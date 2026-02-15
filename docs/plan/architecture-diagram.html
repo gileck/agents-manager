@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents Manager - Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 40px;
+    min-width: 1200px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #f8fafc;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 14px;
+    color: #64748b;
+    margin-bottom: 40px;
+  }
+
+  /* Layout */
+  .diagram {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  /* Tier labels */
+  .tier {
+    position: relative;
+    padding: 20px 0;
+  }
+  .tier-label {
+    position: absolute;
+    left: -20px;
+    top: 50%;
+    transform: translateY(-50%) rotate(-90deg);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #475569;
+    white-space: nowrap;
+  }
+
+  /* Boxes */
+  .box {
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+  }
+  .box-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+  .box-desc {
+    font-size: 11px;
+    opacity: 0.7;
+    line-height: 1.4;
+  }
+  .box-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .box-item {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    white-space: nowrap;
+  }
+
+  /* UI Tier */
+  .ui-tier {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    padding: 20px 40px;
+  }
+  .ui-box {
+    background: linear-gradient(135deg, #1e3a5f, #1a2e4a);
+    border: 1px solid #2563eb;
+    flex: 1;
+    max-width: 320px;
+  }
+  .ui-box .box-title { color: #60a5fa; }
+  .ui-badge {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .badge-p1 { background: #166534; color: #4ade80; }
+  .badge-p2 { background: #713f12; color: #fbbf24; }
+  .badge-p3 { background: #7c2d12; color: #fb923c; }
+  .badge-p4 { background: #581c87; color: #c084fc; }
+
+  /* Connector */
+  .connector {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 6px 0;
+    position: relative;
+  }
+  .connector-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .connector-arrow {
+    color: #475569;
+    font-size: 18px;
+  }
+  .connector-label {
+    font-size: 10px;
+    color: #64748b;
+    padding: 3px 10px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    white-space: nowrap;
+  }
+  .connector-pipes {
+    display: flex;
+    gap: 80px;
+    justify-content: center;
+  }
+  .pipe {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .pipe-line {
+    width: 2px;
+    height: 16px;
+    background: #334155;
+  }
+  .pipe-arrow {
+    color: #475569;
+    font-size: 14px;
+  }
+
+  /* Workflow Service */
+  .workflow-tier {
+    padding: 0 40px;
+  }
+  .workflow-box {
+    background: linear-gradient(135deg, #2d1b4e, #1e1338);
+    border: 2px solid #7c3aed;
+    border-radius: 12px;
+    padding: 24px 28px;
+    position: relative;
+  }
+  .workflow-box .box-title {
+    color: #a78bfa;
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+  .workflow-box .box-desc {
+    color: #8b7fb5;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .workflow-methods {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .wf-method-group {
+    background: rgba(124, 58, 237, 0.1);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .wf-method-group-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #a78bfa;
+    margin-bottom: 6px;
+  }
+  .wf-method {
+    font-size: 10px;
+    color: #c4b5fd;
+    padding: 2px 0;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .workflow-star {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #7c3aed;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 14px;
+    border-radius: 10px;
+    letter-spacing: 1px;
+  }
+
+  /* Interface Tier */
+  .interface-tier {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 0 40px;
+  }
+  .interface-box {
+    background: linear-gradient(135deg, #1a2e1a, #162016);
+    border: 1px solid #16a34a;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .interface-box .box-title {
+    color: #4ade80;
+    font-size: 13px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .interface-box .box-desc {
+    color: #6ee7a0;
+    font-size: 10px;
+  }
+  .interface-box.span-2 { grid-column: span 2; }
+
+  /* Implementation Tier */
+  .impl-tier {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 0 40px;
+  }
+  .impl-box {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .impl-box .box-title {
+    color: #94a3b8;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .impl-box .box-desc {
+    color: #64748b;
+    font-size: 10px;
+  }
+  .impl-box.future {
+    border-style: dashed;
+    opacity: 0.5;
+  }
+  .impl-box.span-2 { grid-column: span 2; }
+
+  /* Pipeline detail box */
+  .pipeline-detail {
+    margin: 20px 40px 0;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid #4f46e5;
+    border-radius: 12px;
+    padding: 24px 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .pipeline-detail-title {
+    grid-column: span 2;
+    color: #818cf8;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .pipeline-section-title {
+    color: #818cf8;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  /* Pipeline flow diagram */
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .flow-node {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 2px solid;
+    white-space: nowrap;
+  }
+  .flow-arrow {
+    color: #475569;
+    font-size: 16px;
+  }
+  .node-backlog { background: rgba(107,114,128,0.15); border-color: #6b7280; color: #9ca3af; }
+  .node-active { background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #60a5fa; }
+  .node-waiting { background: rgba(245,158,11,0.15); border-color: #f59e0b; color: #fbbf24; }
+  .node-review { background: rgba(168,85,247,0.15); border-color: #a855f7; color: #c084fc; }
+  .node-done { background: rgba(34,197,94,0.15); border-color: #22c55e; color: #4ade80; }
+  .node-error { background: rgba(239,68,68,0.15); border-color: #ef4444; color: #f87171; }
+
+  /* Payload types */
+  .payload-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .payload-item {
+    background: rgba(79, 70, 229, 0.1);
+    border: 1px solid rgba(79, 70, 229, 0.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .payload-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #a5b4fc;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .payload-desc {
+    font-size: 10px;
+    color: #6366f1;
+    margin-top: 2px;
+  }
+  .payload-flow {
+    font-size: 10px;
+    color: #818cf8;
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  /* Event log preview */
+  .event-log-box {
+    margin: 20px 40px 0;
+    background: #0c1222;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .event-log-title {
+    grid-column: span 2;
+    color: #f59e0b;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .event-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 11px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .event-level {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+  }
+  .level-info { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .level-warn { background: rgba(245,158,11,0.2); color: #fbbf24; }
+  .level-error { background: rgba(239,68,68,0.2); color: #f87171; }
+  .level-debug { background: rgba(100,116,139,0.2); color: #94a3b8; }
+  .event-cat {
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.05);
+    color: #64748b;
+  }
+  .event-text { color: #94a3b8; }
+
+  /* Section headers */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 40px 8px;
+  }
+  .section-divider-line {
+    flex: 1;
+    height: 1px;
+    background: #1e293b;
+  }
+  .section-divider-text {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #475569;
+    white-space: nowrap;
+  }
+
+  /* Legend */
+  .legend {
+    margin: 30px 40px 0;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #64748b;
+  }
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+
+  /* Responsive arrows between tiers */
+  .tier-connector {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .tier-connector-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tier-arrow {
+    font-size: 20px;
+    color: #334155;
+  }
+  .tier-arrow-label {
+    font-size: 10px;
+    color: #475569;
+    font-style: italic;
+  }
+  .multi-arrows {
+    display: flex;
+    gap: 100px;
+    justify-content: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Agents Manager - Architecture</h1>
+<p class="subtitle">All UIs are equal &bull; Workflow Service is the single brain &bull; Every interface is async &bull; Every layer is swappable</p>
+
+<div class="diagram">
+
+  <!-- UI TIER -->
+  <div class="section-divider">
+    <div class="section-divider-line"></div>
+    <div class="section-divider-text">UI Layer &mdash; Display State + Send Commands (zero logic)</div>
+    <div class="section-divider-line"></div>
+  </div>
+
+  <div class="ui-tier">
+    <div class="box ui-box">
+      <span class="ui-badge badge-p1">Phase 1</span>
+      <div class="box-title">Electron App (React)</div>
+      <div class="box-desc">Primary desktop UI. Kanban board, task detail, settings.</div>
+      <div class="box-items">
+        <span class="box-item">Kanban Board</span>
+        <span class="box-item">Task List</span>
+        <span class="box-item">Task Detail</span>
+        <span class="box-item">Task Form</span>
+        <span class="box-item">Agent Output</span>
+        <span class="box-item">Event Log</span>
+        <span class="box-item">Dashboard</span>
+        <span class="box-item">Settings</span>
+      </div>
+    </div>
+
+    <div class="box ui-box">
+      <span class="ui-badge badge-p4">Phase 4</span>
+      <div class="box-title">Notification Channels</div>
+      <div class="box-desc">Bidirectional. Admin can take actions (answer questions, approve PRs) directly.</div>
+      <div class="box-items">
+        <span class="box-item">Desktop (P1)</span>
+        <span class="box-item">Telegram Bot</span>
+        <span class="box-item">Slack Bot</span>
+        <span class="box-item">Webhook</span>
+        <span class="box-item">Email</span>
+      </div>
+    </div>
+
+    <div class="box ui-box">
+      <span class="ui-badge badge-p3">Phase 3</span>
+      <div class="box-title">CLI (am)</div>
+      <div class="box-desc">For agents and users. Full task/agent operations via terminal.</div>
+      <div class="box-items">
+        <span class="box-item">am tasks list</span>
+        <span class="box-item">am tasks create</span>
+        <span class="box-item">am tasks update</span>
+        <span class="box-item">am agent start</span>
+        <span class="box-item">am tasks respond</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connectors: UI → Workflow -->
+  <div class="connector">
+    <div class="connector-pipes">
+      <div class="pipe">
+        <div class="connector-label">IPC (Electron)</div>
+        <div class="pipe-line"></div>
+        <div class="pipe-arrow">&#9660;</div>
+      </div>
+      <div class="pipe">
+        <div class="connector-label">Adapter (in-process)</div>
+        <div class="pipe-line"></div>
+        <div class="pipe-arrow">&#9660;</div>
+      </div>
+      <div class="pipe">
+        <div class="connector-label">HTTP (localhost)</div>
+        <div class="pipe-line"></div>
+        <div class="pipe-arrow">&#9660;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WORKFLOW SERVICE -->
+  <div class="section-divider">
+    <div class="section-divider-line"></div>
+    <div class="section-divider-text">Brain &mdash; Single Source of All Logic</div>
+    <div class="section-divider-line"></div>
+  </div>
+
+  <div class="workflow-tier">
+    <div class="workflow-box">
+      <div class="workflow-star">THE BRAIN</div>
+      <div class="box-title">IWorkflowService</div>
+      <div class="box-desc">Every mutation goes through here. Orchestrates across all providers. Same code path regardless of which UI triggers it.</div>
+      <div class="workflow-methods">
+        <div class="wf-method-group">
+          <div class="wf-method-group-title">Task Operations</div>
+          <div class="wf-method">createTask()</div>
+          <div class="wf-method">updateTask()</div>
+          <div class="wf-method">deleteTask()</div>
+          <div class="wf-method">getTask()</div>
+          <div class="wf-method">listTasks()</div>
+        </div>
+        <div class="wf-method-group">
+          <div class="wf-method-group-title">Pipeline Operations</div>
+          <div class="wf-method">transitionTask()</div>
+          <div class="wf-method">getValidTransitions()</div>
+          <div class="wf-method">getTransitionHistory()</div>
+          <div class="wf-method">savePipeline()</div>
+        </div>
+        <div class="wf-method-group">
+          <div class="wf-method-group-title">Agent Operations</div>
+          <div class="wf-method">startAgent()</div>
+          <div class="wf-method">stopAgent()</div>
+          <div class="wf-method">getAgentRun()</div>
+          <div class="wf-method">listAgentRuns()</div>
+        </div>
+        <div class="wf-method-group">
+          <div class="wf-method-group-title">Prompt / Notify</div>
+          <div class="wf-method">respondToPrompt()</div>
+          <div class="wf-method">getPendingPrompts()</div>
+          <div class="wf-method">getTaskEvents()</div>
+          <div class="wf-method">onTaskEvent()</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connectors: Workflow → Interfaces -->
+  <div class="tier-connector">
+    <div class="tier-connector-content">
+      <span class="tier-arrow">&#9660;</span>
+      <span class="tier-arrow-label">uses providers via registry (never imports implementations)</span>
+      <span class="tier-arrow">&#9660;</span>
+    </div>
+  </div>
+
+  <!-- INTERFACE TIER -->
+  <div class="section-divider">
+    <div class="section-divider-line"></div>
+    <div class="section-divider-text">Abstraction Layer &mdash; Pure Interfaces (all async)</div>
+    <div class="section-divider-line"></div>
+  </div>
+
+  <div class="interface-tier">
+    <div class="box interface-box">
+      <div class="box-title">ITaskStore</div>
+      <div class="box-desc">Task CRUD, filters, dependencies, bulk ops</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">IPipelineEngine</div>
+      <div class="box-desc">Validate transitions, check guards, fire hooks, track history</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">IAgentFramework</div>
+      <div class="box-desc">Registry of agent adapters. Run, stop, stream output</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">INotificationRouter</div>
+      <div class="box-desc">Broadcast to channels, prompt with actions, race for response</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">ITaskEventLog</div>
+      <div class="box-desc">Log everything. Query by task, category, level</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">IGitOps</div>
+      <div class="box-desc">Branch, commit, diff, push, pull, status</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">IScmPlatform</div>
+      <div class="box-desc">PRs, issues, repo info (GitHub/GitLab)</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">IStorage</div>
+      <div class="box-desc">Key-value + blob storage for configs, transcripts</div>
+    </div>
+    <div class="box interface-box" style="grid-column: 1;">
+      <div class="box-title">IProjectStore</div>
+      <div class="box-desc">Project CRUD, path resolution</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">IPipelineStore</div>
+      <div class="box-desc">Pipeline definition CRUD, get default</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">IPromptStore</div>
+      <div class="box-desc">Pending prompt lifecycle, deduplication</div>
+    </div>
+    <div class="box interface-box">
+      <div class="box-title">INotificationChannel</div>
+      <div class="box-desc">Per-channel: send(), prompt(), isAvailable()</div>
+    </div>
+  </div>
+
+  <!-- Connectors: Interfaces → Implementations -->
+  <div class="tier-connector">
+    <div class="tier-connector-content">
+      <span class="tier-arrow">&#9660;</span>
+      <span class="tier-arrow-label">wired in providers/setup.ts &mdash; the ONLY place implementations are imported</span>
+      <span class="tier-arrow">&#9660;</span>
+    </div>
+  </div>
+
+  <!-- IMPLEMENTATION TIER -->
+  <div class="section-divider">
+    <div class="section-divider-line"></div>
+    <div class="section-divider-text">Implementations &mdash; Swappable (solid = Phase 1, dashed = future)</div>
+    <div class="section-divider-line"></div>
+  </div>
+
+  <div class="impl-tier">
+    <div class="box impl-box">
+      <div class="box-title">SqliteTaskStore</div>
+      <div class="box-desc">better-sqlite3 &rarr; tasks table</div>
+    </div>
+    <div class="box impl-box">
+      <div class="box-title">PipelineEngineImpl</div>
+      <div class="box-desc">State machine runtime, guard/hook registries</div>
+    </div>
+    <div class="box impl-box">
+      <div class="box-title">ClaudeCodeAgent</div>
+      <div class="box-desc">@anthropic-ai/claude-code SDK</div>
+    </div>
+    <div class="box impl-box">
+      <div class="box-title">DesktopNotification</div>
+      <div class="box-desc">Electron Notification API (one-way)</div>
+    </div>
+
+    <div class="box impl-box">
+      <div class="box-title">SqliteProjectStore</div>
+      <div class="box-desc">better-sqlite3 &rarr; projects table</div>
+    </div>
+    <div class="box impl-box">
+      <div class="box-title">SqlitePipelineStore</div>
+      <div class="box-desc">Pipeline JSON in SQLite</div>
+    </div>
+    <div class="box impl-box">
+      <div class="box-title">LocalGitOps</div>
+      <div class="box-desc">git CLI via child_process</div>
+    </div>
+    <div class="box impl-box">
+      <div class="box-title">GitHubPlatform</div>
+      <div class="box-desc">gh CLI for PRs, issues</div>
+    </div>
+
+    <div class="box impl-box">
+      <div class="box-title">SqliteEventLog</div>
+      <div class="box-desc">task_events table</div>
+    </div>
+    <div class="box impl-box">
+      <div class="box-title">SqliteStorage</div>
+      <div class="box-desc">KV + blob in SQLite</div>
+    </div>
+    <div class="box impl-box future">
+      <div class="box-title">CursorAgent</div>
+      <div class="box-desc">cursor CLI adapter</div>
+    </div>
+    <div class="box impl-box future">
+      <div class="box-title">AiderAgent</div>
+      <div class="box-desc">aider CLI adapter</div>
+    </div>
+
+    <div class="box impl-box future">
+      <div class="box-title">LinearTaskStore</div>
+      <div class="box-desc">Linear API &rarr; ITaskStore</div>
+    </div>
+    <div class="box impl-box future">
+      <div class="box-title">TelegramChannel</div>
+      <div class="box-desc">Bot API, inline keyboards</div>
+    </div>
+    <div class="box impl-box future">
+      <div class="box-title">SlackChannel</div>
+      <div class="box-desc">Block Kit, modals, events</div>
+    </div>
+    <div class="box impl-box future">
+      <div class="box-title">WebhookChannel</div>
+      <div class="box-desc">HTTP POST + callback</div>
+    </div>
+  </div>
+
+  <!-- PIPELINE DETAIL -->
+  <div class="section-divider" style="margin-top: 24px;">
+    <div class="section-divider-line"></div>
+    <div class="section-divider-text">Pipeline Engine Detail &mdash; Dynamic State Machine</div>
+    <div class="section-divider-line"></div>
+  </div>
+
+  <div class="pipeline-detail">
+    <div class="pipeline-detail-title">Pipelines are data (JSON), not code. Adding a status = editing config, zero code changes.</div>
+
+    <div>
+      <div class="pipeline-section-title">Simple Pipeline (Phase 1)</div>
+      <div class="flow">
+        <span class="flow-node node-backlog">Open</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-active">In Progress</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-done">Done</span>
+      </div>
+      <br>
+      <div class="pipeline-section-title">Standard Pipeline (Phase 2+)</div>
+      <div class="flow">
+        <span class="flow-node node-backlog">Open</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-active">Planning</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-backlog">Planned</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-active">In Progress</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-review">PR Review</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-done">Done</span>
+      </div>
+      <div class="flow" style="margin-top: 8px; padding-left: 20px;">
+        <span class="flow-node node-review">PR Review</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-waiting">Changes Req</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-active">In Progress</span>
+        <span style="font-size: 10px; color: #64748b;">(loops until approved)</span>
+      </div>
+      <div class="flow" style="margin-top: 8px; padding-left: 20px;">
+        <span class="flow-node node-active">Planning</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-waiting">Needs Info</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-active">Planning</span>
+        <span style="font-size: 10px; color: #64748b;">(admin answers, agent resumes)</span>
+      </div>
+      <div class="flow" style="margin-top: 8px; padding-left: 20px;">
+        <span class="flow-node node-active">Any</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-error">Failed</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-node node-backlog">Open</span>
+        <span style="font-size: 10px; color: #64748b;">(retry)</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="pipeline-section-title">Human-in-the-Loop Payloads</div>
+      <div class="payload-list">
+        <div class="payload-item">
+          <div class="payload-name">NeedsInfoPayload</div>
+          <div class="payload-desc">Agent asks structured questions with context + suggested answers</div>
+          <div class="payload-flow">Agent &rarr; needs_info &rarr; Admin answers via App/Telegram/CLI &rarr; Agent resumes</div>
+        </div>
+        <div class="payload-item">
+          <div class="payload-name">OptionsProposedPayload</div>
+          <div class="payload-desc">Agent proposes approaches with pros/cons/recommendation</div>
+          <div class="payload-flow">Agent &rarr; options_proposed &rarr; Admin picks option &rarr; Agent implements chosen approach</div>
+        </div>
+        <div class="payload-item">
+          <div class="payload-name">ChangesRequestedPayload</div>
+          <div class="payload-desc">File/line-level review comments with severity (must fix / should fix / suggestion)</div>
+          <div class="payload-flow">Review agent &rarr; changes_requested &rarr; Admin confirms &rarr; Impl agent fixes &rarr; loops</div>
+        </div>
+      </div>
+
+      <div class="pipeline-section-title" style="margin-top: 16px;">Pipeline Components</div>
+      <div class="box-items">
+        <span class="box-item">Statuses (nodes)</span>
+        <span class="box-item">Transitions (edges)</span>
+        <span class="box-item">Guards (conditions)</span>
+        <span class="box-item">Hooks (side effects)</span>
+        <span class="box-item">Payloads (structured data)</span>
+        <span class="box-item">History (audit trail)</span>
+        <span class="box-item">Loop protection</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- EVENT LOG -->
+  <div class="section-divider" style="margin-top: 24px;">
+    <div class="section-divider-line"></div>
+    <div class="section-divider-text">Task Event Log &mdash; Single Source of Truth for Debugging</div>
+    <div class="section-divider-line"></div>
+  </div>
+
+  <div class="event-log-box">
+    <div class="event-log-title">Every task has a comprehensive event stream</div>
+
+    <div>
+      <div class="pipeline-section-title">Event Categories</div>
+      <div class="event-row">
+        <span class="event-level level-info">i</span>
+        <span class="event-cat">LIFE</span>
+        <span class="event-text">Task created, deleted</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-info">i</span>
+        <span class="event-cat">TRANS</span>
+        <span class="event-text">Status changed: open &rarr; in_progress (by user)</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-warn">!</span>
+        <span class="event-cat">TRANS</span>
+        <span class="event-text">Transition blocked: guard 'has_plan' failed</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-info">i</span>
+        <span class="event-cat">AGENT</span>
+        <span class="event-text">Claude Code started (implement mode) - Run #5</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-debug">&middot;</span>
+        <span class="event-cat">AGENT</span>
+        <span class="event-text">Agent used tool: Write src/auth/middleware.ts</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-info">i</span>
+        <span class="event-cat">AGENT</span>
+        <span class="event-text">Claude Code completed in 2m 34s ($0.12)</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-error">!</span>
+        <span class="event-cat">AGENT</span>
+        <span class="event-text">Claude Code failed: timeout after 10m</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="pipeline-section-title">More Event Types</div>
+      <div class="event-row">
+        <span class="event-level level-warn">!</span>
+        <span class="event-cat">PAYLOAD</span>
+        <span class="event-text">Agent needs info: 2 questions pending</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-info">i</span>
+        <span class="event-cat">PAYLOAD</span>
+        <span class="event-text">Admin answered via Telegram</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-warn">!</span>
+        <span class="event-cat">PAYLOAD</span>
+        <span class="event-text">PR review: 2 must-fix, 1 suggestion</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-info">i</span>
+        <span class="event-cat">HOOK</span>
+        <span class="event-text">Hook 'start_agent' executed successfully</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-error">!</span>
+        <span class="event-cat">HOOK</span>
+        <span class="event-text">Hook 'create_branch' failed: branch exists</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-debug">&middot;</span>
+        <span class="event-cat">GUARD</span>
+        <span class="event-text">Guard 'no_running_agent' passed</span>
+      </div>
+      <div class="event-row">
+        <span class="event-level level-info">i</span>
+        <span class="event-cat">GIT</span>
+        <span class="event-text">PR #45 created: "Add authentication"</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: #1e3a5f; border-color: #2563eb;"></div>
+      UI Layer
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: #2d1b4e; border-color: #7c3aed;"></div>
+      Workflow Service
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: #1a2e1a; border-color: #16a34a;"></div>
+      Interfaces
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: #1e293b; border-color: #334155;"></div>
+      Implementations
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: #1e293b; border-color: #334155; border-style: dashed; opacity: 0.5;"></div>
+      Future Implementations
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: #1a1a2e; border-color: #4f46e5;"></div>
+      Pipeline Engine
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: #0c1222; border-color: #1e293b;"></div>
+      Event Log
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

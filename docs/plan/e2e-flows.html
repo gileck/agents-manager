@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents Manager - E2E Flows</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 40px;
+  }
+  h1 { text-align: center; font-size: 28px; font-weight: 600; color: #f8fafc; margin-bottom: 6px; }
+  .subtitle { text-align: center; font-size: 14px; color: #64748b; margin-bottom: 40px; }
+
+  /* Flow container */
+  .flow-section {
+    max-width: 1100px;
+    margin: 0 auto 60px;
+  }
+  .flow-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .flow-desc {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  /* Step */
+  .step {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 0;
+    position: relative;
+  }
+
+  /* Timeline */
+  .step-timeline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+  .step-number {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    z-index: 1;
+    flex-shrink: 0;
+    border: 2px solid;
+  }
+  .step-line {
+    width: 2px;
+    flex: 1;
+    min-height: 20px;
+  }
+
+  /* Actor colors */
+  .actor-admin .step-number { background: #1e3a5f; border-color: #3b82f6; color: #60a5fa; }
+  .actor-admin .step-line { background: linear-gradient(to bottom, #2563eb, #1e293b); }
+  .actor-system .step-number { background: #2d1b4e; border-color: #7c3aed; color: #a78bfa; }
+  .actor-system .step-line { background: linear-gradient(to bottom, #7c3aed, #1e293b); }
+  .actor-agent .step-number { background: #1a2e1a; border-color: #16a34a; color: #4ade80; }
+  .actor-agent .step-line { background: linear-gradient(to bottom, #16a34a, #1e293b); }
+  .actor-notification .step-number { background: #3b1a1a; border-color: #f59e0b; color: #fbbf24; }
+  .actor-notification .step-line { background: linear-gradient(to bottom, #f59e0b, #1e293b); }
+
+  /* Step card */
+  .step-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .step-card::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 14px;
+    width: 8px;
+    height: 8px;
+    background: #1e293b;
+    border-left: 1px solid #334155;
+    border-bottom: 1px solid #334155;
+    transform: rotate(45deg);
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .step-actor-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .badge-admin { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+  .badge-system { background: rgba(124,58,237,0.15); color: #a78bfa; border: 1px solid rgba(124,58,237,0.3); }
+  .badge-agent { background: rgba(22,163,74,0.15); color: #4ade80; border: 1px solid rgba(22,163,74,0.3); }
+  .badge-notification { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+
+  .step-action {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f1f5f9;
+  }
+
+  /* Status transition */
+  .status-transition {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .status-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 14px;
+    border: 1.5px solid;
+    white-space: nowrap;
+  }
+  .status-arrow {
+    color: #475569;
+    font-size: 16px;
+  }
+  .s-open { background: rgba(107,114,128,0.12); border-color: #6b7280; color: #9ca3af; }
+  .s-planning { background: rgba(139,92,246,0.12); border-color: #8b5cf6; color: #a78bfa; }
+  .s-planned { background: rgba(167,139,250,0.12); border-color: #a78bfa; color: #c4b5fd; }
+  .s-in-progress { background: rgba(59,130,246,0.12); border-color: #3b82f6; color: #60a5fa; }
+  .s-pr-review { background: rgba(168,85,247,0.12); border-color: #a855f7; color: #c084fc; }
+  .s-changes-req { background: rgba(239,68,68,0.12); border-color: #ef4444; color: #f87171; }
+  .s-needs-info { background: rgba(245,158,11,0.12); border-color: #f59e0b; color: #fbbf24; }
+  .s-options { background: rgba(99,102,241,0.12); border-color: #6366f1; color: #818cf8; }
+  .s-done { background: rgba(34,197,94,0.12); border-color: #22c55e; color: #4ade80; }
+  .s-failed { background: rgba(239,68,68,0.12); border-color: #ef4444; color: #f87171; }
+  .s-none { background: rgba(100,116,139,0.08); border-color: #475569; color: #64748b; font-style: italic; }
+
+  /* Detail grid */
+  .step-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+  .detail-col {
+    min-width: 0;
+  }
+  .detail-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #475569;
+    margin-bottom: 5px;
+  }
+  .detail-item {
+    font-size: 11px;
+    color: #94a3b8;
+    padding: 2px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    line-height: 1.3;
+  }
+  .detail-icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+    font-size: 10px;
+  }
+  .detail-mono {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+    color: #7dd3fc;
+  }
+  .detail-event {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+    color: #a5b4fc;
+  }
+
+  /* Special: payload preview */
+  .payload-preview {
+    background: rgba(79,70,229,0.08);
+    border: 1px solid rgba(79,70,229,0.2);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: #a5b4fc;
+    line-height: 1.5;
+  }
+  .payload-preview strong {
+    color: #c7d2fe;
+    font-weight: 600;
+  }
+
+  /* Annotations / callouts */
+  .callout {
+    background: rgba(245,158,11,0.06);
+    border-left: 3px solid #f59e0b;
+    padding: 10px 14px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: #fbbf24;
+    line-height: 1.5;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout-blue {
+    background: rgba(59,130,246,0.06);
+    border-left-color: #3b82f6;
+    color: #93c5fd;
+  }
+  .callout-green {
+    background: rgba(34,197,94,0.06);
+    border-left-color: #22c55e;
+    color: #86efac;
+  }
+
+  /* Separator */
+  .flow-separator {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 50px 0 30px;
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .flow-separator-line { flex: 1; height: 1px; background: #334155; }
+  .flow-separator-text {
+    font-size: 11px;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 700;
+  }
+
+  /* Legend */
+  .legend {
+    max-width: 1100px;
+    margin: 0 auto 40px;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 16px 0;
+    border-top: 1px solid #1e293b;
+    border-bottom: 1px solid #1e293b;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; }
+
+  /* Wide detail for some steps */
+  .step-details.wide {
+    grid-template-columns: 1fr 1fr;
+  }
+  .step-details.single {
+    grid-template-columns: 1fr;
+  }
+  .detail-col.span-2 { grid-column: span 2; }
+  .detail-col.span-3 { grid-column: span 3; }
+</style>
+</head>
+<body>
+
+<h1>E2E Pipeline Flows</h1>
+<p class="subtitle">Tracing every step through the system: which UI, which service method, which providers, what events</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#1e3a5f; border-color:#3b82f6;"></div> Admin action (via App, Telegram, or CLI)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#2d1b4e; border-color:#7c3aed;"></div> Workflow Service (automatic)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1a2e1a; border-color:#16a34a;"></div> Agent (running)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3b1a1a; border-color:#f59e0b;"></div> Notification channel</div>
+</div>
+
+<!-- ============================================ -->
+<!-- FLOW 1: SIMPLE HAPPY FLOW -->
+<!-- ============================================ -->
+
+<div class="flow-section">
+  <div class="flow-title" style="color: #4ade80;">Flow 1: Simple Happy Path</div>
+  <div class="flow-desc">
+    Admin creates a task in the app, runs the implementation agent, agent succeeds, PR is created, admin merges, task is done.<br>
+    No planning phase, no review loops, no human-in-the-loop prompts. The simplest possible flow.
+  </div>
+
+  <!-- Step 1 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">1</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Creates a new task in the Electron app</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-none">no task</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-open">Open</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI Component</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Task Form page</div>
+          <div class="detail-item"><span class="detail-icon">📋</span> Fills: title, description, priority, size</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">createTask(input)</span></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Providers Used</div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">ITaskStore.createTask()</span></div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">IPipelineEngine.getDefault()</span></div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">ITaskEventLog.log()</span></div>
+        </div>
+      </div>
+      <div class="callout callout-blue">
+        Task is created with <code>pipeline_id: 'simple'</code> and <code>status: 'open'</code> (the pipeline's <code>initialStatus</code>).
+        Event logged: <code>lifecycle / task.created</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">2</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Clicks "Implement" on the task detail page</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-open">Open</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-in-progress">In Progress</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI Component</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Task Detail &rarr; Transition buttons</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Buttons from <code>getValidTransitions()</code></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">transitionTask(id, 'in_progress')</span></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">startAgent(id, 'implement')</span></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Providers Used</div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">IPipelineEngine.transition()</span></div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">IAgentFramework.getAgent()</span></div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">ITaskEventLog.log()</span></div>
+        </div>
+      </div>
+      <div class="callout callout-blue">
+        Pipeline transition fires <code>start_agent</code> hook automatically.
+        WorkflowService builds prompt from task data, spawns Claude Code SDK.
+        Events: <code>transition / status.changed</code>, <code>agent / agent.started</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step actor-agent">
+    <div class="step-timeline"><div class="step-number">3</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-agent">Agent</span>
+        <span class="step-action">Claude Code implements the task (runs in background)</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-in-progress">In Progress</span>
+        <span style="font-size: 11px; color: #64748b; margin-left: 8px;">(no change)</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI Component</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Live Output Panel (streaming)</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Agent spinner on Task Card</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">What's Happening</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Agent reads files, writes code</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Creates branch, makes commits</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Creates PR via <code>gh pr create</code></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events Logged (streaming)</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.tool_use</span> (per tool)</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">git / branch.created</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">git / pr.created</span></div>
+        </div>
+      </div>
+      <div class="callout callout-green">
+        Admin can watch the live output stream or leave and come back later.
+        The <code>onAgentOutput</code> subscription pushes messages to the UI in real-time.
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step actor-system">
+    <div class="step-timeline"><div class="step-number">4</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-system">System</span>
+        <span class="step-action">Agent completes successfully &rarr; auto-transition</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-in-progress">In Progress</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-pr-review">PR Review</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">onAgentCompleted(run, result)</span></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Finds single valid <code>agent_outcome: "plan_complete"</code> transition</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">transitionTask(id, 'pr_review')</span></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Providers Used</div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">IPipelineEngine.getValidTransitions()</span></div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">IPipelineEngine.transition()</span></div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">ITaskStore.updateTask()</span> (PR URL)</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events Logged</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.completed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step actor-notification">
+    <div class="step-timeline"><div class="step-number">5</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-notification">Notification</span>
+        <span class="step-action">Admin notified: "Agent completed, PR ready for review"</span>
+      </div>
+      <div class="step-details wide">
+        <div class="detail-col">
+          <div class="detail-label">Notification Sent</div>
+          <div class="detail-item"><span class="detail-icon">🔔</span> Desktop: "Claude Code completed: Add auth (2m 34s, $0.12)"</div>
+          <div class="detail-item"><span class="detail-icon">🔔</span> Click opens Task Detail page in app</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Providers Used</div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">INotificationRouter.broadcast()</span></div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">DesktopNotificationChannel.send()</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 6 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">6</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Reviews PR on GitHub, merges it</span>
+      </div>
+      <div class="step-details single">
+        <div class="detail-col">
+          <div class="detail-label">Outside the App</div>
+          <div class="detail-item"><span class="detail-icon">🌐</span> Admin opens PR link from Task Detail, reviews on GitHub, clicks Merge</div>
+          <div class="detail-item"><span class="detail-icon">💡</span> This happens outside the app. The app shows the PR URL as a clickable link on the task detail page.</div>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>Gap identified:</strong> The app doesn't auto-detect that the PR was merged. Options for the future:<br>
+        &bull; GitHub webhook that calls the HTTP API<br>
+        &bull; Polling via <code>IScmPlatform.getPR()</code><br>
+        &bull; Admin manually clicks "Mark as Done" (simplest, Phase 1)<br>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 7 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">7</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Clicks "Done" on task detail page</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-pr-review">PR Review</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-done">Done</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI Component</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Task Detail &rarr; "Approve" transition button</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Task card moves to Done column on Kanban</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">transitionTask(id, 'done')</span></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events Logged</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> Pipeline detects terminal status &rarr; task complete</div>
+        </div>
+      </div>
+      <div class="callout callout-green">
+        <strong>Task complete!</strong> Total events in log: ~15-30 entries covering the full lifecycle.
+        Admin can review the entire history on the task detail page.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- FLOW 2: COMPLEX FLOW -->
+<!-- ============================================ -->
+
+<div class="flow-separator">
+  <div class="flow-separator-line"></div>
+  <div class="flow-separator-text">Complex Flow</div>
+  <div class="flow-separator-line"></div>
+</div>
+
+<div class="flow-section">
+  <div class="flow-title" style="color: #f59e0b;">Flow 2: Full Human-in-the-Loop with Review Loops</div>
+  <div class="flow-desc">
+    Admin creates task &rarr; agent plans &rarr; agent needs more info &rarr; admin answers via Telegram &rarr; agent proposes 3 approaches &rarr;
+    admin picks one in the app &rarr; agent implements &rarr; PR review agent finds issues &rarr; admin reviews change requests &rarr;
+    agent fixes &rarr; PR review passes &rarr; admin merges &rarr; done.
+  </div>
+
+  <!-- Step 1 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">1</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Creates task via CLI</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-none">no task</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-open">Open</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI: CLI</div>
+          <div class="detail-item"><span class="detail-icon">$</span> <code>am tasks create --title "Add auth" --priority high --size l --complexity complex</code></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">createTask(input)</span></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Transport</div>
+          <div class="detail-item"><span class="detail-icon">🔗</span> CLI &rarr; HTTP POST /api/tasks &rarr; WorkflowService</div>
+          <div class="detail-item"><span class="detail-icon">💡</span> Same codepath as creating in the Electron app</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">2</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Clicks "Plan" in the Electron app</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-open">Open</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-planning">Planning</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI Component</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Task Detail &rarr; "Plan" transition button</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">transitionTask(id, 'planning')</span></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Hook fires: <span class="detail-mono">startAgent(id, 'plan')</span></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">hook / hook.executed (start_agent)</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.started</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step actor-agent">
+    <div class="step-timeline"><div class="step-number">3</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-agent">Agent</span>
+        <span class="step-action">Planning agent discovers it needs more information</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-planning">Planning</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-needs-info">Needs Info</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">What Happened</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Agent analyzed the codebase</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Task description is too vague</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Agent exits with <code>NeedsInfoPayload</code></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">onAgentCompleted()</span></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Detects payload, transitions to <code>needs_info</code></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Stores <code>pendingPayload</code> on task</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.completed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">payload / needs_info.sent</span></div>
+        </div>
+      </div>
+      <div class="payload-preview">
+        <strong>NeedsInfoPayload:</strong><br>
+        Q1: "What authentication method? (JWT, session-based, OAuth?)" <em>Context: task says 'add auth' but no specifics</em><br>
+        Q2: "Should we support social login (Google, GitHub)?"
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step actor-notification">
+    <div class="step-timeline"><div class="step-number">4</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-notification">Notification</span>
+        <span class="step-action">Telegram bot sends prompt with questions + answer buttons</span>
+      </div>
+      <div class="step-details wide">
+        <div class="detail-col">
+          <div class="detail-label">Notification Router</div>
+          <div class="detail-item"><span class="detail-icon">📦</span> <span class="detail-mono">INotificationRouter.prompt()</span></div>
+          <div class="detail-item"><span class="detail-icon">📦</span> Sends to all active channels simultaneously</div>
+          <div class="detail-item"><span class="detail-icon">📦</span> Creates <code>PendingPrompt</code> in IPromptStore</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">What Admin Sees</div>
+          <div class="detail-item"><span class="detail-icon">💬</span> <strong>Telegram:</strong> Message with questions + [Answer Now] [Open App] buttons</div>
+          <div class="detail-item"><span class="detail-icon">🔔</span> <strong>Desktop:</strong> Notification "Agent needs info: Add auth"</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> <strong>App:</strong> Task detail shows NeedsInfoForm (if open)</div>
+        </div>
+      </div>
+      <div class="callout">
+        All three UIs show the same prompt. First response from any channel wins.
+        The other UIs dismiss their prompts automatically via IPromptStore deduplication.
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">5</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Answers questions via Telegram</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-needs-info">Needs Info</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-planning">Planning</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI: Telegram</div>
+          <div class="detail-item"><span class="detail-icon">💬</span> Admin taps [Answer Now]</div>
+          <div class="detail-item"><span class="detail-icon">💬</span> Types: "JWT with refresh tokens. No social login."</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">respondToPrompt(promptId, response)</span></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Marks prompt as responded</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Transition fires <code>start_agent</code> hook with answers injected into prompt</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">payload / info.provided (via telegram)</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.started</span> (resumed)</div>
+        </div>
+      </div>
+      <div class="callout callout-blue">
+        Electron app's NeedsInfoForm auto-dismisses (prompt marked as responded in IPromptStore).
+        Planning agent restarts with the admin's answers injected into its context.
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 6 -->
+  <div class="step actor-agent">
+    <div class="step-timeline"><div class="step-number">6</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-agent">Agent</span>
+        <span class="step-action">Planning agent proposes 3 implementation approaches</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-planning">Planning</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-options">Options Proposed</span>
+      </div>
+      <div class="step-details wide">
+        <div class="detail-col">
+          <div class="detail-label">What Happened</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Agent completed planning with answers</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Returns <code>OptionsProposedPayload</code> with 3 approaches</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> WorkflowService transitions to <code>options_proposed</code></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.completed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">payload / options.proposed</span></div>
+        </div>
+      </div>
+      <div class="payload-preview">
+        <strong>OptionsProposedPayload:</strong><br>
+        <strong>Option A:</strong> Passport.js + JWT &mdash; Mature library, lots of middleware. Pros: battle-tested. Cons: heavy. <em>Recommended</em><br>
+        <strong>Option B:</strong> Custom JWT middleware &mdash; Lightweight, no deps. Pros: simple. Cons: must handle edge cases manually.<br>
+        <strong>Option C:</strong> Auth0 integration &mdash; Hosted auth. Pros: zero backend code. Cons: external dependency, cost.
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 7 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">7</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Picks Option B in the Electron app, adds instructions</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-options">Options Proposed</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-in-progress">In Progress</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI Component</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Task Detail &rarr; OptionsPicker</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Selects Option B, types: "Also add rate limiting on login route"</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">respondToPrompt(promptId, {actionId: 'option_b', formData})</span></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Transition fires <code>start_agent</code> hook with selected option as context</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">payload / option.selected (Option B)</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.started (implement)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 8 -->
+  <div class="step actor-agent">
+    <div class="step-timeline"><div class="step-number">8</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-agent">Agent</span>
+        <span class="step-action">Implementation agent writes code, creates PR</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-in-progress">In Progress</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-pr-review">PR Review</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">Agent Work</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Creates <code>task/add-auth</code> branch</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Writes JWT middleware, login route, tests</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Adds rate limiting as instructed</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Creates PR #45</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Auto-Transition</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Agent succeeds (exit 0)</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Pipeline: <code>agent_outcome: "pr_ready"</code> &rarr; pr_review</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Hook fires: <code>start_agent(mode: 'review')</code></div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.tool_use (x15)</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">git / branch.created</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">git / pr.created (#45)</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.completed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+        </div>
+      </div>
+      <div class="callout callout-blue">
+        PR review agent starts automatically via the <code>start_agent</code> hook on the transition to <code>pr_review</code>.
+        No admin action needed between implementation and review.
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 9 -->
+  <div class="step actor-agent">
+    <div class="step-timeline"><div class="step-number">9</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-agent">Agent</span>
+        <span class="step-action">PR Review agent finds issues &rarr; changes requested</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-pr-review">PR Review</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-changes-req">Changes Requested</span>
+      </div>
+      <div class="step-details wide">
+        <div class="detail-col">
+          <div class="detail-label">What Happened</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Review agent analyzed the PR diff</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Found 2 issues, returns <code>ChangesRequestedPayload</code></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Pipeline: <code>agent_outcome: "changes_requested"</code> &rarr; changes_requested</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.completed (review)</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">payload / changes.requested</span></div>
+        </div>
+      </div>
+      <div class="payload-preview">
+        <strong>ChangesRequestedPayload (Round 1):</strong><br>
+        <strong style="color: #f87171;">[Must Fix]</strong> src/middleware/auth.ts:42 &mdash; "Missing try-catch around jwt.verify(). Server will crash on invalid tokens."<br>
+        <strong style="color: #fbbf24;">[Should Fix]</strong> src/routes/login.ts:15 &mdash; "Rate limiting is per-route but should be global middleware."
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 10 -->
+  <div class="step actor-notification">
+    <div class="step-timeline"><div class="step-number">10</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-notification">Notification</span>
+        <span class="step-action">Admin notified of change requests via all channels</span>
+      </div>
+      <div class="step-details wide">
+        <div class="detail-col">
+          <div class="detail-label">Notifications Sent</div>
+          <div class="detail-item"><span class="detail-icon">💬</span> <strong>Telegram:</strong> "PR Review: 1 must-fix, 1 should-fix" + [Send Back] [Approve Anyway] buttons</div>
+          <div class="detail-item"><span class="detail-icon">🔔</span> <strong>Desktop:</strong> "Changes requested on: Add auth"</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">App UI (if open)</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Task Detail shows ChangesReviewPanel</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> File/line comments with severity badges</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Buttons: [Send Back for Rework] [Approve Anyway]</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 11 -->
+  <div class="step actor-admin">
+    <div class="step-timeline"><div class="step-number">11</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-admin">Admin</span>
+        <span class="step-action">Reviews comments in app, clicks "Send Back for Rework"</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-changes-req">Changes Requested</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-in-progress">In Progress</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">UI Component</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Task Detail &rarr; ChangesReviewPanel</div>
+          <div class="detail-item"><span class="detail-icon">🖥</span> Adds own comment: "Also check token expiry handling"</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Workflow Service</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <span class="detail-mono">respondToPrompt(promptId, {actionId: 'rework'})</span></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Transition fires <code>start_agent</code> hook</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Agent prompt includes ALL review comments</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">payload / changes.acknowledged</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.started (implement, round 2)</span></div>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>Loop iteration #1:</strong> The agent receives all review comments + admin's extra comment as context.
+        Event log shows this is the 2nd time entering <code>in_progress</code>.
+        Guard <code>max_iterations</code> checks: 2 &lt; 5, allowed.
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 12 -->
+  <div class="step actor-agent">
+    <div class="step-timeline"><div class="step-number">12</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-agent">Agent</span>
+        <span class="step-action">Implementation agent fixes issues, pushes to same PR</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-in-progress">In Progress</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-pr-review">PR Review</span>
+      </div>
+      <div class="step-details wide">
+        <div class="detail-col">
+          <div class="detail-label">Agent Work</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Wraps jwt.verify() in try-catch</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Moves rate limiting to global middleware</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Adds token expiry handling (admin's comment)</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Commits and pushes to existing PR branch</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Auto-Transition Chain</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Agent succeeds &rarr; pipeline transitions to <code>pr_review</code></div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Hook auto-starts PR review agent (round 2)</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Review agent checks the new changes</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 13 -->
+  <div class="step actor-agent">
+    <div class="step-timeline"><div class="step-number">13</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-agent">Agent</span>
+        <span class="step-action">PR Review agent approves (round 2)</span>
+      </div>
+      <div class="status-transition">
+        <span class="status-pill s-pr-review">PR Review</span>
+        <span class="status-arrow">&rarr;</span>
+        <span class="status-pill s-done">Done</span>
+      </div>
+      <div class="step-details">
+        <div class="detail-col">
+          <div class="detail-label">What Happened</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Review agent found no remaining issues</div>
+          <div class="detail-item"><span class="detail-icon">🤖</span> Returns success (exit 0)</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Auto-Transition</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> <code>agent_outcome: "approved"</code> &rarr; done</div>
+          <div class="detail-item"><span class="detail-icon">⚡</span> Pipeline detects terminal status</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Events</div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">agent / agent.completed (review r2)</span></div>
+          <div class="detail-item"><span class="detail-icon">📝</span> <span class="detail-event">transition / status.changed</span></div>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>Gap identified:</strong> Who actually merges the PR?<br>
+        &bull; <strong>Option A:</strong> The review agent runs <code>gh pr merge</code> as part of its success path (automatic)<br>
+        &bull; <strong>Option B:</strong> A <code>merge_pr</code> hook on the done transition uses <code>IScmPlatform.mergePR()</code><br>
+        &bull; <strong>Option C:</strong> Admin merges manually on GitHub (safest, but adds a step)<br>
+        &bull; <strong>Recommendation:</strong> Make it configurable per pipeline. Default to Option B with a confirmation prompt.
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 14 -->
+  <div class="step actor-notification">
+    <div class="step-timeline"><div class="step-number">14</div><div class="step-line"></div></div>
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-actor-badge badge-notification">Notification</span>
+        <span class="step-action">Admin notified: task complete</span>
+      </div>
+      <div class="step-details wide">
+        <div class="detail-col">
+          <div class="detail-label">Notifications</div>
+          <div class="detail-item"><span class="detail-icon">💬</span> <strong>Telegram:</strong> "Task complete: Add auth. PR #45 merged. Total cost: $0.85"</div>
+          <div class="detail-item"><span class="detail-icon">🔔</span> <strong>Desktop:</strong> "Task done: Add auth"</div>
+        </div>
+        <div class="detail-col">
+          <div class="detail-label">Summary</div>
+          <div class="detail-item"><span class="detail-icon">📊</span> 4 agent runs (plan, implement, review x2)</div>
+          <div class="detail-item"><span class="detail-icon">📊</span> 1 review loop (changes requested &rarr; fix &rarr; approve)</div>
+          <div class="detail-item"><span class="detail-icon">📊</span> 1 human-in-the-loop (needs info via Telegram)</div>
+          <div class="detail-item"><span class="detail-icon">📊</span> ~50 events in task event log</div>
+        </div>
+      </div>
+      <div class="callout callout-green">
+        <strong>Task complete!</strong> The full E2E took 4 agent runs, 2 admin interactions (answered questions + reviewed changes),
+        and spanned 3 UIs (CLI for creation, App for option picking + review, Telegram for answering questions).
+        Every single step is traceable in the task event log.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- GAPS / FINDINGS -->
+<!-- ============================================ -->
+
+<div class="flow-separator">
+  <div class="flow-separator-line"></div>
+  <div class="flow-separator-text">Gaps &amp; Findings from E2E Analysis</div>
+  <div class="flow-separator-line"></div>
+</div>
+
+<div class="flow-section">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+
+    <div class="step-card" style="border-left: 3px solid #ef4444;">
+      <div class="step-header">
+        <span class="step-action" style="color: #f87171; font-size: 14px;">Gap 1: PR Merge Ownership</span>
+      </div>
+      <div class="detail-item" style="margin-bottom: 6px;">
+        <span class="detail-icon">❓</span>
+        <span>Who merges the PR when review passes? The pipeline transitions to "done" but the PR is still open on GitHub.</span>
+      </div>
+      <div class="detail-item" style="color: #94a3b8;">
+        <span class="detail-icon">💡</span>
+        <span><strong>Proposal:</strong> Add a <code>merge_pr</code> hook type that calls <code>IScmPlatform.mergePR()</code>. Make it configurable: auto-merge, prompt for confirmation, or manual. Default to prompt.</span>
+      </div>
+    </div>
+
+    <div class="step-card" style="border-left: 3px solid #ef4444;">
+      <div class="step-header">
+        <span class="step-action" style="color: #f87171; font-size: 14px;">Gap 2: PR Merge Detection</span>
+      </div>
+      <div class="detail-item" style="margin-bottom: 6px;">
+        <span class="detail-icon">❓</span>
+        <span>If admin merges PR manually on GitHub, how does the app know? Task stays in "PR Review" forever.</span>
+      </div>
+      <div class="detail-item" style="color: #94a3b8;">
+        <span class="detail-icon">💡</span>
+        <span><strong>Proposal:</strong> Options: (1) GitHub webhook &rarr; HTTP API, (2) periodic polling via IScmPlatform, (3) admin clicks "Mark Done" manually. Start with (3), add (1) later.</span>
+      </div>
+    </div>
+
+    <div class="step-card" style="border-left: 3px solid #ef4444;">
+      <div class="step-header">
+        <span class="step-action" style="color: #f87171; font-size: 14px;">Gap 3: Agent Prompt Continuity</span>
+      </div>
+      <div class="detail-item" style="margin-bottom: 6px;">
+        <span class="detail-icon">❓</span>
+        <span>When agent resumes after "needs info" or "changes requested", how much context does it get? Does it start from scratch or continue?</span>
+      </div>
+      <div class="detail-item" style="color: #94a3b8;">
+        <span class="detail-icon">💡</span>
+        <span><strong>Proposal:</strong> The <code>inject_payload_context</code> hook builds a context string from the event log and stores it in <code>task.agentContext</code>. The prompt builder includes this. Agent gets full history of decisions + review comments.</span>
+      </div>
+    </div>
+
+    <div class="step-card" style="border-left: 3px solid #ef4444;">
+      <div class="step-header">
+        <span class="step-action" style="color: #f87171; font-size: 14px;">Gap 4: Agent Output → Payload Parsing</span>
+      </div>
+      <div class="detail-item" style="margin-bottom: 6px;">
+        <span class="detail-icon">❓</span>
+        <span>How does the agent communicate structured payloads (NeedsInfo, Options, ChangesRequested) back to the system? It's just a text stream.</span>
+      </div>
+      <div class="detail-item" style="color: #94a3b8;">
+        <span class="detail-icon">💡</span>
+        <span><strong>Proposal:</strong> Define a structured output protocol. Agent writes special markers (<code>&lt;&lt;&lt;PAYLOAD&gt;&gt;&gt;...&lt;&lt;&lt;END&gt;&gt;&gt;</code>) or uses a tool call. The agent adapter parses these from the output stream. This is agent-type specific (part of IAgent adapter).</span>
+      </div>
+    </div>
+
+    <div class="step-card" style="border-left: 3px solid #ef4444;">
+      <div class="step-header">
+        <span class="step-action" style="color: #f87171; font-size: 14px;">Gap 5: Concurrent Agent Runs</span>
+      </div>
+      <div class="detail-item" style="margin-bottom: 6px;">
+        <span class="detail-icon">❓</span>
+        <span>Can two agents run on the same task simultaneously? (e.g., plan agent + lint agent). What about same project, different tasks?</span>
+      </div>
+      <div class="detail-item" style="color: #94a3b8;">
+        <span class="detail-icon">💡</span>
+        <span><strong>Proposal:</strong> Guard <code>no_running_agent</code> prevents concurrent runs on the same task. Different tasks on the same project CAN run concurrently (they should use separate branches). Add a guard <code>max_concurrent_agents</code> per project if needed.</span>
+      </div>
+    </div>
+
+    <div class="step-card" style="border-left: 3px solid #ef4444;">
+      <div class="step-header">
+        <span class="step-action" style="color: #f87171; font-size: 14px;">Gap 6: Failed Agent Mid-Pipeline</span>
+      </div>
+      <div class="detail-item" style="margin-bottom: 6px;">
+        <span class="detail-icon">❓</span>
+        <span>If an agent crashes mid-work (OOM, network error, timeout), what happens? Partial code changes on disk, task stuck in "In Progress".</span>
+      </div>
+      <div class="detail-item" style="color: #94a3b8;">
+        <span class="detail-icon">💡</span>
+        <span><strong>Proposal:</strong> On agent process failure: (1) transition to "failed" status via <code>agent_error</code> trigger, (2) log the error in event log, (3) notify admin, (4) admin can retry (failed &rarr; open) or manually fix and advance. Git state is preserved on the branch.</span>
+      </div>
+    </div>
+
+    <div class="step-card" style="border-left: 3px solid #f59e0b;">
+      <div class="step-header">
+        <span class="step-action" style="color: #fbbf24; font-size: 14px;">Enhancement: Diff Review Before Merge</span>
+      </div>
+      <div class="detail-item" style="color: #94a3b8;">
+        <span class="detail-icon">💡</span>
+        <span>Before auto-merging (or in the "PR Review" status), the app should show an inline diff viewer so the admin can see exactly what changed. This was planned for Phase 5 but may be needed earlier.</span>
+      </div>
+    </div>
+
+    <div class="step-card" style="border-left: 3px solid #f59e0b;">
+      <div class="step-header">
+        <span class="step-action" style="color: #fbbf24; font-size: 14px;">Enhancement: Cost Running Total</span>
+      </div>
+      <div class="detail-item" style="color: #94a3b8;">
+        <span class="detail-icon">💡</span>
+        <span>The task detail should show cumulative cost across all agent runs. In the complex flow, 4 agent runs could add up. Show running total + per-run breakdown.</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
