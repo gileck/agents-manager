@@ -1,0 +1,1 @@
+{"version":3,"file":"ipc-base.d.ts","sourceRoot":"","sources":["ipc-base.ts"],"names":[],"mappings":"AAAA,eAAO,MAAM,aAAa,GAAI,WAAW,MAAM,EAAE,QAAQ,MAAM,KAAG,MAEjE,CAAC;AAEF,MAAM,WAAW,WAAW,CAAC,CAAC;IAC5B,OAAO,EAAE,OAAO,CAAC;IACjB,IAAI,CAAC,EAAE,CAAC,CAAC;IACT,KAAK,CAAC,EAAE,MAAM,CAAC;CAChB"}
