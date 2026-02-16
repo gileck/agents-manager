@@ -1,4 +1,4 @@
-import type { ProjectCreateInput, TaskCreateInput } from '../../src/shared/types';
+import type { ProjectCreateInput, TaskCreateInput, AgentRunCreateInput, AgentMode } from '../../src/shared/types';
 
 let projectCounter = 0;
 let taskCounter = 0;
@@ -28,6 +28,18 @@ export function createTaskInput(
     pipelineId,
     title: `Test Task ${taskCounter}`,
     description: `Description for task ${taskCounter}`,
+    ...overrides,
+  };
+}
+
+export function createAgentRunInput(
+  taskId: string,
+  overrides?: Partial<Omit<AgentRunCreateInput, 'taskId'>>,
+): AgentRunCreateInput {
+  return {
+    taskId,
+    agentType: 'scripted',
+    mode: 'plan' as AgentMode,
     ...overrides,
   };
 }

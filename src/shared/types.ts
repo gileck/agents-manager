@@ -60,6 +60,7 @@ export interface Transition {
   guards?: TransitionGuard[];
   hooks?: TransitionHook[];
   label?: string;
+  agentOutcome?: string;
 }
 
 export interface Pipeline {
@@ -178,7 +179,7 @@ export interface TaskDependency {
 }
 
 // Task event types
-export type TaskEventCategory = 'status_change' | 'field_update' | 'dependency_change' | 'comment' | 'system';
+export type TaskEventCategory = 'status_change' | 'field_update' | 'dependency_change' | 'comment' | 'system' | 'agent';
 export type TaskEventSeverity = 'info' | 'warning' | 'error';
 
 export interface TaskEvent {
@@ -208,8 +209,8 @@ export interface TaskEventFilter {
 }
 
 // Activity log types
-export type ActivityAction = 'create' | 'update' | 'delete' | 'transition' | 'system';
-export type ActivityEntity = 'project' | 'task' | 'pipeline' | 'system';
+export type ActivityAction = 'create' | 'update' | 'delete' | 'transition' | 'system' | 'agent_start' | 'agent_complete' | 'prompt_response';
+export type ActivityEntity = 'project' | 'task' | 'pipeline' | 'system' | 'agent_run';
 
 export interface ActivityEntry {
   id: string;
@@ -269,3 +270,176 @@ export interface TransitionHistoryEntry {
 
 export type GuardFn = (task: Task, transition: Transition, context: TransitionContext, db: unknown) => GuardResult;
 export type HookFn = (task: Task, transition: Transition, context: TransitionContext) => Promise<void>;
+
+// ============================================
+// Phase 2: Agent Execution Types
+// ============================================
+
+export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
+export type AgentMode = 'plan' | 'implement' | 'review';
+
+export interface AgentRun {
+  id: string;
+  taskId: string;
+  agentType: string;
+  mode: AgentMode;
+  status: AgentRunStatus;
+  output: string | null;
+  outcome: string | null;
+  payload: Record<string, unknown>;
+  exitCode: number | null;
+  startedAt: number;
+  completedAt: number | null;
+  costInputTokens: number | null;
+  costOutputTokens: number | null;
+}
+
+export interface AgentRunCreateInput {
+  taskId: string;
+  agentType: string;
+  mode: AgentMode;
+}
+
+export interface AgentRunUpdateInput {
+  status?: AgentRunStatus;
+  output?: string;
+  outcome?: string;
+  payload?: Record<string, unknown>;
+  exitCode?: number;
+  completedAt?: number;
+  costInputTokens?: number;
+  costOutputTokens?: number;
+}
+
+export type ArtifactType = 'branch' | 'pr' | 'commit' | 'diff' | 'document';
+
+export interface TaskArtifact {
+  id: string;
+  taskId: string;
+  type: ArtifactType;
+  data: Record<string, unknown>;
+  createdAt: number;
+}
+
+export interface TaskArtifactCreateInput {
+  taskId: string;
+  type: ArtifactType;
+  data?: Record<string, unknown>;
+}
+
+export type PhaseType = 'plan' | 'implement' | 'review';
+export type PhaseStatus = 'pending' | 'active' | 'completed' | 'failed';
+
+export interface TaskPhase {
+  id: string;
+  taskId: string;
+  phase: string;
+  status: PhaseStatus;
+  agentRunId: string | null;
+  startedAt: number | null;
+  completedAt: number | null;
+}
+
+export interface TaskPhaseCreateInput {
+  taskId: string;
+  phase: string;
+}
+
+export interface TaskPhaseUpdateInput {
+  status?: PhaseStatus;
+  agentRunId?: string;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+export type PromptType = 'needs_info' | 'options_proposed' | 'changes_requested';
+export type PromptStatus = 'pending' | 'answered' | 'expired';
+
+export interface PendingPrompt {
+  id: string;
+  taskId: string;
+  agentRunId: string;
+  promptType: string;
+  payload: Record<string, unknown>;
+  response: Record<string, unknown> | null;
+  status: PromptStatus;
+  createdAt: number;
+  answeredAt: number | null;
+}
+
+export interface PendingPromptCreateInput {
+  taskId: string;
+  agentRunId: string;
+  promptType: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface AgentContext {
+  task: Task;
+  project: Project;
+  workdir: string;
+  mode: AgentMode;
+  previousOutput?: string;
+  promptResponses?: Record<string, unknown>[];
+  systemPrompt?: string;
+}
+
+export interface AgentConfig {
+  model?: string;
+  timeout?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
+}
+
+export interface AgentRunResult {
+  exitCode: number;
+  output: string;
+  outcome?: string;
+  payload?: Record<string, unknown>;
+  error?: string;
+  costInputTokens?: number;
+  costOutputTokens?: number;
+}
+
+export interface AgentInfo {
+  type: string;
+  name: string;
+  description: string;
+  available: boolean;
+}
+
+export interface Worktree {
+  path: string;
+  branch: string;
+  taskId: string;
+  locked: boolean;
+}
+
+export interface GitLogEntry {
+  hash: string;
+  subject: string;
+  author: string;
+  date: string;
+}
+
+export interface CreatePRParams {
+  title: string;
+  body: string;
+  head: string;
+  base: string;
+}
+
+export interface PRInfo {
+  url: string;
+  number: number;
+  title: string;
+}
+
+export type PRStatus = 'open' | 'closed' | 'merged';
+
+export interface Notification {
+  taskId: string;
+  title: string;
+  body: string;
+  channel: string;
+}

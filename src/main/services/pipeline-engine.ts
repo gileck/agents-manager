@@ -92,8 +92,10 @@ export class PipelineEngine implements IPipelineEngine {
       return { success: false, error: `Pipeline not found: ${task.pipelineId}` };
     }
 
-    // Find matching transition
+    // Find matching transition — prefer exact trigger match, fall back to any match
     const transition = pipeline.transitions.find(
+      (t) => t.from === task.status && t.to === toStatus && t.trigger === ctx.trigger,
+    ) ?? pipeline.transitions.find(
       (t) => t.from === task.status && t.to === toStatus,
     );
     if (!transition) {

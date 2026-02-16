@@ -72,4 +72,40 @@ export const BUG_PIPELINE: SeededPipeline = {
   ],
 };
 
-export const SEEDED_PIPELINES = [SIMPLE_PIPELINE, FEATURE_PIPELINE, BUG_PIPELINE];
+export const AGENT_PIPELINE: SeededPipeline = {
+  id: 'pipeline-agent',
+  name: 'Agent-Driven',
+  description: 'Agent-driven workflow with plan, implement, and review phases',
+  taskType: 'agent',
+  statuses: [
+    { name: 'open', label: 'Open' },
+    { name: 'planning', label: 'Planning' },
+    { name: 'plan_review', label: 'Plan Review' },
+    { name: 'implementing', label: 'Implementing' },
+    { name: 'pr_review', label: 'PR Review' },
+    { name: 'needs_info', label: 'Needs Info' },
+    { name: 'done', label: 'Done', isFinal: true },
+  ],
+  transitions: [
+    // Agent starts work
+    { from: 'open', to: 'planning', trigger: 'agent' },
+    { from: 'open', to: 'implementing', trigger: 'agent' },
+    // Agent outcomes
+    { from: 'planning', to: 'plan_review', trigger: 'agent', agentOutcome: 'plan_complete' },
+    { from: 'planning', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info' },
+    { from: 'implementing', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready' },
+    { from: 'implementing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info' },
+    // Human-in-the-loop resume
+    { from: 'needs_info', to: 'planning', trigger: 'agent', agentOutcome: 'info_provided' },
+    { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided' },
+    // Manual transitions
+    { from: 'plan_review', to: 'implementing', trigger: 'manual' },
+    { from: 'pr_review', to: 'done', trigger: 'manual' },
+    { from: 'pr_review', to: 'implementing', trigger: 'manual' },
+    // Manual fallbacks
+    { from: 'open', to: 'planning', trigger: 'manual' },
+    { from: 'open', to: 'implementing', trigger: 'manual' },
+  ],
+};
+
+export const SEEDED_PIPELINES = [SIMPLE_PIPELINE, FEATURE_PIPELINE, BUG_PIPELINE, AGENT_PIPELINE];

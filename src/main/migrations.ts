@@ -177,6 +177,85 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_pipelines_task_type ON pipelines(task_type)
       `,
     },
+    {
+      name: '013_create_agent_runs',
+      sql: `
+        CREATE TABLE IF NOT EXISTS agent_runs (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          agent_type TEXT NOT NULL,
+          mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review')),
+          status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')),
+          output TEXT,
+          outcome TEXT,
+          payload TEXT,
+          exit_code INTEGER,
+          started_at INTEGER NOT NULL,
+          completed_at INTEGER,
+          cost_input_tokens INTEGER,
+          cost_output_tokens INTEGER,
+          FOREIGN KEY(task_id) REFERENCES tasks(id)
+        )
+      `,
+    },
+    {
+      name: '014_create_task_artifacts',
+      sql: `
+        CREATE TABLE IF NOT EXISTS task_artifacts (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('branch','pr','commit','diff','document')),
+          data TEXT NOT NULL DEFAULT '{}',
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(task_id) REFERENCES tasks(id)
+        )
+      `,
+    },
+    {
+      name: '015_create_task_phases',
+      sql: `
+        CREATE TABLE IF NOT EXISTS task_phases (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          phase TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')),
+          agent_run_id TEXT,
+          started_at INTEGER,
+          completed_at INTEGER,
+          FOREIGN KEY(task_id) REFERENCES tasks(id),
+          FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+        )
+      `,
+    },
+    {
+      name: '016_create_pending_prompts',
+      sql: `
+        CREATE TABLE IF NOT EXISTS pending_prompts (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          agent_run_id TEXT NOT NULL,
+          prompt_type TEXT NOT NULL,
+          payload TEXT NOT NULL DEFAULT '{}',
+          response TEXT,
+          status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')),
+          created_at INTEGER NOT NULL,
+          answered_at INTEGER,
+          FOREIGN KEY(task_id) REFERENCES tasks(id),
+          FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+        )
+      `,
+    },
+    {
+      name: '017_create_phase2_indexes',
+      sql: `
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_task_id ON agent_runs(task_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+        CREATE INDEX IF NOT EXISTS idx_task_artifacts_task_id ON task_artifacts(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_phases_task_id ON task_phases(task_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
+      `,
+    },
   ];
 }
 
