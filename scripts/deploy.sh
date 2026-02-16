@@ -5,7 +5,7 @@
 
 set -e
 
-APP_NAME="Task Manager"
+APP_NAME="Agents Manager"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="$PROJECT_DIR/dist"
 
@@ -28,14 +28,14 @@ echo "📦 Found app at: $BUILT_APP"
 # Kill the running app if it exists
 echo "🛑 Stopping running instance (if any)..."
 # Kill by app name
-pkill -9 -f "Task Manager" 2>/dev/null || true
+pkill -9 -f "Agents Manager" 2>/dev/null || true
 # Also kill by bundle identifier
-pkill -9 -f "com.taskmanager.app" 2>/dev/null || true
+pkill -9 -f "com.agents-manager.app" 2>/dev/null || true
 # Kill any Electron process running from dist folder
-pkill -9 -f "dist/mac-arm64/Task Manager" 2>/dev/null || true
-pkill -9 -f "dist/mac/Task Manager" 2>/dev/null || true
+pkill -9 -f "dist/mac-arm64/Agents Manager" 2>/dev/null || true
+pkill -9 -f "dist/mac/Agents Manager" 2>/dev/null || true
 # Kill from Applications
-osascript -e 'quit app "Task Manager"' 2>/dev/null || true
+osascript -e 'quit app "Agents Manager"' 2>/dev/null || true
 sleep 2
 
 # Copy to Applications

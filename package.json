@@ -12,7 +12,7 @@
     "build:main": "tsc -p config/tsconfig.main.json",
     "build:preload": "tsc -p config/tsconfig.preload.json",
     "build:renderer": "webpack --config config/webpack.renderer.config.js",
-    "prestart": "pkill -f 'Task Manager' 2>/dev/null || true; pkill -f 'electron .' 2>/dev/null || true; pkill -f Electron 2>/dev/null || true",
+    "prestart": "pkill -f 'Agents Manager' 2>/dev/null || true; pkill -f 'electron .' 2>/dev/null || true; pkill -f Electron 2>/dev/null || true",
     "start": "npm run build && electron .",
     "start:devtools": "npm run build && ELECTRON_DEBUG=1 electron .",
     "electron": "electron .",
@@ -85,8 +85,8 @@
     "webpack-cli": "^6.0.1"
   },
   "build": {
-    "appId": "com.electron.template",
-    "productName": "MacOS App Template",
+    "appId": "com.agents-manager.app",
+    "productName": "Agents Manager",
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": "dir",

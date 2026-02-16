@@ -15,7 +15,7 @@ export function HomePage() {
   return (
     <div className="p-8">
       <div className="max-w-4xl">
-        <h1 className="text-4xl font-bold mb-2">Welcome to MacOS App Template</h1>
+        <h1 className="text-4xl font-bold mb-2">Welcome to Agents Manager</h1>
         <p className="text-muted-foreground mb-8">
           A production-ready Electron template for macOS menu bar apps
         </p>
