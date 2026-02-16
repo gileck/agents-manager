@@ -28,17 +28,17 @@ function rowToProject(row: ProjectRow): Project {
 export class SqliteProjectStore implements IProjectStore {
   constructor(private db: Database.Database) {}
 
-  getProject(id: string): Project | null {
+  async getProject(id: string): Promise<Project | null> {
     const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow | undefined;
     return row ? rowToProject(row) : null;
   }
 
-  listProjects(): Project[] {
+  async listProjects(): Promise<Project[]> {
     const rows = this.db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all() as ProjectRow[];
     return rows.map(rowToProject);
   }
 
-  createProject(input: ProjectCreateInput): Project {
+  async createProject(input: ProjectCreateInput): Promise<Project> {
     const id = generateId();
     const timestamp = now();
     const config = JSON.stringify(input.config ?? {});
@@ -48,11 +48,11 @@ export class SqliteProjectStore implements IProjectStore {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, input.name, input.description ?? null, input.path ?? null, config, timestamp, timestamp);
 
-    return this.getProject(id)!;
+    return (await this.getProject(id))!;
   }
 
-  updateProject(id: string, input: ProjectUpdateInput): Project | null {
-    const existing = this.getProject(id);
+  async updateProject(id: string, input: ProjectUpdateInput): Promise<Project | null> {
+    const existing = await this.getProject(id);
     if (!existing) return null;
 
     const updates: string[] = [];
@@ -82,10 +82,10 @@ export class SqliteProjectStore implements IProjectStore {
     values.push(id);
 
     this.db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    return this.getProject(id)!;
+    return (await this.getProject(id))!;
   }
 
-  deleteProject(id: string): boolean {
+  async deleteProject(id: string): Promise<boolean> {
     const result = this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
     return result.changes > 0;
   }

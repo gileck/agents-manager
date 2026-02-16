@@ -7,14 +7,14 @@ describe('Hook Execution', () => {
   let projectId: string;
   let pipelineId: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetCounters();
     ctx = createTestContext();
-    const project = ctx.projectStore.createProject(createProjectInput());
+    const project = await ctx.projectStore.createProject(createProjectInput());
     projectId = project.id;
 
     // Create a pipeline with hooks
-    const pipeline = ctx.pipelineStore.createPipeline({
+    const pipeline = await ctx.pipelineStore.createPipeline({
       name: 'Hook Test Pipeline',
       taskType: 'hook-test',
       statuses: [
@@ -50,8 +50,8 @@ describe('Hook Execution', () => {
       hookCalled(task.id, transition.to);
     });
 
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
-    const result = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
+    const result = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
 
     expect(result.success).toBe(true);
 
@@ -66,15 +66,15 @@ describe('Hook Execution', () => {
       throw new Error('Hook failed!');
     });
 
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
-    const result = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
+    const result = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
 
     // Transition should still succeed
     expect(result.success).toBe(true);
     expect(result.task!.status).toBe('in_progress');
 
     // Verify the task in DB is also updated
-    const dbTask = ctx.taskStore.getTask(task.id);
+    const dbTask = await ctx.taskStore.getTask(task.id);
     expect(dbTask!.status).toBe('in_progress');
   });
 
@@ -83,12 +83,12 @@ describe('Hook Execution', () => {
       throw new Error('Hook crashed!');
     });
 
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
-    ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
+    await ctx.pipelineEngine.executeTransition(task, 'in_progress');
 
     // Wait for the async hook to fail and be logged
-    await vi.waitFor(() => {
-      const events = ctx.taskEventLog.getEvents({ taskId: task.id, category: 'system', severity: 'error' });
+    await vi.waitFor(async () => {
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'system', severity: 'error' });
       expect(events.length).toBeGreaterThan(0);
       expect(events[0].message).toContain('on_start');
       expect(events[0].message).toContain('failed');
@@ -105,14 +105,14 @@ describe('Hook Execution', () => {
       callOrder.push('on_notify');
     });
 
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
 
     // First move to in_progress
-    const r1 = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    const r1 = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
     expect(r1.success).toBe(true);
 
     // Then move to done (has on_complete and on_notify hooks)
-    const r2 = ctx.pipelineEngine.executeTransition(r1.task!, 'done');
+    const r2 = await ctx.pipelineEngine.executeTransition(r1.task!, 'done');
     expect(r2.success).toBe(true);
 
     await vi.waitFor(() => {
@@ -120,10 +120,10 @@ describe('Hook Execution', () => {
     });
   });
 
-  it('should skip unregistered hooks without error', () => {
+  it('should skip unregistered hooks without error', async () => {
     // Don't register any hooks
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
-    const result = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipelineId));
+    const result = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
 
     // Should still succeed
     expect(result.success).toBe(true);

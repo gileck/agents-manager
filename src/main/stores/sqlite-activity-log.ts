@@ -28,7 +28,7 @@ function rowToEntry(row: ActivityRow): ActivityEntry {
 export class SqliteActivityLog implements IActivityLog {
   constructor(private db: Database.Database) {}
 
-  log(input: ActivityCreateInput): ActivityEntry {
+  async log(input: ActivityCreateInput): Promise<ActivityEntry> {
     const id = generateId();
     const timestamp = now();
 
@@ -56,7 +56,7 @@ export class SqliteActivityLog implements IActivityLog {
     };
   }
 
-  getEntries(filter?: ActivityFilter): ActivityEntry[] {
+  async getEntries(filter?: ActivityFilter): Promise<ActivityEntry[]> {
     const conditions: string[] = [];
     const values: unknown[] = [];
 

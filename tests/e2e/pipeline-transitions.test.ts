@@ -7,10 +7,10 @@ describe('Pipeline Transitions', () => {
   let ctx: TestContext;
   let projectId: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetCounters();
     ctx = createTestContext();
-    const project = ctx.projectStore.createProject(createProjectInput());
+    const project = await ctx.projectStore.createProject(createProjectInput());
     projectId = project.id;
   });
 
@@ -18,70 +18,70 @@ describe('Pipeline Transitions', () => {
     ctx.cleanup();
   });
 
-  it('should execute a valid transition (open → in_progress)', () => {
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+  it('should execute a valid transition (open → in_progress)', async () => {
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
     expect(task.status).toBe('open');
 
-    const result = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    const result = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
 
     expect(result.success).toBe(true);
     expect(result.task).toBeDefined();
     expect(result.task!.status).toBe('in_progress');
   });
 
-  it('should execute full workflow (open → in_progress → done)', () => {
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+  it('should execute full workflow (open → in_progress → done)', async () => {
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
 
-    const result1 = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    const result1 = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
     expect(result1.success).toBe(true);
 
-    const result2 = ctx.pipelineEngine.executeTransition(result1.task!, 'done');
+    const result2 = await ctx.pipelineEngine.executeTransition(result1.task!, 'done');
     expect(result2.success).toBe(true);
     expect(result2.task!.status).toBe('done');
   });
 
-  it('should reject invalid transition (open → done)', () => {
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+  it('should reject invalid transition (open → done)', async () => {
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
 
-    const result = ctx.pipelineEngine.executeTransition(task, 'done');
+    const result = await ctx.pipelineEngine.executeTransition(task, 'done');
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('No transition');
   });
 
-  it('should allow backward transition (in_progress → open)', () => {
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+  it('should allow backward transition (in_progress → open)', async () => {
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
 
-    const result1 = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    const result1 = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
     expect(result1.success).toBe(true);
 
-    const result2 = ctx.pipelineEngine.executeTransition(result1.task!, 'open');
+    const result2 = await ctx.pipelineEngine.executeTransition(result1.task!, 'open');
     expect(result2.success).toBe(true);
     expect(result2.task!.status).toBe('open');
   });
 
-  it('should return valid transitions for a task', () => {
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+  it('should return valid transitions for a task', async () => {
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
 
-    const transitions = ctx.pipelineEngine.getValidTransitions(task);
+    const transitions = await ctx.pipelineEngine.getValidTransitions(task);
     expect(transitions).toHaveLength(1);
     expect(transitions[0].to).toBe('in_progress');
   });
 
-  it('should return valid transitions filtered by trigger', () => {
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+  it('should return valid transitions filtered by trigger', async () => {
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
 
-    const manualTransitions = ctx.pipelineEngine.getValidTransitions(task, 'manual');
+    const manualTransitions = await ctx.pipelineEngine.getValidTransitions(task, 'manual');
     expect(manualTransitions).toHaveLength(1);
 
-    const automaticTransitions = ctx.pipelineEngine.getValidTransitions(task, 'automatic');
+    const automaticTransitions = await ctx.pipelineEngine.getValidTransitions(task, 'automatic');
     expect(automaticTransitions).toHaveLength(0);
   });
 
-  it('should record transition history', () => {
-    const task = ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+  it('should record transition history', async () => {
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
 
-    ctx.pipelineEngine.executeTransition(task, 'in_progress', {
+    await ctx.pipelineEngine.executeTransition(task, 'in_progress', {
       trigger: 'manual',
       actor: 'test-user',
     });
@@ -94,14 +94,14 @@ describe('Pipeline Transitions', () => {
     expect(rows[0].actor).toBe('test-user');
   });
 
-  it('should handle non-existent pipeline gracefully', () => {
-    const task = ctx.taskStore.createTask(
+  it('should handle non-existent pipeline gracefully', async () => {
+    const task = await ctx.taskStore.createTask(
       createTaskInput(projectId, SIMPLE_PIPELINE.id),
     );
     // Manually set a bad pipeline id
     const badTask = { ...task, pipelineId: 'non-existent' };
 
-    const result = ctx.pipelineEngine.executeTransition(badTask, 'in_progress');
+    const result = await ctx.pipelineEngine.executeTransition(badTask, 'in_progress');
     expect(result.success).toBe(false);
     expect(result.error).toContain('Pipeline not found');
   });

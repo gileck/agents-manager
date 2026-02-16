@@ -30,17 +30,17 @@ function rowToPipeline(row: PipelineRow): Pipeline {
 export class SqlitePipelineStore implements IPipelineStore {
   constructor(private db: Database.Database) {}
 
-  getPipeline(id: string): Pipeline | null {
+  async getPipeline(id: string): Promise<Pipeline | null> {
     const row = this.db.prepare('SELECT * FROM pipelines WHERE id = ?').get(id) as PipelineRow | undefined;
     return row ? rowToPipeline(row) : null;
   }
 
-  listPipelines(): Pipeline[] {
+  async listPipelines(): Promise<Pipeline[]> {
     const rows = this.db.prepare('SELECT * FROM pipelines ORDER BY created_at ASC').all() as PipelineRow[];
     return rows.map(rowToPipeline);
   }
 
-  createPipeline(input: PipelineCreateInput): Pipeline {
+  async createPipeline(input: PipelineCreateInput): Promise<Pipeline> {
     const id = generateId();
     const timestamp = now();
 
@@ -58,11 +58,11 @@ export class SqlitePipelineStore implements IPipelineStore {
       timestamp,
     );
 
-    return this.getPipeline(id)!;
+    return (await this.getPipeline(id))!;
   }
 
-  updatePipeline(id: string, input: PipelineUpdateInput): Pipeline | null {
-    const existing = this.getPipeline(id);
+  async updatePipeline(id: string, input: PipelineUpdateInput): Promise<Pipeline | null> {
+    const existing = await this.getPipeline(id);
     if (!existing) return null;
 
     const updates: string[] = [];
@@ -96,15 +96,15 @@ export class SqlitePipelineStore implements IPipelineStore {
     values.push(id);
 
     this.db.prepare(`UPDATE pipelines SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    return this.getPipeline(id)!;
+    return (await this.getPipeline(id))!;
   }
 
-  deletePipeline(id: string): boolean {
+  async deletePipeline(id: string): Promise<boolean> {
     const result = this.db.prepare('DELETE FROM pipelines WHERE id = ?').run(id);
     return result.changes > 0;
   }
 
-  getPipelineForTaskType(taskType: string): Pipeline | null {
+  async getPipelineForTaskType(taskType: string): Promise<Pipeline | null> {
     const row = this.db.prepare('SELECT * FROM pipelines WHERE task_type = ?').get(taskType) as PipelineRow | undefined;
     return row ? rowToPipeline(row) : null;
   }

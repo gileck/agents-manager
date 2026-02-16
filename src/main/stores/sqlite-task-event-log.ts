@@ -28,7 +28,7 @@ function rowToEvent(row: TaskEventRow): TaskEvent {
 export class SqliteTaskEventLog implements ITaskEventLog {
   constructor(private db: Database.Database) {}
 
-  log(input: TaskEventCreateInput): TaskEvent {
+  async log(input: TaskEventCreateInput): Promise<TaskEvent> {
     const id = generateId();
     const timestamp = now();
 
@@ -56,7 +56,7 @@ export class SqliteTaskEventLog implements ITaskEventLog {
     };
   }
 
-  getEvents(filter?: TaskEventFilter): TaskEvent[] {
+  async getEvents(filter?: TaskEventFilter): Promise<TaskEvent[]> {
     const conditions: string[] = [];
     const values: unknown[] = [];
 

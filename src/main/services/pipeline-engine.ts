@@ -8,12 +8,51 @@ import type {
   GuardFn,
   GuardResult,
   HookFn,
+  PipelineStatus,
 } from '../../shared/types';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
-import { generateId, now } from '../stores/utils';
+import { generateId, now, parseJson } from '../stores/utils';
+
+interface TaskRow {
+  id: string;
+  project_id: string;
+  pipeline_id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: number;
+  tags: string;
+  parent_task_id: string | null;
+  assignee: string | null;
+  pr_link: string | null;
+  branch_name: string | null;
+  metadata: string;
+  created_at: number;
+  updated_at: number;
+}
+
+function rowToTask(row: TaskRow): Task {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    pipelineId: row.pipeline_id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    priority: row.priority,
+    tags: parseJson<string[]>(row.tags, []),
+    parentTaskId: row.parent_task_id,
+    assignee: row.assignee,
+    prLink: row.pr_link,
+    branchName: row.branch_name,
+    metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 export class PipelineEngine implements IPipelineEngine {
   private guards = new Map<string, GuardFn>();
@@ -34,8 +73,8 @@ export class PipelineEngine implements IPipelineEngine {
     this.hooks.set(name, fn);
   }
 
-  getValidTransitions(task: Task, trigger?: TransitionTrigger): Transition[] {
-    const pipeline = this.pipelineStore.getPipeline(task.pipelineId);
+  async getValidTransitions(task: Task, trigger?: TransitionTrigger): Promise<Transition[]> {
+    const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
     if (!pipeline) return [];
 
     return pipeline.transitions.filter((t) => {
@@ -45,10 +84,10 @@ export class PipelineEngine implements IPipelineEngine {
     });
   }
 
-  executeTransition(task: Task, toStatus: string, context?: TransitionContext): TransitionResult {
+  async executeTransition(task: Task, toStatus: string, context?: TransitionContext): Promise<TransitionResult> {
     const ctx: TransitionContext = context ?? { trigger: 'manual' };
 
-    const pipeline = this.pipelineStore.getPipeline(task.pipelineId);
+    const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
     if (!pipeline) {
       return { success: false, error: `Pipeline not found: ${task.pipelineId}` };
     }
@@ -64,20 +103,23 @@ export class PipelineEngine implements IPipelineEngine {
       };
     }
 
-    // Execute atomically within a transaction
+    // Execute atomically within a sync transaction (better-sqlite3 requirement).
+    // Uses raw SQL inside the transaction — the async store interface can't be
+    // called from a synchronous callback.
     let updatedTask: Task | null = null;
     const guardResults: Record<string, GuardResult> = {};
     const guardFailures: Array<{ guard: string; reason: string }> = [];
 
     const txn = this.db.transaction(() => {
-      // Re-fetch task inside transaction (TOCTOU protection)
-      const freshTask = this.taskStore.getTask(task.id);
-      if (!freshTask) {
+      // Re-fetch task inside transaction via raw SQL (TOCTOU protection)
+      const freshRow = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow | undefined;
+      if (!freshRow) {
         throw new Error(`Task not found: ${task.id}`);
       }
-      if (freshTask.status !== task.status) {
-        throw new Error(`Task status changed: expected "${task.status}", got "${freshTask.status}"`);
+      if (freshRow.status !== task.status) {
+        throw new Error(`Task status changed: expected "${task.status}", got "${freshRow.status}"`);
       }
+      const freshTask = rowToTask(freshRow);
 
       // Run guards synchronously
       if (transition.guards) {
@@ -98,11 +140,15 @@ export class PipelineEngine implements IPipelineEngine {
       }
 
       if (guardFailures.length > 0) {
-        return; // Will return failure after transaction
+        return;
       }
 
-      // Update task status
-      updatedTask = this.taskStore.updateTask(task.id, { status: toStatus });
+      // Update task status via raw SQL
+      const timestamp = now();
+      this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').run(toStatus, timestamp, task.id);
+
+      // Build the updated task from what we know
+      updatedTask = { ...freshTask, status: toStatus, updatedAt: timestamp };
 
       // Insert transition history
       this.db.prepare(`
@@ -116,7 +162,7 @@ export class PipelineEngine implements IPipelineEngine {
         ctx.trigger,
         ctx.actor ?? null,
         JSON.stringify(guardResults),
-        now(),
+        timestamp,
       );
     });
 
@@ -155,7 +201,7 @@ export class PipelineEngine implements IPipelineEngine {
     }
 
     // Log status_change event
-    this.taskEventLog.log({
+    await this.taskEventLog.log({
       taskId: task.id,
       category: 'status_change',
       severity: 'info',

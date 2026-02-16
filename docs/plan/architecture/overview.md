@@ -5,11 +5,13 @@
 ### 1. Interface-First
 Every external dependency and swappable concern is accessed through an interface. The application code (UI, IPC handlers, business logic) never depends on a specific implementation directly. This means any layer can be replaced without refactoring the rest of the system.
 
-### 2. Async Everywhere
-**Every interface method returns a `Promise`.** No synchronous assumptions, even if the current implementation (SQLite) is synchronous. This is critical because any layer may move to the cloud in the future (remote DB, remote agent service, cloud storage, external task manager). If we use sync interfaces now, migrating to async later means refactoring every caller.
+### 2. Async Everywhere (HARD REQUIREMENT)
+**Every public interface method returns a `Promise`.** This is a non-negotiable architectural constraint, not a suggestion. No synchronous return types on any interface, even if the current implementation (SQLite) is synchronous under the hood.
+
+**Why this is critical:** Any layer may move to the cloud in the future (MongoDB, remote DB, remote agent service, cloud storage, external task manager). If we use sync interfaces now, migrating to async later means refactoring every caller across the entire codebase. By enforcing async interfaces from day one, swapping SQLite for MongoDB is a single-file change in the composition root.
 
 ```typescript
-// WRONG - assumes local sync access
+// WRONG - assumes local sync access, locks us into sync forever
 interface ITaskStore {
   getTask(id: string): Task | null;
   listTasks(projectId: string): Task[];
@@ -22,7 +24,46 @@ interface ITaskStore {
 }
 ```
 
-This applies to ALL interfaces: stores, engine, git ops, notifications - everything. The SQLite implementations simply wrap sync operations in `Promise.resolve()` or use `async/await` naturally. The cost is negligible, but the future flexibility is enormous.
+This applies to ALL public interfaces between domains: stores, engine, git ops, notifications — everything. The SQLite implementations simply mark methods as `async` (the sync return values are auto-wrapped in resolved Promises). The cost is negligible, but the future flexibility is enormous.
+
+#### Async Interfaces vs Sync Implementation Internals
+
+The "async everywhere" rule applies to **public interfaces** — the contracts between application domains. It does NOT mean every internal implementation detail must be async. Specifically:
+
+- **Public interface methods** → MUST return `Promise<T>`
+- **SQLite store implementations** → methods are `async` (wrapping sync better-sqlite3 calls)
+- **Transaction internals** → MAY use sync raw SQL (better-sqlite3's `db.transaction()` requires a synchronous callback)
+
+This distinction matters most in the Pipeline Engine, which needs atomic transactions:
+
+```typescript
+// The public interface is async
+interface IPipelineEngine {
+  executeTransition(task: Task, toStatus: string, ctx?: TransitionContext): Promise<TransitionResult>;
+}
+
+// The SQLite implementation: async public method, sync transaction internals
+class PipelineEngine implements IPipelineEngine {
+  async executeTransition(task, toStatus, ctx): Promise<TransitionResult> {
+    // 1. Fetch pipeline via async store (BEFORE transaction)
+    const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+
+    // 2. Sync transaction — uses raw SQL, NOT async store methods
+    //    (better-sqlite3 transactions require synchronous callbacks)
+    const txn = this.db.transaction(() => {
+      const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id);
+      // ... run guards (sync), update status (raw SQL), insert history (raw SQL)
+    });
+    txn();
+
+    // 3. After transaction — use async stores again
+    await this.taskEventLog.log({ ... });
+    return { success: true, task: updatedTask };
+  }
+}
+```
+
+**Key rule:** A MongoDB implementation of the same interface would use MongoDB transactions (which are async) instead of better-sqlite3 transactions. The public interface stays identical — callers never know or care which database is underneath.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

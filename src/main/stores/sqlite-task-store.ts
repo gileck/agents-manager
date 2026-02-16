@@ -48,12 +48,12 @@ export class SqliteTaskStore implements ITaskStore {
     private pipelineStore: IPipelineStore,
   ) {}
 
-  getTask(id: string): Task | null {
+  async getTask(id: string): Promise<Task | null> {
     const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined;
     return row ? rowToTask(row) : null;
   }
 
-  listTasks(filter?: TaskFilter): Task[] {
+  async listTasks(filter?: TaskFilter): Promise<Task[]> {
     const conditions: string[] = [];
     const values: unknown[] = [];
 
@@ -95,14 +95,14 @@ export class SqliteTaskStore implements ITaskStore {
     return rows.map(rowToTask);
   }
 
-  createTask(input: TaskCreateInput): Task {
+  async createTask(input: TaskCreateInput): Promise<Task> {
     const id = generateId();
     const timestamp = now();
 
     // Determine default status from pipeline's first status
     let status = input.status;
     if (!status) {
-      const pipeline = this.pipelineStore.getPipeline(input.pipelineId);
+      const pipeline = await this.pipelineStore.getPipeline(input.pipelineId);
       if (pipeline && pipeline.statuses.length > 0) {
         status = pipeline.statuses[0].name;
       } else {
@@ -131,11 +131,11 @@ export class SqliteTaskStore implements ITaskStore {
       timestamp,
     );
 
-    return this.getTask(id)!;
+    return (await this.getTask(id))!;
   }
 
-  updateTask(id: string, input: TaskUpdateInput): Task | null {
-    const existing = this.getTask(id);
+  async updateTask(id: string, input: TaskUpdateInput): Promise<Task | null> {
+    const existing = await this.getTask(id);
     if (!existing) return null;
 
     const updates: string[] = [];
@@ -189,28 +189,28 @@ export class SqliteTaskStore implements ITaskStore {
     values.push(id);
 
     this.db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    return this.getTask(id)!;
+    return (await this.getTask(id))!;
   }
 
-  deleteTask(id: string): boolean {
+  async deleteTask(id: string): Promise<boolean> {
     // Delete dependencies first
     this.db.prepare('DELETE FROM task_dependencies WHERE task_id = ? OR depends_on_task_id = ?').run(id, id);
     const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
     return result.changes > 0;
   }
 
-  addDependency(taskId: string, dependsOnTaskId: string): void {
+  async addDependency(taskId: string, dependsOnTaskId: string): Promise<void> {
     this.db.prepare(`
       INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_task_id)
       VALUES (?, ?)
     `).run(taskId, dependsOnTaskId);
   }
 
-  removeDependency(taskId: string, dependsOnTaskId: string): void {
+  async removeDependency(taskId: string, dependsOnTaskId: string): Promise<void> {
     this.db.prepare('DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_task_id = ?').run(taskId, dependsOnTaskId);
   }
 
-  getDependencies(taskId: string): Task[] {
+  async getDependencies(taskId: string): Promise<Task[]> {
     const rows = this.db.prepare(`
       SELECT t.* FROM tasks t
       JOIN task_dependencies td ON t.id = td.depends_on_task_id
@@ -220,7 +220,7 @@ export class SqliteTaskStore implements ITaskStore {
     return rows.map(rowToTask);
   }
 
-  getDependents(taskId: string): Task[] {
+  async getDependents(taskId: string): Promise<Task[]> {
     const rows = this.db.prepare(`
       SELECT t.* FROM tasks t
       JOIN task_dependencies td ON t.id = td.task_id
