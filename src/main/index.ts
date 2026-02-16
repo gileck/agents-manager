@@ -10,13 +10,16 @@ import { createAppServices, type AppServices } from './providers/setup';
 let tray: Tray | null = null;
 let services: AppServices | null = null;
 
+// Set app name so userData path is ~/Library/Application Support/agents-manager/
+app.setName('agents-manager');
+
 // Initialize app with template framework
 initializeApp({
   singleInstance: true,
   onReady: async () => {
     // Initialize database with migrations
     initDatabase({
-      filename: 'app.db',
+      filename: 'agents-manager.db',
       migrations: getMigrations(),
     });
 

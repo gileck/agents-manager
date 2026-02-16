@@ -6,6 +6,7 @@ node_modules/
 # Build outputs
 dist/
 dist-main/
+dist-cli/
 dist-electron/
 build/
 out/

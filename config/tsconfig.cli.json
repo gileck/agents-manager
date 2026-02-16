@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../dist-cli",
+    "module": "CommonJS",
+    "target": "ES2022"
+  },
+  "include": ["../src/cli/**/*", "../src/main/**/*", "../src/shared/**/*", "../template/main/**/*", "../template/shared/**/*"]
+}

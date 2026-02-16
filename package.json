@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "description": "Production-ready Electron template for macOS menu bar apps",
   "main": "bootstrap.js",
+  "bin": {
+    "am": "./dist-cli/src/cli/index.js"
+  },
   "scripts": {
-    "clean": "rm -rf dist dist-main",
+    "clean": "rm -rf dist dist-main dist-cli",
     "build": "npm run clean && npm run build:main && npm run build:preload && npm run build:renderer",
     "build:main": "tsc -p config/tsconfig.main.json",
     "build:preload": "tsc -p config/tsconfig.preload.json",
@@ -21,6 +24,7 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "deploy": "./scripts/deploy.sh",
+    "build:cli": "tsc -p config/tsconfig.cli.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -38,6 +42,7 @@
     "better-sqlite3": "^11.7.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "commander": "^14.0.3",
     "cron-parser": "^4.9.0",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.469.0",
