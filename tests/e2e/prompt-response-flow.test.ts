@@ -28,7 +28,8 @@ describe('Prompt Response Flow', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const prompts = await ctx.pendingPromptStore.getPendingForTask(taskId);
     expect(prompts.length).toBe(1);
@@ -43,7 +44,8 @@ describe('Prompt Response Flow', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const updatedTask = await ctx.taskStore.getTask(taskId);
     expect(updatedTask!.status).toBe('needs_info');
@@ -54,7 +56,8 @@ describe('Prompt Response Flow', () => {
 
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const prompts = await ctx.pendingPromptStore.getPendingForTask(taskId);
     const prompt = prompts[0];
@@ -74,7 +77,8 @@ describe('Prompt Response Flow', () => {
 
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const prompts = await ctx.pendingPromptStore.getPendingForTask(taskId);
     await ctx.workflowService.respondToPrompt(prompts[0].id, { answer: 'details here' });

@@ -95,7 +95,7 @@ export class WorkflowService implements IWorkflowService {
     return result;
   }
 
-  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'scripted'): Promise<AgentRun> {
+  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'scripted', onOutput?: (chunk: string) => void): Promise<AgentRun> {
     await this.activityLog.log({
       action: 'agent_start',
       entityType: 'agent_run',
@@ -104,16 +104,7 @@ export class WorkflowService implements IWorkflowService {
       data: { agentType, mode },
     });
 
-    const run = await this.agentService.execute(taskId, mode, agentType);
-
-    await this.activityLog.log({
-      action: 'agent_complete',
-      entityType: 'agent_run',
-      entityId: run.id,
-      summary: `Agent completed with status: ${run.status}`,
-      data: { agentRunId: run.id, status: run.status, outcome: run.outcome },
-    });
-
+    const run = await this.agentService.execute(taskId, mode, agentType, onOutput);
     return run;
   }
 

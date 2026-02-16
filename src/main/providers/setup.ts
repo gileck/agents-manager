@@ -36,6 +36,8 @@ import { StubNotificationRouter } from '../services/stub-notification-router';
 import { ScriptedAgent, happyPlan } from '../agents/scripted-agent';
 import { ClaudeCodeAgent } from '../agents/claude-code-agent';
 import type { Task, Transition, TransitionContext, GuardResult, AgentMode } from '../../shared/types';
+import { IPC_CHANNELS } from '../../shared/ipc-channels';
+import { sendToRenderer } from '@template/main/core/window';
 
 export interface AppServices {
   // Phase 1
@@ -151,15 +153,21 @@ export function createAppServices(db: Database.Database): AppServices {
     const mode = hookDef.params.mode as AgentMode;
     const agentType = hookDef.params.agentType as string;
     // Fire-and-forget: agent runs asynchronously via WorkflowService (logs activity)
-    workflowService.startAgent(task.id, mode, agentType).catch((err) => {
+    workflowService.startAgent(task.id, mode, agentType, (chunk) => {
+      try {
+        sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, task.id, chunk);
+      } catch { /* window may be closed */ }
+    }).catch(async (err) => {
       const msg = err instanceof Error ? err.message : String(err);
-      taskEventLog.log({
-        taskId: task.id,
-        category: 'system',
-        severity: 'error',
-        message: `start_agent hook failed: ${msg}`,
-        data: { error: msg, mode, agentType },
-      });
+      try {
+        await taskEventLog.log({
+          taskId: task.id,
+          category: 'system',
+          severity: 'error',
+          message: `start_agent hook failed: ${msg}`,
+          data: { error: msg, mode, agentType },
+        });
+      } catch { /* db may be closed during shutdown */ }
     });
   });
 

@@ -21,6 +21,8 @@ import type { IAgentService } from '../interfaces/agent-service';
 import { now } from '../stores/utils';
 
 export class AgentService implements IAgentService {
+  private backgroundPromises = new Map<string, Promise<void>>();
+
   constructor(
     private agentFramework: IAgentFramework,
     private agentRunStore: IAgentRunStore,
@@ -36,7 +38,7 @@ export class AgentService implements IAgentService {
     private pendingPromptStore: IPendingPromptStore,
   ) {}
 
-  async execute(taskId: string, mode: AgentMode, agentType: string): Promise<AgentRun> {
+  async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void): Promise<AgentRun> {
     // 1. Fetch task + project
     const task = await this.taskStore.getTask(taskId);
     if (!task) throw new Error(`Task not found: ${taskId}`);
@@ -84,94 +86,106 @@ export class AgentService implements IAgentService {
     };
     const config: AgentConfig = {};
 
-    // 7. Execute agent
+    // 7. Fire-and-forget agent execution in background
     const agent = this.agentFramework.getAgent(agentType);
-    let result;
+    const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, agentType, onOutput);
+    this.backgroundPromises.set(run.id, promise);
+
+    // 8. Return run immediately (status: 'running')
+    return run;
+  }
+
+  private async runAgentInBackground(
+    agent: import('../interfaces/agent').IAgent,
+    context: AgentContext,
+    config: AgentConfig,
+    run: AgentRun,
+    task: import('../../shared/types').Task,
+    phase: { id: string },
+    worktree: { branch: string; path: string },
+    agentType: string,
+    onOutput?: (chunk: string) => void,
+  ): Promise<void> {
+    const taskId = task.id;
     try {
-      result = await agent.execute(context, config);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      // Update run as failed
+      let result;
+      try {
+        result = await agent.execute(context, config, onOutput);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        const completedAt = now();
+        await this.agentRunStore.updateRun(run.id, {
+          status: 'failed',
+          output: errorMsg,
+          outcome: 'failed',
+          exitCode: 1,
+          completedAt,
+        });
+        await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
+        await this.taskEventLog.log({
+          taskId,
+          category: 'agent',
+          severity: 'error',
+          message: `Agent ${agentType} failed: ${errorMsg}`,
+          data: { agentRunId: run.id, error: errorMsg },
+        });
+        await this.worktreeManager.unlock(taskId);
+        return;
+      }
+
+      // Update run
       const completedAt = now();
-      const updatedRun = await this.agentRunStore.updateRun(run.id, {
-        status: 'failed',
-        output: errorMsg,
-        outcome: 'failed',
-        exitCode: 1,
+      await this.agentRunStore.updateRun(run.id, {
+        status: result.exitCode === 0 ? 'completed' : 'failed',
+        output: result.output,
+        outcome: result.outcome,
+        payload: result.payload,
+        exitCode: result.exitCode,
         completedAt,
+        costInputTokens: result.costInputTokens,
+        costOutputTokens: result.costOutputTokens,
       });
 
-      // Update phase to failed
-      await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
-
-      // Log error event
-      await this.taskEventLog.log({
-        taskId,
-        category: 'agent',
-        severity: 'error',
-        message: `Agent ${agentType} failed: ${errorMsg}`,
-        data: { agentRunId: run.id, error: errorMsg },
-      });
+      // Handle outcome
+      if (result.outcome === 'needs_info') {
+        await this.pendingPromptStore.createPrompt({
+          taskId,
+          agentRunId: run.id,
+          promptType: 'needs_info',
+          payload: result.payload,
+        });
+        await this.tryOutcomeTransition(taskId, 'needs_info');
+      } else if (result.exitCode === 0) {
+        await this.collectArtifacts(taskId, worktree.branch, result);
+        await this.taskPhaseStore.updatePhase(phase.id, { status: 'completed', completedAt });
+        if (result.outcome) {
+          await this.tryOutcomeTransition(taskId, result.outcome);
+        }
+      } else {
+        await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
+      }
 
       // Cleanup
       await this.worktreeManager.unlock(taskId);
 
-      return updatedRun!;
-    }
-
-    // 8. Update run
-    const completedAt = now();
-    const updatedRun = await this.agentRunStore.updateRun(run.id, {
-      status: result.exitCode === 0 ? 'completed' : 'failed',
-      output: result.output,
-      outcome: result.outcome,
-      payload: result.payload,
-      exitCode: result.exitCode,
-      completedAt,
-      costInputTokens: result.costInputTokens,
-      costOutputTokens: result.costOutputTokens,
-    });
-
-    // 9. Handle outcome
-    if (result.outcome === 'needs_info') {
-      // Create pending prompt
-      await this.pendingPromptStore.createPrompt({
+      // Log completion event
+      await this.taskEventLog.log({
         taskId,
-        agentRunId: run.id,
-        promptType: 'needs_info',
-        payload: result.payload,
+        category: 'agent',
+        severity: result.exitCode === 0 ? 'info' : 'error',
+        message: `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}`,
+        data: { agentRunId: run.id, exitCode: result.exitCode, outcome: result.outcome },
       });
-      // Try needs_info transition
-      await this.tryOutcomeTransition(taskId, 'needs_info');
-    } else if (result.exitCode === 0) {
-      // Collect artifacts
-      await this.collectArtifacts(taskId, worktree.branch, result);
-
-      // Update phase to completed
-      await this.taskPhaseStore.updatePhase(phase.id, { status: 'completed', completedAt });
-
-      // Try outcome transition
-      if (result.outcome) {
-        await this.tryOutcomeTransition(taskId, result.outcome);
-      }
-    } else {
-      // Failure
-      await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
+    } finally {
+      this.backgroundPromises.delete(run.id);
     }
+  }
 
-    // 10. Cleanup
-    await this.worktreeManager.unlock(taskId);
-
-    // Log completion event
-    await this.taskEventLog.log({
-      taskId,
-      category: 'agent',
-      severity: result.exitCode === 0 ? 'info' : 'error',
-      message: `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}`,
-      data: { agentRunId: run.id, exitCode: result.exitCode, outcome: result.outcome },
-    });
-
-    return updatedRun!;
+  async waitForCompletion(runId: string): Promise<void> {
+    const promise = this.backgroundPromises.get(runId);
+    if (promise) {
+      await promise;
+    }
   }
 
   async stop(runId: string): Promise<void> {
@@ -179,7 +193,7 @@ export class AgentService implements IAgentService {
     if (!run) throw new Error(`Agent run not found: ${runId}`);
 
     const agent = this.agentFramework.getAgent(run.agentType);
-    await agent.stop(runId);
+    await agent.stop(run.taskId);
 
     await this.agentRunStore.updateRun(runId, {
       status: 'cancelled',

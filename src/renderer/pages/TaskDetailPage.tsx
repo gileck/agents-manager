@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -38,10 +38,21 @@ export function TaskDetailPage() {
     [id]
   );
 
-  const { data: agentRuns } = useIpc<AgentRun[]>(
+  const { data: agentRuns, refetch: refetchAgentRuns } = useIpc<AgentRun[]>(
     () => id ? window.api.agents.runs(id) : Promise.resolve([]),
     [id]
   );
+
+  // Poll agent runs while any is running
+  const hasRunningAgent = agentRuns?.some((r) => r.status === 'running');
+  useEffect(() => {
+    if (!hasRunningAgent) return;
+    const interval = setInterval(() => {
+      refetchAgentRuns();
+      refetch();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hasRunningAgent, refetchAgentRuns, refetch]);
 
   const [tab, setTab] = useState('overview');
   const [editOpen, setEditOpen] = useState(false);
@@ -265,8 +276,8 @@ export function TaskDetailPage() {
                   onClick={async () => {
                     setStartingAgent(true);
                     try {
-                      await window.api.agents.start(id!, 'plan');
-                      await refetch();
+                      const run = await window.api.agents.start(id!, 'plan');
+                      navigate(`/agents/${run.id}`);
                     } finally {
                       setStartingAgent(false);
                     }

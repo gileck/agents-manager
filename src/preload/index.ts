@@ -44,6 +44,7 @@ const IPC_CHANNELS = {
   AGENT_STOP: 'agent:stop',
   AGENT_RUNS: 'agent:runs',
   AGENT_GET: 'agent:get',
+  AGENT_OUTPUT: 'agent:output',
   EVENT_LIST: 'event:list',
   ACTIVITY_LIST: 'activity:list',
   PROMPT_LIST: 'prompt:list',
@@ -174,6 +175,11 @@ const api = {
       const listener = (_: IpcRendererEvent, path: string) => callback(path);
       ipcRenderer.on(IPC_CHANNELS.NAVIGATE, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.NAVIGATE, listener);
+    },
+    agentOutput: (callback: (taskId: string, chunk: string) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string, chunk: string) => callback(taskId, chunk);
+      ipcRenderer.on(IPC_CHANNELS.AGENT_OUTPUT, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_OUTPUT, listener);
     },
   },
 };

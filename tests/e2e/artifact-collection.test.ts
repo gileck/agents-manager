@@ -25,7 +25,8 @@ describe('Artifact Collection', () => {
   it('should create branch artifact after agent run', async () => {
     ctx.scriptedAgent.setScript(happyPlan);
 
-    await ctx.workflowService.startAgent(taskId, 'plan', 'scripted');
+    const run = await ctx.workflowService.startAgent(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const artifacts = await ctx.taskArtifactStore.getArtifactsForTask(taskId, 'branch');
     expect(artifacts.length).toBe(1);
@@ -40,7 +41,8 @@ describe('Artifact Collection', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const prArtifacts = await ctx.taskArtifactStore.getArtifactsForTask(taskId, 'pr');
     expect(prArtifacts.length).toBe(1);
@@ -54,7 +56,8 @@ describe('Artifact Collection', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const diffArtifacts = await ctx.taskArtifactStore.getArtifactsForTask(taskId, 'diff');
     expect(diffArtifacts.length).toBe(1);
@@ -67,7 +70,8 @@ describe('Artifact Collection', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const updatedTask = await ctx.taskStore.getTask(taskId);
     expect(updatedTask!.prLink).toBeTruthy();

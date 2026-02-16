@@ -34,8 +34,10 @@ describe('Error Scenarios', () => {
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
+    const completedRun = await ctx.agentRunStore.getRun(run.id);
 
-    expect(run.status).toBe('failed');
+    expect(completedRun!.status).toBe('failed');
 
     const phases = await ctx.taskPhaseStore.getPhasesForTask(taskId);
     expect(phases[0].status).toBe('failed');
@@ -48,7 +50,8 @@ describe('Error Scenarios', () => {
       outcome: 'failed',
     }));
 
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const worktree = await ctx.worktreeManager.get(taskId);
     expect(worktree).not.toBeNull();
@@ -77,7 +80,8 @@ describe('Error Scenarios', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const events = await ctx.taskEventLog.getEvents({ taskId, category: 'agent', severity: 'error' });
     expect(events.length).toBeGreaterThanOrEqual(1);
@@ -92,9 +96,11 @@ describe('Error Scenarios', () => {
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
+    const completedRun = await ctx.agentRunStore.getRun(run.id);
 
-    expect(run.status).toBe('failed');
-    expect(run.output).toContain('Agent crashed unexpectedly');
+    expect(completedRun!.status).toBe('failed');
+    expect(completedRun!.output).toContain('Agent crashed unexpectedly');
 
     // Worktree should be unlocked after crash
     const worktree = await ctx.worktreeManager.get(taskId);

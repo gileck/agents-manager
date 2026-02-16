@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
 import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
+import { sendToRenderer } from '@template/main/core/window';
 import * as itemService from './services/item-service';
 import { getSetting, setSetting } from '@template/main/services/settings-service';
 import type { AppServices } from './providers/setup';
@@ -176,7 +177,9 @@ export function registerIpcHandlers(services: AppServices): void {
 
   registerIpcHandler(IPC_CHANNELS.AGENT_START, async (_, taskId: string, mode: AgentMode, agentType?: string) => {
     validateId(taskId);
-    return services.workflowService.startAgent(taskId, mode, agentType);
+    return services.workflowService.startAgent(taskId, mode, agentType, (chunk) => {
+      sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, chunk);
+    });
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_STOP, async (_, runId: string) => {

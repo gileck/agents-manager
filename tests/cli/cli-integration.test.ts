@@ -141,6 +141,9 @@ describe('CLI Integration', () => {
       expect(run.mode).toBe('plan');
       expect(['completed', 'failed', 'running']).toContain(run.status);
 
+      // Wait for background execution to complete before cleanup
+      await ctx.agentService.waitForCompletion(run.id);
+
       // Verify run is recorded
       const runs = await ctx.agentRunStore.getRunsForTask(task.id);
       expect(runs.length).toBeGreaterThan(0);

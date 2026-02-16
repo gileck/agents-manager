@@ -204,3 +204,4 @@ ISC
 This template is designed to be copied and customized. Feel free to modify it for your needs!
 
 For questions or issues, please open an issue on GitHub.
+# agents-manager

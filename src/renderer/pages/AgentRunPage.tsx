@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -12,6 +12,40 @@ export function AgentRunPage() {
     () => window.api.agents.get(runId!),
     [runId]
   );
+
+  const [streamOutput, setStreamOutput] = useState('');
+  const outputRef = useRef<HTMLPreElement>(null);
+
+  // Poll for status updates while running
+  useEffect(() => {
+    if (!run || run.status !== 'running') return;
+
+    const interval = setInterval(() => {
+      refetch();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [run?.status, refetch]);
+
+  // Subscribe to streaming output
+  useEffect(() => {
+    if (!run) return;
+
+    const unsubscribe = window.api.on.agentOutput((taskId: string, chunk: string) => {
+      if (taskId === run.taskId) {
+        setStreamOutput((prev) => prev + chunk);
+      }
+    });
+
+    return unsubscribe;
+  }, [run?.taskId]);
+
+  // Auto-scroll output to bottom
+  useEffect(() => {
+    if (outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    }
+  }, [streamOutput, run?.output]);
 
   const handleStop = async () => {
     if (!runId) return;
@@ -34,6 +68,8 @@ export function AgentRunPage() {
       </div>
     );
   }
+
+  const displayOutput = run.status === 'running' ? streamOutput : (run.output || streamOutput);
 
   return (
     <div className="p-8">
@@ -93,14 +129,23 @@ export function AgentRunPage() {
         </CardContent>
       </Card>
 
-      {run.output && (
+      {(displayOutput || run.status === 'running') && (
         <Card>
           <CardHeader>
-            <CardTitle>Output</CardTitle>
+            <CardTitle>
+              Output
+              {run.status === 'running' && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">(streaming...)</span>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap">
-              {run.output}
+            <pre
+              ref={outputRef}
+              className="text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap"
+              style={{ maxHeight: '600px', overflowY: 'auto' }}
+            >
+              {displayOutput || (run.status === 'running' ? 'Waiting for output...' : '')}
             </pre>
           </CardContent>
         </Card>

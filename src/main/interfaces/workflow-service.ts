@@ -14,7 +14,7 @@ export interface IWorkflowService {
   updateTask(id: string, input: TaskUpdateInput): Promise<Task | null>;
   deleteTask(id: string): Promise<boolean>;
   transitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult>;
-  startAgent(taskId: string, mode: AgentMode, agentType?: string): Promise<AgentRun>;
+  startAgent(taskId: string, mode: AgentMode, agentType?: string, onOutput?: (chunk: string) => void): Promise<AgentRun>;
   stopAgent(runId: string): Promise<void>;
   respondToPrompt(promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null>;
   mergePR(taskId: string): Promise<void>;

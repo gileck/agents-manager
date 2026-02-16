@@ -29,7 +29,8 @@ describe('Pipeline Auto-Transition', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const updatedTask = await ctx.taskStore.getTask(taskId);
     expect(updatedTask!.status).toBe('plan_review');
@@ -41,7 +42,8 @@ describe('Pipeline Auto-Transition', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const updatedTask = await ctx.taskStore.getTask(taskId);
     expect(updatedTask!.status).toBe('pr_review');
@@ -57,7 +59,8 @@ describe('Pipeline Auto-Transition', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const updatedTask = await ctx.taskStore.getTask(taskId);
     expect(updatedTask!.status).toBe('planning');
@@ -68,7 +71,8 @@ describe('Pipeline Auto-Transition', () => {
 
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
-    await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
 
     const rows = ctx.db.prepare(
       "SELECT * FROM transition_history WHERE task_id = ? AND trigger = 'agent' ORDER BY created_at ASC",

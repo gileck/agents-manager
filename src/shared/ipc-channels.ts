@@ -44,6 +44,7 @@ export const IPC_CHANNELS = {
   AGENT_STOP: 'agent:stop',
   AGENT_RUNS: 'agent:runs',
   AGENT_GET: 'agent:get',
+  AGENT_OUTPUT: 'agent:output',
 
   // Event operations
   EVENT_LIST: 'event:list',

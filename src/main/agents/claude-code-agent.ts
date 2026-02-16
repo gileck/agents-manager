@@ -1,116 +1,103 @@
-import { spawn, execSync, type ChildProcess } from 'child_process';
 import type { AgentContext, AgentConfig, AgentRunResult } from '../../shared/types';
 import type { IAgent } from '../interfaces/agent';
-import { getShellEnv } from '../services/shell-env';
+
+// Use Function constructor to preserve dynamic import() at runtime.
+// TypeScript compiles `await import(...)` to `require()` under CommonJS,
+// but the SDK is ESM-only (.mjs). This bypasses that transformation.
+const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
 
 export class ClaudeCodeAgent implements IAgent {
   readonly type = 'claude-code';
-  private runningProcesses = new Map<string, ChildProcess>();
+  private runningAbortControllers = new Map<string, AbortController>();
 
   async isAvailable(): Promise<boolean> {
     try {
-      execSync('claude --version', {
-        timeout: 5000,
-        env: getShellEnv(),
-        stdio: 'pipe',
-      });
-      return true;
+      const query = await this.loadQuery();
+      return !!query;
     } catch {
       return false;
     }
   }
 
-  async execute(context: AgentContext, config: AgentConfig): Promise<AgentRunResult> {
+  async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void): Promise<AgentRunResult> {
+    const query = await this.loadQuery();
+
     const prompt = this.buildPrompt(context);
     const workdir = context.project?.path || context.workdir;
     const timeout = config.timeout || (context.mode === 'plan' ? 5 * 60 * 1000 : 10 * 60 * 1000);
 
-    return new Promise<AgentRunResult>((resolve) => {
-      const args = ['-p', prompt, '--output-format', 'json'];
-      const proc = spawn('claude', args, {
-        cwd: workdir,
-        env: getShellEnv(),
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
+    const abortController = new AbortController();
+    const runId = context.task.id;
+    this.runningAbortControllers.set(runId, abortController);
 
-      const runId = context.task.id;
-      this.runningProcesses.set(runId, proc);
+    const timer = setTimeout(() => abortController.abort(), timeout);
 
-      let stdout = '';
-      let stderr = '';
+    let resultText = '';
+    let costInputTokens: number | undefined;
+    let costOutputTokens: number | undefined;
+    let isError = false;
+    let errorMessage: string | undefined;
 
-      proc.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      proc.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      const timer = setTimeout(() => {
-        proc.kill('SIGTERM');
-        setTimeout(() => {
-          if (!proc.killed) proc.kill('SIGKILL');
-        }, 5000);
-      }, timeout);
-
-      proc.on('close', (code) => {
-        clearTimeout(timer);
-        this.runningProcesses.delete(runId);
-
-        const exitCode = code ?? 1;
-        let costInputTokens: number | undefined;
-        let costOutputTokens: number | undefined;
-        let output = stdout || stderr;
-
-        // Try to parse JSON output for token usage
-        try {
-          const parsed = JSON.parse(stdout);
-          if (parsed.result) {
-            output = typeof parsed.result === 'string' ? parsed.result : JSON.stringify(parsed.result);
+    try {
+      for await (const message of query({
+        prompt,
+        options: {
+          cwd: workdir,
+          abortController,
+          permissionMode: 'bypassPermissions',
+          allowDangerouslySkipPermissions: true,
+        },
+      })) {
+        if (message.type === 'assistant') {
+          // Extract text from assistant message content blocks
+          for (const block of message.message.content) {
+            if ('text' in block && typeof block.text === 'string') {
+              onOutput?.(block.text);
+            }
           }
-          if (parsed.usage) {
-            costInputTokens = parsed.usage.input_tokens;
-            costOutputTokens = parsed.usage.output_tokens;
+        } else if (message.type === 'result') {
+          if (message.subtype === 'success') {
+            resultText = message.result;
+          } else {
+            isError = true;
+            errorMessage = message.errors?.join('\n') || 'Agent execution failed';
           }
-        } catch {
-          // stdout wasn't valid JSON, use raw output
+          costInputTokens = message.usage.input_tokens;
+          costOutputTokens = message.usage.output_tokens;
         }
+      }
+    } catch (err) {
+      isError = true;
+      errorMessage = err instanceof Error ? err.message : String(err);
+    } finally {
+      clearTimeout(timer);
+      this.runningAbortControllers.delete(runId);
+    }
 
-        const outcome = this.inferOutcome(context.mode, exitCode);
+    const exitCode = isError ? 1 : 0;
+    const outcome = this.inferOutcome(context.mode, exitCode);
 
-        resolve({
-          exitCode,
-          output,
-          outcome,
-          costInputTokens,
-          costOutputTokens,
-          error: exitCode !== 0 ? (stderr || `Process exited with code ${exitCode}`) : undefined,
-        });
-      });
-
-      proc.on('error', (err) => {
-        clearTimeout(timer);
-        this.runningProcesses.delete(runId);
-        resolve({
-          exitCode: 1,
-          output: '',
-          outcome: 'failed',
-          error: err.message,
-        });
-      });
-    });
+    return {
+      exitCode,
+      output: resultText || errorMessage || '',
+      outcome,
+      costInputTokens,
+      costOutputTokens,
+      error: isError ? errorMessage : undefined,
+    };
   }
 
   async stop(runId: string): Promise<void> {
-    const proc = this.runningProcesses.get(runId);
-    if (!proc) return;
+    const controller = this.runningAbortControllers.get(runId);
+    if (!controller) return;
 
-    proc.kill('SIGTERM');
-    setTimeout(() => {
-      if (!proc.killed) proc.kill('SIGKILL');
-    }, 5000);
-    this.runningProcesses.delete(runId);
+    controller.abort();
+    this.runningAbortControllers.delete(runId);
+  }
+
+  private async loadQuery(): Promise<any> {
+    const mod = await importESM('@anthropic-ai/claude-agent-sdk');
+    return mod.query;
   }
 
   private inferOutcome(mode: string, exitCode: number): string {
