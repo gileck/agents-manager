@@ -18,7 +18,7 @@ A macOS desktop app for managing AI coding agents working on your projects. It c
 |-------|------|---------|------------|
 | 1 | Foundation | Task CRUD, kanban board, project management. A working task tracker with no agent integration. | - |
 | 2 | Agent Execution | Run Claude Code SDK on tasks. Plan-only and implement modes. Stream agent output in real time. | Phase 1 |
-| 3 | Agent CLI + Multi-Agent | Local HTTP server + CLI tool so agents can read/update tasks. Support for Cursor CLI, Aider, custom agents. | Phase 2 |
+| 3 | Agent CLI + Multi-Agent | CLI tool (`am`) with direct DB access so agents can read/update tasks. Support for Cursor CLI, Aider, custom agents. | Phase 2 |
 | 4 | Dashboard + Polish | Dashboard with stats/charts, activity feed, cost tracking, desktop notifications, bulk operations. | Phase 3 |
 | 5 | Advanced | Task templates, GitHub issues import, agent queue, inline diff review. | Phase 4 |
 

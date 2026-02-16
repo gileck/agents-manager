@@ -1103,6 +1103,6 @@ This architecture affects all phases:
 
 - **Phase 1:** Build interfaces + SQLite implementations. Composition root (`setup.ts`) wires everything via constructor injection. This is slightly more setup upfront but pays off immediately.
 - **Phase 2:** Add `IAgent` interface + `ClaudeCodeAgent` implementation. `AgentService` receives `IAgentFramework` via constructor.
-- **Phase 3:** Add more `IAgent` implementations (Cursor, Aider). Add HTTP server that receives `AppServices` at startup. CLI talks to HTTP server.
+- **Phase 3:** Add more `IAgent` implementations (Cursor, Aider). CLI uses `createAppServices(db)` directly — no HTTP server needed.
 - **Phase 4:** `INotifier` + `IActivityLog` get their real usage. Dashboard reads from interfaces.
 - **Phase 5:** `IScmPlatform` used for GitHub import. Could swap to GitLab with zero UI changes.

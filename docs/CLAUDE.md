@@ -73,28 +73,30 @@ src/                   # Application code (CUSTOMIZE THIS)
 
 ### Single Execution Engine Principle
 
-**All business logic lives in `src/main/services/` (the Electron main process).** The Electron renderer (React UI) and any CLI are **UI-only interfaces** — they display information and send commands, but NEVER contain business logic or data access code.
+**All business logic lives in `src/main/services/` (the Electron main process).** The Electron renderer (React UI) and the CLI are **UI-only interfaces** — they display information and send commands, but NEVER contain business logic or data access code.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Electron Main Process (the engine)             │
+│  WorkflowService (the engine)                   │
 │  src/main/services/                             │
 │                                                 │
 │  ALL features go here. All UIs consume this.    │
 └──────────────┬──────────────────┬───────────────┘
-               │ IPC              │ (optional) Unix socket
+               │ IPC              │ createAppServices(db)
 ┌──────────────┴─────┐  ┌────────┴────────────────┐
-│  Electron Renderer │  │  CLI (if applicable)     │
+│  Electron Renderer │  │  CLI (am)                │
 │  src/renderer/     │  │  src/cli/                │
 │  React UI          │  │  Terminal UI             │
 │  UI ONLY           │  │  UI ONLY                 │
 └────────────────────┘  └─────────────────────────┘
 ```
 
+Both UIs use the same `createAppServices(db)` → same WorkflowService → same SQLite file. The CLI accesses the database directly (no HTTP server or Unix socket needed). SQLite WAL mode handles concurrent access safely.
+
 **Rules:**
 - NEVER add features or logic to the renderer that belong in the main process
-- If adding a CLI, it should send ALL commands to the running Electron app via a Unix socket — it should NOT access the database or run logic itself
-- A CLI should have **zero** native module dependencies (no `better-sqlite3`). All data access goes through socket messages to the Electron app
+- The CLI uses `createAppServices(db)` to instantiate WorkflowService directly — same composition root as Electron
+- All business logic lives in WorkflowService, never in CLI commands or IPC handlers
 - If a feature needs to happen on task completion (e.g., writing files, sending notifications), it goes in `src/main/services/`, NOT in a UI layer
 
 ### Directory Structure

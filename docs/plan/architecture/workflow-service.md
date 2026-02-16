@@ -11,7 +11,7 @@ The **Workflow Service** is the single entry point for all operations. It orches
 ```
 ┌─────────────┐     ┌──────────────┐     ┌──────────┐
 │ Electron UI  │     │ Notification  │     │   CLI    │
-│ (IPC)        │     │ Channels      │     │ (HTTP)   │
+│ (IPC)        │     │ Channels      │     │ (direct) │
 └──────┬───────┘     └──────┬────────┘     └────┬─────┘
        │                    │                    │
        ▼                    ▼                    ▼
@@ -435,59 +435,27 @@ export function registerIpcHandlers(workflowService: IWorkflowService) {
 
 Zero logic in the IPC layer. Just maps channels to service methods.
 
-### HTTP API (for CLI and external tools)
+### CLI (Direct DB Access)
 
-Same pattern - thin HTTP routes that call the Workflow Service.
+The CLI uses the same `createAppServices(db)` composition root as the Electron app, calling WorkflowService methods directly. No HTTP server needed.
 
 ```typescript
-// src/main/http-server.ts
+// src/cli/db.ts
+import { createAppServices } from '../main/providers/setup';
+import Database from 'better-sqlite3';
 
-export function createHttpServer(workflowService: IWorkflowService) {
-  const app = express();
-
-  // Tasks
-  app.get('/api/tasks', async (req, res) => {
-    const tasks = await workflowService.listTasks(req.query.projectId, req.query);
-    res.json(tasks);
-  });
-
-  app.post('/api/tasks', async (req, res) => {
-    const task = await workflowService.createTask(req.body);
-    res.json(task);
-  });
-
-  app.patch('/api/tasks/:id', async (req, res) => {
-    const task = await workflowService.updateTask(req.params.id, req.body);
-    res.json(task);
-  });
-
-  // Pipeline
-  app.post('/api/tasks/:id/transition', async (req, res) => {
-    const result = await workflowService.transitionTask(
-      req.params.id, req.body.toStatus, req.body.context
-    );
-    res.json(result);
-  });
-
-  // Agent
-  app.post('/api/tasks/:id/agent', async (req, res) => {
-    const run = await workflowService.startAgent(
-      req.params.id, req.body.mode, req.body.config
-    );
-    res.json(run);
-  });
-
-  // Prompts
-  app.post('/api/prompts/:id/respond', async (req, res) => {
-    const result = await workflowService.respondToPrompt(req.params.id, req.body);
-    res.json(result);
-  });
-
-  return app;
+export function getServices(): AppServices {
+  const db = new Database(DB_PATH);
+  return createAppServices(db);
 }
+
+// src/cli/commands/tasks.ts — same pattern as IPC handlers
+const { workflowService } = getServices();
+const tasks = await workflowService.listTasks(projectId, filters);
+const result = await workflowService.transitionTask(taskId, toStatus, context);
 ```
 
-Zero logic in the HTTP layer. Just maps routes to service methods.
+Zero logic in the CLI layer. Just maps commands to service methods — identical to IPC handlers.
 
 ### Notification Channels
 
@@ -532,7 +500,7 @@ interface IWorkflowEventEmitter {
 ```
 
 - **Electron UI** subscribes via IPC events
-- **HTTP/CLI** can use Server-Sent Events (SSE) or polling
+- **CLI** can poll the database for changes
 - **Notification channels** don't need to subscribe - the Workflow Service pushes to them
 
 ---
@@ -567,8 +535,7 @@ interface IWorkflowEventEmitter {
 - Real-time agent output subscription
 
 ### Phase 3
-- HTTP server added, calls same Workflow Service
-- CLI talks to HTTP server
+- CLI added, uses `createAppServices(db)` directly (no HTTP server)
 - All three UIs verified to produce identical behavior
 
 ### Phase 4

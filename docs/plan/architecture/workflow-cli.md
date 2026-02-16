@@ -16,7 +16,7 @@ The CLI is the fastest way to build, test, and iterate on the core logic:
 ┌─────────────────────────────────────────────────────────────┐
 │  Phase 1-2: Build with CLI only                              │
 │                                                              │
-│  CLI ──→ HTTP API ──→ WorkflowService ──→ SQLite             │
+│  CLI ──→ createAppServices(db) ──→ WorkflowService ──→ SQLite│
 │                                                              │
 │  Every feature is built, tested, and validated via CLI        │
 │  before any UI code is written.                              │
@@ -24,10 +24,10 @@ The CLI is the fastest way to build, test, and iterate on the core logic:
 │  Phase 2-3: Layer UI on top                                  │
 │                                                              │
 │  Electron UI ──→ IPC ──→ WorkflowService ──→ SQLite          │
-│  CLI ──────────→ HTTP ──→ WorkflowService ──→ SQLite         │
+│  CLI ──→ createAppServices(db) ──→ WorkflowService ──→ SQLite│
 │                                                              │
-│  UI calls the same WorkflowService. CLI continues working.   │
-│  Both produce identical behavior.                            │
+│  Both UIs call the same WorkflowService. Both produce        │
+│  identical behavior. No HTTP server needed.                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -39,46 +39,28 @@ The CLI is the fastest way to build, test, and iterate on the core logic:
 4. **Debuggable** — see exactly what's happening with `--verbose` and `--json`
 5. **Agent-accessible** — running agents can use the CLI to query/update tasks
 6. **Remote-friendly** — SSH into a machine and manage agents from terminal
-7. **UI-independent** — if the Electron app isn't running, the CLI still works (when using embedded mode)
+7. **UI-independent** — works with or without the Electron app running
 
 ### Development Strategy
 
 ```
 1. Define IWorkflowService interface
 2. Implement WorkflowService (business logic)
-3. Build HTTP API layer (thin routes → WorkflowService)
-4. Build CLI tool (thin commands → HTTP API)
-5. Test everything via CLI
-6. Build Electron IPC layer (thin handlers → WorkflowService)
-7. Build React UI (calls IPC)
+3. Build CLI tool (thin commands → WorkflowService via createAppServices)
+4. Test everything via CLI
+5. Build Electron IPC layer (thin handlers → WorkflowService)
+6. Build React UI (calls IPC)
 ```
 
-Steps 1-5 don't need Electron at all. The entire feature set can be developed and validated before any UI code exists.
+Steps 1-4 don't need Electron at all. The entire feature set can be developed and validated before any UI code exists.
 
 ---
 
 ## Architecture
 
-### Connection Modes
+### Direct DB Access (No HTTP Server)
 
-The CLI supports two modes of operation:
-
-#### 1. Client Mode (default) — talks to running Electron app
-
-```
-┌──────────┐     HTTP localhost:PORT     ┌──────────────────┐
-│  CLI      │ ─────────────────────────→ │  Electron Main   │
-│  (am)     │ ←───────────────────────── │  HTTP Server     │
-└──────────┘                             │  ↓               │
-                                         │  WorkflowService │
-                                         │  ↓               │
-                                         │  SQLite          │
-                                         └──────────────────┘
-```
-
-The Electron app runs a local HTTP server. The CLI discovers it via a port file.
-
-#### 2. Standalone Mode — runs without Electron
+The CLI instantiates `WorkflowService` directly using the same `createAppServices(db)` composition root as the Electron app. Both the CLI and the Electron app talk to the same SQLite database.
 
 ```
 ┌──────────┐     direct              ┌──────────────────┐
@@ -86,62 +68,60 @@ The Electron app runs a local HTTP server. The CLI discovers it via a port file.
 │  (am)     │ ←──────────────────── │  ↓               │
 └──────────┘                         │  SQLite          │
                                      └──────────────────┘
+
+┌──────────┐     IPC                 ┌──────────────────┐
+│ Electron  │ ─────────────────────→ │  WorkflowService │
+│ Renderer  │ ←──────────────────── │  ↓               │
+└──────────┘                         │  SQLite          │
+                                     └──────────────────┘
 ```
 
-The CLI can instantiate `WorkflowService` directly (same composition root as the Electron app), accessing SQLite without needing the Electron process. Useful for:
-- Development before the Electron app exists
-- CI/CD pipelines
-- Server environments without a display
+Both use the same `createAppServices(db)` → same WorkflowService → same SQLite file. The CLI is a standalone Node.js process — it does not need the Electron app to be running.
 
-```bash
-# Client mode (default — needs running app)
-am tasks list
+### Why No HTTP Server
 
-# Standalone mode (direct DB access — no app needed)
-am --standalone tasks list
-```
+The original architecture called for an HTTP server in the Electron main process, with the CLI as an HTTP client. We chose direct DB access instead. Here's the analysis:
 
-### Port Discovery
+#### What we lose
 
-When the Electron app starts its HTTP server, it writes:
+| Capability | HTTP approach | Direct DB approach | Impact |
+|---|---|---|---|
+| Real-time streaming | SSE from HTTP server | Not available from CLI | **Low** — `am agent watch` can poll the DB or use file-based tailing instead |
+| Live UI sync | CLI changes push to Electron via SSE | Electron must poll or use fs.watch on the DB | **Low** — Electron can use SQLite's WAL mode change detection or a short poll interval |
+| Agent callback URL | Agent gets `AM_API_URL` env var | Agent uses CLI commands or direct DB | **None** — agents already run CLI commands; no HTTP needed |
+| Single process coordination | All mutations go through one process | Two processes can write to SQLite | **None** — SQLite handles concurrent writers with WAL mode; single-writer lock prevents corruption |
 
-```
-~/.agents-manager/server.json
-{
-  "port": 52847,
-  "pid": 12345,
-  "version": "1.0.0",
-  "startedAt": "2026-02-15T10:00:00Z"
-}
-```
+#### What we gain
 
-The CLI reads this file to find the server. If the file doesn't exist or the PID is dead, the CLI reports that the app isn't running and suggests `--standalone` mode.
+| Benefit | Details |
+|---|---|
+| **No Express dependency** | Eliminates express, route definitions, error middleware, port management, CORS |
+| **No port discovery** | No `~/.agents-manager/server.json`, no PID checking, no port conflicts |
+| **No connection failures** | CLI never fails with "app not running" — it always works |
+| **Simpler testing** | Test CLI commands with an in-memory SQLite DB, no HTTP mocking |
+| **Fewer moving parts** | One less process boundary, one less serialization layer, one less failure mode |
+| **Faster startup** | CLI starts instantly — no HTTP handshake or health check |
 
-### HTTP API
+#### Mitigations for lost capabilities
 
-The HTTP API is a thin layer over `IWorkflowService` — zero business logic, just route mapping. Every CLI command maps 1:1 to an HTTP endpoint, which maps 1:1 to a WorkflowService method.
+**Real-time agent output (`am agent watch`):** Instead of SSE streaming, the CLI can:
+1. Poll the `agent_runs` table + `task_events` table on a short interval (500ms)
+2. Tail the agent's log file directly (agents write output to a file)
+3. This is actually simpler than maintaining an SSE connection
 
-```typescript
-// src/main/http-server.ts
-export function createHttpServer(workflowService: IWorkflowService) {
-  const app = express();
-  app.use(express.json());
+**Electron UI live updates when CLI makes changes:** Two options:
+1. **Poll on focus** — when the Electron window gains focus, refresh data from SQLite (simplest, good enough for v1)
+2. **fs.watch on the SQLite WAL file** — detect when another process writes, then refresh. Low overhead, near-instant.
+3. **Add HTTP/IPC later if needed** — if real-time cross-process sync becomes critical, we can add it as a targeted feature, not as the CLI's entire transport layer
 
-  // Every route is a one-liner delegation
-  app.get('/api/projects', async (req, res) =>
-    res.json(await workflowService.listProjects()));
+**Agent integration:** Agents already run as child processes. They can:
+1. Use CLI commands: `am notes add $AM_TASK_ID "Found the bug"`
+2. Read task context: `am tasks get $AM_TASK_ID --json`
+3. No HTTP callback needed — the CLI handles everything
 
-  app.post('/api/tasks', async (req, res) =>
-    res.json(await workflowService.createTask(req.body)));
+### Decision
 
-  app.post('/api/tasks/:id/transition', async (req, res) =>
-    res.json(await workflowService.transitionTask(
-      req.params.id, req.body.toStatus, req.body.context)));
-
-  // ... every WorkflowService method gets a route
-  return app;
-}
-```
+Direct DB access is the right default. The HTTP server adds significant complexity to solve problems we don't have yet. If real-time cross-process coordination becomes essential, it can be added as a targeted feature later — but it should not be the CLI's primary transport.
 
 ---
 
@@ -166,9 +146,9 @@ npx @agents-manager/cli tasks list
 --project <id>       Override project (default: auto-detect from cwd)
 --json               Output as JSON (for scripting)
 --verbose            Show full details (no truncation)
---standalone         Use direct DB access (no app needed)
 --quiet              Suppress non-essential output
 --no-color           Disable colored output
+--db <path>          Override database path (default: ~/Library/Application Support/agents-manager/agents-manager.db)
 ```
 
 ### Project Auto-Detection
@@ -437,7 +417,7 @@ am agent runs --limit 20
 am agent get <run-id>
 am agent show <run-id>                                # alias
 
-# Stream agent output (live, like tail -f)
+# Watch agent output (polls DB for updates, like tail -f)
 am agent watch <run-id>
 am agent watch --task <task-id>                       # watch agent on this task
 am agent logs <run-id>                                # alias (shows completed output)
@@ -480,9 +460,9 @@ am agent cost --since "2026-02-01"                    # cost since date
   [3:12:15] Editing src/auth/middleware.ts
   [3:12:18] Writing tests for the fix...
   [3:12:25] Writing src/auth/__tests__/middleware.test.ts
-  █ (streaming...)
+  █ (polling for updates...)
 
-  Ctrl+C to detach (agent keeps running)
+  Ctrl+C to stop watching (agent keeps running)
 ```
 
 ---
@@ -852,9 +832,8 @@ am prompts respond prm-abc -i
 ### Environment Variables
 
 ```bash
-AM_API_URL=http://localhost:52847/api    # override server URL
 AM_PROJECT_ID=proj-abc                   # override project
-AM_STANDALONE=1                          # force standalone mode
+AM_DB_PATH=/path/to/agents-manager.db    # override database location
 AM_FORMAT=json                           # default to JSON output
 AM_NO_COLOR=1                            # disable colors
 ```
@@ -868,7 +847,7 @@ AM_NO_COLOR=1                            # disable colors
 | 2 | Invalid arguments |
 | 3 | Resource not found |
 | 4 | Validation error (e.g., guard blocked transition) |
-| 5 | Connection error (app not running) |
+| 5 | Database error (DB locked, corrupt, missing) |
 | 6 | Authentication/permission error |
 
 ### Piping & Composition
@@ -903,7 +882,6 @@ Running agents receive env vars and can use the CLI to interact with the task sy
 
 ```bash
 # Inside an agent's environment:
-export AM_API_URL=http://localhost:52847/api
 export AM_PROJECT_ID=proj-abc
 export AM_TASK_ID=task-def
 
@@ -919,6 +897,8 @@ am tasks list --tags "auth" --json
 # Agent can check dependencies
 am deps list $AM_TASK_ID --json
 ```
+
+No HTTP callback URL needed — the CLI accesses the database directly.
 
 ---
 
@@ -946,121 +926,6 @@ Every UI page has CLI equivalents:
 
 ---
 
-## HTTP API Reference
-
-Every CLI command maps to an HTTP endpoint. The full API:
-
-### Projects
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/projects` | `am projects list` |
-| GET | `/api/projects/:id` | `am projects get` |
-| POST | `/api/projects` | `am projects create` |
-| PATCH | `/api/projects/:id` | `am projects update` |
-| DELETE | `/api/projects/:id` | `am projects delete` |
-
-### Tasks
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/tasks?projectId=X&...filters` | `am tasks list` |
-| GET | `/api/tasks/:id` | `am tasks get` |
-| POST | `/api/tasks` | `am tasks create` |
-| PATCH | `/api/tasks/:id` | `am tasks update` |
-| DELETE | `/api/tasks/:id` | `am tasks delete` |
-| POST | `/api/tasks/:id/reorder` | (drag-and-drop) |
-| GET | `/api/tasks/:id/transitions` | `am tasks transitions` |
-| POST | `/api/tasks/:id/transition` | `am tasks transition` |
-| GET | `/api/tasks/:id/history` | `am tasks history` |
-
-### Dependencies
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/tasks/:id/dependencies` | `am deps list` |
-| POST | `/api/tasks/:id/dependencies` | `am deps add` |
-| DELETE | `/api/tasks/:id/dependencies/:depId` | `am deps remove` |
-
-### Notes
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/tasks/:id/notes` | `am notes list` |
-| POST | `/api/tasks/:id/notes` | `am notes add` |
-| DELETE | `/api/notes/:id` | `am notes delete` |
-
-### Artifacts
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/tasks/:id/artifacts` | `am artifacts list` |
-| POST | `/api/tasks/:id/artifacts` | `am artifacts add` |
-| DELETE | `/api/artifacts/:id` | `am artifacts remove` |
-
-### Agents
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| POST | `/api/tasks/:id/agent/start` | `am agent start` |
-| POST | `/api/agent/runs/:id/stop` | `am agent stop` |
-| GET | `/api/agent/runs?...filters` | `am agent runs` |
-| GET | `/api/agent/runs/:id` | `am agent get` |
-| GET | `/api/agent/runs/:id/transcript` | `am agent transcript` |
-| GET | `/api/agent/runs/:id/stream` (SSE) | `am agent watch` |
-| GET | `/api/agent/types` | `am agent types` |
-| GET | `/api/agent/cost?...filters` | `am agent cost` |
-
-### Prompts
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/prompts?taskId=X` | `am prompts list` |
-| GET | `/api/prompts/:id` | `am prompts get` |
-| POST | `/api/prompts/:id/respond` | `am prompts respond` |
-
-### Events
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/events?taskId=X&...filters` | `am events list` |
-| GET | `/api/activity?projectId=X` | `am activity` |
-
-### Pipelines
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/pipelines` | `am pipelines list` |
-| GET | `/api/pipelines/:id` | `am pipelines get` |
-| POST | `/api/pipelines` | `am pipelines import` |
-| PUT | `/api/pipelines/:id` | (pipeline editor) |
-| DELETE | `/api/pipelines/:id` | (pipeline management) |
-
-### Settings
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/settings` | `am settings list` |
-| GET | `/api/settings/:key` | `am settings get` |
-| PUT | `/api/settings/:key` | `am settings set` |
-
-### Status
-
-| Method | Path | CLI Command |
-|--------|------|-------------|
-| GET | `/api/status?projectId=X` | `am status` |
-| GET | `/api/stats?projectId=X` | `am stats` |
-
-### Real-time (SSE)
-
-| Path | Description |
-|------|-------------|
-| `/api/events/stream?taskId=X` | Task event stream |
-| `/api/events/stream?projectId=X` | Project event stream |
-| `/api/agent/runs/:id/stream` | Agent output stream |
-
----
-
 ## Implementation
 
 ### File Structure
@@ -1069,8 +934,7 @@ Every CLI command maps to an HTTP endpoint. The full API:
 src/
 ├── cli/                          # CLI tool source
 │   ├── index.ts                  # Entry point, commander setup
-│   ├── client.ts                 # HTTP client (talks to API)
-│   ├── standalone.ts             # Standalone mode (direct WorkflowService)
+│   ├── db.ts                     # Database initialization (opens SQLite, calls createAppServices)
 │   ├── output/
 │   │   ├── formatter.ts          # Output mode routing (json/table/quiet)
 │   │   ├── table.ts              # Table formatter (human-readable)
@@ -1089,12 +953,10 @@ src/
 │   │   └── status.ts             # am status, am stats
 │   └── utils/
 │       ├── project-detect.ts     # Auto-detect project from cwd
-│       ├── connection.ts         # Port discovery, health check
 │       └── interactive.ts        # Interactive prompts (inquirer)
 │
 ├── main/
-│   ├── http-server.ts            # Express HTTP server (thin routes → WorkflowService)
-│   └── ...
+│   └── ...                       # Same as before — no http-server.ts needed
 ```
 
 ### Dependencies
@@ -1107,54 +969,34 @@ src/
     "cli-table3": "^0.6.3",
     "inquirer": "^9.2.0",
     "ora": "^7.0.1",
-    "eventsource": "^2.0.2"
+    "better-sqlite3": "^11.0.0"
   }
 }
 ```
 
-**Key principle:** The CLI has **zero native module dependencies**. No `better-sqlite3`, no Electron APIs. In client mode, it's pure HTTP. In standalone mode, it imports the composition root which handles native modules.
+**Note:** Unlike the HTTP approach, the CLI **does** depend on `better-sqlite3` since it accesses the database directly. This is an acceptable tradeoff — `better-sqlite3` is already a project dependency (used by the Electron app), and the CLI shares the same build pipeline.
 
-### CLI Client
+### CLI Initialization
 
 ```typescript
-// src/cli/client.ts
+// src/cli/db.ts
+import { createAppServices } from '../main/providers/setup';
+import Database from 'better-sqlite3';
+import { app } from 'electron'; // or use a hardcoded path for standalone CLI
 
-class ApiClient {
-  private baseUrl: string;
+const DB_PATH = process.env.AM_DB_PATH
+  || path.join(os.homedir(), 'Library/Application Support/agents-manager/agents-manager.db');
 
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+let services: AppServices | null = null;
+
+export function getServices(): AppServices {
+  if (!services) {
+    const db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    services = createAppServices(db);
   }
-
-  // Every WorkflowService method has a corresponding client method
-  async listProjects(): Promise<Project[]> {
-    return this.get('/api/projects');
-  }
-
-  async createTask(input: CreateTaskInput): Promise<Task> {
-    return this.post('/api/tasks', input);
-  }
-
-  async transitionTask(taskId: string, toStatus: string, context: TransitionContext): Promise<TransitionResult> {
-    return this.post(`/api/tasks/${taskId}/transition`, { toStatus, context });
-  }
-
-  async startAgent(taskId: string, mode: string, config?: Partial<AgentConfig>): Promise<AgentRun> {
-    return this.post(`/api/tasks/${taskId}/agent/start`, { mode, config });
-  }
-
-  async watchAgent(runId: string, onMessage: (msg: AgentMessage) => void): Promise<void> {
-    // Uses Server-Sent Events for real-time streaming
-    const source = new EventSource(`${this.baseUrl}/api/agent/runs/${runId}/stream`);
-    source.onmessage = (event) => onMessage(JSON.parse(event.data));
-    // ...
-  }
-
-  // Generic HTTP methods
-  private async get<T>(path: string): Promise<T> { /* ... */ }
-  private async post<T>(path: string, body?: unknown): Promise<T> { /* ... */ }
-  private async patch<T>(path: string, body: unknown): Promise<T> { /* ... */ }
-  private async delete(path: string): Promise<void> { /* ... */ }
+  return services;
 }
 ```
 
@@ -1178,8 +1020,8 @@ program
   .option('--json', 'Output as JSON')
   .option('--verbose', 'Show full details')
   .option('--quiet', 'Minimal output')
-  .option('--standalone', 'Direct DB access (no app needed)')
-  .option('--no-color', 'Disable colors');
+  .option('--no-color', 'Disable colors')
+  .option('--db <path>', 'Override database path');
 
 // Each command module registers its subcommands
 registerProjectCommands(program);
@@ -1214,7 +1056,7 @@ export function registerTaskCommands(program: Command) {
     .option('--tags <tags>', 'Filter by tags (comma-separated)')
     .option('--search <query>', 'Search title and description')
     .action(async (options) => {
-      const client = await getClient();
+      const { workflowService } = getServices();
       const projectId = await resolveProjectId(options);
 
       const filters: TaskFilters = {};
@@ -1223,7 +1065,7 @@ export function registerTaskCommands(program: Command) {
       if (options.tags) filters.tags = options.tags.split(',');
       if (options.search) filters.search = options.search;
 
-      const tasks = await client.listTasks(projectId, filters);
+      const tasks = await workflowService.listTasks(projectId, filters);
       output(tasks, {
         table: formatTaskTable,
         json: tasks,
@@ -1244,7 +1086,7 @@ export function registerTaskCommands(program: Command) {
     .option('--from-file <path>', 'Create from markdown file')
     .option('-i, --interactive', 'Interactive mode')
     .action(async (options) => {
-      const client = await getClient();
+      const { workflowService } = getServices();
       const projectId = await resolveProjectId(options);
 
       let input: CreateTaskInput;
@@ -1269,7 +1111,7 @@ export function registerTaskCommands(program: Command) {
         };
       }
 
-      const task = await client.createTask(input);
+      const task = await workflowService.createTask(input);
       output(task, {
         table: () => console.log(`Created: ${task.id} "${task.title}"`),
         json: task,
@@ -1283,8 +1125,8 @@ export function registerTaskCommands(program: Command) {
     .description('Transition task to new status')
     .option('--reason <reason>', 'Reason for transition')
     .action(async (taskId, toStatus, options) => {
-      const client = await getClient();
-      const result = await client.transitionTask(taskId, toStatus, {
+      const { workflowService } = getServices();
+      const result = await workflowService.transitionTask(taskId, toStatus, {
         triggeredBy: 'user',
         reason: options.reason,
       });
@@ -1308,8 +1150,8 @@ export function registerTaskCommands(program: Command) {
     .command('start <taskId>')
     .description('Move task to first active status')
     .action(async (taskId) => {
-      const client = await getClient();
-      const transitions = await client.getValidTransitions(taskId);
+      const { workflowService } = getServices();
+      const transitions = await workflowService.getValidTransitions(taskId);
       const active = transitions.find(t =>
         t.transition.to && t.allowed
       );
@@ -1317,7 +1159,7 @@ export function registerTaskCommands(program: Command) {
         console.error('No valid transition to an active status');
         process.exit(4);
       }
-      await client.transitionTask(taskId, active.transition.to, {
+      await workflowService.transitionTask(taskId, active.transition.to, {
         triggeredBy: 'user',
       });
     });
@@ -1339,7 +1181,7 @@ am completion fish >> ~/.config/fish/completions/am.fish
 # Completions include:
 # - Command names and subcommands
 # - --flag names
-# - Task IDs (queried from API)
+# - Task IDs (queried from DB)
 # - Status names (from pipeline)
 # - Agent types
 # - Project names
@@ -1351,8 +1193,8 @@ am completion fish >> ~/.config/fish/completions/am.fish
 
 ### Phase 1: Foundation CLI
 
-- HTTP server in Electron main process
-- Port discovery (`~/.agents-manager/server.json`)
+- CLI entry point with `createAppServices(db)` direct initialization
+- Database path discovery (`AM_DB_PATH` env var or default location)
 - `am projects` (list, create, get, update, delete)
 - `am tasks` (list, create, get, update, delete)
 - `am tasks transition` (pipeline transitions)
@@ -1364,13 +1206,12 @@ am completion fish >> ~/.config/fish/completions/am.fish
 - `am settings` (list, get, set)
 - Output modes: `--json`, `--quiet`, `--verbose`
 - Project auto-detection from cwd
-- Standalone mode (`--standalone`)
 
 ### Phase 2: Agent CLI
 
 - `am agent start/stop` (start and stop agents)
 - `am agent runs/get` (list and inspect runs)
-- `am agent watch` (live stream via SSE)
+- `am agent watch` (poll-based live output)
 - `am agent transcript` (view completed transcript)
 - `am agent types` (list available agents)
 - `am agent cost` (cost tracking)
