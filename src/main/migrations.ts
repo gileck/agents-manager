@@ -256,7 +256,18 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
       `,
     },
+    {
+      name: '018_update_agent_pipeline_hooks',
+      sql: getUpdateAgentPipelineSql(),
+    },
   ];
+}
+
+function getUpdateAgentPipelineSql(): string {
+  const agentPipeline = SEEDED_PIPELINES.find((p) => p.id === 'pipeline-agent');
+  if (!agentPipeline) return '';
+  const transitions = escSql(JSON.stringify(agentPipeline.transitions));
+  return `UPDATE pipelines SET transitions = '${transitions}', updated_at = ${Date.now()} WHERE id = 'pipeline-agent'`;
 }
 
 function escSql(s: string): string {

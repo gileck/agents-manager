@@ -70,6 +70,10 @@ export function ProjectDetailPage() {
 
   return (
     <div className="p-8">
+      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1 as any)}>
+        &larr; Back
+      </Button>
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">{project.name}</h1>

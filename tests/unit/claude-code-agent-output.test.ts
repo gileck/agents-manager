@@ -55,16 +55,22 @@ describe('ClaudeCodeAgent onOutput streaming', () => {
 
     const result = await agent.execute(createContext(), {}, onOutput);
 
-    expect(chunks).toEqual(['First response', ' continued']);
+    expect(chunks).toEqual(['First response\n', ' continued\n']);
     expect(result.exitCode).toBe(0);
     expect(result.outcome).toBe('plan_complete');
-    expect(result.output).toBe('Plan complete');
+    expect(result.output).toBe('First response\n continued\n');
     expect(result.costInputTokens).toBe(100);
     expect(result.costOutputTokens).toBe(50);
   });
 
   it('should work without onOutput callback', async () => {
     const messages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Done' }],
+        },
+      },
       {
         type: 'result',
         subtype: 'success',
@@ -78,7 +84,7 @@ describe('ClaudeCodeAgent onOutput streaming', () => {
     const result = await agent.execute(createContext(), {});
 
     expect(result.exitCode).toBe(0);
-    expect(result.output).toBe('Done');
+    expect(result.output).toBe('Done\n');
   });
 
   it('should handle error results', async () => {
@@ -102,10 +108,50 @@ describe('ClaudeCodeAgent onOutput streaming', () => {
     const chunks: string[] = [];
     const result = await agent.execute(createContext(), {}, (chunk) => chunks.push(chunk));
 
-    expect(chunks).toEqual(['partial work']);
+    expect(chunks).toEqual(['partial work\n']);
     expect(result.exitCode).toBe(1);
     expect(result.outcome).toBe('failed');
     expect(result.error).toBe('Something failed\nDetails here');
+  });
+
+  it('should include tool_use blocks in output', async () => {
+    const messages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'I will read the file' },
+            { type: 'tool_use', id: 't1', name: 'Read', input: { path: '/tmp/test.txt' } },
+          ],
+        },
+      },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Done reading' },
+          ],
+        },
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Ok',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const chunks: string[] = [];
+    const result = await agent.execute(createContext(), {}, (chunk) => chunks.push(chunk));
+
+    expect(chunks).toEqual([
+      'I will read the file\n',
+      '\n[Tool: Read]\n',
+      'Done reading\n',
+    ]);
+    expect(result.output).toBe('I will read the file\n\n[Tool: Read]\nDone reading\n');
   });
 
   it('should handle thrown errors', async () => {

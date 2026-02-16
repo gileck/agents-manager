@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -8,6 +8,7 @@ import type { AgentRun } from '../../shared/types';
 
 export function AgentRunPage() {
   const { runId } = useParams<{ runId: string }>();
+  const navigate = useNavigate();
   const { data: run, loading, error, refetch } = useIpc<AgentRun | null>(
     () => window.api.agents.get(runId!),
     [runId]
@@ -73,6 +74,10 @@ export function AgentRunPage() {
 
   return (
     <div className="p-8">
+      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1 as any)}>
+        &larr; Back
+      </Button>
+
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Badge variant={run.status === 'completed' ? 'success' : run.status === 'running' ? 'default' : 'destructive'}>

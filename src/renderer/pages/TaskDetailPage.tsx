@@ -55,11 +55,21 @@ export function TaskDetailPage() {
   }, [hasRunningAgent, refetchAgentRuns, refetch]);
 
   const [tab, setTab] = useState('overview');
+
+  // Refetch agent runs when switching to the agents tab
+  useEffect(() => {
+    if (tab === 'agents') {
+      refetchAgentRuns();
+    }
+  }, [tab, refetchAgentRuns]);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<TaskUpdateInput>({});
   const [saving, setSaving] = useState(false);
   const [transitioning, setTransitioning] = useState<string | null>(null);
   const [startingAgent, setStartingAgent] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   const openEdit = () => {
     if (task) {
@@ -101,8 +111,32 @@ export function TaskDetailPage() {
 
   const handleDelete = async () => {
     if (!id) return;
-    await window.api.tasks.delete(id);
-    navigate('/tasks');
+    setDeleting(true);
+    try {
+      await window.api.tasks.delete(id);
+      navigate('/tasks');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (!task) return;
+    setDuplicating(true);
+    try {
+      const newTask = await window.api.tasks.create({
+        projectId: task.projectId,
+        pipelineId: task.pipelineId,
+        title: `${task.title} (copy)`,
+        description: task.description ?? undefined,
+        priority: task.priority,
+        assignee: task.assignee ?? undefined,
+        tags: task.tags,
+      });
+      navigate(`/tasks/${newTask.id}`);
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   if (loading) {
@@ -123,14 +157,21 @@ export function TaskDetailPage() {
 
   return (
     <div className="p-8">
+      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1 as any)}>
+        &larr; Back
+      </Button>
+
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <PipelineBadge status={task.status} pipeline={pipeline} />
           <h1 className="text-3xl font-bold">{task.title}</h1>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleDuplicate} disabled={duplicating}>
+            {duplicating ? 'Duplicating...' : 'Duplicate'}
+          </Button>
           <Button variant="outline" onClick={openEdit}>Edit</Button>
-          <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>Delete</Button>
         </div>
       </div>
 
@@ -318,6 +359,7 @@ export function TaskDetailPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
@@ -358,6 +400,24 @@ export function TaskDetailPage() {
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Task</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-4">
+            Are you sure you want to delete &quot;{task.title}&quot;? This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

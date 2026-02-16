@@ -49,16 +49,28 @@ export class ClaudeCodeAgent implements IAgent {
         },
       })) {
         if (message.type === 'assistant') {
-          // Extract text from assistant message content blocks
           for (const block of message.message.content) {
             if ('text' in block && typeof block.text === 'string') {
-              onOutput?.(block.text);
+              const chunk = block.text + '\n';
+              resultText += chunk;
+              onOutput?.(chunk);
+            } else if (block.type === 'tool_use') {
+              const chunk = `\n[Tool: ${block.name}]\n`;
+              resultText += chunk;
+              onOutput?.(chunk);
+            }
+          }
+        } else if (message.type === 'tool') {
+          // Tool result messages
+          for (const block of (message.message?.content ?? [])) {
+            if ('text' in block && typeof block.text === 'string') {
+              const chunk = block.text + '\n';
+              resultText += chunk;
+              onOutput?.(chunk);
             }
           }
         } else if (message.type === 'result') {
-          if (message.subtype === 'success') {
-            resultText = message.result;
-          } else {
+          if (message.subtype !== 'success') {
             isError = true;
             errorMessage = message.errors?.join('\n') || 'Agent execution failed';
           }

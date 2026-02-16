@@ -15,7 +15,7 @@ import { useTasks } from '../hooks/useTasks';
 import { useProjects } from '../hooks/useProjects';
 import { usePipelines, usePipeline } from '../hooks/usePipelines';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
-import type { TaskFilter, TaskCreateInput } from '../../shared/types';
+import type { Task, TaskFilter, TaskCreateInput } from '../../shared/types';
 
 export function TaskListPage() {
   const [searchParams] = useSearchParams();
@@ -42,6 +42,8 @@ export function TaskListPage() {
     description: '',
   });
   const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const handleCreate = async () => {
     if (!form.title.trim() || !form.projectId || !form.pipelineId) return;
@@ -55,6 +57,31 @@ export function TaskListPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await window.api.tasks.delete(deleteTarget.id);
+      setDeleteTarget(null);
+      await refetch();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDuplicate = async (task: Task) => {
+    const newTask = await window.api.tasks.create({
+      projectId: task.projectId,
+      pipelineId: task.pipelineId,
+      title: `${task.title} (copy)`,
+      description: task.description ?? undefined,
+      priority: task.priority,
+      assignee: task.assignee ?? undefined,
+      tags: task.tags,
+    });
+    navigate(`/tasks/${newTask.id}`);
   };
 
   if (loading) {
@@ -119,7 +146,13 @@ export function TaskListPage() {
       ) : (
         <div className="space-y-2">
           {tasks.map((task) => (
-            <TaskRow key={task.id} task={task} onClick={() => navigate(`/tasks/${task.id}`)} />
+            <TaskRow
+              key={task.id}
+              task={task}
+              onClick={() => navigate(`/tasks/${task.id}`)}
+              onDelete={() => setDeleteTarget(task)}
+              onDuplicate={() => handleDuplicate(task)}
+            />
           ))}
         </div>
       )}
@@ -184,11 +217,34 @@ export function TaskListPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Task</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-4">
+            Are you sure you want to delete &quot;{deleteTarget?.title}&quot;? This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function TaskRow({ task, onClick }: { task: { id: string; title: string; status: string; priority: number; assignee: string | null; pipelineId: string }; onClick: () => void }) {
+function TaskRow({ task, onClick, onDelete, onDuplicate }: {
+  task: { id: string; title: string; status: string; priority: number; assignee: string | null; pipelineId: string };
+  onClick: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+}) {
   const { pipeline } = usePipeline(task.pipelineId);
   return (
     <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={onClick}>
@@ -197,9 +253,26 @@ function TaskRow({ task, onClick }: { task: { id: string; title: string; status:
           <PipelineBadge status={task.status} pipeline={pipeline} />
           <Badge variant="outline">P{task.priority}</Badge>
           <span className="font-medium">{task.title}</span>
-          {task.assignee && (
-            <span className="text-sm text-muted-foreground ml-auto">{task.assignee}</span>
-          )}
+          <div className="flex items-center gap-2 ml-auto">
+            {task.assignee && (
+              <span className="text-sm text-muted-foreground">{task.assignee}</span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+            >
+              Duplicate
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            >
+              Delete
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
