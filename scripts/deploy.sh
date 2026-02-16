@@ -11,7 +11,7 @@ DIST_DIR="$PROJECT_DIR/dist"
 
 echo "🔨 Building app..."
 cd "$PROJECT_DIR"
-yarn dist
+npm run dist
 
 # Find the built app (supports both Intel and Apple Silicon)
 if [ -d "$DIST_DIR/mac-arm64/$APP_NAME.app" ]; then

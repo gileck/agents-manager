@@ -17,25 +17,29 @@ app.setName('agents-manager');
 initializeApp({
   singleInstance: true,
   onReady: async () => {
-    // Initialize database with migrations
-    initDatabase({
-      filename: 'agents-manager.db',
-      migrations: getMigrations(),
-    });
+    try {
+      // Initialize database with migrations
+      initDatabase({
+        filename: 'agents-manager.db',
+        migrations: getMigrations(),
+      });
 
-    // Initialize domain services
-    const db = getDatabase();
-    services = createAppServices(db);
+      // Initialize domain services
+      const db = getDatabase();
+      services = createAppServices(db);
 
-    // Register IPC handlers
-    registerIpcHandlers(services);
+      // Register IPC handlers
+      registerIpcHandlers(services);
 
-    // Create the tray icon with a simple menu
-    tray = createTray({
-      title: '📝',
-      tooltip: 'Agents Manager',
-      menuBuilder: () => buildStandardMenu('Agents Manager'),
-    });
+      // Create the tray icon with a simple menu
+      tray = createTray({
+        title: '📝',
+        tooltip: 'Agents Manager',
+        menuBuilder: () => buildStandardMenu('Agents Manager'),
+      });
+    } catch (err) {
+      console.error('Fatal: onReady failed:', err);
+    }
   },
   onBeforeQuit: () => {
     closeDatabase();

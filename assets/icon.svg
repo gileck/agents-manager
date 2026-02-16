@@ -1,135 +1,106 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a1a2e"/>
-      <stop offset="50%" style="stop-color:#16213e"/>
-      <stop offset="100%" style="stop-color:#0f3460"/>
+      <stop offset="0%" style="stop-color:#4f46e5"/>
+      <stop offset="50%" style="stop-color:#6d28d9"/>
+      <stop offset="100%" style="stop-color:#7c3aed"/>
     </linearGradient>
-    <linearGradient id="glow1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#00d2ff"/>
-      <stop offset="100%" style="stop-color:#3a7bd5"/>
+    <linearGradient id="line1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#c4b5fd"/>
     </linearGradient>
-    <linearGradient id="glow2" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#f857a6"/>
-      <stop offset="100%" style="stop-color:#ff5858"/>
-    </linearGradient>
-    <linearGradient id="glow3" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#a8ff78"/>
-      <stop offset="100%" style="stop-color:#78ffd6"/>
-    </linearGradient>
-    <filter id="softglow">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <filter id="glow">
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#ffffff" flood-opacity="0.4"/>
     </filter>
-    <filter id="nodeshadow">
-      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#00d2ff" flood-opacity="0.5"/>
+    <filter id="glow-orange">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#fb923c" flood-opacity="0.6"/>
     </filter>
-    <filter id="nodeshadow2">
-      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#f857a6" flood-opacity="0.5"/>
+    <filter id="glow-green">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#4ade80" flood-opacity="0.6"/>
     </filter>
-    <filter id="nodeshadow3">
-      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#78ffd6" flood-opacity="0.5"/>
+    <filter id="glow-blue">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#60a5fa" flood-opacity="0.6"/>
+    </filter>
+    <filter id="glow-pink">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#f472b6" flood-opacity="0.6"/>
     </filter>
   </defs>
 
   <!-- Background rounded square -->
   <rect x="40" y="40" width="944" height="944" rx="200" ry="200" fill="url(#bg)"/>
 
-  <!-- Subtle grid pattern -->
-  <g opacity="0.06" stroke="#ffffff" stroke-width="1">
-    <line x1="200" y1="40" x2="200" y2="984"/>
-    <line x1="350" y1="40" x2="350" y2="984"/>
-    <line x1="512" y1="40" x2="512" y2="984"/>
-    <line x1="674" y1="40" x2="674" y2="984"/>
-    <line x1="824" y1="40" x2="824" y2="984"/>
-    <line x1="40" y1="200" x2="984" y2="200"/>
-    <line x1="40" y1="350" x2="984" y2="350"/>
-    <line x1="40" y1="512" x2="984" y2="512"/>
-    <line x1="40" y1="674" x2="984" y2="674"/>
-    <line x1="40" y1="824" x2="984" y2="824"/>
+  <!-- Subtle radial highlight -->
+  <circle cx="512" cy="460" r="350" fill="white" opacity="0.07"/>
+
+  <!-- Connection lines -->
+  <g stroke-width="4" fill="none" opacity="0.5">
+    <line x1="512" y1="470" x2="310" y2="310" stroke="white"/>
+    <line x1="512" y1="470" x2="714" y2="310" stroke="white"/>
+    <line x1="512" y1="554" x2="310" y2="714" stroke="white"/>
+    <line x1="512" y1="554" x2="714" y2="714" stroke="white"/>
+    <!-- Cross connections -->
+    <line x1="310" y1="310" x2="714" y2="310" stroke="white" opacity="0.3"/>
+    <line x1="310" y1="714" x2="714" y2="714" stroke="white" opacity="0.3"/>
+    <line x1="310" y1="310" x2="310" y2="714" stroke="white" opacity="0.3"/>
+    <line x1="714" y1="310" x2="714" y2="714" stroke="white" opacity="0.3"/>
   </g>
 
-  <!-- Connection lines between nodes -->
-  <g stroke-width="3.5" fill="none" opacity="0.6">
-    <!-- Center to top-left -->
-    <line x1="512" y1="480" x2="300" y2="300" stroke="url(#glow1)" opacity="0.5"/>
-    <!-- Center to top-right -->
-    <line x1="512" y1="480" x2="724" y2="300" stroke="url(#glow2)" opacity="0.5"/>
-    <!-- Center to bottom-left -->
-    <line x1="512" y1="560" x2="300" y2="724" stroke="url(#glow3)" opacity="0.5"/>
-    <!-- Center to bottom-right -->
-    <line x1="512" y1="560" x2="724" y2="724" stroke="url(#glow1)" opacity="0.5"/>
-    <!-- Top nodes to each other -->
-    <line x1="300" y1="300" x2="724" y2="300" stroke="#ffffff" opacity="0.15"/>
-    <!-- Bottom nodes to each other -->
-    <line x1="300" y1="724" x2="724" y2="724" stroke="#ffffff" opacity="0.15"/>
-    <!-- Left nodes -->
-    <line x1="300" y1="300" x2="300" y2="724" stroke="#ffffff" opacity="0.15"/>
-    <!-- Right nodes -->
-    <line x1="724" y1="300" x2="724" y2="724" stroke="#ffffff" opacity="0.15"/>
-  </g>
+  <!-- Pulse rings around center -->
+  <circle cx="512" cy="512" r="110" fill="none" stroke="white" stroke-width="1.5" opacity="0.15"/>
+  <circle cx="512" cy="512" r="145" fill="none" stroke="white" stroke-width="1" opacity="0.08"/>
 
-  <!-- Animated pulse rings on center -->
-  <circle cx="512" cy="512" r="100" fill="none" stroke="#00d2ff" stroke-width="1" opacity="0.15"/>
-  <circle cx="512" cy="512" r="140" fill="none" stroke="#00d2ff" stroke-width="0.8" opacity="0.08"/>
-
-  <!-- Center node (main agent) - larger -->
-  <g filter="url(#nodeshadow)">
-    <circle cx="512" cy="512" r="72" fill="#1a1a2e" stroke="url(#glow1)" stroke-width="4"/>
-    <!-- Brain/AI symbol in center -->
-    <g transform="translate(512,512)" fill="none" stroke="#00d2ff" stroke-width="5" stroke-linecap="round">
-      <!-- Stylized "A" shape representing Agent -->
-      <path d="M-24,22 L0,-28 L24,22" />
-      <line x1="-14" y1="6" x2="14" y2="6"/>
-      <!-- Dot on top -->
-      <circle cx="0" cy="-28" r="4" fill="#00d2ff" stroke="none"/>
+  <!-- Center node (main agent) -->
+  <g filter="url(#glow)">
+    <circle cx="512" cy="512" r="76" fill="white"/>
+    <g transform="translate(512,512)" fill="none" stroke="#6d28d9" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-26,24 L0,-30 L26,24"/>
+      <line x1="-15" y1="7" x2="15" y2="7"/>
+      <circle cx="0" cy="-30" r="5" fill="#6d28d9" stroke="none"/>
     </g>
   </g>
 
-  <!-- Top-left node -->
-  <g filter="url(#nodeshadow2)">
-    <circle cx="300" cy="300" r="48" fill="#1a1a2e" stroke="url(#glow2)" stroke-width="3.5"/>
-    <g transform="translate(300,300)" fill="none" stroke="#f857a6" stroke-width="4" stroke-linecap="round">
-      <circle cx="0" cy="-8" r="10"/>
-      <path d="M-14,16 Q0,6 14,16"/>
+  <!-- Top-left node (orange) -->
+  <g filter="url(#glow-orange)">
+    <circle cx="310" cy="310" r="52" fill="#fb923c"/>
+    <g transform="translate(310,310)" fill="none" stroke="white" stroke-width="4.5" stroke-linecap="round">
+      <circle cx="0" cy="-8" r="11"/>
+      <path d="M-16,18 Q0,6 16,18"/>
     </g>
   </g>
 
-  <!-- Top-right node -->
-  <g filter="url(#nodeshadow)">
-    <circle cx="724" cy="300" r="48" fill="#1a1a2e" stroke="url(#glow1)" stroke-width="3.5"/>
-    <g transform="translate(724,300)" fill="none" stroke="#3a7bd5" stroke-width="4" stroke-linecap="round">
-      <rect x="-14" y="-14" width="28" height="28" rx="4"/>
-      <line x1="-6" y1="-2" x2="6" y2="-2"/>
-      <line x1="-6" y1="6" x2="6" y2="6"/>
+  <!-- Top-right node (blue) -->
+  <g filter="url(#glow-blue)">
+    <circle cx="714" cy="310" r="52" fill="#60a5fa"/>
+    <g transform="translate(714,310)" fill="none" stroke="white" stroke-width="4.5" stroke-linecap="round">
+      <rect x="-15" y="-15" width="30" height="30" rx="5"/>
+      <line x1="-7" y1="-3" x2="7" y2="-3"/>
+      <line x1="-7" y1="7" x2="7" y2="7"/>
     </g>
   </g>
 
-  <!-- Bottom-left node -->
-  <g filter="url(#nodeshadow3)">
-    <circle cx="300" cy="724" r="48" fill="#1a1a2e" stroke="url(#glow3)" stroke-width="3.5"/>
-    <g transform="translate(300,724)" fill="none" stroke="#78ffd6" stroke-width="4" stroke-linecap="round">
-      <polygon points="0,-16 16,10 -16,10"/>
+  <!-- Bottom-left node (green) -->
+  <g filter="url(#glow-green)">
+    <circle cx="310" cy="714" r="52" fill="#4ade80"/>
+    <g transform="translate(310,714)" fill="none" stroke="white" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="0,-18 18,12 -18,12"/>
     </g>
   </g>
 
-  <!-- Bottom-right node -->
-  <g filter="url(#nodeshadow2)">
-    <circle cx="724" cy="724" r="48" fill="#1a1a2e" stroke="url(#glow2)" stroke-width="3.5"/>
-    <g transform="translate(724,724)" fill="none" stroke="#f857a6" stroke-width="4" stroke-linecap="round">
-      <path d="M-12,-12 L12,12 M12,-12 L-12,12"/>
-      <circle cx="0" cy="0" r="6"/>
+  <!-- Bottom-right node (pink) -->
+  <g filter="url(#glow-pink)">
+    <circle cx="714" cy="714" r="52" fill="#f472b6"/>
+    <g transform="translate(714,714)" fill="none" stroke="white" stroke-width="4.5" stroke-linecap="round">
+      <circle cx="0" cy="0" r="8" fill="white" stroke="none"/>
+      <line x1="0" y1="-18" x2="0" y2="-10"/>
+      <line x1="0" y1="10" x2="0" y2="18"/>
+      <line x1="-18" y1="0" x2="-10" y2="0"/>
+      <line x1="10" y1="0" x2="18" y2="0"/>
     </g>
   </g>
 
-  <!-- Small floating particles for depth -->
-  <circle cx="420" cy="380" r="3" fill="#00d2ff" opacity="0.4"/>
-  <circle cx="610" cy="400" r="2.5" fill="#f857a6" opacity="0.35"/>
-  <circle cx="400" cy="640" r="2" fill="#78ffd6" opacity="0.4"/>
-  <circle cx="630" cy="620" r="3" fill="#3a7bd5" opacity="0.3"/>
-  <circle cx="512" cy="350" r="2" fill="#ffffff" opacity="0.25"/>
-  <circle cx="512" cy="680" r="2.5" fill="#ffffff" opacity="0.2"/>
+  <!-- Small particles -->
+  <circle cx="420" cy="390" r="4" fill="white" opacity="0.35"/>
+  <circle cx="610" cy="400" r="3" fill="white" opacity="0.3"/>
+  <circle cx="400" cy="640" r="3.5" fill="white" opacity="0.3"/>
+  <circle cx="630" cy="630" r="4" fill="white" opacity="0.25"/>
 </svg>
