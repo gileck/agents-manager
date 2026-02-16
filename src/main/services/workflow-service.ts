@@ -33,7 +33,7 @@ export class WorkflowService implements IWorkflowService {
     private pendingPromptStore: IPendingPromptStore,
     private taskArtifactStore: ITaskArtifactStore,
     private agentService: IAgentService,
-    private scmPlatform: IScmPlatform,
+    private createScmPlatform: (repoPath: string) => IScmPlatform,
   ) {}
 
   async createTask(input: TaskCreateInput): Promise<Task> {
@@ -178,8 +178,14 @@ export class WorkflowService implements IWorkflowService {
     const artifacts = await this.taskArtifactStore.getArtifactsForTask(taskId, 'pr');
     if (artifacts.length === 0) throw new Error(`No PR artifact found for task: ${taskId}`);
 
+    const mergeTask = await this.taskStore.getTask(taskId);
+    if (!mergeTask) throw new Error(`Task not found: ${taskId}`);
+    const project = await this.projectStore.getProject(mergeTask.projectId);
+    if (!project?.path) throw new Error(`Project ${mergeTask.projectId} has no path configured`);
+    const scmPlatform = this.createScmPlatform(project.path);
+
     const prUrl = artifacts[0].data.url as string;
-    await this.scmPlatform.mergePR(prUrl);
+    await scmPlatform.mergePR(prUrl);
 
     await this.activityLog.log({
       action: 'transition',

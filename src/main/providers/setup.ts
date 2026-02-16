@@ -10,9 +10,6 @@ import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentFramework } from '../interfaces/agent-framework';
-import type { IWorktreeManager } from '../interfaces/worktree-manager';
-import type { IGitOps } from '../interfaces/git-ops';
-import type { IScmPlatform } from '../interfaces/scm-platform';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IWorkflowService } from '../interfaces/workflow-service';
@@ -29,9 +26,9 @@ import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
 import { WorkflowService } from '../services/workflow-service';
-import { StubWorktreeManager } from '../services/stub-worktree-manager';
-import { StubGitOps } from '../services/stub-git-ops';
-import { StubScmPlatform } from '../services/stub-scm-platform';
+import { LocalGitOps } from '../services/local-git-ops';
+import { LocalWorktreeManager } from '../services/local-worktree-manager';
+import { GitHubScmPlatform } from '../services/github-scm-platform';
 import { StubNotificationRouter } from '../services/stub-notification-router';
 import { ScriptedAgent, happyPlan } from '../agents/scripted-agent';
 import { ClaudeCodeAgent } from '../agents/claude-code-agent';
@@ -53,9 +50,6 @@ export interface AppServices {
   taskPhaseStore: ITaskPhaseStore;
   pendingPromptStore: IPendingPromptStore;
   agentFramework: IAgentFramework;
-  worktreeManager: IWorktreeManager;
-  gitOps: IGitOps;
-  scmPlatform: IScmPlatform;
   notificationRouter: INotificationRouter;
   agentService: IAgentService;
   workflowService: IWorkflowService;
@@ -116,10 +110,10 @@ export function createAppServices(db: Database.Database): AppServices {
   const taskPhaseStore = new SqliteTaskPhaseStore(db);
   const pendingPromptStore = new SqlitePendingPromptStore(db);
 
-  // Phase 2 infrastructure (stubs — real implementations later)
-  const worktreeManager = new StubWorktreeManager();
-  const gitOps = new StubGitOps();
-  const scmPlatform = new StubScmPlatform();
+  // Phase 2 infrastructure — factory functions create project-scoped instances
+  const createGitOps = (cwd: string) => new LocalGitOps(cwd);
+  const createWorktreeManager = (path: string) => new LocalWorktreeManager(path);
+  const createScmPlatform = (path: string) => new GitHubScmPlatform(path);
   const notificationRouter = new StubNotificationRouter();
 
   // Agent framework + adapters
@@ -129,8 +123,8 @@ export function createAppServices(db: Database.Database): AppServices {
 
   // Agent service
   const agentService = new AgentService(
-    agentFramework, agentRunStore, worktreeManager,
-    gitOps, scmPlatform, taskStore, projectStore, pipelineEngine,
+    agentFramework, agentRunStore, createWorktreeManager,
+    createGitOps, createScmPlatform, taskStore, projectStore, pipelineEngine,
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
   );
 
@@ -138,7 +132,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const workflowService = new WorkflowService(
     taskStore, projectStore, pipelineEngine, pipelineStore,
     taskEventLog, activityLog, agentRunStore, pendingPromptStore,
-    taskArtifactStore, agentService, scmPlatform,
+    taskArtifactStore, agentService, createScmPlatform,
   );
 
   // Register start_agent hook (must be after workflowService is created)
@@ -183,9 +177,6 @@ export function createAppServices(db: Database.Database): AppServices {
     taskPhaseStore,
     pendingPromptStore,
     agentFramework,
-    worktreeManager,
-    gitOps,
-    scmPlatform,
     notificationRouter,
     agentService,
     workflowService,

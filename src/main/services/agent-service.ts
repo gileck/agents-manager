@@ -26,9 +26,9 @@ export class AgentService implements IAgentService {
   constructor(
     private agentFramework: IAgentFramework,
     private agentRunStore: IAgentRunStore,
-    private worktreeManager: IWorktreeManager,
-    private gitOps: IGitOps,
-    private scmPlatform: IScmPlatform,
+    private createWorktreeManager: (projectPath: string) => IWorktreeManager,
+    private createGitOps: (cwd: string) => IGitOps,
+    private createScmPlatform: (repoPath: string) => IScmPlatform,
     private taskStore: ITaskStore,
     private projectStore: IProjectStore,
     private pipelineEngine: IPipelineEngine,
@@ -46,6 +46,12 @@ export class AgentService implements IAgentService {
     const project = await this.projectStore.getProject(task.projectId);
     if (!project) throw new Error(`Project not found: ${task.projectId}`);
 
+    const projectPath = project.path;
+    if (!projectPath) throw new Error(`Project ${project.id} has no path configured`);
+    const worktreeManager = this.createWorktreeManager(projectPath);
+    const gitOps = this.createGitOps(projectPath);
+    const scmPlatform = this.createScmPlatform(projectPath);
+
     // 2. Create agent run record
     const run = await this.agentRunStore.createRun({ taskId, agentType, mode });
 
@@ -61,12 +67,12 @@ export class AgentService implements IAgentService {
     });
 
     // 4. Prepare environment
-    let worktree = await this.worktreeManager.get(taskId);
+    let worktree = await worktreeManager.get(taskId);
     if (!worktree) {
       const branch = `task/${taskId}/${mode}`;
-      worktree = await this.worktreeManager.create(branch, taskId);
+      worktree = await worktreeManager.create(branch, taskId);
     }
-    await this.worktreeManager.lock(taskId);
+    await worktreeManager.lock(taskId);
 
     // 5. Log event
     await this.taskEventLog.log({
@@ -77,18 +83,18 @@ export class AgentService implements IAgentService {
       data: { agentRunId: run.id, agentType, mode },
     });
 
-    // 6. Build context (prefer project.path for real usage, fall back to worktree.path for tests/stubs)
+    // 6. Build context — agent runs in the worktree, not the main checkout
     const context: AgentContext = {
       task,
       project,
-      workdir: project.path || worktree.path,
+      workdir: worktree.path,
       mode,
     };
     const config: AgentConfig = {};
 
     // 7. Fire-and-forget agent execution in background
     const agent = this.agentFramework.getAgent(agentType);
-    const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, agentType, onOutput);
+    const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, worktreeManager, gitOps, scmPlatform, agentType, onOutput);
     this.backgroundPromises.set(run.id, promise);
 
     // 8. Return run immediately (status: 'running')
@@ -103,6 +109,9 @@ export class AgentService implements IAgentService {
     task: import('../../shared/types').Task,
     phase: { id: string },
     worktree: { branch: string; path: string },
+    worktreeManager: IWorktreeManager,
+    gitOps: IGitOps,
+    scmPlatform: IScmPlatform,
     agentType: string,
     onOutput?: (chunk: string) => void,
   ): Promise<void> {
@@ -129,7 +138,7 @@ export class AgentService implements IAgentService {
           message: `Agent ${agentType} failed: ${errorMsg}`,
           data: { agentRunId: run.id, error: errorMsg },
         });
-        await this.worktreeManager.unlock(taskId);
+        await worktreeManager.unlock(taskId);
         return;
       }
 
@@ -156,7 +165,7 @@ export class AgentService implements IAgentService {
         });
         await this.tryOutcomeTransition(taskId, 'needs_info');
       } else if (result.exitCode === 0) {
-        await this.collectArtifacts(taskId, worktree.branch, result);
+        await this.collectArtifacts(taskId, worktree.branch, result, gitOps, scmPlatform);
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'completed', completedAt });
         if (result.outcome) {
           await this.tryOutcomeTransition(taskId, result.outcome);
@@ -166,7 +175,7 @@ export class AgentService implements IAgentService {
       }
 
       // Cleanup
-      await this.worktreeManager.unlock(taskId);
+      await worktreeManager.unlock(taskId);
 
       // Log completion event
       await this.taskEventLog.log({
@@ -215,7 +224,13 @@ export class AgentService implements IAgentService {
     }
   }
 
-  private async collectArtifacts(taskId: string, branch: string, result: { outcome?: string; payload?: Record<string, unknown> }): Promise<void> {
+  private async collectArtifacts(
+    taskId: string,
+    branch: string,
+    result: { outcome?: string; payload?: Record<string, unknown> },
+    gitOps: IGitOps,
+    scmPlatform: IScmPlatform,
+  ): Promise<void> {
     // Always create branch artifact
     await this.taskArtifactStore.createArtifact({
       taskId,
@@ -226,7 +241,7 @@ export class AgentService implements IAgentService {
     if (result.outcome === 'pr_ready') {
       // Create diff artifact
       try {
-        const diffContent = await this.gitOps.diff('main', branch);
+        const diffContent = await gitOps.diff('main', branch);
         await this.taskArtifactStore.createArtifact({
           taskId,
           type: 'diff',
@@ -241,10 +256,12 @@ export class AgentService implements IAgentService {
         });
       }
 
-      // Create PR
+      // Push branch to remote, then create PR
       try {
+        await gitOps.push(branch);
+
         const task = await this.taskStore.getTask(taskId);
-        const prInfo = await this.scmPlatform.createPR({
+        const prInfo = await scmPlatform.createPR({
           title: task?.title ?? 'PR',
           body: `Automated PR for task ${taskId}`,
           head: branch,
