@@ -33,8 +33,8 @@ initializeApp({
     // Create the tray icon with a simple menu
     tray = createTray({
       title: '📝',
-      tooltip: 'MacOS App Template',
-      menuBuilder: () => buildStandardMenu('MacOS App Template'),
+      tooltip: 'Agents Manager',
+      menuBuilder: () => buildStandardMenu('Agents Manager'),
     });
   },
   onBeforeQuit: () => {

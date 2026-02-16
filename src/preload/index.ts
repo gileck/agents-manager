@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import { IPC_CHANNELS } from '../shared/ipc-channels';
 import type {
   Item, ItemCreateInput, ItemUpdateInput, AppSettings,
   Project, ProjectCreateInput, ProjectUpdateInput,
@@ -13,6 +12,45 @@ import type {
   TransitionResult,
   DashboardStats,
 } from '../shared/types';
+
+// Channel constants must be inlined here — Electron's sandboxed preload
+// cannot require() sibling modules. Keep in sync with src/shared/ipc-channels.ts.
+const IPC_CHANNELS = {
+  ITEM_LIST: 'item:list',
+  ITEM_GET: 'item:get',
+  ITEM_CREATE: 'item:create',
+  ITEM_UPDATE: 'item:update',
+  ITEM_DELETE: 'item:delete',
+  SETTINGS_GET: 'settings:get',
+  SETTINGS_UPDATE: 'settings:update',
+  APP_GET_VERSION: 'app:get-version',
+  NAVIGATE: 'navigate',
+  PROJECT_LIST: 'project:list',
+  PROJECT_GET: 'project:get',
+  PROJECT_CREATE: 'project:create',
+  PROJECT_UPDATE: 'project:update',
+  PROJECT_DELETE: 'project:delete',
+  TASK_LIST: 'task:list',
+  TASK_GET: 'task:get',
+  TASK_CREATE: 'task:create',
+  TASK_UPDATE: 'task:update',
+  TASK_DELETE: 'task:delete',
+  TASK_TRANSITION: 'task:transition',
+  TASK_TRANSITIONS: 'task:transitions',
+  TASK_DEPENDENCIES: 'task:dependencies',
+  PIPELINE_LIST: 'pipeline:list',
+  PIPELINE_GET: 'pipeline:get',
+  AGENT_START: 'agent:start',
+  AGENT_STOP: 'agent:stop',
+  AGENT_RUNS: 'agent:runs',
+  AGENT_GET: 'agent:get',
+  EVENT_LIST: 'event:list',
+  ACTIVITY_LIST: 'activity:list',
+  PROMPT_LIST: 'prompt:list',
+  PROMPT_RESPOND: 'prompt:respond',
+  ARTIFACT_LIST: 'artifact:list',
+  DASHBOARD_STATS: 'dashboard:stats',
+} as const;
 
 // Define the API that will be exposed to the renderer
 const api = {
