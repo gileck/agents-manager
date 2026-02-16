@@ -87,24 +87,30 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { name: 'done', label: 'Done', isFinal: true },
   ],
   transitions: [
-    // Agent starts work
-    { from: 'open', to: 'planning', trigger: 'agent' },
-    { from: 'open', to: 'implementing', trigger: 'agent' },
-    // Agent outcomes
+    // Manual transitions that auto-start agents via hooks
+    { from: 'open', to: 'planning', trigger: 'manual', label: 'Start Planning',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' } }] },
+    { from: 'open', to: 'implementing', trigger: 'manual', label: 'Start Implementing',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    { from: 'plan_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    { from: 'pr_review', to: 'implementing', trigger: 'manual', label: 'Request Changes',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Done' },
+    // Agent outcome auto-transitions
     { from: 'planning', to: 'plan_review', trigger: 'agent', agentOutcome: 'plan_complete' },
     { from: 'planning', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info' },
     { from: 'implementing', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready' },
     { from: 'implementing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info' },
-    // Human-in-the-loop resume
-    { from: 'needs_info', to: 'planning', trigger: 'agent', agentOutcome: 'info_provided' },
-    { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided' },
-    // Manual transitions
-    { from: 'plan_review', to: 'implementing', trigger: 'manual' },
-    { from: 'pr_review', to: 'done', trigger: 'manual' },
-    { from: 'pr_review', to: 'implementing', trigger: 'manual' },
-    // Manual fallbacks
-    { from: 'open', to: 'planning', trigger: 'manual' },
-    { from: 'open', to: 'implementing', trigger: 'manual' },
+    // Human-in-the-loop resume (auto-start agent after info provided)
+    { from: 'needs_info', to: 'planning', trigger: 'agent', agentOutcome: 'info_provided',
+      hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' } }] },
+    { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided',
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
   ],
 };
 

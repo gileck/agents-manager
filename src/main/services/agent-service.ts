@@ -75,11 +75,11 @@ export class AgentService implements IAgentService {
       data: { agentRunId: run.id, agentType, mode },
     });
 
-    // 6. Build context
+    // 6. Build context (prefer project.path for real usage, fall back to worktree.path for tests/stubs)
     const context: AgentContext = {
       task,
       project,
-      workdir: worktree.path,
+      workdir: project.path || worktree.path,
       mode,
     };
     const config: AgentConfig = {};

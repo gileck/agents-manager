@@ -34,7 +34,8 @@ import { StubGitOps } from '../services/stub-git-ops';
 import { StubScmPlatform } from '../services/stub-scm-platform';
 import { StubNotificationRouter } from '../services/stub-notification-router';
 import { ScriptedAgent, happyPlan } from '../agents/scripted-agent';
-import type { Task, Transition, TransitionContext, GuardResult } from '../../shared/types';
+import { ClaudeCodeAgent } from '../agents/claude-code-agent';
+import type { Task, Transition, TransitionContext, GuardResult, AgentMode } from '../../shared/types';
 
 export interface AppServices {
   // Phase 1
@@ -96,6 +97,17 @@ export function createAppServices(db: Database.Database): AppServices {
     return { allowed: false, reason: `${row.count} unresolved dependencies` };
   });
 
+  pipelineEngine.registerGuard('no_running_agent', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown): GuardResult => {
+    const sqliteDb = dbRef as Database.Database;
+    const row = sqliteDb.prepare(
+      'SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status = ?'
+    ).get(task.id, 'running') as { count: number };
+    if (row.count > 0) {
+      return { allowed: false, reason: 'An agent is already running for this task' };
+    }
+    return { allowed: true };
+  });
+
   // Phase 2 stores
   const agentRunStore = new SqliteAgentRunStore(db);
   const taskArtifactStore = new SqliteTaskArtifactStore(db);
@@ -110,6 +122,7 @@ export function createAppServices(db: Database.Database): AppServices {
 
   // Agent framework + adapters
   const agentFramework = new AgentFrameworkImpl();
+  agentFramework.registerAgent(new ClaudeCodeAgent());
   agentFramework.registerAgent(new ScriptedAgent(happyPlan));
 
   // Agent service
@@ -125,6 +138,30 @@ export function createAppServices(db: Database.Database): AppServices {
     taskEventLog, activityLog, agentRunStore, pendingPromptStore,
     taskArtifactStore, agentService, scmPlatform,
   );
+
+  // Register start_agent hook (must be after workflowService is created)
+  pipelineEngine.registerHook('start_agent', async (task: Task, transition: Transition) => {
+    const hookDef = transition.hooks?.find((h) => h.name === 'start_agent');
+    if (!hookDef?.params?.mode) {
+      throw new Error(`start_agent hook on transition ${transition.from} → ${transition.to} is missing required "mode" param`);
+    }
+    if (!hookDef.params.agentType) {
+      throw new Error(`start_agent hook on transition ${transition.from} → ${transition.to} is missing required "agentType" param`);
+    }
+    const mode = hookDef.params.mode as AgentMode;
+    const agentType = hookDef.params.agentType as string;
+    // Fire-and-forget: agent runs asynchronously via WorkflowService (logs activity)
+    workflowService.startAgent(task.id, mode, agentType).catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      taskEventLog.log({
+        taskId: task.id,
+        category: 'system',
+        severity: 'error',
+        message: `start_agent hook failed: ${msg}`,
+        data: { error: msg, mode, agentType },
+      });
+    });
+  });
 
   return {
     projectStore,

@@ -346,6 +346,17 @@ export function createTestContext(): TestContext {
     return { allowed: false, reason: `${row.count} unresolved dependencies` };
   });
 
+  pipelineEngine.registerGuard('no_running_agent', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown): GuardResult => {
+    const sqliteDb = dbRef as Database.Database;
+    const row = sqliteDb.prepare(
+      'SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status = ?'
+    ).get(task.id, 'running') as { count: number };
+    if (row.count > 0) {
+      return { allowed: false, reason: 'An agent is already running for this task' };
+    }
+    return { allowed: true };
+  });
+
   // Phase 2 stores
   const agentRunStore = new SqliteAgentRunStore(db);
   const taskArtifactStore = new SqliteTaskArtifactStore(db);
@@ -362,6 +373,7 @@ export function createTestContext(): TestContext {
   const agentFramework = new AgentFrameworkImpl();
   const scriptedAgent = new ScriptedAgent(happyPlan);
   agentFramework.registerAgent(scriptedAgent);
+  agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'claude-code'));
 
   // Agent service
   const agentService = new AgentService(

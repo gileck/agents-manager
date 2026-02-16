@@ -42,10 +42,11 @@ export const humanInTheLoop: AgentScript = async () => ({
 });
 
 export class ScriptedAgent implements IAgent {
-  readonly type = 'scripted';
+  readonly type: string;
   private script: AgentScript;
 
-  constructor(defaultScript: AgentScript) {
+  constructor(defaultScript: AgentScript, type: string = 'scripted') {
+    this.type = type;
     this.script = defaultScript;
   }
 
