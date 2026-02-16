@@ -443,3 +443,15 @@ export interface Notification {
   body: string;
   channel: string;
 }
+
+// ============================================
+// Phase 4: Dashboard Types
+// ============================================
+
+export interface DashboardStats {
+  projectCount: number;
+  totalTasks: number;
+  tasksByStatus: Record<string, number>;
+  activeAgentRuns: number;
+  recentActivityCount: number;
+}

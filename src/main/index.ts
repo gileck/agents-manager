@@ -28,7 +28,7 @@ initializeApp({
     services = createAppServices(db);
 
     // Register IPC handlers
-    registerIpcHandlers();
+    registerIpcHandlers(services);
 
     // Create the tray icon with a simple menu
     tray = createTray({

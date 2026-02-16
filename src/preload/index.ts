@@ -1,21 +1,22 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import type { Item, ItemCreateInput, ItemUpdateInput, AppSettings } from '../shared/types';
-
-const IPC_CHANNELS = {
-  ITEM_LIST: 'item:list',
-  ITEM_GET: 'item:get',
-  ITEM_CREATE: 'item:create',
-  ITEM_UPDATE: 'item:update',
-  ITEM_DELETE: 'item:delete',
-  SETTINGS_GET: 'settings:get',
-  SETTINGS_UPDATE: 'settings:update',
-  APP_GET_VERSION: 'app:get-version',
-  NAVIGATE: 'navigate',
-} as const;
+import { IPC_CHANNELS } from '../shared/ipc-channels';
+import type {
+  Item, ItemCreateInput, ItemUpdateInput, AppSettings,
+  Project, ProjectCreateInput, ProjectUpdateInput,
+  Task, TaskCreateInput, TaskUpdateInput, TaskFilter,
+  Pipeline, Transition,
+  AgentRun, AgentMode,
+  TaskEvent, TaskEventFilter,
+  ActivityEntry, ActivityFilter,
+  PendingPrompt,
+  TaskArtifact,
+  TransitionResult,
+  DashboardStats,
+} from '../shared/types';
 
 // Define the API that will be exposed to the renderer
 const api = {
-  // Item operations
+  // Item operations (template)
   items: {
     list: (): Promise<Item[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.ITEM_LIST),
@@ -41,6 +42,92 @@ const api = {
   app: {
     getVersion: (): Promise<string> =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_GET_VERSION),
+  },
+
+  // Project operations
+  projects: {
+    list: (): Promise<Project[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROJECT_LIST),
+    get: (id: string): Promise<Project | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROJECT_GET, id),
+    create: (input: ProjectCreateInput): Promise<Project> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROJECT_CREATE, input),
+    update: (id: string, input: ProjectUpdateInput): Promise<Project | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROJECT_UPDATE, id, input),
+    delete: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROJECT_DELETE, id),
+  },
+
+  // Task operations
+  tasks: {
+    list: (filter?: TaskFilter): Promise<Task[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_LIST, filter),
+    get: (id: string): Promise<Task | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_GET, id),
+    create: (input: TaskCreateInput): Promise<Task> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_CREATE, input),
+    update: (id: string, input: TaskUpdateInput): Promise<Task | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE, id, input),
+    delete: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_DELETE, id),
+    transition: (taskId: string, toStatus: string, actor?: string): Promise<TransitionResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_TRANSITION, taskId, toStatus, actor),
+    transitions: (taskId: string): Promise<Transition[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_TRANSITIONS, taskId),
+    dependencies: (taskId: string): Promise<Task[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_DEPENDENCIES, taskId),
+  },
+
+  // Pipeline operations
+  pipelines: {
+    list: (): Promise<Pipeline[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PIPELINE_LIST),
+    get: (id: string): Promise<Pipeline | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PIPELINE_GET, id),
+  },
+
+  // Agent operations
+  agents: {
+    start: (taskId: string, mode: AgentMode, agentType?: string): Promise<AgentRun> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_START, taskId, mode, agentType),
+    stop: (runId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_STOP, runId),
+    runs: (taskId: string): Promise<AgentRun[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUNS, taskId),
+    get: (runId: string): Promise<AgentRun | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_GET, runId),
+  },
+
+  // Event operations
+  events: {
+    list: (filter?: TaskEventFilter): Promise<TaskEvent[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EVENT_LIST, filter),
+  },
+
+  // Activity operations
+  activity: {
+    list: (filter?: ActivityFilter): Promise<ActivityEntry[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ACTIVITY_LIST, filter),
+  },
+
+  // Prompt operations
+  prompts: {
+    list: (taskId: string): Promise<PendingPrompt[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROMPT_LIST, taskId),
+    respond: (promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROMPT_RESPOND, promptId, response),
+  },
+
+  // Artifact operations
+  artifacts: {
+    list: (taskId: string): Promise<TaskArtifact[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_LIST, taskId),
+  },
+
+  // Dashboard operations
+  dashboard: {
+    stats: (): Promise<DashboardStats> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DASHBOARD_STATS),
   },
 
   // Event listeners (main -> renderer)

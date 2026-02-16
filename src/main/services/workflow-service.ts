@@ -6,6 +6,7 @@ import type {
   AgentRun,
   AgentMode,
   PendingPrompt,
+  DashboardStats,
 } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IProjectStore } from '../interfaces/project-store';
@@ -160,6 +161,26 @@ export class WorkflowService implements IWorkflowService {
     }
 
     return prompt;
+  }
+
+  async getDashboardStats(): Promise<DashboardStats> {
+    const projects = await this.projectStore.listProjects();
+    const tasks = await this.taskStore.listTasks({});
+    const activeRuns = await this.agentRunStore.getActiveRuns();
+    const recentActivity = await this.activityLog.getEntries({ since: Date.now() - 86400000 });
+
+    const tasksByStatus: Record<string, number> = {};
+    for (const t of tasks) {
+      tasksByStatus[t.status] = (tasksByStatus[t.status] || 0) + 1;
+    }
+
+    return {
+      projectCount: projects.length,
+      totalTasks: tasks.length,
+      tasksByStatus,
+      activeAgentRuns: activeRuns.length,
+      recentActivityCount: recentActivity.length,
+    };
   }
 
   async mergePR(taskId: string): Promise<void> {

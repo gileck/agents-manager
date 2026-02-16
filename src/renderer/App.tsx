@@ -1,9 +1,12 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
-import { HomePage } from './pages/HomePage';
-import { ItemsPage } from './pages/ItemsPage';
-import { ItemFormPage } from './pages/ItemFormPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { ProjectsPage } from './pages/ProjectsPage';
+import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import { TaskListPage } from './pages/TaskListPage';
+import { TaskDetailPage } from './pages/TaskDetailPage';
+import { AgentRunPage } from './pages/AgentRunPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
 
@@ -27,10 +30,12 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
-        <Route index element={<HomePage />} />
-        <Route path="items" element={<ItemsPage />} />
-        <Route path="items/new" element={<ItemFormPage />} />
-        <Route path="items/:id/edit" element={<ItemFormPage />} />
+        <Route index element={<DashboardPage />} />
+        <Route path="projects" element={<ProjectsPage />} />
+        <Route path="projects/:id" element={<ProjectDetailPage />} />
+        <Route path="tasks" element={<TaskListPage />} />
+        <Route path="tasks/:id" element={<TaskDetailPage />} />
+        <Route path="agents/:runId" element={<AgentRunPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>

@@ -6,6 +6,7 @@ import type {
   AgentRun,
   AgentMode,
   PendingPrompt,
+  DashboardStats,
 } from '../../shared/types';
 
 export interface IWorkflowService {
@@ -17,4 +18,5 @@ export interface IWorkflowService {
   stopAgent(runId: string): Promise<void>;
   respondToPrompt(promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null>;
   mergePR(taskId: string): Promise<void>;
+  getDashboardStats(): Promise<DashboardStats>;
 }
