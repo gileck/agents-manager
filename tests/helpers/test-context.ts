@@ -1,0 +1,258 @@
+import Database from 'better-sqlite3';
+import type { IProjectStore } from '../../src/main/interfaces/project-store';
+import type { IPipelineStore } from '../../src/main/interfaces/pipeline-store';
+import type { ITaskStore } from '../../src/main/interfaces/task-store';
+import type { ITaskEventLog } from '../../src/main/interfaces/task-event-log';
+import type { IActivityLog } from '../../src/main/interfaces/activity-log';
+import type { IPipelineEngine } from '../../src/main/interfaces/pipeline-engine';
+import { SqliteProjectStore } from '../../src/main/stores/sqlite-project-store';
+import { SqlitePipelineStore } from '../../src/main/stores/sqlite-pipeline-store';
+import { SqliteTaskStore } from '../../src/main/stores/sqlite-task-store';
+import { SqliteTaskEventLog } from '../../src/main/stores/sqlite-task-event-log';
+import { SqliteActivityLog } from '../../src/main/stores/sqlite-activity-log';
+import { PipelineEngine } from '../../src/main/services/pipeline-engine';
+import { SEEDED_PIPELINES } from '../../src/main/data/seeded-pipelines';
+import type { Task, Transition, TransitionContext, GuardResult } from '../../src/shared/types';
+
+export interface TestContext {
+  db: Database.Database;
+  projectStore: IProjectStore;
+  pipelineStore: IPipelineStore;
+  taskStore: ITaskStore;
+  taskEventLog: ITaskEventLog;
+  activityLog: IActivityLog;
+  pipelineEngine: PipelineEngine;
+  cleanup: () => void;
+}
+
+function applyMigrations(db: Database.Database): void {
+  // Create migrations table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS migrations (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // Template tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS items (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    INSERT OR IGNORE INTO settings (key, value) VALUES
+      ('theme', 'system'),
+      ('notifications_enabled', 'true')
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS logs (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+      level TEXT NOT NULL DEFAULT 'info',
+      message TEXT NOT NULL
+    )
+  `);
+
+  // Phase 1 tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pipelines (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      statuses TEXT NOT NULL,
+      transitions TEXT NOT NULL,
+      task_type TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      path TEXT,
+      config TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      pipeline_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL,
+      priority INTEGER NOT NULL DEFAULT 0,
+      tags TEXT NOT NULL DEFAULT '[]',
+      parent_task_id TEXT,
+      assignee TEXT,
+      pr_link TEXT,
+      branch_name TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id),
+      FOREIGN KEY (pipeline_id) REFERENCES pipelines(id),
+      FOREIGN KEY (parent_task_id) REFERENCES tasks(id)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_dependencies (
+      task_id TEXT NOT NULL,
+      depends_on_task_id TEXT NOT NULL,
+      PRIMARY KEY (task_id, depends_on_task_id),
+      FOREIGN KEY (task_id) REFERENCES tasks(id),
+      FOREIGN KEY (depends_on_task_id) REFERENCES tasks(id)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS transition_history (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      from_status TEXT NOT NULL,
+      to_status TEXT NOT NULL,
+      trigger TEXT NOT NULL,
+      actor TEXT,
+      guard_results TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks(id)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_events (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      severity TEXT NOT NULL DEFAULT 'info',
+      message TEXT NOT NULL,
+      data TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks(id)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id TEXT PRIMARY KEY,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      data TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL
+    )
+  `);
+
+  // Seed pipelines
+  const now = Date.now();
+  const insertPipeline = db.prepare(`
+    INSERT OR IGNORE INTO pipelines (id, name, description, statuses, transitions, task_type, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const p of SEEDED_PIPELINES) {
+    insertPipeline.run(
+      p.id,
+      p.name,
+      p.description,
+      JSON.stringify(p.statuses),
+      JSON.stringify(p.transitions),
+      p.taskType,
+      now,
+      now,
+    );
+  }
+
+  // Indexes
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_pipeline_id ON tasks(pipeline_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee);
+    CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks(parent_task_id);
+    CREATE INDEX IF NOT EXISTS idx_task_dependencies_depends_on ON task_dependencies(depends_on_task_id);
+    CREATE INDEX IF NOT EXISTS idx_transition_history_task_id ON transition_history(task_id);
+    CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON task_events(task_id);
+    CREATE INDEX IF NOT EXISTS idx_task_events_category ON task_events(category);
+    CREATE INDEX IF NOT EXISTS idx_task_events_created_at ON task_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_activity_log_entity ON activity_log(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at);
+    CREATE INDEX IF NOT EXISTS idx_pipelines_task_type ON pipelines(task_type)
+  `);
+}
+
+export function createTestContext(): TestContext {
+  const db = new Database(':memory:');
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
+  applyMigrations(db);
+
+  const projectStore = new SqliteProjectStore(db);
+  const pipelineStore = new SqlitePipelineStore(db);
+  const taskStore = new SqliteTaskStore(db, pipelineStore);
+  const taskEventLog = new SqliteTaskEventLog(db);
+  const activityLog = new SqliteActivityLog(db);
+  const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, db);
+
+  // Register built-in guards
+  pipelineEngine.registerGuard('has_pr', (task: Task): GuardResult => {
+    if (task.prLink) {
+      return { allowed: true };
+    }
+    return { allowed: false, reason: 'Task must have a PR link' };
+  });
+
+  pipelineEngine.registerGuard('dependencies_resolved', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown): GuardResult => {
+    const sqliteDb = dbRef as Database.Database;
+    const row = sqliteDb.prepare(`
+      SELECT COUNT(*) as count FROM task_dependencies td
+      JOIN tasks t ON t.id = td.depends_on_task_id
+      JOIN pipelines p ON p.id = t.pipeline_id
+      WHERE td.task_id = ?
+      AND t.status NOT IN (
+        SELECT json_extract(s.value, '$.name')
+        FROM pipelines p2, json_each(p2.statuses) s
+        WHERE p2.id = t.pipeline_id
+        AND json_extract(s.value, '$.isFinal') = 1
+      )
+    `).get(task.id) as { count: number };
+
+    if (row.count === 0) {
+      return { allowed: true };
+    }
+    return { allowed: false, reason: `${row.count} unresolved dependencies` };
+  });
+
+  return {
+    db,
+    projectStore,
+    pipelineStore,
+    taskStore,
+    taskEventLog,
+    activityLog,
+    pipelineEngine,
+    cleanup: () => db.close(),
+  };
+}
