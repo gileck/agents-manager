@@ -256,15 +256,20 @@ export class AgentService implements IAgentService {
     gitOps: IGitOps,
     scmPlatform: IScmPlatform,
   ): Promise<void> {
+    const log = (message: string, severity: 'info' | 'warning' | 'error' = 'info', data?: Record<string, unknown>) =>
+      this.taskEventLog.log({ taskId, category: 'agent', severity, message, data });
+
     // Always create branch artifact
     await this.taskArtifactStore.createArtifact({
       taskId,
       type: 'branch',
       data: { branch },
     });
+    await log('Created branch artifact', 'info', { branch });
 
     if (result.outcome === 'pr_ready') {
-      // Create diff artifact
+      // Collect diff
+      await log('Collecting diff: main..' + branch);
       try {
         const diffContent = await gitOps.diff('main', branch);
         await this.taskArtifactStore.createArtifact({
@@ -272,19 +277,26 @@ export class AgentService implements IAgentService {
           type: 'diff',
           data: { diff: diffContent },
         });
+        await log(`Diff collected (${diffContent.length} chars)`, diffContent.length === 0 ? 'warning' : 'info');
       } catch (err) {
-        await this.taskEventLog.log({
-          taskId,
-          category: 'agent',
-          severity: 'warning',
-          message: `Failed to collect diff: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        await log(`Failed to collect diff: ${err instanceof Error ? err.message : String(err)}`, 'warning');
       }
 
-      // Push branch to remote, then create PR
+      // Push branch
+      await log('Pushing branch to remote: ' + branch);
       try {
         await gitOps.push(branch);
+        await log('Branch pushed successfully');
+      } catch (err) {
+        await log(`Failed to push branch: ${err instanceof Error ? err.message : String(err)}`, 'error', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return; // Can't create PR without pushing
+      }
 
+      // Create PR
+      await log('Creating pull request');
+      try {
         const task = await this.taskStore.getTask(taskId);
         const prInfo = await scmPlatform.createPR({
           title: task?.title ?? 'PR',
@@ -299,18 +311,15 @@ export class AgentService implements IAgentService {
           data: { url: prInfo.url, number: prInfo.number },
         });
 
-        // Update task with PR link and branch name
         await this.taskStore.updateTask(taskId, {
           prLink: prInfo.url,
           branchName: branch,
         });
+
+        await log('PR created successfully', 'info', { url: prInfo.url, number: prInfo.number });
       } catch (err) {
-        await this.taskEventLog.log({
-          taskId,
-          category: 'agent',
-          severity: 'error',
-          message: `Failed to create PR: ${err instanceof Error ? err.message : String(err)}`,
-          data: { error: err instanceof Error ? err.message : String(err) },
+        await log(`Failed to create PR: ${err instanceof Error ? err.message : String(err)}`, 'error', {
+          error: err instanceof Error ? err.message : String(err),
         });
       }
     }
