@@ -70,8 +70,9 @@ export function TaskDetailPage() {
     && (Date.now() - lastRun.completedAt) < 30000;
   const isStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null && !isFinalizing;
 
-  // Poll while agent is running, needs_info, finalizing, or stuck
-  const shouldPoll = hasRunningAgent || task?.status === 'needs_info' || isFinalizing || isStuck;
+  // Poll while agent is running, needs_info, finalizing, stuck, or waiting for PR
+  const awaitingPr = task?.status === 'pr_review' && !task.prLink;
+  const shouldPoll = hasRunningAgent || task?.status === 'needs_info' || isFinalizing || isStuck || awaitingPr;
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -811,7 +812,7 @@ function StatusActionBar({
         {task.prLink ? (
           <span className="text-sm font-mono">{task.prLink}</span>
         ) : (
-          <span className="text-sm text-muted-foreground">PR not yet available</span>
+          <span className="text-sm text-muted-foreground animate-pulse">Creating PR...</span>
         )}
         {primaryTransitions.map((t) => (
           <Button
