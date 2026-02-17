@@ -219,7 +219,6 @@ export class WorkflowService implements IWorkflowService {
       });
       if (doneTransition) {
         await this.pipelineEngine.executeTransition(task, doneTransition.to, { trigger: 'manual' });
-        await this.cleanupWorktree(task);
       }
     }
   }
