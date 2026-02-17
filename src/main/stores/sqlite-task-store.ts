@@ -193,8 +193,16 @@ export class SqliteTaskStore implements ITaskStore {
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    // Delete dependencies first
+    // Delete all related records that reference this task
+    this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM agent_runs WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);
     this.db.prepare('DELETE FROM task_dependencies WHERE task_id = ? OR depends_on_task_id = ?').run(id, id);
+    // Clear parent reference on child tasks
+    this.db.prepare('UPDATE tasks SET parent_task_id = NULL WHERE parent_task_id = ?').run(id);
     const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
     return result.changes > 0;
   }

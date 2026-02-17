@@ -45,6 +45,31 @@ export function TaskListPage() {
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const allSelected = tasks.length > 0 && selectedIds.size === tasks.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < tasks.length;
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(tasks.map((t) => t.id)));
+    }
+  };
+
   const handleCreate = async () => {
     if (!form.title.trim() || !form.projectId || !form.pipelineId) return;
     setCreating(true);
@@ -65,9 +90,25 @@ export function TaskListPage() {
     try {
       await window.api.tasks.delete(deleteTarget.id);
       setDeleteTarget(null);
+      selectedIds.delete(deleteTarget.id);
+      setSelectedIds(new Set(selectedIds));
       await refetch();
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    try {
+      for (const id of selectedIds) {
+        await window.api.tasks.delete(id);
+      }
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      await refetch();
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -145,10 +186,37 @@ export function TaskListPage() {
         </Card>
       ) : (
         <div className="space-y-2">
+          {/* Select all bar */}
+          <div className="flex items-center gap-3 px-4 py-2">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              ref={(el) => { if (el) el.indeterminate = someSelected; }}
+              onChange={toggleSelectAll}
+              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+            />
+            <span className="text-sm text-muted-foreground">
+              {selectedIds.size > 0
+                ? `${selectedIds.size} of ${tasks.length} selected`
+                : 'Select all'}
+            </span>
+            {selectedIds.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setBulkDeleteOpen(true)}
+              >
+                Delete selected ({selectedIds.size})
+              </Button>
+            )}
+          </div>
+
           {tasks.map((task) => (
             <TaskRow
               key={task.id}
               task={task}
+              selected={selectedIds.has(task.id)}
+              onToggleSelect={() => toggleSelect(task.id)}
               onClick={() => navigate(`/tasks/${task.id}`)}
               onDelete={() => setDeleteTarget(task)}
               onDuplicate={() => handleDuplicate(task)}
@@ -235,21 +303,48 @@ export function TaskListPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open) setBulkDeleteOpen(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selectedIds.size} Tasks</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-4">
+            Are you sure you want to delete {selectedIds.size} task{selectedIds.size > 1 ? 's' : ''}? This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} task${selectedIds.size > 1 ? 's' : ''}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function TaskRow({ task, onClick, onDelete, onDuplicate }: {
+function TaskRow({ task, selected, onToggleSelect, onClick, onDelete, onDuplicate }: {
   task: { id: string; title: string; status: string; priority: number; assignee: string | null; pipelineId: string };
+  selected: boolean;
+  onToggleSelect: () => void;
   onClick: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
 }) {
   const { pipeline } = usePipeline(task.pipelineId);
   return (
-    <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={onClick}>
+    <Card className={`cursor-pointer hover:bg-accent/50 transition-colors ${selected ? 'ring-2 ring-primary' : ''}`} onClick={onClick}>
       <CardContent className="py-3">
         <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+          />
           <PipelineBadge status={task.status} pipeline={pipeline} />
           <Badge variant="outline">P{task.priority}</Badge>
           <span className="font-medium">{task.title}</span>
