@@ -317,7 +317,7 @@ export function TaskDetailPage() {
                   onClick={async () => {
                     setStartingAgent(true);
                     try {
-                      const run = await window.api.agents.start(id!, 'plan');
+                      const run = await window.api.agents.start(id!, 'plan', 'claude-code');
                       navigate(`/agents/${run.id}`);
                     } finally {
                       setStartingAgent(false);

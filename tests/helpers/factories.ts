@@ -13,6 +13,7 @@ export function createProjectInput(overrides?: Partial<ProjectCreateInput>): Pro
   return {
     name: `Test Project ${projectCounter}`,
     description: `Description for project ${projectCounter}`,
+    path: '/tmp/test-project',
     ...overrides,
   };
 }

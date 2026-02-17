@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -16,6 +16,7 @@ export function AgentRunPage() {
 
   const [streamOutput, setStreamOutput] = useState('');
   const outputRef = useRef<HTMLPreElement>(null);
+  const shouldAutoScroll = useRef(true);
 
   // Poll for status updates while running
   useEffect(() => {
@@ -41,17 +42,38 @@ export function AgentRunPage() {
     return unsubscribe;
   }, [run?.taskId]);
 
-  // Auto-scroll output to bottom
+  // Track scroll position to disable auto-scroll when user scrolls up
+  const handleScroll = useCallback(() => {
+    if (!outputRef.current) return;
+    const el = outputRef.current;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    shouldAutoScroll.current = atBottom;
+  }, []);
+
+  // Auto-scroll output to bottom only if user hasn't scrolled up
   useEffect(() => {
-    if (outputRef.current) {
+    if (outputRef.current && shouldAutoScroll.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
   }, [streamOutput, run?.output]);
+
+  const [restarting, setRestarting] = useState(false);
 
   const handleStop = async () => {
     if (!runId) return;
     await window.api.agents.stop(runId);
     await refetch();
+  };
+
+  const handleRestart = async () => {
+    if (!run) return;
+    setRestarting(true);
+    try {
+      const newRun = await window.api.agents.start(run.taskId, run.mode, run.agentType);
+      navigate(`/agents/${newRun.id}`, { replace: true });
+    } finally {
+      setRestarting(false);
+    }
   };
 
   if (loading) {
@@ -73,88 +95,58 @@ export function AgentRunPage() {
   const displayOutput = run.status === 'running' ? streamOutput : (run.output || streamOutput);
 
   return (
-    <div className="p-8">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1 as any)}>
+    <div className="p-8 flex flex-col" style={{ minHeight: 'calc(100vh - 4rem)' }}>
+      <Button variant="ghost" size="sm" className="mb-4 self-start" onClick={() => navigate(-1 as any)}>
         &larr; Back
       </Button>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Badge variant={run.status === 'completed' ? 'success' : run.status === 'running' ? 'default' : 'destructive'}>
             {run.status}
           </Badge>
-          <h1 className="text-3xl font-bold">Agent Run</h1>
+          <h1 className="text-2xl font-bold">Agent Run</h1>
+          <span className="text-sm text-muted-foreground">{run.mode} / {run.agentType}</span>
         </div>
-        {run.status === 'running' && (
-          <Button variant="destructive" onClick={handleStop}>Stop Agent</Button>
-        )}
+        <div className="flex gap-2">
+          {run.status === 'running' && (
+            <Button variant="destructive" size="sm" onClick={handleStop}>Stop Agent</Button>
+          )}
+          {run.status !== 'running' && (
+            <Button size="sm" onClick={handleRestart} disabled={restarting}>
+              {restarting ? 'Restarting...' : 'Restart Agent'}
+            </Button>
+          )}
+        </div>
       </div>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Run Details</CardTitle>
+      <div className="flex gap-4 text-sm text-muted-foreground mb-4">
+        <span>Started: {new Date(run.startedAt).toLocaleString()}</span>
+        {run.completedAt && <span>Completed: {new Date(run.completedAt).toLocaleString()}</span>}
+        {run.outcome && <span>Outcome: {run.outcome}</span>}
+        {run.exitCode !== null && <span>Exit Code: {run.exitCode}</span>}
+      </div>
+
+      <Card className="flex-1 flex flex-col min-h-0">
+        <CardHeader className="py-3">
+          <CardTitle className="text-base">
+            Output
+            {run.status === 'running' && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">(streaming...)</span>
+            )}
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
-            <span className="text-sm text-muted-foreground">Status</span>
-            <Badge variant={run.status === 'completed' ? 'success' : run.status === 'running' ? 'default' : 'destructive'}>
-              {run.status}
-            </Badge>
-
-            <span className="text-sm text-muted-foreground">Mode</span>
-            <span className="text-sm">{run.mode}</span>
-
-            <span className="text-sm text-muted-foreground">Agent Type</span>
-            <span className="text-sm">{run.agentType}</span>
-
-            <span className="text-sm text-muted-foreground">Started</span>
-            <span className="text-sm">{new Date(run.startedAt).toLocaleString()}</span>
-
-            {run.completedAt && (
-              <>
-                <span className="text-sm text-muted-foreground">Completed</span>
-                <span className="text-sm">{new Date(run.completedAt).toLocaleString()}</span>
-              </>
-            )}
-
-            {run.outcome && (
-              <>
-                <span className="text-sm text-muted-foreground">Outcome</span>
-                <span className="text-sm">{run.outcome}</span>
-              </>
-            )}
-
-            {run.exitCode !== null && (
-              <>
-                <span className="text-sm text-muted-foreground">Exit Code</span>
-                <span className="text-sm">{run.exitCode}</span>
-              </>
-            )}
-          </div>
+        <CardContent className="flex-1 min-h-0 pb-4">
+          <pre
+            ref={outputRef}
+            onScroll={handleScroll}
+            className="text-xs bg-muted p-4 rounded overflow-auto whitespace-pre-wrap h-full"
+            style={{ maxHeight: 'calc(100vh - 320px)', minHeight: '300px' }}
+          >
+            {displayOutput || (run.status === 'running' ? 'Waiting for output...' : '')}
+          </pre>
         </CardContent>
       </Card>
-
-      {(displayOutput || run.status === 'running') && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Output
-              {run.status === 'running' && (
-                <span className="ml-2 text-sm font-normal text-muted-foreground">(streaming...)</span>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre
-              ref={outputRef}
-              className="text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap"
-              style={{ maxHeight: '600px', overflowY: 'auto' }}
-            >
-              {displayOutput || (run.status === 'running' ? 'Waiting for output...' : '')}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

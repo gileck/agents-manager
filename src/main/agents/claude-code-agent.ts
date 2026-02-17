@@ -6,6 +6,10 @@ import type { IAgent } from '../interfaces/agent';
 // but the SDK is ESM-only (.mjs). This bypasses that transformation.
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
 
+function log(msg: string) {
+  console.log(`[ClaudeCodeAgent] ${msg}`);
+}
+
 export class ClaudeCodeAgent implements IAgent {
   readonly type = 'claude-code';
   private runningAbortControllers = new Map<string, AbortController>();
@@ -37,6 +41,15 @@ export class ClaudeCodeAgent implements IAgent {
     let costOutputTokens: number | undefined;
     let isError = false;
     let errorMessage: string | undefined;
+    let messageCount = 0;
+
+    const emit = (chunk: string) => {
+      resultText += chunk;
+      onOutput?.(chunk);
+    };
+
+    log(`Starting agent run: mode=${context.mode}, workdir=${workdir}, timeout=${timeout}ms`);
+    log(`Prompt: ${prompt.slice(0, 200)}`);
 
     try {
       for await (const message of query({
@@ -48,39 +61,55 @@ export class ClaudeCodeAgent implements IAgent {
           allowDangerouslySkipPermissions: true,
         },
       })) {
+        messageCount++;
+        const msg = message as any;
+
+        log(`Message #${messageCount}: type="${message.type}" | keys: ${Object.keys(message).join(', ')}`);
+
         if (message.type === 'assistant') {
-          for (const block of message.message.content) {
+          const content = msg.message?.content ?? [];
+          log(`  assistant content blocks: ${content.length}`);
+          for (const block of content) {
+            log(`  block type="${block.type}" ${block.type === 'text' ? `text_length=${block.text.length}` : block.type === 'tool_use' ? `tool="${block.name}"` : ''}`);
             if ('text' in block && typeof block.text === 'string') {
-              const chunk = block.text + '\n';
-              resultText += chunk;
-              onOutput?.(chunk);
+              emit(block.text + '\n');
             } else if (block.type === 'tool_use') {
-              const chunk = `\n[Tool: ${block.name}]\n`;
-              resultText += chunk;
-              onOutput?.(chunk);
-            }
-          }
-        } else if (message.type === 'tool') {
-          // Tool result messages
-          for (const block of (message.message?.content ?? [])) {
-            if ('text' in block && typeof block.text === 'string') {
-              const chunk = block.text + '\n';
-              resultText += chunk;
-              onOutput?.(chunk);
+              const input = JSON.stringify(block.input ?? {});
+              emit(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 500)}${input.length > 500 ? '...' : ''}\n`);
             }
           }
         } else if (message.type === 'result') {
-          if (message.subtype !== 'success') {
+          log(`  result subtype="${msg.subtype}" result_length=${msg.result?.length ?? 0}`);
+          if (msg.subtype !== 'success') {
             isError = true;
-            errorMessage = message.errors?.join('\n') || 'Agent execution failed';
+            errorMessage = msg.errors?.join('\n') || 'Agent execution failed';
           }
-          costInputTokens = message.usage.input_tokens;
-          costOutputTokens = message.usage.output_tokens;
+          costInputTokens = msg.usage?.input_tokens;
+          costOutputTokens = msg.usage?.output_tokens;
+        } else {
+          // Log any other message type fully so we know what the SDK yields
+          const json = JSON.stringify(message);
+          log(`  UNHANDLED type="${message.type}" payload(${json.length} chars): ${json.slice(0, 500)}`);
+          // Still emit something so the user sees it
+          if (msg.message?.content) {
+            for (const block of msg.message.content) {
+              if ('text' in block && typeof block.text === 'string') {
+                emit(`[${message.type}] ${block.text}\n`);
+              }
+            }
+          } else if (typeof msg.summary === 'string') {
+            emit(`[${message.type}] ${msg.summary}\n`);
+          } else if (typeof msg.result === 'string') {
+            emit(`[${message.type}] ${msg.result}\n`);
+          }
         }
+
+        log(`  resultText total length: ${resultText.length}`);
       }
     } catch (err) {
       isError = true;
       errorMessage = err instanceof Error ? err.message : String(err);
+      log(`Error during execution: ${errorMessage}`);
     } finally {
       clearTimeout(timer);
       this.runningAbortControllers.delete(runId);
@@ -88,6 +117,10 @@ export class ClaudeCodeAgent implements IAgent {
 
     const exitCode = isError ? 1 : 0;
     const outcome = this.inferOutcome(context.mode, exitCode);
+
+    log(`Run complete: messages=${messageCount}, exitCode=${exitCode}, outcome=${outcome}, output_length=${resultText.length}`);
+    log(`Output first 300 chars: ${resultText.slice(0, 300)}`);
+    log(`Output last 300 chars: ${resultText.slice(-300)}`);
 
     return {
       exitCode,

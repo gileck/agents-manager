@@ -182,3 +182,5 @@ temp/
 # *.db
 # *.sqlite
 # *.sqlite3
+
+.agent-worktrees/

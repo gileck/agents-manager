@@ -377,8 +377,11 @@ export function createTestContext(): TestContext {
 
   // Agent service
   const agentService = new AgentService(
-    agentFramework, agentRunStore, worktreeManager,
-    gitOps, scmPlatform, taskStore, projectStore, pipelineEngine,
+    agentFramework, agentRunStore,
+    () => worktreeManager,
+    () => gitOps,
+    () => scmPlatform,
+    taskStore, projectStore, pipelineEngine,
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
   );
 

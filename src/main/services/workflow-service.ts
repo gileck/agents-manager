@@ -95,7 +95,7 @@ export class WorkflowService implements IWorkflowService {
     return result;
   }
 
-  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'scripted', onOutput?: (chunk: string) => void): Promise<AgentRun> {
+  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'claude-code', onOutput?: (chunk: string) => void): Promise<AgentRun> {
     await this.activityLog.log({
       action: 'agent_start',
       entityType: 'agent_run',
