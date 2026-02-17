@@ -19,6 +19,7 @@ import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IScmPlatform } from '../interfaces/scm-platform';
+import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 
 export class WorkflowService implements IWorkflowService {
@@ -34,6 +35,7 @@ export class WorkflowService implements IWorkflowService {
     private taskArtifactStore: ITaskArtifactStore,
     private agentService: IAgentService,
     private createScmPlatform: (repoPath: string) => IScmPlatform,
+    private createWorktreeManager: (path: string) => IWorktreeManager,
   ) {}
 
   async createTask(input: TaskCreateInput): Promise<Task> {
@@ -61,6 +63,12 @@ export class WorkflowService implements IWorkflowService {
   }
 
   async deleteTask(id: string): Promise<boolean> {
+    // Clean up worktree before deleting the task (need task to resolve project)
+    const task = await this.taskStore.getTask(id);
+    if (task) {
+      await this.cleanupWorktree(task);
+    }
+
     const result = await this.taskStore.deleteTask(id);
     if (result) {
       await this.activityLog.log({
@@ -90,6 +98,13 @@ export class WorkflowService implements IWorkflowService {
         summary: `Transitioned task from ${task.status} to ${toStatus}`,
         data: { fromStatus: task.status, toStatus, actor },
       });
+
+      // Clean up worktree when task reaches a final state
+      const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+      const targetStatus = pipeline?.statuses.find((s) => s.name === toStatus);
+      if (targetStatus?.isFinal) {
+        await this.cleanupWorktree(task);
+      }
     }
 
     return result;
@@ -204,7 +219,22 @@ export class WorkflowService implements IWorkflowService {
       });
       if (doneTransition) {
         await this.pipelineEngine.executeTransition(task, doneTransition.to, { trigger: 'manual' });
+        await this.cleanupWorktree(task);
       }
+    }
+  }
+
+  private async cleanupWorktree(task: Task): Promise<void> {
+    try {
+      const project = await this.projectStore.getProject(task.projectId);
+      if (!project?.path) return;
+      const wm = this.createWorktreeManager(project.path);
+      const worktree = await wm.get(task.id);
+      if (!worktree) return;
+      if (worktree.locked) await wm.unlock(task.id);
+      await wm.delete(task.id);
+    } catch {
+      // Best-effort cleanup — don't block the operation
     }
   }
 }

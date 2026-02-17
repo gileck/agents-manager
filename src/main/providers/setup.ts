@@ -98,7 +98,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const workflowService = new WorkflowService(
     taskStore, projectStore, pipelineEngine, pipelineStore,
     taskEventLog, activityLog, agentRunStore, pendingPromptStore,
-    taskArtifactStore, agentService, createScmPlatform,
+    taskArtifactStore, agentService, createScmPlatform, createWorktreeManager,
   );
 
   // Register hooks (must be after workflowService is created)
