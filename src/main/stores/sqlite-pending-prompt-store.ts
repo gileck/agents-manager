@@ -10,6 +10,7 @@ interface PendingPromptRow {
   prompt_type: string;
   payload: string;
   response: string | null;
+  resume_outcome: string | null;
   status: string;
   created_at: number;
   answered_at: number | null;
@@ -23,6 +24,7 @@ function rowToPrompt(row: PendingPromptRow): PendingPrompt {
     promptType: row.prompt_type,
     payload: parseJson<Record<string, unknown>>(row.payload, {}),
     response: parseJson<Record<string, unknown> | null>(row.response, null),
+    resumeOutcome: row.resume_outcome,
     status: row.status as PendingPrompt['status'],
     createdAt: row.created_at,
     answeredAt: row.answered_at,
@@ -37,9 +39,9 @@ export class SqlitePendingPromptStore implements IPendingPromptStore {
     const timestamp = now();
 
     this.db.prepare(`
-      INSERT INTO pending_prompts (id, task_id, agent_run_id, prompt_type, payload, status, created_at)
-      VALUES (?, ?, ?, ?, ?, 'pending', ?)
-    `).run(id, input.taskId, input.agentRunId, input.promptType, JSON.stringify(input.payload ?? {}), timestamp);
+      INSERT INTO pending_prompts (id, task_id, agent_run_id, prompt_type, payload, resume_outcome, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(id, input.taskId, input.agentRunId, input.promptType, JSON.stringify(input.payload ?? {}), input.resumeOutcome ?? null, timestamp);
 
     return (await this.getPrompt(id))!;
   }

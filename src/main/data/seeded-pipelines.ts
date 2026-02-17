@@ -105,11 +105,20 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'planning', to: 'plan_review', trigger: 'agent', agentOutcome: 'plan_complete',
       hooks: [{ name: 'notify', params: { titleTemplate: 'Plan ready', bodyTemplate: 'Plan ready: {taskTitle}' } }] },
     { from: 'planning', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' } }] },
+      hooks: [
+        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' } },
+        { name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' } },
+      ] },
     { from: 'implementing', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}' } }] },
+      hooks: [
+        { name: 'push_and_create_pr' },
+        { name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}' } },
+      ] },
     { from: 'implementing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' } }] },
+      hooks: [
+        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' } },
+        { name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' } },
+      ] },
     // Human-in-the-loop resume (auto-start agent after info provided)
     { from: 'needs_info', to: 'planning', trigger: 'agent', agentOutcome: 'info_provided',
       hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' } }] },

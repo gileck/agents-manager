@@ -260,6 +260,14 @@ export function getMigrations(): Migration[] {
       name: '018_update_agent_pipeline_hooks',
       sql: getUpdateAgentPipelineSql(),
     },
+    {
+      name: '019_add_resume_outcome_to_pending_prompts',
+      sql: `ALTER TABLE pending_prompts ADD COLUMN resume_outcome TEXT`,
+    },
+    {
+      name: '020_update_agent_pipeline_hooks_v2',
+      sql: getUpdateAgentPipelineSql(),
+    },
   ];
 }
 

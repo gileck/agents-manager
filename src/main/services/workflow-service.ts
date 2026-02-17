@@ -153,16 +153,18 @@ export class WorkflowService implements IWorkflowService {
       data: { promptId, response },
     });
 
-    // Try info_provided transition
-    const task = await this.taskStore.getTask(prompt.taskId);
-    if (task) {
-      const transitions = await this.pipelineEngine.getValidTransitions(task, 'agent');
-      const match = transitions.find((t) => t.agentOutcome === 'info_provided');
-      if (match) {
-        await this.pipelineEngine.executeTransition(task, match.to, {
-          trigger: 'agent',
-          data: { outcome: 'info_provided' },
-        });
+    // Try to resume via the outcome stored on the prompt
+    if (prompt.resumeOutcome) {
+      const task = await this.taskStore.getTask(prompt.taskId);
+      if (task) {
+        const transitions = await this.pipelineEngine.getValidTransitions(task, 'agent');
+        const match = transitions.find((t) => t.agentOutcome === prompt.resumeOutcome);
+        if (match) {
+          await this.pipelineEngine.executeTransition(task, match.to, {
+            trigger: 'agent',
+            data: { outcome: prompt.resumeOutcome },
+          });
+        }
       }
     }
 
@@ -209,14 +211,13 @@ export class WorkflowService implements IWorkflowService {
       summary: `Merged PR: ${prUrl}`,
     });
 
-    // Try to transition task if pipeline supports it
+    // Try to transition task to a final status if pipeline supports it
     const task = await this.taskStore.getTask(taskId);
     if (task) {
+      const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+      const finalNames = new Set(pipeline?.statuses.filter((s) => s.isFinal).map((s) => s.name) ?? []);
       const transitions = await this.pipelineEngine.getValidTransitions(task, 'manual');
-      const doneTransition = transitions.find((t) => {
-        // Look for a transition to a final-looking status
-        return t.to === 'done' || t.to === 'resolved' || t.to === 'closed';
-      });
+      const doneTransition = transitions.find((t) => finalNames.has(t.to));
       if (doneTransition) {
         await this.pipelineEngine.executeTransition(task, doneTransition.to, { trigger: 'manual' });
       }

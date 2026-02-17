@@ -364,6 +364,7 @@ export interface PendingPrompt {
   promptType: string;
   payload: Record<string, unknown>;
   response: Record<string, unknown> | null;
+  resumeOutcome: string | null;
   status: PromptStatus;
   createdAt: number;
   answeredAt: number | null;
@@ -374,6 +375,7 @@ export interface PendingPromptCreateInput {
   agentRunId: string;
   promptType: string;
   payload?: Record<string, unknown>;
+  resumeOutcome?: string;
 }
 
 export interface AgentContext {

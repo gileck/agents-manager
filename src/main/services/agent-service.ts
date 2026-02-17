@@ -211,36 +211,8 @@ export class AgentService implements IAgentService {
           data: { branch: worktree.branch },
         });
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'completed', completedAt });
-
-        // For pr_ready: verify there are actual commits before transitioning
-        let effectiveOutcome: string | undefined = result.outcome;
-        if (effectiveOutcome === 'pr_ready' && context.project?.path) {
-          try {
-            const gitOps = this.createGitOps(context.project.path);
-            const diffContent = await gitOps.diff('main', worktree.branch);
-            if (diffContent.trim().length === 0) {
-              await this.taskEventLog.log({
-                taskId,
-                category: 'agent',
-                severity: 'warning',
-                message: 'Agent reported pr_ready but no changes detected on branch — skipping transition',
-                data: { branch: worktree.branch },
-              });
-              effectiveOutcome = undefined;
-            }
-          } catch (err) {
-            await this.taskEventLog.log({
-              taskId,
-              category: 'agent',
-              severity: 'warning',
-              message: `Failed to verify branch diff: ${err instanceof Error ? err.message : String(err)}`,
-              data: { branch: worktree.branch },
-            });
-          }
-        }
-
-        if (effectiveOutcome) {
-          await this.tryOutcomeTransition(taskId, effectiveOutcome, {
+        if (result.outcome) {
+          await this.tryOutcomeTransition(taskId, result.outcome, {
             agentRunId: run.id,
             payload: result.payload,
             branch: worktree.branch,
