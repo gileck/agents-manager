@@ -11,6 +11,7 @@ import type {
   TaskArtifact,
   TransitionResult,
   DashboardStats,
+  DebugTimelineEntry,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -51,6 +52,7 @@ const IPC_CHANNELS = {
   PROMPT_LIST: 'prompt:list',
   PROMPT_RESPOND: 'prompt:respond',
   ARTIFACT_LIST: 'artifact:list',
+  TASK_DEBUG_TIMELINE: 'task:debug-timeline',
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;
 
@@ -116,6 +118,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_TRANSITIONS, taskId),
     dependencies: (taskId: string): Promise<Task[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEPENDENCIES, taskId),
+    debugTimeline: (taskId: string): Promise<DebugTimelineEntry[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_DEBUG_TIMELINE, taskId),
   },
 
   // Pipeline operations

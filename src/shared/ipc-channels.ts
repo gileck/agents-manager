@@ -60,6 +60,9 @@ export const IPC_CHANNELS = {
   // Artifact operations
   ARTIFACT_LIST: 'artifact:list',
 
+  // Debug timeline
+  TASK_DEBUG_TIMELINE: 'task:debug-timeline',
+
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;

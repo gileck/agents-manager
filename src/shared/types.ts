@@ -181,8 +181,8 @@ export interface TaskDependency {
 }
 
 // Task event types
-export type TaskEventCategory = 'status_change' | 'field_update' | 'dependency_change' | 'comment' | 'system' | 'agent';
-export type TaskEventSeverity = 'info' | 'warning' | 'error';
+export type TaskEventCategory = 'status_change' | 'field_update' | 'dependency_change' | 'comment' | 'system' | 'agent' | 'agent_debug';
+export type TaskEventSeverity = 'debug' | 'info' | 'warning' | 'error';
 
 export interface TaskEvent {
   id: string;
@@ -449,6 +449,14 @@ export interface Notification {
 // ============================================
 // Phase 4: Dashboard Types
 // ============================================
+
+export interface DebugTimelineEntry {
+  timestamp: number;
+  source: 'event' | 'activity' | 'transition' | 'agent_run' | 'phase' | 'artifact' | 'prompt';
+  severity: 'info' | 'warning' | 'error' | 'debug';
+  title: string;
+  data?: Record<string, unknown>;
+}
 
 export interface DashboardStats {
   projectCount: number;

@@ -37,6 +37,7 @@ import { registerAgentHandler } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
 
 export interface AppServices {
+  db: Database.Database;
   // Phase 1
   projectStore: IProjectStore;
   pipelineStore: IPipelineStore;
@@ -103,6 +104,7 @@ export function createAppServices(db: Database.Database): AppServices {
   registerNotificationHandler(pipelineEngine, { notificationRouter });
 
   return {
+    db,
     projectStore,
     pipelineStore,
     taskStore,

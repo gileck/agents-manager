@@ -117,10 +117,19 @@ export class AgentService implements IAgentService {
     onOutput?: (chunk: string) => void,
   ): Promise<void> {
     const taskId = task.id;
+    const onLog = (message: string, data?: Record<string, unknown>) => {
+      this.taskEventLog.log({
+        taskId,
+        category: 'agent_debug',
+        severity: 'debug',
+        message,
+        data,
+      }).catch(() => {}); // fire-and-forget
+    };
     try {
       let result;
       try {
-        result = await agent.execute(context, config, onOutput);
+        result = await agent.execute(context, config, onOutput, onLog);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         const completedAt = now();

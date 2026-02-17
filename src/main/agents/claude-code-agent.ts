@@ -6,10 +6,6 @@ import type { IAgent } from '../interfaces/agent';
 // but the SDK is ESM-only (.mjs). This bypasses that transformation.
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
 
-function log(msg: string) {
-  console.log(`[ClaudeCodeAgent] ${msg}`);
-}
-
 export class ClaudeCodeAgent implements IAgent {
   readonly type = 'claude-code';
   private runningAbortControllers = new Map<string, AbortController>();
@@ -23,7 +19,8 @@ export class ClaudeCodeAgent implements IAgent {
     }
   }
 
-  async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void): Promise<AgentRunResult> {
+  async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void): Promise<AgentRunResult> {
+    const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     const query = await this.loadQuery();
 
     const prompt = this.buildPrompt(context);
