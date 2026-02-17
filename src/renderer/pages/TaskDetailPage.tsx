@@ -58,11 +58,15 @@ export function TaskDetailPage() {
   const activeRun = agentRuns?.find((r) => r.status === 'running') ?? null;
   const lastRun = agentRuns?.[0] ?? null;
   const isAgentPhase = task?.status === 'planning' || task?.status === 'implementing';
-  const isStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null;
+  // After agent completes, post-completion work (git push, PR creation) may take
+  // several seconds before transitioning the task. Don't show "stuck" during this window.
+  const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
+    && lastRun?.status === 'completed' && lastRun.completedAt != null
+    && (Date.now() - lastRun.completedAt) < 30000;
+  const isStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null && !isFinalizing;
 
-  // Poll while agent is running, needs_info, or stuck (post-completion
-  // work like git push / PR creation may still be transitioning the task)
-  const shouldPoll = hasRunningAgent || task?.status === 'needs_info' || isStuck;
+  // Poll while agent is running, needs_info, finalizing, or stuck
+  const shouldPoll = hasRunningAgent || task?.status === 'needs_info' || isFinalizing || isStuck;
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -285,6 +289,7 @@ export function TaskDetailPage() {
           activeRun={activeRun}
           lastRun={lastRun}
           isStuck={isStuck}
+          isFinalizing={isFinalizing}
           primaryTransitions={primaryTransitions}
           transitioning={transitioning}
           stoppingAgent={stoppingAgent}
@@ -617,6 +622,7 @@ function StatusActionBar({
   activeRun,
   lastRun,
   isStuck,
+  isFinalizing,
   primaryTransitions,
   transitioning,
   stoppingAgent,
@@ -630,6 +636,7 @@ function StatusActionBar({
   activeRun: AgentRun | null;
   lastRun: AgentRun | null;
   isStuck: boolean;
+  isFinalizing: boolean;
   primaryTransitions: Transition[];
   transitioning: string | null;
   stoppingAgent: boolean;
@@ -697,6 +704,29 @@ function StatusActionBar({
             {stoppingAgent ? 'Stopping...' : 'Stop Agent'}
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  // Planning / Implementing — agent just finished, post-completion work in progress
+  if ((status === 'planning' || status === 'implementing') && isFinalizing) {
+    return (
+      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#3b82f6' }}>
+        <span className="relative flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
+        </span>
+        <span className="text-sm">
+          Finalizing — pushing branch and creating PR...
+        </span>
+        {lastRun && (
+          <button
+            className="text-sm text-blue-500 hover:underline ml-2"
+            onClick={() => onNavigateToRun(lastRun.id)}
+          >
+            View Output &rarr;
+          </button>
+        )}
       </div>
     );
   }
