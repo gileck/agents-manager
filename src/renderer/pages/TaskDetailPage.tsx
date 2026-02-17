@@ -286,6 +286,7 @@ export function TaskDetailPage() {
           pipeline={pipeline}
           currentStatus={task.status}
           transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
+          agentState={hasRunningAgent ? 'running' : isStuck ? 'failed' : 'idle'}
         />
       )}
 
@@ -500,6 +501,7 @@ export function TaskDetailPage() {
               pipeline={pipeline}
               currentStatus={task.status}
               transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
+              agentState={hasRunningAgent ? 'running' : isStuck ? 'failed' : 'idle'}
             />
           ) : (
             <Card className="mt-4">
@@ -848,6 +850,7 @@ const SOURCE_COLORS: Record<string, string> = {
   prompt: '#f59e0b',
   git: '#e44d26',
   github: '#a855f7',
+  worktree: '#10b981',
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -1077,10 +1080,12 @@ function PipelineProgress({
   pipeline,
   currentStatus,
   transitionEntries,
+  agentState = 'idle',
 }: {
   pipeline: import('../../shared/types').Pipeline;
   currentStatus: string;
   transitionEntries: DebugTimelineEntry[];
+  agentState?: 'idle' | 'running' | 'failed';
 }) {
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
 
@@ -1154,7 +1159,9 @@ function PipelineProgress({
                     style={{
                       width: 28,
                       height: 28,
-                      backgroundColor: isCompleted ? '#22c55e' : isCurrent ? '#3b82f6' : '#d1d5db',
+                      backgroundColor: isCompleted ? '#22c55e'
+                        : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
+                        : '#d1d5db',
                     }}
                   >
                     {isCompleted && (
@@ -1162,7 +1169,7 @@ function PipelineProgress({
                         <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
-                    {isCurrent && (
+                    {isCurrent && agentState === 'running' && (
                       <>
                         <span
                           className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
@@ -1174,6 +1181,17 @@ function PipelineProgress({
                         />
                       </>
                     )}
+                    {isCurrent && agentState === 'idle' && (
+                      <span
+                        className="relative inline-flex rounded-full"
+                        style={{ width: 10, height: 10, backgroundColor: '#fff' }}
+                      />
+                    )}
+                    {isCurrent && agentState === 'failed' && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M4 4l6 6M10 4l-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    )}
                     {isFuture && (
                       <span
                         className="rounded-full"
@@ -1184,7 +1202,9 @@ function PipelineProgress({
                   <span
                     className="text-xs font-medium text-center"
                     style={{
-                      color: isCompleted ? '#16a34a' : isCurrent ? '#2563eb' : '#9ca3af',
+                      color: isCompleted ? '#16a34a'
+                        : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#2563eb')
+                        : '#9ca3af',
                     }}
                   >
                     {label}
@@ -1243,10 +1263,12 @@ function PipelineVertical({
   pipeline,
   currentStatus,
   transitionEntries,
+  agentState = 'idle',
 }: {
   pipeline: import('../../shared/types').Pipeline;
   currentStatus: string;
   transitionEntries: DebugTimelineEntry[];
+  agentState?: 'idle' | 'running' | 'failed';
 }) {
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
@@ -1322,7 +1344,9 @@ function PipelineVertical({
                     style={{
                       width: 28,
                       height: 28,
-                      backgroundColor: isCompleted ? '#22c55e' : isCurrent ? '#3b82f6' : '#d1d5db',
+                      backgroundColor: isCompleted ? '#22c55e'
+                        : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
+                        : '#d1d5db',
                     }}
                   >
                     {isCompleted && (
@@ -1330,7 +1354,7 @@ function PipelineVertical({
                         <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
-                    {isCurrent && (
+                    {isCurrent && agentState === 'running' && (
                       <>
                         <span
                           className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
@@ -1341,6 +1365,17 @@ function PipelineVertical({
                           style={{ width: 10, height: 10, backgroundColor: '#fff' }}
                         />
                       </>
+                    )}
+                    {isCurrent && agentState === 'idle' && (
+                      <span
+                        className="relative inline-flex rounded-full"
+                        style={{ width: 10, height: 10, backgroundColor: '#fff' }}
+                      />
+                    )}
+                    {isCurrent && agentState === 'failed' && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M4 4l6 6M10 4l-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
                     )}
                     {isFuture && (
                       <span
@@ -1372,7 +1407,9 @@ function PipelineVertical({
                     <span
                       className="text-sm font-medium"
                       style={{
-                        color: isCompleted ? '#16a34a' : isCurrent ? '#2563eb' : '#9ca3af',
+                        color: isCompleted ? '#16a34a'
+                          : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#2563eb')
+                          : '#9ca3af',
                       }}
                     >
                       {label}
