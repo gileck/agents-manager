@@ -316,6 +316,7 @@ export function TaskDetailPage() {
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
+          <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -477,6 +478,22 @@ export function TaskDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="pipeline">
+          {pipeline ? (
+            <PipelineProgress
+              pipeline={pipeline}
+              currentStatus={task.status}
+              transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
+            />
+          ) : (
+            <Card className="mt-4">
+              <CardContent className="py-4">
+                <p className="text-sm text-muted-foreground">Pipeline not loaded.</p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -955,6 +972,189 @@ function DebuggerPanel({ entries }: { entries: DebugTimelineEntry[] }) {
             })}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Compute the happy (default forward) path through a pipeline */
+function computeHappyPath(pipeline: import('../../shared/types').Pipeline): string[] {
+  const { statuses, transitions } = pipeline;
+  if (statuses.length === 0) return [];
+
+  const statusIndex = new Map(statuses.map((s, i) => [s.name, i]));
+  const path: string[] = [statuses[0].name];
+  const visited = new Set<string>(path);
+
+  while (true) {
+    const current = path[path.length - 1];
+    const currentDef = statuses.find((s) => s.name === current);
+    if (currentDef?.isFinal) break;
+
+    // Find transitions from current to an unvisited status, pick lowest-index target
+    const candidates = transitions
+      .filter((t) => t.from === current && !visited.has(t.to))
+      .sort((a, b) => (statusIndex.get(a.to) ?? 999) - (statusIndex.get(b.to) ?? 999));
+
+    if (candidates.length === 0) break;
+    const next = candidates[0].to;
+    path.push(next);
+    visited.add(next);
+  }
+  return path;
+}
+
+/** Project forward from a status to the final status */
+function projectForward(
+  from: string,
+  pipeline: import('../../shared/types').Pipeline,
+  alreadyVisited: Set<string>,
+): string[] {
+  const { statuses, transitions } = pipeline;
+  const statusIndex = new Map(statuses.map((s, i) => [s.name, i]));
+  const path: string[] = [];
+  const visited = new Set(alreadyVisited);
+  let current = from;
+
+  while (true) {
+    const currentDef = statuses.find((s) => s.name === current);
+    if (currentDef?.isFinal) break;
+
+    const candidates = transitions
+      .filter((t) => t.from === current && !visited.has(t.to))
+      .sort((a, b) => (statusIndex.get(a.to) ?? 999) - (statusIndex.get(b.to) ?? 999));
+
+    if (candidates.length === 0) break;
+    const next = candidates[0].to;
+    path.push(next);
+    visited.add(next);
+    current = next;
+  }
+  return path;
+}
+
+/** Pipeline progress visualization */
+function PipelineProgress({
+  pipeline,
+  currentStatus,
+  transitionEntries,
+}: {
+  pipeline: import('../../shared/types').Pipeline;
+  currentStatus: string;
+  transitionEntries: DebugTimelineEntry[];
+}) {
+  const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
+
+  // Extract visited statuses from transition entries
+  const sortedTransitions = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
+  const visitedStatuses: string[] = [];
+  for (const entry of sortedTransitions) {
+    const from = entry.data?.fromStatus as string | undefined;
+    const to = entry.data?.toStatus as string | undefined;
+    if (from && visitedStatuses.length === 0) visitedStatuses.push(from);
+    if (from && visitedStatuses[visitedStatuses.length - 1] !== from) visitedStatuses.push(from);
+    if (to) visitedStatuses.push(to);
+  }
+
+  // Compute display path
+  let displayPath: string[];
+  let currentIndex: number;
+
+  if (visitedStatuses.length === 0) {
+    // No transitions yet — show happy path, current status is active
+    displayPath = computeHappyPath(pipeline);
+    currentIndex = displayPath.indexOf(currentStatus);
+    if (currentIndex === -1) {
+      displayPath = [currentStatus, ...computeHappyPath(pipeline).filter((s) => s !== currentStatus)];
+      currentIndex = 0;
+    }
+  } else {
+    // Dedup visited list preserving order
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const s of visitedStatuses) {
+      if (!seen.has(s)) { seen.add(s); deduped.push(s); }
+    }
+    // Ensure current status is included
+    if (!seen.has(currentStatus)) {
+      deduped.push(currentStatus);
+      seen.add(currentStatus);
+    }
+    // Project forward from current
+    const future = projectForward(currentStatus, pipeline, seen);
+    displayPath = [...deduped, ...future];
+    currentIndex = displayPath.indexOf(currentStatus);
+  }
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="py-6">
+        <div className="flex flex-wrap items-center gap-y-4">
+          {displayPath.map((statusName, i) => {
+            const isCompleted = i < currentIndex;
+            const isCurrent = i === currentIndex;
+            const isFuture = i > currentIndex;
+            const label = statusLabelMap.get(statusName) ?? statusName;
+
+            return (
+              <React.Fragment key={statusName}>
+                {/* Connector line */}
+                {i > 0 && (
+                  <div
+                    className="h-0.5 flex-shrink-0"
+                    style={{
+                      width: 32,
+                      backgroundColor: i <= currentIndex ? '#22c55e' : '#d1d5db',
+                    }}
+                  />
+                )}
+                {/* Node */}
+                <div className="flex flex-col items-center gap-1.5" style={{ minWidth: 64 }}>
+                  <div
+                    className="relative flex items-center justify-center rounded-full"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      backgroundColor: isCompleted ? '#22c55e' : isCurrent ? '#3b82f6' : '#d1d5db',
+                    }}
+                  >
+                    {isCompleted && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {isCurrent && (
+                      <>
+                        <span
+                          className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                          style={{ backgroundColor: '#3b82f6' }}
+                        />
+                        <span
+                          className="relative inline-flex rounded-full"
+                          style={{ width: 10, height: 10, backgroundColor: '#fff' }}
+                        />
+                      </>
+                    )}
+                    {isFuture && (
+                      <span
+                        className="rounded-full"
+                        style={{ width: 10, height: 10, backgroundColor: '#9ca3af' }}
+                      />
+                    )}
+                  </div>
+                  <span
+                    className="text-xs font-medium text-center"
+                    style={{
+                      color: isCompleted ? '#16a34a' : isCurrent ? '#2563eb' : '#9ca3af',
+                    }}
+                  >
+                    {label}
+                  </span>
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );
