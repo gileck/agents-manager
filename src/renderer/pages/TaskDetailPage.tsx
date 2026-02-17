@@ -1166,6 +1166,14 @@ function PipelineProgress({
             const isCurrent = i === currentIndex;
             const isFuture = i > currentIndex;
             const label = statusLabelMap.get(statusName) ?? statusName;
+            const isAgentic = agenticStatuses.has(statusName);
+            const statusDef = pipeline.statuses.find((s) => s.name === statusName);
+            const isFinalCurrent = isCurrent && statusDef?.isFinal;
+
+            // Node color
+            const nodeColor = isCompleted || isFinalCurrent ? '#22c55e'
+              : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
+              : '#d1d5db';
 
             return (
               <React.Fragment key={statusName}>
@@ -1186,17 +1194,16 @@ function PipelineProgress({
                     style={{
                       width: 28,
                       height: 28,
-                      backgroundColor: isCompleted ? '#22c55e'
-                        : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
-                        : '#d1d5db',
+                      backgroundColor: nodeColor,
+                      boxShadow: isAgentic ? agenticRing(nodeColor) : undefined,
                     }}
                   >
-                    {isCompleted && (
+                    {(isCompleted || isFinalCurrent) && (
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
-                    {isCurrent && agentState === 'running' && (
+                    {isCurrent && !isFinalCurrent && agentState === 'running' && (
                       <>
                         <span
                           className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
@@ -1208,13 +1215,13 @@ function PipelineProgress({
                         />
                       </>
                     )}
-                    {isCurrent && agentState === 'idle' && (
+                    {isCurrent && !isFinalCurrent && agentState === 'idle' && (
                       <span
                         className="relative inline-flex rounded-full"
                         style={{ width: 10, height: 10, backgroundColor: '#fff' }}
                       />
                     )}
-                    {isCurrent && agentState === 'failed' && (
+                    {isCurrent && !isFinalCurrent && agentState === 'failed' && (
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M4 4l6 6M10 4l-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                       </svg>
@@ -1229,7 +1236,7 @@ function PipelineProgress({
                   <span
                     className="text-xs font-medium text-center"
                     style={{
-                      color: isCompleted ? '#16a34a'
+                      color: isCompleted || isFinalCurrent ? '#16a34a'
                         : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#2563eb')
                         : '#9ca3af',
                     }}
@@ -1299,6 +1306,7 @@ function PipelineVertical({
 }) {
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
+  const agenticStatuses = computeAgenticStatuses(pipeline);
   const statusDetailsMap = buildStatusDetailsMap(transitionEntries);
 
   // Compute display path (same logic as PipelineProgress)
@@ -1352,12 +1360,20 @@ function PipelineVertical({
             const isCurrent = i === currentIndex;
             const isFuture = i > currentIndex;
             const label = statusLabelMap.get(statusName) ?? statusName;
+            const isAgentic = agenticStatuses.has(statusName);
+            const statusDef = pipeline.statuses.find((s) => s.name === statusName);
+            const isFinalCurrent = isCurrent && statusDef?.isFinal;
             const details = statusDetailsMap.get(statusName);
-            const hasDetails = isCompleted || (isCurrent && details);
+            const hasDetails = isCompleted || isFinalCurrent || (isCurrent && details);
             const expanded = expandedSteps.has(i);
 
+            // Node color
+            const nodeColor = isCompleted || isFinalCurrent ? '#22c55e'
+              : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
+              : '#d1d5db';
+
             // For current step, compute live duration
-            const currentDuration = isCurrent && details
+            const currentDuration = isCurrent && !isFinalCurrent && details
               ? Date.now() - details.timestamp
               : undefined;
 
@@ -1371,17 +1387,16 @@ function PipelineVertical({
                     style={{
                       width: 28,
                       height: 28,
-                      backgroundColor: isCompleted ? '#22c55e'
-                        : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
-                        : '#d1d5db',
+                      backgroundColor: nodeColor,
+                      boxShadow: isAgentic ? agenticRing(nodeColor) : undefined,
                     }}
                   >
-                    {isCompleted && (
+                    {(isCompleted || isFinalCurrent) && (
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
-                    {isCurrent && agentState === 'running' && (
+                    {isCurrent && !isFinalCurrent && agentState === 'running' && (
                       <>
                         <span
                           className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
@@ -1393,13 +1408,13 @@ function PipelineVertical({
                         />
                       </>
                     )}
-                    {isCurrent && agentState === 'idle' && (
+                    {isCurrent && !isFinalCurrent && agentState === 'idle' && (
                       <span
                         className="relative inline-flex rounded-full"
                         style={{ width: 10, height: 10, backgroundColor: '#fff' }}
                       />
                     )}
-                    {isCurrent && agentState === 'failed' && (
+                    {isCurrent && !isFinalCurrent && agentState === 'failed' && (
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M4 4l6 6M10 4l-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                       </svg>
@@ -1434,7 +1449,7 @@ function PipelineVertical({
                     <span
                       className="text-sm font-medium"
                       style={{
-                        color: isCompleted ? '#16a34a'
+                        color: isCompleted || isFinalCurrent ? '#16a34a'
                           : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#2563eb')
                           : '#9ca3af',
                       }}
@@ -1450,8 +1465,8 @@ function PipelineVertical({
 
                   {/* Expanded details */}
                   {expanded && hasDetails && (
-                    <div className="ml-1 mt-1 mb-2 pl-3 border-l-2 text-xs space-y-1.5" style={{ borderColor: isCompleted ? '#22c55e' : '#3b82f6' }}>
-                      {isCompleted && details && (
+                    <div className="ml-1 mt-1 mb-2 pl-3 border-l-2 text-xs space-y-1.5" style={{ borderColor: isCompleted || isFinalCurrent ? '#22c55e' : '#3b82f6' }}>
+                      {(isCompleted || isFinalCurrent) && details && (
                         <>
                           <div className="flex gap-2">
                             <span className="text-muted-foreground">Arrived at:</span>
@@ -1477,7 +1492,7 @@ function PipelineVertical({
                           )}
                         </>
                       )}
-                      {isCurrent && details && (
+                      {isCurrent && !isFinalCurrent && details && (
                         <>
                           <div className="flex gap-2">
                             <span className="text-muted-foreground">Active since:</span>
