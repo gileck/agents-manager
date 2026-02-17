@@ -13,6 +13,7 @@ import type { IAgentFramework } from '../interfaces/agent-framework';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IWorkflowService } from '../interfaces/workflow-service';
+import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
 import { SqliteTaskStore } from '../stores/sqlite-task-store';
@@ -54,6 +55,7 @@ export interface AppServices {
   notificationRouter: INotificationRouter;
   agentService: IAgentService;
   workflowService: IWorkflowService;
+  createWorktreeManager: (path: string) => IWorktreeManager;
 }
 
 export function createAppServices(db: Database.Database): AppServices {
@@ -119,5 +121,6 @@ export function createAppServices(db: Database.Database): AppServices {
     notificationRouter,
     agentService,
     workflowService,
+    createWorktreeManager,
   };
 }

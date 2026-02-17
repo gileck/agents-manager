@@ -63,6 +63,9 @@ export const IPC_CHANNELS = {
   // Debug timeline
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
 
+  // Worktree
+  TASK_WORKTREE: 'task:worktree',
+
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;

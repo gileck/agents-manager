@@ -72,8 +72,30 @@ export class AgentService implements IAgentService {
     if (!worktree) {
       const branch = `task/${taskId}/${mode}`;
       worktree = await worktreeManager.create(branch, taskId);
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'info',
+        message: `Worktree created on branch ${branch}`,
+        data: { branch, path: worktree.path, taskId },
+      });
+    } else {
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'info',
+        message: `Worktree reused at ${worktree.path}`,
+        data: { path: worktree.path },
+      });
     }
     await worktreeManager.lock(taskId);
+    await this.taskEventLog.log({
+      taskId,
+      category: 'worktree',
+      severity: 'debug',
+      message: 'Worktree locked',
+      data: { taskId },
+    });
 
     // 5. Log event
     await this.taskEventLog.log({
@@ -149,6 +171,13 @@ export class AgentService implements IAgentService {
           data: { agentRunId: run.id, error: errorMsg },
         });
         await worktreeManager.unlock(taskId);
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'debug',
+          message: 'Worktree unlocked',
+          data: { taskId },
+        });
         return;
       }
 
@@ -210,6 +239,13 @@ export class AgentService implements IAgentService {
 
       // Cleanup
       await worktreeManager.unlock(taskId);
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'debug',
+        message: 'Worktree unlocked',
+        data: { taskId },
+      });
 
       // Log completion event
       await this.taskEventLog.log({

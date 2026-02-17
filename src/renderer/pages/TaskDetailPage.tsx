@@ -16,7 +16,7 @@ import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import type {
   Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
-  DebugTimelineEntry,
+  DebugTimelineEntry, Worktree,
 } from '../../shared/types';
 
 // Agent pipeline statuses that have specific bar rendering
@@ -50,6 +50,11 @@ export function TaskDetailPage() {
 
   const { data: pendingPrompts, refetch: refetchPrompts } = useIpc<PendingPrompt[]>(
     () => id ? window.api.prompts.list(id) : Promise.resolve([]),
+    [id, task?.status]
+  );
+
+  const { data: worktree } = useIpc<Worktree | null>(
+    () => id ? window.api.tasks.worktree(id) : Promise.resolve(null),
     [id, task?.status]
   );
 
@@ -269,7 +274,14 @@ export function TaskDetailPage() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <PipelineBadge status={task.status} pipeline={pipeline} />
-          <h1 className="text-3xl font-bold">{task.title}</h1>
+          <div>
+            <h1 className="text-3xl font-bold">{task.title}</h1>
+            {worktree && (
+              <p className="text-xs text-muted-foreground mt-1 font-mono">
+                Worktree: {worktree.path} ({worktree.branch})
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleDuplicate} disabled={duplicating}>
@@ -1075,6 +1087,20 @@ function projectForward(
   return path;
 }
 
+/** Compute which statuses are agentic (have agent-triggered outbound transitions) */
+function computeAgenticStatuses(pipeline: import('../../shared/types').Pipeline): Set<string> {
+  const agentic = new Set<string>();
+  for (const t of pipeline.transitions) {
+    if (t.trigger === 'agent') agentic.add(t.from);
+  }
+  return agentic;
+}
+
+/** Get ring box-shadow for agentic nodes */
+function agenticRing(color: string): string {
+  return `0 0 0 3px ${color}40`;
+}
+
 /** Pipeline progress visualization */
 function PipelineProgress({
   pipeline,
@@ -1088,6 +1114,7 @@ function PipelineProgress({
   agentState?: 'idle' | 'running' | 'failed';
 }) {
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
+  const agenticStatuses = computeAgenticStatuses(pipeline);
 
   // Extract visited statuses from transition entries
   const sortedTransitions = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);

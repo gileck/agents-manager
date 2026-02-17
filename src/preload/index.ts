@@ -12,6 +12,7 @@ import type {
   TransitionResult,
   DashboardStats,
   DebugTimelineEntry,
+  Worktree,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -53,6 +54,7 @@ const IPC_CHANNELS = {
   PROMPT_RESPOND: 'prompt:respond',
   ARTIFACT_LIST: 'artifact:list',
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
+  TASK_WORKTREE: 'task:worktree',
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;
 
@@ -120,6 +122,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEPENDENCIES, taskId),
     debugTimeline: (taskId: string): Promise<DebugTimelineEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEBUG_TIMELINE, taskId),
+    worktree: (taskId: string): Promise<Worktree | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE, taskId),
   },
 
   // Pipeline operations

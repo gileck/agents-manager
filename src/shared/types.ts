@@ -181,7 +181,7 @@ export interface TaskDependency {
 }
 
 // Task event types
-export type TaskEventCategory = 'status_change' | 'field_update' | 'dependency_change' | 'comment' | 'system' | 'agent' | 'agent_debug' | 'git' | 'github';
+export type TaskEventCategory = 'status_change' | 'field_update' | 'dependency_change' | 'comment' | 'system' | 'agent' | 'agent_debug' | 'git' | 'github' | 'worktree';
 export type TaskEventSeverity = 'debug' | 'info' | 'warning' | 'error';
 
 export interface TaskEvent {
@@ -452,7 +452,7 @@ export interface Notification {
 
 export interface DebugTimelineEntry {
   timestamp: number;
-  source: 'event' | 'activity' | 'transition' | 'agent' | 'phase' | 'artifact' | 'prompt' | 'git' | 'github';
+  source: 'event' | 'activity' | 'transition' | 'agent' | 'phase' | 'artifact' | 'prompt' | 'git' | 'github' | 'worktree';
   severity: 'info' | 'warning' | 'error' | 'debug';
   title: string;
   data?: Record<string, unknown>;

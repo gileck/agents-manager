@@ -274,6 +274,7 @@ export function registerIpcHandlers(services: AppServices): void {
       agent_debug: 'agent',
       git: 'git',
       github: 'github',
+      worktree: 'worktree',
     };
     const eventRows = db.prepare(
       'SELECT category, severity, message, data, created_at FROM task_events WHERE task_id = ?'
@@ -374,6 +375,20 @@ export function registerIpcHandlers(services: AppServices): void {
     // Sort by timestamp descending
     entries.sort((a, b) => b.timestamp - a.timestamp);
     return entries;
+  });
+
+  // ============================================
+  // Worktree
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.TASK_WORKTREE, async (_, taskId: string) => {
+    validateId(taskId);
+    const task = await services.taskStore.getTask(taskId);
+    if (!task) return null;
+    const project = await services.projectStore.getProject(task.projectId);
+    if (!project?.path) return null;
+    const wm = services.createWorktreeManager(project.path);
+    return wm.get(taskId);
   });
 
   // ============================================
