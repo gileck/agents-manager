@@ -60,8 +60,9 @@ export function TaskDetailPage() {
   const isAgentPhase = task?.status === 'planning' || task?.status === 'implementing';
   const isStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null;
 
-  // Poll while agent is running or while in needs_info
-  const shouldPoll = hasRunningAgent || task?.status === 'needs_info';
+  // Poll while agent is running, needs_info, or stuck (post-completion
+  // work like git push / PR creation may still be transitioning the task)
+  const shouldPoll = hasRunningAgent || task?.status === 'needs_info' || isStuck;
 
   useEffect(() => {
     if (!shouldPoll) return;
