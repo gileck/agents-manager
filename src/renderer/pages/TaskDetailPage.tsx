@@ -228,7 +228,7 @@ export function TaskDetailPage() {
     }
   };
 
-  if (loading) {
+  if (loading && !task) {
     return (
       <div className="p-8">
         <p className="text-muted-foreground">Loading task...</p>
