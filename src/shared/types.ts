@@ -386,6 +386,7 @@ export interface AgentContext {
   previousOutput?: string;
   promptResponses?: Record<string, unknown>[];
   systemPrompt?: string;
+  validationErrors?: string;
 }
 
 export interface AgentConfig {

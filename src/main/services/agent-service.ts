@@ -17,8 +17,13 @@ import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IGitOps } from '../interfaces/git-ops';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
+import { getShellEnv } from './shell-env';
+
+const execAsync = promisify(exec);
 
 export class AgentService implements IAgentService {
   private backgroundPromises = new Map<string, Promise<void>>();
@@ -178,6 +183,48 @@ export class AgentService implements IAgentService {
         return;
       }
 
+      // Post-agent validation loop (skip for plan mode — no code changes to validate)
+      const validationCommands = context.mode !== 'plan'
+        ? (context.project.config?.validationCommands as string[] | undefined) ?? []
+        : [];
+      const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
+      let validationAttempts = 0;
+
+      while (result.exitCode === 0 && validationCommands.length > 0 && validationAttempts < maxValidationRetries) {
+        const validation = await this.runValidation(validationCommands, worktree.path);
+        if (validation.passed) break;
+
+        validationAttempts++;
+        await this.taskEventLog.log({
+          taskId,
+          category: 'agent',
+          severity: 'warning',
+          message: `Validation failed (attempt ${validationAttempts}/${maxValidationRetries}), re-running agent`,
+          data: { output: validation.output.slice(0, 2000) },
+        });
+
+        context.validationErrors = validation.output;
+        try {
+          result = await agent.execute(context, config, onOutput, onLog);
+        } catch (err) {
+          result = { exitCode: 1, output: err instanceof Error ? err.message : String(err), outcome: 'failed' };
+        }
+      }
+
+      // Final validation check after retries exhausted
+      if (validationAttempts === maxValidationRetries && validationCommands.length > 0 && result.exitCode === 0) {
+        const finalCheck = await this.runValidation(validationCommands, worktree.path);
+        if (!finalCheck.passed) {
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'warning',
+            message: `Validation still failing after ${maxValidationRetries} retries`,
+            data: { output: finalCheck.output.slice(0, 2000) },
+          });
+        }
+      }
+
       // Update run
       const completedAt = now();
       await this.agentRunStore.updateRun(run.id, {
@@ -303,6 +350,21 @@ export class AgentService implements IAgentService {
     });
 
     await this.pendingPromptStore.expirePromptsForRun(runId);
+  }
+
+  private async runValidation(commands: string[], cwd: string): Promise<{ passed: boolean; output: string }> {
+    const results: string[] = [];
+    for (const cmd of commands) {
+      try {
+        await execAsync(cmd, { cwd, env: getShellEnv(), timeout: 60_000, maxBuffer: 10 * 1024 * 1024 });
+      } catch (err: any) {
+        const exitCode = err.code ?? '?';
+        results.push(`$ ${cmd} (exit ${exitCode})\n${err.stdout ?? ''}${err.stderr ?? ''}`);
+      }
+    }
+    return results.length === 0
+      ? { passed: true, output: '' }
+      : { passed: false, output: results.join('\n\n') };
   }
 
   private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {

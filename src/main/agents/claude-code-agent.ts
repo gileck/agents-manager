@@ -156,15 +156,25 @@ export class ClaudeCodeAgent implements IAgent {
     const { task, mode } = context;
     const desc = task.description ? ` ${task.description}` : '';
 
+    let prompt: string;
     switch (mode) {
       case 'plan':
-        return `Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`;
+        prompt = `Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`;
+        break;
       case 'implement':
-        return `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`;
+        prompt = `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`;
+        break;
       case 'review':
-        return `Review the changes for this task. Task: ${task.title}.${desc}`;
+        prompt = `Review the changes for this task. Task: ${task.title}.${desc}`;
+        break;
       default:
-        return `${task.title}.${desc}`;
+        prompt = `${task.title}.${desc}`;
     }
+
+    if (context.validationErrors) {
+      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
+    }
+
+    return prompt;
   }
 }
