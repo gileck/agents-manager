@@ -268,15 +268,20 @@ export function registerIpcHandlers(services: AppServices): void {
     const db = services.db;
     const entries: DebugTimelineEntry[] = [];
 
-    // 1. Events
+    // 1. Events — map category to timeline source
+    const categorySourceMap: Record<string, DebugTimelineEntry['source']> = {
+      agent: 'agent',
+      agent_debug: 'agent',
+      git: 'git',
+      github: 'github',
+    };
     const eventRows = db.prepare(
       'SELECT category, severity, message, data, created_at FROM task_events WHERE task_id = ?'
     ).all(taskId) as { category: string; severity: string; message: string; data: string; created_at: number }[];
     for (const r of eventRows) {
-      const isAgentEvent = r.category === 'agent' || r.category === 'agent_debug';
       entries.push({
         timestamp: r.created_at,
-        source: isAgentEvent ? 'agent_run' : 'event',
+        source: categorySourceMap[r.category] ?? 'event',
         severity: (r.severity as DebugTimelineEntry['severity']) || 'info',
         title: r.message,
         data: { category: r.category, ...safeParse(r.data) },
@@ -318,7 +323,7 @@ export function registerIpcHandlers(services: AppServices): void {
     for (const r of agentRows) {
       entries.push({
         timestamp: r.completed_at ?? r.started_at,
-        source: 'agent_run',
+        source: 'agent',
         severity: r.status === 'failed' ? 'error' : 'info',
         title: `Agent ${r.mode}/${r.agent_type}: ${r.status}`,
         data: { exitCode: r.exit_code, outcome: r.outcome, inputTokens: r.cost_input_tokens, outputTokens: r.cost_output_tokens },

@@ -785,10 +785,12 @@ const SOURCE_COLORS: Record<string, string> = {
   event: '#6b7280',
   activity: '#3b82f6',
   transition: '#8b5cf6',
-  agent_run: '#22c55e',
+  agent: '#22c55e',
   phase: '#06b6d4',
   artifact: '#f97316',
   prompt: '#f59e0b',
+  git: '#e44d26',
+  github: '#a855f7',
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -798,7 +800,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   error: '#ef4444',
 };
 
-const ALL_SOURCES = ['event', 'activity', 'transition', 'agent_run', 'phase', 'artifact', 'prompt'] as const;
+const ALL_SOURCES = ['event', 'activity', 'transition', 'agent', 'phase', 'artifact', 'prompt', 'git', 'github'] as const;
 const ALL_SEVERITIES = ['debug', 'info', 'warning', 'error'] as const;
 
 function formatTime(ts: number): string {
