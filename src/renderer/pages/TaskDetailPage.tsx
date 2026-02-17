@@ -278,7 +278,7 @@ export function TaskDetailPage() {
             <h1 className="text-3xl font-bold">{task.title}</h1>
             {worktree && (
               <p className="text-xs text-muted-foreground mt-1 font-mono">
-                Worktree: {worktree.path} ({worktree.branch})
+                Worktree: {worktree.branch}
               </p>
             )}
           </div>
@@ -1101,6 +1101,101 @@ function agenticRing(color: string): string {
   return `0 0 0 3px ${color}40`;
 }
 
+/** Compute display path with skipped steps */
+function computeDisplayPath(
+  pipeline: import('../../shared/types').Pipeline,
+  currentStatus: string,
+  transitionEntries: DebugTimelineEntry[],
+): { displayPath: string[]; currentIndex: number; skippedStatuses: Set<string> } {
+  const sortedTransitions = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
+  const visitedStatuses: string[] = [];
+  for (const entry of sortedTransitions) {
+    const from = entry.data?.fromStatus as string | undefined;
+    const to = entry.data?.toStatus as string | undefined;
+    if (from && visitedStatuses.length === 0) visitedStatuses.push(from);
+    if (from && visitedStatuses[visitedStatuses.length - 1] !== from) visitedStatuses.push(from);
+    if (to) visitedStatuses.push(to);
+  }
+
+  const happyPath = computeHappyPath(pipeline);
+  const happySet = new Set(happyPath);
+  const visitedSet = new Set(visitedStatuses);
+  const skippedStatuses = new Set<string>();
+
+  if (visitedStatuses.length === 0) {
+    let displayPath = happyPath;
+    let currentIndex = displayPath.indexOf(currentStatus);
+    if (currentIndex === -1) {
+      displayPath = [currentStatus, ...happyPath.filter((s) => s !== currentStatus)];
+      currentIndex = 0;
+    }
+    return { displayPath, currentIndex, skippedStatuses };
+  }
+
+  // Dedup visited preserving order
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const s of visitedStatuses) {
+    if (!seen.has(s)) { seen.add(s); deduped.push(s); }
+  }
+  if (!seen.has(currentStatus)) {
+    deduped.push(currentStatus);
+    seen.add(currentStatus);
+  }
+
+  // If current is in the happy path, merge visited with full happy path
+  // to show skipped steps in their natural position
+  if (happySet.has(currentStatus)) {
+    const happyIndex = new Map(happyPath.map((s, i) => [s, i]));
+    const currentHappyIdx = happyIndex.get(currentStatus)!;
+
+    // Identify skipped: in happy path, before current, not visited
+    for (let i = 0; i < currentHappyIdx; i++) {
+      if (!visitedSet.has(happyPath[i])) {
+        skippedStatuses.add(happyPath[i]);
+      }
+    }
+
+    // Merge: walk happy path up to current, inserting extra visited
+    // steps at the position they were first reached
+    const merged: string[] = [];
+    const mergedSet = new Set<string>();
+    let dedupedIdx = 0;
+
+    for (let hi = 0; hi <= currentHappyIdx; hi++) {
+      const hStep = happyPath[hi];
+      // Insert extra visited steps that came before this happy step
+      while (dedupedIdx < deduped.length) {
+        const ds = deduped[dedupedIdx];
+        if (ds === hStep) break;
+        if (happySet.has(ds) && (happyIndex.get(ds)! > hi)) break;
+        if (!mergedSet.has(ds)) { merged.push(ds); mergedSet.add(ds); }
+        dedupedIdx++;
+      }
+      if (!mergedSet.has(hStep)) { merged.push(hStep); mergedSet.add(hStep); }
+      if (dedupedIdx < deduped.length && deduped[dedupedIdx] === hStep) dedupedIdx++;
+    }
+    // Append remaining visited steps
+    for (; dedupedIdx < deduped.length; dedupedIdx++) {
+      if (!mergedSet.has(deduped[dedupedIdx])) {
+        merged.push(deduped[dedupedIdx]);
+        mergedSet.add(deduped[dedupedIdx]);
+      }
+    }
+
+    const future = projectForward(currentStatus, pipeline, mergedSet);
+    const displayPath = [...merged, ...future];
+    const currentIndex = displayPath.indexOf(currentStatus);
+    return { displayPath, currentIndex, skippedStatuses };
+  }
+
+  // Fallback: current not in happy path (e.g. needs_info)
+  const future = projectForward(currentStatus, pipeline, seen);
+  const displayPath = [...deduped, ...future];
+  const currentIndex = displayPath.indexOf(currentStatus);
+  return { displayPath, currentIndex, skippedStatuses };
+}
+
 /** Pipeline progress visualization */
 function PipelineProgress({
   pipeline,
@@ -1115,92 +1210,65 @@ function PipelineProgress({
 }) {
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
   const agenticStatuses = computeAgenticStatuses(pipeline);
-
-  // Extract visited statuses from transition entries
-  const sortedTransitions = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
-  const visitedStatuses: string[] = [];
-  for (const entry of sortedTransitions) {
-    const from = entry.data?.fromStatus as string | undefined;
-    const to = entry.data?.toStatus as string | undefined;
-    if (from && visitedStatuses.length === 0) visitedStatuses.push(from);
-    if (from && visitedStatuses[visitedStatuses.length - 1] !== from) visitedStatuses.push(from);
-    if (to) visitedStatuses.push(to);
-  }
-
-  // Compute display path
-  let displayPath: string[];
-  let currentIndex: number;
-
-  if (visitedStatuses.length === 0) {
-    // No transitions yet — show happy path, current status is active
-    displayPath = computeHappyPath(pipeline);
-    currentIndex = displayPath.indexOf(currentStatus);
-    if (currentIndex === -1) {
-      displayPath = [currentStatus, ...computeHappyPath(pipeline).filter((s) => s !== currentStatus)];
-      currentIndex = 0;
-    }
-  } else {
-    // Dedup visited list preserving order
-    const seen = new Set<string>();
-    const deduped: string[] = [];
-    for (const s of visitedStatuses) {
-      if (!seen.has(s)) { seen.add(s); deduped.push(s); }
-    }
-    // Ensure current status is included
-    if (!seen.has(currentStatus)) {
-      deduped.push(currentStatus);
-      seen.add(currentStatus);
-    }
-    // Project forward from current
-    const future = projectForward(currentStatus, pipeline, seen);
-    displayPath = [...deduped, ...future];
-    currentIndex = displayPath.indexOf(currentStatus);
-  }
+  const { displayPath, currentIndex, skippedStatuses } = computeDisplayPath(pipeline, currentStatus, transitionEntries);
 
   return (
     <Card className="mt-4">
       <CardContent className="py-6">
         <div className="flex flex-wrap items-center gap-y-4">
           {displayPath.map((statusName, i) => {
-            const isCompleted = i < currentIndex;
+            const isSkipped = skippedStatuses.has(statusName);
+            const isCompleted = !isSkipped && i < currentIndex;
             const isCurrent = i === currentIndex;
-            const isFuture = i > currentIndex;
+            const isFuture = !isSkipped && i > currentIndex;
             const label = statusLabelMap.get(statusName) ?? statusName;
             const isAgentic = agenticStatuses.has(statusName);
             const statusDef = pipeline.statuses.find((s) => s.name === statusName);
             const isFinalCurrent = isCurrent && statusDef?.isFinal;
 
             // Node color
-            const nodeColor = isCompleted || isFinalCurrent ? '#22c55e'
+            const nodeColor = isSkipped ? '#d1d5db'
+              : isCompleted || isFinalCurrent ? '#22c55e'
               : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
               : '#d1d5db';
+
+            // Connector: gray dashed if adjacent to skipped step
+            const prevSkipped = i > 0 && skippedStatuses.has(displayPath[i - 1]);
+            const connectorSkipped = isSkipped || prevSkipped;
 
             return (
               <React.Fragment key={statusName}>
                 {/* Connector line */}
                 {i > 0 && (
                   <div
-                    className="h-0.5 flex-shrink-0"
+                    className="flex-shrink-0"
                     style={{
                       width: 32,
-                      backgroundColor: i <= currentIndex ? '#22c55e' : '#d1d5db',
+                      height: 2,
+                      backgroundColor: connectorSkipped ? 'transparent' : (i <= currentIndex ? '#22c55e' : '#d1d5db'),
+                      borderBottom: connectorSkipped ? '2px dashed #d1d5db' : undefined,
                     }}
                   />
                 )}
                 {/* Node */}
-                <div className="flex flex-col items-center gap-1.5" style={{ minWidth: 64 }}>
+                <div className="flex flex-col items-center gap-1.5" style={{ minWidth: 64, opacity: isSkipped ? 0.5 : 1 }}>
                   <div
                     className="relative flex items-center justify-center rounded-full"
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: isSkipped ? 22 : 28,
+                      height: isSkipped ? 22 : 28,
                       backgroundColor: nodeColor,
-                      boxShadow: isAgentic ? agenticRing(nodeColor) : undefined,
+                      boxShadow: isAgentic && !isSkipped ? agenticRing(nodeColor) : undefined,
                     }}
                   >
                     {(isCompleted || isFinalCurrent) && (
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {isSkipped && (
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M3 6h6" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" />
                       </svg>
                     )}
                     {isCurrent && !isFinalCurrent && agentState === 'running' && (
@@ -1236,9 +1304,11 @@ function PipelineProgress({
                   <span
                     className="text-xs font-medium text-center"
                     style={{
-                      color: isCompleted || isFinalCurrent ? '#16a34a'
+                      color: isSkipped ? '#9ca3af'
+                        : isCompleted || isFinalCurrent ? '#16a34a'
                         : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#2563eb')
                         : '#9ca3af',
+                      textDecoration: isSkipped ? 'line-through' : undefined,
                     }}
                   >
                     {label}
@@ -1308,42 +1378,7 @@ function PipelineVertical({
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
   const agenticStatuses = computeAgenticStatuses(pipeline);
   const statusDetailsMap = buildStatusDetailsMap(transitionEntries);
-
-  // Compute display path (same logic as PipelineProgress)
-  const sortedTransitions = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
-  const visitedStatuses: string[] = [];
-  for (const entry of sortedTransitions) {
-    const from = entry.data?.fromStatus as string | undefined;
-    const to = entry.data?.toStatus as string | undefined;
-    if (from && visitedStatuses.length === 0) visitedStatuses.push(from);
-    if (from && visitedStatuses[visitedStatuses.length - 1] !== from) visitedStatuses.push(from);
-    if (to) visitedStatuses.push(to);
-  }
-
-  let displayPath: string[];
-  let currentIndex: number;
-
-  if (visitedStatuses.length === 0) {
-    displayPath = computeHappyPath(pipeline);
-    currentIndex = displayPath.indexOf(currentStatus);
-    if (currentIndex === -1) {
-      displayPath = [currentStatus, ...computeHappyPath(pipeline).filter((s) => s !== currentStatus)];
-      currentIndex = 0;
-    }
-  } else {
-    const seen = new Set<string>();
-    const deduped: string[] = [];
-    for (const s of visitedStatuses) {
-      if (!seen.has(s)) { seen.add(s); deduped.push(s); }
-    }
-    if (!seen.has(currentStatus)) {
-      deduped.push(currentStatus);
-      seen.add(currentStatus);
-    }
-    const future = projectForward(currentStatus, pipeline, seen);
-    displayPath = [...deduped, ...future];
-    currentIndex = displayPath.indexOf(currentStatus);
-  }
+  const { displayPath, currentIndex, skippedStatuses } = computeDisplayPath(pipeline, currentStatus, transitionEntries);
 
   const toggleStep = (idx: number) => {
     const next = new Set(expandedSteps);
@@ -1356,21 +1391,27 @@ function PipelineVertical({
       <CardContent className="py-6">
         <div className="flex flex-col">
           {displayPath.map((statusName, i) => {
-            const isCompleted = i < currentIndex;
+            const isSkipped = skippedStatuses.has(statusName);
+            const isCompleted = !isSkipped && i < currentIndex;
             const isCurrent = i === currentIndex;
-            const isFuture = i > currentIndex;
+            const isFuture = !isSkipped && i > currentIndex;
             const label = statusLabelMap.get(statusName) ?? statusName;
             const isAgentic = agenticStatuses.has(statusName);
             const statusDef = pipeline.statuses.find((s) => s.name === statusName);
             const isFinalCurrent = isCurrent && statusDef?.isFinal;
             const details = statusDetailsMap.get(statusName);
-            const hasDetails = isCompleted || isFinalCurrent || (isCurrent && details);
+            const hasDetails = !isSkipped && (isCompleted || isFinalCurrent || (isCurrent && details));
             const expanded = expandedSteps.has(i);
 
             // Node color
-            const nodeColor = isCompleted || isFinalCurrent ? '#22c55e'
+            const nodeColor = isSkipped ? '#d1d5db'
+              : isCompleted || isFinalCurrent ? '#22c55e'
               : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
               : '#d1d5db';
+
+            // Connector: dashed if adjacent to skipped step
+            const nextSkipped = i + 1 < displayPath.length && skippedStatuses.has(displayPath[i + 1]);
+            const connectorDashed = isSkipped || nextSkipped;
 
             // For current step, compute live duration
             const currentDuration = isCurrent && !isFinalCurrent && details
@@ -1378,22 +1419,27 @@ function PipelineVertical({
               : undefined;
 
             return (
-              <div key={statusName} className="flex">
+              <div key={statusName} className="flex" style={{ opacity: isSkipped ? 0.5 : 1 }}>
                 {/* Left column: node + connector */}
                 <div className="flex flex-col items-center mr-4" style={{ width: 28 }}>
                   {/* Node */}
                   <div
                     className="relative flex items-center justify-center rounded-full flex-shrink-0"
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: isSkipped ? 22 : 28,
+                      height: isSkipped ? 22 : 28,
                       backgroundColor: nodeColor,
-                      boxShadow: isAgentic ? agenticRing(nodeColor) : undefined,
+                      boxShadow: isAgentic && !isSkipped ? agenticRing(nodeColor) : undefined,
                     }}
                   >
                     {(isCompleted || isFinalCurrent) && (
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {isSkipped && (
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M3 6h6" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" />
                       </svg>
                     )}
                     {isCurrent && !isFinalCurrent && agentState === 'running' && (
@@ -1431,9 +1477,11 @@ function PipelineVertical({
                     <div
                       className="flex-1"
                       style={{
-                        width: 2,
+                        width: 0,
                         minHeight: expanded ? 8 : 24,
-                        backgroundColor: i < currentIndex ? '#22c55e' : '#d1d5db',
+                        borderLeft: connectorDashed
+                          ? '2px dashed #d1d5db'
+                          : `2px solid ${i < currentIndex ? '#22c55e' : '#d1d5db'}`,
                       }}
                     />
                   )}
@@ -1443,15 +1491,17 @@ function PipelineVertical({
                 <div className={`flex-1 ${i < displayPath.length - 1 ? 'pb-2' : ''}`}>
                   <div
                     className={`flex items-center gap-2 py-1 rounded -mt-0.5 ${hasDetails ? 'cursor-pointer hover:bg-accent/50' : ''}`}
-                    style={{ minHeight: 28 }}
+                    style={{ minHeight: isSkipped ? 22 : 28 }}
                     onClick={() => hasDetails && toggleStep(i)}
                   >
                     <span
                       className="text-sm font-medium"
                       style={{
-                        color: isCompleted || isFinalCurrent ? '#16a34a'
+                        color: isSkipped ? '#9ca3af'
+                          : isCompleted || isFinalCurrent ? '#16a34a'
                           : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#2563eb')
                           : '#9ca3af',
+                        textDecoration: isSkipped ? 'line-through' : undefined,
                       }}
                     >
                       {label}
