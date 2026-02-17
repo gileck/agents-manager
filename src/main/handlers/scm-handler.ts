@@ -19,6 +19,36 @@ export interface ScmHandlerDeps {
 }
 
 export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps): void {
+  engine.registerHook('merge_pr', async (task: Task) => {
+    const ghLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', data?: Record<string, unknown>) =>
+      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data });
+
+    const artifacts = await deps.taskArtifactStore.getArtifactsForTask(task.id, 'pr');
+    if (artifacts.length === 0) {
+      await ghLog('merge_pr hook: no PR artifact found', 'error');
+      return;
+    }
+
+    const prUrl = artifacts[artifacts.length - 1].data.url as string;
+    const project = await deps.projectStore.getProject(task.projectId);
+    if (!project?.path) {
+      await ghLog(`merge_pr hook: project ${task.projectId} has no path`, 'error');
+      return;
+    }
+
+    const scmPlatform = deps.createScmPlatform(project.path);
+    await ghLog(`Merging PR: ${prUrl}`);
+    try {
+      await scmPlatform.mergePR(prUrl);
+      await ghLog('PR merged successfully', 'info', { url: prUrl });
+    } catch (err) {
+      await ghLog(`Failed to merge PR: ${err instanceof Error ? err.message : String(err)}`, 'error', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err; // Let pipeline engine log the hook failure
+    }
+  });
+
   engine.registerHook('push_and_create_pr', async (task: Task, transition: Transition, context: TransitionContext) => {
     const data = context.data as { branch?: string } | undefined;
     const branch = data?.branch;

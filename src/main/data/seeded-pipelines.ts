@@ -100,7 +100,8 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'pr_review', to: 'implementing', trigger: 'manual', label: 'Request Changes',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
-    { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Done' },
+    { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
+      hooks: [{ name: 'merge_pr' }] },
     // Agent outcome auto-transitions
     { from: 'planning', to: 'plan_review', trigger: 'agent', agentOutcome: 'plan_complete',
       hooks: [{ name: 'notify', params: { titleTemplate: 'Plan ready', bodyTemplate: 'Plan ready: {taskTitle}' } }] },
