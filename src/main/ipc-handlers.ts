@@ -55,10 +55,12 @@ export function registerIpcHandlers(services: AppServices): void {
   registerIpcHandler(IPC_CHANNELS.SETTINGS_GET, async (): Promise<AppSettings> => {
     const theme = getSetting('theme', 'system') as 'light' | 'dark' | 'system';
     const notificationsEnabled = getSetting('notifications_enabled', 'true') === 'true';
+    const currentProjectId = getSetting('current_project_id', '') || null;
 
     return {
       theme,
       notificationsEnabled,
+      currentProjectId,
     };
   });
 
@@ -69,11 +71,15 @@ export function registerIpcHandlers(services: AppServices): void {
     if (updates.notificationsEnabled !== undefined) {
       setSetting('notifications_enabled', updates.notificationsEnabled.toString());
     }
+    if (updates.currentProjectId !== undefined) {
+      setSetting('current_project_id', updates.currentProjectId ?? '');
+    }
 
     // Return updated settings
     return {
       theme: getSetting('theme', 'system') as 'light' | 'dark' | 'system',
       notificationsEnabled: getSetting('notifications_enabled', 'true') === 'true',
+      currentProjectId: getSetting('current_project_id', '') || null,
     };
   });
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -12,31 +12,28 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
 import { useTasks } from '../hooks/useTasks';
-import { useProjects } from '../hooks/useProjects';
 import { usePipelines, usePipeline } from '../hooks/usePipelines';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
+import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import type { Task, TaskFilter, TaskCreateInput } from '../../shared/types';
 
 export function TaskListPage() {
-  const [searchParams] = useSearchParams();
-  const projectIdParam = searchParams.get('projectId') ?? undefined;
+  const { currentProjectId, loading: projectLoading } = useCurrentProject();
 
   const [statusFilter, setStatusFilter] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('');
 
   const filter: TaskFilter = {};
-  if (projectIdParam) filter.projectId = projectIdParam;
+  if (currentProjectId) filter.projectId = currentProjectId;
   if (statusFilter) filter.status = statusFilter;
   if (assigneeFilter) filter.assignee = assigneeFilter;
 
   const { tasks, loading, error, refetch } = useTasks(filter);
-  const { projects } = useProjects();
   const { pipelines } = usePipelines();
   const navigate = useNavigate();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState<TaskCreateInput>({
-    projectId: '',
+  const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({
     pipelineId: '',
     title: '',
     description: '',
@@ -46,6 +43,7 @@ export function TaskListPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Selection state
+  const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -70,13 +68,18 @@ export function TaskListPage() {
     }
   };
 
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
   const handleCreate = async () => {
-    if (!form.title.trim() || !form.projectId || !form.pipelineId) return;
+    if (!form.title.trim() || !currentProjectId || !form.pipelineId) return;
     setCreating(true);
     try {
-      const task = await window.api.tasks.create(form);
+      const task = await window.api.tasks.create({ ...form, projectId: currentProjectId });
       setDialogOpen(false);
-      setForm({ projectId: '', pipelineId: '', title: '', description: '' });
+      setForm({ pipelineId: '', title: '', description: '' });
       await refetch();
       navigate(`/tasks/${task.id}`);
     } finally {
@@ -106,6 +109,7 @@ export function TaskListPage() {
       }
       setSelectedIds(new Set());
       setBulkDeleteOpen(false);
+      setSelectMode(false);
       await refetch();
     } finally {
       setBulkDeleting(false);
@@ -125,7 +129,7 @@ export function TaskListPage() {
     navigate(`/tasks/${newTask.id}`);
   };
 
-  if (loading) {
+  if (projectLoading || loading) {
     return (
       <div className="p-8">
         <p className="text-muted-foreground">Loading tasks...</p>
@@ -141,11 +145,34 @@ export function TaskListPage() {
     );
   }
 
+  if (!currentProjectId) {
+    return (
+      <div className="p-8">
+        <h1 className="text-3xl font-bold mb-4">Tasks</h1>
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground">No project selected. Go to Projects to select one.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Tasks</h1>
-        <Button onClick={() => setDialogOpen(true)}>New Task</Button>
+        <div className="flex items-center gap-2">
+          {tasks.length > 0 && (
+            <Button
+              variant={selectMode ? 'outline' : 'secondary'}
+              onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+            >
+              {selectMode ? 'Cancel' : 'Select'}
+            </Button>
+          )}
+          <Button onClick={() => setDialogOpen(true)}>New Task</Button>
+        </div>
       </div>
 
       <div className="flex gap-4 mb-4">
@@ -187,34 +214,37 @@ export function TaskListPage() {
       ) : (
         <div className="space-y-2">
           {/* Select all bar */}
-          <div className="flex items-center gap-3 px-4 py-2">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              ref={(el) => { if (el) el.indeterminate = someSelected; }}
-              onChange={toggleSelectAll}
-              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
-            />
-            <span className="text-sm text-muted-foreground">
-              {selectedIds.size > 0
-                ? `${selectedIds.size} of ${tasks.length} selected`
-                : 'Select all'}
-            </span>
-            {selectedIds.size > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setBulkDeleteOpen(true)}
-              >
-                Delete selected ({selectedIds.size})
-              </Button>
-            )}
-          </div>
+          {selectMode && (
+            <div className="flex items-center gap-3 px-4 py-2">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                onChange={toggleSelectAll}
+                className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+              />
+              <span className="text-sm text-muted-foreground">
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} of ${tasks.length} selected`
+                  : 'Select all'}
+              </span>
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setBulkDeleteOpen(true)}
+                >
+                  Delete selected ({selectedIds.size})
+                </Button>
+              )}
+            </div>
+          )}
 
           {tasks.map((task) => (
             <TaskRow
               key={task.id}
               task={task}
+              selectMode={selectMode}
               selected={selectedIds.has(task.id)}
               onToggleSelect={() => toggleSelect(task.id)}
               onClick={() => navigate(`/tasks/${task.id}`)}
@@ -231,19 +261,6 @@ export function TaskListPage() {
             <DialogTitle>New Task</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Project</Label>
-              <Select value={form.projectId} onValueChange={(v) => setForm({ ...form, projectId: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="space-y-2">
               <Label>Pipeline</Label>
               <Select value={form.pipelineId} onValueChange={(v) => setForm({ ...form, pipelineId: v })}>
@@ -278,7 +295,7 @@ export function TaskListPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button
               onClick={handleCreate}
-              disabled={creating || !form.title.trim() || !form.projectId || !form.pipelineId}
+              disabled={creating || !form.title.trim() || !form.pipelineId}
             >
               {creating ? 'Creating...' : 'Create'}
             </Button>
@@ -325,8 +342,9 @@ export function TaskListPage() {
   );
 }
 
-function TaskRow({ task, selected, onToggleSelect, onClick, onDelete, onDuplicate }: {
+function TaskRow({ task, selectMode, selected, onToggleSelect, onClick, onDelete, onDuplicate }: {
   task: { id: string; title: string; status: string; priority: number; assignee: string | null; pipelineId: string };
+  selectMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
   onClick: () => void;
@@ -338,13 +356,15 @@ function TaskRow({ task, selected, onToggleSelect, onClick, onDelete, onDuplicat
     <Card className={`cursor-pointer hover:bg-accent/50 transition-colors ${selected ? 'ring-2 ring-primary' : ''}`} onClick={onClick}>
       <CardContent className="py-3">
         <div className="flex items-center gap-3">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggleSelect}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
-          />
+          {selectMode && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+            />
+          )}
           <PipelineBadge status={task.status} pipeline={pipeline} />
           <Badge variant="outline">P{task.priority}</Badge>
           <span className="font-medium">{task.title}</span>

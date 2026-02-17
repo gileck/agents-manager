@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -8,10 +8,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
 import { useProjects } from '../hooks/useProjects';
+import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import type { ProjectCreateInput } from '../../shared/types';
 
 export function ProjectsPage() {
   const { projects, loading, error, refetch } = useProjects();
+  const { currentProjectId, setCurrentProjectId } = useCurrentProject();
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<ProjectCreateInput>({ name: '', description: '', path: '' });
@@ -21,13 +23,20 @@ export function ProjectsPage() {
     if (!form.name.trim()) return;
     setCreating(true);
     try {
-      await window.api.projects.create(form);
+      const project = await window.api.projects.create(form);
       setDialogOpen(false);
       setForm({ name: '', description: '', path: '' });
       await refetch();
+      await setCurrentProjectId(project.id);
+      navigate('/tasks');
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleSelect = async (projectId: string) => {
+    await setCurrentProjectId(projectId);
+    navigate('/tasks');
   };
 
   if (loading) {
@@ -64,8 +73,8 @@ export function ProjectsPage() {
           {projects.map((project) => (
             <Card
               key={project.id}
-              className="cursor-pointer hover:bg-accent/50 transition-colors"
-              onClick={() => navigate(`/projects/${project.id}`)}
+              className={`cursor-pointer hover:bg-accent/50 transition-colors ${project.id === currentProjectId ? 'ring-2 ring-primary' : ''}`}
+              onClick={() => handleSelect(project.id)}
             >
               <CardContent className="py-4">
                 <div className="flex items-center justify-between">
@@ -75,9 +84,18 @@ export function ProjectsPage() {
                       <div className="text-sm text-muted-foreground">{project.description}</div>
                     )}
                   </div>
-                  {project.path && (
-                    <span className="text-xs text-muted-foreground font-mono">{project.path}</span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {project.path && (
+                      <span className="text-xs text-muted-foreground font-mono">{project.path}</span>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}`); }}
+                    >
+                      Details
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

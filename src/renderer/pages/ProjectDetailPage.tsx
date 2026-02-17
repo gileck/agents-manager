@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -12,6 +12,7 @@ import { useIpc } from '@template/renderer/hooks/useIpc';
 import { useTasks } from '../hooks/useTasks';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { usePipeline } from '../hooks/usePipelines';
+import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import type { Project, ProjectUpdateInput } from '../../shared/types';
 
 export function ProjectDetailPage() {
@@ -46,9 +47,14 @@ export function ProjectDetailPage() {
     }
   };
 
+  const { currentProjectId, setCurrentProjectId } = useCurrentProject();
+
   const handleDelete = async () => {
     if (!id) return;
     await window.api.projects.delete(id);
+    if (currentProjectId === id) {
+      await setCurrentProjectId(null);
+    }
     navigate('/projects');
   };
 

@@ -9,6 +9,7 @@ import { TaskDetailPage } from './pages/TaskDetailPage';
 import { AgentRunPage } from './pages/AgentRunPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
+import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
 
 function AppRoutes() {
   const navigate = useNavigate();
@@ -43,5 +44,9 @@ function AppRoutes() {
 }
 
 export default function App() {
-  return <AppRoutes />;
+  return (
+    <CurrentProjectProvider>
+      <AppRoutes />
+    </CurrentProjectProvider>
+  );
 }

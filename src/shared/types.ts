@@ -18,6 +18,7 @@ export type ItemUpdateInput = Partial<ItemCreateInput>;
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   notificationsEnabled: boolean;
+  currentProjectId: string | null;
 }
 
 // Log types (kept for template infrastructure)
