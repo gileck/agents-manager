@@ -268,6 +268,10 @@ export function getMigrations(): Migration[] {
       name: '020_update_agent_pipeline_hooks_v2',
       sql: getUpdateAgentPipelineSql(),
     },
+    {
+      name: '021_update_agent_pipeline_retry',
+      sql: getUpdateAgentPipelineSql(),
+    },
   ];
 }
 

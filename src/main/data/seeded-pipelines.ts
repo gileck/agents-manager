@@ -124,6 +124,13 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' } }] },
     { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided',
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    // Auto-retry on agent failure (self-transitions gated by max_retries)
+    { from: 'planning', to: 'planning', trigger: 'agent', agentOutcome: 'failed',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' } }] },
+    { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'failed',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
     // Recovery: cancel agent phases back to open
     { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },
     { from: 'implementing', to: 'open', trigger: 'manual', label: 'Cancel Implementation' },

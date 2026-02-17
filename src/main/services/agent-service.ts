@@ -172,6 +172,9 @@ export class AgentService implements IAgentService {
           message: 'Worktree unlocked',
           data: { taskId },
         });
+
+        // Attempt failure transition (pipeline may retry via hooks)
+        await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
         return;
       }
 
@@ -250,6 +253,9 @@ export class AgentService implements IAgentService {
         }
       } else {
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
+
+        // Attempt failure transition (pipeline may retry via hooks)
+        await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
       }
 
       // Cleanup
