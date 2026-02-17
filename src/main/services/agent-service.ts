@@ -329,7 +329,17 @@ export class AgentService implements IAgentService {
         await gitLog(`Failed to collect diff: ${err instanceof Error ? err.message : String(err)}`, 'warning');
       }
 
-      // Push branch
+      // Push base branch so origin/main is up-to-date (avoids PR including unrelated commits)
+      await gitLog('Pushing base branch (main) to remote');
+      try {
+        await gitOps.push('main');
+        await gitLog('Base branch pushed successfully');
+      } catch (err) {
+        await gitLog(`Failed to push base branch: ${err instanceof Error ? err.message : String(err)}`, 'warning');
+        // Non-fatal: PR will still work, just may include extra commits
+      }
+
+      // Push task branch
       await gitLog('Pushing branch to remote: ' + branch);
       try {
         await gitOps.push(branch);
