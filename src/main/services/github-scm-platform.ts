@@ -26,21 +26,17 @@ export class GitHubScmPlatform implements IScmPlatform {
   }
 
   async createPR(params: CreatePRParams): Promise<PRInfo> {
-    const output = await this.gh([
+    // gh pr create outputs the PR URL to stdout
+    const url = await this.gh([
       'pr', 'create',
       '--title', params.title,
       '--body', params.body,
       '--head', params.head,
       '--base', params.base,
-      '--json', 'number,title,url',
     ]);
 
-    const data = JSON.parse(output);
-    return {
-      url: data.url,
-      number: data.number,
-      title: data.title,
-    };
+    const number = this.extractPRNumber(url);
+    return { url, number, title: params.title };
   }
 
   async mergePR(prUrl: string): Promise<void> {
