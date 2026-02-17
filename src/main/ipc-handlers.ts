@@ -273,9 +273,10 @@ export function registerIpcHandlers(services: AppServices): void {
       'SELECT category, severity, message, data, created_at FROM task_events WHERE task_id = ?'
     ).all(taskId) as { category: string; severity: string; message: string; data: string; created_at: number }[];
     for (const r of eventRows) {
+      const isAgentEvent = r.category === 'agent' || r.category === 'agent_debug';
       entries.push({
         timestamp: r.created_at,
-        source: 'event',
+        source: isAgentEvent ? 'agent_run' : 'event',
         severity: (r.severity as DebugTimelineEntry['severity']) || 'info',
         title: r.message,
         data: { category: r.category, ...safeParse(r.data) },

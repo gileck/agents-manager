@@ -310,7 +310,7 @@ export function TaskDetailPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="debugger">Debugger</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
         </TabsList>
@@ -413,7 +413,7 @@ export function TaskDetailPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="debugger">
+        <TabsContent value="timeline">
           <DebuggerPanel entries={debugTimeline ?? []} />
         </TabsContent>
 
@@ -813,6 +813,8 @@ function DebuggerPanel({ entries }: { entries: DebugTimelineEntry[] }) {
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(ALL_SOURCES));
   const [severityFilter, setSeverityFilter] = useState<Set<string>>(new Set(ALL_SEVERITIES));
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [sortNewest, setSortNewest] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   const toggleFilter = (set: Set<string>, value: string, setter: (s: Set<string>) => void) => {
     const next = new Set(set);
@@ -824,10 +826,44 @@ function DebuggerPanel({ entries }: { entries: DebugTimelineEntry[] }) {
     (e) => sourceFilter.has(e.source) && severityFilter.has(e.severity)
   );
 
+  const sorted = sortNewest
+    ? filtered
+    : [...filtered].reverse();
+
+  const handleCopyAll = () => {
+    const text = sorted.map((e) => {
+      const time = formatTime(e.timestamp);
+      const line = `${time} [${e.source}] [${e.severity}] ${e.title}`;
+      if (e.data) return `${line}\n${JSON.stringify(e.data, null, 2)}`;
+      return line;
+    }).join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
     <Card className="mt-4">
-      <CardHeader className="py-3">
-        <CardTitle className="text-base">Debug Timeline</CardTitle>
+      <CardHeader className="py-3 flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Timeline</CardTitle>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSortNewest((v) => !v)}
+          >
+            {sortNewest ? 'Newest first' : 'Oldest first'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopyAll}
+            disabled={sorted.length === 0}
+          >
+            {copied ? 'Copied!' : 'Copy All'}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {/* Filter bar */}
@@ -866,11 +902,11 @@ function DebuggerPanel({ entries }: { entries: DebugTimelineEntry[] }) {
         </div>
 
         {/* Timeline */}
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <p className="text-sm text-muted-foreground">No entries match the current filters.</p>
         ) : (
           <div className="space-y-0.5 max-h-[600px] overflow-y-auto">
-            {filtered.map((entry) => {
+            {sorted.map((entry) => {
               const stableIdx = entries.indexOf(entry);
               const expanded = expandedIds.has(stableIdx);
               return (
