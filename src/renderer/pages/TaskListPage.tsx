@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -33,11 +33,25 @@ export function TaskListPage() {
   const navigate = useNavigate();
 
   const [defaultPipelineId, setDefaultPipelineId] = useState<string | null>(null);
+  const [activeTaskIds, setActiveTaskIds] = useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     window.api.settings.get().then((s: AppSettings) => {
       setDefaultPipelineId(s.defaultPipelineId);
     });
+  }, []);
+
+  // Poll for active agent task IDs
+  useEffect(() => {
+    let mounted = true;
+    const fetchActive = () => {
+      window.api.agents.activeTaskIds().then((ids) => {
+        if (mounted) setActiveTaskIds(new Set(ids));
+      }).catch(() => {});
+    };
+    fetchActive();
+    const interval = setInterval(fetchActive, 5000);
+    return () => { mounted = false; clearInterval(interval); };
   }, []);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -257,6 +271,7 @@ export function TaskListPage() {
             <TaskRow
               key={task.id}
               task={task}
+              hasActiveAgent={activeTaskIds.has(task.id)}
               selectMode={selectMode}
               selected={selectedIds.has(task.id)}
               onToggleSelect={() => toggleSelect(task.id)}
@@ -355,8 +370,9 @@ export function TaskListPage() {
   );
 }
 
-function TaskRow({ task, selectMode, selected, onToggleSelect, onClick, onDelete, onDuplicate }: {
+function TaskRow({ task, hasActiveAgent, selectMode, selected, onToggleSelect, onClick, onDelete, onDuplicate }: {
   task: { id: string; title: string; status: string; priority: number; assignee: string | null; pipelineId: string };
+  hasActiveAgent: boolean;
   selectMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
@@ -377,6 +393,12 @@ function TaskRow({ task, selectMode, selected, onToggleSelect, onClick, onDelete
               onClick={(e) => e.stopPropagation()}
               className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
             />
+          )}
+          {hasActiveAgent && (
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            </span>
           )}
           <PipelineBadge status={task.status} pipeline={pipeline} />
           <Badge variant="outline">P{task.priority}</Badge>

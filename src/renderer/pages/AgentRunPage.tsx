@@ -4,7 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { useIpc } from '@template/renderer/hooks/useIpc';
-import type { AgentRun } from '../../shared/types';
+import type { AgentRun, Task } from '../../shared/types';
+
+const OUTCOME_MESSAGES: Record<string, string> = {
+  plan_complete: 'Plan is ready for review. Go to task to review and approve.',
+  pr_ready: 'PR has been created.',
+  needs_info: 'Agent needs more information.',
+  failed: 'Agent run failed. Go to task for recovery options.',
+};
 
 export function AgentRunPage() {
   const { runId } = useParams<{ runId: string }>();
@@ -12,6 +19,12 @@ export function AgentRunPage() {
   const { data: run, loading, error, refetch } = useIpc<AgentRun | null>(
     () => window.api.agents.get(runId!),
     [runId]
+  );
+
+  // Fetch associated task
+  const { data: associatedTask } = useIpc<Task | null>(
+    () => run?.taskId ? window.api.tasks.get(run.taskId) : Promise.resolve(null),
+    [run?.taskId]
   );
 
   const [streamOutput, setStreamOutput] = useState('');
@@ -93,11 +106,23 @@ export function AgentRunPage() {
   }
 
   const displayOutput = run.status === 'running' ? streamOutput : (run.output || streamOutput);
+  const outcomeMessage = run.outcome ? OUTCOME_MESSAGES[run.outcome] : null;
 
   return (
     <div className="p-8 flex flex-col" style={{ minHeight: 'calc(100vh - 4rem)' }}>
-      <Button variant="ghost" size="sm" className="mb-4 self-start" onClick={() => navigate(-1 as any)}>
-        &larr; Back
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mb-4 self-start"
+        onClick={() => {
+          if (associatedTask) {
+            navigate(`/tasks/${associatedTask.id}`);
+          } else {
+            navigate(-1 as any);
+          }
+        }}
+      >
+        &larr; {associatedTask ? `Back to ${associatedTask.title}` : 'Back'}
       </Button>
 
       <div className="flex items-center justify-between mb-4">
@@ -120,12 +145,36 @@ export function AgentRunPage() {
         </div>
       </div>
 
+      {/* Task context link */}
+      {associatedTask && (
+        <div className="mb-2">
+          <button
+            className="text-sm text-blue-500 hover:underline"
+            onClick={() => navigate(`/tasks/${associatedTask.id}`)}
+          >
+            Task: {associatedTask.title}
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-4 text-sm text-muted-foreground mb-4">
         <span>Started: {new Date(run.startedAt).toLocaleString()}</span>
         {run.completedAt && <span>Completed: {new Date(run.completedAt).toLocaleString()}</span>}
         {run.outcome && <span>Outcome: {run.outcome}</span>}
         {run.exitCode !== null && <span>Exit Code: {run.exitCode}</span>}
       </div>
+
+      {/* Outcome message after completion */}
+      {run.status !== 'running' && outcomeMessage && (
+        <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3">
+          <span className="text-sm">{outcomeMessage}</span>
+          {associatedTask && (
+            <Button size="sm" variant="outline" onClick={() => navigate(`/tasks/${associatedTask.id}`)}>
+              Go to Task
+            </Button>
+          )}
+        </div>
+      )}
 
       <Card className="flex-1 flex flex-col min-h-0">
         <CardHeader className="py-3">

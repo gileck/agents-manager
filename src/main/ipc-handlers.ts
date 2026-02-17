@@ -209,6 +209,11 @@ export function registerIpcHandlers(services: AppServices): void {
     return services.agentRunStore.getRun(runId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.AGENT_ACTIVE_TASK_IDS, async () => {
+    const runs = await services.agentRunStore.getActiveRuns();
+    return [...new Set(runs.map((r) => r.taskId))];
+  });
+
   // ============================================
   // Event Operations
   // ============================================

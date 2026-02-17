@@ -115,6 +115,10 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' } }] },
     { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided',
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    // Recovery: cancel agent phases back to open
+    { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },
+    { from: 'implementing', to: 'open', trigger: 'manual', label: 'Cancel Implementation' },
+    { from: 'implementing', to: 'plan_review', trigger: 'manual', label: 'Back to Plan Review' },
   ],
 };
 

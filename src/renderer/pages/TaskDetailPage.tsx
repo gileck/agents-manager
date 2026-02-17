@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -14,8 +15,11 @@ import { usePipeline } from '../hooks/usePipelines';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import type {
-  Transition, TaskEvent, TaskArtifact, AgentRun, TaskUpdateInput,
+  Transition, TaskEvent, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
 } from '../../shared/types';
+
+// Agent pipeline statuses that have specific bar rendering
+const AGENT_STATUSES = new Set(['open', 'planning', 'implementing', 'plan_review', 'pr_review', 'needs_info', 'done']);
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -43,16 +47,40 @@ export function TaskDetailPage() {
     [id]
   );
 
-  // Poll agent runs while any is running
-  const hasRunningAgent = agentRuns?.some((r) => r.status === 'running');
+  const { data: pendingPrompts, refetch: refetchPrompts } = useIpc<PendingPrompt[]>(
+    () => id ? window.api.prompts.list(id) : Promise.resolve([]),
+    [id, task?.status]
+  );
+
+  // Derived agent state
+  const hasRunningAgent = agentRuns?.some((r) => r.status === 'running') ?? false;
+  const activeRun = agentRuns?.find((r) => r.status === 'running') ?? null;
+  const lastRun = agentRuns?.[0] ?? null;
+  const isAgentPhase = task?.status === 'planning' || task?.status === 'implementing';
+  const isStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null;
+
+  // Poll while agent is running or while in needs_info
+  const shouldPoll = hasRunningAgent || task?.status === 'needs_info';
+
   useEffect(() => {
-    if (!hasRunningAgent) return;
+    if (!shouldPoll) return;
     const interval = setInterval(() => {
       refetchAgentRuns();
       refetch();
+      refetchTransitions();
+      refetchPrompts();
     }, 3000);
     return () => clearInterval(interval);
-  }, [hasRunningAgent, refetchAgentRuns, refetch]);
+  }, [shouldPoll, refetchAgentRuns, refetch, refetchTransitions, refetchPrompts]);
+
+  // Completion edge: full refresh when agent finishes
+  const prevHasRunning = useRef(hasRunningAgent);
+  useEffect(() => {
+    if (prevHasRunning.current && !hasRunningAgent) {
+      refetch(); refetchTransitions(); refetchAgentRuns(); refetchPrompts();
+    }
+    prevHasRunning.current = hasRunningAgent;
+  }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts]);
 
   const [tab, setTab] = useState('overview');
 
@@ -62,14 +90,28 @@ export function TaskDetailPage() {
       refetchAgentRuns();
     }
   }, [tab, refetchAgentRuns]);
+
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<TaskUpdateInput>({});
   const [saving, setSaving] = useState(false);
   const [transitioning, setTransitioning] = useState<string | null>(null);
-  const [startingAgent, setStartingAgent] = useState(false);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [stoppingAgent, setStoppingAgent] = useState(false);
+
+  // Prompt response state
+  const [promptResponse, setPromptResponse] = useState('');
+  const [responding, setResponding] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
+
+  // Auto-dismiss transition error after 15 seconds
+  useEffect(() => {
+    if (!transitionError) return;
+    const timer = setTimeout(() => setTransitionError(null), 15000);
+    return () => clearTimeout(timer);
+  }, [transitionError]);
 
   const openEdit = () => {
     if (task) {
@@ -98,14 +140,59 @@ export function TaskDetailPage() {
   const handleTransition = async (toStatus: string) => {
     if (!id) return;
     setTransitioning(toStatus);
+    setTransitionError(null);
     try {
       const result = await window.api.tasks.transition(id, toStatus);
       if (result.success) {
         await refetch();
         await refetchTransitions();
+        await refetchAgentRuns();
+        await refetchPrompts();
+      } else {
+        const msg = result.guardFailures?.map((g: { reason: string }) => g.reason).join('; ')
+          ?? result.error ?? 'Transition failed';
+        setTransitionError(msg);
       }
+    } catch (err) {
+      setTransitionError(err instanceof Error ? err.message : 'Connection error. Please try again.');
     } finally {
       setTransitioning(null);
+    }
+  };
+
+  const handleStopAgent = async () => {
+    if (!activeRun) return;
+    setStoppingAgent(true);
+    try {
+      await window.api.agents.stop(activeRun.id);
+      await refetchAgentRuns();
+      await refetch();
+      await refetchTransitions();
+    } catch (err) {
+      setTransitionError(err instanceof Error ? err.message : 'Failed to stop agent.');
+    } finally {
+      setStoppingAgent(false);
+    }
+  };
+
+  const handlePromptRespond = async (promptId: string) => {
+    setResponding(true);
+    setPromptError(null);
+    try {
+      const result = await window.api.prompts.respond(promptId, { answer: promptResponse });
+      if (!result) {
+        setPromptError('This prompt has already been answered.');
+      } else {
+        setPromptResponse('');
+      }
+      await refetchPrompts();
+      await refetch();
+      await refetchTransitions();
+      await refetchAgentRuns();
+    } catch (err) {
+      setPromptError(err instanceof Error ? err.message : 'Failed to submit response. Please try again.');
+    } finally {
+      setResponding(false);
     }
   };
 
@@ -155,13 +242,24 @@ export function TaskDetailPage() {
     );
   }
 
+  // Determine which transitions are "primary" (shown in the status bar)
+  // vs "secondary" (shown at bottom of overview)
+  const isAgentPipeline = AGENT_STATUSES.has(task.status);
+  const primaryTransitionTargets = getPrimaryTransitionTargets(task.status, isStuck);
+  const primaryTransitions = isAgentPipeline
+    ? (transitions ?? []).filter((t) => primaryTransitionTargets.has(t.to))
+    : (transitions ?? []); // Non-agent pipelines: all transitions in bar
+  const secondaryTransitions = isAgentPipeline
+    ? (transitions ?? []).filter((t) => !primaryTransitionTargets.has(t.to))
+    : [];
+
   return (
     <div className="p-8">
       <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1 as any)}>
         &larr; Back
       </Button>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <PipelineBadge status={task.status} pipeline={pipeline} />
           <h1 className="text-3xl font-bold">{task.title}</h1>
@@ -175,10 +273,41 @@ export function TaskDetailPage() {
         </div>
       </div>
 
+      {/* Status Action Bar */}
+      <StatusActionBar
+        task={task}
+        isAgentPipeline={isAgentPipeline}
+        hasRunningAgent={hasRunningAgent}
+        activeRun={activeRun}
+        lastRun={lastRun}
+        isStuck={isStuck}
+        primaryTransitions={primaryTransitions}
+        transitioning={transitioning}
+        stoppingAgent={stoppingAgent}
+        onTransition={handleTransition}
+        onStopAgent={handleStopAgent}
+        onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
+      />
+
+      {/* Transition Error Banner */}
+      {transitionError && (
+        <div
+          className="mb-4 rounded-md px-4 py-3 text-sm text-white flex items-center justify-between"
+          style={{ backgroundColor: '#dc2626' }}
+        >
+          <span>{transitionError}</span>
+          <button
+            className="ml-4 text-white hover:opacity-80 font-bold text-lg leading-none"
+            onClick={() => setTransitionError(null)}
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="transitions">Transitions</TabsTrigger>
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
@@ -227,32 +356,59 @@ export function TaskDetailPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="transitions">
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>Available Transitions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!transitions || transitions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No transitions available from current status.</p>
-              ) : (
-                <div className="flex gap-2 flex-wrap">
-                  {transitions.map((t) => (
+          {/* Pending Prompt UI (needs_info) */}
+          {task.status === 'needs_info' && pendingPrompts && pendingPrompts.length > 0 && (
+            <Card className="mt-4 border-amber-400">
+              <CardHeader className="py-3">
+                <CardTitle className="text-base text-amber-600">Agent needs more information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {pendingPrompts.filter((p) => p.status === 'pending').map((prompt) => (
+                  <div key={prompt.id} className="space-y-3">
+                    <div className="text-sm">
+                      {renderPromptQuestions(prompt.payload)}
+                    </div>
+                    <Textarea
+                      value={promptResponse}
+                      onChange={(e) => setPromptResponse(e.target.value)}
+                      placeholder="Type your response..."
+                      rows={3}
+                    />
+                    {promptError && (
+                      <p className="text-sm text-destructive">{promptError}</p>
+                    )}
                     <Button
-                      key={t.to}
-                      variant="outline"
-                      onClick={() => handleTransition(t.to)}
-                      disabled={transitioning !== null}
+                      onClick={() => handlePromptRespond(prompt.id)}
+                      disabled={responding || !promptResponse.trim()}
                     >
-                      {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+                      {responding ? 'Submitting...' : 'Submit Response'}
                     </Button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Secondary transitions at bottom of Overview */}
+          {secondaryTransitions.length > 0 && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-xs text-muted-foreground mb-2">Other actions:</p>
+              <div className="flex gap-2 flex-wrap">
+                {secondaryTransitions.map((t) => (
+                  <Button
+                    key={t.to}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleTransition(t.to)}
+                    disabled={transitioning !== null}
+                  >
+                    {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="events">
@@ -309,24 +465,7 @@ export function TaskDetailPage() {
         <TabsContent value="agents">
           <Card className="mt-4">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Agent Runs</CardTitle>
-                <Button
-                  size="sm"
-                  disabled={startingAgent}
-                  onClick={async () => {
-                    setStartingAgent(true);
-                    try {
-                      const run = await window.api.agents.start(id!, 'plan', 'claude-code');
-                      navigate(`/agents/${run.id}`);
-                    } finally {
-                      setStartingAgent(false);
-                    }
-                  }}
-                >
-                  {startingAgent ? 'Starting...' : 'Start Agent'}
-                </Button>
-              </div>
+              <CardTitle>Agent Runs</CardTitle>
             </CardHeader>
             <CardContent>
               {!agentRuns || agentRuns.length === 0 ? (
@@ -411,12 +550,18 @@ export function TaskDetailPage() {
           <DialogHeader>
             <DialogTitle>Delete Task</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground py-4">
-            Are you sure you want to delete &quot;{task.title}&quot;? This action cannot be undone.
-          </p>
+          {hasRunningAgent ? (
+            <p className="text-sm text-amber-600 py-4">
+              Stop the running agent before deleting this task.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4">
+              Are you sure you want to delete &quot;{task.title}&quot;? This action cannot be undone.
+            </p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting || hasRunningAgent}>
               {deleting ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
@@ -424,4 +569,233 @@ export function TaskDetailPage() {
       </Dialog>
     </div>
   );
+}
+
+/** Determine which transition targets are "primary" for the status action bar */
+function getPrimaryTransitionTargets(status: string, isStuck: boolean): Set<string> {
+  switch (status) {
+    case 'open':
+      return new Set(['planning', 'implementing']);
+    case 'planning':
+      return isStuck ? new Set(['open']) : new Set();
+    case 'implementing':
+      return isStuck ? new Set(['open', 'plan_review']) : new Set();
+    case 'plan_review':
+      return new Set(['implementing']);
+    case 'pr_review':
+      return new Set(['done', 'implementing']);
+    case 'needs_info':
+      return new Set();
+    case 'done':
+      return new Set();
+    default:
+      return new Set(); // Fallback: handled by isAgentPipeline=false path
+  }
+}
+
+/** Render prompt questions from payload */
+function renderPromptQuestions(payload: Record<string, unknown>) {
+  if (Array.isArray(payload.questions)) {
+    return (
+      <ul className="list-disc ml-4 space-y-1">
+        {payload.questions.map((q: unknown, i: number) => (
+          <li key={i}>{String(q)}</li>
+        ))}
+      </ul>
+    );
+  }
+  if (typeof payload.question === 'string') {
+    return <p>{payload.question}</p>;
+  }
+  return <p>The agent needs additional information to proceed.</p>;
+}
+
+/** Status Action Bar component */
+function StatusActionBar({
+  task,
+  isAgentPipeline,
+  hasRunningAgent,
+  activeRun,
+  lastRun,
+  isStuck,
+  primaryTransitions,
+  transitioning,
+  stoppingAgent,
+  onTransition,
+  onStopAgent,
+  onNavigateToRun,
+}: {
+  task: { status: string; prLink?: string | null };
+  isAgentPipeline: boolean;
+  hasRunningAgent: boolean;
+  activeRun: AgentRun | null;
+  lastRun: AgentRun | null;
+  isStuck: boolean;
+  primaryTransitions: Transition[];
+  transitioning: string | null;
+  stoppingAgent: boolean;
+  onTransition: (toStatus: string) => void;
+  onStopAgent: () => void;
+  onNavigateToRun: (runId: string) => void;
+}) {
+  if (!isAgentPipeline) {
+    // Fallback: render all transitions as standard buttons
+    if (!primaryTransitions.length) return null;
+    return (
+      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+        {primaryTransitions.map((t) => (
+          <Button
+            key={t.to}
+            onClick={() => onTransition(t.to)}
+            disabled={transitioning !== null}
+          >
+            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  const status = task.status;
+
+  // Open: show primary forward transitions
+  if (status === 'open') {
+    if (!primaryTransitions.length) return null;
+    return (
+      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+        {primaryTransitions.map((t) => (
+          <Button
+            key={t.to}
+            onClick={() => onTransition(t.to)}
+            disabled={transitioning !== null}
+          >
+            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  // Planning / Implementing with running agent
+  if ((status === 'planning' || status === 'implementing') && hasRunningAgent && activeRun) {
+    return (
+      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#22c55e' }}>
+        <span className="relative flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+        </span>
+        <span className="text-sm">
+          Agent running: {activeRun.mode} / {activeRun.agentType}
+        </span>
+        <button
+          className="text-sm text-blue-500 hover:underline ml-2"
+          onClick={() => onNavigateToRun(activeRun.id)}
+        >
+          View Output &rarr;
+        </button>
+        <div className="ml-auto">
+          <Button variant="destructive" size="sm" onClick={onStopAgent} disabled={stoppingAgent}>
+            {stoppingAgent ? 'Stopping...' : 'Stop Agent'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Planning / Implementing stuck (failed or no agent)
+  if ((status === 'planning' || status === 'implementing') && isStuck) {
+    return (
+      <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
+        <span className="text-sm font-medium" style={{ color: '#dc2626' }}>
+          Agent failed or not running
+        </span>
+        {lastRun && (
+          <button
+            className="text-sm text-blue-500 hover:underline"
+            onClick={() => onNavigateToRun(lastRun.id)}
+          >
+            View Last Run
+          </button>
+        )}
+        <div className="flex gap-2 ml-auto">
+          {primaryTransitions.map((t) => (
+            <Button
+              key={t.to}
+              variant="outline"
+              size="sm"
+              onClick={() => onTransition(t.to)}
+              disabled={transitioning !== null}
+            >
+              {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+            </Button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Plan Review
+  if (status === 'plan_review') {
+    return (
+      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+        <span className="text-sm">Review the plan, then:</span>
+        {primaryTransitions.map((t) => (
+          <Button
+            key={t.to}
+            onClick={() => onTransition(t.to)}
+            disabled={transitioning !== null}
+          >
+            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  // PR Review
+  if (status === 'pr_review') {
+    return (
+      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+        {task.prLink ? (
+          <span className="text-sm font-mono">{task.prLink}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground">PR not yet available</span>
+        )}
+        {primaryTransitions.map((t) => (
+          <Button
+            key={t.to}
+            variant={t.to === 'done' ? 'default' : 'outline'}
+            onClick={() => onTransition(t.to)}
+            disabled={transitioning !== null}
+          >
+            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  // Needs Info
+  if (status === 'needs_info') {
+    return (
+      <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#fffbeb', border: '1px solid #fbbf24' }}>
+        <span className="text-sm font-medium" style={{ color: '#d97706' }}>
+          Agent needs more information
+        </span>
+        <span className="text-xs text-muted-foreground">— respond below</span>
+      </div>
+    );
+  }
+
+  // Done
+  if (status === 'done') {
+    return (
+      <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac' }}>
+        <span style={{ color: '#16a34a' }}>&#10003;</span>
+        <span className="text-sm font-medium" style={{ color: '#16a34a' }}>Task complete</span>
+      </div>
+    );
+  }
+
+  return null;
 }
