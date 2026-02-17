@@ -313,11 +313,11 @@ export function registerIpcHandlers(services: AppServices): void {
 
     // 4. Agent runs
     const agentRows = db.prepare(
-      'SELECT mode, agent_type, status, exit_code, outcome, cost_input_tokens, cost_output_tokens, started_at FROM agent_runs WHERE task_id = ?'
-    ).all(taskId) as { mode: string; agent_type: string; status: string; exit_code: number | null; outcome: string | null; cost_input_tokens: number | null; cost_output_tokens: number | null; started_at: number }[];
+      'SELECT mode, agent_type, status, exit_code, outcome, cost_input_tokens, cost_output_tokens, started_at, completed_at FROM agent_runs WHERE task_id = ?'
+    ).all(taskId) as { mode: string; agent_type: string; status: string; exit_code: number | null; outcome: string | null; cost_input_tokens: number | null; cost_output_tokens: number | null; started_at: number; completed_at: number | null }[];
     for (const r of agentRows) {
       entries.push({
-        timestamp: r.started_at,
+        timestamp: r.completed_at ?? r.started_at,
         source: 'agent_run',
         severity: r.status === 'failed' ? 'error' : 'info',
         title: `Agent ${r.mode}/${r.agent_type}: ${r.status}`,

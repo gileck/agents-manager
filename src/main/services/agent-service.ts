@@ -190,7 +190,16 @@ export class AgentService implements IAgentService {
         });
         await this.tryOutcomeTransition(taskId, 'needs_info');
       } else if (result.exitCode === 0) {
-        await this.collectArtifacts(taskId, worktree.branch, result, gitOps, scmPlatform);
+        try {
+          await this.collectArtifacts(taskId, worktree.branch, result, gitOps, scmPlatform);
+        } catch (err) {
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'error',
+            message: `collectArtifacts failed: ${err instanceof Error ? err.message : String(err)}`,
+          }).catch(() => {});
+        }
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'completed', completedAt });
         if (result.outcome) {
           await this.tryOutcomeTransition(taskId, result.outcome);
