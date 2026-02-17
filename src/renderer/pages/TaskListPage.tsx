@@ -15,7 +15,7 @@ import { useTasks } from '../hooks/useTasks';
 import { usePipelines, usePipeline } from '../hooks/usePipelines';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
-import type { Task, TaskFilter, TaskCreateInput } from '../../shared/types';
+import type { Task, TaskFilter, TaskCreateInput, AppSettings } from '../../shared/types';
 
 export function TaskListPage() {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
@@ -31,6 +31,14 @@ export function TaskListPage() {
   const { tasks, loading, error, refetch } = useTasks(filter);
   const { pipelines } = usePipelines();
   const navigate = useNavigate();
+
+  const [defaultPipelineId, setDefaultPipelineId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    window.api.settings.get().then((s: AppSettings) => {
+      setDefaultPipelineId(s.defaultPipelineId);
+    });
+  }, []);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({
@@ -171,7 +179,12 @@ export function TaskListPage() {
               {selectMode ? 'Cancel' : 'Select'}
             </Button>
           )}
-          <Button onClick={() => setDialogOpen(true)}>New Task</Button>
+          <Button onClick={() => {
+            const prefill = (defaultPipelineId && pipelines.some((p) => p.id === defaultPipelineId))
+              ? defaultPipelineId : '';
+            setForm({ pipelineId: prefill, title: '', description: '' });
+            setDialogOpen(true);
+          }}>New Task</Button>
         </div>
       </div>
 

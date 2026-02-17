@@ -56,11 +56,13 @@ export function registerIpcHandlers(services: AppServices): void {
     const theme = getSetting('theme', 'system') as 'light' | 'dark' | 'system';
     const notificationsEnabled = getSetting('notifications_enabled', 'true') === 'true';
     const currentProjectId = getSetting('current_project_id', '') || null;
+    const defaultPipelineId = getSetting('default_pipeline_id', '') || null;
 
     return {
       theme,
       notificationsEnabled,
       currentProjectId,
+      defaultPipelineId,
     };
   });
 
@@ -74,12 +76,16 @@ export function registerIpcHandlers(services: AppServices): void {
     if (updates.currentProjectId !== undefined) {
       setSetting('current_project_id', updates.currentProjectId ?? '');
     }
+    if (updates.defaultPipelineId !== undefined) {
+      setSetting('default_pipeline_id', updates.defaultPipelineId ?? '');
+    }
 
     // Return updated settings
     return {
       theme: getSetting('theme', 'system') as 'light' | 'dark' | 'system',
       notificationsEnabled: getSetting('notifications_enabled', 'true') === 'true',
       currentProjectId: getSetting('current_project_id', '') || null,
+      defaultPipelineId: getSetting('default_pipeline_id', '') || null,
     };
   });
 

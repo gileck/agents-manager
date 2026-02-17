@@ -8,6 +8,7 @@ import { TaskListPage } from './pages/TaskListPage';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { AgentRunPage } from './pages/AgentRunPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { PipelinesPage } from './pages/PipelinesPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
 
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="tasks" element={<TaskListPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
         <Route path="agents/:runId" element={<AgentRunPage />} />
+        <Route path="pipelines" element={<PipelinesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
