@@ -11,6 +11,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { PipelinesPage } from './pages/PipelinesPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { Toaster } from './components/ui/toaster';
 
 function AppRoutes() {
   const navigate = useNavigate();
@@ -48,7 +50,10 @@ function AppRoutes() {
 export default function App() {
   return (
     <CurrentProjectProvider>
-      <AppRoutes />
+      <ErrorBoundary>
+        <AppRoutes />
+      </ErrorBoundary>
+      <Toaster />
     </CurrentProjectProvider>
   );
 }
