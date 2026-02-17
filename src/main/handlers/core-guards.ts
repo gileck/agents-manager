@@ -40,7 +40,9 @@ export function registerCoreGuards(engine: IPipelineEngine, db: Database.Databas
       "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status IN ('failed', 'cancelled')"
     ).get(task.id) as { count: number };
 
-    if (row.count >= max) {
+    // count includes the run that just failed; first failure = count 1.
+    // max: 3 means allow up to 3 retries (4 total attempts), so block when count > max.
+    if (row.count > max) {
       return { allowed: false, reason: `Max retries (${max}) reached — ${row.count} failed runs` };
     }
     return { allowed: true };

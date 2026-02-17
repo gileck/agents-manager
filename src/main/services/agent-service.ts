@@ -253,12 +253,9 @@ export class AgentService implements IAgentService {
         }
       } else {
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
-
-        // Attempt failure transition (pipeline may retry via hooks)
-        await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
       }
 
-      // Cleanup
+      // Cleanup — unlock before retry transition so the new agent can acquire the lock
       await worktreeManager.unlock(taskId);
       await this.taskEventLog.log({
         taskId,
@@ -267,6 +264,11 @@ export class AgentService implements IAgentService {
         message: 'Worktree unlocked',
         data: { taskId },
       });
+
+      // For failed runs, attempt failure transition (pipeline may retry via hooks)
+      if (result.exitCode !== 0) {
+        await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
+      }
 
       // Log completion event
       await this.taskEventLog.log({
@@ -311,7 +313,16 @@ export class AgentService implements IAgentService {
     const match = transitions.find((t) => t.agentOutcome === outcome);
     if (match) {
       const ctx: TransitionContext = { trigger: 'agent', data: { outcome, ...data } };
-      await this.pipelineEngine.executeTransition(task, match.to, ctx);
+      const result = await this.pipelineEngine.executeTransition(task, match.to, ctx);
+      if (!result.success) {
+        await this.taskEventLog.log({
+          taskId,
+          category: 'system',
+          severity: 'warning',
+          message: `Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? result.guardFailures?.map((g) => g.reason).join(', ')}`,
+          data: { outcome, toStatus: match.to, error: result.error, guardFailures: result.guardFailures },
+        });
+      }
     }
   }
 
