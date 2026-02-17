@@ -312,7 +312,7 @@ export function registerIpcHandlers(services: AppServices): void {
         source: 'transition',
         severity: 'info',
         title: `${r.from_status} → ${r.to_status} (${r.trigger})`,
-        data: { fromStatus: r.from_status, toStatus: r.to_status, guardResults: safeParse(r.guard_results) },
+        data: { fromStatus: r.from_status, toStatus: r.to_status, trigger: r.trigger, guardResults: safeParse(r.guard_results) },
       });
     }
 

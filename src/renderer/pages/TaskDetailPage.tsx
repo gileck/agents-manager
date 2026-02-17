@@ -280,6 +280,15 @@ export function TaskDetailPage() {
         </div>
       </div>
 
+      {/* Inline compact pipeline progress bar */}
+      {pipeline && (
+        <PipelineProgress
+          pipeline={pipeline}
+          currentStatus={task.status}
+          transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
+        />
+      )}
+
       {/* Status Action Bar — defer for agent pipelines until agentRuns loads */}
       {(!isAgentPipeline || agentRuns !== null) && (
         <StatusActionBar
@@ -487,7 +496,7 @@ export function TaskDetailPage() {
 
         <TabsContent value="pipeline">
           {pipeline ? (
-            <PipelineProgress
+            <PipelineVertical
               pipeline={pipeline}
               currentStatus={task.status}
               transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
@@ -1182,6 +1191,250 @@ function PipelineProgress({
                   </span>
                 </div>
               </React.Fragment>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Build a map of status details from transition entries */
+function buildStatusDetailsMap(
+  transitionEntries: DebugTimelineEntry[],
+): Map<string, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }> {
+  const sorted = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
+  const map = new Map<string, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }>();
+
+  for (let i = 0; i < sorted.length; i++) {
+    const entry = sorted[i];
+    const toStatus = entry.data?.toStatus as string | undefined;
+    if (!toStatus) continue;
+
+    const nextTimestamp = i + 1 < sorted.length ? sorted[i + 1].timestamp : undefined;
+    const duration = nextTimestamp != null ? nextTimestamp - entry.timestamp : undefined;
+
+    map.set(toStatus, {
+      timestamp: entry.timestamp,
+      trigger: entry.data?.trigger as string | undefined,
+      guardResults: entry.data?.guardResults,
+      duration,
+    });
+  }
+
+  return map;
+}
+
+/** Format a duration in ms to a human-readable string */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainSec = seconds % 60;
+  if (minutes < 60) return `${minutes}m ${remainSec}s`;
+  const hours = Math.floor(minutes / 60);
+  const remainMin = minutes % 60;
+  return `${hours}h ${remainMin}m`;
+}
+
+/** Vertical pipeline with collapsible step details */
+function PipelineVertical({
+  pipeline,
+  currentStatus,
+  transitionEntries,
+}: {
+  pipeline: import('../../shared/types').Pipeline;
+  currentStatus: string;
+  transitionEntries: DebugTimelineEntry[];
+}) {
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
+  const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
+  const statusDetailsMap = buildStatusDetailsMap(transitionEntries);
+
+  // Compute display path (same logic as PipelineProgress)
+  const sortedTransitions = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
+  const visitedStatuses: string[] = [];
+  for (const entry of sortedTransitions) {
+    const from = entry.data?.fromStatus as string | undefined;
+    const to = entry.data?.toStatus as string | undefined;
+    if (from && visitedStatuses.length === 0) visitedStatuses.push(from);
+    if (from && visitedStatuses[visitedStatuses.length - 1] !== from) visitedStatuses.push(from);
+    if (to) visitedStatuses.push(to);
+  }
+
+  let displayPath: string[];
+  let currentIndex: number;
+
+  if (visitedStatuses.length === 0) {
+    displayPath = computeHappyPath(pipeline);
+    currentIndex = displayPath.indexOf(currentStatus);
+    if (currentIndex === -1) {
+      displayPath = [currentStatus, ...computeHappyPath(pipeline).filter((s) => s !== currentStatus)];
+      currentIndex = 0;
+    }
+  } else {
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const s of visitedStatuses) {
+      if (!seen.has(s)) { seen.add(s); deduped.push(s); }
+    }
+    if (!seen.has(currentStatus)) {
+      deduped.push(currentStatus);
+      seen.add(currentStatus);
+    }
+    const future = projectForward(currentStatus, pipeline, seen);
+    displayPath = [...deduped, ...future];
+    currentIndex = displayPath.indexOf(currentStatus);
+  }
+
+  const toggleStep = (idx: number) => {
+    const next = new Set(expandedSteps);
+    if (next.has(idx)) next.delete(idx); else next.add(idx);
+    setExpandedSteps(next);
+  };
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="py-6">
+        <div className="flex flex-col">
+          {displayPath.map((statusName, i) => {
+            const isCompleted = i < currentIndex;
+            const isCurrent = i === currentIndex;
+            const isFuture = i > currentIndex;
+            const label = statusLabelMap.get(statusName) ?? statusName;
+            const details = statusDetailsMap.get(statusName);
+            const hasDetails = isCompleted || (isCurrent && details);
+            const expanded = expandedSteps.has(i);
+
+            // For current step, compute live duration
+            const currentDuration = isCurrent && details
+              ? Date.now() - details.timestamp
+              : undefined;
+
+            return (
+              <div key={statusName} className="flex">
+                {/* Left column: node + connector */}
+                <div className="flex flex-col items-center mr-4" style={{ width: 28 }}>
+                  {/* Node */}
+                  <div
+                    className="relative flex items-center justify-center rounded-full flex-shrink-0"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      backgroundColor: isCompleted ? '#22c55e' : isCurrent ? '#3b82f6' : '#d1d5db',
+                    }}
+                  >
+                    {isCompleted && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {isCurrent && (
+                      <>
+                        <span
+                          className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                          style={{ backgroundColor: '#3b82f6' }}
+                        />
+                        <span
+                          className="relative inline-flex rounded-full"
+                          style={{ width: 10, height: 10, backgroundColor: '#fff' }}
+                        />
+                      </>
+                    )}
+                    {isFuture && (
+                      <span
+                        className="rounded-full"
+                        style={{ width: 10, height: 10, backgroundColor: '#9ca3af' }}
+                      />
+                    )}
+                  </div>
+                  {/* Connector line */}
+                  {i < displayPath.length - 1 && (
+                    <div
+                      className="flex-1"
+                      style={{
+                        width: 2,
+                        minHeight: expanded ? 8 : 24,
+                        backgroundColor: i < currentIndex ? '#22c55e' : '#d1d5db',
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Right column: label + details */}
+                <div className={`flex-1 ${i < displayPath.length - 1 ? 'pb-2' : ''}`}>
+                  <div
+                    className={`flex items-center gap-2 py-1 rounded -mt-0.5 ${hasDetails ? 'cursor-pointer hover:bg-accent/50' : ''}`}
+                    style={{ minHeight: 28 }}
+                    onClick={() => hasDetails && toggleStep(i)}
+                  >
+                    <span
+                      className="text-sm font-medium"
+                      style={{
+                        color: isCompleted ? '#16a34a' : isCurrent ? '#2563eb' : '#9ca3af',
+                      }}
+                    >
+                      {label}
+                    </span>
+                    {hasDetails && (
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {expanded ? '\u25BC' : '\u25B6'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Expanded details */}
+                  {expanded && hasDetails && (
+                    <div className="ml-1 mt-1 mb-2 pl-3 border-l-2 text-xs space-y-1.5" style={{ borderColor: isCompleted ? '#22c55e' : '#3b82f6' }}>
+                      {isCompleted && details && (
+                        <>
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground">Arrived at:</span>
+                            <span className="font-mono">{formatTime(details.timestamp)}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground">Duration:</span>
+                            <span>{details.duration != null ? formatDuration(details.duration) : 'N/A'}</span>
+                          </div>
+                          {details.trigger && (
+                            <div className="flex gap-2 items-center">
+                              <span className="text-muted-foreground">Trigger:</span>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">{details.trigger}</Badge>
+                            </div>
+                          )}
+                          {details.guardResults && typeof details.guardResults === 'object' && Object.keys(details.guardResults as object).length > 0 && (
+                            <div>
+                              <span className="text-muted-foreground">Guard results:</span>
+                              <pre className="text-[11px] bg-muted p-2 rounded mt-1 overflow-x-auto max-h-[200px] overflow-y-auto">
+                                {JSON.stringify(details.guardResults, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {isCurrent && details && (
+                        <>
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground">Active since:</span>
+                            <span className="font-mono">{formatTime(details.timestamp)}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground">Duration so far:</span>
+                            <span>{currentDuration != null ? formatDuration(currentDuration) : 'N/A'}</span>
+                          </div>
+                          {details.trigger && (
+                            <div className="flex gap-2 items-center">
+                              <span className="text-muted-foreground">Trigger:</span>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">{details.trigger}</Badge>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
