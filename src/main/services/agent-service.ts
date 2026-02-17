@@ -18,6 +18,7 @@ import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentService } from '../interfaces/agent-service';
+import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
 
 export class AgentService implements IAgentService {
@@ -154,6 +155,21 @@ export class AgentService implements IAgentService {
         costInputTokens: result.costInputTokens,
         costOutputTokens: result.costOutputTokens,
       });
+
+      // Validate outcome payload
+      if (result.outcome) {
+        const validation = validateOutcomePayload(result.outcome, result.payload);
+        if (!validation.valid) {
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'warning',
+            message: `Invalid outcome payload: ${validation.error}`,
+            data: { outcome: result.outcome, error: validation.error },
+          });
+          // Don't block — still attempt transition (warn-and-proceed for v1)
+        }
+      }
 
       // Handle outcome
       if (result.outcome === 'needs_info') {

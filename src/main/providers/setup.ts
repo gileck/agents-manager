@@ -29,12 +29,12 @@ import { WorkflowService } from '../services/workflow-service';
 import { LocalGitOps } from '../services/local-git-ops';
 import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
-import { StubNotificationRouter } from '../services/stub-notification-router';
+import { DesktopNotificationRouter } from '../services/desktop-notification-router';
 import { ScriptedAgent, happyPlan } from '../agents/scripted-agent';
 import { ClaudeCodeAgent } from '../agents/claude-code-agent';
-import type { Task, Transition, TransitionContext, GuardResult, AgentMode } from '../../shared/types';
-import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import { sendToRenderer } from '@template/main/core/window';
+import { registerCoreGuards } from '../handlers/core-guards';
+import { registerAgentHandler } from '../handlers/agent-handler';
+import { registerNotificationHandler } from '../handlers/notification-handler';
 
 export interface AppServices {
   // Phase 1
@@ -65,44 +65,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, db);
 
   // Register built-in guards
-  pipelineEngine.registerGuard('has_pr', (task: Task): GuardResult => {
-    if (task.prLink) {
-      return { allowed: true };
-    }
-    return { allowed: false, reason: 'Task must have a PR link' };
-  });
-
-  pipelineEngine.registerGuard('dependencies_resolved', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown): GuardResult => {
-    const sqliteDb = dbRef as Database.Database;
-    const row = sqliteDb.prepare(`
-      SELECT COUNT(*) as count FROM task_dependencies td
-      JOIN tasks t ON t.id = td.depends_on_task_id
-      JOIN pipelines p ON p.id = t.pipeline_id
-      WHERE td.task_id = ?
-      AND t.status NOT IN (
-        SELECT json_extract(s.value, '$.name')
-        FROM pipelines p2, json_each(p2.statuses) s
-        WHERE p2.id = t.pipeline_id
-        AND json_extract(s.value, '$.isFinal') = 1
-      )
-    `).get(task.id) as { count: number };
-
-    if (row.count === 0) {
-      return { allowed: true };
-    }
-    return { allowed: false, reason: `${row.count} unresolved dependencies` };
-  });
-
-  pipelineEngine.registerGuard('no_running_agent', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown): GuardResult => {
-    const sqliteDb = dbRef as Database.Database;
-    const row = sqliteDb.prepare(
-      'SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status = ?'
-    ).get(task.id, 'running') as { count: number };
-    if (row.count > 0) {
-      return { allowed: false, reason: 'An agent is already running for this task' };
-    }
-    return { allowed: true };
-  });
+  registerCoreGuards(pipelineEngine, db);
 
   // Phase 2 stores
   const agentRunStore = new SqliteAgentRunStore(db);
@@ -114,7 +77,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const createGitOps = (cwd: string) => new LocalGitOps(cwd);
   const createWorktreeManager = (path: string) => new LocalWorktreeManager(path);
   const createScmPlatform = (path: string) => new GitHubScmPlatform(path);
-  const notificationRouter = new StubNotificationRouter();
+  const notificationRouter = new DesktopNotificationRouter();
 
   // Agent framework + adapters
   const agentFramework = new AgentFrameworkImpl();
@@ -135,35 +98,9 @@ export function createAppServices(db: Database.Database): AppServices {
     taskArtifactStore, agentService, createScmPlatform,
   );
 
-  // Register start_agent hook (must be after workflowService is created)
-  pipelineEngine.registerHook('start_agent', async (task: Task, transition: Transition) => {
-    const hookDef = transition.hooks?.find((h) => h.name === 'start_agent');
-    if (!hookDef?.params?.mode) {
-      throw new Error(`start_agent hook on transition ${transition.from} → ${transition.to} is missing required "mode" param`);
-    }
-    if (!hookDef.params.agentType) {
-      throw new Error(`start_agent hook on transition ${transition.from} → ${transition.to} is missing required "agentType" param`);
-    }
-    const mode = hookDef.params.mode as AgentMode;
-    const agentType = hookDef.params.agentType as string;
-    // Fire-and-forget: agent runs asynchronously via WorkflowService (logs activity)
-    workflowService.startAgent(task.id, mode, agentType, (chunk) => {
-      try {
-        sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, task.id, chunk);
-      } catch { /* window may be closed */ }
-    }).catch(async (err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      try {
-        await taskEventLog.log({
-          taskId: task.id,
-          category: 'system',
-          severity: 'error',
-          message: `start_agent hook failed: ${msg}`,
-          data: { error: msg, mode, agentType },
-        });
-      } catch { /* db may be closed during shutdown */ }
-    });
-  });
+  // Register hooks (must be after workflowService is created)
+  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
+  registerNotificationHandler(pipelineEngine, { notificationRouter });
 
   return {
     projectStore,
