@@ -5,6 +5,7 @@ import { Input } from '@template/renderer/components/ui/input';
 import { Label } from '@template/renderer/components/ui/label';
 import { Textarea } from '@template/renderer/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@template/renderer/components/ui/card';
+import type { Item } from '../../shared/types';
 
 export function ItemFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,7 +18,7 @@ export function ItemFormPage() {
 
   useEffect(() => {
     if (isEdit && id) {
-      window.api.items.get(id).then(item => {
+      window.api.items.get(id).then((item: Item | null) => {
         if (item) {
           setName(item.name);
           setDescription(item.description || '');

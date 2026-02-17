@@ -5,12 +5,6 @@ import App from './App';
 import { reportError } from './lib/error-handler';
 import './styles/globals.css';
 
-declare global {
-  interface Window {
-    api?: unknown;
-  }
-}
-
 window.addEventListener('error', (event) => {
   console.error('Renderer error event:', event.error || event.message);
   reportError(event.error || event.message, 'Uncaught error');

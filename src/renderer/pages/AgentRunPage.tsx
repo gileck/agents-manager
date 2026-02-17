@@ -52,7 +52,7 @@ export function AgentRunPage() {
       }
     });
 
-    return unsubscribe;
+    return () => { unsubscribe(); };
   }, [run?.taskId]);
 
   // Track scroll position to disable auto-scroll when user scrolls up

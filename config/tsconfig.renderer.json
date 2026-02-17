@@ -9,5 +9,5 @@
     "noEmit": true,
     "isolatedModules": true
   },
-  "include": ["../src/renderer/**/*", "../src/shared/**/*", "../src/preload/**/*", "../template/renderer/**/*", "../template/shared/**/*"]
+  "include": ["../src/renderer/**/*", "../src/shared/**/*", "../src/preload/**/*"]
 }

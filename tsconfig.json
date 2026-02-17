@@ -15,7 +15,8 @@
     "baseUrl": ".",
     "paths": {
       "@shared/*": ["src/shared/*"],
-      "@template/*": ["template/*"]
+      "@template/*": ["template/*"],
+      "@/*": ["template/renderer/*"]
     }
   },
   "exclude": ["node_modules", "dist", "dist-main"]

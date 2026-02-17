@@ -45,7 +45,7 @@ export function TaskListPage() {
   useEffect(() => {
     let mounted = true;
     const fetchActive = () => {
-      window.api.agents.activeTaskIds().then((ids) => {
+      window.api.agents.activeTaskIds().then((ids: string[]) => {
         if (mounted) setActiveTaskIds(new Set(ids));
       }).catch(() => {});
     };

@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@template/renderer/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@template/renderer/components/ui/card';
+import type { Item } from '../../shared/types';
 
 export function HomePage() {
   const [itemCount, setItemCount] = useState(0);
   const [version, setVersion] = useState('');
 
   useEffect(() => {
-    window.api.items.list().then(items => setItemCount(items.length));
+    window.api.items.list().then((items: Item[]) => setItemCount(items.length));
     window.api.app.getVersion().then(setVersion);
   }, []);
 
