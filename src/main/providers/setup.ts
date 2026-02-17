@@ -36,6 +36,8 @@ import { ClaudeCodeAgent } from '../agents/claude-code-agent';
 import { registerCoreGuards } from '../handlers/core-guards';
 import { registerAgentHandler } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
+import { registerPromptHandler } from '../handlers/prompt-handler';
+import { registerScmHandler } from '../handlers/scm-handler';
 
 export interface AppServices {
   db: Database.Database;
@@ -90,8 +92,9 @@ export function createAppServices(db: Database.Database): AppServices {
   // Agent service
   const agentService = new AgentService(
     agentFramework, agentRunStore, createWorktreeManager,
-    createGitOps, createScmPlatform, taskStore, projectStore, pipelineEngine,
+    taskStore, projectStore, pipelineEngine,
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
+    createGitOps,
   );
 
   // Workflow service
@@ -104,6 +107,11 @@ export function createAppServices(db: Database.Database): AppServices {
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
   registerNotificationHandler(pipelineEngine, { notificationRouter });
+  registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
+  registerScmHandler(pipelineEngine, {
+    projectStore, taskStore, taskArtifactStore, taskEventLog,
+    createWorktreeManager, createGitOps, createScmPlatform,
+  });
 
   return {
     db,

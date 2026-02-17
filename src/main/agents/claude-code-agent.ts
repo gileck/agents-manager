@@ -160,7 +160,7 @@ export class ClaudeCodeAgent implements IAgent {
       case 'plan':
         return `Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`;
       case 'implement':
-        return `Implement the changes for this task. Task: ${task.title}.${desc}`;
+        return `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`;
       case 'review':
         return `Review the changes for this task. Task: ${task.title}.${desc}`;
       default:

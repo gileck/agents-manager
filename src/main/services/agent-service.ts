@@ -8,8 +8,6 @@ import type {
 import type { IAgentFramework } from '../interfaces/agent-framework';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
-import type { IGitOps } from '../interfaces/git-ops';
-import type { IScmPlatform } from '../interfaces/scm-platform';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
@@ -28,8 +26,6 @@ export class AgentService implements IAgentService {
     private agentFramework: IAgentFramework,
     private agentRunStore: IAgentRunStore,
     private createWorktreeManager: (projectPath: string) => IWorktreeManager,
-    private createGitOps: (cwd: string) => IGitOps,
-    private createScmPlatform: (repoPath: string) => IScmPlatform,
     private taskStore: ITaskStore,
     private projectStore: IProjectStore,
     private pipelineEngine: IPipelineEngine,
@@ -50,8 +46,6 @@ export class AgentService implements IAgentService {
     const projectPath = project.path;
     if (!projectPath) throw new Error(`Project ${project.id} has no path configured`);
     const worktreeManager = this.createWorktreeManager(projectPath);
-    const gitOps = this.createGitOps(projectPath);
-    const scmPlatform = this.createScmPlatform(projectPath);
 
     // 2. Create agent run record
     const run = await this.agentRunStore.createRun({ taskId, agentType, mode });
@@ -117,7 +111,7 @@ export class AgentService implements IAgentService {
 
     // 7. Fire-and-forget agent execution in background
     const agent = this.agentFramework.getAgent(agentType);
-    const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, worktreeManager, gitOps, scmPlatform, agentType, onOutput);
+    const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, worktreeManager, agentType, onOutput);
     this.backgroundPromises.set(run.id, promise);
 
     // 8. Return run immediately (status: 'running')
@@ -133,8 +127,6 @@ export class AgentService implements IAgentService {
     phase: { id: string },
     worktree: { branch: string; path: string },
     worktreeManager: IWorktreeManager,
-    gitOps: IGitOps,
-    scmPlatform: IScmPlatform,
     agentType: string,
     onOutput?: (chunk: string) => void,
   ): Promise<void> {
@@ -209,29 +201,50 @@ export class AgentService implements IAgentService {
         }
       }
 
-      // Handle outcome
-      if (result.outcome === 'needs_info') {
-        await this.pendingPromptStore.createPrompt({
+      // Handle outcome — all outcomes go through the generic transition path.
+      // Side-effects (prompt creation, PR creation) are handled by hooks on the transition.
+      if (result.exitCode === 0) {
+        // Always create branch artifact for successful runs
+        await this.taskArtifactStore.createArtifact({
           taskId,
-          agentRunId: run.id,
-          promptType: 'needs_info',
-          payload: result.payload,
+          type: 'branch',
+          data: { branch: worktree.branch },
         });
-        await this.tryOutcomeTransition(taskId, 'needs_info');
-      } else if (result.exitCode === 0) {
-        try {
-          await this.collectArtifacts(taskId, worktree.branch, result, gitOps, scmPlatform);
-        } catch (err) {
-          await this.taskEventLog.log({
-            taskId,
-            category: 'agent',
-            severity: 'error',
-            message: `collectArtifacts failed: ${err instanceof Error ? err.message : String(err)}`,
-          }).catch(() => {});
-        }
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'completed', completedAt });
-        if (result.outcome) {
-          await this.tryOutcomeTransition(taskId, result.outcome);
+
+        // For pr_ready: verify there are actual commits before transitioning
+        let effectiveOutcome: string | undefined = result.outcome;
+        if (effectiveOutcome === 'pr_ready' && context.project?.path) {
+          try {
+            const gitOps = this.createGitOps(context.project.path);
+            const diffContent = await gitOps.diff('main', worktree.branch);
+            if (diffContent.trim().length === 0) {
+              await this.taskEventLog.log({
+                taskId,
+                category: 'agent',
+                severity: 'warning',
+                message: 'Agent reported pr_ready but no changes detected on branch — skipping transition',
+                data: { branch: worktree.branch },
+              });
+              effectiveOutcome = undefined;
+            }
+          } catch (err) {
+            await this.taskEventLog.log({
+              taskId,
+              category: 'agent',
+              severity: 'warning',
+              message: `Failed to verify branch diff: ${err instanceof Error ? err.message : String(err)}`,
+              data: { branch: worktree.branch },
+            });
+          }
+        }
+
+        if (effectiveOutcome) {
+          await this.tryOutcomeTransition(taskId, effectiveOutcome, {
+            agentRunId: run.id,
+            payload: result.payload,
+            branch: worktree.branch,
+          });
         }
       } else {
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
@@ -282,103 +295,16 @@ export class AgentService implements IAgentService {
     await this.pendingPromptStore.expirePromptsForRun(runId);
   }
 
-  private async tryOutcomeTransition(taskId: string, outcome: string): Promise<void> {
+  private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {
     const task = await this.taskStore.getTask(taskId);
     if (!task) return;
 
     const transitions = await this.pipelineEngine.getValidTransitions(task, 'agent');
     const match = transitions.find((t) => t.agentOutcome === outcome);
     if (match) {
-      const ctx: TransitionContext = { trigger: 'agent', data: { outcome } };
+      const ctx: TransitionContext = { trigger: 'agent', data: { outcome, ...data } };
       await this.pipelineEngine.executeTransition(task, match.to, ctx);
     }
   }
 
-  private async collectArtifacts(
-    taskId: string,
-    branch: string,
-    result: { outcome?: string; payload?: Record<string, unknown> },
-    gitOps: IGitOps,
-    scmPlatform: IScmPlatform,
-  ): Promise<void> {
-    const gitLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', data?: Record<string, unknown>) =>
-      this.taskEventLog.log({ taskId, category: 'git', severity, message, data });
-    const ghLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', data?: Record<string, unknown>) =>
-      this.taskEventLog.log({ taskId, category: 'github', severity, message, data });
-
-    // Always create branch artifact
-    await this.taskArtifactStore.createArtifact({
-      taskId,
-      type: 'branch',
-      data: { branch },
-    });
-    await gitLog('Created branch artifact', 'info', { branch });
-
-    if (result.outcome === 'pr_ready') {
-      // Collect diff
-      await gitLog('Collecting diff: main..' + branch);
-      try {
-        const diffContent = await gitOps.diff('main', branch);
-        await this.taskArtifactStore.createArtifact({
-          taskId,
-          type: 'diff',
-          data: { diff: diffContent },
-        });
-        await gitLog(`Diff collected (${diffContent.length} chars)`, diffContent.length === 0 ? 'warning' : 'info');
-      } catch (err) {
-        await gitLog(`Failed to collect diff: ${err instanceof Error ? err.message : String(err)}`, 'warning');
-      }
-
-      // Push base branch so origin/main is up-to-date (avoids PR including unrelated commits)
-      await gitLog('Pushing base branch (main) to remote');
-      try {
-        await gitOps.push('main');
-        await gitLog('Base branch pushed successfully');
-      } catch (err) {
-        await gitLog(`Failed to push base branch: ${err instanceof Error ? err.message : String(err)}`, 'warning');
-        // Non-fatal: PR will still work, just may include extra commits
-      }
-
-      // Push task branch
-      await gitLog('Pushing branch to remote: ' + branch);
-      try {
-        await gitOps.push(branch);
-        await gitLog('Branch pushed successfully');
-      } catch (err) {
-        await gitLog(`Failed to push branch: ${err instanceof Error ? err.message : String(err)}`, 'error', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return; // Can't create PR without pushing
-      }
-
-      // Create PR
-      await ghLog('Creating pull request');
-      try {
-        const task = await this.taskStore.getTask(taskId);
-        const prInfo = await scmPlatform.createPR({
-          title: task?.title ?? 'PR',
-          body: `Automated PR for task ${taskId}`,
-          head: branch,
-          base: 'main',
-        });
-
-        await this.taskArtifactStore.createArtifact({
-          taskId,
-          type: 'pr',
-          data: { url: prInfo.url, number: prInfo.number },
-        });
-
-        await this.taskStore.updateTask(taskId, {
-          prLink: prInfo.url,
-          branchName: branch,
-        });
-
-        await ghLog('PR created successfully', 'info', { url: prInfo.url, number: prInfo.number });
-      } catch (err) {
-        await ghLog(`Failed to create PR: ${err instanceof Error ? err.message : String(err)}`, 'error', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-  }
 }
