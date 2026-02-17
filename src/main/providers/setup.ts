@@ -94,6 +94,7 @@ export function createAppServices(db: Database.Database): AppServices {
     agentFramework, agentRunStore, createWorktreeManager,
     taskStore, projectStore, pipelineEngine,
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
+    createGitOps,
   );
 
   // Workflow service

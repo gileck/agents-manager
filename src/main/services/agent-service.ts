@@ -16,6 +16,7 @@ import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentService } from '../interfaces/agent-service';
+import type { IGitOps } from '../interfaces/git-ops';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
 
@@ -33,6 +34,7 @@ export class AgentService implements IAgentService {
     private taskArtifactStore: ITaskArtifactStore,
     private taskPhaseStore: ITaskPhaseStore,
     private pendingPromptStore: IPendingPromptStore,
+    private createGitOps: (cwd: string) => IGitOps,
   ) {}
 
   async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void): Promise<AgentRun> {
@@ -211,8 +213,36 @@ export class AgentService implements IAgentService {
           data: { branch: worktree.branch },
         });
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'completed', completedAt });
-        if (result.outcome) {
-          await this.tryOutcomeTransition(taskId, result.outcome, {
+
+        // Guard: verify branch has actual changes before transitioning to pr_ready
+        let effectiveOutcome: string | undefined = result.outcome;
+        if (effectiveOutcome === 'pr_ready') {
+          try {
+            const gitOps = this.createGitOps(worktree.path);
+            const diffContent = await gitOps.diff('main', worktree.branch);
+            if (diffContent.trim().length === 0) {
+              await this.taskEventLog.log({
+                taskId,
+                category: 'agent',
+                severity: 'warning',
+                message: 'Agent reported pr_ready but no changes detected on branch — skipping transition',
+                data: { branch: worktree.branch },
+              });
+              effectiveOutcome = undefined;
+            }
+          } catch (err) {
+            await this.taskEventLog.log({
+              taskId,
+              category: 'agent',
+              severity: 'warning',
+              message: `Failed to verify branch diff: ${err instanceof Error ? err.message : String(err)}`,
+              data: { branch: worktree.branch },
+            });
+          }
+        }
+
+        if (effectiveOutcome) {
+          await this.tryOutcomeTransition(taskId, effectiveOutcome, {
             agentRunId: run.id,
             payload: result.payload,
             branch: worktree.branch,

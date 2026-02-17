@@ -24,7 +24,7 @@ export class ClaudeCodeAgent implements IAgent {
     const query = await this.loadQuery();
 
     const prompt = this.buildPrompt(context);
-    const workdir = context.project?.path || context.workdir;
+    const workdir = context.workdir;
     const timeout = config.timeout || (context.mode === 'plan' ? 5 * 60 * 1000 : 10 * 60 * 1000);
 
     const abortController = new AbortController();
