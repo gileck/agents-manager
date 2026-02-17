@@ -275,21 +275,23 @@ export function TaskDetailPage() {
         </div>
       </div>
 
-      {/* Status Action Bar */}
-      <StatusActionBar
-        task={task}
-        isAgentPipeline={isAgentPipeline}
-        hasRunningAgent={hasRunningAgent}
-        activeRun={activeRun}
-        lastRun={lastRun}
-        isStuck={isStuck}
-        primaryTransitions={primaryTransitions}
-        transitioning={transitioning}
-        stoppingAgent={stoppingAgent}
-        onTransition={handleTransition}
-        onStopAgent={handleStopAgent}
-        onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
-      />
+      {/* Status Action Bar — defer for agent pipelines until agentRuns loads */}
+      {(!isAgentPipeline || agentRuns !== null) && (
+        <StatusActionBar
+          task={task}
+          isAgentPipeline={isAgentPipeline}
+          hasRunningAgent={hasRunningAgent}
+          activeRun={activeRun}
+          lastRun={lastRun}
+          isStuck={isStuck}
+          primaryTransitions={primaryTransitions}
+          transitioning={transitioning}
+          stoppingAgent={stoppingAgent}
+          onTransition={handleTransition}
+          onStopAgent={handleStopAgent}
+          onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
+        />
+      )}
 
       {/* Transition Error Banner */}
       {transitionError && (
