@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Textarea } from '../ui/textarea';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '../ui/select';
@@ -59,7 +60,8 @@ export function TaskCreateDialog({
           </div>
           <div className="space-y-2">
             <Label>Description</Label>
-            <Input
+            <Textarea
+              rows={3}
               value={form.description ?? ''}
               onChange={(e) => onFormChange({ ...form, description: e.target.value })}
               placeholder="Optional description"
