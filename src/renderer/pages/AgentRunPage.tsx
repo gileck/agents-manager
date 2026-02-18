@@ -28,8 +28,18 @@ export function AgentRunPage() {
   );
 
   const [streamOutput, setStreamOutput] = useState('');
+  const initializedFromDb = useRef(false);
   const outputRef = useRef<HTMLPreElement>(null);
   const shouldAutoScroll = useRef(true);
+
+  // Seed streamOutput from DB when loading a running agent (e.g. after page refresh)
+  useEffect(() => {
+    if (!run || initializedFromDb.current) return;
+    if (run.status === 'running' && run.output) {
+      setStreamOutput(run.output);
+    }
+    initializedFromDb.current = true;
+  }, [run]);
 
   // Poll for status updates while running
   useEffect(() => {

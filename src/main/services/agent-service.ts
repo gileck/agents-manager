@@ -147,11 +147,27 @@ export class AgentService implements IAgentService {
         data,
       }).catch(() => {}); // fire-and-forget
     };
+
+    // Buffer output and periodically flush to DB so it survives page refreshes
+    let outputBuffer = '';
+    const wrappedOnOutput = onOutput
+      ? (chunk: string) => {
+          outputBuffer += chunk;
+          onOutput(chunk);
+        }
+      : undefined;
+    const flushInterval = setInterval(() => {
+      if (outputBuffer) {
+        this.agentRunStore.updateRun(run.id, { output: outputBuffer }).catch(() => {});
+      }
+    }, 3000);
+
     try {
       let result;
       try {
-        result = await agent.execute(context, config, onOutput, onLog);
+        result = await agent.execute(context, config, wrappedOnOutput, onLog);
       } catch (err) {
+        clearInterval(flushInterval);
         const errorMsg = err instanceof Error ? err.message : String(err);
         const completedAt = now();
         await this.agentRunStore.updateRun(run.id, {
@@ -205,7 +221,7 @@ export class AgentService implements IAgentService {
 
         context.validationErrors = validation.output;
         try {
-          result = await agent.execute(context, config, onOutput, onLog);
+          result = await agent.execute(context, config, wrappedOnOutput, onLog);
         } catch (err) {
           result = { exitCode: 1, output: err instanceof Error ? err.message : String(err), outcome: 'failed' };
         }
@@ -224,6 +240,9 @@ export class AgentService implements IAgentService {
           });
         }
       }
+
+      // Stop periodic flushing and do a final flush with the complete result
+      clearInterval(flushInterval);
 
       // Update run
       const completedAt = now();
@@ -326,6 +345,7 @@ export class AgentService implements IAgentService {
         data: { agentRunId: run.id, exitCode: result.exitCode, outcome: result.outcome },
       });
     } finally {
+      clearInterval(flushInterval);
       this.backgroundPromises.delete(run.id);
     }
   }
