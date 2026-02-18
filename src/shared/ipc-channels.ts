@@ -60,6 +60,9 @@ export const IPC_CHANNELS = {
   // Artifact operations
   ARTIFACT_LIST: 'artifact:list',
 
+  // Task context entries
+  TASK_CONTEXT_ENTRIES: 'task:context-entries',
+
   // Debug timeline
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
 

@@ -16,7 +16,7 @@ import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import type {
   Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
-  DebugTimelineEntry, Worktree,
+  DebugTimelineEntry, Worktree, TaskContextEntry,
 } from '../../shared/types';
 
 // Agent pipeline statuses that have specific bar rendering
@@ -58,6 +58,11 @@ export function TaskDetailPage() {
     [id, task?.status]
   );
 
+  const { data: contextEntries, refetch: refetchContext } = useIpc<TaskContextEntry[]>(
+    () => id ? window.api.tasks.contextEntries(id) : Promise.resolve([]),
+    [id]
+  );
+
   // Derived agent state
   const hasRunningAgent = agentRuns?.some((r) => r.status === 'running') ?? false;
   const activeRun = agentRuns?.find((r) => r.status === 'running') ?? null;
@@ -82,18 +87,19 @@ export function TaskDetailPage() {
       refetchTransitions();
       refetchPrompts();
       refetchDebug();
+      refetchContext();
     }, 3000);
     return () => clearInterval(interval);
-  }, [shouldPoll, refetchAgentRuns, refetch, refetchTransitions, refetchPrompts, refetchDebug]);
+  }, [shouldPoll, refetchAgentRuns, refetch, refetchTransitions, refetchPrompts, refetchDebug, refetchContext]);
 
   // Completion edge: full refresh when agent finishes
   const prevHasRunning = useRef(hasRunningAgent);
   useEffect(() => {
     if (prevHasRunning.current && !hasRunningAgent) {
-      refetch(); refetchTransitions(); refetchAgentRuns(); refetchPrompts(); refetchDebug();
+      refetch(); refetchTransitions(); refetchAgentRuns(); refetchPrompts(); refetchDebug(); refetchContext();
     }
     prevHasRunning.current = hasRunningAgent;
-  }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug]);
+  }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
 
   const [tab, setTab] = useState('overview');
 
@@ -344,6 +350,7 @@ export function TaskDetailPage() {
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
+          <TabsTrigger value="context">Context</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
 
@@ -496,6 +503,25 @@ export function TaskDetailPage() {
                         </div>
                       </CardContent>
                     </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="context">
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Task Context</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!contextEntries || contextEntries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No context entries yet. Entries are added as agents complete their work.</p>
+              ) : (
+                <div className="space-y-3">
+                  {contextEntries.map((entry) => (
+                    <ContextEntryCard key={entry.id} entry={entry} />
                   ))}
                 </div>
               )}
@@ -920,6 +946,38 @@ function ArtifactCard({ artifact }: { artifact: TaskArtifact }) {
   );
 }
 
+const CONTEXT_SOURCE_COLORS: Record<string, string> = {
+  agent: '#3b82f6',
+  reviewer: '#f59e0b',
+  system: '#6b7280',
+  user: '#8b5cf6',
+};
+
+function ContextEntryCard({ entry }: { entry: TaskContextEntry }) {
+  const sourceColor = CONTEXT_SOURCE_COLORS[entry.source] ?? '#6b7280';
+  return (
+    <div className="rounded-md border px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span
+          className="px-2 py-0.5 rounded text-xs font-semibold text-white"
+          style={{ backgroundColor: sourceColor }}
+        >
+          {entry.source}
+        </span>
+        <span className="text-xs text-muted-foreground font-medium">
+          {entry.entryType.replace(/_/g, ' ')}
+        </span>
+        <span className="text-xs text-muted-foreground ml-auto">
+          {new Date(entry.createdAt).toLocaleString()}
+        </span>
+      </div>
+      <pre className="text-sm whitespace-pre-wrap break-words bg-muted p-3 rounded max-h-[400px] overflow-y-auto">
+        {entry.summary}
+      </pre>
+    </div>
+  );
+}
+
 const SOURCE_COLORS: Record<string, string> = {
   event: '#6b7280',
   activity: '#3b82f6',
@@ -931,6 +989,7 @@ const SOURCE_COLORS: Record<string, string> = {
   git: '#e44d26',
   github: '#a855f7',
   worktree: '#10b981',
+  context: '#14b8a6',
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -940,7 +999,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   error: '#ef4444',
 };
 
-const ALL_SOURCES = ['event', 'activity', 'transition', 'agent', 'phase', 'artifact', 'prompt', 'git', 'github'] as const;
+const ALL_SOURCES = ['event', 'activity', 'transition', 'agent', 'phase', 'artifact', 'prompt', 'git', 'github', 'context'] as const;
 const ALL_SEVERITIES = ['debug', 'info', 'warning', 'error'] as const;
 
 function formatTime(ts: number): string {

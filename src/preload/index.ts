@@ -9,6 +9,7 @@ import type {
   ActivityEntry, ActivityFilter,
   PendingPrompt,
   TaskArtifact,
+  TaskContextEntry,
   TransitionResult,
   DashboardStats,
   DebugTimelineEntry,
@@ -53,6 +54,7 @@ const IPC_CHANNELS = {
   PROMPT_LIST: 'prompt:list',
   PROMPT_RESPOND: 'prompt:respond',
   ARTIFACT_LIST: 'artifact:list',
+  TASK_CONTEXT_ENTRIES: 'task:context-entries',
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
   TASK_WORKTREE: 'task:worktree',
   DASHBOARD_STATS: 'dashboard:stats',
@@ -120,6 +122,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_TRANSITIONS, taskId),
     dependencies: (taskId: string): Promise<Task[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEPENDENCIES, taskId),
+    contextEntries: (taskId: string): Promise<TaskContextEntry[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_CONTEXT_ENTRIES, taskId),
     debugTimeline: (taskId: string): Promise<DebugTimelineEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEBUG_TIMELINE, taskId),
     worktree: (taskId: string): Promise<Worktree | null> =>

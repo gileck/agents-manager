@@ -35,7 +35,14 @@ export abstract class BaseClaudeAgent implements IAgent {
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     const query = await this.loadQuery();
 
-    const prompt = this.buildPrompt(context);
+    let prompt = this.buildPrompt(context);
+    if (context.taskContext?.length) {
+      const block = context.taskContext.map(e => {
+        const ts = new Date(e.createdAt).toISOString();
+        return `### [${e.source}] ${e.entryType} (${ts})\n${e.summary}`;
+      }).join('\n\n');
+      prompt = `## Task Context\n\n${block}\n\n---\n\n${prompt}`;
+    }
     const workdir = context.workdir;
     const timeout = this.getTimeout(context, config);
 

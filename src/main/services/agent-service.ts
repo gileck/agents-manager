@@ -17,6 +17,7 @@ import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IGitOps } from '../interfaces/git-ops';
+import type { ITaskContextStore } from '../interfaces/task-context-store';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
@@ -40,6 +41,7 @@ export class AgentService implements IAgentService {
     private taskPhaseStore: ITaskPhaseStore,
     private pendingPromptStore: IPendingPromptStore,
     private createGitOps: (cwd: string) => IGitOps,
+    private taskContextStore: ITaskContextStore,
   ) {}
 
   async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void): Promise<AgentRun> {
@@ -115,16 +117,8 @@ export class AgentService implements IAgentService {
       mode,
     };
 
-    // For request_changes mode, attach the most recent reviewer feedback
-    if (mode === 'request_changes') {
-      const previousRuns = await this.agentRunStore.getRunsForTask(taskId);
-      const lastReview = previousRuns.find(
-        r => r.agentType === 'pr-reviewer' && r.status === 'completed' && r.output
-      );
-      if (lastReview?.output) {
-        context.previousOutput = lastReview.output;
-      }
-    }
+    // Load accumulated task context entries for the agent
+    context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
 
     const config: AgentConfig = {};
 
@@ -284,6 +278,34 @@ export class AgentService implements IAgentService {
         }
       }
 
+      // Save context entry for successful runs
+      if (result.exitCode === 0) {
+        try {
+          const summary = this.extractContextSummary(result.output);
+          const entryType = this.getContextEntryType(agentType, context.mode, result.outcome);
+          const entryData: Record<string, unknown> = {};
+          if (agentType === 'pr-reviewer') {
+            entryData.verdict = result.outcome;
+            if (result.payload?.comments) {
+              entryData.comments = result.payload.comments;
+            }
+          }
+          await this.taskContextStore.addEntry({
+            taskId, agentRunId: run.id,
+            source: agentType === 'pr-reviewer' ? 'reviewer' : 'agent',
+            entryType, summary, data: entryData,
+          });
+        } catch (err) {
+          // Non-fatal — don't block pipeline on context entry failure
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'warning',
+            message: `Failed to save context entry: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
+      }
+
       // Handle outcome — all outcomes go through the generic transition path.
       // Side-effects (prompt creation, PR creation) are handled by hooks on the transition.
       if (result.exitCode === 0) {
@@ -397,6 +419,23 @@ export class AgentService implements IAgentService {
     return results.length === 0
       ? { passed: true, output: '' }
       : { passed: false, output: results.join('\n\n') };
+  }
+
+  private extractContextSummary(output: string): string {
+    const trimmed = output.trimEnd();
+    const match = trimmed.match(/## Summary\s*\n([\s\S]+)$/i);
+    if (match) return match[1].trim().slice(0, 2000);
+    return trimmed.slice(-500).trim();
+  }
+
+  private getContextEntryType(agentType: string, mode: AgentMode, outcome?: string): string {
+    if (agentType === 'pr-reviewer') return outcome === 'approved' ? 'review_approved' : 'review_feedback';
+    switch (mode) {
+      case 'plan': return 'plan_summary';
+      case 'implement': return 'implementation_summary';
+      case 'request_changes': return 'fix_summary';
+      default: return 'agent_output';
+    }
   }
 
   private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {

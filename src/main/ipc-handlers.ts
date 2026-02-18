@@ -260,6 +260,15 @@ export function registerIpcHandlers(services: AppServices): void {
   });
 
   // ============================================
+  // Task Context Entries
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.TASK_CONTEXT_ENTRIES, async (_, taskId: string) => {
+    validateId(taskId);
+    return services.taskContextStore.getEntriesForTask(taskId);
+  });
+
+  // ============================================
   // Debug Timeline
   // ============================================
 
@@ -369,6 +378,20 @@ export function registerIpcHandlers(services: AppServices): void {
         severity: 'info',
         title: `Prompt: ${r.prompt_type} (${r.status})`,
         data: { payload: safeParse(r.payload), response: safeParse(r.response) },
+      });
+    }
+
+    // 8. Task context entries
+    const contextRows = db.prepare(
+      'SELECT source, entry_type, summary, agent_run_id, created_at FROM task_context_entries WHERE task_id = ?'
+    ).all(taskId) as { source: string; entry_type: string; summary: string; agent_run_id: string | null; created_at: number }[];
+    for (const r of contextRows) {
+      entries.push({
+        timestamp: r.created_at,
+        source: 'context',
+        severity: 'info',
+        title: `Context: [${r.source}] ${r.entry_type}`,
+        data: { summary: r.summary.slice(0, 500), agentRunId: r.agent_run_id },
       });
     }
 

@@ -378,12 +378,32 @@ export interface PendingPromptCreateInput {
   resumeOutcome?: string;
 }
 
+export interface TaskContextEntry {
+  id: string;
+  taskId: string;
+  agentRunId: string | null;
+  source: string;
+  entryType: string;
+  summary: string;
+  data: Record<string, unknown>;
+  createdAt: number;
+}
+
+export interface TaskContextEntryCreateInput {
+  taskId: string;
+  agentRunId?: string;
+  source: string;
+  entryType: string;
+  summary: string;
+  data?: Record<string, unknown>;
+}
+
 export interface AgentContext {
   task: Task;
   project: Project;
   workdir: string;
   mode: AgentMode;
-  previousOutput?: string;
+  taskContext?: TaskContextEntry[];
   promptResponses?: Record<string, unknown>[];
   systemPrompt?: string;
   validationErrors?: string;
@@ -455,7 +475,7 @@ export interface Notification {
 
 export interface DebugTimelineEntry {
   timestamp: number;
-  source: 'event' | 'activity' | 'transition' | 'agent' | 'phase' | 'artifact' | 'prompt' | 'git' | 'github' | 'worktree';
+  source: 'event' | 'activity' | 'transition' | 'agent' | 'phase' | 'artifact' | 'prompt' | 'git' | 'github' | 'worktree' | 'context';
   severity: 'info' | 'warning' | 'error' | 'debug';
   title: string;
   data?: Record<string, unknown>;
