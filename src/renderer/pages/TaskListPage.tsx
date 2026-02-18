@@ -22,11 +22,13 @@ export function TaskListPage() {
 
   const [statusFilter, setStatusFilter] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('');
+  const [searchFilter, setSearchFilter] = useState('');
 
   const filter: TaskFilter = {};
   if (currentProjectId) filter.projectId = currentProjectId;
   if (statusFilter) filter.status = statusFilter;
   if (assigneeFilter) filter.assignee = assigneeFilter;
+  if (searchFilter) filter.search = searchFilter;
 
   const { tasks, loading, error, refetch } = useTasks(filter);
   const { pipelines } = usePipelines();
@@ -203,6 +205,15 @@ export function TaskListPage() {
       </div>
 
       <div className="flex gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <Label>Search:</Label>
+          <Input
+            className="w-64"
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            placeholder="Search tasks..."
+          />
+        </div>
         <div className="flex items-center gap-2">
           <Label>Status:</Label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
