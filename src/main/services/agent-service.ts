@@ -114,6 +114,18 @@ export class AgentService implements IAgentService {
       workdir: worktree.path,
       mode,
     };
+
+    // For request_changes mode, attach the most recent reviewer feedback
+    if (mode === 'request_changes') {
+      const previousRuns = await this.agentRunStore.getRunsForTask(taskId);
+      const lastReview = previousRuns.find(
+        r => r.agentType === 'pr-reviewer' && r.status === 'completed' && r.output
+      );
+      if (lastReview?.output) {
+        context.previousOutput = lastReview.output;
+      }
+    }
+
     const config: AgentConfig = {};
 
     // 7. Fire-and-forget agent execution in background

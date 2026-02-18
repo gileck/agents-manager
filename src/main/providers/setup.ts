@@ -30,9 +30,10 @@ import { WorkflowService } from '../services/workflow-service';
 import { LocalGitOps } from '../services/local-git-ops';
 import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
-import { DesktopNotificationRouter } from '../services/desktop-notification-router';
+import { StubNotificationRouter } from '../services/stub-notification-router';
 import { ScriptedAgent, happyPlan } from '../agents/scripted-agent';
 import { ClaudeCodeAgent } from '../agents/claude-code-agent';
+import { PrReviewerAgent } from '../agents/pr-reviewer-agent';
 import { registerCoreGuards } from '../handlers/core-guards';
 import { registerAgentHandler } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
@@ -82,11 +83,18 @@ export function createAppServices(db: Database.Database): AppServices {
   const createGitOps = (cwd: string) => new LocalGitOps(cwd);
   const createWorktreeManager = (path: string) => new LocalWorktreeManager(path);
   const createScmPlatform = (path: string) => new GitHubScmPlatform(path);
-  const notificationRouter = new DesktopNotificationRouter();
+  let notificationRouter: INotificationRouter;
+  try {
+    const { DesktopNotificationRouter } = require('../services/desktop-notification-router');
+    notificationRouter = new DesktopNotificationRouter();
+  } catch {
+    notificationRouter = new StubNotificationRouter();
+  }
 
   // Agent framework + adapters
   const agentFramework = new AgentFrameworkImpl();
   agentFramework.registerAgent(new ClaudeCodeAgent());
+  agentFramework.registerAgent(new PrReviewerAgent());
   agentFramework.registerAgent(new ScriptedAgent(happyPlan));
 
   // Agent service

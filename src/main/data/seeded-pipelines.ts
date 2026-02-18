@@ -114,6 +114,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [
         { name: 'push_and_create_pr' },
         { name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}' } },
+        { name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' } },
       ] },
     { from: 'implementing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
       hooks: [
@@ -132,6 +133,15 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'failed',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    // PR review agent outcomes
+    { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
+      hooks: [{ name: 'merge_pr' }] },
+    { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' } }] },
+    { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'failed',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' } }] },
     // Recovery: cancel agent phases back to open
     { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },
     { from: 'implementing', to: 'open', trigger: 'manual', label: 'Cancel Implementation' },
