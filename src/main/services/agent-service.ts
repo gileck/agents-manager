@@ -100,15 +100,16 @@ export class AgentService implements IAgentService {
       data: { taskId },
     });
 
-    // 5. Rebase worktree onto main so the branch includes latest changes
+    // 5. Rebase worktree onto origin/main so the branch only contains agent changes
     try {
       const gitOps = this.createGitOps(worktree.path);
-      await gitOps.rebase('main');
+      await gitOps.fetch('origin');
+      await gitOps.rebase('origin/main');
       await this.taskEventLog.log({
         taskId,
         category: 'worktree',
         severity: 'info',
-        message: 'Worktree rebased onto main',
+        message: 'Worktree rebased onto origin/main',
         data: { taskId },
       });
     } catch (err) {
@@ -117,7 +118,7 @@ export class AgentService implements IAgentService {
         taskId,
         category: 'worktree',
         severity: 'warning',
-        message: `Rebase onto main failed: ${errorMsg}`,
+        message: `Rebase onto origin/main failed: ${errorMsg}`,
         data: { taskId, error: errorMsg },
       });
     }

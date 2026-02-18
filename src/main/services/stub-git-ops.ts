@@ -7,6 +7,10 @@ export class StubGitOps implements IGitOps {
   private commits: Array<{ hash: string; message: string }> = [];
   private commitCounter = 0;
 
+  async fetch(_remote?: string): Promise<void> {
+    // no-op in stub
+  }
+
   async createBranch(name: string, _baseBranch?: string): Promise<void> {
     this.branches.push(name);
     this.currentBranch = name;
