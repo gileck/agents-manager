@@ -1,49 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Badge } from '../components/ui/badge';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '../components/ui/select';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from '../components/ui/dialog';
 import { useTasks } from '../hooks/useTasks';
-import { usePipelines, usePipeline } from '../hooks/usePipelines';
-import { PipelineBadge } from '../components/pipeline/PipelineBadge';
+import { usePipelines } from '../hooks/usePipelines';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
+import { TaskFilterBar, EMPTY_FILTERS } from '../components/tasks/TaskFilterBar';
+import { TaskSortControls } from '../components/tasks/TaskSortControls';
+import { TaskStatusSummary } from '../components/tasks/TaskStatusSummary';
+import { TaskEmptyState } from '../components/tasks/TaskEmptyState';
+import { TaskGroupedList } from '../components/tasks/TaskGroupedList';
+import { TaskCreateDialog } from '../components/tasks/TaskCreateDialog';
+import { TaskDeleteDialog, BulkDeleteDialog } from '../components/tasks/TaskDeleteDialogs';
+import { sortTasks, collectTags, buildPipelineMap } from '../components/tasks/task-helpers';
+import type { FilterState } from '../components/tasks/TaskFilterBar';
+import type { SortField, SortDirection, GroupBy } from '../components/tasks/task-helpers';
 import type { Task, TaskFilter, TaskCreateInput, AppSettings } from '../../shared/types';
 
 export function TaskListPage() {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
-
-  const [searchFilter, setSearchFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [assigneeFilter, setAssigneeFilter] = useState('');
-
-  const filter: TaskFilter = {};
-  if (currentProjectId) filter.projectId = currentProjectId;
-  if (searchFilter) filter.search = searchFilter;
-  if (statusFilter) filter.status = statusFilter;
-  if (assigneeFilter) filter.assignee = assigneeFilter;
-
-  const { tasks, loading, error, refetch } = useTasks(filter);
-  const { pipelines } = usePipelines();
   const navigate = useNavigate();
 
-  const [defaultPipelineId, setDefaultPipelineId] = useState<string | null>(null);
+  // Filters
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+
+  // Build backend filter from UI state
+  const taskFilter: TaskFilter = {};
+  if (currentProjectId) taskFilter.projectId = currentProjectId;
+  if (filters.search) taskFilter.search = filters.search;
+  if (filters.status) taskFilter.status = filters.status;
+  if (filters.assignee) taskFilter.assignee = filters.assignee;
+  if (filters.priority) taskFilter.priority = Number(filters.priority);
+  if (filters.pipelineId) taskFilter.pipelineId = filters.pipelineId;
+  if (filters.tag) taskFilter.tag = filters.tag;
+
+  const { tasks, loading, error, refetch } = useTasks(taskFilter);
+  const { pipelines } = usePipelines();
+
+  // Sort & group state
+  const [sortField, setSortField] = useState<SortField>('created');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [groupBy, setGroupBy] = useState<GroupBy>('none');
+
+  // Derived data
+  const pipelineMap = useMemo(() => buildPipelineMap(pipelines), [pipelines]);
+  const availableTags = useMemo(() => collectTags(tasks), [tasks]);
+  const sortedTasks = useMemo(() => sortTasks(tasks, sortField, sortDirection), [tasks, sortField, sortDirection]);
+  const allStatuses = useMemo(
+    () => pipelines.flatMap((p) => p.statuses).reduce<string[]>((acc, s) => {
+      if (!acc.includes(s.name)) acc.push(s.name);
+      return acc;
+    }, []),
+    [pipelines],
+  );
+
+  // Active agents
   const [activeTaskIds, setActiveTaskIds] = useState<Set<string>>(new Set());
-
-  React.useEffect(() => {
-    window.api.settings.get().then((s: AppSettings) => {
-      setDefaultPipelineId(s.defaultPipelineId);
-    });
-  }, []);
-
-  // Poll for active agent task IDs
   useEffect(() => {
     let mounted = true;
     const fetchActive = () => {
@@ -56,45 +71,21 @@ export function TaskListPage() {
     return () => { mounted = false; clearInterval(interval); };
   }, []);
 
+  // Create dialog
+  const [defaultPipelineId, setDefaultPipelineId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({
-    pipelineId: '',
-    title: '',
-    description: '',
-  });
+  const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '' });
   const [creating, setCreating] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  // Selection state
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
+  useEffect(() => {
+    window.api.settings.get().then((s: AppSettings) => setDefaultPipelineId(s.defaultPipelineId));
+  }, []);
 
-  const allSelected = tasks.length > 0 && selectedIds.size === tasks.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < tasks.length;
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(tasks.map((t) => t.id)));
-    }
-  };
-
-  const exitSelectMode = () => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
+  const openCreateDialog = () => {
+    const prefill = (defaultPipelineId && pipelines.some((p) => p.id === defaultPipelineId))
+      ? defaultPipelineId : '';
+    setForm({ pipelineId: prefill, title: '', description: '' });
+    setDialogOpen(true);
   };
 
   const handleCreate = async () => {
@@ -111,26 +102,49 @@ export function TaskListPage() {
     }
   };
 
+  // Delete
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
       await window.api.tasks.delete(deleteTarget.id);
       setDeleteTarget(null);
-      selectedIds.delete(deleteTarget.id);
-      setSelectedIds(new Set(selectedIds));
+      const next = new Set(selectedIds);
+      next.delete(deleteTarget.id);
+      setSelectedIds(next);
       await refetch();
     } finally {
       setDeleting(false);
     }
   };
 
+  // Selection
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const allSelected = tasks.length > 0 && selectedIds.size === tasks.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < tasks.length;
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? new Set() : new Set(tasks.map((t) => t.id)));
+  };
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
+
   const handleBulkDelete = async () => {
     setBulkDeleting(true);
     try {
-      for (const id of selectedIds) {
-        await window.api.tasks.delete(id);
-      }
+      for (const id of selectedIds) await window.api.tasks.delete(id);
       setSelectedIds(new Set());
       setBulkDeleteOpen(false);
       setSelectMode(false);
@@ -153,105 +167,93 @@ export function TaskListPage() {
     navigate(`/tasks/${newTask.id}`);
   };
 
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+
+  // Loading / error / no project states
   if (projectLoading || loading) {
-    return (
-      <div className="p-8">
-        <p className="text-muted-foreground">Loading tasks...</p>
-      </div>
-    );
+    return <div className="p-8"><p className="text-muted-foreground">Loading tasks...</p></div>;
   }
-
   if (error) {
-    return (
-      <div className="p-8">
-        <p className="text-destructive">Error: {error}</p>
-      </div>
-    );
+    return <div className="p-8"><p className="text-destructive">Error: {error}</p></div>;
   }
-
   if (!currentProjectId) {
     return (
       <div className="p-8">
         <h1 className="text-3xl font-bold mb-4">Tasks</h1>
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">No project selected. Go to Projects to select one.</p>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="py-8 text-center">
+          <p className="text-muted-foreground">No project selected. Go to Projects to select one.</p>
+        </CardContent></Card>
       </div>
     );
   }
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-bold">Tasks</h1>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mr-2">
+            <span>Group:</span>
+            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)}>
+              <SelectTrigger className="w-28 h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+                <SelectItem value="priority">Priority</SelectItem>
+                <SelectItem value="pipeline">Pipeline</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mr-2">
+            <span>Sort:</span>
+            <TaskSortControls
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSortFieldChange={setSortField}
+              onSortDirectionToggle={() => setSortDirection((d) => d === 'asc' ? 'desc' : 'asc')}
+            />
+          </div>
           {tasks.length > 0 && (
             <Button
               variant={selectMode ? 'outline' : 'secondary'}
+              size="sm"
               onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
             >
               {selectMode ? 'Cancel' : 'Select'}
             </Button>
           )}
-          <Button onClick={() => {
-            const prefill = (defaultPipelineId && pipelines.some((p) => p.id === defaultPipelineId))
-              ? defaultPipelineId : '';
-            setForm({ pipelineId: prefill, title: '', description: '' });
-            setDialogOpen(true);
-          }}>New Task</Button>
+          <Button size="sm" onClick={openCreateDialog}>New Task</Button>
         </div>
       </div>
 
-      <div className="flex gap-4 mb-4 items-center">
-        <div className="flex items-center gap-2">
-          <Label>Search:</Label>
-          <Input
-            className="w-60"
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            placeholder="Search by title or description..."
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label>Status:</Label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="All" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">All</SelectItem>
-              {/* Show known statuses from pipelines */}
-              {pipelines.flatMap((p) => p.statuses).reduce<string[]>((acc, s) => {
-                if (!acc.includes(s.name)) acc.push(s.name);
-                return acc;
-              }, []).map((name) => (
-                <SelectItem key={name} value={name}>{name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Label>Assignee:</Label>
-          <Input
-            className="w-40"
-            value={assigneeFilter}
-            onChange={(e) => setAssigneeFilter(e.target.value)}
-            placeholder="Filter..."
-          />
-        </div>
+      {/* Filter bar */}
+      <div className="mb-4">
+        <TaskFilterBar
+          filters={filters}
+          onFiltersChange={setFilters}
+          statuses={allStatuses}
+          pipelines={pipelines}
+          tags={availableTags}
+        />
       </div>
 
-      {tasks.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">No tasks found.</p>
-          </CardContent>
-        </Card>
+      {/* Status summary */}
+      <div className="mb-4">
+        <TaskStatusSummary tasks={sortedTasks} pipelineMap={pipelineMap} />
+      </div>
+
+      {/* Task list */}
+      {sortedTasks.length === 0 ? (
+        <TaskEmptyState
+          hasFilters={hasActiveFilters}
+          onClearFilters={() => setFilters(EMPTY_FILTERS)}
+          onCreateTask={openCreateDialog}
+        />
       ) : (
-        <div className="space-y-2">
-          {/* Select all bar */}
+        <>
           {selectMode && (
             <div className="flex items-center gap-3 px-4 py-2">
               <input
@@ -262,180 +264,54 @@ export function TaskListPage() {
                 className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
               />
               <span className="text-sm text-muted-foreground">
-                {selectedIds.size > 0
-                  ? `${selectedIds.size} of ${tasks.length} selected`
-                  : 'Select all'}
+                {selectedIds.size > 0 ? `${selectedIds.size} of ${tasks.length} selected` : 'Select all'}
               </span>
               {selectedIds.size > 0 && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setBulkDeleteOpen(true)}
-                >
+                <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
                   Delete selected ({selectedIds.size})
                 </Button>
               )}
             </div>
           )}
 
-          {tasks.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              hasActiveAgent={activeTaskIds.has(task.id)}
-              selectMode={selectMode}
-              selected={selectedIds.has(task.id)}
-              onToggleSelect={() => toggleSelect(task.id)}
-              onClick={() => navigate(`/tasks/${task.id}`)}
-              onDelete={() => setDeleteTarget(task)}
-              onDuplicate={() => handleDuplicate(task)}
-            />
-          ))}
-        </div>
+          <TaskGroupedList
+            tasks={sortedTasks}
+            groupBy={groupBy}
+            pipelineMap={pipelineMap}
+            activeTaskIds={activeTaskIds}
+            selectMode={selectMode}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onClickTask={(id) => navigate(`/tasks/${id}`)}
+            onDeleteTask={setDeleteTarget}
+            onDuplicateTask={handleDuplicate}
+          />
+        </>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Task</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Pipeline</Label>
-              <Select value={form.pipelineId} onValueChange={(v) => setForm({ ...form, pipelineId: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select pipeline" />
-                </SelectTrigger>
-                <SelectContent>
-                  {pipelines.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Title</Label>
-              <Input
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="Task title"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Input
-                value={form.description ?? ''}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handleCreate}
-              disabled={creating || !form.title.trim() || !form.pipelineId}
-            >
-              {creating ? 'Creating...' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Task</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground py-4">
-            Are you sure you want to delete &quot;{deleteTarget?.title}&quot;? This action cannot be undone.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Deleting...' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Delete Confirmation Dialog */}
-      <Dialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open) setBulkDeleteOpen(false); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete {selectedIds.size} Tasks</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground py-4">
-            Are you sure you want to delete {selectedIds.size} task{selectedIds.size > 1 ? 's' : ''}? This action cannot be undone.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
-              {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} task${selectedIds.size > 1 ? 's' : ''}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Dialogs */}
+      <TaskCreateDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        pipelines={pipelines}
+        form={form}
+        onFormChange={setForm}
+        onCreate={handleCreate}
+        creating={creating}
+      />
+      <TaskDeleteDialog
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        deleting={deleting}
+      />
+      <BulkDeleteDialog
+        open={bulkDeleteOpen}
+        count={selectedIds.size}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDelete}
+        deleting={bulkDeleting}
+      />
     </div>
-  );
-}
-
-function TaskRow({ task, hasActiveAgent, selectMode, selected, onToggleSelect, onClick, onDelete, onDuplicate }: {
-  task: { id: string; title: string; status: string; priority: number; assignee: string | null; pipelineId: string };
-  hasActiveAgent: boolean;
-  selectMode: boolean;
-  selected: boolean;
-  onToggleSelect: () => void;
-  onClick: () => void;
-  onDelete: () => void;
-  onDuplicate: () => void;
-}) {
-  const { pipeline } = usePipeline(task.pipelineId);
-  return (
-    <Card className={`cursor-pointer hover:bg-accent/50 transition-colors ${selected ? 'ring-2 ring-primary' : ''}`} onClick={onClick}>
-      <CardContent className="py-3">
-        <div className="flex items-center gap-3">
-          {selectMode && (
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={onToggleSelect}
-              onClick={(e) => e.stopPropagation()}
-              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
-            />
-          )}
-          {hasActiveAgent && (
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
-            </span>
-          )}
-          <PipelineBadge status={task.status} pipeline={pipeline} />
-          <Badge variant="outline">P{task.priority}</Badge>
-          <span className="font-medium">{task.title}</span>
-          <div className="flex items-center gap-2 ml-auto">
-            {task.assignee && (
-              <span className="text-sm text-muted-foreground">{task.assignee}</span>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
-            >
-              Duplicate
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            >
-              Delete
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
