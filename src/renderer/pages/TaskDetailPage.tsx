@@ -373,7 +373,14 @@ export function TaskDetailPage() {
                 {task.prLink && (
                   <>
                     <span className="text-sm text-muted-foreground">PR</span>
-                    <span className="text-sm font-mono">{task.prLink}</span>
+                    <a
+                      href={task.prLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-500 hover:underline break-all"
+                    >
+                      {task.prLink}
+                    </a>
                   </>
                 )}
 
@@ -831,7 +838,14 @@ function StatusActionBar({
     return (
       <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
         {task.prLink ? (
-          <span className="text-sm font-mono">{task.prLink}</span>
+          <a
+            href={task.prLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-blue-500 hover:underline break-all"
+          >
+            {task.prLink}
+          </a>
         ) : (
           <span className="text-sm text-muted-foreground animate-pulse">Creating PR...</span>
         )}
