@@ -75,6 +75,7 @@ export abstract class BaseClaudeAgent implements IAgent {
           abortController,
           permissionMode: 'bypassPermissions',
           allowDangerouslySkipPermissions: true,
+          model: config.model,
         },
       })) {
         messageCount++;

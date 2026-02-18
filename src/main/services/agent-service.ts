@@ -120,7 +120,9 @@ export class AgentService implements IAgentService {
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
 
-    const config: AgentConfig = {};
+    const config: AgentConfig = {
+      model: context.project.config?.model as string | undefined,
+    };
 
     // 7. Fire-and-forget agent execution in background
     const agent = this.agentFramework.getAgent(agentType);
