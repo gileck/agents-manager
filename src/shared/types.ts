@@ -172,6 +172,7 @@ export interface TaskFilter {
   assignee?: string;
   parentTaskId?: string | null;
   tag?: string;
+  search?: string;
 }
 
 // Task dependency
