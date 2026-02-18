@@ -36,6 +36,16 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       return;
     }
 
+    // Remove worktree before merge so --delete-branch can clean up the local branch
+    const worktreeManager = deps.createWorktreeManager(project.path);
+    try {
+      await worktreeManager.unlock(task.id);
+      await worktreeManager.delete(task.id);
+      await ghLog('Worktree removed before merge', 'info', { taskId: task.id });
+    } catch (err) {
+      await ghLog(`Worktree cleanup before merge failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
+    }
+
     const scmPlatform = deps.createScmPlatform(project.path);
     await ghLog(`Merging PR: ${prUrl}`);
     try {
