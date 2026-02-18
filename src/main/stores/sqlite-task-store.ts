@@ -89,6 +89,11 @@ export class SqliteTaskStore implements ITaskStore {
       conditions.push("EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)");
       values.push(filter.tag);
     }
+    if (filter?.search) {
+      conditions.push("(title LIKE ? OR description LIKE ?)");
+      const pattern = `%${filter.search}%`;
+      values.push(pattern, pattern);
+    }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const rows = this.db.prepare(`SELECT * FROM tasks ${where} ORDER BY created_at DESC`).all(...values) as TaskRow[];

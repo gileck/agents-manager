@@ -172,6 +172,8 @@ export interface TaskFilter {
   assignee?: string;
   parentTaskId?: string | null;
   tag?: string;
+  /** Free-text search across title and description (case-insensitive substring match) */
+  search?: string;
 }
 
 // Task dependency

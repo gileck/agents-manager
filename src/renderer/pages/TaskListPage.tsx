@@ -20,11 +20,13 @@ import type { Task, TaskFilter, TaskCreateInput, AppSettings } from '../../share
 export function TaskListPage() {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
 
+  const [searchFilter, setSearchFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('');
 
   const filter: TaskFilter = {};
   if (currentProjectId) filter.projectId = currentProjectId;
+  if (searchFilter) filter.search = searchFilter;
   if (statusFilter) filter.status = statusFilter;
   if (assigneeFilter) filter.assignee = assigneeFilter;
 
@@ -202,7 +204,16 @@ export function TaskListPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 mb-4">
+      <div className="flex gap-4 mb-4 items-center">
+        <div className="flex items-center gap-2">
+          <Label>Search:</Label>
+          <Input
+            className="w-60"
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            placeholder="Search by title or description..."
+          />
+        </div>
         <div className="flex items-center gap-2">
           <Label>Status:</Label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
