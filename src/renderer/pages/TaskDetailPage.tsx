@@ -570,7 +570,8 @@ export function TaskDetailPage() {
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Input
+              <Textarea
+                rows={3}
                 value={editForm.description ?? ''}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
               />

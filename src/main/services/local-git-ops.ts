@@ -69,6 +69,10 @@ export class LocalGitOps implements IGitOps {
     return entries;
   }
 
+  async rebase(onto: string): Promise<void> {
+    await this.git(['rebase', onto]);
+  }
+
   async getCurrentBranch(): Promise<string> {
     return this.git(['rev-parse', '--abbrev-ref', 'HEAD']);
   }

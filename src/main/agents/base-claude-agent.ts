@@ -64,8 +64,7 @@ export abstract class BaseClaudeAgent implements IAgent {
       onOutput?.(chunk);
     };
 
-    log(`Starting agent run: mode=${context.mode}, workdir=${workdir}, timeout=${timeout}ms`);
-    log(`Prompt: ${prompt.slice(0, 200)}`);
+    log(`Starting agent run: mode=${context.mode}, workdir=${workdir}, timeout=${timeout}ms, model=${config.model ?? 'default'}`);
 
     try {
       for await (const message of query({
@@ -81,22 +80,18 @@ export abstract class BaseClaudeAgent implements IAgent {
         messageCount++;
         const msg = message as any;
 
-        log(`Message #${messageCount}: type="${message.type}" | keys: ${Object.keys(message).join(', ')}`);
-
         if (message.type === 'assistant') {
           const content = msg.message?.content ?? [];
-          log(`  assistant content blocks: ${content.length}`);
           for (const block of content) {
-            log(`  block type="${block.type}" ${block.type === 'text' ? `text_length=${block.text.length}` : block.type === 'tool_use' ? `tool="${block.name}"` : ''}`);
             if ('text' in block && typeof block.text === 'string') {
               emit(block.text + '\n');
             } else if (block.type === 'tool_use') {
               const input = JSON.stringify(block.input ?? {});
+              log(`Tool: ${block.name} | Input: ${input.slice(0, 300)}${input.length > 300 ? '...' : ''}`);
               emit(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 500)}${input.length > 500 ? '...' : ''}\n`);
             }
           }
         } else if (message.type === 'result') {
-          log(`  result subtype="${msg.subtype}" result_length=${msg.result?.length ?? 0}`);
           if (msg.subtype !== 'success') {
             isError = true;
             errorMessage = msg.errors?.join('\n') || 'Agent execution failed';
@@ -104,8 +99,6 @@ export abstract class BaseClaudeAgent implements IAgent {
           costInputTokens = msg.usage?.input_tokens;
           costOutputTokens = msg.usage?.output_tokens;
         } else {
-          const json = JSON.stringify(message);
-          log(`  UNHANDLED type="${message.type}" payload(${json.length} chars): ${json.slice(0, 500)}`);
           if (msg.message?.content) {
             for (const block of msg.message.content) {
               if ('text' in block && typeof block.text === 'string') {
@@ -118,8 +111,6 @@ export abstract class BaseClaudeAgent implements IAgent {
             emit(`[${message.type}] ${msg.result}\n`);
           }
         }
-
-        log(`  resultText total length: ${resultText.length}`);
       }
     } catch (err) {
       isError = true;
@@ -134,8 +125,6 @@ export abstract class BaseClaudeAgent implements IAgent {
     const outcome = this.inferOutcome(context.mode, exitCode, resultText);
 
     log(`Run complete: messages=${messageCount}, exitCode=${exitCode}, outcome=${outcome}, output_length=${resultText.length}`);
-    log(`Output first 300 chars: ${resultText.slice(0, 300)}`);
-    log(`Output last 300 chars: ${resultText.slice(-300)}`);
 
     const output = resultText || errorMessage || '';
     return this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens);

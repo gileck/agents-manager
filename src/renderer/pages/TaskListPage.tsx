@@ -4,6 +4,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
@@ -323,7 +324,8 @@ export function TaskListPage() {
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Input
+              <Textarea
+                rows={3}
                 value={form.description ?? ''}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder="Optional description"

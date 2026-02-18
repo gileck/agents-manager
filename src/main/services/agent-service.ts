@@ -100,7 +100,29 @@ export class AgentService implements IAgentService {
       data: { taskId },
     });
 
-    // 5. Log event
+    // 5. Rebase worktree onto main so the branch includes latest changes
+    try {
+      const gitOps = this.createGitOps(worktree.path);
+      await gitOps.rebase('main');
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'info',
+        message: 'Worktree rebased onto main',
+        data: { taskId },
+      });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'warning',
+        message: `Rebase onto main failed: ${errorMsg}`,
+        data: { taskId, error: errorMsg },
+      });
+    }
+
+    // 6. Log event
     await this.taskEventLog.log({
       taskId,
       category: 'agent',

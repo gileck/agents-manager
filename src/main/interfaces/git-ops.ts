@@ -8,5 +8,6 @@ export interface IGitOps {
   diff(fromRef: string, toRef?: string): Promise<string>;
   commit(message: string): Promise<string>;
   log(count?: number): Promise<GitLogEntry[]>;
+  rebase(onto: string): Promise<void>;
   getCurrentBranch(): Promise<string>;
 }
