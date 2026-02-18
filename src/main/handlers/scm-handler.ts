@@ -112,15 +112,6 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       return;
     }
 
-    // Push base branch so origin/main is up-to-date
-    await gitLog('Pushing base branch (main) to remote');
-    try {
-      await gitOps.push('main');
-      await gitLog('Base branch pushed successfully');
-    } catch (err) {
-      await gitLog(`Failed to push base branch: ${err instanceof Error ? err.message : String(err)}`, 'warning');
-    }
-
     // Push task branch
     await gitLog('Pushing branch to remote: ' + branch);
     try {
