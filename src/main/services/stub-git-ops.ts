@@ -45,6 +45,10 @@ export class StubGitOps implements IGitOps {
     }));
   }
 
+  async rebase(_onto: string): Promise<void> {
+    // no-op in stub
+  }
+
   async getCurrentBranch(): Promise<string> {
     return this.currentBranch;
   }
