@@ -4,7 +4,7 @@ import type { IPipelineStore } from '../../src/main/interfaces/pipeline-store';
 import type { ITaskStore } from '../../src/main/interfaces/task-store';
 import type { ITaskEventLog } from '../../src/main/interfaces/task-event-log';
 import type { IActivityLog } from '../../src/main/interfaces/activity-log';
-import type { IPipelineEngine } from '../../src/main/interfaces/pipeline-engine';
+import type { IPipelineEngine as _IPipelineEngine } from '../../src/main/interfaces/pipeline-engine';
 import type { IAgentRunStore } from '../../src/main/interfaces/agent-run-store';
 import type { ITaskArtifactStore } from '../../src/main/interfaces/task-artifact-store';
 import type { ITaskPhaseStore } from '../../src/main/interfaces/task-phase-store';

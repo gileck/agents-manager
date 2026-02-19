@@ -46,7 +46,7 @@ describe('Hook Execution', () => {
 
   it('should call hook on transition', async () => {
     const hookCalled = vi.fn();
-    ctx.pipelineEngine.registerHook('on_start', async (task, transition, context) => {
+    ctx.pipelineEngine.registerHook('on_start', async (task, transition, _context) => {
       hookCalled(task.id, transition.to);
     });
 

@@ -5,7 +5,7 @@ import type { BadgeProps } from '../ui/badge';
 import { PipelineBadge } from '../pipeline/PipelineBadge';
 import { GitPullRequest } from 'lucide-react';
 import { TaskItemMenu } from './TaskItemMenu';
-import { PRIORITY_LABELS, formatRelativeTimestamp } from './task-helpers';
+import { formatRelativeTimestamp } from './task-helpers';
 import type { Task, Pipeline } from '../../../shared/types';
 
 const PRIORITY_VARIANTS: Record<number, NonNullable<BadgeProps['variant']>> = {

@@ -5,6 +5,7 @@ exports.setUpdateInterval = setUpdateInterval;
 exports.clearUpdateInterval = clearUpdateInterval;
 const electron_1 = require("electron");
 const window_1 = require("./window");
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let mainWindow = null;
 let updateInterval = null;
 function initializeApp(config = {}) {

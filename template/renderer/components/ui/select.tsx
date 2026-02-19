@@ -28,7 +28,7 @@ function useSelectContext() {
   return context;
 }
 
-function Select({ value, onValueChange, children, disabled, className }: SelectProps) {
+function Select({ value, onValueChange, children, disabled: _disabled, className }: SelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
 
   return (

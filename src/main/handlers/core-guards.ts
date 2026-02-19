@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { Task, Transition, TransitionContext, GuardResult } from '../../shared/types';
 
-export function registerCoreGuards(engine: IPipelineEngine, db: Database.Database): void {
+export function registerCoreGuards(engine: IPipelineEngine, _db: Database.Database): void {
   engine.registerGuard('has_pr', (task: Task): GuardResult => {
     if (task.prLink) {
       return { allowed: true };

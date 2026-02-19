@@ -174,7 +174,7 @@ describe('CLI Integration', () => {
     });
 
     it('requireProject should throw with project list when no match', async () => {
-      const project = await ctx.projectStore.createProject({
+      const _project = await ctx.projectStore.createProject({
         name: 'Listed Project',
         path: '/tmp/listed',
       });

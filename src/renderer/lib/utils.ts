@@ -81,7 +81,7 @@ export function stripAnsi(str: string): string {
 }
 
 // Format hour to 12-hour time string
-function formatHour(hour: number): string {
+function _formatHour(hour: number): string {
   const period = hour >= 12 ? 'PM' : 'AM';
   const h = hour % 12 || 12;
   return `${h}:00 ${period}`;
@@ -103,8 +103,8 @@ export function formatCronSchedule(cron: string): string {
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                      'July', 'August', 'September', 'October', 'November', 'December'];
+  const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
 
   // Parse minute
   const min = minute === '*' ? 0 : parseInt(minute, 10);

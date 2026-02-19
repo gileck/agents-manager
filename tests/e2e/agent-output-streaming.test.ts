@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
 import { AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
-import type { AgentRunResult } from '../../src/shared/types';
+import type { AgentRunResult as _AgentRunResult } from '../../src/shared/types';
 
 describe('Agent Output Streaming', () => {
   let ctx: TestContext;

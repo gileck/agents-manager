@@ -39,7 +39,7 @@ interface TaskFilterBarProps {
 }
 
 function useDebouncedCallback(callback: (value: string) => void, delay: number) {
-  const timerRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => { clearTimeout(timerRef.current); }, []);
   return (value: string) => {
     clearTimeout(timerRef.current);

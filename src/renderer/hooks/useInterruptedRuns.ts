@@ -12,7 +12,7 @@ export function useInterruptedRuns() {
     const unsubscribe = window.api.on.agentInterruptedRuns((runs) => {
       setInterruptedRuns(runs);
     });
-    return unsubscribe;
+    return () => { unsubscribe(); };
   }, []);
 
   const dismiss = () => setInterruptedRuns([]);
