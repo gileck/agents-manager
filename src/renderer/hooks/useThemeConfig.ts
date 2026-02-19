@@ -3,6 +3,7 @@ import type { ThemeConfig, ThemeColors } from '../../shared/types';
 import { DEFAULT_THEME_CONFIG, COLOR_VAR_MAP, THEME_PRESETS } from '../theme-presets';
 
 const STYLE_ID = 'theme-overrides';
+const SAVE_DEBOUNCE_MS = 300;
 
 /**
  * Generates CSS variable override rules from a ThemeConfig.
@@ -60,6 +61,23 @@ export function useThemeConfig() {
   const [isLoaded, setIsLoaded] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * Debounce-persist a theme config to settings via IPC.
+   * Cancels any pending save so only the latest config is written.
+   */
+  const debounceSave = useCallback((config: ThemeConfig) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await window.api.settings.update({ themeConfig: JSON.stringify(config) });
+      } catch (err) {
+        console.error('Failed to save theme config:', err);
+      }
+    }, SAVE_DEBOUNCE_MS);
+  }, []);
+
   // Load saved config on mount
   useEffect(() => {
     async function load() {
@@ -86,19 +104,8 @@ export function useThemeConfig() {
   const setThemeConfig = useCallback((config: ThemeConfig) => {
     setThemeConfigState(config);
     applyStyleOverrides(config);
-
-    // Debounce save to avoid excessive IPC calls during rapid color adjustments
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        await window.api.settings.update({ themeConfig: JSON.stringify(config) });
-      } catch (err) {
-        console.error('Failed to save theme config:', err);
-      }
-    }, 300);
-  }, []);
+    debounceSave(config);
+  }, [debounceSave]);
 
   /**
    * Apply a preset theme by name.
@@ -125,12 +132,16 @@ export function useThemeConfig() {
 
   /**
    * Update a single color in the current config (for either light or dark mode).
+   * Uses a functional state update to derive the next config from the latest state,
+   * then applies overrides and schedules a debounced save outside the updater
+   * to avoid stale-closure issues.
    */
   const updateColor = useCallback((
     key: keyof ThemeColors,
     value: string,
     mode: 'light' | 'dark'
   ) => {
+    let nextConfig: ThemeConfig | null = null;
     setThemeConfigState(prev => {
       const next: ThemeConfig = {
         ...prev,
@@ -143,46 +154,33 @@ export function useThemeConfig() {
       } else {
         next.darkColors[key] = value;
       }
-      applyStyleOverrides(next);
-
-      // Debounce save
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      saveTimeoutRef.current = setTimeout(async () => {
-        try {
-          await window.api.settings.update({ themeConfig: JSON.stringify(next) });
-        } catch (err) {
-          console.error('Failed to save theme config:', err);
-        }
-      }, 300);
-
+      nextConfig = next;
       return next;
     });
-  }, []);
+    // Apply overrides and schedule save outside the updater so React
+    // batching doesn't cause stale captures in the timeout closure.
+    // nextConfig is assigned synchronously by the updater above.
+    if (nextConfig) {
+      applyStyleOverrides(nextConfig);
+      debounceSave(nextConfig);
+    }
+  }, [debounceSave]);
 
   /**
    * Update the border radius.
    */
   const updateRadius = useCallback((radius: string) => {
+    let nextConfig: ThemeConfig | null = null;
     setThemeConfigState(prev => {
       const next: ThemeConfig = { ...prev, name: 'Custom', radius };
-      applyStyleOverrides(next);
-
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      saveTimeoutRef.current = setTimeout(async () => {
-        try {
-          await window.api.settings.update({ themeConfig: JSON.stringify(next) });
-        } catch (err) {
-          console.error('Failed to save theme config:', err);
-        }
-      }, 300);
-
+      nextConfig = next;
       return next;
     });
-  }, []);
+    if (nextConfig) {
+      applyStyleOverrides(nextConfig);
+      debounceSave(nextConfig);
+    }
+  }, [debounceSave]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

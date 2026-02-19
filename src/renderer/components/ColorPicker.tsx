@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
+import type React from 'react';
+import { useCallback, useMemo } from 'react';
 import { parseHslString, formatHslString, hslStringToHex, hexToHslString } from '../utils/color-utils';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
