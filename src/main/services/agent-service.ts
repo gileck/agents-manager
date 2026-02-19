@@ -591,11 +591,23 @@ export class AgentService implements IAgentService {
       ].join('\n');
     }
 
+    // Build plan comments section
+    let planCommentsSection = '';
+    if (task.planComments && task.planComments.length > 0) {
+      const lines = ['', '## Admin Feedback'];
+      for (const comment of task.planComments) {
+        const time = new Date(comment.createdAt).toLocaleString();
+        lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+      }
+      planCommentsSection = lines.join('\n');
+    }
+
     let prompt = template
       .replace(/\{taskTitle\}/g, task.title)
       .replace(/\{taskDescription\}/g, desc)
       .replace(/\{subtasksSection\}/g, subtasksSection)
       .replace(/\{planSection\}/g, planSection)
+      .replace(/\{planCommentsSection\}/g, planCommentsSection)
       .replace(/\{priorReviewSection\}/g, priorReviewSection);
 
     // Append standard suffix
