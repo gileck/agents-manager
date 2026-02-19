@@ -51,6 +51,17 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
     return this.getDefinition(id);
   }
 
+  async getDefinitionByMode(mode: string): Promise<AgentDefinition | null> {
+    const rows = this.db.prepare('SELECT * FROM agent_definitions').all() as AgentDefinitionRow[];
+    for (const row of rows) {
+      const def = rowToDefinition(row);
+      if (def.modes.some(m => m.mode === mode)) {
+        return def;
+      }
+    }
+    return null;
+  }
+
   async createDefinition(input: AgentDefinitionCreateInput): Promise<AgentDefinition> {
     const id = generateId();
     const timestamp = now();

@@ -145,9 +145,9 @@ export class AgentService implements IAgentService {
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
 
-    // Look up agent definition and resolve prompt template
+    // Look up agent definition by mode and resolve prompt template
     try {
-      const agentDef = await this.agentDefinitionStore.getDefinitionByAgentType(agentType);
+      const agentDef = await this.agentDefinitionStore.getDefinitionByMode(mode);
       if (agentDef) {
         const modeConfig = agentDef.modes.find(m => m.mode === mode);
         if (modeConfig?.promptTemplate) {

@@ -535,6 +535,10 @@ export function getMigrations(): Migration[] {
       name: '032_update_agent_definitions_add_plan_revision',
       sql: getUpdateAgentDefinitionsSql(),
     },
+    {
+      name: '033_split_agent_definitions',
+      sql: getSplitAgentDefinitionsSql(),
+    },
   ];
 }
 
@@ -607,6 +611,75 @@ function getUpdateAgentDefinitionsSql(): string {
   ]);
 
   return `UPDATE agent_definitions SET name = 'Claude Code Agent', description = 'Plans, implements, and fixes code changes', modes = '${escSql(claudeCodeModes)}', updated_at = ${ts} WHERE id = 'agent-def-claude-code'`;
+}
+
+function getSplitAgentDefinitionsSql(): string {
+  const ts = Date.now();
+
+  const planModes = JSON.stringify([
+    {
+      mode: 'plan',
+      promptTemplate: [
+        'Analyze this task and create a detailed implementation plan. Task: {taskTitle}.{taskDescription}',
+        '',
+        'Your output will be captured as structured JSON with three fields:',
+        '- "plan": the full implementation plan as markdown',
+        '- "planSummary": a short 2-3 sentence summary of the plan',
+        '- "subtasks": an array of concrete implementation step names',
+      ].join('\n'),
+      timeout: 300000,
+    },
+    {
+      mode: 'plan_revision',
+      promptTemplate: [
+        'The admin has reviewed the current plan and requested changes. Revise the plan based on their feedback.',
+        '',
+        'Task: {taskTitle}.{taskDescription}',
+        '{planSection}',
+        '{planCommentsSection}',
+        '',
+        'Your output will be captured as structured JSON with three fields:',
+        '- "plan": the revised full implementation plan as markdown',
+        '- "planSummary": a short 2-3 sentence summary of the revised plan',
+        '- "subtasks": an array of concrete implementation step names',
+      ].join('\n'),
+      timeout: 300000,
+    },
+  ]);
+
+  const implementorModes = JSON.stringify([
+    {
+      mode: 'implement',
+      promptTemplate: [
+        'Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: {taskTitle}.{taskDescription}',
+        '{planSection}',
+        '{subtasksSection}',
+      ].join('\n'),
+    },
+    {
+      mode: 'request_changes',
+      promptTemplate: [
+        'A code reviewer has reviewed the changes on this branch and requested changes.',
+        'You MUST address ALL of the reviewer\'s feedback from the Task Context above.',
+        '',
+        'Task: {taskTitle}.{taskDescription}',
+        '{planSection}',
+        '',
+        '## Instructions',
+        '1. Read the reviewer\'s feedback in the Task Context above carefully.',
+        '2. Fix every issue mentioned — do not skip or ignore any feedback.',
+        '3. After making all fixes, stage and commit with a descriptive message.',
+      ].join('\n'),
+    },
+  ]);
+
+  // Update existing claude-code definition to become Plan Agent
+  const updatePlan = `UPDATE agent_definitions SET name = 'Plan Agent', description = 'Creates and revises implementation plans', modes = '${escSql(planModes)}', updated_at = ${ts} WHERE id = 'agent-def-claude-code'`;
+
+  // Insert new Implementor Agent
+  const insertImpl = `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, created_at, updated_at) VALUES ('agent-def-implementor', 'Implementor Agent', 'Implements code changes and addresses review feedback', 'claude-code', '${escSql(implementorModes)}', 1, ${ts}, ${ts})`;
+
+  return [updatePlan, insertImpl].join(';\n');
 }
 
 function getSeedAgentDefinitionsSql(): string {
