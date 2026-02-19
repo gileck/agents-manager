@@ -344,11 +344,10 @@ export class AgentService implements IAgentService {
       // Save context entry for successful runs
       if (result.exitCode === 0) {
         try {
-          // Use planSummary from structured output for plan mode, fall back to parsing
-          const so = result.structuredOutput as { planSummary?: string } | undefined;
-          const summary = (context.mode === 'plan' && so?.planSummary)
-            ? so.planSummary
-            : this.extractContextSummary(result.output);
+          // Use structured output summary when available, fall back to parsing
+          const so = result.structuredOutput as { summary?: string; planSummary?: string } | undefined;
+          const structuredSummary = so?.planSummary ?? so?.summary;
+          const summary = structuredSummary || this.extractContextSummary(result.output);
           const entryType = this.getContextEntryType(agentType, context.mode, result.outcome);
           const entryData: Record<string, unknown> = {};
           if (agentType === 'pr-reviewer') {

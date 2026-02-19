@@ -9,23 +9,49 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
   }
 
   protected getOutputFormat(context: AgentContext): object | undefined {
-    if (context.mode !== 'plan') return undefined;
-    return {
-      type: 'json_schema',
-      schema: {
-        type: 'object',
-        properties: {
-          plan: { type: 'string', description: 'The full implementation plan as markdown' },
-          planSummary: { type: 'string', description: 'A short 2-3 sentence summary of the plan for display in task context' },
-          subtasks: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Concrete implementation steps that break down the plan',
+    switch (context.mode) {
+      case 'plan':
+        return {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              plan: { type: 'string', description: 'The full implementation plan as markdown' },
+              planSummary: { type: 'string', description: 'A short 2-3 sentence summary of the plan for display in task context' },
+              subtasks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Concrete implementation steps that break down the plan',
+              },
+            },
+            required: ['plan', 'planSummary', 'subtasks'],
           },
-        },
-        required: ['plan', 'planSummary', 'subtasks'],
-      },
-    };
+        };
+      case 'implement':
+        return {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              summary: { type: 'string', description: 'A short summary of the changes implemented' },
+            },
+            required: ['summary'],
+          },
+        };
+      case 'request_changes':
+        return {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              summary: { type: 'string', description: 'A short summary of the fixes made to address reviewer feedback' },
+            },
+            required: ['summary'],
+          },
+        };
+      default:
+        return undefined;
+    }
   }
 
   buildPrompt(context: AgentContext): string {
@@ -96,7 +122,11 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         prompt = `${task.title}.${desc}`;
     }
 
-    prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
+    // Modes with structured output get their summary via the schema.
+    // For other modes, ask for a textual summary section.
+    if (!this.getOutputFormat(context)) {
+      prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
+    }
 
     if (context.validationErrors) {
       prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
