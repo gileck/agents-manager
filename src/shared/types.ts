@@ -14,6 +14,40 @@ export type ItemCreateInput = {
 
 export type ItemUpdateInput = Partial<ItemCreateInput>;
 
+// Theme types
+export interface ThemeColors {
+  background: string;
+  foreground: string;
+  card: string;
+  cardForeground: string;
+  popover: string;
+  popoverForeground: string;
+  primary: string;
+  primaryForeground: string;
+  secondary: string;
+  secondaryForeground: string;
+  muted: string;
+  mutedForeground: string;
+  accent: string;
+  accentForeground: string;
+  destructive: string;
+  destructiveForeground: string;
+  success: string;
+  successForeground: string;
+  warning: string;
+  warningForeground: string;
+  border: string;
+  input: string;
+  ring: string;
+}
+
+export interface ThemeConfig {
+  name: string;
+  colors: ThemeColors;
+  darkColors: ThemeColors;
+  radius: string;
+}
+
 // Settings types
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
@@ -21,6 +55,7 @@ export interface AppSettings {
   currentProjectId: string | null;
   defaultPipelineId: string | null;
   bugPipelineId: string | null;
+  themeConfig: string | null;
 }
 
 // Log types (kept for template infrastructure)

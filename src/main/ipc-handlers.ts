@@ -70,6 +70,7 @@ export function registerIpcHandlers(services: AppServices): void {
     const currentProjectId = getSetting('current_project_id', '') || null;
     const defaultPipelineId = getSetting('default_pipeline_id', '') || null;
     const bugPipelineId = getSetting('bug_pipeline_id', '') || null;
+    const themeConfig = getSetting('theme_config', '') || null;
 
     return {
       theme,
@@ -77,6 +78,7 @@ export function registerIpcHandlers(services: AppServices): void {
       currentProjectId,
       defaultPipelineId,
       bugPipelineId,
+      themeConfig,
     };
   });
 
@@ -96,6 +98,9 @@ export function registerIpcHandlers(services: AppServices): void {
     if (updates.bugPipelineId !== undefined) {
       setSetting('bug_pipeline_id', updates.bugPipelineId ?? '');
     }
+    if (updates.themeConfig !== undefined) {
+      setSetting('theme_config', updates.themeConfig ?? '');
+    }
 
     // Return updated settings
     return {
@@ -104,6 +109,7 @@ export function registerIpcHandlers(services: AppServices): void {
       currentProjectId: getSetting('current_project_id', '') || null,
       defaultPipelineId: getSetting('default_pipeline_id', '') || null,
       bugPipelineId: getSetting('bug_pipeline_id', '') || null,
+      themeConfig: getSetting('theme_config', '') || null,
     };
   });
 
