@@ -5,12 +5,13 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
   readonly type = 'claude-code';
 
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
-    return config.timeout || (context.mode === 'plan' ? 5 * 60 * 1000 : 10 * 60 * 1000); // request_changes uses same 10min as implement
+    return config.timeout || (context.mode === 'plan' || context.mode === 'plan_revision' ? 5 * 60 * 1000 : 10 * 60 * 1000);
   }
 
   protected getOutputFormat(context: AgentContext): object | undefined {
     switch (context.mode) {
       case 'plan':
+      case 'plan_revision':
         return {
           type: 'json_schema',
           schema: {
@@ -60,22 +61,66 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
 
     let prompt: string;
     switch (mode) {
-      case 'plan':
-        prompt = [
+      case 'plan': {
+        const planLines = [
           `Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`,
+        ];
+        if (task.planComments && task.planComments.length > 0) {
+          planLines.push('', '## Admin Feedback');
+          for (const comment of task.planComments) {
+            const time = new Date(comment.createdAt).toLocaleString();
+            planLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+          }
+        }
+        planLines.push(
           ``,
           `Your output will be captured as structured JSON with three fields:`,
           `- "plan": the full implementation plan as markdown`,
           `- "planSummary": a short 2-3 sentence summary of the plan`,
           `- "subtasks": an array of concrete implementation step names`,
-        ].join('\n');
+        );
+        prompt = planLines.join('\n');
         break;
+      }
+      case 'plan_revision': {
+        const prLines = [
+          `The admin has reviewed the current plan and requested changes. Revise the plan based on their feedback.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        ];
+        if (task.plan) {
+          prLines.push('', '## Current Plan', task.plan);
+        }
+        if (task.planComments && task.planComments.length > 0) {
+          prLines.push('', '## Admin Feedback');
+          for (const comment of task.planComments) {
+            const time = new Date(comment.createdAt).toLocaleString();
+            prLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+          }
+        }
+        prLines.push(
+          '',
+          'Your output will be captured as structured JSON with three fields:',
+          '- "plan": the revised full implementation plan as markdown',
+          '- "planSummary": a short 2-3 sentence summary of the revised plan',
+          '- "subtasks": an array of concrete implementation step names',
+        );
+        prompt = prLines.join('\n');
+        break;
+      }
       case 'implement': {
         const lines = [
           `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`,
         ];
         if (task.plan) {
           lines.push('', '## Plan', task.plan);
+        }
+        if (task.planComments && task.planComments.length > 0) {
+          lines.push('', '## Plan Comments');
+          for (const comment of task.planComments) {
+            const time = new Date(comment.createdAt).toLocaleString();
+            lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+          }
         }
         if (task.subtasks && task.subtasks.length > 0) {
           lines.push('', '## Subtasks', 'Track your progress by updating subtask status as you work:');
@@ -108,6 +153,13 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         if (task.plan) {
           rcLines.push('', '## Plan', task.plan);
         }
+        if (task.planComments && task.planComments.length > 0) {
+          rcLines.push('', '## Plan Comments');
+          for (const comment of task.planComments) {
+            const time = new Date(comment.createdAt).toLocaleString();
+            rcLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+          }
+        }
         rcLines.push(
           ``,
           `## Instructions`,
@@ -139,6 +191,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
     if (exitCode !== 0) return 'failed';
     switch (mode) {
       case 'plan': return 'plan_complete';
+      case 'plan_revision': return 'plan_complete';
       case 'implement': return 'pr_ready';
       case 'request_changes': return 'pr_ready';
       default: return 'completed';

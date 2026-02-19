@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Task, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask } from '../../shared/types';
+import type { Task, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, PlanComment } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import { generateId, now, parseJson } from './utils';
@@ -20,6 +20,7 @@ interface TaskRow {
   feature_id: string | null;
   plan: string | null;
   subtasks: string;
+  plan_comments: string;
   metadata: string;
   created_at: number;
   updated_at: number;
@@ -42,6 +43,7 @@ function rowToTask(row: TaskRow): Task {
     branchName: row.branch_name,
     plan: row.plan,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
+    planComments: parseJson<PlanComment[]>(row.plan_comments, []),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -130,8 +132,8 @@ export class SqliteTaskStore implements ITaskStore {
     }
 
     this.db.prepare(`
-      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, subtasks, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, subtasks, plan_comments, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.projectId,
@@ -148,6 +150,7 @@ export class SqliteTaskStore implements ITaskStore {
       input.branchName ?? null,
       null,
       JSON.stringify(input.subtasks ?? []),
+      '[]',
       JSON.stringify(input.metadata ?? {}),
       timestamp,
       timestamp,
@@ -210,6 +213,10 @@ export class SqliteTaskStore implements ITaskStore {
     if (input.subtasks !== undefined) {
       updates.push('subtasks = ?');
       values.push(JSON.stringify(input.subtasks));
+    }
+    if (input.planComments !== undefined) {
+      updates.push('plan_comments = ?');
+      values.push(JSON.stringify(input.planComments));
     }
     if (input.metadata !== undefined) {
       updates.push('metadata = ?');

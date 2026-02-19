@@ -158,6 +158,13 @@ export interface Subtask {
   status: SubtaskStatus;
 }
 
+// Plan comment types
+export interface PlanComment {
+  author: string;
+  content: string;
+  createdAt: number;
+}
+
 // Task types
 export interface Task {
   id: string;
@@ -175,6 +182,7 @@ export interface Task {
   branchName: string | null;
   plan: string | null;
   subtasks: Subtask[];
+  planComments: PlanComment[];
   metadata: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
@@ -210,6 +218,7 @@ export interface TaskUpdateInput {
   branchName?: string | null;
   plan?: string | null;
   subtasks?: Subtask[];
+  planComments?: PlanComment[];
   metadata?: Record<string, unknown>;
 }
 
@@ -330,7 +339,7 @@ export type HookFn = (task: Task, transition: Transition, context: TransitionCon
 // ============================================
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
-export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes';
+export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision';
 
 export interface AgentRun {
   id: string;

@@ -245,8 +245,8 @@ export class AgentService implements IAgentService {
         return;
       }
 
-      // Post-agent validation loop (skip for plan mode — no code changes to validate)
-      const validationCommands = context.mode !== 'plan'
+      // Post-agent validation loop (skip for plan/plan_revision mode — no code changes to validate)
+      const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision'
         ? (context.project.config?.validationCommands as string[] | undefined) ?? []
         : [];
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
@@ -318,8 +318,8 @@ export class AgentService implements IAgentService {
         }
       }
 
-      // Extract plan, subtasks, and context from plan output
-      if (result.exitCode === 0 && context.mode === 'plan') {
+      // Extract plan, subtasks, and context from plan/plan_revision output
+      if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision')) {
         const so = result.structuredOutput as { plan?: string; planSummary?: string; subtasks?: string[] } | undefined;
         if (so?.plan) {
           const updates: import('../../shared/types').TaskUpdateInput = { plan: so.plan };
@@ -514,6 +514,7 @@ export class AgentService implements IAgentService {
     if (agentType === 'pr-reviewer') return outcome === 'approved' ? 'review_approved' : 'review_feedback';
     switch (mode) {
       case 'plan': return 'plan_summary';
+      case 'plan_revision': return 'plan_revision_summary';
       case 'implement': return 'implementation_summary';
       case 'request_changes': return 'fix_summary';
       default: return 'agent_output';

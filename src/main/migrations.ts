@@ -423,6 +423,114 @@ export function getMigrations(): Migration[] {
       name: '028_create_agent_definitions',
       sql: getSeedAgentDefinitionsSql(),
     },
+    {
+      name: '029_add_plan_comments_column',
+      sql: `ALTER TABLE tasks ADD COLUMN plan_comments TEXT NOT NULL DEFAULT '[]'`,
+    },
+    {
+      name: '030_add_plan_revision_mode',
+      sql: `
+        -- Rebuild agent_runs to widen the mode CHECK constraint to include plan_revision.
+        -- task_phases and pending_prompts have FKs to agent_runs,
+        -- so we must rebuild them too (drop children first, then parent).
+
+        -- 1. Rebuild task_phases without FK to agent_runs
+        CREATE TABLE task_phases_tmp (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          phase TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')),
+          agent_run_id TEXT,
+          started_at INTEGER,
+          completed_at INTEGER,
+          FOREIGN KEY(task_id) REFERENCES tasks(id)
+        );
+        INSERT INTO task_phases_tmp SELECT * FROM task_phases;
+        DROP TABLE task_phases;
+
+        -- 2. Rebuild pending_prompts without FK to agent_runs
+        CREATE TABLE pending_prompts_tmp (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          agent_run_id TEXT NOT NULL,
+          prompt_type TEXT NOT NULL,
+          payload TEXT NOT NULL DEFAULT '{}',
+          response TEXT,
+          status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')),
+          created_at INTEGER NOT NULL,
+          answered_at INTEGER,
+          resume_outcome TEXT,
+          FOREIGN KEY(task_id) REFERENCES tasks(id)
+        );
+        INSERT INTO pending_prompts_tmp SELECT * FROM pending_prompts;
+        DROP TABLE pending_prompts;
+
+        -- 3. Now rebuild agent_runs with updated CHECK
+        CREATE TABLE agent_runs_new (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          agent_type TEXT NOT NULL,
+          mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review','request_changes','plan_revision')),
+          status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')),
+          output TEXT,
+          outcome TEXT,
+          payload TEXT,
+          exit_code INTEGER,
+          started_at INTEGER NOT NULL,
+          completed_at INTEGER,
+          cost_input_tokens INTEGER,
+          cost_output_tokens INTEGER,
+          FOREIGN KEY(task_id) REFERENCES tasks(id)
+        );
+        INSERT INTO agent_runs_new SELECT * FROM agent_runs;
+        DROP TABLE agent_runs;
+        ALTER TABLE agent_runs_new RENAME TO agent_runs;
+
+        -- 4. Restore task_phases with FK to new agent_runs
+        CREATE TABLE task_phases (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          phase TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')),
+          agent_run_id TEXT,
+          started_at INTEGER,
+          completed_at INTEGER,
+          FOREIGN KEY(task_id) REFERENCES tasks(id),
+          FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+        );
+        INSERT INTO task_phases SELECT * FROM task_phases_tmp;
+        DROP TABLE task_phases_tmp;
+
+        -- 5. Restore pending_prompts with FK to new agent_runs
+        CREATE TABLE pending_prompts (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          agent_run_id TEXT NOT NULL,
+          prompt_type TEXT NOT NULL,
+          payload TEXT NOT NULL DEFAULT '{}',
+          response TEXT,
+          status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')),
+          created_at INTEGER NOT NULL,
+          answered_at INTEGER,
+          resume_outcome TEXT,
+          FOREIGN KEY(task_id) REFERENCES tasks(id),
+          FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+        );
+        INSERT INTO pending_prompts SELECT * FROM pending_prompts_tmp;
+        DROP TABLE pending_prompts_tmp;
+
+        -- 6. Recreate all indexes
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_task_id ON agent_runs(task_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+        CREATE INDEX IF NOT EXISTS idx_task_phases_task_id ON task_phases(task_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
+      `,
+    },
+    {
+      name: '031_update_agent_pipeline_plan_revision',
+      sql: getUpdateAgentPipelineSql(),
+    },
   ];
 }
 

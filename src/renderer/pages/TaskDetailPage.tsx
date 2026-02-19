@@ -22,7 +22,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type {
   Task, Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
-  DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus,
+  DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus, PlanComment,
 } from '../../shared/types';
 
 // Agent pipeline statuses that have specific bar rendering
@@ -109,6 +109,13 @@ export function TaskDetailPage() {
   }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
 
   const [tab, setTab] = useState('overview');
+
+  // Auto-switch to Plan tab when task enters plan_review
+  useEffect(() => {
+    if (task?.status === 'plan_review') {
+      setTab('plan');
+    }
+  }, [task?.status]);
 
   // Refetch agent runs when switching to the agents tab
   useEffect(() => {
@@ -499,6 +506,18 @@ export function TaskDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Plan Review Actions */}
+          {task.status === 'plan_review' && (
+            <PlanReviewSection
+              taskId={id!}
+              planComments={task.planComments}
+              transitions={transitions ?? []}
+              transitioning={transitioning}
+              onTransition={handleTransition}
+              onRefetch={refetch}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="timeline">
@@ -699,7 +718,7 @@ function getPrimaryTransitionTargets(status: string, isStuck: boolean): Set<stri
     case 'implementing':
       return isStuck ? new Set(['open', 'plan_review']) : new Set();
     case 'plan_review':
-      return new Set(['implementing']);
+      return new Set(); // Actions moved to Plan tab
     case 'pr_review':
       return new Set(['done', 'implementing']);
     case 'needs_info':
@@ -726,6 +745,108 @@ function renderPromptQuestions(payload: Record<string, unknown>) {
     return <p>{payload.question}</p>;
   }
   return <p>The agent needs additional information to proceed.</p>;
+}
+
+/** Plan Review Section — comment history, new comment, approve/request changes */
+function PlanReviewSection({
+  taskId,
+  planComments,
+  transitions,
+  transitioning,
+  onTransition,
+  onRefetch,
+}: {
+  taskId: string;
+  planComments: PlanComment[];
+  transitions: Transition[];
+  transitioning: string | null;
+  onTransition: (toStatus: string) => Promise<void> | void;
+  onRefetch: () => Promise<void> | void;
+}) {
+  const [newComment, setNewComment] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const approveTransition = transitions.find((t) => t.to === 'implementing' && t.label?.includes('Approve'));
+  const reviseTransition = transitions.find((t) => t.to === 'planning' && t.label?.includes('Plan Changes'));
+
+  const handleAction = async (toStatus: string) => {
+    setSaving(true);
+    try {
+      // Save comment if provided
+      if (newComment.trim()) {
+        const comment: PlanComment = {
+          author: 'admin',
+          content: newComment.trim(),
+          createdAt: Date.now(),
+        };
+        await window.api.tasks.update(taskId, {
+          planComments: [...planComments, comment],
+        });
+        setNewComment('');
+        await onRefetch();
+      }
+      // Trigger transition — await to keep buttons disabled until complete
+      await onTransition(toStatus);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="mt-4 border-blue-400">
+      <CardHeader className="py-3">
+        <CardTitle className="text-base">Plan Review</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {/* Comment history */}
+        {planComments.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {planComments.map((comment, i) => (
+              <div key={i} className="rounded-md bg-muted px-3 py-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-semibold">{comment.author}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(comment.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* New comment textarea */}
+        <Textarea
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="Add feedback for the planning agent..."
+          rows={3}
+          className="mb-3"
+        />
+
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          {approveTransition && (
+            <Button
+              onClick={() => handleAction(approveTransition.to)}
+              disabled={saving || transitioning !== null}
+            >
+              {transitioning === approveTransition.to ? 'Approving...' : 'Approve & Implement'}
+            </Button>
+          )}
+          {reviseTransition && (
+            <Button
+              variant="outline"
+              onClick={() => handleAction(reviseTransition.to)}
+              disabled={saving || transitioning !== null || !newComment.trim()}
+            >
+              {transitioning === reviseTransition.to ? 'Requesting...' : 'Request Plan Changes'}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 /** Subtasks Section */
@@ -1166,17 +1287,8 @@ function StatusActionBar({
   // Plan Review
   if (status === 'plan_review') {
     return (
-      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
-        <span className="text-sm">Review the plan, then:</span>
-        {primaryTransitions.map((t) => (
-          <Button
-            key={t.to}
-            onClick={() => onTransition(t.to)}
-            disabled={transitioning !== null}
-          >
-            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
-          </Button>
-        ))}
+      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#3b82f6' }}>
+        <span className="text-sm">Review the plan in the <strong>Plan</strong> tab, then approve or request changes.</span>
       </div>
     );
   }
