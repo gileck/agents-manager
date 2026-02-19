@@ -4,20 +4,6 @@ import { BaseClaudeAgent } from './base-claude-agent';
 export class ClaudeCodeAgent extends BaseClaudeAgent {
   readonly type = 'claude-code';
 
-  protected getMaxTurns(context: AgentContext): number {
-    switch (context.mode) {
-      case 'plan':
-      case 'plan_revision':
-      case 'investigate':
-        return 100;
-      case 'implement':
-      case 'request_changes':
-        return 200;
-      default:
-        return 100;
-    }
-  }
-
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
     return config.timeout || (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate' ? 5 * 60 * 1000 : 10 * 60 * 1000);
   }

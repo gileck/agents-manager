@@ -14,11 +14,6 @@ export abstract class BaseClaudeAgent implements IAgent {
   abstract buildPrompt(context: AgentContext): string;
   abstract inferOutcome(mode: string, exitCode: number, output: string): string;
 
-  /** Override in subclass to limit the number of SDK turns. */
-  protected getMaxTurns(_context: AgentContext): number {
-    return 100;
-  }
-
   /** Override in subclass to request structured JSON output from the SDK. */
   protected getOutputFormat(_context: AgentContext): object | undefined {
     return undefined;
@@ -78,14 +73,6 @@ export abstract class BaseClaudeAgent implements IAgent {
     log(`Starting agent run: mode=${context.mode}, workdir=${workdir}, timeout=${timeout}ms, model=${config.model ?? 'default'}`);
 
     const outputFormat = this.getOutputFormat(context);
-    const maxTurns = this.getMaxTurns(context);
-
-    log(`Entering SDK message loop`, {
-      promptLength: prompt.length,
-      model: config.model ?? 'default',
-      maxTurns,
-      hasOutputFormat: !!outputFormat,
-    });
 
     try {
       for await (const message of query({
@@ -96,14 +83,10 @@ export abstract class BaseClaudeAgent implements IAgent {
           permissionMode: 'bypassPermissions',
           allowDangerouslySkipPermissions: true,
           model: config.model,
-          maxTurns,
           ...(outputFormat ? { outputFormat } : {}),
         },
       })) {
         messageCount++;
-        if (messageCount % 25 === 0) {
-          log(`SDK message loop heartbeat: ${messageCount} messages processed`);
-        }
         const msg = message as any;
 
         if (message.type === 'assistant') {
@@ -141,16 +124,10 @@ export abstract class BaseClaudeAgent implements IAgent {
           }
         }
       }
-      log(`SDK message loop completed: ${messageCount} messages, hasStructuredOutput=${!!structuredOutput}, isError=${isError}`);
     } catch (err) {
       isError = true;
-      const isAbort = err instanceof Error && err.name === 'AbortError';
       errorMessage = err instanceof Error ? err.message : String(err);
-      if (isAbort) {
-        log(`Agent timed out after ${timeout}ms (${messageCount} messages processed)`);
-      } else {
-        log(`Agent execution error: ${errorMessage}`);
-      }
+      log(`Error during execution: ${errorMessage}`);
     } finally {
       clearTimeout(timer);
       this.runningAbortControllers.delete(runId);
@@ -159,7 +136,7 @@ export abstract class BaseClaudeAgent implements IAgent {
     const exitCode = isError ? 1 : 0;
     const outcome = this.inferOutcome(context.mode, exitCode, resultText);
 
-    log(`Agent returning: exitCode=${exitCode}, outcome=${outcome}, outputLength=${resultText.length}, hasStructuredOutput=${!!structuredOutput}`);
+    log(`Run complete: messages=${messageCount}, exitCode=${exitCode}, outcome=${outcome}, output_length=${resultText.length}`);
 
     const output = resultText || errorMessage || '';
     return this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens, structuredOutput);

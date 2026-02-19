@@ -4,10 +4,6 @@ import { BaseClaudeAgent } from './base-claude-agent';
 export class PrReviewerAgent extends BaseClaudeAgent {
   readonly type = 'pr-reviewer';
 
-  protected getMaxTurns(_context: AgentContext): number {
-    return 50;
-  }
-
   buildPrompt(context: AgentContext): string {
     const { task } = context;
     const desc = task.description ? ` ${task.description}` : '';
