@@ -36,6 +36,24 @@ npm run dev            # Watch all three targets in parallel
 
 **Important:** Always run `yarn checks` after modifying code to ensure TypeScript and lint validations pass. A pre-commit hook enforces this automatically on every commit.
 
+## Testing
+
+```bash
+npx vitest run        # Run all 157 tests (~750ms)
+npx vitest run tests/e2e/pipeline-auto-transition.test.ts  # Single file
+```
+
+Tests use `createTestContext()` which builds a full in-memory service graph with real SQLite stores, production guards (`registerCoreGuards`), and stubs for git/SCM. Key points:
+
+- **`ctx.transitionTo(taskId, toStatus)`** — use for manual transitions; bakes in `trigger: 'manual'` and throws on failure with guard details
+- **`ctx.scriptedAgent.setScript(happyPlan)`** — control agent behavior with pre-built scripts (`happyPlan`, `happyImplement`, `humanInTheLoop`, etc.)
+- **Factories** (`createProjectInput`, `createTaskInput`) — generate valid test data; call `resetCounters()` in `beforeEach`
+- **Always call `ctx.cleanup()`** in `afterEach` to close the in-memory DB
+- **Avoid hardcoded counts** — use `SEEDED_PIPELINES.length` instead of magic numbers
+- **Use `AGENT_PIPELINE.id`** for agent workflow tests, `SIMPLE_PIPELINE.id` for basic flows
+
+See [testing.md](./testing.md) for the full guide.
+
 ## Deployment
 
 To install the app to your Mac and add it to the Dock:
@@ -74,6 +92,7 @@ Comprehensive implementation-grounded reference docs for each major domain:
 | [cli-reference.md](./cli-reference.md) | CLI tool (`am`), commands, project context |
 | [ipc-and-renderer.md](./ipc-and-renderer.md) | IPC channels, renderer pages, hooks, streaming |
 | [event-system.md](./event-system.md) | Events, activity log, transition history, debug timeline |
+| [testing.md](./testing.md) | Test infrastructure, TestContext, factories, best practices |
 
 ## Architecture
 
