@@ -5,11 +5,12 @@ import { useTheme } from '@template/renderer/hooks/useTheme';
 import {
   Select,
   SelectTrigger,
+  SelectValue,
   SelectContent,
   SelectItem,
 } from '@template/renderer/components/ui/select';
+import { Button } from '@template/renderer/components/ui/button';
 import { FolderOpen, Sun, Moon } from 'lucide-react';
-import { cn } from '@template/renderer/lib/utils';
 
 export function TopMenu() {
   const { currentProject, currentProjectId, setCurrentProjectId } =
@@ -31,14 +32,9 @@ export function TopMenu() {
           onValueChange={(id) => setCurrentProjectId(id)}
         >
           <SelectTrigger className="w-48 h-8 border-none bg-transparent shadow-none text-sm font-medium hover:bg-muted">
-            <span
-              className={cn(
-                'truncate',
-                !currentProject && 'text-muted-foreground'
-              )}
-            >
-              {currentProject ? currentProject.name : 'Select a project'}
-            </span>
+            <SelectValue placeholder="Select a project">
+              {currentProject ? currentProject.name : undefined}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {projects.map((project) => (
@@ -51,9 +47,10 @@ export function TopMenu() {
       </div>
 
       {/* Right: Theme Toggle */}
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={toggleTheme}
-        className="p-2 rounded-md hover:bg-muted transition-colors"
         title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
       >
         {resolvedTheme === 'dark' ? (
@@ -61,7 +58,7 @@ export function TopMenu() {
         ) : (
           <Moon className="h-4 w-4 text-muted-foreground" />
         )}
-      </button>
+      </Button>
     </div>
   );
 }

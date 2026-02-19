@@ -157,7 +157,7 @@ export function AgentRunPage() {
   const doneCount = subtasks.filter((s) => s.status === 'done').length;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-6 py-3 border-b flex items-center gap-3">
         <Button
