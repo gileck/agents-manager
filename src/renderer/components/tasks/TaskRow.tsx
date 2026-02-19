@@ -1,11 +1,10 @@
 import React from 'react';
 import { Card, CardContent } from '../ui/card';
-import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import type { BadgeProps } from '../ui/badge';
 import { PipelineBadge } from '../pipeline/PipelineBadge';
-import { Copy, Trash2, GitPullRequest } from 'lucide-react';
-import { TaskStatusMenu } from './TaskStatusMenu';
+import { GitPullRequest } from 'lucide-react';
+import { TaskItemMenu } from './TaskItemMenu';
 import { PRIORITY_LABELS, formatRelativeTimestamp } from './task-helpers';
 import type { Task, Pipeline } from '../../../shared/types';
 
@@ -99,29 +98,13 @@ export function TaskRow({
             <span className="text-xs text-muted-foreground w-16 text-right">
               {formatRelativeTimestamp(task.updatedAt)}
             </span>
-            <TaskStatusMenu
+            <TaskItemMenu
               task={task}
               pipeline={pipeline}
               onStatusChange={onStatusChange}
+              onDuplicate={onDuplicate}
+              onDelete={onDelete}
             />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
-              title="Duplicate"
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive hover:text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              title="Delete"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
           </div>
         </div>
       </CardContent>
