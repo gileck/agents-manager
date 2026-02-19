@@ -2,7 +2,6 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@template/renderer/lib/utils';
 import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Settings, Bug } from 'lucide-react';
-import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -19,8 +18,6 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onReportBug }: SidebarProps) {
-  const { currentProject } = useCurrentProject();
-
   return (
     <aside className="w-56 border-r border-border bg-card flex flex-col">
       {/* Logo */}
@@ -28,9 +25,6 @@ export function Sidebar({ onReportBug }: SidebarProps) {
         <div className="flex items-center">
           <LayoutDashboard className="h-5 w-5 text-blue-500 mr-2" />
           <span className="font-semibold text-sm">Agents Manager</span>
-        </div>
-        <div className="mt-2 text-xs text-muted-foreground truncate">
-          {currentProject ? currentProject.name : 'No project selected'}
         </div>
       </div>
 
