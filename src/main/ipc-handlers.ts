@@ -325,8 +325,9 @@ export function registerIpcHandlers(services: AppServices): void {
       github: 'github',
       worktree: 'worktree',
     };
+    // Exclude status_change events — they duplicate transition_history entries (section 3)
     const eventRows = db.prepare(
-      'SELECT category, severity, message, data, created_at FROM task_events WHERE task_id = ?'
+      "SELECT category, severity, message, data, created_at FROM task_events WHERE task_id = ? AND category != 'status_change'"
     ).all(taskId) as { category: string; severity: string; message: string; data: string; created_at: number }[];
     for (const r of eventRows) {
       entries.push({

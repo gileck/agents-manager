@@ -132,10 +132,13 @@ export function TaskDetailPage() {
   const [duplicating, setDuplicating] = useState(false);
   const [stoppingAgent, setStoppingAgent] = useState(false);
 
-  // Prompt response state
-  const [promptResponse, setPromptResponse] = useState('');
+  // Prompt response state — per-prompt to avoid cross-prompt interference
+  const [promptResponses, setPromptResponses] = useState<Record<string, string>>({});
   const [responding, setResponding] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
+  const getPromptResponse = (promptId: string) => promptResponses[promptId] ?? '';
+  const setPromptResponse = (promptId: string, value: string) =>
+    setPromptResponses(prev => ({ ...prev, [promptId]: value }));
 
   // Auto-dismiss transition error after 15 seconds
   useEffect(() => {
@@ -211,11 +214,11 @@ export function TaskDetailPage() {
     setResponding(true);
     setPromptError(null);
     try {
-      const result = await window.api.prompts.respond(promptId, { answer: promptResponse });
+      const result = await window.api.prompts.respond(promptId, { answer: getPromptResponse(promptId) });
       if (!result) {
         setPromptError('This prompt has already been answered.');
       } else {
-        setPromptResponse('');
+        setPromptResponse(promptId, '');
       }
       await refetchPrompts();
       await refetch();
@@ -456,8 +459,8 @@ export function TaskDetailPage() {
           {/* Dependencies */}
           <DependenciesSection taskId={id!} projectId={task.projectId} />
 
-          {/* Pending Prompt UI (needs_info) */}
-          {task.status === 'needs_info' && pendingPrompts && pendingPrompts.length > 0 && (
+          {/* Pending Prompt UI — show whenever there are pending prompts, not just in needs_info */}
+          {pendingPrompts && pendingPrompts.some(p => p.status === 'pending') && (
             <Card className="mt-4 border-amber-400">
               <CardHeader className="py-3">
                 <CardTitle className="text-base text-amber-600">Agent needs more information</CardTitle>
@@ -469,8 +472,8 @@ export function TaskDetailPage() {
                       {renderPromptQuestions(prompt.payload)}
                     </div>
                     <Textarea
-                      value={promptResponse}
-                      onChange={(e) => setPromptResponse(e.target.value)}
+                      value={getPromptResponse(prompt.id)}
+                      onChange={(e) => setPromptResponse(prompt.id, e.target.value)}
                       placeholder="Type your response..."
                       rows={3}
                     />
@@ -479,7 +482,7 @@ export function TaskDetailPage() {
                     )}
                     <Button
                       onClick={() => handlePromptRespond(prompt.id)}
-                      disabled={responding || !promptResponse.trim()}
+                      disabled={responding || !getPromptResponse(prompt.id).trim()}
                     >
                       {responding ? 'Submitting...' : 'Submit Response'}
                     </Button>
