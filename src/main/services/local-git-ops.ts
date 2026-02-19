@@ -108,4 +108,8 @@ export class LocalGitOps implements IGitOps {
   async showCommit(hash: string): Promise<string> {
     return this.git(['show', hash]);
   }
+
+  async deleteRemoteBranch(branch: string): Promise<void> {
+    await this.git(['push', 'origin', '--delete', branch]);
+  }
 }

@@ -22,4 +22,6 @@ export interface IGitOps {
   resetFile(filepath: string): Promise<void>;
   /** Return `git show <hash>` diff output. */
   showCommit(hash: string): Promise<string>;
+  /** Delete a remote branch: `git push origin --delete <branch>`. */
+  deleteRemoteBranch(branch: string): Promise<void>;
 }

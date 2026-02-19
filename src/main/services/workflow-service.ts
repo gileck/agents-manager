@@ -20,6 +20,7 @@ import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IScmPlatform } from '../interfaces/scm-platform';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
+import type { IGitOps } from '../interfaces/git-ops';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 
 export class WorkflowService implements IWorkflowService {
@@ -36,6 +37,7 @@ export class WorkflowService implements IWorkflowService {
     private agentService: IAgentService,
     private createScmPlatform: (repoPath: string) => IScmPlatform,
     private createWorktreeManager: (path: string) => IWorktreeManager,
+    private createGitOps?: (cwd: string) => IGitOps,
   ) {}
 
   async createTask(input: TaskCreateInput): Promise<Task> {
@@ -182,6 +184,14 @@ export class WorkflowService implements IWorkflowService {
             trigger: 'agent',
             data: { outcome: prompt.resumeOutcome },
           });
+        } else {
+          await this.taskEventLog.log({
+            taskId: prompt.taskId,
+            category: 'system',
+            severity: 'warning',
+            message: `No transition found for resumeOutcome "${prompt.resumeOutcome}" from status "${task.status}"`,
+            data: { promptId, resumeOutcome: prompt.resumeOutcome, currentStatus: task.status },
+          });
         }
       }
     }
@@ -249,8 +259,19 @@ export class WorkflowService implements IWorkflowService {
       const wm = this.createWorktreeManager(project.path);
       const worktree = await wm.get(task.id);
       if (!worktree) return;
+      const branch = worktree.branch;
       if (worktree.locked) await wm.unlock(task.id);
       await wm.delete(task.id);
+
+      // Clean up the remote branch (best-effort)
+      if (branch && this.createGitOps) {
+        try {
+          const gitOps = this.createGitOps(project.path);
+          await gitOps.deleteRemoteBranch(branch);
+        } catch {
+          // Remote branch may not exist — safe to ignore
+        }
+      }
     } catch {
       // Best-effort cleanup — don't block the operation
     }

@@ -120,6 +120,7 @@ export function createAppServices(db: Database.Database): AppServices {
     taskStore, projectStore, pipelineEngine, pipelineStore,
     taskEventLog, activityLog, agentRunStore, pendingPromptStore,
     taskArtifactStore, agentService, createScmPlatform, createWorktreeManager,
+    createGitOps,
   );
 
   // Register hooks (must be after workflowService is created)
