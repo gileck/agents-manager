@@ -125,8 +125,8 @@ export function AgentRunPage() {
     }
   };
 
-  // --- Loading / error states ---
-  if (loading) {
+  // --- Loading / error states (only on initial load, not during refetches) ---
+  if (loading && !run) {
     return (
       <div className="p-8">
         <p className="text-muted-foreground">Loading agent run...</p>
@@ -134,13 +134,15 @@ export function AgentRunPage() {
     );
   }
 
-  if (error || !run) {
+  if (!loading && (error || !run)) {
     return (
       <div className="p-8">
         <p className="text-destructive">{error || 'Agent run not found'}</p>
       </div>
     );
   }
+
+  if (!run) return null;
 
   const isRunning = run.status === 'running';
   const displayOutput = isRunning ? streamOutput : (run.output || streamOutput);
