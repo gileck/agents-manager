@@ -20,12 +20,32 @@ import type { FilterState } from '../components/tasks/TaskFilterBar';
 import type { SortField, SortDirection, GroupBy } from '../components/tasks/task-helpers';
 import type { Task, TaskFilter, TaskCreateInput, AppSettings } from '../../shared/types';
 
+function useLocalStorage<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  return [value, setValue];
+}
+
 export function TaskListPage() {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
   const navigate = useNavigate();
 
-  // Filters
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  // Persistent filters, sort & group state
+  const [filters, setFilters] = useLocalStorage<FilterState>('taskList.filters', EMPTY_FILTERS);
+  const [sortField, setSortField] = useLocalStorage<SortField>('taskList.sortField', 'created');
+  const [sortDirection, setSortDirection] = useLocalStorage<SortDirection>('taskList.sortDirection', 'desc');
+  const [groupBy, setGroupBy] = useLocalStorage<GroupBy>('taskList.groupBy', 'none');
 
   // Build backend filter from UI state
   const taskFilter: TaskFilter = {};
@@ -39,11 +59,6 @@ export function TaskListPage() {
 
   const { tasks, loading, error, refetch } = useTasks(taskFilter);
   const { pipelines } = usePipelines();
-
-  // Sort & group state
-  const [sortField, setSortField] = useState<SortField>('created');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [groupBy, setGroupBy] = useState<GroupBy>('none');
 
   // Derived data
   const pipelineMap = useMemo(() => buildPipelineMap(pipelines), [pipelines]);
