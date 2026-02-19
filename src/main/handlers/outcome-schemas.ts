@@ -46,6 +46,7 @@ export const OUTCOME_SCHEMAS: Record<string, OutcomeDefinition> = {
   },
   // Signal-only (no payload)
   plan_complete: { description: 'Planning finished', schema: null },
+  investigation_complete: { description: 'Investigation finished', schema: null },
   pr_ready: { description: 'Implementation done, PR created', schema: null },
   approved: { description: 'Review passed', schema: null },
   design_ready: { description: 'Design completed', schema: null },

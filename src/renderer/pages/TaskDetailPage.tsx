@@ -26,7 +26,8 @@ import type {
 } from '../../shared/types';
 
 // Agent pipeline statuses that have specific bar rendering
-const AGENT_STATUSES = new Set(['open', 'planning', 'implementing', 'plan_review', 'pr_review', 'needs_info', 'done']);
+const AGENT_STATUSES = new Set(['open', 'planning', 'implementing', 'plan_review', 'pr_review', 'needs_info', 'done',
+  'reported', 'investigating', 'investigation_review']);
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -74,7 +75,7 @@ export function TaskDetailPage() {
   const hasRunningAgent = agentRuns?.some((r) => r.status === 'running') ?? false;
   const activeRun = agentRuns?.find((r) => r.status === 'running') ?? null;
   const lastRun = agentRuns?.[0] ?? null;
-  const isAgentPhase = task?.status === 'planning' || task?.status === 'implementing';
+  const isAgentPhase = task?.status === 'planning' || task?.status === 'implementing' || task?.status === 'investigating';
   // After agent completes, post-completion work (git push, PR creation) may take
   // several seconds before transitioning the task. Don't show "stuck" during this window.
   const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
@@ -764,7 +765,7 @@ function getPrimaryTransitionTargets(status: string, isStuck: boolean): Set<stri
     case 'planning':
       return isStuck ? new Set(['open']) : new Set();
     case 'implementing':
-      return isStuck ? new Set(['open', 'plan_review']) : new Set();
+      return isStuck ? new Set(['open', 'plan_review', 'reported', 'investigation_review']) : new Set();
     case 'plan_review':
       return new Set(); // Actions moved to Plan tab
     case 'pr_review':
@@ -773,6 +774,13 @@ function getPrimaryTransitionTargets(status: string, isStuck: boolean): Set<stri
       return new Set();
     case 'done':
       return new Set();
+    // Bug-agent pipeline statuses
+    case 'reported':
+      return new Set(['investigating', 'implementing']);
+    case 'investigating':
+      return isStuck ? new Set(['reported']) : new Set();
+    case 'investigation_review':
+      return new Set(['implementing', 'investigating']);
     default:
       return new Set(); // Fallback: handled by isAgentPipeline=false path
   }
