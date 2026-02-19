@@ -58,10 +58,33 @@ export class PrReviewerAgent extends BaseClaudeAgent {
     if (outcome === 'changes_requested') {
       result.payload = {
         summary: output.slice(-500),
-        comments: [],
+        comments: this.extractComments(output),
       };
     }
 
     return result;
+  }
+
+  /** Extract review comments/issues from reviewer output. */
+  private extractComments(output: string): string[] {
+    const comments: string[] = [];
+    // Match numbered list items that look like review feedback (e.g., "1. Fix X", "- Issue: Y")
+    const lines = output.split('\n');
+    let inChangesSection = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.includes('CHANGES_REQUESTED') || trimmed.toLowerCase().includes('changes requested') || trimmed.toLowerCase().includes('issues found')) {
+        inChangesSection = true;
+        continue;
+      }
+      if (trimmed.startsWith('REVIEW_VERDICT:') || trimmed.startsWith('## Summary')) {
+        inChangesSection = false;
+        continue;
+      }
+      if (inChangesSection && (trimmed.match(/^\d+\./) || trimmed.startsWith('- '))) {
+        comments.push(trimmed.replace(/^\d+\.\s*/, '').replace(/^- /, ''));
+      }
+    }
+    return comments;
   }
 }

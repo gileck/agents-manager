@@ -114,8 +114,8 @@ export abstract class BaseClaudeAgent implements IAgent {
               emit(block.text + '\n');
             } else if (block.type === 'tool_use') {
               const input = JSON.stringify(block.input ?? {});
-              log(`Tool: ${block.name} | Input: ${input.slice(0, 300)}${input.length > 300 ? '...' : ''}`);
-              emit(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 500)}${input.length > 500 ? '...' : ''}\n`);
+              log(`Tool: ${block.name} | Input: ${input.slice(0, 1000)}${input.length > 1000 ? '...' : ''}`);
+              emit(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
             }
           }
         } else if (message.type === 'result') {
