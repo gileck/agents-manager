@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@template/renderer/lib/utils';
 import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Settings, Bug } from 'lucide-react';
+import { ActiveAgentsList } from './ActiveAgentsList';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -29,7 +30,7 @@ export function Sidebar({ onReportBug }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-2">
+      <nav className="flex-1 overflow-y-auto min-h-0 p-2">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -48,6 +49,9 @@ export function Sidebar({ onReportBug }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
+
+      {/* Active Agents */}
+      <ActiveAgentsList />
 
       {/* Footer */}
       <div className="p-4 border-t border-border">

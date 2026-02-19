@@ -50,6 +50,7 @@ export const IPC_CHANNELS = {
   AGENT_GET: 'agent:get',
   AGENT_OUTPUT: 'agent:output',
   AGENT_ACTIVE_TASK_IDS: 'agent:active-task-ids',
+  AGENT_ACTIVE_RUNS: 'agent:active-runs',
 
   // Event operations
   EVENT_LIST: 'event:list',

@@ -56,6 +56,7 @@ const IPC_CHANNELS = {
   AGENT_GET: 'agent:get',
   AGENT_OUTPUT: 'agent:output',
   AGENT_ACTIVE_TASK_IDS: 'agent:active-task-ids',
+  AGENT_ACTIVE_RUNS: 'agent:active-runs',
   EVENT_LIST: 'event:list',
   ACTIVITY_LIST: 'activity:list',
   PROMPT_LIST: 'prompt:list',
@@ -212,6 +213,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_GET, runId),
     activeTaskIds: (): Promise<string[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_ACTIVE_TASK_IDS),
+    activeRuns: (): Promise<AgentRun[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_ACTIVE_RUNS),
   },
 
   // Event operations
