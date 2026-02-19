@@ -6,10 +6,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { OutputPanel } from '../components/agent-run/OutputPanel';
+import { PromptPanel } from '../components/agent-run/PromptPanel';
 import { SubtasksPanel } from '../components/agent-run/SubtasksPanel';
 import { GitChangesPanel } from '../components/agent-run/GitChangesPanel';
 import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
-import type { AgentRun, Task } from '../../shared/types';
+import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
+import type { AgentRun, Task, TaskContextEntry } from '../../shared/types';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
   plan_complete: 'Plan is ready for review. Go to task to review and approve.',
@@ -31,6 +33,12 @@ export function AgentRunPage() {
   // --- Task polling (for live subtask updates) ---
   const { data: task, refetch: refetchTask } = useIpc<Task | null>(
     () => run?.taskId ? window.api.tasks.get(run.taskId) : Promise.resolve(null),
+    [run?.taskId]
+  );
+
+  // --- Task context entries (for prompt tab) ---
+  const { data: contextEntries } = useIpc<TaskContextEntry[]>(
+    () => run?.taskId ? window.api.tasks.contextEntries(run.taskId) : Promise.resolve([]),
     [run?.taskId]
   );
 
@@ -104,27 +112,10 @@ export function AgentRunPage() {
   }, [run?.status, fetchGit]);
 
   // --- Tab state ---
-  const [activeTab, setActiveTab] = useState('subtasks');
+  const [activeTab, setActiveTab] = useState('output');
 
   // --- Section visibility ---
   const [metadataCollapsed, setMetadataCollapsed] = useState(false);
-  const [tabsCollapsed, setTabsCollapsed] = useState(false);
-  const [outputMaximized, setOutputMaximized] = useState(false);
-
-  const toggleOutputMaximized = useCallback(() => {
-    setOutputMaximized((prev) => {
-      if (!prev) {
-        // Maximizing: collapse metadata and tabs
-        setMetadataCollapsed(true);
-        setTabsCollapsed(true);
-      } else {
-        // Restoring: expand everything
-        setMetadataCollapsed(false);
-        setTabsCollapsed(false);
-      }
-      return !prev;
-    });
-  }, []);
 
   // --- Actions ---
   const [restarting, setRestarting] = useState(false);
@@ -208,7 +199,7 @@ export function AgentRunPage() {
       </div>
 
       {/* Metadata row — collapsible */}
-      {!metadataCollapsed && (
+      {!metadataCollapsed ? (
         <div className="px-6 py-2 border-b flex flex-wrap gap-4 text-xs text-muted-foreground">
           <button
             onClick={() => setMetadataCollapsed(true)}
@@ -224,11 +215,10 @@ export function AgentRunPage() {
             <span>Tokens: {(run.costInputTokens ?? 0).toLocaleString()} in / {(run.costOutputTokens ?? 0).toLocaleString()} out</span>
           )}
         </div>
-      )}
-      {metadataCollapsed && (
+      ) : (
         <div className="px-6 py-1 border-b">
           <button
-            onClick={() => { setMetadataCollapsed(false); setOutputMaximized(false); }}
+            onClick={() => setMetadataCollapsed(false)}
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
             <ChevronRight className="h-3 w-3" />
@@ -249,72 +239,69 @@ export function AgentRunPage() {
         </div>
       )}
 
-      {/* Output panel — takes all remaining space when maximized */}
-      <div className={`${outputMaximized ? 'flex-1' : 'flex-[3]'} min-h-0 px-6 pt-3 pb-1 flex flex-col`}>
-        <OutputPanel
-          output={displayOutput}
-          startedAt={run.startedAt}
-          isRunning={isRunning}
-          maximized={outputMaximized}
-          onMaximizeToggle={toggleOutputMaximized}
-        />
-      </div>
+      {/* Main tabs — fill remaining space */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 px-6 pt-3">
+        <TabsList>
+          <TabsTrigger value="output">
+            Output
+            {isRunning && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block animate-pulse" />}
+          </TabsTrigger>
+          <TabsTrigger value="prompt">Prompt</TabsTrigger>
+          <TabsTrigger value="subtasks">
+            Subtasks{subtasks.length > 0 && ` (${doneCount}/${subtasks.length})`}
+          </TabsTrigger>
+          <TabsTrigger value="git">Git</TabsTrigger>
+          <TabsTrigger value="task">Task Details</TabsTrigger>
+          <TabsTrigger value="json">JSON Output</TabsTrigger>
+        </TabsList>
 
-      {/* Tabs panel — collapsible */}
-      {!tabsCollapsed ? (
-        <div className="flex-[2] min-h-0 px-6 pb-3 flex flex-col">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setTabsCollapsed(true)}
-                className="text-muted-foreground hover:text-foreground transition-colors p-1"
-                title="Collapse panel"
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-              <TabsList>
-                <TabsTrigger value="subtasks">
-                  Subtasks{subtasks.length > 0 && ` (${doneCount}/${subtasks.length})`}
-                </TabsTrigger>
-                <TabsTrigger value="git">Git Changes</TabsTrigger>
-                <TabsTrigger value="info">Task Info</TabsTrigger>
-              </TabsList>
-            </div>
+        <TabsContent value="output" className="flex-1 min-h-0 flex flex-col pb-3">
+          <OutputPanel
+            output={displayOutput}
+            startedAt={run.startedAt}
+            isRunning={isRunning}
+          />
+        </TabsContent>
 
-            <TabsContent value="subtasks" className="flex-1 overflow-auto border rounded-md">
-              <SubtasksPanel subtasks={subtasks} />
-            </TabsContent>
+        <TabsContent value="prompt" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
+          <PromptPanel
+            taskTitle={task?.title ?? ''}
+            taskDescription={task?.description ?? null}
+            taskPlan={task?.plan ?? null}
+            mode={run.mode}
+            agentType={run.agentType}
+            contextEntries={contextEntries ?? []}
+          />
+        </TabsContent>
 
-            <TabsContent value="git" className="flex-1 overflow-auto border rounded-md">
-              <GitChangesPanel
-                diff={gitDiff}
-                stat={gitStat}
-                onRefresh={fetchGit}
-                loading={gitLoading}
-              />
-            </TabsContent>
+        <TabsContent value="subtasks" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+          <SubtasksPanel subtasks={subtasks} />
+        </TabsContent>
 
-            <TabsContent value="info" className="flex-1 overflow-auto border rounded-md">
-              {task ? (
-                <TaskInfoPanel task={task} run={run} />
-              ) : (
-                <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
-      ) : (
-        <div className="px-6 pb-3">
-          <button
-            onClick={() => { setTabsCollapsed(false); setOutputMaximized(false); }}
-            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors py-1"
-          >
-            <ChevronRight className="h-3 w-3" />
-            {activeTab === 'subtasks' ? `Subtasks${subtasks.length > 0 ? ` (${doneCount}/${subtasks.length})` : ''}` :
-             activeTab === 'git' ? 'Git Changes' : 'Task Info'}
-          </button>
-        </div>
-      )}
+        <TabsContent value="git" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+          <GitChangesPanel
+            diff={gitDiff}
+            stat={gitStat}
+            onRefresh={fetchGit}
+            loading={gitLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="task" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+          {task ? (
+            <TaskInfoPanel task={task} run={run} />
+          ) : (
+            <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="json" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
+          <JSONOutputPanel
+            payload={run.payload}
+            isRunning={isRunning}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
