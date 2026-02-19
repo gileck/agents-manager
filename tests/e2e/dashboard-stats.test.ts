@@ -45,7 +45,7 @@ describe('Dashboard Stats', () => {
     const taskToTransition = await ctx.taskStore.createTask(
       createTaskInput(project.id, 'pipeline-simple'),
     );
-    await ctx.pipelineEngine.executeTransition(taskToTransition, 'in_progress', { trigger: 'manual' });
+    await ctx.transitionTo(taskToTransition.id, 'in_progress');
 
     const stats = await ctx.workflowService.getDashboardStats();
 

@@ -38,8 +38,7 @@ describe('Artifact Collection', () => {
     ctx.scriptedAgent.setScript(happyImplement);
 
     // First transition to implementing
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'manual' });
+    await ctx.transitionTo(taskId, 'implementing');
 
     const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -53,8 +52,7 @@ describe('Artifact Collection', () => {
   it('should create diff artifact when outcome is pr_ready', async () => {
     ctx.scriptedAgent.setScript(happyImplement);
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'manual' });
+    await ctx.transitionTo(taskId, 'implementing');
 
     const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -67,8 +65,7 @@ describe('Artifact Collection', () => {
   it('should update task prLink and branchName after PR creation', async () => {
     ctx.scriptedAgent.setScript(happyImplement);
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'manual' });
+    await ctx.transitionTo(taskId, 'implementing');
 
     const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);

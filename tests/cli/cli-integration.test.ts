@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
+import { SEEDED_PIPELINES } from '../../src/main/data/seeded-pipelines';
 import { resolveProject, requireProject } from '../../src/cli/context';
 import { output } from '../../src/cli/output';
 
@@ -270,7 +271,7 @@ describe('CLI Integration', () => {
   describe('Pipelines', () => {
     it('should list seeded pipelines', async () => {
       const pipelines = await ctx.pipelineStore.listPipelines();
-      expect(pipelines.length).toBe(5); // 5 seeded pipelines
+      expect(pipelines.length).toBe(SEEDED_PIPELINES.length);
     });
 
     it('should get pipeline details', async () => {

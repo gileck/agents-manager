@@ -92,7 +92,7 @@ describe('Workflow Service Lifecycle', () => {
     );
 
     // Transition to in_progress
-    await ctx.pipelineEngine.executeTransition(task, 'in_progress', { trigger: 'manual' });
+    await ctx.transitionTo(task.id, 'in_progress');
     const inProgress = await ctx.taskStore.getTask(task.id);
     expect(inProgress!.status).toBe('in_progress');
 

@@ -35,12 +35,13 @@ import { StubWorktreeManager } from '../../src/main/services/stub-worktree-manag
 import { StubGitOps } from '../../src/main/services/stub-git-ops';
 import { StubScmPlatform } from '../../src/main/services/stub-scm-platform';
 import { StubNotificationRouter } from '../../src/main/services/stub-notification-router';
+import { registerCoreGuards } from '../../src/main/handlers/core-guards';
 import { registerScmHandler } from '../../src/main/handlers/scm-handler';
 import { registerPromptHandler } from '../../src/main/handlers/prompt-handler';
 import { registerNotificationHandler } from '../../src/main/handlers/notification-handler';
 import { ScriptedAgent, happyPlan } from '../../src/main/agents/scripted-agent';
 import { SEEDED_PIPELINES } from '../../src/main/data/seeded-pipelines';
-import type { Task, Transition, TransitionContext, GuardResult } from '../../src/shared/types';
+import type { Task } from '../../src/shared/types';
 
 export interface TestContext {
   db: Database.Database;
@@ -68,6 +69,7 @@ export interface TestContext {
   featureStore: IFeatureStore;
   agentDefinitionStore: IAgentDefinitionStore;
   taskContextStore: ITaskContextStore;
+  transitionTo: (taskId: string, toStatus: string) => Promise<Task>;
   cleanup: () => void;
 }
 
@@ -416,59 +418,8 @@ export function createTestContext(): TestContext {
   const activityLog = new SqliteActivityLog(db);
   const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, db);
 
-  // Register built-in guards
-  pipelineEngine.registerGuard('has_pr', (task: Task): GuardResult => {
-    if (task.prLink) {
-      return { allowed: true };
-    }
-    return { allowed: false, reason: 'Task must have a PR link' };
-  });
-
-  pipelineEngine.registerGuard('dependencies_resolved', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown): GuardResult => {
-    const sqliteDb = dbRef as Database.Database;
-    const row = sqliteDb.prepare(`
-      SELECT COUNT(*) as count FROM task_dependencies td
-      JOIN tasks t ON t.id = td.depends_on_task_id
-      JOIN pipelines p ON p.id = t.pipeline_id
-      WHERE td.task_id = ?
-      AND t.status NOT IN (
-        SELECT json_extract(s.value, '$.name')
-        FROM pipelines p2, json_each(p2.statuses) s
-        WHERE p2.id = t.pipeline_id
-        AND json_extract(s.value, '$.isFinal') = 1
-      )
-    `).get(task.id) as { count: number };
-
-    if (row.count === 0) {
-      return { allowed: true };
-    }
-    return { allowed: false, reason: `${row.count} unresolved dependencies` };
-  });
-
-  pipelineEngine.registerGuard('no_running_agent', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown): GuardResult => {
-    const sqliteDb = dbRef as Database.Database;
-    const row = sqliteDb.prepare(
-      'SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status = ?'
-    ).get(task.id, 'running') as { count: number };
-    if (row.count > 0) {
-      return { allowed: false, reason: 'An agent is already running for this task' };
-    }
-    return { allowed: true };
-  });
-
-  pipelineEngine.registerGuard('max_retries', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown, params?: Record<string, unknown>): GuardResult => {
-    const sqliteDb = dbRef as Database.Database;
-    const max = (params?.max as number) ?? 3;
-
-    const row = sqliteDb.prepare(
-      "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status IN ('failed', 'cancelled')"
-    ).get(task.id) as { count: number };
-
-    if (row.count > max) {
-      return { allowed: false, reason: `Max retries (${max}) reached — ${row.count} failed runs` };
-    }
-    return { allowed: true };
-  });
+  // Register built-in guards (same as production setup.ts)
+  registerCoreGuards(pipelineEngine, db);
 
   // Phase 2 stores
   const agentRunStore = new SqliteAgentRunStore(db);
@@ -548,6 +499,16 @@ export function createTestContext(): TestContext {
     featureStore,
     agentDefinitionStore,
     taskContextStore,
+    transitionTo: async (taskId: string, toStatus: string): Promise<Task> => {
+      const task = await taskStore.getTask(taskId);
+      if (!task) throw new Error(`Task not found: ${taskId}`);
+      const result = await pipelineEngine.executeTransition(task, toStatus, { trigger: 'manual' });
+      if (!result.success) {
+        const reason = result.guardFailures?.map(g => `${g.guard}: ${g.reason}`).join(', ') || result.error || 'unknown';
+        throw new Error(`Transition to '${toStatus}' failed: ${reason}`);
+      }
+      return result.task!;
+    },
     cleanup: () => db.close(),
   };
 }

@@ -23,12 +23,9 @@ describe('no_running_agent guard', () => {
   });
 
   it('should allow transition when no agent is running', async () => {
+    await ctx.transitionTo(taskId, 'planning');
     const task = await ctx.taskStore.getTask(taskId);
-    const result = await ctx.pipelineEngine.executeTransition(task!, 'planning', {
-      trigger: 'manual',
-    });
-
-    expect(result.success).toBe(true);
+    expect(task!.status).toBe('planning');
   });
 
   it('should block transition when agent is running', async () => {
@@ -39,15 +36,7 @@ describe('no_running_agent guard', () => {
       mode: 'plan',
     });
 
-    const task = await ctx.taskStore.getTask(taskId);
-    const result = await ctx.pipelineEngine.executeTransition(task!, 'planning', {
-      trigger: 'manual',
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.guardFailures).toBeDefined();
-    expect(result.guardFailures!.length).toBeGreaterThan(0);
-    expect(result.guardFailures![0].guard).toBe('no_running_agent');
+    await expect(ctx.transitionTo(taskId, 'planning')).rejects.toThrow('no_running_agent');
   });
 
   it('should allow transition after agent completes', async () => {
@@ -64,12 +53,9 @@ describe('no_running_agent guard', () => {
       outcome: 'plan_complete',
     });
 
+    await ctx.transitionTo(taskId, 'planning');
     const task = await ctx.taskStore.getTask(taskId);
-    const result = await ctx.pipelineEngine.executeTransition(task!, 'planning', {
-      trigger: 'manual',
-    });
-
-    expect(result.success).toBe(true);
+    expect(task!.status).toBe('planning');
   });
 
   it('should allow transition after agent fails', async () => {
@@ -85,11 +71,8 @@ describe('no_running_agent guard', () => {
       output: 'error',
     });
 
+    await ctx.transitionTo(taskId, 'planning');
     const task = await ctx.taskStore.getTask(taskId);
-    const result = await ctx.pipelineEngine.executeTransition(task!, 'planning', {
-      trigger: 'manual',
-    });
-
-    expect(result.success).toBe(true);
+    expect(task!.status).toBe('planning');
   });
 });

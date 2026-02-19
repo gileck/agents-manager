@@ -26,8 +26,7 @@ describe('Pipeline Auto-Transition', () => {
     ctx.scriptedAgent.setScript(happyPlan);
 
     // First transition to planning (manual trigger per pipeline definition)
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'manual' });
+    await ctx.transitionTo(taskId, 'planning');
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -39,8 +38,7 @@ describe('Pipeline Auto-Transition', () => {
   it('should auto-transition implementing to pr_review on pr_ready', async () => {
     ctx.scriptedAgent.setScript(happyImplement);
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'manual' });
+    await ctx.transitionTo(taskId, 'implementing');
 
     const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -56,8 +54,7 @@ describe('Pipeline Auto-Transition', () => {
       outcome: 'unknown_outcome',
     }));
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'manual' });
+    await ctx.transitionTo(taskId, 'planning');
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -69,8 +66,7 @@ describe('Pipeline Auto-Transition', () => {
   it('should record agent trigger in transition history', async () => {
     ctx.scriptedAgent.setScript(happyPlan);
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'manual' });
+    await ctx.transitionTo(taskId, 'planning');
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
