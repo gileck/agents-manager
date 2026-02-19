@@ -21,6 +21,11 @@ npm run start:devtools # Build and run with DevTools
 npm run electron       # Run without rebuilding (no DevTools)
 npm run electron:debug # Run without rebuilding (with DevTools)
 
+# Validation
+yarn checks            # Run TypeScript type-checking + ESLint (ALWAYS run after changing code)
+yarn typecheck         # TypeScript only (all tsconfig projects)
+yarn lint              # ESLint only
+
 # Production / Deployment
 npm run dist           # Build distributable .app bundle
 npm run deploy         # Build, install to /Applications, and launch
@@ -28,6 +33,8 @@ npm run deploy         # Build, install to /Applications, and launch
 # Watch mode
 npm run dev            # Watch all three targets in parallel
 ```
+
+**Important:** Always run `yarn checks` after modifying code to ensure TypeScript and lint validations pass. A pre-commit hook enforces this automatically on every commit.
 
 ## Deployment
 
