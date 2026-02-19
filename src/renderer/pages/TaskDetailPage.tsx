@@ -1873,6 +1873,44 @@ function computeDisplayPath(
     return { displayPath, currentIndex, skippedStatuses };
   }
 
+  // Collapse consecutive duplicates (from self-transitions like retries)
+  const collapsed: string[] = [];
+  for (const s of visitedStatuses) {
+    if (collapsed.length === 0 || collapsed[collapsed.length - 1] !== s) {
+      collapsed.push(s);
+    }
+  }
+
+  // Check for loops: non-consecutive revisits (e.g. pr_review → implementing)
+  const seenOnce = new Set<string>();
+  let hasLoops = false;
+  for (const s of collapsed) {
+    if (seenOnce.has(s)) { hasLoops = true; break; }
+    seenOnce.add(s);
+  }
+
+  if (hasLoops) {
+    // Show full history including loops so the revisit is visible
+    const historyPath = [...collapsed];
+    if (historyPath[historyPath.length - 1] !== currentStatus) {
+      historyPath.push(currentStatus);
+    }
+    const currentIndex = historyPath.length - 1;
+
+    // Project forward using happy path from current status
+    const happyIdx = happyPath.indexOf(currentStatus);
+    let future: string[];
+    if (happyIdx >= 0) {
+      future = happyPath.slice(happyIdx + 1);
+    } else {
+      // Fallback: project forward excluding already-shown statuses
+      future = projectForward(currentStatus, pipeline, new Set(historyPath));
+    }
+
+    const displayPath = [...historyPath, ...future];
+    return { displayPath, currentIndex, skippedStatuses };
+  }
+
   // Dedup visited preserving order
   const seen = new Set<string>();
   const deduped: string[] = [];
@@ -1978,7 +2016,7 @@ function PipelineProgress({
             const connectorSkipped = isSkipped || prevSkipped;
 
             return (
-              <React.Fragment key={statusName}>
+              <React.Fragment key={`${statusName}-${i}`}>
                 {/* Connector line */}
                 {i > 0 && (
                   <div
@@ -2064,30 +2102,41 @@ function PipelineProgress({
   );
 }
 
-/** Build a map of status details from transition entries */
-function buildStatusDetailsMap(
+/** Build a map of status details indexed by position in the display path */
+function buildPositionDetailsMap(
+  displayPath: string[],
   transitionEntries: DebugTimelineEntry[],
-): Map<string, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }> {
+): Map<number, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }> {
   const sorted = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
-  const map = new Map<string, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }>();
+  const result = new Map<number, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }>();
 
+  let pathPos = 0;
   for (let i = 0; i < sorted.length; i++) {
     const entry = sorted[i];
     const toStatus = entry.data?.toStatus as string | undefined;
     if (!toStatus) continue;
 
+    // Find next matching position in display path
+    let matchPos = pathPos + 1;
+    while (matchPos < displayPath.length && displayPath[matchPos] !== toStatus) {
+      matchPos++;
+    }
+    if (matchPos >= displayPath.length) continue;
+
     const nextTimestamp = i + 1 < sorted.length ? sorted[i + 1].timestamp : undefined;
     const duration = nextTimestamp != null ? nextTimestamp - entry.timestamp : undefined;
 
-    map.set(toStatus, {
+    result.set(matchPos, {
       timestamp: entry.timestamp,
       trigger: entry.data?.trigger as string | undefined,
       guardResults: entry.data?.guardResults,
       duration,
     });
+
+    pathPos = matchPos;
   }
 
-  return map;
+  return result;
 }
 
 /** Format a duration in ms to a human-readable string */
@@ -2118,8 +2167,8 @@ function PipelineVertical({
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
   const agenticStatuses = computeAgenticStatuses(pipeline);
-  const statusDetailsMap = buildStatusDetailsMap(transitionEntries);
   const { displayPath, currentIndex, skippedStatuses } = computeDisplayPath(pipeline, currentStatus, transitionEntries);
+  const positionDetailsMap = buildPositionDetailsMap(displayPath, transitionEntries);
 
   const toggleStep = (idx: number) => {
     const next = new Set(expandedSteps);
@@ -2140,7 +2189,7 @@ function PipelineVertical({
             const isAgentic = agenticStatuses.has(statusName);
             const statusDef = pipeline.statuses.find((s) => s.name === statusName);
             const isFinalCurrent = isCurrent && statusDef?.isFinal;
-            const details = statusDetailsMap.get(statusName);
+            const details = positionDetailsMap.get(i);
             const hasDetails = !isSkipped && (isCompleted || isFinalCurrent || (isCurrent && details));
             const expanded = expandedSteps.has(i);
 
@@ -2160,7 +2209,7 @@ function PipelineVertical({
               : undefined;
 
             return (
-              <div key={statusName} className="flex" style={{ opacity: isSkipped ? 0.5 : 1 }}>
+              <div key={`${statusName}-${i}`} className="flex" style={{ opacity: isSkipped ? 0.5 : 1 }}>
                 {/* Left column: node + connector */}
                 <div className="flex flex-col items-center mr-4" style={{ width: 28 }}>
                   {/* Node */}
