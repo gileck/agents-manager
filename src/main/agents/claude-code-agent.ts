@@ -151,12 +151,26 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           `Bug: ${task.title}.${desc}`,
           ``,
           `## Instructions`,
-          `1. Read the bug report carefully.`,
-          `2. Investigate the codebase to find the root cause.`,
-          `3. Write a detailed investigation report with your findings.`,
-          `4. Suggest a concrete fix plan.`,
-          `5. Break the fix into subtasks.`,
+          `1. Read the bug report carefully — it may contain debug logs, error traces, timeline entries, and context from the reporter.`,
+          `2. Use the CLI to gather additional debugging info about this task:`,
+          `   - \`am tasks get ${task.id} --json\` — full task details`,
+          `   - \`am events list --task ${task.id} --json\` — task event log`,
+          `3. Investigate the codebase to find the root cause.`,
+          `4. Write a detailed investigation report with your findings.`,
+          `5. Suggest a concrete fix plan.`,
+          `6. Break the fix into subtasks.`,
         ];
+        // Include related task info if available in metadata
+        const relatedTaskId = task.metadata?.relatedTaskId as string | undefined;
+        if (relatedTaskId) {
+          invLines.push(
+            ``,
+            `## Related Task`,
+            `This bug references task \`${relatedTaskId}\`. Use the CLI to inspect it:`,
+            `  am tasks get ${relatedTaskId} --json`,
+            `  am events list --task ${relatedTaskId} --json`,
+          );
+        }
         if (task.subtasks && task.subtasks.length > 0) {
           invLines.push('', '## Subtasks');
           for (const st of task.subtasks) {

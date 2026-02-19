@@ -603,13 +603,28 @@ export class AgentService implements IAgentService {
       planCommentsSection = lines.join('\n');
     }
 
+    // Build related task section for bug reports
+    let relatedTaskSection = '';
+    const relatedTaskId = task.metadata?.relatedTaskId as string | undefined;
+    if (relatedTaskId) {
+      relatedTaskSection = [
+        '',
+        '## Related Task',
+        `This bug references task \`${relatedTaskId}\`. Use the CLI to inspect it:`,
+        `  am tasks get ${relatedTaskId} --json`,
+        `  am events list --task ${relatedTaskId} --json`,
+      ].join('\n');
+    }
+
     let prompt = template
       .replace(/\{taskTitle\}/g, task.title)
       .replace(/\{taskDescription\}/g, desc)
+      .replace(/\{taskId\}/g, task.id)
       .replace(/\{subtasksSection\}/g, subtasksSection)
       .replace(/\{planSection\}/g, planSection)
       .replace(/\{planCommentsSection\}/g, planCommentsSection)
-      .replace(/\{priorReviewSection\}/g, priorReviewSection);
+      .replace(/\{priorReviewSection\}/g, priorReviewSection)
+      .replace(/\{relatedTaskSection\}/g, relatedTaskSection);
 
     // Append standard suffix
     prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
