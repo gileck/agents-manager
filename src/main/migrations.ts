@@ -419,6 +419,10 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_tasks_feature_id ON tasks(feature_id)
       `,
     },
+    {
+      name: '028_create_agent_definitions',
+      sql: getSeedAgentDefinitionsSql(),
+    },
   ];
 }
 
@@ -431,6 +435,87 @@ function getUpdateAgentPipelineSql(): string {
 
 function escSql(s: string): string {
   return s.replace(/'/g, "''");
+}
+
+function getSeedAgentDefinitionsSql(): string {
+  const createTable = `
+    CREATE TABLE IF NOT EXISTS agent_definitions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      engine TEXT NOT NULL,
+      model TEXT,
+      modes TEXT NOT NULL DEFAULT '[]',
+      system_prompt TEXT,
+      timeout INTEGER,
+      is_built_in INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `;
+
+  const ts = Date.now();
+
+  const implementorModes = JSON.stringify([
+    {
+      mode: 'plan',
+      promptTemplate: [
+        'Analyze this task and create a detailed implementation plan. Task: {taskTitle}.{taskDescription}',
+        '',
+        '{subtasksSection}',
+      ].join('\n'),
+      timeout: 300000,
+    },
+    {
+      mode: 'implement',
+      promptTemplate: [
+        'Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: {taskTitle}.{taskDescription}',
+        '{planSection}',
+        '{subtasksSection}',
+      ].join('\n'),
+    },
+    {
+      mode: 'request_changes',
+      promptTemplate: [
+        'A code reviewer has reviewed the changes on this branch and requested changes.',
+        'You MUST address ALL of the reviewer\'s feedback from the Task Context above.',
+        '',
+        'Task: {taskTitle}.{taskDescription}',
+        '{planSection}',
+        '',
+        '## Instructions',
+        '1. Read the reviewer\'s feedback in the Task Context above carefully.',
+        '2. Fix every issue mentioned — do not skip or ignore any feedback.',
+        '3. After making all fixes, stage and commit with a descriptive message.',
+      ].join('\n'),
+    },
+  ]);
+
+  const reviewerModes = JSON.stringify([
+    {
+      mode: 'review',
+      promptTemplate: [
+        'You are a code reviewer. Review the changes in this branch for the following task: {taskTitle}.{taskDescription}',
+        '',
+        '{priorReviewSection}',
+        'Steps:',
+        '1. Run `git diff main..HEAD` to see all changes made in this branch.',
+        '2. Review the diff for code quality, correctness, style, and completeness against the task description.',
+        '3. Provide a concise review.',
+        '4. End your response with a "## Summary" section briefly describing your review findings.',
+        '5. End your output with exactly one of these verdicts on its own line:',
+        '   REVIEW_VERDICT: APPROVED',
+        '   REVIEW_VERDICT: CHANGES_REQUESTED',
+        '',
+        'If the changes look good, use APPROVED. If there are issues that need fixing, use CHANGES_REQUESTED and explain what needs to change.',
+      ].join('\n'),
+    },
+  ]);
+
+  const seedImplementor = `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, created_at, updated_at) VALUES ('agent-def-claude-code', 'Implementor', 'Plans, implements, and fixes code changes', 'claude-code', '${escSql(implementorModes)}', 1, ${ts}, ${ts})`;
+  const seedReviewer = `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, created_at, updated_at) VALUES ('agent-def-pr-reviewer', 'PR Reviewer', 'Reviews code changes and provides feedback', 'claude-code', '${escSql(reviewerModes)}', 1, ${ts}, ${ts})`;
+
+  return [createTable, seedImplementor, seedReviewer].join(';\n');
 }
 
 function getSeedPipelinesSql(): string {

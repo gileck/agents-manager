@@ -8,6 +8,7 @@ import { TaskListPage } from './pages/TaskListPage';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { AgentRunPage } from './pages/AgentRunPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AgentDefinitionsPage } from './pages/AgentDefinitionsPage';
 import { PipelinesPage } from './pages/PipelinesPage';
 import { FeatureListPage } from './pages/FeatureListPage';
 import { FeatureDetailPage } from './pages/FeatureDetailPage';
@@ -41,6 +42,7 @@ function AppRoutes() {
         <Route path="projects/:id" element={<ProjectDetailPage />} />
         <Route path="tasks" element={<TaskListPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
+        <Route path="agents" element={<AgentDefinitionsPage />} />
         <Route path="agents/:runId" element={<AgentRunPage />} />
         <Route path="features" element={<FeatureListPage />} />
         <Route path="features/:id" element={<FeatureDetailPage />} />

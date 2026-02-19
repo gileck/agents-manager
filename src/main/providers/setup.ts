@@ -16,6 +16,7 @@ import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IFeatureStore } from '../interfaces/feature-store';
+import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
 import { SqliteTaskStore } from '../stores/sqlite-task-store';
@@ -27,6 +28,7 @@ import { SqliteTaskPhaseStore } from '../stores/sqlite-task-phase-store';
 import { SqlitePendingPromptStore } from '../stores/sqlite-pending-prompt-store';
 import { SqliteTaskContextStore } from '../stores/sqlite-task-context-store';
 import { SqliteFeatureStore } from '../stores/sqlite-feature-store';
+import { SqliteAgentDefinitionStore } from '../stores/sqlite-agent-definition-store';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
@@ -64,6 +66,7 @@ export interface AppServices {
   workflowService: IWorkflowService;
   taskContextStore: ITaskContextStore;
   featureStore: IFeatureStore;
+  agentDefinitionStore: IAgentDefinitionStore;
   createWorktreeManager: (path: string) => IWorktreeManager;
 }
 
@@ -86,6 +89,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const pendingPromptStore = new SqlitePendingPromptStore(db);
   const taskContextStore = new SqliteTaskContextStore(db);
   const featureStore = new SqliteFeatureStore(db);
+  const agentDefinitionStore = new SqliteAgentDefinitionStore(db);
 
   // Phase 2 infrastructure — factory functions create project-scoped instances
   const createGitOps = (cwd: string) => new LocalGitOps(cwd);
@@ -110,7 +114,7 @@ export function createAppServices(db: Database.Database): AppServices {
     agentFramework, agentRunStore, createWorktreeManager,
     taskStore, projectStore, pipelineEngine,
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
-    createGitOps, taskContextStore,
+    createGitOps, taskContextStore, agentDefinitionStore,
   );
 
   // Workflow service
@@ -147,6 +151,7 @@ export function createAppServices(db: Database.Database): AppServices {
     workflowService,
     taskContextStore,
     featureStore,
+    agentDefinitionStore,
     createWorktreeManager,
   };
 }

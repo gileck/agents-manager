@@ -21,6 +21,8 @@ import type {
   FeatureCreateInput,
   FeatureUpdateInput,
   FeatureFilter,
+  AgentDefinitionCreateInput,
+  AgentDefinitionUpdateInput,
 } from '../shared/types';
 
 function safeParse(json: string | null | undefined): Record<string, unknown> | undefined {
@@ -460,6 +462,34 @@ export function registerIpcHandlers(services: AppServices): void {
   registerIpcHandler(IPC_CHANNELS.FEATURE_DELETE, async (_, id: string) => {
     validateId(id);
     return services.featureStore.deleteFeature(id);
+  });
+
+  // ============================================
+  // Agent Definition Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_DEF_LIST, async () => {
+    return services.agentDefinitionStore.listDefinitions();
+  });
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_DEF_GET, async (_, id: string) => {
+    validateId(id);
+    return services.agentDefinitionStore.getDefinition(id);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_DEF_CREATE, async (_, input: AgentDefinitionCreateInput) => {
+    validateInput(input, ['name', 'engine']);
+    return services.agentDefinitionStore.createDefinition(input);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_DEF_UPDATE, async (_, id: string, input: AgentDefinitionUpdateInput) => {
+    validateId(id);
+    return services.agentDefinitionStore.updateDefinition(id, input);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_DEF_DELETE, async (_, id: string) => {
+    validateId(id);
+    return services.agentDefinitionStore.deleteDefinition(id);
   });
 
   // ============================================

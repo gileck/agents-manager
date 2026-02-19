@@ -79,6 +79,13 @@ export const IPC_CHANNELS = {
   FEATURE_UPDATE: 'feature:update',
   FEATURE_DELETE: 'feature:delete',
 
+  // Agent definition operations
+  AGENT_DEF_LIST: 'agent-def:list',
+  AGENT_DEF_GET: 'agent-def:get',
+  AGENT_DEF_CREATE: 'agent-def:create',
+  AGENT_DEF_UPDATE: 'agent-def:update',
+  AGENT_DEF_DELETE: 'agent-def:delete',
+
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;

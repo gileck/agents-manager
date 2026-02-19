@@ -6,6 +6,7 @@ import type {
   Feature, FeatureCreateInput, FeatureUpdateInput, FeatureFilter,
   Pipeline, Transition,
   AgentRun, AgentMode,
+  AgentDefinition, AgentDefinitionCreateInput, AgentDefinitionUpdateInput,
   TaskEvent, TaskEventFilter,
   ActivityEntry, ActivityFilter,
   PendingPrompt,
@@ -66,6 +67,11 @@ const IPC_CHANNELS = {
   FEATURE_CREATE: 'feature:create',
   FEATURE_UPDATE: 'feature:update',
   FEATURE_DELETE: 'feature:delete',
+  AGENT_DEF_LIST: 'agent-def:list',
+  AGENT_DEF_GET: 'agent-def:get',
+  AGENT_DEF_CREATE: 'agent-def:create',
+  AGENT_DEF_UPDATE: 'agent-def:update',
+  AGENT_DEF_DELETE: 'agent-def:delete',
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;
 
@@ -157,6 +163,20 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.FEATURE_UPDATE, id, input),
     delete: (id: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.FEATURE_DELETE, id),
+  },
+
+  // Agent definition operations
+  agentDefinitions: {
+    list: (): Promise<AgentDefinition[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_DEF_LIST),
+    get: (id: string): Promise<AgentDefinition | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_DEF_GET, id),
+    create: (input: AgentDefinitionCreateInput): Promise<AgentDefinition> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_DEF_CREATE, input),
+    update: (id: string, input: AgentDefinitionUpdateInput): Promise<AgentDefinition | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_DEF_UPDATE, id, input),
+    delete: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_DEF_DELETE, id),
   },
 
   // Pipeline operations
