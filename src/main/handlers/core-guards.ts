@@ -31,10 +31,9 @@ export function registerCoreGuards(engine: IPipelineEngine, db: Database.Databas
     return { allowed: false, reason: `${row.count} unresolved dependencies` };
   });
 
-  engine.registerGuard('max_retries', (task: Task, transition: Transition, _context: TransitionContext, dbRef: unknown): GuardResult => {
+  engine.registerGuard('max_retries', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown, params?: Record<string, unknown>): GuardResult => {
     const sqliteDb = dbRef as Database.Database;
-    const hookDef = transition.guards?.find((g) => g.name === 'max_retries');
-    const max = (hookDef?.params?.max as number) ?? 3;
+    const max = (params?.max as number) ?? 3;
 
     const row = sqliteDb.prepare(
       "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status IN ('failed', 'cancelled')"

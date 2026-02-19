@@ -57,6 +57,14 @@ export class StubGitOps implements IGitOps {
     // no-op in stub
   }
 
+  async rebaseAbort(): Promise<void> {
+    // no-op in stub
+  }
+
+  async deleteRemoteBranch(_branch: string): Promise<void> {
+    // no-op in stub
+  }
+
   async getCurrentBranch(): Promise<string> {
     return this.currentBranch;
   }

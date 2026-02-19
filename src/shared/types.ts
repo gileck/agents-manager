@@ -42,9 +42,11 @@ export interface PipelineStatus {
   label: string;
   color?: string;
   isFinal?: boolean;
+  category?: string;
+  position?: number;
 }
 
-export type TransitionTrigger = 'manual' | 'automatic' | 'agent';
+export type TransitionTrigger = 'manual' | 'agent' | 'system';
 
 export interface TransitionGuard {
   name: string;
@@ -281,6 +283,7 @@ export interface ActivityEntry {
   action: ActivityAction;
   entityType: ActivityEntity;
   entityId: string;
+  projectId: string | null;
   summary: string;
   data: Record<string, unknown>;
   createdAt: number;
@@ -290,6 +293,7 @@ export interface ActivityCreateInput {
   action: ActivityAction;
   entityType: ActivityEntity;
   entityId: string;
+  projectId?: string;
   summary: string;
   data?: Record<string, unknown>;
 }
@@ -298,6 +302,7 @@ export interface ActivityFilter {
   action?: ActivityAction;
   entityType?: ActivityEntity;
   entityId?: string;
+  projectId?: string;
   since?: number;
   until?: number;
 }
@@ -332,7 +337,7 @@ export interface TransitionHistoryEntry {
   createdAt: number;
 }
 
-export type GuardFn = (task: Task, transition: Transition, context: TransitionContext, db: unknown) => GuardResult;
+export type GuardFn = (task: Task, transition: Transition, context: TransitionContext, db: unknown, params?: Record<string, unknown>) => GuardResult;
 export type HookFn = (task: Task, transition: Transition, context: TransitionContext) => Promise<void>;
 
 // ============================================
@@ -468,8 +473,6 @@ export interface AgentContext {
   workdir: string;
   mode: AgentMode;
   taskContext?: TaskContextEntry[];
-  promptResponses?: Record<string, unknown>[];
-  systemPrompt?: string;
   validationErrors?: string;
   resolvedPrompt?: string;
 }

@@ -142,7 +142,7 @@ export class PipelineEngine implements IPipelineEngine {
             guardFailures.push({ guard: guard.name, reason: result.reason! });
             continue;
           }
-          const result = guardFn(freshTask, transition, ctx, this.db);
+          const result = guardFn(freshTask, transition, ctx, this.db, guard.params);
           guardResults[guard.name] = result;
           if (!result.allowed) {
             guardFailures.push({ guard: guard.name, reason: result.reason ?? 'Guard check failed' });

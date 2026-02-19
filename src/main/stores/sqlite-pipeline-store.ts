@@ -27,6 +27,38 @@ function rowToPipeline(row: PipelineRow): Pipeline {
   };
 }
 
+function validatePipelineInput(input: { statuses?: PipelineStatus[]; transitions?: Transition[] }): void {
+  if (input.statuses !== undefined) {
+    if (!Array.isArray(input.statuses) || input.statuses.length === 0) {
+      throw new Error('Pipeline must have at least one status');
+    }
+    const names = new Set<string>();
+    for (const s of input.statuses) {
+      if (!s.name || typeof s.name !== 'string') throw new Error('Each status must have a non-empty name');
+      if (!s.label || typeof s.label !== 'string') throw new Error(`Status "${s.name}" must have a non-empty label`);
+      if (names.has(s.name)) throw new Error(`Duplicate status name: "${s.name}"`);
+      names.add(s.name);
+    }
+  }
+  if (input.transitions !== undefined) {
+    if (!Array.isArray(input.transitions)) {
+      throw new Error('Transitions must be an array');
+    }
+    const statusNames = input.statuses ? new Set(input.statuses.map(s => s.name)) : null;
+    for (const t of input.transitions) {
+      if (!t.from || typeof t.from !== 'string') throw new Error('Each transition must have a "from" status');
+      if (!t.to || typeof t.to !== 'string') throw new Error('Each transition must have a "to" status');
+      if (!t.trigger || !['manual', 'agent', 'system'].includes(t.trigger)) {
+        throw new Error(`Invalid trigger "${t.trigger}" — must be manual, agent, or system`);
+      }
+      if (statusNames) {
+        if (t.from !== '*' && !statusNames.has(t.from)) throw new Error(`Transition "from" references unknown status: "${t.from}"`);
+        if (!statusNames.has(t.to)) throw new Error(`Transition "to" references unknown status: "${t.to}"`);
+      }
+    }
+  }
+}
+
 export class SqlitePipelineStore implements IPipelineStore {
   constructor(private db: Database.Database) {}
 
@@ -41,6 +73,7 @@ export class SqlitePipelineStore implements IPipelineStore {
   }
 
   async createPipeline(input: PipelineCreateInput): Promise<Pipeline> {
+    validatePipelineInput(input);
     const id = generateId();
     const timestamp = now();
 
@@ -64,6 +97,11 @@ export class SqlitePipelineStore implements IPipelineStore {
   async updatePipeline(id: string, input: PipelineUpdateInput): Promise<Pipeline | null> {
     const existing = await this.getPipeline(id);
     if (!existing) return null;
+
+    validatePipelineInput({
+      statuses: input.statuses ?? existing.statuses,
+      transitions: input.transitions ?? existing.transitions,
+    });
 
     const updates: string[] = [];
     const values: unknown[] = [];

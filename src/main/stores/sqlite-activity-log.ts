@@ -8,6 +8,7 @@ interface ActivityRow {
   action: string;
   entity_type: string;
   entity_id: string;
+  project_id: string | null;
   summary: string;
   data: string;
   created_at: number;
@@ -19,6 +20,7 @@ function rowToEntry(row: ActivityRow): ActivityEntry {
     action: row.action as ActivityEntry['action'],
     entityType: row.entity_type as ActivityEntry['entityType'],
     entityId: row.entity_id,
+    projectId: row.project_id,
     summary: row.summary,
     data: parseJson<Record<string, unknown>>(row.data, {}),
     createdAt: row.created_at,
@@ -33,13 +35,14 @@ export class SqliteActivityLog implements IActivityLog {
     const timestamp = now();
 
     this.db.prepare(`
-      INSERT INTO activity_log (id, action, entity_type, entity_id, summary, data, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO activity_log (id, action, entity_type, entity_id, project_id, summary, data, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.action,
       input.entityType,
       input.entityId,
+      input.projectId ?? null,
       input.summary,
       JSON.stringify(input.data ?? {}),
       timestamp,
@@ -50,6 +53,7 @@ export class SqliteActivityLog implements IActivityLog {
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId,
+      projectId: input.projectId ?? null,
       summary: input.summary,
       data: input.data ?? {},
       createdAt: timestamp,
@@ -71,6 +75,10 @@ export class SqliteActivityLog implements IActivityLog {
     if (filter?.entityId) {
       conditions.push('entity_id = ?');
       values.push(filter.entityId);
+    }
+    if (filter?.projectId) {
+      conditions.push('project_id = ?');
+      values.push(filter.projectId);
     }
     if (filter?.since !== undefined) {
       conditions.push('created_at >= ?');

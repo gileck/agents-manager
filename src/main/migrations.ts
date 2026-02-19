@@ -563,6 +563,13 @@ export function getMigrations(): Migration[] {
       name: '039_update_pipelines_no_changes_outcome',
       sql: getUpdateAllPipelinesSql(),
     },
+    {
+      name: '040_add_project_id_to_activity_log',
+      sql: `
+        ALTER TABLE activity_log ADD COLUMN project_id TEXT;
+        CREATE INDEX IF NOT EXISTS idx_activity_log_project_id ON activity_log(project_id)
+      `,
+    },
   ];
 }
 
