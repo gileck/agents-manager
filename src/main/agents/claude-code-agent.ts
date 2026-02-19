@@ -5,13 +5,14 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
   readonly type = 'claude-code';
 
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
-    return config.timeout || (context.mode === 'plan' || context.mode === 'plan_revision' ? 5 * 60 * 1000 : 10 * 60 * 1000);
+    return config.timeout || (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate' ? 5 * 60 * 1000 : 10 * 60 * 1000);
   }
 
   protected getOutputFormat(context: AgentContext): object | undefined {
     switch (context.mode) {
       case 'plan':
       case 'plan_revision':
+      case 'investigate':
         return {
           type: 'json_schema',
           schema: {
@@ -143,6 +144,35 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         prompt = lines.join('\n');
         break;
       }
+      case 'investigate': {
+        const invLines = [
+          `You are a bug investigator. Analyze the following bug report, investigate the root cause, and suggest a fix with concrete steps.`,
+          ``,
+          `Bug: ${task.title}.${desc}`,
+          ``,
+          `## Instructions`,
+          `1. Read the bug report carefully.`,
+          `2. Investigate the codebase to find the root cause.`,
+          `3. Write a detailed investigation report with your findings.`,
+          `4. Suggest a concrete fix plan.`,
+          `5. Break the fix into subtasks.`,
+        ];
+        if (task.subtasks && task.subtasks.length > 0) {
+          invLines.push('', '## Subtasks');
+          for (const st of task.subtasks) {
+            invLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
+          }
+        }
+        invLines.push(
+          ``,
+          `Your output will be captured as structured JSON with three fields:`,
+          `- "plan": a detailed investigation report as markdown (root cause analysis, findings, fix suggestion)`,
+          `- "planSummary": a short 2-3 sentence summary of the investigation`,
+          `- "subtasks": an array of concrete fix step names`,
+        );
+        prompt = invLines.join('\n');
+        break;
+      }
       case 'request_changes': {
         const rcLines = [
           `A code reviewer has reviewed the changes on this branch and requested changes.`,
@@ -192,6 +222,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
     switch (mode) {
       case 'plan': return 'plan_complete';
       case 'plan_revision': return 'plan_complete';
+      case 'investigate': return 'investigation_complete';
       case 'implement': return 'pr_ready';
       case 'request_changes': return 'pr_ready';
       default: return 'completed';

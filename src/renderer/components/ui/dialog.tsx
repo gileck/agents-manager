@@ -88,8 +88,8 @@ function DialogContent({ children, className }: DialogContentProps) {
         onClick={() => onOpenChange(false)}
       />
       {/* Content */}
-      <div className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg">
-        <div className={cn('', className)}>{children}</div>
+      <div className={cn("fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg", className)}>
+        <div>{children}</div>
         <button
           type="button"
           onClick={() => onOpenChange(false)}

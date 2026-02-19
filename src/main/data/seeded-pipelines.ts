@@ -152,4 +152,84 @@ export const AGENT_PIPELINE: SeededPipeline = {
   ],
 };
 
-export const SEEDED_PIPELINES = [SIMPLE_PIPELINE, FEATURE_PIPELINE, BUG_PIPELINE, AGENT_PIPELINE];
+export const BUG_AGENT_PIPELINE: SeededPipeline = {
+  id: 'pipeline-bug-agent',
+  name: 'Bug (Agent-Driven)',
+  description: 'Agent-driven bug investigation and fix workflow',
+  taskType: 'bug-agent',
+  statuses: [
+    { name: 'reported', label: 'Reported', color: '#ef4444' },
+    { name: 'investigating', label: 'Investigating', color: '#f59e0b' },
+    { name: 'investigation_review', label: 'Investigation Review', color: '#8b5cf6' },
+    { name: 'implementing', label: 'Implementing', color: '#3b82f6' },
+    { name: 'pr_review', label: 'PR Review', color: '#06b6d4' },
+    { name: 'needs_info', label: 'Needs Info', color: '#6b7280' },
+    { name: 'done', label: 'Done', color: '#22c55e', isFinal: true },
+  ],
+  transitions: [
+    // Manual transitions
+    { from: 'reported', to: 'investigating', trigger: 'manual', label: 'Start Investigation',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'investigate', agentType: 'claude-code' } }] },
+    { from: 'reported', to: 'implementing', trigger: 'manual', label: 'Start Implementing',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    { from: 'investigation_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    { from: 'investigation_review', to: 'investigating', trigger: 'manual', label: 'Request Investigation Changes',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'investigate', agentType: 'claude-code' } }] },
+    { from: 'pr_review', to: 'implementing', trigger: 'manual', label: 'Request Changes',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' } }] },
+    { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
+      hooks: [{ name: 'merge_pr' }] },
+    // Agent outcome auto-transitions
+    { from: 'investigating', to: 'investigation_review', trigger: 'agent', agentOutcome: 'investigation_complete',
+      hooks: [{ name: 'notify', params: { titleTemplate: 'Investigation ready', bodyTemplate: 'Investigation ready: {taskTitle}' } }] },
+    { from: 'investigating', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
+      hooks: [
+        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' } },
+        { name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' } },
+      ] },
+    { from: 'implementing', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
+      hooks: [
+        { name: 'push_and_create_pr' },
+        { name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}' } },
+        { name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' } },
+      ] },
+    { from: 'implementing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
+      hooks: [
+        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' } },
+        { name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' } },
+      ] },
+    // Human-in-the-loop resume
+    { from: 'needs_info', to: 'investigating', trigger: 'agent', agentOutcome: 'info_provided',
+      hooks: [{ name: 'start_agent', params: { mode: 'investigate', agentType: 'claude-code' } }] },
+    { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided',
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    // Auto-retry on failure
+    { from: 'investigating', to: 'investigating', trigger: 'agent', agentOutcome: 'failed',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'investigate', agentType: 'claude-code' } }] },
+    { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'failed',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' } }] },
+    // PR review agent outcomes
+    { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
+      hooks: [{ name: 'merge_pr' }] },
+    { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' } }] },
+    { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'failed',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' } }] },
+    // Recovery
+    { from: 'investigating', to: 'reported', trigger: 'manual', label: 'Cancel Investigation' },
+    { from: 'implementing', to: 'reported', trigger: 'manual', label: 'Cancel Implementation' },
+    { from: 'implementing', to: 'investigation_review', trigger: 'manual', label: 'Back to Investigation Review' },
+  ],
+};
+
+export const SEEDED_PIPELINES = [SIMPLE_PIPELINE, FEATURE_PIPELINE, BUG_PIPELINE, AGENT_PIPELINE, BUG_AGENT_PIPELINE];

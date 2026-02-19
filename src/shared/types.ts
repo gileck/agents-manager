@@ -20,6 +20,7 @@ export interface AppSettings {
   notificationsEnabled: boolean;
   currentProjectId: string | null;
   defaultPipelineId: string | null;
+  bugPipelineId: string | null;
 }
 
 // Log types (kept for template infrastructure)
@@ -339,7 +340,7 @@ export type HookFn = (task: Task, transition: Transition, context: TransitionCon
 // ============================================
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
-export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision';
+export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision' | 'investigate';
 
 export interface AgentRun {
   id: string;

@@ -539,6 +539,22 @@ export function getMigrations(): Migration[] {
       name: '033_split_agent_definitions',
       sql: getSplitAgentDefinitionsSql(),
     },
+    {
+      name: '034_add_bug_investigator',
+      sql: getAddBugInvestigatorSql(),
+    },
+    {
+      name: '035_set_default_bug_pipeline',
+      sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('bug_pipeline_id', 'pipeline-bug-agent')`,
+    },
+    {
+      name: '036_add_investigate_mode',
+      sql: getAddInvestigateModeSql(),
+    },
+    {
+      name: '037_widen_agent_runs_for_investigate',
+      sql: getWidenAgentRunsForInvestigateSql(),
+    },
   ];
 }
 
@@ -761,6 +777,150 @@ function getSeedAgentDefinitionsSql(): string {
   const seedReviewer = `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, created_at, updated_at) VALUES ('agent-def-pr-reviewer', 'PR Reviewer', 'Reviews code changes and provides feedback', 'claude-code', '${escSql(reviewerModes)}', 1, ${ts}, ${ts})`;
 
   return [createTable, seedImplementor, seedReviewer].join(';\n');
+}
+
+function getWidenAgentRunsForInvestigateSql(): string {
+  return `
+    -- Rebuild agent_runs to widen the mode CHECK constraint to include investigate.
+    -- task_phases and pending_prompts have FKs to agent_runs,
+    -- so we must rebuild them too (drop children first, then parent).
+
+    -- 1. Rebuild task_phases without FK to agent_runs
+    CREATE TABLE task_phases_tmp (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')),
+      agent_run_id TEXT,
+      started_at INTEGER,
+      completed_at INTEGER,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    );
+    INSERT INTO task_phases_tmp SELECT * FROM task_phases;
+    DROP TABLE task_phases;
+
+    -- 2. Rebuild pending_prompts without FK to agent_runs
+    CREATE TABLE pending_prompts_tmp (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      agent_run_id TEXT NOT NULL,
+      prompt_type TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      response TEXT,
+      status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')),
+      created_at INTEGER NOT NULL,
+      answered_at INTEGER,
+      resume_outcome TEXT,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    );
+    INSERT INTO pending_prompts_tmp SELECT * FROM pending_prompts;
+    DROP TABLE pending_prompts;
+
+    -- 3. Now rebuild agent_runs with updated CHECK
+    CREATE TABLE agent_runs_new (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      agent_type TEXT NOT NULL,
+      mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review','request_changes','plan_revision','investigate')),
+      status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')),
+      output TEXT,
+      outcome TEXT,
+      payload TEXT,
+      exit_code INTEGER,
+      started_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      cost_input_tokens INTEGER,
+      cost_output_tokens INTEGER,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    );
+    INSERT INTO agent_runs_new SELECT * FROM agent_runs;
+    DROP TABLE agent_runs;
+    ALTER TABLE agent_runs_new RENAME TO agent_runs;
+
+    -- 4. Restore task_phases with FK to new agent_runs
+    CREATE TABLE task_phases (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')),
+      agent_run_id TEXT,
+      started_at INTEGER,
+      completed_at INTEGER,
+      FOREIGN KEY(task_id) REFERENCES tasks(id),
+      FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+    );
+    INSERT INTO task_phases SELECT * FROM task_phases_tmp;
+    DROP TABLE task_phases_tmp;
+
+    -- 5. Restore pending_prompts with FK to new agent_runs
+    CREATE TABLE pending_prompts (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      agent_run_id TEXT NOT NULL,
+      prompt_type TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      response TEXT,
+      status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')),
+      created_at INTEGER NOT NULL,
+      answered_at INTEGER,
+      resume_outcome TEXT,
+      FOREIGN KEY(task_id) REFERENCES tasks(id),
+      FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+    );
+    INSERT INTO pending_prompts SELECT * FROM pending_prompts_tmp;
+    DROP TABLE pending_prompts_tmp;
+
+    -- 6. Recreate all indexes
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_task_id ON agent_runs(task_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+    CREATE INDEX IF NOT EXISTS idx_task_phases_task_id ON task_phases(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
+  `;
+}
+
+function getAddBugInvestigatorSql(): string {
+  const bugAgentPipeline = SEEDED_PIPELINES.find((p) => p.id === 'pipeline-bug-agent');
+  if (!bugAgentPipeline) return '';
+  const now = Date.now();
+  const id = escSql(bugAgentPipeline.id);
+  const name = escSql(bugAgentPipeline.name);
+  const desc = escSql(bugAgentPipeline.description);
+  const taskType = escSql(bugAgentPipeline.taskType);
+  const statuses = escSql(JSON.stringify(bugAgentPipeline.statuses));
+  const transitions = escSql(JSON.stringify(bugAgentPipeline.transitions));
+  return `INSERT OR IGNORE INTO pipelines (id, name, description, statuses, transitions, task_type, created_at, updated_at) VALUES ('${id}', '${name}', '${desc}', '${statuses}', '${transitions}', '${taskType}', ${now}, ${now})`;
+}
+
+function getAddInvestigateModeSql(): string {
+  const ts = Date.now();
+
+  const investigateMode = {
+    mode: 'investigate',
+    promptTemplate: [
+      'You are a bug investigator. Analyze the following bug report, investigate the root cause, and suggest a fix with concrete steps.',
+      '',
+      'Bug: {taskTitle}.{taskDescription}',
+      '',
+      '## Instructions',
+      '1. Read the bug report carefully.',
+      '2. Investigate the codebase to find the root cause.',
+      '3. Write a detailed investigation report with your findings.',
+      '4. Suggest a concrete fix plan.',
+      '5. Break the fix into subtasks.',
+      '',
+      '{subtasksSection}',
+    ].join('\n'),
+    timeout: 300000,
+  };
+
+  // We need to add the investigate mode to the existing agent-def-claude-code modes array.
+  // Since SQLite doesn't have native JSON array manipulation, we read the current modes,
+  // add the new mode, and write back. But in a migration we use raw SQL, so we use
+  // json_insert / json_set. However the simplest approach: use REPLACE to append.
+  // Actually, we'll just use a direct UPDATE that reads and appends via SQLite JSON functions.
+  const modeJson = escSql(JSON.stringify(investigateMode));
+  return `UPDATE agent_definitions SET modes = json_insert(modes, '$[#]', json('${modeJson}')), updated_at = ${ts} WHERE id = 'agent-def-claude-code'`;
 }
 
 function getSeedPipelinesSql(): string {

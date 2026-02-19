@@ -246,7 +246,7 @@ export class AgentService implements IAgentService {
       }
 
       // Post-agent validation loop (skip for plan/plan_revision mode — no code changes to validate)
-      const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision'
+      const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision' && context.mode !== 'investigate'
         ? (context.project.config?.validationCommands as string[] | undefined) ?? []
         : [];
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
@@ -319,7 +319,7 @@ export class AgentService implements IAgentService {
       }
 
       // Extract plan, subtasks, and context from plan/plan_revision output
-      if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision')) {
+      if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate')) {
         const so = result.structuredOutput as { plan?: string; planSummary?: string; subtasks?: string[] } | undefined;
         if (so?.plan) {
           const updates: import('../../shared/types').TaskUpdateInput = { plan: so.plan };
@@ -515,6 +515,7 @@ export class AgentService implements IAgentService {
     switch (mode) {
       case 'plan': return 'plan_summary';
       case 'plan_revision': return 'plan_revision_summary';
+      case 'investigate': return 'investigation_summary';
       case 'implement': return 'implementation_summary';
       case 'request_changes': return 'fix_summary';
       default: return 'agent_output';
@@ -549,7 +550,7 @@ export class AgentService implements IAgentService {
 
     // Build subtasks section
     let subtasksSection = '';
-    if (context.mode === 'plan') {
+    if (context.mode === 'plan' || context.mode === 'investigate') {
       subtasksSection = [
         '',
         'At the end of your plan, include a "## Subtasks" section with a JSON array of subtask names that break down the implementation into concrete steps. Example:',

@@ -17,6 +17,14 @@ interface AgentDefinitionDialogProps {
 
 const EMPTY_MODE: AgentModeConfig = { mode: '', promptTemplate: '' };
 
+const MODELS_BY_ENGINE: Record<string, { value: string; label: string }[]> = {
+  'claude-code': [
+    { value: 'claude-opus-4-6-20250610', label: 'Claude Opus 4.6' },
+    { value: 'claude-sonnet-4-6-20250514', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+  ],
+};
+
 export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }: AgentDefinitionDialogProps) {
   const isEdit = !!definition;
 
@@ -99,7 +107,7 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Agent' : 'New Agent'}</DialogTitle>
         </DialogHeader>
@@ -129,7 +137,17 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
 
           <div className="space-y-2">
             <Label>Model Override (optional)</Label>
-            <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g. claude-sonnet-4-5-20250514" />
+            <Select value={model} onValueChange={setModel}>
+              <SelectTrigger>
+                <SelectValue placeholder="Default (project setting)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Default (project setting)</SelectItem>
+                {(MODELS_BY_ENGINE[engine] ?? []).map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
