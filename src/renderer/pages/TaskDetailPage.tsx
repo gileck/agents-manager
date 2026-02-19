@@ -10,13 +10,18 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
-import { useTask } from '../hooks/useTasks';
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '../components/ui/select';
+import { useTask, useTasks } from '../hooks/useTasks';
 import { usePipeline } from '../hooks/usePipelines';
+import { useFeatures } from '../hooks/useFeatures';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type {
-  Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
+  Task, Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus,
 } from '../../shared/types';
 
@@ -28,6 +33,7 @@ export function TaskDetailPage() {
   const navigate = useNavigate();
   const { task, loading, error, refetch } = useTask(id!);
   const { pipeline } = usePipeline(task?.pipelineId);
+  const { features } = useFeatures(task ? { projectId: task.projectId } : undefined);
 
   const { data: transitions, refetch: refetchTransitions } = useIpc<Transition[]>(
     () => id ? window.api.tasks.transitions(id) : Promise.resolve([]),
@@ -140,6 +146,7 @@ export function TaskDetailPage() {
         description: task.description ?? '',
         priority: task.priority,
         assignee: task.assignee ?? '',
+        featureId: task.featureId,
       });
       setEditOpen(true);
     }
@@ -372,6 +379,18 @@ export function TaskDetailPage() {
                 <span className="text-sm text-muted-foreground">Description</span>
                 <span className="text-sm">{task.description || 'No description'}</span>
 
+                {task.featureId && (
+                  <>
+                    <span className="text-sm text-muted-foreground">Feature</span>
+                    <span
+                      className="text-sm text-blue-500 hover:underline cursor-pointer"
+                      onClick={() => navigate(`/features/${task.featureId}`)}
+                    >
+                      {features.find((f) => f.id === task.featureId)?.title ?? task.featureId}
+                    </span>
+                  </>
+                )}
+
                 {task.prLink && (
                   <>
                     <span className="text-sm text-muted-foreground">PR</span>
@@ -409,6 +428,9 @@ export function TaskDetailPage() {
 
           {/* Subtasks */}
           <SubtasksSection taskId={id!} subtasks={task.subtasks} onUpdate={refetch} />
+
+          {/* Dependencies */}
+          <DependenciesSection taskId={id!} projectId={task.projectId} />
 
           {/* Pending Prompt UI (needs_info) */}
           {task.status === 'needs_info' && pendingPrompts && pendingPrompts.length > 0 && (
@@ -471,9 +493,7 @@ export function TaskDetailPage() {
             </CardHeader>
             <CardContent>
               {task.plan ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <ReactMarkdown>{task.plan}</ReactMarkdown>
-                </div>
+                <PlanMarkdown content={task.plan} />
               ) : (
                 <p className="text-sm text-muted-foreground">No plan yet. A plan will appear here after the planning agent completes.</p>
               )}
@@ -613,6 +633,25 @@ export function TaskDetailPage() {
                 onChange={(e) => setEditForm({ ...editForm, assignee: e.target.value || null })}
               />
             </div>
+            {features.length > 0 && (
+              <div className="space-y-2">
+                <Label>Feature</Label>
+                <Select
+                  value={editForm.featureId ?? '__none__'}
+                  onValueChange={(v) => setEditForm({ ...editForm, featureId: v === '__none__' ? null : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No feature" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No feature</SelectItem>
+                    {features.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
@@ -806,6 +845,172 @@ function SubtasksSection({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** Dependencies Section — Blocked By + Blocks */
+function DependenciesSection({
+  taskId,
+  projectId,
+}: {
+  taskId: string;
+  projectId: string;
+}) {
+  const navigate = useNavigate();
+
+  const { data: blockedBy, refetch: refetchDeps } = useIpc<Task[]>(
+    () => window.api.tasks.dependencies(taskId),
+    [taskId],
+  );
+
+  const { data: blocks, refetch: refetchDependents } = useIpc<Task[]>(
+    () => window.api.tasks.dependents(taskId),
+    [taskId],
+  );
+
+  const { tasks: projectTasks } = useTasks({ projectId });
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const blockedByIds = new Set((blockedBy ?? []).map((t) => t.id));
+  const availableTasks = projectTasks.filter(
+    (t) => t.id !== taskId && !blockedByIds.has(t.id),
+  );
+
+  const handleAdd = async (depTaskId: string) => {
+    await window.api.tasks.addDependency(taskId, depTaskId);
+    setPickerOpen(false);
+    await refetchDeps();
+    await refetchDependents();
+  };
+
+  const handleRemove = async (depTaskId: string) => {
+    setRemoving(depTaskId);
+    try {
+      await window.api.tasks.removeDependency(taskId, depTaskId);
+      await refetchDeps();
+      await refetchDependents();
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  return (
+    <Card className="mt-4">
+      <CardHeader className="py-3">
+        <CardTitle className="text-base">Dependencies</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {/* Blocked By */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-muted-foreground">Blocked By</span>
+            <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)}>
+              Add
+            </Button>
+          </div>
+          {(!blockedBy || blockedBy.length === 0) ? (
+            <p className="text-xs text-muted-foreground">No dependencies.</p>
+          ) : (
+            <div className="space-y-1">
+              {blockedBy.map((dep) => (
+                <div key={dep.id} className="flex items-center gap-2 group py-1">
+                  <Badge variant="outline" className="text-[10px] shrink-0">{dep.status}</Badge>
+                  <span
+                    className="text-sm text-blue-500 hover:underline cursor-pointer truncate flex-1"
+                    onClick={() => navigate(`/tasks/${dep.id}`)}
+                  >
+                    {dep.title}
+                  </span>
+                  <button
+                    onClick={() => handleRemove(dep.id)}
+                    disabled={removing === dep.id}
+                    className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity text-sm px-1"
+                    title="Remove dependency"
+                  >
+                    {removing === dep.id ? '...' : '\u00d7'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Blocks */}
+        <div>
+          <span className="text-sm font-medium text-muted-foreground block mb-2">Blocks</span>
+          {(!blocks || blocks.length === 0) ? (
+            <p className="text-xs text-muted-foreground">No tasks depend on this task.</p>
+          ) : (
+            <div className="space-y-1">
+              {blocks.map((dep) => (
+                <div key={dep.id} className="flex items-center gap-2 py-1">
+                  <Badge variant="outline" className="text-[10px] shrink-0">{dep.status}</Badge>
+                  <span
+                    className="text-sm text-blue-500 hover:underline cursor-pointer truncate"
+                    onClick={() => navigate(`/tasks/${dep.id}`)}
+                  >
+                    {dep.title}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Add Dependency Picker */}
+        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Dependency</DialogTitle>
+            </DialogHeader>
+            <DependencyPicker tasks={availableTasks} onSelect={handleAdd} />
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Simple searchable picker for selecting a task dependency */
+function DependencyPicker({
+  tasks,
+  onSelect,
+}: {
+  tasks: Task[];
+  onSelect: (taskId: string) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const filtered = tasks.filter((t) =>
+    t.title.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return (
+    <div className="py-2 space-y-3">
+      <Input
+        placeholder="Search tasks..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        autoFocus
+      />
+      <div className="max-h-60 overflow-y-auto space-y-1">
+        {filtered.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2">No matching tasks.</p>
+        ) : (
+          filtered.map((t) => (
+            <div
+              key={t.id}
+              className="flex items-center gap-2 px-2 py-2 rounded hover:bg-accent cursor-pointer"
+              onClick={() => onSelect(t.id)}
+            >
+              <Badge variant="outline" className="text-[10px] shrink-0">{t.status}</Badge>
+              <span className="text-sm truncate">{t.title}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -17,6 +17,7 @@ interface TaskRow {
   assignee: string | null;
   pr_link: string | null;
   branch_name: string | null;
+  feature_id: string | null;
   plan: string | null;
   subtasks: string;
   metadata: string;
@@ -35,6 +36,7 @@ function rowToTask(row: TaskRow): Task {
     priority: row.priority,
     tags: parseJson<string[]>(row.tags, []),
     parentTaskId: row.parent_task_id,
+    featureId: row.feature_id,
     assignee: row.assignee,
     prLink: row.pr_link,
     branchName: row.branch_name,
@@ -89,6 +91,14 @@ export class SqliteTaskStore implements ITaskStore {
         values.push(filter.parentTaskId);
       }
     }
+    if (filter?.featureId !== undefined) {
+      if (filter.featureId === null) {
+        conditions.push('feature_id IS NULL');
+      } else {
+        conditions.push('feature_id = ?');
+        values.push(filter.featureId);
+      }
+    }
     if (filter?.tag) {
       conditions.push("EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)");
       values.push(filter.tag);
@@ -120,8 +130,8 @@ export class SqliteTaskStore implements ITaskStore {
     }
 
     this.db.prepare(`
-      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, assignee, pr_link, branch_name, plan, subtasks, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, subtasks, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.projectId,
@@ -132,6 +142,7 @@ export class SqliteTaskStore implements ITaskStore {
       input.priority ?? 0,
       JSON.stringify(input.tags ?? []),
       input.parentTaskId ?? null,
+      input.featureId ?? null,
       input.assignee ?? null,
       input.prLink ?? null,
       input.branchName ?? null,
@@ -176,6 +187,10 @@ export class SqliteTaskStore implements ITaskStore {
       updates.push('parent_task_id = ?');
       values.push(input.parentTaskId);
     }
+    if (input.featureId !== undefined) {
+      updates.push('feature_id = ?');
+      values.push(input.featureId);
+    }
     if (input.assignee !== undefined) {
       updates.push('assignee = ?');
       values.push(input.assignee);
@@ -213,6 +228,7 @@ export class SqliteTaskStore implements ITaskStore {
 
   async deleteTask(id: string): Promise<boolean> {
     // Delete all related records that reference this task
+    this.db.prepare('DELETE FROM task_context_entries WHERE task_id = ?').run(id);
     this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
     this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
     this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);

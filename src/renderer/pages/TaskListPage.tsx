@@ -15,7 +15,8 @@ import { TaskEmptyState } from '../components/tasks/TaskEmptyState';
 import { TaskGroupedList } from '../components/tasks/TaskGroupedList';
 import { TaskCreateDialog } from '../components/tasks/TaskCreateDialog';
 import { TaskDeleteDialog, BulkDeleteDialog } from '../components/tasks/TaskDeleteDialogs';
-import { sortTasks, collectTags, buildPipelineMap } from '../components/tasks/task-helpers';
+import { useFeatures } from '../hooks/useFeatures';
+import { sortTasks, collectTags, buildPipelineMap, buildFeatureMap } from '../components/tasks/task-helpers';
 import type { FilterState } from '../components/tasks/TaskFilterBar';
 import type { SortField, SortDirection, GroupBy } from '../components/tasks/task-helpers';
 import type { Task, TaskFilter, TaskCreateInput, AppSettings } from '../../shared/types';
@@ -57,11 +58,21 @@ export function TaskListPage() {
   if (filters.pipelineId) taskFilter.pipelineId = filters.pipelineId;
   if (filters.tag) taskFilter.tag = filters.tag;
 
+  if (filters.featureId) {
+    if (filters.featureId === '__none__') {
+      taskFilter.featureId = null;
+    } else {
+      taskFilter.featureId = filters.featureId;
+    }
+  }
+
   const { tasks, loading, error, refetch } = useTasks(taskFilter);
   const { pipelines } = usePipelines();
+  const { features } = useFeatures(currentProjectId ? { projectId: currentProjectId } : undefined);
 
   // Derived data
   const pipelineMap = useMemo(() => buildPipelineMap(pipelines), [pipelines]);
+  const featureMap = useMemo(() => buildFeatureMap(features), [features]);
   const availableTags = useMemo(() => collectTags(tasks), [tasks]);
   const sortedTasks = useMemo(() => sortTasks(tasks, sortField, sortDirection), [tasks, sortField, sortDirection]);
   const allStatuses = useMemo(
@@ -219,6 +230,7 @@ export function TaskListPage() {
                 <SelectItem value="status">Status</SelectItem>
                 <SelectItem value="priority">Priority</SelectItem>
                 <SelectItem value="pipeline">Pipeline</SelectItem>
+                <SelectItem value="feature">Feature</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -252,6 +264,7 @@ export function TaskListPage() {
           statuses={allStatuses}
           pipelines={pipelines}
           tags={availableTags}
+          features={features}
         />
       </div>
 
@@ -293,6 +306,7 @@ export function TaskListPage() {
             tasks={sortedTasks}
             groupBy={groupBy}
             pipelineMap={pipelineMap}
+            featureMap={featureMap}
             activeTaskIds={activeTaskIds}
             selectMode={selectMode}
             selectedIds={selectedIds}
@@ -309,6 +323,7 @@ export function TaskListPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         pipelines={pipelines}
+        features={features}
         form={form}
         onFormChange={setForm}
         onCreate={handleCreate}

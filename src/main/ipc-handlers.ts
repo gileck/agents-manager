@@ -18,6 +18,9 @@ import type {
   ActivityFilter,
   AgentMode,
   DebugTimelineEntry,
+  FeatureCreateInput,
+  FeatureUpdateInput,
+  FeatureFilter,
 } from '../shared/types';
 
 function safeParse(json: string | null | undefined): Record<string, unknown> | undefined {
@@ -174,6 +177,23 @@ export function registerIpcHandlers(services: AppServices): void {
   registerIpcHandler(IPC_CHANNELS.TASK_DEPENDENCIES, async (_, taskId: string) => {
     validateId(taskId);
     return services.taskStore.getDependencies(taskId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_DEPENDENTS, async (_, taskId: string) => {
+    validateId(taskId);
+    return services.taskStore.getDependents(taskId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_ADD_DEPENDENCY, async (_, taskId: string, dependsOnTaskId: string) => {
+    validateId(taskId);
+    validateId(dependsOnTaskId);
+    await services.taskStore.addDependency(taskId, dependsOnTaskId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_REMOVE_DEPENDENCY, async (_, taskId: string, dependsOnTaskId: string) => {
+    validateId(taskId);
+    validateId(dependsOnTaskId);
+    await services.taskStore.removeDependency(taskId, dependsOnTaskId);
   });
 
   // ============================================
@@ -412,6 +432,34 @@ export function registerIpcHandlers(services: AppServices): void {
     if (!project?.path) return null;
     const wm = services.createWorktreeManager(project.path);
     return wm.get(taskId);
+  });
+
+  // ============================================
+  // Feature Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.FEATURE_LIST, async (_, filter?: FeatureFilter) => {
+    return services.featureStore.listFeatures(filter);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.FEATURE_GET, async (_, id: string) => {
+    validateId(id);
+    return services.featureStore.getFeature(id);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.FEATURE_CREATE, async (_, input: FeatureCreateInput) => {
+    validateInput(input, ['projectId', 'title']);
+    return services.featureStore.createFeature(input);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.FEATURE_UPDATE, async (_, id: string, input: FeatureUpdateInput) => {
+    validateId(id);
+    return services.featureStore.updateFeature(id, input);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.FEATURE_DELETE, async (_, id: string) => {
+    validateId(id);
+    return services.featureStore.deleteFeature(id);
   });
 
   // ============================================

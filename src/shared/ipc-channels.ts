@@ -34,6 +34,9 @@ export const IPC_CHANNELS = {
   TASK_TRANSITION: 'task:transition',
   TASK_TRANSITIONS: 'task:transitions',
   TASK_DEPENDENCIES: 'task:dependencies',
+  TASK_DEPENDENTS: 'task:dependents',
+  TASK_ADD_DEPENDENCY: 'task:add-dependency',
+  TASK_REMOVE_DEPENDENCY: 'task:remove-dependency',
 
   // Pipeline operations
   PIPELINE_LIST: 'pipeline:list',
@@ -68,6 +71,13 @@ export const IPC_CHANNELS = {
 
   // Worktree
   TASK_WORKTREE: 'task:worktree',
+
+  // Feature operations
+  FEATURE_LIST: 'feature:list',
+  FEATURE_GET: 'feature:get',
+  FEATURE_CREATE: 'feature:create',
+  FEATURE_UPDATE: 'feature:update',
+  FEATURE_DELETE: 'feature:delete',
 
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',

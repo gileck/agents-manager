@@ -3,6 +3,7 @@ import type {
   Item, ItemCreateInput, ItemUpdateInput, AppSettings,
   Project, ProjectCreateInput, ProjectUpdateInput,
   Task, TaskCreateInput, TaskUpdateInput, TaskFilter,
+  Feature, FeatureCreateInput, FeatureUpdateInput, FeatureFilter,
   Pipeline, Transition,
   AgentRun, AgentMode,
   TaskEvent, TaskEventFilter,
@@ -41,6 +42,9 @@ const IPC_CHANNELS = {
   TASK_TRANSITION: 'task:transition',
   TASK_TRANSITIONS: 'task:transitions',
   TASK_DEPENDENCIES: 'task:dependencies',
+  TASK_DEPENDENTS: 'task:dependents',
+  TASK_ADD_DEPENDENCY: 'task:add-dependency',
+  TASK_REMOVE_DEPENDENCY: 'task:remove-dependency',
   PIPELINE_LIST: 'pipeline:list',
   PIPELINE_GET: 'pipeline:get',
   AGENT_START: 'agent:start',
@@ -57,6 +61,11 @@ const IPC_CHANNELS = {
   TASK_CONTEXT_ENTRIES: 'task:context-entries',
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
   TASK_WORKTREE: 'task:worktree',
+  FEATURE_LIST: 'feature:list',
+  FEATURE_GET: 'feature:get',
+  FEATURE_CREATE: 'feature:create',
+  FEATURE_UPDATE: 'feature:update',
+  FEATURE_DELETE: 'feature:delete',
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;
 
@@ -122,12 +131,32 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_TRANSITIONS, taskId),
     dependencies: (taskId: string): Promise<Task[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEPENDENCIES, taskId),
+    dependents: (taskId: string): Promise<Task[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_DEPENDENTS, taskId),
+    addDependency: (taskId: string, dependsOnTaskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_ADD_DEPENDENCY, taskId, dependsOnTaskId),
+    removeDependency: (taskId: string, dependsOnTaskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_REMOVE_DEPENDENCY, taskId, dependsOnTaskId),
     contextEntries: (taskId: string): Promise<TaskContextEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_CONTEXT_ENTRIES, taskId),
     debugTimeline: (taskId: string): Promise<DebugTimelineEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEBUG_TIMELINE, taskId),
     worktree: (taskId: string): Promise<Worktree | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE, taskId),
+  },
+
+  // Feature operations
+  features: {
+    list: (filter?: FeatureFilter): Promise<Feature[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FEATURE_LIST, filter),
+    get: (id: string): Promise<Feature | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FEATURE_GET, id),
+    create: (input: FeatureCreateInput): Promise<Feature> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FEATURE_CREATE, input),
+    update: (id: string, input: FeatureUpdateInput): Promise<Feature | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FEATURE_UPDATE, id, input),
+    delete: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FEATURE_DELETE, id),
   },
 
   // Pipeline operations

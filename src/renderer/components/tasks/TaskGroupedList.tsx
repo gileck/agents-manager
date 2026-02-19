@@ -4,12 +4,13 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { TaskRow } from './TaskRow';
 import { groupTasks } from './task-helpers';
 import type { GroupBy } from './task-helpers';
-import type { Task, Pipeline } from '../../../shared/types';
+import type { Task, Pipeline, Feature } from '../../../shared/types';
 
 interface TaskGroupedListProps {
   tasks: Task[];
   groupBy: GroupBy;
   pipelineMap: Map<string, Pipeline>;
+  featureMap?: Map<string, Feature>;
   activeTaskIds: Set<string>;
   selectMode: boolean;
   selectedIds: Set<string>;
@@ -23,6 +24,7 @@ export function TaskGroupedList({
   tasks,
   groupBy,
   pipelineMap,
+  featureMap,
   activeTaskIds,
   selectMode,
   selectedIds,
@@ -32,8 +34,8 @@ export function TaskGroupedList({
   onDuplicateTask,
 }: TaskGroupedListProps) {
   const groups = useMemo(
-    () => groupTasks(tasks, groupBy, pipelineMap),
-    [tasks, groupBy, pipelineMap],
+    () => groupTasks(tasks, groupBy, pipelineMap, featureMap),
+    [tasks, groupBy, pipelineMap, featureMap],
   );
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -47,6 +49,9 @@ export function TaskGroupedList({
     });
   };
 
+  const getFeatureName = (task: Task) =>
+    task.featureId ? featureMap?.get(task.featureId)?.title : undefined;
+
   if (groupBy === 'none') {
     return (
       <div className="space-y-2">
@@ -56,6 +61,7 @@ export function TaskGroupedList({
             task={task}
             pipeline={pipelineMap.get(task.pipelineId) ?? null}
             hasActiveAgent={activeTaskIds.has(task.id)}
+            featureName={getFeatureName(task)}
             selectMode={selectMode}
             selected={selectedIds.has(task.id)}
             onToggleSelect={() => onToggleSelect(task.id)}
@@ -96,6 +102,7 @@ export function TaskGroupedList({
                     task={task}
                     pipeline={pipelineMap.get(task.pipelineId) ?? null}
                     hasActiveAgent={activeTaskIds.has(task.id)}
+                    featureName={getFeatureName(task)}
                     selectMode={selectMode}
                     selected={selectedIds.has(task.id)}
                     onToggleSelect={() => onToggleSelect(task.id)}

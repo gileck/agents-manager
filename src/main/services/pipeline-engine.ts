@@ -30,6 +30,7 @@ interface TaskRow {
   assignee: string | null;
   pr_link: string | null;
   branch_name: string | null;
+  feature_id: string | null;
   plan: string | null;
   subtasks: string;
   metadata: string;
@@ -48,6 +49,7 @@ function rowToTask(row: TaskRow): Task {
     priority: row.priority,
     tags: parseJson<string[]>(row.tags, []),
     parentTaskId: row.parent_task_id,
+    featureId: row.feature_id,
     assignee: row.assignee,
     prLink: row.pr_link,
     branchName: row.branch_name,

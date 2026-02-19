@@ -9,12 +9,13 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../ui/dialog';
-import type { Pipeline, TaskCreateInput } from '../../../shared/types';
+import type { Pipeline, Feature, TaskCreateInput } from '../../../shared/types';
 
 interface TaskCreateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pipelines: Pipeline[];
+  features?: Feature[];
   form: Omit<TaskCreateInput, 'projectId'>;
   onFormChange: (form: Omit<TaskCreateInput, 'projectId'>) => void;
   onCreate: () => void;
@@ -25,6 +26,7 @@ export function TaskCreateDialog({
   open,
   onOpenChange,
   pipelines,
+  features,
   form,
   onFormChange,
   onCreate,
@@ -67,6 +69,25 @@ export function TaskCreateDialog({
               placeholder="Optional description"
             />
           </div>
+          {features && features.length > 0 && (
+            <div className="space-y-2">
+              <Label>Feature</Label>
+              <Select
+                value={form.featureId ?? '__none__'}
+                onValueChange={(v) => onFormChange({ ...form, featureId: v === '__none__' ? undefined : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No feature" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No feature</SelectItem>
+                  {features.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>{f.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

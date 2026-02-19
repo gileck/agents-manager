@@ -397,6 +397,28 @@ export function getMigrations(): Migration[] {
       name: '025_add_plan_column',
       sql: `ALTER TABLE tasks ADD COLUMN plan TEXT`,
     },
+    {
+      name: '026_create_features',
+      sql: `
+        CREATE TABLE IF NOT EXISTS features (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_features_project_id ON features(project_id)
+      `,
+    },
+    {
+      name: '027_add_feature_id_to_tasks',
+      sql: `
+        ALTER TABLE tasks ADD COLUMN feature_id TEXT REFERENCES features(id);
+        CREATE INDEX IF NOT EXISTS idx_tasks_feature_id ON tasks(feature_id)
+      `,
+    },
   ];
 }
 

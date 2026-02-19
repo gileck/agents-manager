@@ -117,6 +117,39 @@ export interface ProjectUpdateInput {
   config?: Record<string, unknown>;
 }
 
+// Feature types
+export type FeatureStatus = 'open' | 'in_progress' | 'done';
+
+export interface Feature {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FeatureCreateInput {
+  projectId: string;
+  title: string;
+  description?: string;
+}
+
+export interface FeatureUpdateInput {
+  title?: string;
+  description?: string;
+}
+
+export interface FeatureFilter {
+  projectId?: string;
+}
+
+export interface FeatureWithProgress extends Feature {
+  status: FeatureStatus;
+  totalTasks: number;
+  doneTasks: number;
+}
+
 // Subtask types
 export type SubtaskStatus = 'open' | 'in_progress' | 'done';
 
@@ -136,6 +169,7 @@ export interface Task {
   priority: number;
   tags: string[];
   parentTaskId: string | null;
+  featureId: string | null;
   assignee: string | null;
   prLink: string | null;
   branchName: string | null;
@@ -155,6 +189,7 @@ export interface TaskCreateInput {
   priority?: number;
   tags?: string[];
   parentTaskId?: string;
+  featureId?: string;
   assignee?: string;
   prLink?: string;
   branchName?: string;
@@ -169,6 +204,7 @@ export interface TaskUpdateInput {
   priority?: number;
   tags?: string[];
   parentTaskId?: string | null;
+  featureId?: string | null;
   assignee?: string | null;
   prLink?: string | null;
   branchName?: string | null;
@@ -184,6 +220,7 @@ export interface TaskFilter {
   priority?: number;
   assignee?: string;
   parentTaskId?: string | null;
+  featureId?: string | null;
   tag?: string;
   /** Free-text search across title and description (case-insensitive substring match) */
   search?: string;

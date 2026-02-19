@@ -1,4 +1,4 @@
-import type { Task, Pipeline } from '../../../shared/types';
+import type { Task, Pipeline, Feature, FeatureWithProgress, FeatureStatus } from '../../../shared/types';
 
 export const PRIORITY_LABELS: Record<number, string> = {
   0: 'P0 - Critical',
@@ -9,7 +9,7 @@ export const PRIORITY_LABELS: Record<number, string> = {
 
 export type SortField = 'created' | 'updated' | 'priority' | 'status' | 'title';
 export type SortDirection = 'asc' | 'desc';
-export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline';
+export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline' | 'feature';
 
 export function sortTasks(tasks: Task[], field: SortField, direction: SortDirection): Task[] {
   const sorted = [...tasks].sort((a, b) => {
@@ -41,6 +41,7 @@ export function groupTasks(
   tasks: Task[],
   groupBy: GroupBy,
   pipelineMap?: Map<string, Pipeline>,
+  featureMap?: Map<string, Feature>,
 ): Map<string, Task[]> {
   if (groupBy === 'none') {
     return new Map([['all', tasks]]);
@@ -58,6 +59,11 @@ export function groupTasks(
         break;
       case 'pipeline':
         key = pipelineMap?.get(task.pipelineId)?.name ?? task.pipelineId;
+        break;
+      case 'feature':
+        key = task.featureId
+          ? (featureMap?.get(task.featureId)?.title ?? task.featureId)
+          : 'No Feature';
         break;
       default:
         key = 'all';
@@ -89,6 +95,7 @@ export function countActiveFilters(filters: {
   pipelineId?: string;
   assignee?: string;
   tag?: string;
+  featureId?: string;
 }): number {
   let count = 0;
   if (filters.search) count++;
@@ -97,6 +104,7 @@ export function countActiveFilters(filters: {
   if (filters.pipelineId) count++;
   if (filters.assignee) count++;
   if (filters.tag) count++;
+  if (filters.featureId) count++;
   return count;
 }
 
@@ -106,6 +114,111 @@ export function buildPipelineMap(pipelines: Pipeline[]): Map<string, Pipeline> {
     map.set(p.id, p);
   }
   return map;
+}
+
+export function buildFeatureMap(features: Feature[]): Map<string, Feature> {
+  const map = new Map<string, Feature>();
+  for (const f of features) {
+    map.set(f.id, f);
+  }
+  return map;
+}
+
+export function computeFeatureStatus(
+  feature: Feature,
+  tasks: Task[],
+  pipelineMap: Map<string, Pipeline>,
+): FeatureWithProgress {
+  const featureTasks = tasks.filter((t) => t.featureId === feature.id);
+  const totalTasks = featureTasks.length;
+
+  let doneTasks = 0;
+  let initialTasks = 0;
+
+  for (const task of featureTasks) {
+    const pipeline = pipelineMap.get(task.pipelineId);
+    if (!pipeline) continue;
+
+    const statusDef = pipeline.statuses.find((s) => s.name === task.status);
+    if (statusDef?.isFinal) {
+      doneTasks++;
+    }
+
+    if (pipeline.statuses.length > 0 && task.status === pipeline.statuses[0].name) {
+      initialTasks++;
+    }
+  }
+
+  let status: FeatureStatus;
+  if (totalTasks === 0 || initialTasks === totalTasks) {
+    status = 'open';
+  } else if (doneTasks === totalTasks) {
+    status = 'done';
+  } else {
+    status = 'in_progress';
+  }
+
+  return { ...feature, status, totalTasks, doneTasks };
+}
+
+/**
+ * Groups tasks into parallel dependency layers using Kahn's algorithm.
+ * Layer 0: tasks with no dependencies (can all start immediately).
+ * Layer N: tasks whose deps are all in layers 0..N-1.
+ * Tasks with circular deps or deps outside the provided set go into a final "Other" layer.
+ */
+export function computeDependencyLayers(
+  tasks: Task[],
+  depsMap: Map<string, string[]>,
+): Task[][] {
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const taskById = new Map(tasks.map((t) => [t.id, t]));
+
+  // Build in-degree map considering only deps within the feature
+  const inDegree = new Map<string, number>();
+  const dependents = new Map<string, string[]>(); // depId -> taskIds that depend on it
+
+  for (const task of tasks) {
+    const deps = (depsMap.get(task.id) ?? []).filter((d) => taskIds.has(d));
+    inDegree.set(task.id, deps.length);
+    for (const dep of deps) {
+      const list = dependents.get(dep) ?? [];
+      list.push(task.id);
+      dependents.set(dep, list);
+    }
+  }
+
+  const layers: Task[][] = [];
+  const placed = new Set<string>();
+
+  // BFS by layers
+  let queue = tasks.filter((t) => (inDegree.get(t.id) ?? 0) === 0);
+
+  while (queue.length > 0) {
+    layers.push(queue);
+    for (const t of queue) placed.add(t.id);
+
+    const nextQueue: Task[] = [];
+    for (const t of queue) {
+      for (const depId of (dependents.get(t.id) ?? [])) {
+        const deg = (inDegree.get(depId) ?? 1) - 1;
+        inDegree.set(depId, deg);
+        if (deg === 0) {
+          const depTask = taskById.get(depId);
+          if (depTask) nextQueue.push(depTask);
+        }
+      }
+    }
+    queue = nextQueue;
+  }
+
+  // Remaining tasks (circular deps or deps outside the feature set)
+  const remaining = tasks.filter((t) => !placed.has(t.id));
+  if (remaining.length > 0) {
+    layers.push(remaining);
+  }
+
+  return layers;
 }
 
 export function formatRelativeTimestamp(timestamp: number): string {

@@ -7,7 +7,7 @@ import {
 } from '../ui/select';
 import { Search, X } from 'lucide-react';
 import { PRIORITY_LABELS, countActiveFilters } from './task-helpers';
-import type { Pipeline } from '../../../shared/types';
+import type { Pipeline, Feature } from '../../../shared/types';
 
 export interface FilterState {
   search: string;
@@ -16,6 +16,7 @@ export interface FilterState {
   pipelineId: string;
   assignee: string;
   tag: string;
+  featureId: string;
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -25,6 +26,7 @@ export const EMPTY_FILTERS: FilterState = {
   pipelineId: '',
   assignee: '',
   tag: '',
+  featureId: '',
 };
 
 interface TaskFilterBarProps {
@@ -33,6 +35,7 @@ interface TaskFilterBarProps {
   statuses: string[];
   pipelines: Pipeline[];
   tags: string[];
+  features?: Feature[];
 }
 
 function useDebouncedCallback(callback: (value: string) => void, delay: number) {
@@ -44,7 +47,7 @@ function useDebouncedCallback(callback: (value: string) => void, delay: number) 
   };
 }
 
-export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, tags }: TaskFilterBarProps) {
+export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, tags, features }: TaskFilterBarProps) {
   const [localSearch, setLocalSearch] = useState(filters.search);
   const [localAssignee, setLocalAssignee] = useState(filters.assignee);
 
@@ -78,6 +81,12 @@ export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, t
   }
   if (filters.assignee) activeChips.push({ key: 'assignee', label: `assignee: ${filters.assignee}` });
   if (filters.tag) activeChips.push({ key: 'tag', label: `tag: ${filters.tag}` });
+  if (filters.featureId) {
+    const fLabel = filters.featureId === '__none__'
+      ? 'No feature'
+      : (features?.find((f) => f.id === filters.featureId)?.title ?? filters.featureId);
+    activeChips.push({ key: 'featureId', label: `feature: ${fLabel}` });
+  }
 
   return (
     <div className="space-y-2">
@@ -147,6 +156,20 @@ export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, t
               <SelectItem value="__all__">All tags</SelectItem>
               {tags.map((t) => (
                 <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {features && features.length > 0 && (
+          <Select value={filters.featureId} onValueChange={(v) => update({ featureId: v === '__all__' ? '' : v })}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Feature" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All features</SelectItem>
+              <SelectItem value="__none__">No feature</SelectItem>
+              {features.map((f) => (
+                <SelectItem key={f.id} value={f.id}>{f.title}</SelectItem>
               ))}
             </SelectContent>
           </Select>

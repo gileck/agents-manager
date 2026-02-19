@@ -19,6 +19,7 @@ interface TaskRowProps {
   task: Task;
   pipeline: Pipeline | null;
   hasActiveAgent: boolean;
+  featureName?: string;
   selectMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
@@ -31,6 +32,7 @@ export function TaskRow({
   task,
   pipeline,
   hasActiveAgent,
+  featureName,
   selectMode,
   selected,
   onToggleSelect,
@@ -59,6 +61,11 @@ export function TaskRow({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-medium truncate">{task.title}</span>
+              {featureName && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                  {featureName}
+                </Badge>
+              )}
               {task.tags.slice(0, 3).map((tag) => (
                 <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
                   {tag}

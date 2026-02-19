@@ -1,13 +1,14 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@template/renderer/lib/utils';
-import { LayoutDashboard, FolderOpen, CheckSquare, Workflow, Settings } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Settings } from 'lucide-react';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/projects', icon: FolderOpen, label: 'Projects' },
   { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
+  { to: '/features', icon: Layers, label: 'Features' },
   { to: '/pipelines', icon: Workflow, label: 'Pipelines' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

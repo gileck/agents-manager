@@ -17,3 +17,4 @@ export type { IScmPlatform } from './scm-platform';
 export type { INotificationRouter } from './notification-router';
 export type { IWorkflowService } from './workflow-service';
 export type { ITaskContextStore } from './task-context-store';
+export type { IFeatureStore } from './feature-store';
