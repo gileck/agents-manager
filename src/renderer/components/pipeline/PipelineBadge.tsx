@@ -42,17 +42,37 @@ function colorToVariant(color: string): BadgeVariant {
   return NAMED_COLOR_TO_VARIANT[color] ?? 'outline';
 }
 
+// Fallback colors for common status names when pipeline doesn't define a color
+const STATUS_NAME_FALLBACK: Record<string, BadgeVariant> = {
+  open: 'default',
+  done: 'success',
+  closed: 'secondary',
+  planning: 'warning',
+  implementing: 'default',
+  in_progress: 'default',
+  pr_review: 'warning',
+  pr_ready: 'warning',
+  failed: 'destructive',
+  blocked: 'destructive',
+};
+
+function statusNameToVariant(name: string): BadgeVariant {
+  return STATUS_NAME_FALLBACK[name.toLowerCase()] ?? 'outline';
+}
+
 export function PipelineBadge({ status, pipeline }: PipelineBadgeProps) {
   if (!pipeline) {
-    return <Badge variant="outline">{status}</Badge>;
+    return <Badge variant={statusNameToVariant(status)}>{status}</Badge>;
   }
 
   const statusDef = pipeline.statuses.find((s) => s.name === status);
   if (!statusDef) {
-    return <Badge variant="outline">{status}</Badge>;
+    return <Badge variant={statusNameToVariant(status)}>{status}</Badge>;
   }
 
-  const variant = statusDef.color ? colorToVariant(statusDef.color) : 'outline';
+  const variant = statusDef.color
+    ? colorToVariant(statusDef.color)
+    : statusNameToVariant(status);
 
   return <Badge variant={variant}>{statusDef.label || status}</Badge>;
 }

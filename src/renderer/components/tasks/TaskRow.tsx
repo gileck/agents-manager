@@ -11,7 +11,7 @@ import type { Task, Pipeline } from '../../../shared/types';
 const PRIORITY_VARIANTS: Record<number, NonNullable<BadgeProps['variant']>> = {
   0: 'destructive',
   1: 'warning',
-  2: 'secondary',
+  2: 'default',
   3: 'success',
 };
 
