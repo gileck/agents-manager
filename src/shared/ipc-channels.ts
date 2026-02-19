@@ -87,6 +87,10 @@ export const IPC_CHANNELS = {
   AGENT_DEF_UPDATE: 'agent-def:update',
   AGENT_DEF_DELETE: 'agent-def:delete',
 
+  // Git operations
+  GIT_DIFF: 'git:diff',
+  GIT_STAT: 'git:stat',
+
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;

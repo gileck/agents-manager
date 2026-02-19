@@ -73,6 +73,8 @@ const IPC_CHANNELS = {
   AGENT_DEF_CREATE: 'agent-def:create',
   AGENT_DEF_UPDATE: 'agent-def:update',
   AGENT_DEF_DELETE: 'agent-def:delete',
+  GIT_DIFF: 'git:diff',
+  GIT_STAT: 'git:stat',
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;
 
@@ -228,6 +230,14 @@ const api = {
   artifacts: {
     list: (taskId: string): Promise<TaskArtifact[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_LIST, taskId),
+  },
+
+  // Git operations
+  git: {
+    diff: (taskId: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_DIFF, taskId),
+    stat: (taskId: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_STAT, taskId),
   },
 
   // Dashboard operations

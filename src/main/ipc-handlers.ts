@@ -4,6 +4,7 @@ import { registerIpcHandler, validateId, validateInput } from '@template/main/ip
 import { sendToRenderer } from '@template/main/core/window';
 import * as itemService from './services/item-service';
 import { getSetting, setSetting } from '@template/main/services/settings-service';
+import { LocalGitOps } from './services/local-git-ops';
 import type { AppServices } from './providers/setup';
 import type {
   ItemCreateInput,
@@ -501,6 +502,43 @@ export function registerIpcHandlers(services: AppServices): void {
   registerIpcHandler(IPC_CHANNELS.AGENT_DEF_DELETE, async (_, id: string) => {
     validateId(id);
     return services.agentDefinitionStore.deleteDefinition(id);
+  });
+
+  // ============================================
+  // Git Operations
+  // ============================================
+
+  async function getTaskGitOps(taskId: string): Promise<LocalGitOps | null> {
+    const task = await services.taskStore.getTask(taskId);
+    if (!task) return null;
+    const project = await services.projectStore.getProject(task.projectId);
+    if (!project?.path) return null;
+    const wm = services.createWorktreeManager(project.path);
+    const worktree = await wm.get(taskId);
+    if (!worktree) return null;
+    return new LocalGitOps(worktree.path);
+  }
+
+  registerIpcHandler(IPC_CHANNELS.GIT_DIFF, async (_, taskId: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) return null;
+    try {
+      return await gitOps.diff('origin/main');
+    } catch {
+      return null;
+    }
+  });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_STAT, async (_, taskId: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) return null;
+    try {
+      return await gitOps.diffStat('origin/main');
+    } catch {
+      return null;
+    }
   });
 
   // ============================================
