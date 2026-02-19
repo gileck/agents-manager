@@ -6,9 +6,11 @@ interface OutputPanelProps {
   output: string;
   startedAt: number;
   isRunning: boolean;
+  maximized?: boolean;
+  onMaximizeToggle?: () => void;
 }
 
-export function OutputPanel({ output, startedAt, isRunning }: OutputPanelProps) {
+export function OutputPanel({ output, startedAt, isRunning, maximized, onMaximizeToggle }: OutputPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -115,6 +117,8 @@ export function OutputPanel({ output, startedAt, isRunning }: OutputPanelProps) 
         onNextMatch={handleNext}
         startedAt={startedAt}
         isRunning={isRunning}
+        maximized={maximized}
+        onMaximizeToggle={onMaximizeToggle}
       />
       <pre
         ref={preRef}

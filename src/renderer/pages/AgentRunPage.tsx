@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { OutputPanel } from '../components/agent-run/OutputPanel';
 import { SubtasksPanel } from '../components/agent-run/SubtasksPanel';
@@ -105,6 +106,26 @@ export function AgentRunPage() {
   // --- Tab state ---
   const [activeTab, setActiveTab] = useState('subtasks');
 
+  // --- Section visibility ---
+  const [metadataCollapsed, setMetadataCollapsed] = useState(false);
+  const [tabsCollapsed, setTabsCollapsed] = useState(false);
+  const [outputMaximized, setOutputMaximized] = useState(false);
+
+  const toggleOutputMaximized = useCallback(() => {
+    setOutputMaximized((prev) => {
+      if (!prev) {
+        // Maximizing: collapse metadata and tabs
+        setMetadataCollapsed(true);
+        setTabsCollapsed(true);
+      } else {
+        // Restoring: expand everything
+        setMetadataCollapsed(false);
+        setTabsCollapsed(false);
+      }
+      return !prev;
+    });
+  }, []);
+
   // --- Actions ---
   const [restarting, setRestarting] = useState(false);
 
@@ -186,18 +207,38 @@ export function AgentRunPage() {
         </div>
       </div>
 
-      {/* Metadata row */}
-      <div className="px-6 py-2 border-b flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <span>Started: {new Date(run.startedAt).toLocaleString()}</span>
-        {run.completedAt && <span>Completed: {new Date(run.completedAt).toLocaleString()}</span>}
-        {run.outcome && <span>Outcome: <Badge variant="outline" className="text-xs ml-1">{run.outcome}</Badge></span>}
-        {(run.costInputTokens != null || run.costOutputTokens != null) && (
-          <span>Tokens: {(run.costInputTokens ?? 0).toLocaleString()} in / {(run.costOutputTokens ?? 0).toLocaleString()} out</span>
-        )}
-      </div>
+      {/* Metadata row — collapsible */}
+      {!metadataCollapsed && (
+        <div className="px-6 py-2 border-b flex flex-wrap gap-4 text-xs text-muted-foreground">
+          <button
+            onClick={() => setMetadataCollapsed(true)}
+            className="hover:text-foreground transition-colors"
+            title="Collapse metadata"
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+          <span>Started: {new Date(run.startedAt).toLocaleString()}</span>
+          {run.completedAt && <span>Completed: {new Date(run.completedAt).toLocaleString()}</span>}
+          {run.outcome && <span>Outcome: <Badge variant="outline" className="text-xs ml-1">{run.outcome}</Badge></span>}
+          {(run.costInputTokens != null || run.costOutputTokens != null) && (
+            <span>Tokens: {(run.costInputTokens ?? 0).toLocaleString()} in / {(run.costOutputTokens ?? 0).toLocaleString()} out</span>
+          )}
+        </div>
+      )}
+      {metadataCollapsed && (
+        <div className="px-6 py-1 border-b">
+          <button
+            onClick={() => { setMetadataCollapsed(false); setOutputMaximized(false); }}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+          >
+            <ChevronRight className="h-3 w-3" />
+            Metadata
+          </button>
+        </div>
+      )}
 
       {/* Outcome banner */}
-      {!isRunning && outcomeMessage && (
+      {!isRunning && outcomeMessage && !metadataCollapsed && (
         <div className="mx-6 mt-2 rounded-md border px-4 py-2 flex items-center gap-3">
           <span className="text-sm">{outcomeMessage}</span>
           {task && (
@@ -208,48 +249,72 @@ export function AgentRunPage() {
         </div>
       )}
 
-      {/* Output panel (~60%) */}
-      <div className="flex-[3] min-h-0 px-6 pt-3 pb-1 flex flex-col">
+      {/* Output panel — takes all remaining space when maximized */}
+      <div className={`${outputMaximized ? 'flex-1' : 'flex-[3]'} min-h-0 px-6 pt-3 pb-1 flex flex-col`}>
         <OutputPanel
           output={displayOutput}
           startedAt={run.startedAt}
           isRunning={isRunning}
+          maximized={outputMaximized}
+          onMaximizeToggle={toggleOutputMaximized}
         />
       </div>
 
-      {/* Tabs panel (~40%) */}
-      <div className="flex-[2] min-h-0 px-6 pb-3 flex flex-col">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
-          <TabsList>
-            <TabsTrigger value="subtasks">
-              Subtasks{subtasks.length > 0 && ` (${doneCount}/${subtasks.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="git">Git Changes</TabsTrigger>
-            <TabsTrigger value="info">Task Info</TabsTrigger>
-          </TabsList>
+      {/* Tabs panel — collapsible */}
+      {!tabsCollapsed ? (
+        <div className="flex-[2] min-h-0 px-6 pb-3 flex flex-col">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setTabsCollapsed(true)}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                title="Collapse panel"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              <TabsList>
+                <TabsTrigger value="subtasks">
+                  Subtasks{subtasks.length > 0 && ` (${doneCount}/${subtasks.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="git">Git Changes</TabsTrigger>
+                <TabsTrigger value="info">Task Info</TabsTrigger>
+              </TabsList>
+            </div>
 
-          <TabsContent value="subtasks" className="flex-1 overflow-auto border rounded-md">
-            <SubtasksPanel subtasks={subtasks} />
-          </TabsContent>
+            <TabsContent value="subtasks" className="flex-1 overflow-auto border rounded-md">
+              <SubtasksPanel subtasks={subtasks} />
+            </TabsContent>
 
-          <TabsContent value="git" className="flex-1 overflow-auto border rounded-md">
-            <GitChangesPanel
-              diff={gitDiff}
-              stat={gitStat}
-              onRefresh={fetchGit}
-              loading={gitLoading}
-            />
-          </TabsContent>
+            <TabsContent value="git" className="flex-1 overflow-auto border rounded-md">
+              <GitChangesPanel
+                diff={gitDiff}
+                stat={gitStat}
+                onRefresh={fetchGit}
+                loading={gitLoading}
+              />
+            </TabsContent>
 
-          <TabsContent value="info" className="flex-1 overflow-auto border rounded-md">
-            {task ? (
-              <TaskInfoPanel task={task} run={run} />
-            ) : (
-              <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
+            <TabsContent value="info" className="flex-1 overflow-auto border rounded-md">
+              {task ? (
+                <TaskInfoPanel task={task} run={run} />
+              ) : (
+                <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      ) : (
+        <div className="px-6 pb-3">
+          <button
+            onClick={() => { setTabsCollapsed(false); setOutputMaximized(false); }}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors py-1"
+          >
+            <ChevronRight className="h-3 w-3" />
+            {activeTab === 'subtasks' ? `Subtasks${subtasks.length > 0 ? ` (${doneCount}/${subtasks.length})` : ''}` :
+             activeTab === 'git' ? 'Git Changes' : 'Task Info'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

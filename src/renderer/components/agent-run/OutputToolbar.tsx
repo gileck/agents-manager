@@ -9,6 +9,8 @@ import {
   Search,
   ChevronUp,
   ChevronDown,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
 interface OutputToolbarProps {
@@ -23,6 +25,8 @@ interface OutputToolbarProps {
   onNextMatch: () => void;
   startedAt: number;
   isRunning: boolean;
+  maximized?: boolean;
+  onMaximizeToggle?: () => void;
 }
 
 export function OutputToolbar({
@@ -37,6 +41,8 @@ export function OutputToolbar({
   onNextMatch,
   startedAt,
   isRunning,
+  maximized,
+  onMaximizeToggle,
 }: OutputToolbarProps) {
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState('');
@@ -100,7 +106,20 @@ export function OutputToolbar({
         )}
       </div>
 
-      <span className="ml-auto text-xs text-muted-foreground font-mono">{elapsed}</span>
+      <div className="ml-auto flex items-center gap-2">
+        {onMaximizeToggle && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onMaximizeToggle}
+            title={maximized ? 'Restore panels' : 'Maximize output'}
+          >
+            {maximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </Button>
+        )}
+        <span className="text-xs text-muted-foreground font-mono">{elapsed}</span>
+      </div>
     </div>
   );
 }
