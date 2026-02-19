@@ -24,8 +24,8 @@ export abstract class BaseClaudeAgent implements IAgent {
     return undefined;
   }
 
-  buildResult(exitCode: number, output: string, outcome: string, error?: string, costInputTokens?: number, costOutputTokens?: number, structuredOutput?: Record<string, unknown>): AgentRunResult {
-    return { exitCode, output, outcome, error, costInputTokens, costOutputTokens, structuredOutput };
+  buildResult(exitCode: number, output: string, outcome: string, error?: string, costInputTokens?: number, costOutputTokens?: number, structuredOutput?: Record<string, unknown>, prompt?: string): AgentRunResult {
+    return { exitCode, output, outcome, error, costInputTokens, costOutputTokens, structuredOutput, prompt };
   }
 
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
@@ -41,7 +41,7 @@ export abstract class BaseClaudeAgent implements IAgent {
     }
   }
 
-  async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void): Promise<AgentRunResult> {
+  async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void, onPromptBuilt?: (prompt: string) => void): Promise<AgentRunResult> {
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     const query = await this.loadQuery();
 
@@ -53,6 +53,7 @@ export abstract class BaseClaudeAgent implements IAgent {
       }).join('\n\n');
       prompt = `## Task Context\n\n${block}\n\n---\n\n${prompt}`;
     }
+    onPromptBuilt?.(prompt);
     const workdir = context.workdir;
     const timeout = this.getTimeout(context, config);
 
@@ -162,7 +163,7 @@ export abstract class BaseClaudeAgent implements IAgent {
     log(`Agent returning: exitCode=${exitCode}, outcome=${outcome}, outputLength=${resultText.length}, hasStructuredOutput=${!!structuredOutput}`);
 
     const output = resultText || errorMessage || '';
-    return this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens, structuredOutput);
+    return this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens, structuredOutput, prompt);
   }
 
   async stop(runId: string): Promise<void> {

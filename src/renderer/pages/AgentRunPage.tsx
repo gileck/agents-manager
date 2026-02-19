@@ -11,7 +11,7 @@ import { SubtasksPanel } from '../components/agent-run/SubtasksPanel';
 import { GitChangesPanel } from '../components/agent-run/GitChangesPanel';
 import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
-import type { AgentRun, Task, TaskContextEntry } from '../../shared/types';
+import type { AgentRun, Task } from '../../shared/types';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
   plan_complete: 'Plan is ready for review. Go to task to review and approve.',
@@ -33,12 +33,6 @@ export function AgentRunPage() {
   // --- Task polling (for live subtask updates) ---
   const { data: task, refetch: refetchTask } = useIpc<Task | null>(
     () => run?.taskId ? window.api.tasks.get(run.taskId) : Promise.resolve(null),
-    [run?.taskId]
-  );
-
-  // --- Task context entries (for prompt tab) ---
-  const { data: contextEntries } = useIpc<TaskContextEntry[]>(
-    () => run?.taskId ? window.api.tasks.contextEntries(run.taskId) : Promise.resolve([]),
     [run?.taskId]
   );
 
@@ -264,14 +258,7 @@ export function AgentRunPage() {
         </TabsContent>
 
         <TabsContent value="prompt" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
-          <PromptPanel
-            taskTitle={task?.title ?? ''}
-            taskDescription={task?.description ?? null}
-            taskPlan={task?.plan ?? null}
-            mode={run.mode}
-            agentType={run.agentType}
-            contextEntries={contextEntries ?? []}
-          />
+          <PromptPanel prompt={run.prompt} />
         </TabsContent>
 
         <TabsContent value="subtasks" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">

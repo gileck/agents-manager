@@ -356,6 +356,7 @@ export interface AgentRun {
   completedAt: number | null;
   costInputTokens: number | null;
   costOutputTokens: number | null;
+  prompt: string | null;
 }
 
 export interface AgentRunCreateInput {
@@ -373,6 +374,7 @@ export interface AgentRunUpdateInput {
   completedAt?: number;
   costInputTokens?: number;
   costOutputTokens?: number;
+  prompt?: string;
 }
 
 export type ArtifactType = 'branch' | 'pr' | 'commit' | 'diff' | 'document';
@@ -488,6 +490,7 @@ export interface AgentRunResult {
   error?: string;
   costInputTokens?: number;
   costOutputTokens?: number;
+  prompt?: string;
 }
 
 export interface AgentInfo {

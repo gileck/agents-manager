@@ -555,6 +555,10 @@ export function getMigrations(): Migration[] {
       name: '037_widen_agent_runs_for_investigate',
       sql: getWidenAgentRunsForInvestigateSql(),
     },
+    {
+      name: '038_add_prompt_to_agent_runs',
+      sql: `ALTER TABLE agent_runs ADD COLUMN prompt TEXT`,
+    },
   ];
 }
 

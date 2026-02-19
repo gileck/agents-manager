@@ -17,6 +17,7 @@ interface AgentRunRow {
   completed_at: number | null;
   cost_input_tokens: number | null;
   cost_output_tokens: number | null;
+  prompt: string | null;
 }
 
 function rowToRun(row: AgentRunRow): AgentRun {
@@ -34,6 +35,7 @@ function rowToRun(row: AgentRunRow): AgentRun {
     completedAt: row.completed_at,
     costInputTokens: row.cost_input_tokens,
     costOutputTokens: row.cost_output_tokens,
+    prompt: row.prompt,
   };
 }
 
@@ -90,6 +92,10 @@ export class SqliteAgentRunStore implements IAgentRunStore {
     if (input.costOutputTokens !== undefined) {
       updates.push('cost_output_tokens = ?');
       values.push(input.costOutputTokens);
+    }
+    if (input.prompt !== undefined) {
+      updates.push('prompt = ?');
+      values.push(input.prompt);
     }
 
     if (updates.length === 0) return existing;

@@ -221,10 +221,14 @@ export class AgentService implements IAgentService {
       }
     }, 3000);
 
+    const onPromptBuilt = (prompt: string) => {
+      this.agentRunStore.updateRun(run.id, { prompt }).catch(() => {});
+    };
+
     try {
       let result;
       try {
-        result = await agent.execute(context, config, wrappedOnOutput, onLog);
+        result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt);
       } catch (err) {
         clearInterval(flushInterval);
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -341,6 +345,7 @@ export class AgentService implements IAgentService {
         completedAt,
         costInputTokens: result.costInputTokens,
         costOutputTokens: result.costOutputTokens,
+        prompt: result.prompt,
       });
       this.taskEventLog.log({
         taskId,

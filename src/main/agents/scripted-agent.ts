@@ -54,7 +54,7 @@ export class ScriptedAgent implements IAgent {
     this.script = script;
   }
 
-  async execute(context: AgentContext, config: AgentConfig, _onOutput?: (chunk: string) => void, _onLog?: (message: string, data?: Record<string, unknown>) => void): Promise<AgentRunResult> {
+  async execute(context: AgentContext, config: AgentConfig, _onOutput?: (chunk: string) => void, _onLog?: (message: string, data?: Record<string, unknown>) => void, _onPromptBuilt?: (prompt: string) => void): Promise<AgentRunResult> {
     return this.script(context, config);
   }
 

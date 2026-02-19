@@ -2,7 +2,7 @@ import type { AgentContext, AgentConfig, AgentRunResult } from '../../shared/typ
 
 export interface IAgent {
   readonly type: string;
-  execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void): Promise<AgentRunResult>;
+  execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void, onPromptBuilt?: (prompt: string) => void): Promise<AgentRunResult>;
   stop(runId: string): Promise<void>;
   isAvailable(): Promise<boolean>;
 }
