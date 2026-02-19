@@ -57,6 +57,18 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       });
       throw err; // Let pipeline engine log the hook failure
     }
+
+    // Optionally pull origin/main to local main so the user's checkout
+    // stays up-to-date with merged task branches.
+    if (project.config?.pullMainAfterMerge) {
+      try {
+        const gitOps = deps.createGitOps(project.path);
+        await gitOps.pull('main');
+        await ghLog('Pulled origin/main to local main');
+      } catch (err) {
+        await ghLog(`Failed to pull main after merge (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
+      }
+    }
   });
 
   engine.registerHook('push_and_create_pr', async (task: Task, transition: Transition, context: TransitionContext) => {
