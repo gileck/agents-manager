@@ -46,6 +46,65 @@ export class AgentService implements IAgentService {
     private agentDefinitionStore: IAgentDefinitionStore,
   ) {}
 
+  async recoverOrphanedRuns(): Promise<AgentRun[]> {
+    const activeRuns = await this.agentRunStore.getActiveRuns();
+    if (activeRuns.length === 0) return [];
+
+    const recovered: AgentRun[] = [];
+
+    for (const run of activeRuns) {
+      try {
+        const completedAt = now();
+
+        // Mark run as failed/interrupted
+        await this.agentRunStore.updateRun(run.id, {
+          status: 'failed',
+          outcome: 'interrupted',
+          completedAt,
+          output: (run.output ?? '') + '\n[Interrupted by app shutdown]',
+        });
+
+        // Fail the active phase
+        const phase = await this.taskPhaseStore.getActivePhase(run.taskId);
+        if (phase) {
+          await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
+        }
+
+        // Unlock worktree
+        try {
+          const task = await this.taskStore.getTask(run.taskId);
+          if (task) {
+            const project = await this.projectStore.getProject(task.projectId);
+            if (project?.path) {
+              const wm = this.createWorktreeManager(project.path);
+              await wm.unlock(run.taskId);
+            }
+          }
+        } catch {
+          // Worktree may not exist — safe to ignore
+        }
+
+        // Expire pending prompts
+        await this.pendingPromptStore.expirePromptsForRun(run.id);
+
+        // Log event
+        await this.taskEventLog.log({
+          taskId: run.taskId,
+          category: 'agent',
+          severity: 'warning',
+          message: 'Agent run interrupted by app shutdown',
+          data: { agentRunId: run.id, agentType: run.agentType, mode: run.mode },
+        });
+
+        recovered.push({ ...run, status: 'failed', outcome: 'interrupted', completedAt });
+      } catch (err) {
+        console.error(`Failed to recover orphaned run ${run.id}:`, err);
+      }
+    }
+
+    return recovered;
+  }
+
   async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void): Promise<AgentRun> {
     // 1. Fetch task + project
     const task = await this.taskStore.getTask(taskId);

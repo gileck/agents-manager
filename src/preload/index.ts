@@ -57,6 +57,7 @@ const IPC_CHANNELS = {
   AGENT_OUTPUT: 'agent:output',
   AGENT_ACTIVE_TASK_IDS: 'agent:active-task-ids',
   AGENT_ACTIVE_RUNS: 'agent:active-runs',
+  AGENT_INTERRUPTED_RUNS: 'agent:interrupted-runs',
   EVENT_LIST: 'event:list',
   ACTIVITY_LIST: 'activity:list',
   PROMPT_LIST: 'prompt:list',
@@ -282,6 +283,11 @@ const api = {
       const listener = (_: IpcRendererEvent, taskId: string, chunk: string) => callback(taskId, chunk);
       ipcRenderer.on(IPC_CHANNELS.AGENT_OUTPUT, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_OUTPUT, listener);
+    },
+    agentInterruptedRuns: (callback: (runs: AgentRun[]) => void) => {
+      const listener = (_: IpcRendererEvent, runs: AgentRun[]) => callback(runs);
+      ipcRenderer.on(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, listener);
     },
   },
 };

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Layout } from './components/layout/Layout';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -33,6 +34,29 @@ function AppRoutes() {
       unsubscribe?.();
     };
   }, [navigate]);
+
+  useEffect(() => {
+    const unsubscribe = window.api?.on?.agentInterruptedRuns?.((runs) => {
+      for (const run of runs) {
+        toast.warning(`Agent interrupted: ${run.mode} on task`, {
+          description: `The "${run.mode}" agent was interrupted by app shutdown.`,
+          duration: 15000,
+          action: {
+            label: 'Restart',
+            onClick: async () => {
+              try {
+                await window.api.agents.start(run.taskId, run.mode, run.agentType);
+                toast.success('Agent restarted');
+              } catch {
+                toast.error('Failed to restart agent');
+              }
+            },
+          },
+        });
+      }
+    });
+    return () => { unsubscribe?.(); };
+  }, []);
 
   return (
     <Routes>
