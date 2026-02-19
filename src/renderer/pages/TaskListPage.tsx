@@ -19,6 +19,7 @@ import { useFeatures } from '../hooks/useFeatures';
 import { sortTasks, collectTags, buildPipelineMap, buildFeatureMap } from '../components/tasks/task-helpers';
 import type { FilterState } from '../components/tasks/TaskFilterBar';
 import type { SortField, SortDirection, GroupBy } from '../components/tasks/task-helpers';
+import { toast } from 'sonner';
 import type { Task, TaskFilter, TaskCreateInput, AppSettings } from '../../shared/types';
 
 function useLocalStorage<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
@@ -193,6 +194,26 @@ export function TaskListPage() {
     navigate(`/tasks/${newTask.id}`);
   };
 
+  // Status change
+  const handleStatusChange = async (taskId: string, toStatus: string) => {
+    try {
+      const result = await window.api.tasks.transition(taskId, toStatus);
+      if (result.success) {
+        toast.success(`Status changed to "${toStatus}"`);
+        await refetch();
+      } else if (result.guardFailures && result.guardFailures.length > 0) {
+        const reasons = result.guardFailures.map((g) => g.reason).join('; ');
+        toast.error('Transition blocked', { description: reasons });
+      } else {
+        toast.error('Transition failed', { description: result.error ?? 'Unknown error' });
+      }
+    } catch (err) {
+      toast.error('Transition failed', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
   const hasActiveFilters = Object.values(filters).some(Boolean);
 
   // Loading / error / no project states
@@ -314,6 +335,7 @@ export function TaskListPage() {
             onClickTask={(id) => navigate(`/tasks/${id}`)}
             onDeleteTask={setDeleteTarget}
             onDuplicateTask={handleDuplicate}
+            onStatusChange={handleStatusChange}
           />
         </>
       )}
