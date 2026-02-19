@@ -29,6 +29,7 @@ export function ProjectDetailPage() {
   const [saving, setSaving] = useState(false);
 
   const [editModel, setEditModel] = useState('');
+  const [editPullMain, setEditPullMain] = useState(false);
 
   const MODEL_OPTIONS = [
     { label: 'Default', value: '' },
@@ -41,6 +42,7 @@ export function ProjectDetailPage() {
     if (project) {
       setEditForm({ name: project.name, description: project.description ?? '', path: project.path ?? '' });
       setEditModel((project.config?.model as string) ?? '');
+      setEditPullMain(!!project.config?.pullMainAfterMerge);
       setEditOpen(true);
     }
   };
@@ -51,7 +53,7 @@ export function ProjectDetailPage() {
     try {
       const update: ProjectUpdateInput = {
         ...editForm,
-        config: { ...(project?.config ?? {}), model: editModel || undefined },
+        config: { ...(project?.config ?? {}), model: editModel || undefined, pullMainAfterMerge: editPullMain },
       };
       await window.api.projects.update(id, update);
       setEditOpen(false);
@@ -122,6 +124,9 @@ export function ProjectDetailPage() {
           <span className="text-sm font-mono">
             {MODEL_OPTIONS.find(o => o.value === (project.config?.model as string))?.label ?? 'Default'}
           </span>
+          <span className="mx-3 text-muted-foreground">|</span>
+          <span className="text-sm text-muted-foreground">Pull main after merge: </span>
+          <span className="text-sm font-mono">{project.config?.pullMainAfterMerge ? 'Yes' : 'No'}</span>
         </CardContent>
       </Card>
 
@@ -183,6 +188,16 @@ export function ProjectDetailPage() {
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="edit-pull-main"
+                checked={editPullMain}
+                onChange={(e) => setEditPullMain(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              <Label htmlFor="edit-pull-main">Pull main after PR merge</Label>
             </div>
           </div>
           <DialogFooter>
