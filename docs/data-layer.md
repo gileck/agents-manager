@@ -110,16 +110,17 @@ This pattern is used when adding new enum values (e.g., adding `request_changes`
 ### Key Indexes
 
 **Phase 1 (migration 012) — 13 indexes:**
-- `tasks`: projectId, pipelineId, status, priority, parentTaskId, featureId
+- `tasks`: projectId, pipelineId, status, parentTaskId
 - `task_events`: taskId + createdAt, category
 - `transition_history`: taskId + createdAt
 - `activity_log`: entityType + entityId, action + createdAt
+- `tasks.featureId` added later in migration 027
 
-**Phase 2 (migration 017) — 5 indexes:**
-- `agent_runs`: taskId + startedAt, status
-- `task_artifacts`: taskId + type
+**Phase 2 (migration 017) — 6 indexes:**
+- `agent_runs`: taskId, status (separate single-column indexes)
+- `task_artifacts`: taskId
 - `task_phases`: taskId
-- `pending_prompts`: taskId + status
+- `pending_prompts`: taskId, status (separate single-column indexes)
 
 ## JSON Storage Convention
 
