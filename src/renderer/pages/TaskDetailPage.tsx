@@ -131,6 +131,8 @@ export function TaskDetailPage() {
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [stoppingAgent, setStoppingAgent] = useState(false);
 
@@ -241,6 +243,23 @@ export function TaskDetailPage() {
     }
   };
 
+  const handleReset = async () => {
+    if (!id) return;
+    setResetting(true);
+    try {
+      await window.api.tasks.reset(id);
+      setResetOpen(false);
+      await refetch();
+      await refetchTransitions();
+      await refetchAgentRuns();
+      await refetchPrompts();
+      await refetchDebug();
+      await refetchContext();
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleDuplicate = async () => {
     if (!task) return;
     setDuplicating(true);
@@ -310,6 +329,7 @@ export function TaskDetailPage() {
             {duplicating ? 'Duplicating...' : 'Duplicate'}
           </Button>
           <Button variant="outline" onClick={openEdit}>Edit</Button>
+          <Button variant="outline" onClick={() => setResetOpen(true)} disabled={hasRunningAgent}>Reset</Button>
           <Button variant="destructive" onClick={() => setDeleteOpen(true)}>Delete</Button>
         </div>
       </div>
@@ -704,6 +724,34 @@ export function TaskDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reset Confirmation Dialog */}
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Task</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This will clear all agent-generated data for &quot;{task.title}&quot; and reset the status to the pipeline&apos;s initial state.
+            </p>
+            <div className="text-sm space-y-1">
+              <p className="font-medium">Cleared:</p>
+              <p className="text-muted-foreground">Plan, subtasks, PR link, branch, agent runs, events, timeline, artifacts, worktree</p>
+            </div>
+            <div className="text-sm space-y-1">
+              <p className="font-medium">Preserved:</p>
+              <p className="text-muted-foreground">Title, description, priority, tags, assignee, dependencies</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleReset} disabled={resetting}>
+              {resetting ? 'Resetting...' : 'Reset'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -766,8 +814,8 @@ function PlanReviewSection({
   const [newComment, setNewComment] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const approveTransition = transitions.find((t) => t.to === 'implementing' && t.label?.includes('Approve'));
-  const reviseTransition = transitions.find((t) => t.to === 'planning' && t.label?.includes('Plan Changes'));
+  const approveTransition = transitions.find((t) => t.to === 'implementing');
+  const reviseTransition = transitions.find((t) => t.to === 'planning');
 
   const handleAction = async (toStatus: string) => {
     setSaving(true);
