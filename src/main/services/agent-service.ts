@@ -245,12 +245,29 @@ export class AgentService implements IAgentService {
         return;
       }
 
+      this.taskEventLog.log({
+        taskId,
+        category: 'agent_debug',
+        severity: 'debug',
+        message: `Agent execute() returned: exitCode=${result.exitCode}, outcome=${result.outcome}, outputLength=${result.output?.length ?? 0}, costTokens=${result.costInputTokens ?? 0}/${result.costOutputTokens ?? 0}, hasStructuredOutput=${!!result.structuredOutput}`,
+        data: { exitCode: result.exitCode, outcome: result.outcome, outputLength: result.output?.length ?? 0 },
+      }).catch(() => {});
+
       // Post-agent validation loop (skip for plan/plan_revision mode — no code changes to validate)
       const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision' && context.mode !== 'investigate'
         ? (context.project.config?.validationCommands as string[] | undefined) ?? []
         : [];
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
       let validationAttempts = 0;
+
+      if (validationCommands.length > 0) {
+        this.taskEventLog.log({
+          taskId,
+          category: 'agent_debug',
+          severity: 'debug',
+          message: `Starting post-agent validation: ${validationCommands.length} commands, maxRetries=${maxValidationRetries}`,
+        }).catch(() => {});
+      }
 
       while (result.exitCode === 0 && validationCommands.length > 0 && validationAttempts < maxValidationRetries) {
         const validation = await this.runValidation(validationCommands, worktree.path);
@@ -287,13 +304,23 @@ export class AgentService implements IAgentService {
         }
       }
 
+      if (validationCommands.length > 0) {
+        this.taskEventLog.log({
+          taskId,
+          category: 'agent_debug',
+          severity: 'debug',
+          message: `Validation complete: attempts=${validationAttempts}, passed=${validationAttempts < maxValidationRetries}`,
+        }).catch(() => {});
+      }
+
       // Stop periodic flushing and do a final flush with the complete result
       clearInterval(flushInterval);
 
       // Update run
       const completedAt = now();
+      const runStatus = result.exitCode === 0 ? 'completed' : 'failed';
       await this.agentRunStore.updateRun(run.id, {
-        status: result.exitCode === 0 ? 'completed' : 'failed',
+        status: runStatus,
         output: result.output,
         outcome: result.outcome,
         payload: result.payload,
@@ -302,6 +329,12 @@ export class AgentService implements IAgentService {
         costInputTokens: result.costInputTokens,
         costOutputTokens: result.costOutputTokens,
       });
+      this.taskEventLog.log({
+        taskId,
+        category: 'agent_debug',
+        severity: 'debug',
+        message: `Agent run updated: status=${runStatus}, outcome=${result.outcome}, exitCode=${result.exitCode}`,
+      }).catch(() => {});
 
       // Validate outcome payload
       if (result.outcome) {
@@ -322,6 +355,12 @@ export class AgentService implements IAgentService {
       if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate')) {
         const so = result.structuredOutput as { plan?: string; planSummary?: string; subtasks?: string[] } | undefined;
         if (so?.plan) {
+          this.taskEventLog.log({
+            taskId,
+            category: 'agent_debug',
+            severity: 'debug',
+            message: `Extracting plan from structured output: hasPlan=${!!so.plan}, hasSubtasks=${!!so.subtasks}, subtaskCount=${so.subtasks?.length ?? 0}`,
+          }).catch(() => {});
           const updates: import('../../shared/types').TaskUpdateInput = { plan: so.plan };
           if (so.subtasks && so.subtasks.length > 0) {
             updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
@@ -329,6 +368,12 @@ export class AgentService implements IAgentService {
           await this.taskStore.updateTask(taskId, updates);
         } else {
           // Fallback: parse raw output if structured output unavailable
+          this.taskEventLog.log({
+            taskId,
+            category: 'agent_debug',
+            severity: 'debug',
+            message: 'Structured output unavailable, falling back to raw output parsing',
+          }).catch(() => {});
           await this.taskStore.updateTask(taskId, { plan: this.extractPlan(result.output) });
           try {
             const subtasks = this.extractSubtasks(result.output);
@@ -349,6 +394,12 @@ export class AgentService implements IAgentService {
           const structuredSummary = so?.planSummary ?? so?.summary;
           const summary = structuredSummary || this.extractContextSummary(result.output);
           const entryType = this.getContextEntryType(agentType, context.mode, result.outcome);
+          this.taskEventLog.log({
+            taskId,
+            category: 'agent_debug',
+            severity: 'debug',
+            message: `Saving context entry: type=${entryType}, source=${agentType === 'pr-reviewer' ? 'reviewer' : 'agent'}, summaryLength=${summary.length}`,
+          }).catch(() => {});
           const entryData: Record<string, unknown> = {};
           if (agentType === 'pr-reviewer') {
             entryData.verdict = result.outcome;
@@ -386,9 +437,21 @@ export class AgentService implements IAgentService {
         // Guard: verify branch has actual changes before transitioning to pr_ready
         let effectiveOutcome: string | undefined = result.outcome;
         if (effectiveOutcome === 'pr_ready') {
+          this.taskEventLog.log({
+            taskId,
+            category: 'agent_debug',
+            severity: 'debug',
+            message: `Verifying branch diff for pr_ready: branch=${worktree.branch}`,
+          }).catch(() => {});
           try {
             const gitOps = this.createGitOps(worktree.path);
             const diffContent = await gitOps.diff('main', worktree.branch);
+            this.taskEventLog.log({
+              taskId,
+              category: 'agent_debug',
+              severity: 'debug',
+              message: `Branch diff result: hasChanges=${diffContent.trim().length > 0}, diffLength=${diffContent.length}`,
+            }).catch(() => {});
             if (diffContent.trim().length === 0) {
               await this.taskEventLog.log({
                 taskId,
@@ -411,6 +474,12 @@ export class AgentService implements IAgentService {
         }
 
         if (effectiveOutcome) {
+          this.taskEventLog.log({
+            taskId,
+            category: 'agent_debug',
+            severity: 'debug',
+            message: `Attempting outcome transition: outcome=${effectiveOutcome}`,
+          }).catch(() => {});
           await this.tryOutcomeTransition(taskId, effectiveOutcome, {
             agentRunId: run.id,
             payload: result.payload,
@@ -444,8 +513,35 @@ export class AgentService implements IAgentService {
         message: `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}`,
         data: { agentRunId: run.id, exitCode: result.exitCode, outcome: result.outcome },
       });
+    } catch (outerErr) {
+      // FATAL: catch any unhandled error in post-agent processing to prevent silent hangs
+      const errMsg = outerErr instanceof Error ? outerErr.message : String(outerErr);
+      this.taskEventLog.log({
+        taskId,
+        category: 'agent',
+        severity: 'error',
+        message: `FATAL: Unhandled error in agent background execution: ${errMsg}`,
+        data: { agentRunId: run.id, error: errMsg },
+      }).catch(() => {});
+      try {
+        await this.agentRunStore.updateRun(run.id, {
+          status: 'failed',
+          outcome: 'failed',
+          exitCode: 1,
+          output: `Internal error: ${errMsg}`,
+          completedAt: now(),
+        });
+      } catch {
+        // Last resort — can't even update the run
+      }
     } finally {
       clearInterval(flushInterval);
+      this.taskEventLog.log({
+        taskId,
+        category: 'agent_debug',
+        severity: 'debug',
+        message: `Agent background execution cleanup: runId=${run.id}`,
+      }).catch(() => {});
       this.backgroundPromises.delete(run.id);
     }
   }
@@ -639,15 +735,35 @@ export class AgentService implements IAgentService {
   }
 
   private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {
+    this.taskEventLog.log({
+      taskId,
+      category: 'agent_debug',
+      severity: 'debug',
+      message: `tryOutcomeTransition: taskId=${taskId}, outcome=${outcome}`,
+    }).catch(() => {});
+
     const task = await this.taskStore.getTask(taskId);
     if (!task) return;
 
     const transitions = await this.pipelineEngine.getValidTransitions(task, 'agent');
     const match = transitions.find((t) => t.agentOutcome === outcome);
     if (match) {
+      this.taskEventLog.log({
+        taskId,
+        category: 'agent_debug',
+        severity: 'debug',
+        message: `Found matching transition: ${task.status} → ${match.to}`,
+      }).catch(() => {});
       const ctx: TransitionContext = { trigger: 'agent', data: { outcome, ...data } };
       const result = await this.pipelineEngine.executeTransition(task, match.to, ctx);
-      if (!result.success) {
+      if (result.success) {
+        this.taskEventLog.log({
+          taskId,
+          category: 'agent_debug',
+          severity: 'debug',
+          message: `Outcome transition succeeded: ${task.status} → ${match.to}`,
+        }).catch(() => {});
+      } else {
         await this.taskEventLog.log({
           taskId,
           category: 'system',
@@ -656,6 +772,13 @@ export class AgentService implements IAgentService {
           data: { outcome, toStatus: match.to, error: result.error, guardFailures: result.guardFailures },
         });
       }
+    } else {
+      this.taskEventLog.log({
+        taskId,
+        category: 'agent_debug',
+        severity: 'debug',
+        message: `No matching transition found for outcome=${outcome} from status=${task.status}`,
+      }).catch(() => {});
     }
   }
 
