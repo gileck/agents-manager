@@ -7,8 +7,11 @@ export interface IGitOps {
   push(branch: string, force?: boolean): Promise<void>;
   pull(branch: string): Promise<void>;
   diff(fromRef: string, toRef?: string): Promise<string>;
+  diffStat(fromRef: string, toRef?: string): Promise<string>;
   commit(message: string): Promise<string>;
   log(count?: number): Promise<GitLogEntry[]>;
   rebase(onto: string): Promise<void>;
   getCurrentBranch(): Promise<string>;
+  /** Discard all uncommitted changes and untracked files in the working tree. */
+  clean(): Promise<void>;
 }

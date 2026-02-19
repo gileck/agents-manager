@@ -32,6 +32,10 @@ export class StubGitOps implements IGitOps {
     return 'diff --git a/file.ts b/file.ts\n+stub change';
   }
 
+  async diffStat(_fromRef: string, _toRef?: string): Promise<string> {
+    return ' file.ts | 1 +\n 1 file changed, 1 insertion(+)';
+  }
+
   async commit(message: string): Promise<string> {
     this.commitCounter++;
     const hash = `stub${this.commitCounter.toString().padStart(6, '0')}`;
@@ -55,5 +59,9 @@ export class StubGitOps implements IGitOps {
 
   async getCurrentBranch(): Promise<string> {
     return this.currentBranch;
+  }
+
+  async clean(): Promise<void> {
+    // no-op in stub
   }
 }

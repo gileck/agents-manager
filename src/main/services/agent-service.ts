@@ -102,16 +102,28 @@ export class AgentService implements IAgentService {
       data: { taskId },
     });
 
-    // 5. Rebase worktree onto origin/main so the branch only contains agent changes
+    // 5. Clean worktree and rebase onto main so the branch only contains agent changes
     try {
       const gitOps = this.createGitOps(worktree.path);
-      await gitOps.fetch('origin');
-      await gitOps.rebase('origin/main');
+
+      // Discard any uncommitted changes or untracked files left from prior runs
+      await gitOps.clean();
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'debug',
+        message: 'Worktree cleaned (reset uncommitted changes)',
+        data: { taskId },
+      });
+
+      // Rebase onto local main (not origin/main) to stay in sync with the
+      // user's latest committed state and avoid including unrelated diffs.
+      await gitOps.rebase('main');
       await this.taskEventLog.log({
         taskId,
         category: 'worktree',
         severity: 'info',
-        message: 'Worktree rebased onto origin/main',
+        message: 'Worktree rebased onto main',
         data: { taskId },
       });
     } catch (err) {
@@ -120,7 +132,7 @@ export class AgentService implements IAgentService {
         taskId,
         category: 'worktree',
         severity: 'warning',
-        message: `Rebase onto origin/main failed: ${errorMsg}`,
+        message: `Worktree clean/rebase failed: ${errorMsg}`,
         data: { taskId, error: errorMsg },
       });
     }
@@ -353,7 +365,7 @@ export class AgentService implements IAgentService {
 
       // Extract plan, subtasks, and context from plan/plan_revision output
       if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate')) {
-        const so = result.structuredOutput as { plan?: string; planSummary?: string; subtasks?: string[] } | undefined;
+        const so = result.structuredOutput as { plan?: string; planSummary?: string; investigationSummary?: string; subtasks?: string[] } | undefined;
         if (so?.plan) {
           this.taskEventLog.log({
             taskId,
@@ -390,8 +402,8 @@ export class AgentService implements IAgentService {
       if (result.exitCode === 0) {
         try {
           // Use structured output summary when available, fall back to parsing
-          const so = result.structuredOutput as { summary?: string; planSummary?: string } | undefined;
-          const structuredSummary = so?.planSummary ?? so?.summary;
+          const so = result.structuredOutput as { summary?: string; planSummary?: string; investigationSummary?: string } | undefined;
+          const structuredSummary = so?.investigationSummary ?? so?.planSummary ?? so?.summary;
           const summary = structuredSummary || this.extractContextSummary(result.output);
           const entryType = this.getContextEntryType(agentType, context.mode, result.outcome);
           this.taskEventLog.log({

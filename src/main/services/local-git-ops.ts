@@ -50,6 +50,13 @@ export class LocalGitOps implements IGitOps {
     return this.git(['diff', fromRef]);
   }
 
+  async diffStat(fromRef: string, toRef?: string): Promise<string> {
+    if (toRef) {
+      return this.git(['diff', '--stat', `${fromRef}...${toRef}`]);
+    }
+    return this.git(['diff', '--stat', fromRef]);
+  }
+
   async commit(message: string): Promise<string> {
     await this.git(['add', '-A']);
     await this.git(['commit', '-m', message]);
@@ -79,5 +86,10 @@ export class LocalGitOps implements IGitOps {
 
   async getCurrentBranch(): Promise<string> {
     return this.git(['rev-parse', '--abbrev-ref', 'HEAD']);
+  }
+
+  async clean(): Promise<void> {
+    await this.git(['reset', '--hard', 'HEAD']);
+    await this.git(['clean', '-fd']);
   }
 }
