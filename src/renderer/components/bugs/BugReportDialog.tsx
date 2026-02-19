@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -17,10 +17,12 @@ interface BugReportDialogProps {
 
 export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [debugLogs, setDebugLogs] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Extract task ID from route if on a task page
@@ -35,11 +37,13 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
       setDescription('');
       setDebugLogs('');
       setError(null);
+      setLoadingLogs(null);
     }
   }, [open]);
 
   const handleLoadTimeline = async () => {
-    if (!currentTaskId) return;
+    if (!currentTaskId || loadingLogs) return;
+    setLoadingLogs('timeline');
     try {
       const timeline = await window.api.tasks.debugTimeline(currentTaskId);
       const formatted = timeline.slice(0, 50).map((entry) => {
@@ -49,11 +53,14 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
       setDebugLogs((prev) => prev ? `${prev}\n\n--- Timeline (task ${currentTaskId}) ---\n${formatted}` : `--- Timeline (task ${currentTaskId}) ---\n${formatted}`);
     } catch {
       toast.error('Failed to load timeline');
+    } finally {
+      setLoadingLogs(null);
     }
   };
 
   const handleLoadContext = async () => {
-    if (!currentTaskId) return;
+    if (!currentTaskId || loadingLogs) return;
+    setLoadingLogs('context');
     try {
       const entries = await window.api.tasks.contextEntries(currentTaskId);
       const formatted = entries.map((entry) => {
@@ -63,11 +70,14 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
       setDebugLogs((prev) => prev ? `${prev}\n\n--- Context Entries (task ${currentTaskId}) ---\n${formatted}` : `--- Context Entries (task ${currentTaskId}) ---\n${formatted}`);
     } catch {
       toast.error('Failed to load context entries');
+    } finally {
+      setLoadingLogs(null);
     }
   };
 
   const handleLoadEvents = async () => {
-    if (!currentTaskId) return;
+    if (!currentTaskId || loadingLogs) return;
+    setLoadingLogs('events');
     try {
       const events = await window.api.events.list({ taskId: currentTaskId });
       const formatted = events.slice(0, 50).map((event) => {
@@ -77,6 +87,8 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
       setDebugLogs((prev) => prev ? `${prev}\n\n--- Events (task ${currentTaskId}) ---\n${formatted}` : `--- Events (task ${currentTaskId}) ---\n${formatted}`);
     } catch {
       toast.error('Failed to load events');
+    } finally {
+      setLoadingLogs(null);
     }
   };
 
@@ -90,7 +102,6 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
       const projectId = settings.currentProjectId;
       if (!projectId) {
         setError('Select a project first in Settings');
-        setSubmitting(false);
         return;
       }
 
@@ -99,7 +110,6 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
         const pipelines = await window.api.pipelines.list();
         if (pipelines.length === 0) {
           setError('No pipelines configured');
-          setSubmitting(false);
           return;
         }
         pipelineId = pipelines[0].id;
@@ -136,9 +146,7 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
       toast.success('Bug report created', {
         action: {
           label: 'View Task',
-          onClick: () => {
-            window.location.hash = `#/tasks/${task.id}`;
-          },
+          onClick: () => navigate(`/tasks/${task.id}`),
         },
       });
       onOpenChange(false);
@@ -192,14 +200,14 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
               <Label>Debug Logs</Label>
               {currentTaskId && (
                 <div className="flex gap-1">
-                  <Button variant="outline" size="sm" onClick={handleLoadTimeline}>
-                    Load Timeline
+                  <Button variant="outline" size="sm" onClick={handleLoadTimeline} disabled={!!loadingLogs}>
+                    {loadingLogs === 'timeline' ? 'Loading...' : 'Load Timeline'}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleLoadContext}>
-                    Load Context
+                  <Button variant="outline" size="sm" onClick={handleLoadContext} disabled={!!loadingLogs}>
+                    {loadingLogs === 'context' ? 'Loading...' : 'Load Context'}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleLoadEvents}>
-                    Load Events
+                  <Button variant="outline" size="sm" onClick={handleLoadEvents} disabled={!!loadingLogs}>
+                    {loadingLogs === 'events' ? 'Loading...' : 'Load Events'}
                   </Button>
                 </div>
               )}

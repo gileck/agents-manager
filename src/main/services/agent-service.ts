@@ -616,15 +616,16 @@ export class AgentService implements IAgentService {
       ].join('\n');
     }
 
+    // Use replacer functions to avoid $-pattern interpretation in replacement strings
     let prompt = template
-      .replace(/\{taskTitle\}/g, task.title)
-      .replace(/\{taskDescription\}/g, desc)
-      .replace(/\{taskId\}/g, task.id)
-      .replace(/\{subtasksSection\}/g, subtasksSection)
-      .replace(/\{planSection\}/g, planSection)
-      .replace(/\{planCommentsSection\}/g, planCommentsSection)
-      .replace(/\{priorReviewSection\}/g, priorReviewSection)
-      .replace(/\{relatedTaskSection\}/g, relatedTaskSection);
+      .replace(/\{taskTitle\}/g, () => task.title)
+      .replace(/\{taskDescription\}/g, () => desc)
+      .replace(/\{taskId\}/g, () => task.id)
+      .replace(/\{subtasksSection\}/g, () => subtasksSection)
+      .replace(/\{planSection\}/g, () => planSection)
+      .replace(/\{planCommentsSection\}/g, () => planCommentsSection)
+      .replace(/\{priorReviewSection\}/g, () => priorReviewSection)
+      .replace(/\{relatedTaskSection\}/g, () => relatedTaskSection);
 
     // Append standard suffix
     prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';

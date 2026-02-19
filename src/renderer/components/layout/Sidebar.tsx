@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@template/renderer/lib/utils';
 import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Settings, Bug } from 'lucide-react';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
-import { BugReportDialog } from '../bugs/BugReportDialog';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -15,9 +14,12 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onReportBug: () => void;
+}
+
+export function Sidebar({ onReportBug }: SidebarProps) {
   const { currentProject } = useCurrentProject();
-  const [bugDialogOpen, setBugDialogOpen] = useState(false);
 
   return (
     <aside className="w-56 border-r border-border bg-card flex flex-col">
@@ -56,7 +58,7 @@ export function Sidebar() {
       {/* Footer */}
       <div className="p-4 border-t border-border">
         <button
-          onClick={() => setBugDialogOpen(true)}
+          onClick={onReportBug}
           className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
         >
           <Bug className="h-4 w-4" />
@@ -64,8 +66,6 @@ export function Sidebar() {
         </button>
         <p className="text-xs text-muted-foreground mt-2 px-3">Agents Manager v1.0.0</p>
       </div>
-
-      <BugReportDialog open={bugDialogOpen} onOpenChange={setBugDialogOpen} />
     </aside>
   );
 }
