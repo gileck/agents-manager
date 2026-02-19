@@ -51,6 +51,23 @@ The deploy script (`scripts/deploy.sh`):
 - Installs to `/Applications/`
 - Launches the app
 
+## Documentation Reference
+
+Comprehensive implementation-grounded reference docs for each major domain:
+
+| Document | Domain |
+|----------|--------|
+| [architecture-overview.md](./architecture-overview.md) | System architecture, composition root, single-execution-engine principle |
+| [pipeline-engine.md](./pipeline-engine.md) | State machine, transitions, guards, hooks, seeded pipelines |
+| [agent-system.md](./agent-system.md) | Agent types, execution lifecycle, prompts, validation, context accumulation |
+| [task-management.md](./task-management.md) | Tasks, dependencies, subtasks, features, filtering |
+| [git-scm-integration.md](./git-scm-integration.md) | Worktrees, git ops, PR lifecycle, branch strategy |
+| [data-layer.md](./data-layer.md) | SQLite schema, stores, migrations |
+| [workflow-service.md](./workflow-service.md) | WorkflowService orchestration, activity logging, prompt handling |
+| [cli-reference.md](./cli-reference.md) | CLI tool (`am`), commands, project context |
+| [ipc-and-renderer.md](./ipc-and-renderer.md) | IPC channels, renderer pages, hooks, streaming |
+| [event-system.md](./event-system.md) | Events, activity log, transition history, debug timeline |
+
 ## Architecture
 
 ### Template vs Application Code
