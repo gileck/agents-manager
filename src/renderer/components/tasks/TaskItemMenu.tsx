@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '../ui/button';
-import { MoreVertical, Check, Loader2 } from 'lucide-react';
+import { MoreVertical, Check, Loader2, Copy, Trash2 } from 'lucide-react';
 import type { Task, Pipeline, PipelineStatus, Transition } from '../../../shared/types';
 
-interface TaskStatusMenuProps {
+interface TaskItemMenuProps {
   task: Task;
   pipeline: Pipeline | null;
   onStatusChange: (taskId: string, toStatus: string) => Promise<void>;
+  onDuplicate: () => void;
+  onDelete: () => void;
 }
 
 /** Color dot rendered next to each status label. */
@@ -25,7 +27,7 @@ function StatusDot({ color, muted }: { color?: string; muted?: boolean }) {
   );
 }
 
-export function TaskStatusMenu({ task, pipeline, onStatusChange }: TaskStatusMenuProps) {
+export function TaskItemMenu({ task, pipeline, onStatusChange, onDuplicate, onDelete }: TaskItemMenuProps) {
   const [open, setOpen] = useState(false);
   const [transitions, setTransitions] = useState<Transition[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -93,6 +95,24 @@ export function TaskStatusMenu({ task, pipeline, onStatusChange }: TaskStatusMen
     [onStatusChange, task.id, transitioning],
   );
 
+  const handleDuplicate = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setOpen(false);
+      onDuplicate();
+    },
+    [onDuplicate],
+  );
+
+  const handleDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setOpen(false);
+      onDelete();
+    },
+    [onDelete],
+  );
+
   const statuses: PipelineStatus[] = pipeline?.statuses ?? [];
   const availableTargets = new Set(transitions?.map((t) => t.to) ?? []);
 
@@ -104,7 +124,7 @@ export function TaskStatusMenu({ task, pipeline, onStatusChange }: TaskStatusMen
         size="icon"
         className="h-7 w-7"
         onClick={handleToggle}
-        title="Change status"
+        title="Task actions"
       >
         <MoreVertical className="h-3.5 w-3.5" />
       </Button>
@@ -115,6 +135,7 @@ export function TaskStatusMenu({ task, pipeline, onStatusChange }: TaskStatusMen
           className="absolute right-0 top-full mt-1 z-50 min-w-[200px] rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Status change section */}
           <div className="px-3 py-2 text-xs font-semibold text-muted-foreground border-b">
             Change Status
           </div>
@@ -177,6 +198,27 @@ export function TaskStatusMenu({ task, pipeline, onStatusChange }: TaskStatusMen
               })}
             </div>
           )}
+
+          {/* Divider */}
+          <div className="border-t my-1" />
+
+          {/* Task actions section */}
+          <div className="py-1">
+            <button
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-accent transition-colors cursor-pointer"
+              onClick={handleDuplicate}
+            >
+              <Copy className="h-3.5 w-3.5 shrink-0" />
+              <span>Duplicate</span>
+            </button>
+            <button
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+              onClick={handleDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5 shrink-0" />
+              <span>Delete</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
