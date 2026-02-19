@@ -81,6 +81,24 @@ export class WorkflowService implements IWorkflowService {
     return result;
   }
 
+  async resetTask(id: string): Promise<Task | null> {
+    const task = await this.taskStore.getTask(id);
+    if (task) {
+      await this.cleanupWorktree(task);
+    }
+
+    const result = await this.taskStore.resetTask(id);
+    if (result) {
+      await this.activityLog.log({
+        action: 'reset',
+        entityType: 'task',
+        entityId: id,
+        summary: `Reset task: ${result.title}`,
+      });
+    }
+    return result;
+  }
+
   async transitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult> {
     const task = await this.taskStore.getTask(taskId);
     if (!task) return { success: false, error: `Task not found: ${taskId}` };

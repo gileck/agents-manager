@@ -6,6 +6,7 @@ export interface ITaskStore {
   createTask(input: TaskCreateInput): Promise<Task>;
   updateTask(id: string, input: TaskUpdateInput): Promise<Task | null>;
   deleteTask(id: string): Promise<boolean>;
+  resetTask(id: string): Promise<Task | null>;
   addDependency(taskId: string, dependsOnTaskId: string): Promise<void>;
   removeDependency(taskId: string, dependsOnTaskId: string): Promise<void>;
   getDependencies(taskId: string): Promise<Task[]>;

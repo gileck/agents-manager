@@ -13,6 +13,7 @@ export interface IWorkflowService {
   createTask(input: TaskCreateInput): Promise<Task>;
   updateTask(id: string, input: TaskUpdateInput): Promise<Task | null>;
   deleteTask(id: string): Promise<boolean>;
+  resetTask(id: string): Promise<Task | null>;
   transitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult>;
   startAgent(taskId: string, mode: AgentMode, agentType?: string, onOutput?: (chunk: string) => void): Promise<AgentRun>;
   stopAgent(runId: string): Promise<void>;

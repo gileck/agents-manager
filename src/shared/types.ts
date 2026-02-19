@@ -272,7 +272,7 @@ export interface TaskEventFilter {
 }
 
 // Activity log types
-export type ActivityAction = 'create' | 'update' | 'delete' | 'transition' | 'system' | 'agent_start' | 'agent_complete' | 'prompt_response';
+export type ActivityAction = 'create' | 'update' | 'delete' | 'reset' | 'transition' | 'system' | 'agent_start' | 'agent_complete' | 'prompt_response';
 export type ActivityEntity = 'project' | 'task' | 'pipeline' | 'system' | 'agent_run';
 
 export interface ActivityEntry {

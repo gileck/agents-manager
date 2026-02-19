@@ -40,6 +40,7 @@ const IPC_CHANNELS = {
   TASK_CREATE: 'task:create',
   TASK_UPDATE: 'task:update',
   TASK_DELETE: 'task:delete',
+  TASK_RESET: 'task:reset',
   TASK_TRANSITION: 'task:transition',
   TASK_TRANSITIONS: 'task:transitions',
   TASK_DEPENDENCIES: 'task:dependencies',
@@ -131,6 +132,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE, id, input),
     delete: (id: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DELETE, id),
+    reset: (id: string): Promise<Task | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_RESET, id),
     transition: (taskId: string, toStatus: string, actor?: string): Promise<TransitionResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_TRANSITION, taskId, toStatus, actor),
     transitions: (taskId: string): Promise<Transition[]> =>

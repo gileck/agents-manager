@@ -249,6 +249,37 @@ export class SqliteTaskStore implements ITaskStore {
     return result.changes > 0;
   }
 
+  async resetTask(id: string): Promise<Task | null> {
+    const existing = await this.getTask(id);
+    if (!existing) return null;
+
+    // Determine first status from pipeline
+    let firstStatus = 'open';
+    const pipeline = await this.pipelineStore.getPipeline(existing.pipelineId);
+    if (pipeline && pipeline.statuses.length > 0) {
+      firstStatus = pipeline.statuses[0].name;
+    }
+
+    // Delete all related records (same as deleteTask, but keep task_dependencies)
+    this.db.prepare('DELETE FROM task_context_entries WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM agent_runs WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
+    this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);
+
+    // Reset task record fields
+    this.db.prepare(`
+      UPDATE tasks
+      SET status = ?, plan = NULL, subtasks = '[]', plan_comments = '[]',
+          pr_link = NULL, branch_name = NULL, updated_at = ?
+      WHERE id = ?
+    `).run(firstStatus, now(), id);
+
+    return this.getTask(id);
+  }
+
   async addDependency(taskId: string, dependsOnTaskId: string): Promise<void> {
     this.db.prepare(`
       INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_task_id)

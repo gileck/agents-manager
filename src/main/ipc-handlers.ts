@@ -164,6 +164,11 @@ export function registerIpcHandlers(services: AppServices): void {
     return services.workflowService.deleteTask(id);
   });
 
+  registerIpcHandler(IPC_CHANNELS.TASK_RESET, async (_, id: string) => {
+    validateId(id);
+    return services.workflowService.resetTask(id);
+  });
+
   registerIpcHandler(IPC_CHANNELS.TASK_TRANSITION, async (_, taskId: string, toStatus: string, actor?: string) => {
     validateId(taskId);
     return services.workflowService.transitionTask(taskId, toStatus, actor);
