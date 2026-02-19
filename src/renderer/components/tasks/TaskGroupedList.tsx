@@ -18,6 +18,7 @@ interface TaskGroupedListProps {
   onClickTask: (id: string) => void;
   onDeleteTask: (task: Task) => void;
   onDuplicateTask: (task: Task) => void;
+  onStatusChange: (taskId: string, toStatus: string) => Promise<void>;
 }
 
 export function TaskGroupedList({
@@ -32,6 +33,7 @@ export function TaskGroupedList({
   onClickTask,
   onDeleteTask,
   onDuplicateTask,
+  onStatusChange,
 }: TaskGroupedListProps) {
   const groups = useMemo(
     () => groupTasks(tasks, groupBy, pipelineMap, featureMap),
@@ -68,6 +70,7 @@ export function TaskGroupedList({
             onClick={() => onClickTask(task.id)}
             onDelete={() => onDeleteTask(task)}
             onDuplicate={() => onDuplicateTask(task)}
+            onStatusChange={onStatusChange}
           />
         ))}
       </div>
@@ -109,6 +112,7 @@ export function TaskGroupedList({
                     onClick={() => onClickTask(task.id)}
                     onDelete={() => onDeleteTask(task)}
                     onDuplicate={() => onDuplicateTask(task)}
+                    onStatusChange={onStatusChange}
                   />
                 ))}
               </div>

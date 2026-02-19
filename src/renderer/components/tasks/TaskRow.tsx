@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge';
 import type { BadgeProps } from '../ui/badge';
 import { PipelineBadge } from '../pipeline/PipelineBadge';
 import { Copy, Trash2, GitPullRequest } from 'lucide-react';
+import { TaskStatusMenu } from './TaskStatusMenu';
 import { PRIORITY_LABELS, formatRelativeTimestamp } from './task-helpers';
 import type { Task, Pipeline } from '../../../shared/types';
 
@@ -26,6 +27,7 @@ interface TaskRowProps {
   onClick: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onStatusChange: (taskId: string, toStatus: string) => Promise<void>;
 }
 
 export function TaskRow({
@@ -39,6 +41,7 @@ export function TaskRow({
   onClick,
   onDelete,
   onDuplicate,
+  onStatusChange,
 }: TaskRowProps) {
   return (
     <Card
@@ -96,6 +99,11 @@ export function TaskRow({
             <span className="text-xs text-muted-foreground w-16 text-right">
               {formatRelativeTimestamp(task.updatedAt)}
             </span>
+            <TaskStatusMenu
+              task={task}
+              pipeline={pipeline}
+              onStatusChange={onStatusChange}
+            />
             <Button
               variant="ghost"
               size="icon"
