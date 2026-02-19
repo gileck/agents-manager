@@ -219,7 +219,7 @@ export class WorkflowService implements IWorkflowService {
     if (!project?.path) throw new Error(`Project ${mergeTask.projectId} has no path configured`);
     const scmPlatform = this.createScmPlatform(project.path);
 
-    const prUrl = artifacts[0].data.url as string;
+    const prUrl = artifacts[artifacts.length - 1].data.url as string;
     await scmPlatform.mergePR(prUrl);
 
     await this.activityLog.log({

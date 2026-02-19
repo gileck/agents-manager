@@ -11,6 +11,8 @@ export interface IGitOps {
   commit(message: string): Promise<string>;
   log(count?: number): Promise<GitLogEntry[]>;
   rebase(onto: string): Promise<void>;
+  /** Abort an in-progress rebase. */
+  rebaseAbort(): Promise<void>;
   getCurrentBranch(): Promise<string>;
   /** Discard all uncommitted changes and untracked files in the working tree. */
   clean(): Promise<void>;

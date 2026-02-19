@@ -29,9 +29,10 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       );
     }
 
+    const defaultBranch = (context.project.config?.defaultBranch as string) || 'main';
     lines.push(
       'Steps:',
-      '1. Run `git diff main..HEAD` to see all changes made in this branch.',
+      `1. Run \`git diff ${defaultBranch}..HEAD\` to see all changes made in this branch.`,
       '2. Review the diff for code quality, correctness, style, and completeness against the task description.',
       '3. Provide a concise review.',
       '4. End your response with a "## Summary" section briefly describing your review findings.',

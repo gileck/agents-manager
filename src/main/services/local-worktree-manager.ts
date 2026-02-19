@@ -129,7 +129,7 @@ export class LocalWorktreeManager implements IWorktreeManager {
         } else if (line.startsWith('branch ')) {
           // "branch refs/heads/foo" → "foo"
           branch = line.slice('branch '.length).replace('refs/heads/', '');
-        } else if (line === 'locked') {
+        } else if (line === 'locked' || line.startsWith('locked ')) {
           locked = true;
         }
       }

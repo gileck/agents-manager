@@ -163,7 +163,9 @@ export function registerIpcHandlers(services: AppServices): void {
 
   registerIpcHandler(IPC_CHANNELS.TASK_UPDATE, async (_, id: string, input: TaskUpdateInput) => {
     validateId(id);
-    return services.workflowService.updateTask(id, input);
+    // Strip status to prevent bypassing pipeline transitions via direct update
+    const { status: _status, ...safeInput } = input;
+    return services.workflowService.updateTask(id, safeInput);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_DELETE, async (_, id: string) => {
@@ -384,7 +386,7 @@ export function registerIpcHandlers(services: AppServices): void {
     ).all(taskId) as { phase: string; status: string; started_at: number | null; completed_at: number | null }[];
     for (const r of phaseRows) {
       entries.push({
-        timestamp: r.started_at ?? r.completed_at ?? 0,
+        timestamp: r.started_at ?? r.completed_at ?? Date.now(),
         source: 'phase',
         severity: r.status === 'failed' ? 'error' : 'info',
         title: `Phase ${r.phase}: ${r.status}`,
@@ -585,7 +587,8 @@ export function registerIpcHandlers(services: AppServices): void {
     validateId(taskId);
     const gitOps = await getTaskGitOps(taskId);
     if (!gitOps) throw new Error('No worktree for task');
-    await gitOps.rebase('main');
+    const branch = await gitOps.getCurrentBranch();
+    await gitOps.pull(branch);
   });
 
   registerIpcHandler(IPC_CHANNELS.GIT_LOG, async (_, taskId: string) => {

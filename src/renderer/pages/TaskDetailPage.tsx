@@ -110,14 +110,8 @@ export function TaskDetailPage() {
     prevHasRunning.current = hasRunningAgent;
   }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
 
-  const [tab, setTab] = useState('overview');
-
-  // Auto-switch to Plan tab when task enters plan_review
-  useEffect(() => {
-    if (task?.status === 'plan_review') {
-      setTab('plan');
-    }
-  }, [task?.status]);
+  const initialTab = task?.status === 'plan_review' ? 'plan' : 'overview';
+  const [tab, setTab] = useState(initialTab);
 
   // Refetch agent runs when switching to the agents tab
   useEffect(() => {

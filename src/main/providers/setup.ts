@@ -37,7 +37,6 @@ import { LocalGitOps } from '../services/local-git-ops';
 import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
 import { StubNotificationRouter } from '../services/stub-notification-router';
-import { ScriptedAgent, happyPlan } from '../agents/scripted-agent';
 import { ClaudeCodeAgent } from '../agents/claude-code-agent';
 import { PrReviewerAgent } from '../agents/pr-reviewer-agent';
 import { registerCoreGuards } from '../handlers/core-guards';
@@ -107,7 +106,6 @@ export function createAppServices(db: Database.Database): AppServices {
   const agentFramework = new AgentFrameworkImpl();
   agentFramework.registerAgent(new ClaudeCodeAgent());
   agentFramework.registerAgent(new PrReviewerAgent());
-  agentFramework.registerAgent(new ScriptedAgent(happyPlan));
 
   // Agent service
   const agentService = new AgentService(

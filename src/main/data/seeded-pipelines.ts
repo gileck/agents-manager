@@ -145,6 +145,8 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'failed',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' } }] },
+    // No changes detected on branch after implementation
+    { from: 'implementing', to: 'open', trigger: 'agent', agentOutcome: 'no_changes' },
     // Recovery: cancel agent phases back to open
     { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },
     { from: 'implementing', to: 'open', trigger: 'manual', label: 'Cancel Implementation' },
@@ -225,6 +227,8 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
     { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'failed',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' } }] },
+    // No changes detected on branch after implementation
+    { from: 'implementing', to: 'reported', trigger: 'agent', agentOutcome: 'no_changes' },
     // Recovery
     { from: 'investigating', to: 'reported', trigger: 'manual', label: 'Cancel Investigation' },
     { from: 'implementing', to: 'reported', trigger: 'manual', label: 'Cancel Implementation' },

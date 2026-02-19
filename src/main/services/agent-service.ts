@@ -178,21 +178,34 @@ export class AgentService implements IAgentService {
       // Fetch and rebase onto origin/main so the branch only contains agent
       // changes and never inherits unpushed local commits from other tasks.
       await gitOps.fetch('origin');
-      await gitOps.rebase('origin/main');
-      await this.taskEventLog.log({
-        taskId,
-        category: 'worktree',
-        severity: 'info',
-        message: 'Worktree rebased onto origin/main',
-        data: { taskId },
-      });
+      try {
+        await gitOps.rebase('origin/main');
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'info',
+          message: 'Worktree rebased onto origin/main',
+          data: { taskId },
+        });
+      } catch (rebaseErr) {
+        // Abort the broken rebase so the worktree is left in a usable state
+        try { await gitOps.rebaseAbort(); } catch { /* may not be in rebase state */ }
+        const errorMsg = rebaseErr instanceof Error ? rebaseErr.message : String(rebaseErr);
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'warning',
+          message: `Rebase failed and aborted: ${errorMsg}`,
+          data: { taskId, error: errorMsg },
+        });
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       await this.taskEventLog.log({
         taskId,
         category: 'worktree',
         severity: 'warning',
-        message: `Worktree clean/rebase failed: ${errorMsg}`,
+        message: `Worktree clean failed: ${errorMsg}`,
         data: { taskId, error: errorMsg },
       });
     }
@@ -266,11 +279,18 @@ export class AgentService implements IAgentService {
       }).catch(() => {}); // fire-and-forget
     };
 
-    // Buffer output and periodically flush to DB so it survives page refreshes
+    // Buffer output and periodically flush to DB so it survives page refreshes.
+    // Cap the buffer to prevent unbounded memory growth.
+    const MAX_OUTPUT_BUFFER = 5 * 1024 * 1024; // 5 MB
     let outputBuffer = '';
     const wrappedOnOutput = onOutput
       ? (chunk: string) => {
-          outputBuffer += chunk;
+          if (outputBuffer.length < MAX_OUTPUT_BUFFER) {
+            outputBuffer += chunk;
+            if (outputBuffer.length > MAX_OUTPUT_BUFFER) {
+              outputBuffer = outputBuffer.slice(0, MAX_OUTPUT_BUFFER) + '\n[output truncated]';
+            }
+          }
           onOutput(chunk);
         }
       : undefined;
@@ -522,7 +542,7 @@ export class AgentService implements IAgentService {
           }).catch(() => {});
           try {
             const gitOps = this.createGitOps(worktree.path);
-            const diffContent = await gitOps.diff('main', worktree.branch);
+            const diffContent = await gitOps.diff('origin/main', worktree.branch);
             this.taskEventLog.log({
               taskId,
               category: 'agent_debug',
@@ -534,10 +554,10 @@ export class AgentService implements IAgentService {
                 taskId,
                 category: 'agent',
                 severity: 'warning',
-                message: 'Agent reported pr_ready but no changes detected on branch — skipping transition',
+                message: 'Agent reported pr_ready but no changes detected on branch — using no_changes outcome',
                 data: { branch: worktree.branch },
               });
-              effectiveOutcome = undefined;
+              effectiveOutcome = 'no_changes';
             }
           } catch (err) {
             await this.taskEventLog.log({
@@ -612,6 +632,8 @@ export class AgentService implements IAgentService {
         // Last resort — can't even update the run
       }
     } finally {
+      // Delete the promise reference first to prevent leaks even if cleanup throws
+      this.backgroundPromises.delete(run.id);
       clearInterval(flushInterval);
       this.taskEventLog.log({
         taskId,
@@ -619,7 +641,6 @@ export class AgentService implements IAgentService {
         severity: 'debug',
         message: `Agent background execution cleanup: runId=${run.id}`,
       }).catch(() => {});
-      this.backgroundPromises.delete(run.id);
     }
   }
 
@@ -643,6 +664,20 @@ export class AgentService implements IAgentService {
     });
 
     await this.pendingPromptStore.expirePromptsForRun(runId);
+
+    // Unlock worktree so subsequent runs can acquire it
+    try {
+      const task = await this.taskStore.getTask(run.taskId);
+      if (task) {
+        const project = await this.projectStore.getProject(task.projectId);
+        if (project?.path) {
+          const wm = this.createWorktreeManager(project.path);
+          await wm.unlock(run.taskId);
+        }
+      }
+    } catch {
+      // Worktree may not exist — safe to ignore
+    }
   }
 
   private async runValidation(commands: string[], cwd: string): Promise<{ passed: boolean; output: string }> {

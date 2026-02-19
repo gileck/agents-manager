@@ -35,7 +35,7 @@ export class LocalGitOps implements IGitOps {
 
   async push(branch: string, force?: boolean): Promise<void> {
     const args = ['push', '-u', 'origin', branch];
-    if (force) args.push('--force');
+    if (force) args.push('--force-with-lease');
     await this.git(args);
   }
 
@@ -82,6 +82,10 @@ export class LocalGitOps implements IGitOps {
 
   async rebase(onto: string): Promise<void> {
     await this.git(['rebase', onto]);
+  }
+
+  async rebaseAbort(): Promise<void> {
+    await this.git(['rebase', '--abort']);
   }
 
   async getCurrentBranch(): Promise<string> {

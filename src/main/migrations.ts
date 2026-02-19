@@ -559,7 +559,20 @@ export function getMigrations(): Migration[] {
       name: '038_add_prompt_to_agent_runs',
       sql: `ALTER TABLE agent_runs ADD COLUMN prompt TEXT`,
     },
+    {
+      name: '039_update_pipelines_no_changes_outcome',
+      sql: getUpdateAllPipelinesSql(),
+    },
   ];
+}
+
+function getUpdateAllPipelinesSql(): string {
+  const statements: string[] = [];
+  for (const p of SEEDED_PIPELINES) {
+    const transitions = escSql(JSON.stringify(p.transitions));
+    statements.push(`UPDATE pipelines SET transitions = '${transitions}', updated_at = ${Date.now()} WHERE id = '${escSql(p.id)}'`);
+  }
+  return statements.join(';\n');
 }
 
 function getUpdateAgentPipelineSql(): string {

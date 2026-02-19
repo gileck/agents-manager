@@ -25,8 +25,9 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
 
     const artifacts = await deps.taskArtifactStore.getArtifactsForTask(task.id, 'pr');
     if (artifacts.length === 0) {
-      await ghLog('merge_pr hook: no PR artifact found', 'error');
-      return;
+      const msg = 'merge_pr hook: no PR artifact found';
+      await ghLog(msg, 'error');
+      throw new Error(msg);
     }
 
     const prUrl = artifacts[artifacts.length - 1].data.url as string;
@@ -156,11 +157,12 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     await ghLog('Creating pull request');
     try {
       const freshTask = await deps.taskStore.getTask(task.id);
+      const baseBranch = (project.config?.defaultBranch as string) || 'main';
       const prInfo = await scmPlatform.createPR({
         title: freshTask?.title ?? 'PR',
         body: `Automated PR for task ${task.id}`,
         head: branch,
-        base: 'main',
+        base: baseBranch,
       });
 
       await deps.taskArtifactStore.createArtifact({

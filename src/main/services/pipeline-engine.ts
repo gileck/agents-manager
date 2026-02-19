@@ -88,7 +88,7 @@ export class PipelineEngine implements IPipelineEngine {
     if (!pipeline) return [];
 
     return pipeline.transitions.filter((t) => {
-      if (t.from !== task.status) return false;
+      if (t.from !== task.status && t.from !== '*') return false;
       if (trigger && t.trigger !== trigger) return false;
       return true;
     });
@@ -102,11 +102,10 @@ export class PipelineEngine implements IPipelineEngine {
       return { success: false, error: `Pipeline not found: ${task.pipelineId}` };
     }
 
-    // Find matching transition — prefer exact trigger match, fall back to any match
+    // Find matching transition — enforce trigger type match
+    const fromMatch = (t: Transition) => t.from === task.status || t.from === '*';
     const transition = pipeline.transitions.find(
-      (t) => t.from === task.status && t.to === toStatus && t.trigger === ctx.trigger,
-    ) ?? pipeline.transitions.find(
-      (t) => t.from === task.status && t.to === toStatus,
+      (t) => fromMatch(t) && t.to === toStatus && t.trigger === ctx.trigger,
     );
     if (!transition) {
       return {
@@ -186,6 +185,14 @@ export class PipelineEngine implements IPipelineEngine {
     }
 
     if (guardFailures.length > 0) {
+      // Log guard failures to the task event log so they're visible in the timeline
+      this.taskEventLog.log({
+        taskId: task.id,
+        category: 'system',
+        severity: 'warning',
+        message: `Transition ${task.status} → ${toStatus} blocked by guards: ${guardFailures.map(g => `${g.guard}: ${g.reason}`).join('; ')}`,
+        data: { fromStatus: task.status, toStatus, trigger: ctx.trigger, guardFailures },
+      }).catch(() => {});
       return { success: false, guardFailures };
     }
 
@@ -208,6 +215,14 @@ export class PipelineEngine implements IPipelineEngine {
               data: { hook: hook.name, error: message },
             });
           });
+        } else {
+          this.taskEventLog.log({
+            taskId: task.id,
+            category: 'system',
+            severity: 'warning',
+            message: `Hook "${hook.name}" not registered — skipping`,
+            data: { hook: hook.name },
+          }).catch(() => {});
         }
       }
     }
