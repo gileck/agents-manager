@@ -541,6 +541,60 @@ export function registerIpcHandlers(services: AppServices): void {
     }
   });
 
+  registerIpcHandler(IPC_CHANNELS.GIT_STATUS, async (_, taskId: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) return null;
+    try {
+      return await gitOps.status();
+    } catch {
+      return null;
+    }
+  });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_RESET_FILE, async (_, taskId: string, filepath: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) throw new Error('No worktree for task');
+    await gitOps.resetFile(filepath);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_CLEAN, async (_, taskId: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) throw new Error('No worktree for task');
+    await gitOps.clean();
+  });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_PULL, async (_, taskId: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) throw new Error('No worktree for task');
+    await gitOps.rebase('main');
+  });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_LOG, async (_, taskId: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) return null;
+    try {
+      return await gitOps.log();
+    } catch {
+      return null;
+    }
+  });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_SHOW, async (_, taskId: string, hash: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) return null;
+    try {
+      return await gitOps.showCommit(hash);
+    } catch {
+      return null;
+    }
+  });
+
   // ============================================
   // Dashboard Operations
   // ============================================

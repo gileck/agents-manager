@@ -15,6 +15,7 @@ import type {
   TransitionResult,
   DashboardStats,
   DebugTimelineEntry,
+  GitLogEntry,
   Worktree,
 } from '../shared/types';
 
@@ -75,6 +76,12 @@ const IPC_CHANNELS = {
   AGENT_DEF_DELETE: 'agent-def:delete',
   GIT_DIFF: 'git:diff',
   GIT_STAT: 'git:stat',
+  GIT_STATUS: 'git:status',
+  GIT_RESET_FILE: 'git:reset-file',
+  GIT_CLEAN: 'git:clean',
+  GIT_PULL: 'git:pull',
+  GIT_LOG: 'git:log',
+  GIT_SHOW: 'git:show',
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;
 
@@ -238,6 +245,18 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.GIT_DIFF, taskId),
     stat: (taskId: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_STAT, taskId),
+    status: (taskId: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_STATUS, taskId),
+    resetFile: (taskId: string, filepath: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_RESET_FILE, taskId, filepath),
+    clean: (taskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_CLEAN, taskId),
+    pull: (taskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_PULL, taskId),
+    log: (taskId: string): Promise<GitLogEntry[] | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_LOG, taskId),
+    show: (taskId: string, hash: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_SHOW, taskId, hash),
   },
 
   // Dashboard operations

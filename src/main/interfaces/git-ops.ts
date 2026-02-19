@@ -14,4 +14,10 @@ export interface IGitOps {
   getCurrentBranch(): Promise<string>;
   /** Discard all uncommitted changes and untracked files in the working tree. */
   clean(): Promise<void>;
+  /** Return `git status --porcelain` output. */
+  status(): Promise<string>;
+  /** Reset a single file: `git checkout -- <filepath>`. */
+  resetFile(filepath: string): Promise<void>;
+  /** Return `git show <hash>` diff output. */
+  showCommit(hash: string): Promise<string>;
 }

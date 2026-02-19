@@ -92,4 +92,16 @@ export class LocalGitOps implements IGitOps {
     await this.git(['reset', '--hard', 'HEAD']);
     await this.git(['clean', '-fd']);
   }
+
+  async status(): Promise<string> {
+    return this.git(['status', '--porcelain']);
+  }
+
+  async resetFile(filepath: string): Promise<void> {
+    await this.git(['checkout', '--', filepath]);
+  }
+
+  async showCommit(hash: string): Promise<string> {
+    return this.git(['show', hash]);
+  }
 }

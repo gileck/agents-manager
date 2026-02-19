@@ -17,6 +17,7 @@ import { useTask, useTasks } from '../hooks/useTasks';
 import { usePipeline } from '../hooks/usePipelines';
 import { useFeatures } from '../hooks/useFeatures';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
+import { GitTab } from '../components/tasks/GitTab';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -388,6 +389,7 @@ export function TaskDetailPage() {
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
           <TabsTrigger value="context">Context</TabsTrigger>
+          <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
 
@@ -616,6 +618,10 @@ export function TaskDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="git">
+          <GitTab taskId={id!} />
         </TabsContent>
 
         <TabsContent value="pipeline">

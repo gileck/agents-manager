@@ -90,6 +90,12 @@ export const IPC_CHANNELS = {
   // Git operations
   GIT_DIFF: 'git:diff',
   GIT_STAT: 'git:stat',
+  GIT_STATUS: 'git:status',
+  GIT_RESET_FILE: 'git:reset-file',
+  GIT_CLEAN: 'git:clean',
+  GIT_PULL: 'git:pull',
+  GIT_LOG: 'git:log',
+  GIT_SHOW: 'git:show',
 
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',

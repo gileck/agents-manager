@@ -64,4 +64,16 @@ export class StubGitOps implements IGitOps {
   async clean(): Promise<void> {
     // no-op in stub
   }
+
+  async status(): Promise<string> {
+    return '';
+  }
+
+  async resetFile(_filepath: string): Promise<void> {
+    // no-op in stub
+  }
+
+  async showCommit(_hash: string): Promise<string> {
+    return '';
+  }
 }
