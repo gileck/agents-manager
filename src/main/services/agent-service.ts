@@ -305,7 +305,7 @@ export class AgentService implements IAgentService {
 
       // Extract subtasks and save plan from plan output
       if (result.exitCode === 0 && context.mode === 'plan') {
-        await this.taskStore.updateTask(taskId, { plan: result.output });
+        await this.taskStore.updateTask(taskId, { plan: this.extractPlan(result.output) });
         try {
           const subtasks = this.extractSubtasks(result.output);
           if (subtasks.length > 0) {
@@ -457,6 +457,22 @@ export class AgentService implements IAgentService {
     return results.length === 0
       ? { passed: true, output: '' }
       : { passed: false, output: results.join('\n\n') };
+  }
+
+  private extractPlan(output: string): string {
+    // The raw output contains interleaved plan text, tool calls, and tool results.
+    // Strip tool call lines ("> Tool: ...", "> Input: ...") and
+    // bracketed system messages ("[tool_result] ...", "[system] ...", etc.)
+    return output
+      .split('\n')
+      .filter(line => {
+        if (line.startsWith('> Tool: ') || line.startsWith('> Input: ')) return false;
+        if (/^\[[\w_]+\] /.test(line)) return false;
+        return true;
+      })
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   private extractContextSummary(output: string): string {
