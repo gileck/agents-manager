@@ -303,6 +303,18 @@ export class AgentService implements IAgentService {
         }
       }
 
+      // Extract subtasks from plan output
+      if (result.exitCode === 0 && context.mode === 'plan') {
+        try {
+          const subtasks = this.extractSubtasks(result.output);
+          if (subtasks.length > 0) {
+            await this.taskStore.updateTask(taskId, { subtasks });
+          }
+        } catch {
+          // Non-fatal — don't block pipeline on subtask extraction failure
+        }
+      }
+
       // Save context entry for successful runs
       if (result.exitCode === 0) {
         try {
@@ -461,6 +473,28 @@ export class AgentService implements IAgentService {
       case 'request_changes': return 'fix_summary';
       default: return 'agent_output';
     }
+  }
+
+  private extractSubtasks(output: string): import('../../shared/types').Subtask[] {
+    const match = output.match(/## Subtasks\s*\n[\s\S]*?```(?:json)?\s*\n([\s\S]*?)```/i);
+    if (!match) return [];
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (Array.isArray(parsed)) {
+        const results: import('../../shared/types').Subtask[] = [];
+        for (const item of parsed) {
+          if (typeof item === 'string') {
+            results.push({ name: item, status: 'open' });
+          } else if (typeof item === 'object' && item !== null && 'name' in item) {
+            results.push({ name: String((item as { name: unknown }).name), status: 'open' });
+          }
+        }
+        return results;
+      }
+    } catch {
+      // Invalid JSON
+    }
+    return [];
   }
 
   private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {

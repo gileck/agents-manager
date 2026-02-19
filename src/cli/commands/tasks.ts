@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import type { AppServices } from '../../main/providers/setup';
+import type { Subtask, SubtaskStatus } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject } from '../context';
 
@@ -23,12 +24,17 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
         priority: cmdOpts.priority,
         assignee: cmdOpts.assignee,
       });
-      const rows = list.map((t) => ({
-        status: t.status,
-        priority: t.priority,
-        title: t.title,
-        id: t.id,
-      }));
+      const rows = list.map((t) => {
+        const done = t.subtasks.filter((s) => s.status === 'done').length;
+        const total = t.subtasks.length;
+        return {
+          status: t.status,
+          priority: t.priority,
+          title: t.title,
+          id: t.id,
+          ...(total > 0 ? { subtasks: `${done}/${total}` } : {}),
+        };
+      });
       output(rows, opts);
     });
 
@@ -222,5 +228,108 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
         return;
       }
       output(result.task!, opts);
+    });
+
+  // Subtask commands
+  const subtask = tasks.command('subtask').description('Manage subtasks');
+
+  subtask
+    .command('list <taskId>')
+    .alias('ls')
+    .description('List subtasks for a task')
+    .action(async (taskId: string) => {
+      const opts = program.opts() as OutputOptions;
+      const services = getServices();
+      const task = await services.taskStore.getTask(taskId);
+      if (!task) {
+        console.error(`Task not found: ${taskId}`);
+        process.exitCode = 1;
+        return;
+      }
+      output(task.subtasks, opts);
+    });
+
+  subtask
+    .command('add <taskId>')
+    .description('Add a subtask')
+    .requiredOption('--name <name>', 'Subtask name')
+    .option('--status <status>', 'Subtask status (open|in_progress|done)', 'open')
+    .action(async (taskId: string, cmdOpts: { name: string; status: string }) => {
+      const opts = program.opts() as OutputOptions;
+      const services = getServices();
+      const task = await services.taskStore.getTask(taskId);
+      if (!task) {
+        console.error(`Task not found: ${taskId}`);
+        process.exitCode = 1;
+        return;
+      }
+      const newSubtask: Subtask = { name: cmdOpts.name, status: cmdOpts.status as SubtaskStatus };
+      const subtasks = [...task.subtasks, newSubtask];
+      await services.taskStore.updateTask(taskId, { subtasks });
+      output(subtasks, opts);
+    });
+
+  subtask
+    .command('update <taskId>')
+    .description('Update a subtask status by name')
+    .requiredOption('--name <name>', 'Subtask name')
+    .requiredOption('--status <status>', 'New status (open|in_progress|done)')
+    .action(async (taskId: string, cmdOpts: { name: string; status: string }) => {
+      const opts = program.opts() as OutputOptions;
+      const services = getServices();
+      const task = await services.taskStore.getTask(taskId);
+      if (!task) {
+        console.error(`Task not found: ${taskId}`);
+        process.exitCode = 1;
+        return;
+      }
+      const subtasks = task.subtasks.map((s) =>
+        s.name === cmdOpts.name ? { ...s, status: cmdOpts.status as SubtaskStatus } : s
+      );
+      await services.taskStore.updateTask(taskId, { subtasks });
+      output(subtasks, opts);
+    });
+
+  subtask
+    .command('remove <taskId>')
+    .description('Remove a subtask by name')
+    .requiredOption('--name <name>', 'Subtask name')
+    .action(async (taskId: string, cmdOpts: { name: string }) => {
+      const opts = program.opts() as OutputOptions;
+      const services = getServices();
+      const task = await services.taskStore.getTask(taskId);
+      if (!task) {
+        console.error(`Task not found: ${taskId}`);
+        process.exitCode = 1;
+        return;
+      }
+      const subtasks = task.subtasks.filter((s) => s.name !== cmdOpts.name);
+      await services.taskStore.updateTask(taskId, { subtasks });
+      output(subtasks, opts);
+    });
+
+  subtask
+    .command('set <taskId>')
+    .description('Replace all subtasks with a JSON array')
+    .requiredOption('--subtasks <json>', 'JSON array of subtasks')
+    .action(async (taskId: string, cmdOpts: { subtasks: string }) => {
+      const opts = program.opts() as OutputOptions;
+      const services = getServices();
+      const task = await services.taskStore.getTask(taskId);
+      if (!task) {
+        console.error(`Task not found: ${taskId}`);
+        process.exitCode = 1;
+        return;
+      }
+      let subtasks: Subtask[];
+      try {
+        subtasks = JSON.parse(cmdOpts.subtasks);
+      } catch {
+        console.error('Invalid JSON for --subtasks');
+        process.exitCode = 1;
+        return;
+      }
+      await services.taskStore.updateTask(taskId, { subtasks });
+      output(subtasks, opts);
     });
 }

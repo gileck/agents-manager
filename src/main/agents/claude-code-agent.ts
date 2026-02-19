@@ -15,11 +15,41 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
     let prompt: string;
     switch (mode) {
       case 'plan':
-        prompt = `Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`;
+        prompt = [
+          `Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`,
+          ``,
+          `At the end of your plan, include a "## Subtasks" section with a JSON array of subtask names that break down the implementation into concrete steps. Example:`,
+          `## Subtasks`,
+          '```json',
+          `["Set up database schema", "Implement API endpoint", "Add unit tests"]`,
+          '```',
+        ].join('\n');
         break;
-      case 'implement':
-        prompt = `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`;
+      case 'implement': {
+        const lines = [
+          `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`,
+        ];
+        if (task.subtasks && task.subtasks.length > 0) {
+          lines.push('', '## Subtasks', 'Track your progress by updating subtask status as you work:');
+          for (const st of task.subtasks) {
+            lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
+          }
+          lines.push(
+            '',
+            `Use the CLI to update subtask status as you complete each step:`,
+            `  am tasks subtask update ${task.id} --name "subtask name" --status in_progress`,
+            `  am tasks subtask update ${task.id} --name "subtask name" --status done`,
+          );
+        } else {
+          lines.push(
+            '',
+            `If you want to track progress, create subtasks via CLI:`,
+            `  am tasks subtask add ${task.id} --name "step description"`,
+          );
+        }
+        prompt = lines.join('\n');
         break;
+      }
       case 'request_changes':
         prompt = [
           `A code reviewer has reviewed the changes on this branch and requested changes.`,

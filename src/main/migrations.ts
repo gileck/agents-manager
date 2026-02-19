@@ -389,6 +389,10 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
       `,
     },
+    {
+      name: '024_add_subtasks_column',
+      sql: `ALTER TABLE tasks ADD COLUMN subtasks TEXT NOT NULL DEFAULT '[]'`,
+    },
   ];
 }
 

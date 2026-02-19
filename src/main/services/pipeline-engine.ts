@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type {
   Task,
+  Subtask,
   Transition,
   TransitionTrigger,
   TransitionContext,
@@ -29,6 +30,7 @@ interface TaskRow {
   assignee: string | null;
   pr_link: string | null;
   branch_name: string | null;
+  subtasks: string;
   metadata: string;
   created_at: number;
   updated_at: number;
@@ -48,6 +50,7 @@ function rowToTask(row: TaskRow): Task {
     assignee: row.assignee,
     prLink: row.pr_link,
     branchName: row.branch_name,
+    subtasks: parseJson<Subtask[]>(row.subtasks, []),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

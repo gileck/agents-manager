@@ -117,6 +117,14 @@ export interface ProjectUpdateInput {
   config?: Record<string, unknown>;
 }
 
+// Subtask types
+export type SubtaskStatus = 'open' | 'in_progress' | 'done';
+
+export interface Subtask {
+  name: string;
+  status: SubtaskStatus;
+}
+
 // Task types
 export interface Task {
   id: string;
@@ -131,6 +139,7 @@ export interface Task {
   assignee: string | null;
   prLink: string | null;
   branchName: string | null;
+  subtasks: Subtask[];
   metadata: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
@@ -148,6 +157,7 @@ export interface TaskCreateInput {
   assignee?: string;
   prLink?: string;
   branchName?: string;
+  subtasks?: Subtask[];
   metadata?: Record<string, unknown>;
 }
 
@@ -161,6 +171,7 @@ export interface TaskUpdateInput {
   assignee?: string | null;
   prLink?: string | null;
   branchName?: string | null;
+  subtasks?: Subtask[];
   metadata?: Record<string, unknown>;
 }
 
