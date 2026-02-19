@@ -12,6 +12,9 @@ import type { IPendingPromptStore } from '../../src/main/interfaces/pending-prom
 import type { IWorktreeManager } from '../../src/main/interfaces/worktree-manager';
 import type { IGitOps } from '../../src/main/interfaces/git-ops';
 import type { IScmPlatform } from '../../src/main/interfaces/scm-platform';
+import type { IFeatureStore } from '../../src/main/interfaces/feature-store';
+import type { IAgentDefinitionStore } from '../../src/main/interfaces/agent-definition-store';
+import type { ITaskContextStore } from '../../src/main/interfaces/task-context-store';
 import { SqliteProjectStore } from '../../src/main/stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../../src/main/stores/sqlite-pipeline-store';
 import { SqliteTaskStore } from '../../src/main/stores/sqlite-task-store';
@@ -21,6 +24,9 @@ import { SqliteAgentRunStore } from '../../src/main/stores/sqlite-agent-run-stor
 import { SqliteTaskArtifactStore } from '../../src/main/stores/sqlite-task-artifact-store';
 import { SqliteTaskPhaseStore } from '../../src/main/stores/sqlite-task-phase-store';
 import { SqlitePendingPromptStore } from '../../src/main/stores/sqlite-pending-prompt-store';
+import { SqliteFeatureStore } from '../../src/main/stores/sqlite-feature-store';
+import { SqliteAgentDefinitionStore } from '../../src/main/stores/sqlite-agent-definition-store';
+import { SqliteTaskContextStore } from '../../src/main/stores/sqlite-task-context-store';
 import { PipelineEngine } from '../../src/main/services/pipeline-engine';
 import { AgentFrameworkImpl } from '../../src/main/services/agent-framework-impl';
 import { AgentService } from '../../src/main/services/agent-service';
@@ -55,6 +61,10 @@ export interface TestContext {
   notificationRouter: StubNotificationRouter;
   agentService: AgentService;
   workflowService: WorkflowService;
+  // Phase 3
+  featureStore: IFeatureStore;
+  agentDefinitionStore: IAgentDefinitionStore;
+  taskContextStore: ITaskContextStore;
   cleanup: () => void;
 }
 
@@ -126,6 +136,18 @@ function applyMigrations(db: Database.Database): void {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS features (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -136,9 +158,13 @@ function applyMigrations(db: Database.Database): void {
       priority INTEGER NOT NULL DEFAULT 0,
       tags TEXT NOT NULL DEFAULT '[]',
       parent_task_id TEXT,
+      feature_id TEXT REFERENCES features(id),
       assignee TEXT,
       pr_link TEXT,
       branch_name TEXT,
+      plan TEXT,
+      subtasks TEXT NOT NULL DEFAULT '[]',
+      plan_comments TEXT NOT NULL DEFAULT '[]',
       metadata TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
@@ -191,6 +217,7 @@ function applyMigrations(db: Database.Database): void {
       action TEXT NOT NULL,
       entity_type TEXT NOT NULL,
       entity_id TEXT NOT NULL,
+      project_id TEXT,
       summary TEXT NOT NULL,
       data TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL
@@ -203,11 +230,12 @@ function applyMigrations(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
       agent_type TEXT NOT NULL,
-      mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review')),
+      mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review','request_changes','plan_revision','investigate')),
       status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')),
       output TEXT,
       outcome TEXT,
       payload TEXT,
+      prompt TEXT,
       exit_code INTEGER,
       started_at INTEGER NOT NULL,
       completed_at INTEGER,
@@ -250,11 +278,43 @@ function applyMigrations(db: Database.Database): void {
       prompt_type TEXT NOT NULL,
       payload TEXT NOT NULL DEFAULT '{}',
       response TEXT,
+      resume_outcome TEXT,
       status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')),
       created_at INTEGER NOT NULL,
       answered_at INTEGER,
       FOREIGN KEY(task_id) REFERENCES tasks(id),
       FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+    )
+  `);
+
+  // Phase 3 tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_context_entries (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      agent_run_id TEXT,
+      source TEXT NOT NULL,
+      entry_type TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      data TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_definitions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      engine TEXT NOT NULL,
+      model TEXT,
+      modes TEXT NOT NULL DEFAULT '[]',
+      system_prompt TEXT,
+      timeout INTEGER,
+      is_built_in INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
     )
   `);
 
@@ -278,7 +338,41 @@ function applyMigrations(db: Database.Database): void {
     );
   }
 
-  // Indexes (Phase 1 + Phase 2)
+  // Seed built-in agent definitions
+  const insertAgentDef = db.prepare(`
+    INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+  `);
+
+  insertAgentDef.run(
+    'agent-def-claude-code',
+    'Implementor',
+    'Plans, implements, and fixes code changes',
+    'claude-code',
+    JSON.stringify([
+      { mode: 'plan', promptTemplate: 'Create a plan for: {taskTitle}', timeout: 300000 },
+      { mode: 'implement', promptTemplate: 'Implement: {taskTitle}' },
+      { mode: 'request_changes', promptTemplate: 'Address review feedback for: {taskTitle}' },
+      { mode: 'plan_revision', promptTemplate: 'Revise plan for: {taskTitle}' },
+      { mode: 'investigate', promptTemplate: 'Investigate bug: {taskTitle}', timeout: 300000 },
+    ]),
+    now,
+    now,
+  );
+
+  insertAgentDef.run(
+    'agent-def-pr-reviewer',
+    'PR Reviewer',
+    'Reviews code changes and provides feedback',
+    'claude-code',
+    JSON.stringify([
+      { mode: 'review', promptTemplate: 'Review changes for: {taskTitle}' },
+    ]),
+    now,
+    now,
+  );
+
+  // Indexes (Phase 1 + Phase 2 + Phase 3)
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_pipeline_id ON tasks(pipeline_id);
@@ -298,7 +392,9 @@ function applyMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_task_artifacts_task_id ON task_artifacts(task_id);
     CREATE INDEX IF NOT EXISTS idx_task_phases_task_id ON task_phases(task_id);
     CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
-    CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status);
+    CREATE INDEX IF NOT EXISTS idx_features_project_id ON features(project_id);
+    CREATE INDEX IF NOT EXISTS idx_task_context_task_id ON task_context_entries(task_id)
   `);
 }
 
@@ -357,11 +453,30 @@ export function createTestContext(): TestContext {
     return { allowed: true };
   });
 
+  pipelineEngine.registerGuard('max_retries', (task: Task, _transition: Transition, _context: TransitionContext, dbRef: unknown, params?: Record<string, unknown>): GuardResult => {
+    const sqliteDb = dbRef as Database.Database;
+    const max = (params?.max as number) ?? 3;
+
+    const row = sqliteDb.prepare(
+      "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status IN ('failed', 'cancelled')"
+    ).get(task.id) as { count: number };
+
+    if (row.count > max) {
+      return { allowed: false, reason: `Max retries (${max}) reached — ${row.count} failed runs` };
+    }
+    return { allowed: true };
+  });
+
   // Phase 2 stores
   const agentRunStore = new SqliteAgentRunStore(db);
   const taskArtifactStore = new SqliteTaskArtifactStore(db);
   const taskPhaseStore = new SqliteTaskPhaseStore(db);
   const pendingPromptStore = new SqlitePendingPromptStore(db);
+
+  // Phase 3 stores
+  const featureStore = new SqliteFeatureStore(db);
+  const agentDefinitionStore = new SqliteAgentDefinitionStore(db);
+  const taskContextStore = new SqliteTaskContextStore(db);
 
   // Phase 2 infrastructure (stubs)
   const worktreeManager = new StubWorktreeManager();
@@ -379,17 +494,19 @@ export function createTestContext(): TestContext {
   const agentService = new AgentService(
     agentFramework, agentRunStore,
     () => worktreeManager,
-    () => gitOps,
-    () => scmPlatform,
     taskStore, projectStore, pipelineEngine,
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
+    () => gitOps,
+    taskContextStore, agentDefinitionStore,
   );
 
   // Workflow service
   const workflowService = new WorkflowService(
     taskStore, projectStore, pipelineEngine, pipelineStore,
     taskEventLog, activityLog, agentRunStore, pendingPromptStore,
-    taskArtifactStore, agentService, scmPlatform,
+    taskArtifactStore, agentService,
+    () => scmPlatform,
+    () => worktreeManager,
   );
 
   return {
@@ -412,6 +529,9 @@ export function createTestContext(): TestContext {
     notificationRouter,
     agentService,
     workflowService,
+    featureStore,
+    agentDefinitionStore,
+    taskContextStore,
     cleanup: () => db.close(),
   };
 }
