@@ -1,5 +1,7 @@
 import type { AgentContext, AgentConfig, AgentRunResult } from '../../shared/types';
 import type { IAgent } from '../interfaces/agent';
+import { PromptRenderer } from '../services/prompt-renderer';
+import { SandboxGuard } from '../services/sandbox-guard';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
@@ -45,7 +47,13 @@ export abstract class BaseClaudeAgent implements IAgent {
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     const query = await this.loadQuery();
 
-    let prompt = context.resolvedPrompt ?? this.buildPrompt(context);
+    let prompt: string;
+    if (context.modeConfig?.promptTemplate) {
+      const renderer = new PromptRenderer();
+      prompt = renderer.render(context.modeConfig.promptTemplate, context);
+    } else {
+      prompt = context.resolvedPrompt ?? this.buildPrompt(context);
+    }
     if (context.taskContext?.length) {
       const block = context.taskContext.map(e => {
         const ts = new Date(e.createdAt).toISOString();
@@ -81,6 +89,13 @@ export abstract class BaseClaudeAgent implements IAgent {
     const outputFormat = this.getOutputFormat(context);
     const maxTurns = this.getMaxTurns(context);
 
+    // Set up sandbox guard — restrict file access to worktree
+    const isReadOnlyMode = context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate';
+    const sandboxGuard = new SandboxGuard(
+      [workdir],
+      isReadOnlyMode && context.project?.path ? [context.project.path] : [],
+    );
+
     log(`Entering SDK message loop`, {
       promptLength: prompt.length,
       model: config.model ?? 'default',
@@ -99,6 +114,16 @@ export abstract class BaseClaudeAgent implements IAgent {
           model: config.model,
           maxTurns,
           ...(outputFormat ? { outputFormat } : {}),
+          hooks: {
+            preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
+              const result = sandboxGuard.evaluateToolCall(toolName, toolInput);
+              if (!result.allow) {
+                log(`Sandbox guard blocked ${toolName}: ${result.reason}`);
+                return { decision: 'block', reason: result.reason };
+              }
+              return undefined;
+            },
+          },
         },
       })) {
         messageCount++;

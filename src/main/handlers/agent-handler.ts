@@ -1,7 +1,7 @@
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
-import type { Task, Transition, AgentMode } from '../../shared/types';
+import type { Task, Transition, TransitionContext, AgentMode, HookResult } from '../../shared/types';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { sendToRenderer } from '@template/main/core/window';
 
@@ -11,16 +11,15 @@ export interface AgentHandlerDeps {
 }
 
 export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandlerDeps): void {
-  engine.registerHook('start_agent', async (task: Task, transition: Transition) => {
-    const hookDef = transition.hooks?.find((h) => h.name === 'start_agent');
-    if (!hookDef?.params?.mode) {
+  engine.registerHook('start_agent', async (task: Task, transition: Transition, _context: TransitionContext, params?: Record<string, unknown>): Promise<HookResult> => {
+    if (!params?.mode) {
       throw new Error(`start_agent hook on transition ${transition.from} → ${transition.to} is missing required "mode" param`);
     }
-    if (!hookDef.params.agentType) {
+    if (!params.agentType) {
       throw new Error(`start_agent hook on transition ${transition.from} → ${transition.to} is missing required "agentType" param`);
     }
-    const mode = hookDef.params.mode as AgentMode;
-    const agentType = hookDef.params.agentType as string;
+    const mode = params.mode as AgentMode;
+    const agentType = params.agentType as string;
     // Fire-and-forget: agent runs asynchronously via WorkflowService (logs activity)
     deps.workflowService.startAgent(task.id, mode, agentType, (chunk) => {
       try {
@@ -38,5 +37,6 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
         });
       } catch { /* db may be closed during shutdown */ }
     });
+    return { success: true };
   });
 }

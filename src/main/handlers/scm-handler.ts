@@ -6,7 +6,7 @@ import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { IScmPlatform } from '../interfaces/scm-platform';
-import type { Task, Transition, TransitionContext } from '../../shared/types';
+import type { Task, Transition, TransitionContext, HookResult } from '../../shared/types';
 
 export interface ScmHandlerDeps {
   projectStore: IProjectStore;
@@ -19,7 +19,7 @@ export interface ScmHandlerDeps {
 }
 
 export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps): void {
-  engine.registerHook('merge_pr', async (task: Task) => {
+  engine.registerHook('merge_pr', async (task: Task, _transition: Transition, _context: TransitionContext, _params?: Record<string, unknown>): Promise<HookResult> => {
     const ghLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', data?: Record<string, unknown>) =>
       deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data });
 
@@ -34,7 +34,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     const project = await deps.projectStore.getProject(task.projectId);
     if (!project?.path) {
       await ghLog(`merge_pr hook: project ${task.projectId} has no path`, 'error');
-      return;
+      return { success: false, error: `Project ${task.projectId} has no path` };
     }
 
     // Remove worktree before merge so --delete-branch can clean up the local branch
@@ -70,9 +70,11 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
         await ghLog(`Failed to pull main after merge (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
       }
     }
+
+    return { success: true };
   });
 
-  engine.registerHook('push_and_create_pr', async (task: Task, transition: Transition, context: TransitionContext) => {
+  engine.registerHook('push_and_create_pr', async (task: Task, transition: Transition, context: TransitionContext, _params?: Record<string, unknown>): Promise<HookResult> => {
     const data = context.data as { branch?: string } | undefined;
     const branch = data?.branch;
     if (!branch) {
@@ -82,7 +84,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
         severity: 'error',
         message: 'push_and_create_pr hook: no branch in transition context',
       });
-      return;
+      return { success: false, error: 'No branch in transition context' };
     }
 
     const project = await deps.projectStore.getProject(task.projectId);
@@ -93,7 +95,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
         severity: 'error',
         message: `push_and_create_pr hook: project ${task.projectId} has no path`,
       });
-      return;
+      return { success: false, error: `Project ${task.projectId} has no path` };
     }
 
     const scmPlatform = deps.createScmPlatform(project.path);
@@ -138,7 +140,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     // Skip push + PR if no changes on branch
     if (diffContent.trim().length === 0) {
       await gitLog('No changes detected on branch — skipping push and PR creation', 'warning', { branch });
-      return;
+      return { success: true };
     }
 
     // Push task branch (force-push since rebase rewrites history)
@@ -150,7 +152,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       await gitLog(`Failed to push branch: ${err instanceof Error ? err.message : String(err)}`, 'error', {
         error: err instanceof Error ? err.message : String(err),
       });
-      return; // Can't create PR without pushing
+      return { success: false, error: 'Failed to push branch' };
     }
 
     // Create PR
@@ -181,6 +183,9 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       await ghLog(`Failed to create PR: ${err instanceof Error ? err.message : String(err)}`, 'error', {
         error: err instanceof Error ? err.message : String(err),
       });
+      return { success: false, error: 'Failed to create PR' };
     }
+
+    return { success: true };
   });
 }

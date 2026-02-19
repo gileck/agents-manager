@@ -570,7 +570,54 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_activity_log_project_id ON activity_log(project_id)
       `,
     },
+    {
+      name: '041_reseed_pipelines_hook_policies',
+      sql: getReseedPipelinesSql(),
+    },
+    {
+      name: '042_update_reviewer_default_branch',
+      sql: getUpdateReviewerDefaultBranchSql(),
+    },
+    {
+      name: '043_reseed_pipeline_categories',
+      sql: getReseedPipelinesSql(),
+    },
   ];
+}
+
+function getUpdateReviewerDefaultBranchSql(): string {
+  const ts = Date.now();
+  const reviewerModes = JSON.stringify([
+    {
+      mode: 'review',
+      promptTemplate: [
+        'You are a code reviewer. Review the changes in this branch for the following task: {taskTitle}.{taskDescription}',
+        '',
+        '{priorReviewSection}',
+        'Steps:',
+        '1. Run `git diff {defaultBranch}..HEAD` to see all changes made in this branch.',
+        '2. Review the diff for code quality, correctness, style, and completeness against the task description.',
+        '3. Provide a concise review.',
+        '4. End your response with a "## Summary" section briefly describing your review findings.',
+        '5. End your output with exactly one of these verdicts on its own line:',
+        '   REVIEW_VERDICT: APPROVED',
+        '   REVIEW_VERDICT: CHANGES_REQUESTED',
+        '',
+        'If the changes look good, use APPROVED. If there are issues that need fixing, use CHANGES_REQUESTED and explain what needs to change.',
+      ].join('\n'),
+    },
+  ]);
+  return `UPDATE agent_definitions SET modes = '${escSql(reviewerModes)}', updated_at = ${ts} WHERE id = 'agent-def-pr-reviewer'`;
+}
+
+function getReseedPipelinesSql(): string {
+  const statements: string[] = [];
+  for (const p of SEEDED_PIPELINES) {
+    const statuses = escSql(JSON.stringify(p.statuses));
+    const transitions = escSql(JSON.stringify(p.transitions));
+    statements.push(`UPDATE pipelines SET statuses = '${statuses}', transitions = '${transitions}', updated_at = ${Date.now()} WHERE id = '${escSql(p.id)}'`);
+  }
+  return statements.join(';\n');
 }
 
 function getUpdateAllPipelinesSql(): string {

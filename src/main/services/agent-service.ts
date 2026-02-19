@@ -230,13 +230,14 @@ export class AgentService implements IAgentService {
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
 
-    // Look up agent definition by mode and resolve prompt template
+    // Look up agent definition by convention-based ID and pass modeConfig to context
     try {
-      const agentDef = await this.agentDefinitionStore.getDefinitionByMode(mode);
+      const defId = `agent-def-${agentType}`;
+      const agentDef = await this.agentDefinitionStore.getDefinition(defId);
       if (agentDef) {
         const modeConfig = agentDef.modes.find(m => m.mode === mode);
-        if (modeConfig?.promptTemplate) {
-          context.resolvedPrompt = this.resolvePromptTemplate(modeConfig.promptTemplate, context);
+        if (modeConfig) {
+          context.modeConfig = modeConfig;
         }
       }
     } catch {
@@ -644,6 +645,10 @@ export class AgentService implements IAgentService {
     }
   }
 
+  getActiveRunIds(): string[] {
+    return Array.from(this.backgroundPromises.keys());
+  }
+
   async waitForCompletion(runId: string): Promise<void> {
     const promise = this.backgroundPromises.get(runId);
     if (promise) {
@@ -750,100 +755,6 @@ export class AgentService implements IAgentService {
       // Invalid JSON
     }
     return [];
-  }
-
-  private resolvePromptTemplate(template: string, context: AgentContext): string {
-    const { task } = context;
-    const desc = task.description ? ` ${task.description}` : '';
-
-    // Build subtasks section
-    let subtasksSection = '';
-    if (context.mode === 'plan' || context.mode === 'investigate') {
-      subtasksSection = [
-        '',
-        'At the end of your plan, include a "## Subtasks" section with a JSON array of subtask names that break down the implementation into concrete steps. Example:',
-        '## Subtasks',
-        '```json',
-        '["Set up database schema", "Implement API endpoint", "Add unit tests"]',
-        '```',
-      ].join('\n');
-    } else if (task.subtasks && task.subtasks.length > 0) {
-      const lines = ['', '## Subtasks', 'Track your progress by updating subtask status as you work:'];
-      for (const st of task.subtasks) {
-        lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
-      }
-      lines.push(
-        '',
-        'Use the CLI to update subtask status as you complete each step:',
-        `  am tasks subtask update ${task.id} --name "subtask name" --status in_progress`,
-        `  am tasks subtask update ${task.id} --name "subtask name" --status done`,
-      );
-      subtasksSection = lines.join('\n');
-    }
-
-    // Build plan section
-    let planSection = '';
-    if (task.plan) {
-      planSection = `\n## Plan\n${task.plan}`;
-    }
-
-    // Build prior review section
-    let priorReviewSection = '';
-    const hasPriorReview = context.taskContext?.some(
-      e => e.entryType === 'review_feedback' || e.entryType === 'fix_summary'
-    );
-    if (hasPriorReview) {
-      priorReviewSection = [
-        'This is a RE-REVIEW. Previous review feedback and fixes are in the Task Context above.',
-        'Verify ALL previously requested changes were addressed before approving.',
-        '',
-      ].join('\n');
-    }
-
-    // Build plan comments section
-    let planCommentsSection = '';
-    if (task.planComments && task.planComments.length > 0) {
-      const lines = ['', '## Admin Feedback'];
-      for (const comment of task.planComments) {
-        const time = new Date(comment.createdAt).toLocaleString();
-        lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-      }
-      planCommentsSection = lines.join('\n');
-    }
-
-    // Build related task section for bug reports
-    let relatedTaskSection = '';
-    const relatedTaskId = task.metadata?.relatedTaskId as string | undefined;
-    if (relatedTaskId) {
-      relatedTaskSection = [
-        '',
-        '## Related Task',
-        `This bug references task \`${relatedTaskId}\`. Use the CLI to inspect it:`,
-        `  am tasks get ${relatedTaskId} --json`,
-        `  am events list --task ${relatedTaskId} --json`,
-      ].join('\n');
-    }
-
-    // Use replacer functions to avoid $-pattern interpretation in replacement strings
-    let prompt = template
-      .replace(/\{taskTitle\}/g, () => task.title)
-      .replace(/\{taskDescription\}/g, () => desc)
-      .replace(/\{taskId\}/g, () => task.id)
-      .replace(/\{subtasksSection\}/g, () => subtasksSection)
-      .replace(/\{planSection\}/g, () => planSection)
-      .replace(/\{planCommentsSection\}/g, () => planCommentsSection)
-      .replace(/\{priorReviewSection\}/g, () => priorReviewSection)
-      .replace(/\{relatedTaskSection\}/g, () => relatedTaskSection);
-
-    // Append standard suffix
-    prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
-
-    // Append validation errors if present
-    if (context.validationErrors) {
-      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
-    }
-
-    return prompt;
   }
 
   private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {

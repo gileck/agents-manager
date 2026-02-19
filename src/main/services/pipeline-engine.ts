@@ -10,7 +10,8 @@ import type {
   GuardFn,
   GuardResult,
   HookFn,
-  PipelineStatus,
+  HookFailure,
+  HookExecutionPolicy,
 } from '../../shared/types';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ITaskStore } from '../interfaces/task-store';
@@ -200,28 +201,64 @@ export class PipelineEngine implements IPipelineEngine {
       return { success: false, error: 'Transaction completed but task was not updated' };
     }
 
-    // Run hooks after transaction (failures logged, don't rollback)
+    // Run hooks after transaction
+    const hookFailures: HookFailure[] = [];
     if (transition.hooks) {
       for (const hook of transition.hooks) {
         const hookFn = this.hooks.get(hook.name);
-        if (hookFn) {
-          hookFn(updatedTask, transition, ctx).catch((err) => {
-            const message = err instanceof Error ? err.message : String(err);
-            this.taskEventLog.log({
-              taskId: task.id,
-              category: 'system',
-              severity: 'error',
-              message: `Hook "${hook.name}" failed: ${message}`,
-              data: { hook: hook.name, error: message },
-            });
-          });
-        } else {
+        const policy: HookExecutionPolicy = hook.policy ?? 'best_effort';
+
+        if (!hookFn) {
+          const failure: HookFailure = { hook: hook.name, error: `Hook "${hook.name}" not registered`, policy };
+          hookFailures.push(failure);
           this.taskEventLog.log({
             taskId: task.id,
             category: 'system',
             severity: 'warning',
             message: `Hook "${hook.name}" not registered — skipping`,
             data: { hook: hook.name },
+          }).catch(() => {});
+          continue;
+        }
+
+        if (policy === 'fire_and_forget') {
+          hookFn(updatedTask, transition, ctx, hook.params).catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            this.taskEventLog.log({
+              taskId: task.id,
+              category: 'system',
+              severity: 'error',
+              message: `Hook "${hook.name}" failed (fire_and_forget): ${message}`,
+              data: { hook: hook.name, error: message },
+            });
+          });
+          continue;
+        }
+
+        // required or best_effort: await the hook
+        try {
+          const result = await hookFn(updatedTask, transition, ctx, hook.params);
+          if (result && !result.success) {
+            const failure: HookFailure = { hook: hook.name, error: result.error ?? 'Hook returned failure', policy };
+            hookFailures.push(failure);
+            this.taskEventLog.log({
+              taskId: task.id,
+              category: 'system',
+              severity: policy === 'required' ? 'error' : 'warning',
+              message: `Hook "${hook.name}" failed: ${failure.error}`,
+              data: { hook: hook.name, error: failure.error, policy },
+            }).catch(() => {});
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          const failure: HookFailure = { hook: hook.name, error: message, policy };
+          hookFailures.push(failure);
+          this.taskEventLog.log({
+            taskId: task.id,
+            category: 'system',
+            severity: policy === 'required' ? 'error' : 'warning',
+            message: `Hook "${hook.name}" threw: ${message}`,
+            data: { hook: hook.name, error: message, policy },
           }).catch(() => {});
         }
       }
@@ -241,6 +278,6 @@ export class PipelineEngine implements IPipelineEngine {
       },
     });
 
-    return { success: true, task: updatedTask };
+    return { success: true, task: updatedTask, ...(hookFailures.length > 0 ? { hookFailures } : {}) };
   }
 }

@@ -37,12 +37,14 @@ export interface LogEntry {
 // ============================================
 
 // Pipeline types
+export type StatusCategory = 'ready' | 'agent_running' | 'human_review' | 'waiting_for_input' | 'terminal';
+
 export interface PipelineStatus {
   name: string;
   label: string;
   color?: string;
   isFinal?: boolean;
-  category?: string;
+  category?: StatusCategory;
   position?: number;
 }
 
@@ -53,9 +55,23 @@ export interface TransitionGuard {
   params?: Record<string, unknown>;
 }
 
+export type HookExecutionPolicy = 'required' | 'best_effort' | 'fire_and_forget';
+
+export interface HookResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface HookFailure {
+  hook: string;
+  error: string;
+  policy: HookExecutionPolicy;
+}
+
 export interface TransitionHook {
   name: string;
   params?: Record<string, unknown>;
+  policy?: HookExecutionPolicy;
 }
 
 export interface Transition {
@@ -324,6 +340,7 @@ export interface TransitionResult {
   task?: Task;
   error?: string;
   guardFailures?: Array<{ guard: string; reason: string }>;
+  hookFailures?: HookFailure[];
 }
 
 export interface TransitionHistoryEntry {
@@ -338,7 +355,7 @@ export interface TransitionHistoryEntry {
 }
 
 export type GuardFn = (task: Task, transition: Transition, context: TransitionContext, db: unknown, params?: Record<string, unknown>) => GuardResult;
-export type HookFn = (task: Task, transition: Transition, context: TransitionContext) => Promise<void>;
+export type HookFn = (task: Task, transition: Transition, context: TransitionContext, params?: Record<string, unknown>) => Promise<HookResult | void>;
 
 // ============================================
 // Phase 2: Agent Execution Types
@@ -475,6 +492,7 @@ export interface AgentContext {
   taskContext?: TaskContextEntry[];
   validationErrors?: string;
   resolvedPrompt?: string;
+  modeConfig?: AgentModeConfig;
 }
 
 export interface AgentConfig {
@@ -585,6 +603,7 @@ export interface Notification {
 // ============================================
 
 export interface DebugTimelineEntry {
+  id?: string;
   timestamp: number;
   source: 'event' | 'activity' | 'transition' | 'agent' | 'phase' | 'artifact' | 'prompt' | 'git' | 'github' | 'worktree' | 'context';
   severity: 'info' | 'warning' | 'error' | 'debug';

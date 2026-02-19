@@ -25,16 +25,14 @@ import type {
   Task, Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus, PlanComment,
 } from '../../shared/types';
-
-// Agent pipeline statuses that have specific bar rendering
-const AGENT_STATUSES = new Set(['open', 'planning', 'implementing', 'plan_review', 'pr_review', 'needs_info', 'done',
-  'reported', 'investigating', 'investigation_review']);
+import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { task, loading, error, refetch } = useTask(id!);
   const { pipeline } = usePipeline(task?.pipelineId);
+  const statusMeta = usePipelineStatusMeta(task, pipeline);
   const { features } = useFeatures(task ? { projectId: task.projectId } : undefined);
 
   const { data: transitions, refetch: refetchTransitions } = useIpc<Transition[]>(
@@ -73,10 +71,11 @@ export function TaskDetailPage() {
   );
 
   // Derived agent state
+  const isAgentPipeline = pipeline?.statuses.some((s) => s.category === 'agent_running') ?? false;
   const hasRunningAgent = agentRuns?.some((r) => r.status === 'running') ?? false;
   const activeRun = agentRuns?.find((r) => r.status === 'running') ?? null;
   const lastRun = agentRuns?.[0] ?? null;
-  const isAgentPhase = task?.status === 'planning' || task?.status === 'implementing' || task?.status === 'investigating';
+  const isAgentPhase = statusMeta.isAgentRunning;
   // After agent completes, post-completion work (git push, PR creation) may take
   // several seconds before transitioning the task. Don't show "stuck" during this window.
   const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
@@ -85,8 +84,8 @@ export function TaskDetailPage() {
   const isStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null && !isFinalizing;
 
   // Poll while agent is running, needs_info, finalizing, stuck, or waiting for PR
-  const awaitingPr = task?.status === 'pr_review' && !task.prLink;
-  const shouldPoll = hasRunningAgent || task?.status === 'needs_info' || isFinalizing || isStuck || awaitingPr;
+  const awaitingPr = statusMeta.isHumanReview && !task?.prLink;
+  const shouldPoll = hasRunningAgent || statusMeta.isWaitingForInput || isFinalizing || isStuck || awaitingPr;
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -295,15 +294,29 @@ export function TaskDetailPage() {
   }
 
   // Determine which transitions are "primary" (shown in the status bar)
-  // vs "secondary" (shown at bottom of overview)
-  const isAgentPipeline = AGENT_STATUSES.has(task.status);
-  const primaryTransitionTargets = getPrimaryTransitionTargets(task.status, isStuck);
-  const primaryTransitions = isAgentPipeline
-    ? (transitions ?? []).filter((t) => primaryTransitionTargets.has(t.to))
-    : (transitions ?? []); // Non-agent pipelines: all transitions in bar
-  const secondaryTransitions = isAgentPipeline
-    ? (transitions ?? []).filter((t) => !primaryTransitionTargets.has(t.to))
-    : [];
+  // vs "secondary" (shown at bottom of overview).
+  // Uses pipeline status categories instead of hardcoded status names.
+  const hasCategories = statusMeta.category !== undefined;
+  const allTransitions = transitions ?? [];
+  let primaryTransitions: Transition[];
+  let secondaryTransitions: Transition[];
+  if (!hasCategories) {
+    // Non-categorized pipelines: all transitions in bar
+    primaryTransitions = allTransitions;
+    secondaryTransitions = [];
+  } else if (statusMeta.isReady || statusMeta.isHumanReview) {
+    // Ready / human review: all transitions are primary actions
+    primaryTransitions = allTransitions;
+    secondaryTransitions = [];
+  } else if (statusMeta.isAgentRunning) {
+    // Agent running: only show cancel/recovery when stuck
+    primaryTransitions = isStuck ? allTransitions : [];
+    secondaryTransitions = isStuck ? [] : allTransitions;
+  } else {
+    // Terminal / waiting_for_input: no primary actions
+    primaryTransitions = [];
+    secondaryTransitions = allTransitions;
+  }
 
   return (
     <div className="p-8">
@@ -760,34 +773,6 @@ export function TaskDetailPage() {
   );
 }
 
-/** Determine which transition targets are "primary" for the status action bar */
-function getPrimaryTransitionTargets(status: string, isStuck: boolean): Set<string> {
-  switch (status) {
-    case 'open':
-      return new Set(['planning', 'implementing']);
-    case 'planning':
-      return isStuck ? new Set(['open']) : new Set();
-    case 'implementing':
-      return isStuck ? new Set(['open', 'plan_review', 'reported', 'investigation_review']) : new Set();
-    case 'plan_review':
-      return new Set(); // Actions moved to Plan tab
-    case 'pr_review':
-      return new Set(['done', 'implementing']);
-    case 'needs_info':
-      return new Set();
-    case 'done':
-      return new Set();
-    // Bug-agent pipeline statuses
-    case 'reported':
-      return new Set(['investigating', 'implementing']);
-    case 'investigating':
-      return isStuck ? new Set(['reported']) : new Set();
-    case 'investigation_review':
-      return new Set(['implementing', 'investigating']);
-    default:
-      return new Set(); // Fallback: handled by isAgentPipeline=false path
-  }
-}
 
 /** Render prompt questions from payload */
 function renderPromptQuestions(payload: Record<string, unknown>) {

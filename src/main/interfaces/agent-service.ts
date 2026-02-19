@@ -5,4 +5,5 @@ export interface IAgentService {
   waitForCompletion(runId: string): Promise<void>;
   stop(runId: string): Promise<void>;
   recoverOrphanedRuns(): Promise<AgentRun[]>;
+  getActiveRunIds(): string[];
 }
