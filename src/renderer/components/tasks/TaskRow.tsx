@@ -7,6 +7,41 @@ import { Copy, Trash2, GitPullRequest } from 'lucide-react';
 import { PRIORITY_LABELS, formatRelativeTimestamp } from './task-helpers';
 import type { Task, Pipeline } from '../../../shared/types';
 
+const PRIORITY_BORDER_COLORS: Record<number, string> = {
+  0: 'border-l-red-500',
+  1: 'border-l-orange-400',
+  2: 'border-l-yellow-400',
+  3: 'border-l-green-400',
+};
+
+function getStatusBgColor(status: string, pipeline: Pipeline | null): string {
+  if (!pipeline) return '';
+  const statusDef = pipeline.statuses.find((s) => s.name === status);
+  if (!statusDef?.color) return '';
+
+  const color = statusDef.color;
+  // Map named colors to subtle Tailwind bg tints
+  const namedColorMap: Record<string, string> = {
+    blue: 'bg-blue-500/5',
+    gray: 'bg-gray-500/5',
+    red: 'bg-red-500/5',
+    green: 'bg-green-500/5',
+    yellow: 'bg-yellow-500/5',
+    orange: 'bg-orange-500/5',
+  };
+  if (namedColorMap[color]) return namedColorMap[color];
+
+  // For hex colors, use inline style instead (handled in component)
+  return '';
+}
+
+function getStatusHexBg(status: string, pipeline: Pipeline | null): string | undefined {
+  if (!pipeline) return undefined;
+  const statusDef = pipeline.statuses.find((s) => s.name === status);
+  if (!statusDef?.color || !statusDef.color.startsWith('#')) return undefined;
+  return `${statusDef.color}0D`; // ~5% opacity (hex 0D = 13/255)
+}
+
 interface TaskRowProps {
   task: Task;
   pipeline: Pipeline | null;
@@ -30,9 +65,14 @@ export function TaskRow({
   onDelete,
   onDuplicate,
 }: TaskRowProps) {
+  const priorityBorder = PRIORITY_BORDER_COLORS[task.priority] ?? 'border-l-gray-300';
+  const statusBg = getStatusBgColor(task.status, pipeline);
+  const statusHexBg = getStatusHexBg(task.status, pipeline);
+
   return (
     <Card
-      className={`cursor-pointer hover:bg-accent/50 transition-colors ${selected ? 'ring-2 ring-primary' : ''} ${hasActiveAgent ? 'border-l-2 border-l-green-500' : ''}`}
+      className={`cursor-pointer hover:bg-accent/50 transition-colors border-l-[3px] ${priorityBorder} ${statusBg} ${selected ? 'ring-2 ring-primary' : ''} ${hasActiveAgent ? 'ring-1 ring-green-500' : ''}`}
+      style={statusHexBg ? { backgroundColor: statusHexBg } : undefined}
       onClick={onClick}
     >
       <CardContent className="py-3">
