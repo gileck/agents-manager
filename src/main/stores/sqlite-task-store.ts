@@ -17,6 +17,7 @@ interface TaskRow {
   assignee: string | null;
   pr_link: string | null;
   branch_name: string | null;
+  plan: string | null;
   subtasks: string;
   metadata: string;
   created_at: number;
@@ -37,6 +38,7 @@ function rowToTask(row: TaskRow): Task {
     assignee: row.assignee,
     prLink: row.pr_link,
     branchName: row.branch_name,
+    plan: row.plan,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
@@ -118,8 +120,8 @@ export class SqliteTaskStore implements ITaskStore {
     }
 
     this.db.prepare(`
-      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, assignee, pr_link, branch_name, subtasks, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, assignee, pr_link, branch_name, plan, subtasks, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.projectId,
@@ -133,6 +135,7 @@ export class SqliteTaskStore implements ITaskStore {
       input.assignee ?? null,
       input.prLink ?? null,
       input.branchName ?? null,
+      null,
       JSON.stringify(input.subtasks ?? []),
       JSON.stringify(input.metadata ?? {}),
       timestamp,
@@ -184,6 +187,10 @@ export class SqliteTaskStore implements ITaskStore {
     if (input.branchName !== undefined) {
       updates.push('branch_name = ?');
       values.push(input.branchName);
+    }
+    if (input.plan !== undefined) {
+      updates.push('plan = ?');
+      values.push(input.plan);
     }
     if (input.subtasks !== undefined) {
       updates.push('subtasks = ?');

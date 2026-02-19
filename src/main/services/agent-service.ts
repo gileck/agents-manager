@@ -303,8 +303,9 @@ export class AgentService implements IAgentService {
         }
       }
 
-      // Extract subtasks from plan output
+      // Extract subtasks and save plan from plan output
       if (result.exitCode === 0 && context.mode === 'plan') {
+        await this.taskStore.updateTask(taskId, { plan: result.output });
         try {
           const subtasks = this.extractSubtasks(result.output);
           if (subtasks.length > 0) {

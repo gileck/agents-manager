@@ -393,6 +393,10 @@ export function getMigrations(): Migration[] {
       name: '024_add_subtasks_column',
       sql: `ALTER TABLE tasks ADD COLUMN subtasks TEXT NOT NULL DEFAULT '[]'`,
     },
+    {
+      name: '025_add_plan_column',
+      sql: `ALTER TABLE tasks ADD COLUMN plan TEXT`,
+    },
   ];
 }
 

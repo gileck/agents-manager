@@ -139,6 +139,7 @@ export interface Task {
   assignee: string | null;
   prLink: string | null;
   branchName: string | null;
+  plan: string | null;
   subtasks: Subtask[];
   metadata: Record<string, unknown>;
   createdAt: number;
@@ -171,6 +172,7 @@ export interface TaskUpdateInput {
   assignee?: string | null;
   prLink?: string | null;
   branchName?: string | null;
+  plan?: string | null;
   subtasks?: Subtask[];
   metadata?: Record<string, unknown>;
 }

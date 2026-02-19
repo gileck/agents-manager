@@ -30,6 +30,7 @@ interface TaskRow {
   assignee: string | null;
   pr_link: string | null;
   branch_name: string | null;
+  plan: string | null;
   subtasks: string;
   metadata: string;
   created_at: number;
@@ -50,6 +51,7 @@ function rowToTask(row: TaskRow): Task {
     assignee: row.assignee,
     prLink: row.pr_link,
     branchName: row.branch_name,
+    plan: row.plan,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,

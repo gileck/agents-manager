@@ -14,6 +14,7 @@ import { useTask } from '../hooks/useTasks';
 import { usePipeline } from '../hooks/usePipelines';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { useIpc } from '@template/renderer/hooks/useIpc';
+import ReactMarkdown from 'react-markdown';
 import type {
   Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus,
@@ -347,6 +348,7 @@ export function TaskDetailPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="plan">Plan</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
@@ -460,6 +462,23 @@ export function TaskDetailPage() {
               </div>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="plan">
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Plan</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {task.plan ? (
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <ReactMarkdown>{task.plan}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No plan yet. A plan will appear here after the planning agent completes.</p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="timeline">

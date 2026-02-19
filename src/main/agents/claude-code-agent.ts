@@ -29,6 +29,9 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         const lines = [
           `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`,
         ];
+        if (task.plan) {
+          lines.push('', '## Plan', task.plan);
+        }
         if (task.subtasks && task.subtasks.length > 0) {
           lines.push('', '## Subtasks', 'Track your progress by updating subtask status as you work:');
           for (const st of task.subtasks) {
@@ -50,19 +53,26 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         prompt = lines.join('\n');
         break;
       }
-      case 'request_changes':
-        prompt = [
+      case 'request_changes': {
+        const rcLines = [
           `A code reviewer has reviewed the changes on this branch and requested changes.`,
           `You MUST address ALL of the reviewer's feedback from the Task Context above.`,
           ``,
           `Task: ${task.title}.${desc}`,
+        ];
+        if (task.plan) {
+          rcLines.push('', '## Plan', task.plan);
+        }
+        rcLines.push(
           ``,
           `## Instructions`,
           `1. Read the reviewer's feedback in the Task Context above carefully.`,
           `2. Fix every issue mentioned — do not skip or ignore any feedback.`,
           `3. After making all fixes, stage and commit with a descriptive message.`,
-        ].join('\n');
+        );
+        prompt = rcLines.join('\n');
         break;
+      }
       default:
         prompt = `${task.title}.${desc}`;
     }
