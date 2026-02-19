@@ -26,7 +26,6 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
     switch (context.mode) {
       case 'plan':
       case 'plan_revision':
-      case 'investigate':
         return {
           type: 'json_schema',
           schema: {
@@ -41,6 +40,23 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
               },
             },
             required: ['plan', 'planSummary', 'subtasks'],
+          },
+        };
+      case 'investigate':
+        return {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              plan: { type: 'string', description: 'The detailed investigation report as markdown (root cause analysis, findings, fix suggestion)' },
+              investigationSummary: { type: 'string', description: 'A short 2-3 sentence summary of the investigation findings for display in task context' },
+              subtasks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Concrete fix steps that break down the suggested fix',
+              },
+            },
+            required: ['plan', 'investigationSummary', 'subtasks'],
           },
         };
       case 'implement':
@@ -195,7 +211,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           ``,
           `Your output will be captured as structured JSON with three fields:`,
           `- "plan": a detailed investigation report as markdown (root cause analysis, findings, fix suggestion)`,
-          `- "planSummary": a short 2-3 sentence summary of the investigation`,
+          `- "investigationSummary": a short 2-3 sentence summary of the investigation findings`,
           `- "subtasks": an array of concrete fix step names`,
         );
         prompt = invLines.join('\n');
