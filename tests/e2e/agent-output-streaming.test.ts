@@ -83,9 +83,13 @@ describe('Agent Output Streaming', () => {
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted', onOutput);
     await ctx.agentService.waitForCompletion(run.id);
 
-    // Verify onOutput was passed through to agent.execute()
+    // Verify an onOutput wrapper was passed through to agent.execute()
     expect(executeSpy).toHaveBeenCalledOnce();
     const callArgs = executeSpy.mock.calls[0];
-    expect(callArgs[2]).toBe(onOutput);
+    // AgentService wraps onOutput in a buffering lambda, so check it's a function
+    // that delegates to the original by invoking it
+    expect(typeof callArgs[2]).toBe('function');
+    callArgs[2]!('test-chunk');
+    expect(chunks).toContain('test-chunk');
   });
 });

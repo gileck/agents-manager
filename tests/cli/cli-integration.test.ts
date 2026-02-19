@@ -270,7 +270,7 @@ describe('CLI Integration', () => {
   describe('Pipelines', () => {
     it('should list seeded pipelines', async () => {
       const pipelines = await ctx.pipelineStore.listPipelines();
-      expect(pipelines.length).toBe(4); // 4 seeded pipelines
+      expect(pipelines.length).toBe(5); // 5 seeded pipelines
     });
 
     it('should get pipeline details', async () => {

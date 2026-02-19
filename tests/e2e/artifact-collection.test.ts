@@ -39,7 +39,7 @@ describe('Artifact Collection', () => {
 
     // First transition to implementing
     const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'agent' });
+    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'manual' });
 
     const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -54,7 +54,7 @@ describe('Artifact Collection', () => {
     ctx.scriptedAgent.setScript(happyImplement);
 
     const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'agent' });
+    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'manual' });
 
     const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -68,7 +68,7 @@ describe('Artifact Collection', () => {
     ctx.scriptedAgent.setScript(happyImplement);
 
     const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'agent' });
+    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'manual' });
 
     const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);

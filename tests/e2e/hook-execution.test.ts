@@ -88,10 +88,11 @@ describe('Hook Execution', () => {
 
     // Wait for the async hook to fail and be logged
     await vi.waitFor(async () => {
-      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'system', severity: 'error' });
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'system', severity: 'warning' });
       expect(events.length).toBeGreaterThan(0);
-      expect(events[0].message).toContain('on_start');
-      expect(events[0].message).toContain('failed');
+      const hookEvent = events.find(e => e.message.includes('on_start'));
+      expect(hookEvent).toBeTruthy();
+      expect(hookEvent!.message).toContain('threw');
     });
   });
 

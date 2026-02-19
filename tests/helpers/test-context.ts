@@ -35,6 +35,9 @@ import { StubWorktreeManager } from '../../src/main/services/stub-worktree-manag
 import { StubGitOps } from '../../src/main/services/stub-git-ops';
 import { StubScmPlatform } from '../../src/main/services/stub-scm-platform';
 import { StubNotificationRouter } from '../../src/main/services/stub-notification-router';
+import { registerScmHandler } from '../../src/main/handlers/scm-handler';
+import { registerPromptHandler } from '../../src/main/handlers/prompt-handler';
+import { registerNotificationHandler } from '../../src/main/handlers/notification-handler';
 import { ScriptedAgent, happyPlan } from '../../src/main/agents/scripted-agent';
 import { SEEDED_PIPELINES } from '../../src/main/data/seeded-pipelines';
 import type { Task, Transition, TransitionContext, GuardResult } from '../../src/shared/types';
@@ -508,6 +511,19 @@ export function createTestContext(): TestContext {
     () => scmPlatform,
     () => worktreeManager,
   );
+
+  // Register production hooks (scm, prompt, notification)
+  registerScmHandler(pipelineEngine, {
+    projectStore,
+    taskStore,
+    taskArtifactStore,
+    taskEventLog,
+    createWorktreeManager: () => worktreeManager,
+    createGitOps: () => gitOps,
+    createScmPlatform: () => scmPlatform,
+  });
+  registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
+  registerNotificationHandler(pipelineEngine, { notificationRouter });
 
   return {
     db,

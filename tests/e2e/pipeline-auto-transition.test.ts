@@ -25,9 +25,9 @@ describe('Pipeline Auto-Transition', () => {
   it('should auto-transition planning to plan_review on plan_complete', async () => {
     ctx.scriptedAgent.setScript(happyPlan);
 
-    // First transition to planning
+    // First transition to planning (manual trigger per pipeline definition)
     const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
+    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'manual' });
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -40,7 +40,7 @@ describe('Pipeline Auto-Transition', () => {
     ctx.scriptedAgent.setScript(happyImplement);
 
     const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'agent' });
+    await ctx.pipelineEngine.executeTransition(task!, 'implementing', { trigger: 'manual' });
 
     const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -57,7 +57,7 @@ describe('Pipeline Auto-Transition', () => {
     }));
 
     const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
+    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'manual' });
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -70,7 +70,7 @@ describe('Pipeline Auto-Transition', () => {
     ctx.scriptedAgent.setScript(happyPlan);
 
     const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
+    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'manual' });
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
