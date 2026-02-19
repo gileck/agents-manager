@@ -116,14 +116,15 @@ export class AgentService implements IAgentService {
         data: { taskId },
       });
 
-      // Rebase onto local main (not origin/main) to stay in sync with the
-      // user's latest committed state and avoid including unrelated diffs.
-      await gitOps.rebase('main');
+      // Fetch and rebase onto origin/main so the branch only contains agent
+      // changes and never inherits unpushed local commits from other tasks.
+      await gitOps.fetch('origin');
+      await gitOps.rebase('origin/main');
       await this.taskEventLog.log({
         taskId,
         category: 'worktree',
         severity: 'info',
-        message: 'Worktree rebased onto main',
+        message: 'Worktree rebased onto origin/main',
         data: { taskId },
       });
     } catch (err) {

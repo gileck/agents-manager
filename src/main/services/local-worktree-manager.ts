@@ -45,9 +45,13 @@ export class LocalWorktreeManager implements IWorktreeManager {
 
     const wtPath = this.worktreePath(taskId);
 
+    // Fetch latest remote state so the new branch is based on origin/main,
+    // not local main (which may have unpushed commits from other tasks).
+    await this.git(['fetch', 'origin']);
+
     try {
-      // Try creating with a new branch
-      await this.git(['worktree', 'add', '-b', branch, wtPath]);
+      // Try creating with a new branch based on origin/main
+      await this.git(['worktree', 'add', '-b', branch, wtPath, 'origin/main']);
     } catch {
       // Branch may already exist from a prior run — retry without -b
       await this.git(['worktree', 'add', wtPath, branch]);

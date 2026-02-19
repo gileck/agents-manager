@@ -83,7 +83,6 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       return;
     }
 
-    const gitOps = deps.createGitOps(project.path);
     const scmPlatform = deps.createScmPlatform(project.path);
 
     const gitLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', logData?: Record<string, unknown>) =>
@@ -91,11 +90,28 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     const ghLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', logData?: Record<string, unknown>) =>
       deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data: logData });
 
-    // Collect diff and verify there are actual changes
-    await gitLog('Collecting diff: main..' + branch);
+    // Resolve the worktree path for this task so git operations run in the
+    // checked-out branch (not the main repo checkout).
+    const worktreeManager = deps.createWorktreeManager(project.path);
+    const worktree = await worktreeManager.get(task.id);
+    const gitCwd = worktree?.path ?? project.path;
+    const gitOps = deps.createGitOps(gitCwd);
+
+    // Rebase onto origin/main before push so the PR diff only contains agent
+    // changes and doesn't include unpushed local commits from other tasks.
+    try {
+      await gitOps.fetch('origin');
+      await gitOps.rebase('origin/main');
+      await gitLog('Rebased onto origin/main before push');
+    } catch (err) {
+      await gitLog(`Rebase onto origin/main failed: ${err instanceof Error ? err.message : String(err)}`, 'warning');
+    }
+
+    // Collect diff against origin/main (what GitHub will compare against)
+    await gitLog('Collecting diff: origin/main..' + branch);
     let diffContent = '';
     try {
-      diffContent = await gitOps.diff('main', branch);
+      diffContent = await gitOps.diff('origin/main', branch);
       await deps.taskArtifactStore.createArtifact({
         taskId: task.id,
         type: 'diff',
@@ -112,10 +128,10 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       return;
     }
 
-    // Push task branch
+    // Push task branch (force-push since rebase rewrites history)
     await gitLog('Pushing branch to remote: ' + branch);
     try {
-      await gitOps.push(branch);
+      await gitOps.push(branch, true);
       await gitLog('Branch pushed successfully');
     } catch (err) {
       await gitLog(`Failed to push branch: ${err instanceof Error ? err.message : String(err)}`, 'error', {
