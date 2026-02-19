@@ -459,6 +459,7 @@ export interface AgentContext {
   promptResponses?: Record<string, unknown>[];
   systemPrompt?: string;
   validationErrors?: string;
+  resolvedPrompt?: string;
 }
 
 export interface AgentConfig {
@@ -473,6 +474,7 @@ export interface AgentRunResult {
   output: string;
   outcome?: string;
   payload?: Record<string, unknown>;
+  structuredOutput?: Record<string, unknown>;
   error?: string;
   costInputTokens?: number;
   costOutputTokens?: number;
@@ -483,6 +485,47 @@ export interface AgentInfo {
   name: string;
   description: string;
   available: boolean;
+}
+
+// Agent definition types
+export interface AgentModeConfig {
+  mode: string;
+  promptTemplate: string;
+  timeout?: number;
+}
+
+export interface AgentDefinition {
+  id: string;
+  name: string;
+  description: string | null;
+  engine: string;
+  model: string | null;
+  modes: AgentModeConfig[];
+  systemPrompt: string | null;
+  timeout: number | null;
+  isBuiltIn: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AgentDefinitionCreateInput {
+  name: string;
+  description?: string;
+  engine: string;
+  model?: string;
+  modes?: AgentModeConfig[];
+  systemPrompt?: string;
+  timeout?: number;
+}
+
+export interface AgentDefinitionUpdateInput {
+  name?: string;
+  description?: string;
+  engine?: string;
+  model?: string | null;
+  modes?: AgentModeConfig[];
+  systemPrompt?: string | null;
+  timeout?: number | null;
 }
 
 export interface Worktree {

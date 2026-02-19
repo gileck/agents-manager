@@ -14,8 +14,13 @@ export abstract class BaseClaudeAgent implements IAgent {
   abstract buildPrompt(context: AgentContext): string;
   abstract inferOutcome(mode: string, exitCode: number, output: string): string;
 
-  buildResult(exitCode: number, output: string, outcome: string, error?: string, costInputTokens?: number, costOutputTokens?: number): AgentRunResult {
-    return { exitCode, output, outcome, error, costInputTokens, costOutputTokens };
+  /** Override in subclass to request structured JSON output from the SDK. */
+  protected getOutputFormat(_context: AgentContext): object | undefined {
+    return undefined;
+  }
+
+  buildResult(exitCode: number, output: string, outcome: string, error?: string, costInputTokens?: number, costOutputTokens?: number, structuredOutput?: Record<string, unknown>): AgentRunResult {
+    return { exitCode, output, outcome, error, costInputTokens, costOutputTokens, structuredOutput };
   }
 
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
@@ -35,7 +40,7 @@ export abstract class BaseClaudeAgent implements IAgent {
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     const query = await this.loadQuery();
 
-    let prompt = this.buildPrompt(context);
+    let prompt = context.resolvedPrompt ?? this.buildPrompt(context);
     if (context.taskContext?.length) {
       const block = context.taskContext.map(e => {
         const ts = new Date(e.createdAt).toISOString();
@@ -55,6 +60,7 @@ export abstract class BaseClaudeAgent implements IAgent {
     let resultText = '';
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
+    let structuredOutput: Record<string, unknown> | undefined;
     let isError = false;
     let errorMessage: string | undefined;
     let messageCount = 0;
@@ -66,6 +72,8 @@ export abstract class BaseClaudeAgent implements IAgent {
 
     log(`Starting agent run: mode=${context.mode}, workdir=${workdir}, timeout=${timeout}ms, model=${config.model ?? 'default'}`);
 
+    const outputFormat = this.getOutputFormat(context);
+
     try {
       for await (const message of query({
         prompt,
@@ -75,6 +83,7 @@ export abstract class BaseClaudeAgent implements IAgent {
           permissionMode: 'bypassPermissions',
           allowDangerouslySkipPermissions: true,
           model: config.model,
+          ...(outputFormat ? { outputFormat } : {}),
         },
       })) {
         messageCount++;
@@ -95,6 +104,9 @@ export abstract class BaseClaudeAgent implements IAgent {
           if (msg.subtype !== 'success') {
             isError = true;
             errorMessage = msg.errors?.join('\n') || 'Agent execution failed';
+          }
+          if (msg.structured_output) {
+            structuredOutput = msg.structured_output;
           }
           costInputTokens = msg.usage?.input_tokens;
           costOutputTokens = msg.usage?.output_tokens;
@@ -127,7 +139,7 @@ export abstract class BaseClaudeAgent implements IAgent {
     log(`Run complete: messages=${messageCount}, exitCode=${exitCode}, outcome=${outcome}, output_length=${resultText.length}`);
 
     const output = resultText || errorMessage || '';
-    return this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens);
+    return this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens, structuredOutput);
   }
 
   async stop(runId: string): Promise<void> {

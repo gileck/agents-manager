@@ -18,6 +18,7 @@ import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
+import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
@@ -42,6 +43,7 @@ export class AgentService implements IAgentService {
     private pendingPromptStore: IPendingPromptStore,
     private createGitOps: (cwd: string) => IGitOps,
     private taskContextStore: ITaskContextStore,
+    private agentDefinitionStore: IAgentDefinitionStore,
   ) {}
 
   async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void): Promise<AgentRun> {
@@ -142,6 +144,19 @@ export class AgentService implements IAgentService {
 
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
+
+    // Look up agent definition and resolve prompt template
+    try {
+      const agentDef = await this.agentDefinitionStore.getDefinitionByAgentType(agentType);
+      if (agentDef) {
+        const modeConfig = agentDef.modes.find(m => m.mode === mode);
+        if (modeConfig?.promptTemplate) {
+          context.resolvedPrompt = this.resolvePromptTemplate(modeConfig.promptTemplate, context);
+        }
+      }
+    } catch {
+      // Fall through to hardcoded buildPrompt if lookup fails
+    }
 
     const config: AgentConfig = {
       model: context.project.config?.model as string | undefined,
@@ -303,23 +318,37 @@ export class AgentService implements IAgentService {
         }
       }
 
-      // Extract subtasks and save plan from plan output
+      // Extract plan, subtasks, and context from plan output
       if (result.exitCode === 0 && context.mode === 'plan') {
-        await this.taskStore.updateTask(taskId, { plan: this.extractPlan(result.output) });
-        try {
-          const subtasks = this.extractSubtasks(result.output);
-          if (subtasks.length > 0) {
-            await this.taskStore.updateTask(taskId, { subtasks });
+        const so = result.structuredOutput as { plan?: string; planSummary?: string; subtasks?: string[] } | undefined;
+        if (so?.plan) {
+          const updates: import('../../shared/types').TaskUpdateInput = { plan: so.plan };
+          if (so.subtasks && so.subtasks.length > 0) {
+            updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
           }
-        } catch {
-          // Non-fatal — don't block pipeline on subtask extraction failure
+          await this.taskStore.updateTask(taskId, updates);
+        } else {
+          // Fallback: parse raw output if structured output unavailable
+          await this.taskStore.updateTask(taskId, { plan: this.extractPlan(result.output) });
+          try {
+            const subtasks = this.extractSubtasks(result.output);
+            if (subtasks.length > 0) {
+              await this.taskStore.updateTask(taskId, { subtasks });
+            }
+          } catch {
+            // Non-fatal
+          }
         }
       }
 
       // Save context entry for successful runs
       if (result.exitCode === 0) {
         try {
-          const summary = this.extractContextSummary(result.output);
+          // Use planSummary from structured output for plan mode, fall back to parsing
+          const so = result.structuredOutput as { planSummary?: string } | undefined;
+          const summary = (context.mode === 'plan' && so?.planSummary)
+            ? so.planSummary
+            : this.extractContextSummary(result.output);
           const entryType = this.getContextEntryType(agentType, context.mode, result.outcome);
           const entryData: Record<string, unknown> = {};
           if (agentType === 'pr-reviewer') {
@@ -512,6 +541,72 @@ export class AgentService implements IAgentService {
       // Invalid JSON
     }
     return [];
+  }
+
+  private resolvePromptTemplate(template: string, context: AgentContext): string {
+    const { task } = context;
+    const desc = task.description ? ` ${task.description}` : '';
+
+    // Build subtasks section
+    let subtasksSection = '';
+    if (context.mode === 'plan') {
+      subtasksSection = [
+        '',
+        'At the end of your plan, include a "## Subtasks" section with a JSON array of subtask names that break down the implementation into concrete steps. Example:',
+        '## Subtasks',
+        '```json',
+        '["Set up database schema", "Implement API endpoint", "Add unit tests"]',
+        '```',
+      ].join('\n');
+    } else if (task.subtasks && task.subtasks.length > 0) {
+      const lines = ['', '## Subtasks', 'Track your progress by updating subtask status as you work:'];
+      for (const st of task.subtasks) {
+        lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
+      }
+      lines.push(
+        '',
+        'Use the CLI to update subtask status as you complete each step:',
+        `  am tasks subtask update ${task.id} --name "subtask name" --status in_progress`,
+        `  am tasks subtask update ${task.id} --name "subtask name" --status done`,
+      );
+      subtasksSection = lines.join('\n');
+    }
+
+    // Build plan section
+    let planSection = '';
+    if (task.plan) {
+      planSection = `\n## Plan\n${task.plan}`;
+    }
+
+    // Build prior review section
+    let priorReviewSection = '';
+    const hasPriorReview = context.taskContext?.some(
+      e => e.entryType === 'review_feedback' || e.entryType === 'fix_summary'
+    );
+    if (hasPriorReview) {
+      priorReviewSection = [
+        'This is a RE-REVIEW. Previous review feedback and fixes are in the Task Context above.',
+        'Verify ALL previously requested changes were addressed before approving.',
+        '',
+      ].join('\n');
+    }
+
+    let prompt = template
+      .replace(/\{taskTitle\}/g, task.title)
+      .replace(/\{taskDescription\}/g, desc)
+      .replace(/\{subtasksSection\}/g, subtasksSection)
+      .replace(/\{planSection\}/g, planSection)
+      .replace(/\{priorReviewSection\}/g, priorReviewSection);
+
+    // Append standard suffix
+    prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
+
+    // Append validation errors if present
+    if (context.validationErrors) {
+      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
+    }
+
+    return prompt;
   }
 
   private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {

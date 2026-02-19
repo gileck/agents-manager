@@ -8,6 +8,26 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
     return config.timeout || (context.mode === 'plan' ? 5 * 60 * 1000 : 10 * 60 * 1000); // request_changes uses same 10min as implement
   }
 
+  protected getOutputFormat(context: AgentContext): object | undefined {
+    if (context.mode !== 'plan') return undefined;
+    return {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        properties: {
+          plan: { type: 'string', description: 'The full implementation plan as markdown' },
+          planSummary: { type: 'string', description: 'A short 2-3 sentence summary of the plan for display in task context' },
+          subtasks: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Concrete implementation steps that break down the plan',
+          },
+        },
+        required: ['plan', 'planSummary', 'subtasks'],
+      },
+    };
+  }
+
   buildPrompt(context: AgentContext): string {
     const { task, mode } = context;
     const desc = task.description ? ` ${task.description}` : '';
@@ -18,11 +38,10 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         prompt = [
           `Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`,
           ``,
-          `At the end of your plan, include a "## Subtasks" section with a JSON array of subtask names that break down the implementation into concrete steps. Example:`,
-          `## Subtasks`,
-          '```json',
-          `["Set up database schema", "Implement API endpoint", "Add unit tests"]`,
-          '```',
+          `Your output will be captured as structured JSON with three fields:`,
+          `- "plan": the full implementation plan as markdown`,
+          `- "planSummary": a short 2-3 sentence summary of the plan`,
+          `- "subtasks": an array of concrete implementation step names`,
         ].join('\n');
         break;
       case 'implement': {
