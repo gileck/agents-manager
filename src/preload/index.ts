@@ -76,6 +76,7 @@ const IPC_CHANNELS = {
   AGENT_DEF_DELETE: 'agent-def:delete',
   GIT_DIFF: 'git:diff',
   GIT_STAT: 'git:stat',
+  GIT_WORKING_DIFF: 'git:working-diff',
   GIT_STATUS: 'git:status',
   GIT_RESET_FILE: 'git:reset-file',
   GIT_CLEAN: 'git:clean',
@@ -245,6 +246,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.GIT_DIFF, taskId),
     stat: (taskId: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_STAT, taskId),
+    workingDiff: (taskId: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_WORKING_DIFF, taskId),
     status: (taskId: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_STATUS, taskId),
     resetFile: (taskId: string, filepath: string): Promise<void> =>

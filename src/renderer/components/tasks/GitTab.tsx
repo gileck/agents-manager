@@ -83,7 +83,7 @@ export function GitTab({ taskId }: GitTabProps) {
     try {
       const [statusRaw, diffRaw, logResult] = await Promise.all([
         window.api.git.status(taskId),
-        window.api.git.diff(taskId),
+        window.api.git.workingDiff(taskId),
         window.api.git.log(taskId),
       ]);
       setStatusEntries(parseStatus(statusRaw ?? ''));

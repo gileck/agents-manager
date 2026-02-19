@@ -541,6 +541,17 @@ export function registerIpcHandlers(services: AppServices): void {
     }
   });
 
+  registerIpcHandler(IPC_CHANNELS.GIT_WORKING_DIFF, async (_, taskId: string) => {
+    validateId(taskId);
+    const gitOps = await getTaskGitOps(taskId);
+    if (!gitOps) return null;
+    try {
+      return await gitOps.diff('HEAD');
+    } catch {
+      return null;
+    }
+  });
+
   registerIpcHandler(IPC_CHANNELS.GIT_STATUS, async (_, taskId: string) => {
     validateId(taskId);
     const gitOps = await getTaskGitOps(taskId);
