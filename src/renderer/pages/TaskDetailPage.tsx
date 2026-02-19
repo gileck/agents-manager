@@ -780,7 +780,7 @@ function PlanReviewSection({
           createdAt: Date.now(),
         };
         await window.api.tasks.update(taskId, {
-          planComments: [...planComments, comment],
+          planComments: [...(planComments ?? []), comment],
         });
         setNewComment('');
         await onRefetch();
@@ -799,7 +799,7 @@ function PlanReviewSection({
       </CardHeader>
       <CardContent>
         {/* Comment history */}
-        {planComments.length > 0 && (
+        {planComments && planComments.length > 0 && (
           <div className="space-y-2 mb-4">
             {planComments.map((comment, i) => (
               <div key={i} className="rounded-md bg-muted px-3 py-2">
