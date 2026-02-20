@@ -106,6 +106,9 @@ export const IPC_CHANNELS = {
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',
 
+  // Telegram
+  TELEGRAM_TEST: 'telegram:test',
+
   // Shell
   OPEN_IN_CHROME: 'shell:open-in-chrome',
 } as const;

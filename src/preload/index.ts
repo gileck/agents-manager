@@ -87,6 +87,7 @@ const IPC_CHANNELS = {
   GIT_SHOW: 'git:show',
   TASK_WORKFLOW_REVIEW: 'task:workflow-review',
   DASHBOARD_STATS: 'dashboard:stats',
+  TELEGRAM_TEST: 'telegram:test',
   OPEN_IN_CHROME: 'shell:open-in-chrome',
 } as const;
 
@@ -274,6 +275,12 @@ const api = {
   dashboard: {
     stats: (): Promise<DashboardStats> =>
       ipcRenderer.invoke(IPC_CHANNELS.DASHBOARD_STATS),
+  },
+
+  // Telegram operations
+  telegram: {
+    test: (botToken: string, chatId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_TEST, botToken, chatId),
   },
 
   // Shell operations

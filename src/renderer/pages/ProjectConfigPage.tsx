@@ -37,6 +37,7 @@ export function ProjectConfigPage() {
   const [maxValidationRetries, setMaxValidationRetries] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
+  const [telegramTesting, setTelegramTesting] = useState(false);
 
   // Track whether we've loaded initial data (to skip auto-save on first populate)
   const initialized = useRef(false);
@@ -316,6 +317,26 @@ export function ProjectConfigPage() {
                   value={telegramChatId}
                   onChange={(e) => setTelegramChatId(e.target.value)}
                 />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!telegramBotToken || !telegramChatId || telegramTesting}
+                  onClick={async () => {
+                    setTelegramTesting(true);
+                    try {
+                      await window.api.telegram.test(telegramBotToken, telegramChatId);
+                      toast.success('Test message sent successfully');
+                    } catch (err) {
+                      toast.error(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
+                    } finally {
+                      setTelegramTesting(false);
+                    }
+                  }}
+                >
+                  {telegramTesting ? 'Sending...' : 'Test Notifications'}
+                </Button>
               </div>
             </div>
           </CardContent>
