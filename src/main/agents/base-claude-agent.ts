@@ -97,6 +97,9 @@ export abstract class BaseClaudeAgent implements IAgent {
       prompt = `## Task Context\n\n${block}\n\n---\n\n${prompt}`;
     }
     onPromptBuilt?.(prompt);
+    if (!context.workdir) {
+      throw new Error(`AgentContext.workdir is required but was not set for task "${context.task.id}"`);
+    }
     const workdir = context.workdir;
     const timeout = this.getTimeout(context, config);
 
