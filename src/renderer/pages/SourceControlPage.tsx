@@ -184,7 +184,7 @@ export function SourceControlPage() {
           value={activeProjectId ?? ''}
           onValueChange={(v) => setSelectedProjectId(v)}
         >
-          <SelectTrigger style={{ width: '250px' }}>
+          <SelectTrigger className="w-[250px]">
             <SelectValue placeholder="Select project" />
           </SelectTrigger>
           <SelectContent>
