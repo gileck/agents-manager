@@ -527,7 +527,23 @@ export class AgentService implements IAgentService {
           }).catch(() => {});
           const updates: import('../../shared/types').TaskUpdateInput = { technicalDesign: so.technicalDesign };
           if (so.subtasks && so.subtasks.length > 0) {
-            updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
+            // During revision, only overwrite subtasks if none have been started yet
+            if (context.mode === 'technical_design_revision') {
+              const current = await this.taskStore.getTask(taskId);
+              const allOpen = !current?.subtasks?.some(s => s.status !== 'open');
+              if (allOpen) {
+                updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
+              } else {
+                this.taskEventLog.log({
+                  taskId,
+                  category: 'agent_debug',
+                  severity: 'debug',
+                  message: 'Skipping subtask overwrite during revision — some subtasks already started',
+                }).catch(() => {});
+              }
+            } else {
+              updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
+            }
           }
           await this.taskStore.updateTask(taskId, updates);
         } else {

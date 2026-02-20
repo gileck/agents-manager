@@ -627,6 +627,10 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_chat_messages_project ON chat_messages(project_id, created_at)
       `,
     },
+    {
+      name: '053_add_technical_design_to_implement_templates',
+      sql: getAddTechnicalDesignToImplementTemplatesSql(),
+    },
   ];
 }
 
@@ -1194,6 +1198,41 @@ function getWidenAgentRunsForTechnicalDesignSql(): string {
     CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
     CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
   `;
+}
+
+function getAddTechnicalDesignToImplementTemplatesSql(): string {
+  const ts = Date.now();
+
+  // Rebuild the implementor modes with {technicalDesignSection} added after {planSection}
+  const implementorModes = JSON.stringify([
+    {
+      mode: 'implement',
+      promptTemplate: [
+        'Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: {taskTitle}.{taskDescription}',
+        '{planSection}',
+        '{technicalDesignSection}',
+        '{subtasksSection}',
+      ].join('\n'),
+    },
+    {
+      mode: 'request_changes',
+      promptTemplate: [
+        'A code reviewer has reviewed the changes on this branch and requested changes.',
+        'You MUST address ALL of the reviewer\'s feedback from the Task Context above.',
+        '',
+        'Task: {taskTitle}.{taskDescription}',
+        '{planSection}',
+        '{technicalDesignSection}',
+        '',
+        '## Instructions',
+        '1. Read the reviewer\'s feedback in the Task Context above carefully.',
+        '2. Fix every issue mentioned — do not skip or ignore any feedback.',
+        '3. After making all fixes, stage and commit with a descriptive message.',
+      ].join('\n'),
+    },
+  ]);
+
+  return `UPDATE agent_definitions SET modes = '${escSql(implementorModes)}', updated_at = ${ts} WHERE id = 'agent-def-implementor'`;
 }
 
 function getAddTechnicalDesignModeSql(): string {

@@ -20,7 +20,7 @@ export function registerPromptHandler(engine: IPipelineEngine, deps: PromptHandl
       taskId: task.id,
       agentRunId: data.agentRunId,
       promptType: transition.agentOutcome ?? 'prompt',
-      payload: data?.payload,
+      payload: { ...data?.payload, resumeToStatus: transition.from },
       resumeOutcome,
     });
 

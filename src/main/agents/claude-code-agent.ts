@@ -11,7 +11,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
       case 'investigate':
       case 'technical_design':
       case 'technical_design_revision':
-        return 100;
+        return 150;
       case 'implement':
       case 'request_changes':
         return 200;
@@ -31,7 +31,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
       case 'resolve_conflicts':
       case 'technical_design':
       case 'technical_design_revision':
-        return 5 * 60 * 1000;
+        return 10 * 60 * 1000;
       default:
         return 10 * 60 * 1000;
     }
@@ -212,6 +212,9 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
             lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
           }
         }
+        if (task.technicalDesign) {
+          lines.push('', '## Technical Design', task.technicalDesign);
+        }
         prompt = lines.join('\n');
         break;
       }
@@ -266,6 +269,13 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         ];
         if (task.plan) {
           tdLines.push('', '## Plan', task.plan);
+        }
+        if (task.planComments && task.planComments.length > 0) {
+          tdLines.push('', '## Plan Comments');
+          for (const comment of task.planComments) {
+            const time = new Date(comment.createdAt).toLocaleString();
+            tdLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+          }
         }
         tdLines.push(
           '',
@@ -354,6 +364,9 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
             const time = new Date(comment.createdAt).toLocaleString();
             rcLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
           }
+        }
+        if (task.technicalDesign) {
+          rcLines.push('', '## Technical Design', task.technicalDesign);
         }
         rcLines.push(
           ``,

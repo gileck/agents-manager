@@ -178,7 +178,11 @@ export class WorkflowService implements IWorkflowService {
       const task = await this.taskStore.getTask(prompt.taskId);
       if (task) {
         const transitions = await this.pipelineEngine.getValidTransitions(task, 'agent');
-        const match = transitions.find((t) => t.agentOutcome === prompt.resumeOutcome);
+        const resumeToStatus = (prompt.payload as Record<string, unknown> | undefined)?.resumeToStatus as string | undefined;
+        const match = (resumeToStatus
+          ? transitions.find((t) => t.agentOutcome === prompt.resumeOutcome && t.to === resumeToStatus)
+          : undefined)
+          ?? transitions.find((t) => t.agentOutcome === prompt.resumeOutcome);
         if (match) {
           await this.pipelineEngine.executeTransition(task, match.to, {
             trigger: 'agent',
