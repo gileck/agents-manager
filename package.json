@@ -4,7 +4,7 @@
   "description": "Production-ready Electron template for macOS menu bar apps",
   "main": "bootstrap.js",
   "bin": {
-    "am": "./dist-cli/src/cli/index.js"
+    "agents-manager": "./bootstrap-cli.js"
   },
   "scripts": {
     "clean": "rm -rf dist dist-main dist-cli",
