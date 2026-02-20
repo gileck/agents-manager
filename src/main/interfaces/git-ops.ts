@@ -1,4 +1,4 @@
-import type { GitLogEntry } from '../../shared/types';
+import type { GitLogEntry, GitCommitDetail } from '../../shared/types';
 
 export interface IGitOps {
   createBranch(name: string, baseBranch?: string): Promise<void>;
@@ -24,4 +24,5 @@ export interface IGitOps {
   showCommit(hash: string): Promise<string>;
   /** Delete a remote branch: `git push origin --delete <branch>`. */
   deleteRemoteBranch(branch: string): Promise<void>;
+  getCommitDetail(hash: string): Promise<GitCommitDetail>;
 }

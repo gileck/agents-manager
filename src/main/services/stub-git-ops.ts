@@ -1,4 +1,4 @@
-import type { GitLogEntry } from '../../shared/types';
+import type { GitLogEntry, GitCommitDetail } from '../../shared/types';
 import type { IGitOps } from '../interfaces/git-ops';
 
 export class StubGitOps implements IGitOps {
@@ -83,5 +83,14 @@ export class StubGitOps implements IGitOps {
 
   async showCommit(_hash: string): Promise<string> {
     return '';
+  }
+
+  async getCommitDetail(hash: string): Promise<GitCommitDetail> {
+    const commit = this.commits.find((c) => c.hash === hash);
+    return {
+      hash,
+      body: commit ? `Stub body for: ${commit.message}` : '',
+      files: [{ status: 'M', path: 'stub/file.ts' }],
+    };
   }
 }
