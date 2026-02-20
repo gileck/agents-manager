@@ -594,6 +594,26 @@ export function getMigrations(): Migration[] {
       name: '046_seed_workflow_reviewer_agent_definition',
       sql: getSeedWorkflowReviewerSql(),
     },
+    {
+      name: '047_add_technical_design_column',
+      sql: `ALTER TABLE tasks ADD COLUMN technical_design TEXT`,
+    },
+    {
+      name: '048_add_technical_design_comments_column',
+      sql: `ALTER TABLE tasks ADD COLUMN technical_design_comments TEXT NOT NULL DEFAULT '[]'`,
+    },
+    {
+      name: '049_widen_agent_runs_for_technical_design',
+      sql: getWidenAgentRunsForTechnicalDesignSql(),
+    },
+    {
+      name: '050_reseed_pipelines_technical_design',
+      sql: getReseedPipelinesSql(),
+    },
+    {
+      name: '051_seed_technical_design_agent_definition',
+      sql: getAddTechnicalDesignModeSql(),
+    },
   ];
 }
 
@@ -1135,4 +1155,50 @@ function getSeedWorkflowReviewerSql(): string {
     },
   ]);
   return `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, created_at, updated_at) VALUES ('agent-def-task-workflow-reviewer', 'Workflow Reviewer', 'Reviews completed task execution end-to-end', 'claude-code', '${escSql(modes)}', 1, ${ts}, ${ts})`;
+}
+
+function getWidenAgentRunsForTechnicalDesignSql(): string {
+  return `
+    CREATE TABLE task_phases_tmp (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, phase TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')), agent_run_id TEXT, started_at INTEGER, completed_at INTEGER, FOREIGN KEY(task_id) REFERENCES tasks(id));
+    INSERT INTO task_phases_tmp SELECT * FROM task_phases;
+    DROP TABLE task_phases;
+    CREATE TABLE pending_prompts_tmp (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, agent_run_id TEXT NOT NULL, prompt_type TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}', response TEXT, status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')), created_at INTEGER NOT NULL, answered_at INTEGER, resume_outcome TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id));
+    INSERT INTO pending_prompts_tmp SELECT * FROM pending_prompts;
+    DROP TABLE pending_prompts;
+    CREATE TABLE agent_runs_new (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, agent_type TEXT NOT NULL, mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review','request_changes','plan_revision','investigate','resolve_conflicts','technical_design','technical_design_revision')), status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')), output TEXT, outcome TEXT, payload TEXT, prompt TEXT, exit_code INTEGER, started_at INTEGER NOT NULL, completed_at INTEGER, cost_input_tokens INTEGER, cost_output_tokens INTEGER, FOREIGN KEY(task_id) REFERENCES tasks(id));
+    INSERT INTO agent_runs_new SELECT * FROM agent_runs;
+    DROP TABLE agent_runs;
+    ALTER TABLE agent_runs_new RENAME TO agent_runs;
+    CREATE TABLE task_phases (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, phase TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')), agent_run_id TEXT, started_at INTEGER, completed_at INTEGER, FOREIGN KEY(task_id) REFERENCES tasks(id), FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id));
+    INSERT INTO task_phases SELECT * FROM task_phases_tmp;
+    DROP TABLE task_phases_tmp;
+    CREATE TABLE pending_prompts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, agent_run_id TEXT NOT NULL, prompt_type TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}', response TEXT, status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')), created_at INTEGER NOT NULL, answered_at INTEGER, resume_outcome TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id), FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id));
+    INSERT INTO pending_prompts SELECT * FROM pending_prompts_tmp;
+    DROP TABLE pending_prompts_tmp;
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_task_id ON agent_runs(task_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+    CREATE INDEX IF NOT EXISTS idx_task_phases_task_id ON task_phases(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
+  `;
+}
+
+function getAddTechnicalDesignModeSql(): string {
+  const ts = Date.now();
+  const technicalDesignMode = {
+    mode: 'technical_design',
+    promptTemplate: 'You are a software architect. Produce a detailed technical design document for the following task.\n\nTask: {taskTitle}.{taskDescription}\n{planSection}\n\n## Instructions\n1. Read the task description and the existing plan carefully.\n2. Explore the codebase thoroughly — file structure, patterns, existing implementations.\n3. Produce a structured technical design document covering:\n   - **Architecture Overview** — high-level approach\n   - **Files to Create/Modify** — specific file paths with descriptions\n   - **Data Model Changes** — schema/type changes if needed\n   - **API/Interface Changes** — new or modified interfaces\n   - **Key Implementation Details** — algorithms, patterns, edge cases\n   - **Dependencies** — new packages, existing utilities to reuse\n   - **Testing Strategy** — what to test and how\n   - **Risk Assessment** — potential issues and mitigations',
+    timeout: 300000,
+  };
+  const technicalDesignRevisionMode = {
+    mode: 'technical_design_revision',
+    promptTemplate: 'The admin has reviewed the current technical design and requested changes. Revise the design based on their feedback.\n\nTask: {taskTitle}.{taskDescription}\n{planSection}\n{technicalDesignSection}\n{technicalDesignCommentsSection}\n\nRevise the technical design to address all feedback. Produce an updated design document.',
+    timeout: 300000,
+  };
+  const mode1Json = escSql(JSON.stringify(technicalDesignMode));
+  const mode2Json = escSql(JSON.stringify(technicalDesignRevisionMode));
+  return [
+    `UPDATE agent_definitions SET modes = json_insert(modes, '$[#]', json('${mode1Json}')), updated_at = ${ts} WHERE id = 'agent-def-claude-code'`,
+    `UPDATE agent_definitions SET modes = json_insert(modes, '$[#]', json('${mode2Json}')), updated_at = ${ts} WHERE id = 'agent-def-claude-code'`,
+  ].join(';\n');
 }

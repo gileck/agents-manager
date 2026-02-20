@@ -34,8 +34,10 @@ interface TaskRow {
   branch_name: string | null;
   feature_id: string | null;
   plan: string | null;
+  technical_design: string | null;
   subtasks: string;
   plan_comments: string;
+  technical_design_comments: string;
   metadata: string;
   created_at: number;
   updated_at: number;
@@ -57,8 +59,10 @@ function rowToTask(row: TaskRow): Task {
     prLink: row.pr_link,
     branchName: row.branch_name,
     plan: row.plan,
+    technicalDesign: row.technical_design,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),
+    technicalDesignComments: parseJson<PlanComment[]>(row.technical_design_comments, []),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
