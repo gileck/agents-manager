@@ -635,6 +635,10 @@ export function getMigrations(): Migration[] {
       name: '054_add_skills_to_agent_definitions',
       sql: `ALTER TABLE agent_definitions ADD COLUMN skills TEXT NOT NULL DEFAULT '[]'`,
     },
+    {
+      name: '055_reseed_pipelines_design_before_plan',
+      sql: getReseedPipelinesSql(),
+    },
   ];
 }
 
