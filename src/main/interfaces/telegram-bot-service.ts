@@ -1,5 +1,5 @@
 export interface ITelegramBotService {
-  start(projectId: string): Promise<void>;
+  start(projectId: string, botToken: string, chatId: string): Promise<void>;
   stop(): Promise<void>;
   isRunning(): boolean;
 }

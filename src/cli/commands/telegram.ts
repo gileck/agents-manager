@@ -36,7 +36,7 @@ export function registerTelegramCommands(program: Command, getServices: () => Ap
         workflowService: services.workflowService,
       });
 
-      await botService.start(project.id);
+      await botService.start(project.id, botToken, chatId);
 
       // Reuse the single bot instance for notifications to avoid Telegram 409 conflicts
       const bot = botService.getBot()!;

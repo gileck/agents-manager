@@ -16,8 +16,13 @@ export class MultiChannelNotificationRouter implements INotificationRouter {
   }
 
   async send(notification: Notification): Promise<void> {
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       this.routers.map((r) => r.send(notification)),
     );
+    for (const r of results) {
+      if (r.status === 'rejected') {
+        console.error('[notification-router]', r.reason);
+      }
+    }
   }
 }

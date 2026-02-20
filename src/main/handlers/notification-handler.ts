@@ -28,7 +28,7 @@ export function registerNotificationHandler(
       taskId: task.id,
       title: applyTemplate(titleTemplate),
       body: applyTemplate(bodyTemplate),
-      channel: 'desktop',
+      channel: 'pipeline',
     });
 
     return { success: true };

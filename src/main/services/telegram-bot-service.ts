@@ -6,7 +6,6 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { TaskUpdateInput } from '../../shared/types';
-import { getResolvedConfig } from './config-service';
 
 interface PendingAction {
   type: 'create_title' | 'edit_field';
@@ -38,16 +37,9 @@ export class TelegramBotService implements ITelegramBotService {
     return this.bot;
   }
 
-  async start(projectId: string): Promise<void> {
+  async start(projectId: string, botToken: string, chatId: string): Promise<void> {
     const project = await this.deps.projectStore.getProject(projectId);
     if (!project) throw new Error(`Project not found: ${projectId}`);
-
-    const config = getResolvedConfig(project.path ?? undefined);
-    const botToken = config.telegram?.botToken;
-    const chatId = config.telegram?.chatId;
-    if (!botToken || !chatId) {
-      throw new Error('Telegram botToken and chatId must be configured');
-    }
 
     this.projectId = projectId;
     this.chatId = chatId;
@@ -76,23 +68,23 @@ export class TelegramBotService implements ITelegramBotService {
   private registerHandlers(): void {
     const bot = this.bot!;
 
-    bot.onText(/\/tasks/, (msg) => {
+    bot.onText(/\/tasks$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.handleTasks(msg.chat.id).catch(this.logError);
     });
 
-    bot.onText(/\/task (.+)/, (msg, match) => {
+    bot.onText(/\/task (\S+)/, (msg, match) => {
       if (!this.isAllowed(msg)) return;
       this.handleTaskDetail(msg.chat.id, match![1].trim()).catch(this.logError);
     });
 
-    bot.onText(/\/create/, (msg) => {
+    bot.onText(/\/create$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.pendingActions.set(msg.chat.id, { type: 'create_title' });
       bot.sendMessage(msg.chat.id, 'Enter the task title:').catch(this.logError);
     });
 
-    bot.onText(/\/help/, (msg) => {
+    bot.onText(/\/help$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       bot.sendMessage(msg.chat.id, [
         '*Available commands:*',

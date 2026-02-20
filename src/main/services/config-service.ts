@@ -44,5 +44,12 @@ export function loadProjectConfig(projectPath: string): Record<string, unknown> 
 export function getResolvedConfig(projectPath?: string): AppConfig {
   const global = loadGlobalConfig();
   const project = projectPath ? loadProjectConfig(projectPath) : {};
-  return { ...DEFAULT_CONFIG, ...global, ...project };
+  const merged = { ...DEFAULT_CONFIG, ...global, ...project };
+  if (global.telegram || project.telegram) {
+    merged.telegram = {
+      ...((global.telegram ?? {}) as Record<string, unknown>),
+      ...((project.telegram ?? {}) as Record<string, unknown>),
+    };
+  }
+  return merged as AppConfig;
 }
