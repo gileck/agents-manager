@@ -105,4 +105,7 @@ export const IPC_CHANNELS = {
 
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',
+
+  // Shell
+  OPEN_IN_CHROME: 'shell:open-in-chrome',
 } as const;
