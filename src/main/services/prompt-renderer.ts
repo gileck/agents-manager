@@ -11,6 +11,8 @@ export class PromptRenderer {
       '{planCommentsSection}': this.buildPlanCommentsSection(context),
       '{priorReviewSection}': this.buildPriorReviewSection(context),
       '{relatedTaskSection}': this.buildRelatedTaskSection(context),
+      '{technicalDesignSection}': this.buildTechnicalDesignSection(context),
+      '{technicalDesignCommentsSection}': this.buildTechnicalDesignCommentsSection(context),
       '{defaultBranch}': this.buildDefaultBranch(context),
       '{skipSummary}': '',
     };
@@ -117,6 +119,26 @@ export class PromptRenderer {
         `  am tasks get ${relatedTaskId} --json`,
         `  am events list --task ${relatedTaskId} --json`,
       ].join('\n');
+    }
+    return '';
+  }
+
+  private buildTechnicalDesignSection(context: AgentContext): string {
+    if (context.task.technicalDesign) {
+      return `\n## Technical Design\n${context.task.technicalDesign}`;
+    }
+    return '';
+  }
+
+  private buildTechnicalDesignCommentsSection(context: AgentContext): string {
+    const { task } = context;
+    if (task.technicalDesignComments && task.technicalDesignComments.length > 0) {
+      const lines = ['', '## Admin Feedback on Design'];
+      for (const comment of task.technicalDesignComments) {
+        const time = new Date(comment.createdAt).toLocaleString();
+        lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+      }
+      return lines.join('\n');
     }
     return '';
   }

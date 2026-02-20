@@ -1,8 +1,9 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@template/renderer/lib/utils';
-import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Palette, Settings, Bug } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Palette, Settings, Bug, SlidersHorizontal } from 'lucide-react';
 import { ActiveAgentsList } from './ActiveAgentsList';
+import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -20,6 +21,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onReportBug }: SidebarProps) {
+  const { currentProjectId } = useCurrentProject();
+
   return (
     <aside className="w-56 border-r border-border bg-card flex flex-col">
       {/* Logo */}
@@ -49,6 +52,22 @@ export function Sidebar({ onReportBug }: SidebarProps) {
             {item.label}
           </NavLink>
         ))}
+        {currentProjectId && (
+          <NavLink
+            to={`/projects/${currentProjectId}/config`}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium mb-1 transition-colors',
+                isActive
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )
+            }
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Configuration
+          </NavLink>
+        )}
       </nav>
 
       {/* Active Agents */}

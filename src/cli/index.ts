@@ -16,7 +16,7 @@ import { registerTelegramCommands } from './commands/telegram';
 const program = new Command();
 
 program
-  .name('am')
+  .name('agents-manager')
   .description('Agents Manager CLI')
   .version('1.0.0')
   .option('--project <id>', 'Project ID')

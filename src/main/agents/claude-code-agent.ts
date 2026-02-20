@@ -9,6 +9,8 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
       case 'plan':
       case 'plan_revision':
       case 'investigate':
+      case 'technical_design':
+      case 'technical_design_revision':
         return 100;
       case 'implement':
       case 'request_changes':
@@ -27,6 +29,8 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
       case 'plan_revision':
       case 'investigate':
       case 'resolve_conflicts':
+      case 'technical_design':
+      case 'technical_design_revision':
         return 5 * 60 * 1000;
       default:
         return 10 * 60 * 1000;
@@ -68,6 +72,24 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
               },
             },
             required: ['plan', 'investigationSummary', 'subtasks'],
+          },
+        };
+      case 'technical_design':
+      case 'technical_design_revision':
+        return {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              technicalDesign: { type: 'string', description: 'The full technical design document as markdown' },
+              designSummary: { type: 'string', description: 'A short 2-3 sentence summary of the technical design' },
+              subtasks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Concrete implementation steps derived from the design',
+              },
+            },
+            required: ['technicalDesign', 'designSummary', 'subtasks'],
           },
         };
       case 'implement':
@@ -236,6 +258,69 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         prompt = invLines.join('\n');
         break;
       }
+      case 'technical_design': {
+        const tdLines = [
+          `You are a software architect. Produce a detailed technical design document for the following task.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        ];
+        if (task.plan) {
+          tdLines.push('', '## Plan', task.plan);
+        }
+        tdLines.push(
+          '',
+          '## Instructions',
+          '1. Read the task description and the existing plan carefully.',
+          '2. Explore the codebase thoroughly — file structure, patterns, existing implementations.',
+          '3. Produce a structured technical design document covering:',
+          '   - **Architecture Overview** — high-level approach',
+          '   - **Files to Create/Modify** — specific file paths with descriptions',
+          '   - **Data Model Changes** — schema/type changes if needed',
+          '   - **API/Interface Changes** — new or modified interfaces',
+          '   - **Key Implementation Details** — algorithms, patterns, edge cases',
+          '   - **Dependencies** — new packages, existing utilities to reuse',
+          '   - **Testing Strategy** — what to test and how',
+          '   - **Risk Assessment** — potential issues and mitigations',
+          '',
+          'Your output will be captured as structured JSON with three fields:',
+          '- "technicalDesign": the full technical design document as markdown',
+          '- "designSummary": a short 2-3 sentence summary of the technical design',
+          '- "subtasks": an array of concrete implementation step names derived from the design',
+        );
+        prompt = tdLines.join('\n');
+        break;
+      }
+      case 'technical_design_revision': {
+        const tdrLines = [
+          `The admin has reviewed the current technical design and requested changes. Revise the design based on their feedback.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        ];
+        if (task.plan) {
+          tdrLines.push('', '## Plan', task.plan);
+        }
+        if (task.technicalDesign) {
+          tdrLines.push('', '## Current Technical Design', task.technicalDesign);
+        }
+        if (task.technicalDesignComments && task.technicalDesignComments.length > 0) {
+          tdrLines.push('', '## Admin Feedback on Design');
+          for (const comment of task.technicalDesignComments) {
+            const time = new Date(comment.createdAt).toLocaleString();
+            tdrLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+          }
+        }
+        tdrLines.push(
+          '',
+          'Revise the technical design to address all feedback. Produce an updated design document.',
+          '',
+          'Your output will be captured as structured JSON with three fields:',
+          '- "technicalDesign": the revised full technical design document as markdown',
+          '- "designSummary": a short 2-3 sentence summary of the revised technical design',
+          '- "subtasks": an array of concrete implementation step names derived from the design',
+        );
+        prompt = tdrLines.join('\n');
+        break;
+      }
       case 'resolve_conflicts': {
         const conflictLines = [
           `The branch for this task has merge conflicts with origin/main. Resolve them so the branch can be pushed cleanly.`,
@@ -303,6 +388,8 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
       case 'plan': return 'plan_complete';
       case 'plan_revision': return 'plan_complete';
       case 'investigate': return 'investigation_complete';
+      case 'technical_design': return 'design_ready';
+      case 'technical_design_revision': return 'design_ready';
       case 'implement': return 'pr_ready';
       case 'request_changes': return 'pr_ready';
       case 'resolve_conflicts': return 'pr_ready';

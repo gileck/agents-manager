@@ -236,8 +236,10 @@ export interface Task {
   prLink: string | null;
   branchName: string | null;
   plan: string | null;
+  technicalDesign: string | null;
   subtasks: Subtask[];
   planComments: PlanComment[];
+  technicalDesignComments: PlanComment[];
   metadata: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
@@ -274,8 +276,10 @@ export interface TaskUpdateInput {
   prLink?: string | null;
   branchName?: string | null;
   plan?: string | null;
+  technicalDesign?: string | null;
   subtasks?: Subtask[];
   planComments?: PlanComment[];
+  technicalDesignComments?: PlanComment[];
   metadata?: Record<string, unknown>;
 }
 
@@ -401,7 +405,7 @@ export type HookFn = (task: Task, transition: Transition, context: TransitionCon
 // ============================================
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
-export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision' | 'investigate' | 'resolve_conflicts';
+export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision' | 'investigate' | 'resolve_conflicts' | 'technical_design' | 'technical_design_revision';
 
 export interface AgentRun {
   id: string;
