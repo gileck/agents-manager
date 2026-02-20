@@ -619,6 +619,17 @@ export interface GitLogEntry {
   date: string;
 }
 
+export interface GitCommitDetail {
+  hash: string;
+  body: string;
+  files: GitFileChange[];
+}
+
+export interface GitFileChange {
+  status: string; // 'A' added, 'M' modified, 'D' deleted, etc.
+  path: string;
+}
+
 export interface CreatePRParams {
   title: string;
   body: string;

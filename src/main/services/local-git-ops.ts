@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import type { GitLogEntry } from '../../shared/types';
+import type { GitLogEntry, GitCommitDetail, GitFileChange } from '../../shared/types';
 import type { IGitOps } from '../interfaces/git-ops';
 import { getShellEnv } from './shell-env';
 
@@ -111,5 +111,18 @@ export class LocalGitOps implements IGitOps {
 
   async deleteRemoteBranch(branch: string): Promise<void> {
     await this.git(['push', 'origin', '--delete', branch]);
+  }
+
+  async getCommitDetail(hash: string): Promise<GitCommitDetail> {
+    const body = await this.git(['log', '-1', '--format=%b', '--', hash]);
+    const filesOutput = await this.git(['diff-tree', '--no-commit-id', '--name-status', '-r', '--', hash]);
+    const files: GitFileChange[] = filesOutput
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [status, ...pathParts] = line.split('\t');
+        return { status, path: pathParts.join('\t') };
+      });
+    return { hash, body, files };
   }
 }

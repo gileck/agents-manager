@@ -16,6 +16,7 @@ import type {
   DashboardStats,
   DebugTimelineEntry,
   GitLogEntry,
+  GitCommitDetail,
   Worktree,
   ChatMessage,
   TelegramBotLogEntry,
@@ -102,6 +103,9 @@ const IPC_CHANNELS = {
   CHAT_CLEAR: 'chat:clear',
   CHAT_SUMMARIZE: 'chat:summarize',
   CHAT_OUTPUT: 'chat:output',
+  GIT_PROJECT_LOG: 'git:project-log',
+  GIT_BRANCH: 'git:branch',
+  GIT_COMMIT_DETAIL: 'git:commit-detail',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -284,6 +288,13 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.GIT_LOG, taskId),
     show: (taskId: string, hash: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_SHOW, taskId, hash),
+    // Source control (project-scoped)
+    projectLog: (projectId: string, count?: number): Promise<GitLogEntry[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_PROJECT_LOG, projectId, count),
+    branch: (projectId: string): Promise<string> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_BRANCH, projectId),
+    commitDetail: (projectId: string, hash: string): Promise<GitCommitDetail> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_COMMIT_DETAIL, projectId, hash),
   },
 
   // Dashboard operations

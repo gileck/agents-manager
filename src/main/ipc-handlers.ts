@@ -25,10 +25,13 @@ import type {
   AgentDefinitionCreateInput,
   AgentDefinitionUpdateInput,
   TelegramBotLogEntry,
+  GitLogEntry,
+  GitCommitDetail,
 } from '../shared/types';
 import { TelegramBotService } from './services/telegram-bot-service';
 import { TelegramNotificationRouter } from './services/telegram-notification-router';
 import type { INotificationRouter } from './interfaces/notification-router';
+import type { IGitOps } from './interfaces/git-ops';
 
 export function registerIpcHandlers(services: AppServices): void {
   // ============================================
@@ -655,5 +658,31 @@ export function registerIpcHandlers(services: AppServices): void {
     } else {
       await shell.openExternal(url);
     }
+  });
+
+  // ============================================
+  // Source Control Operations (project-scoped)
+  // ============================================
+
+  async function withProjectGit<T>(projectId: string, fallback: T, fn: (git: IGitOps) => Promise<T>): Promise<T> {
+    validateId(projectId);
+    const project = await services.projectStore.getProject(projectId);
+    if (!project?.path) return fallback;
+    return fn(services.createGitOps(project.path));
+  }
+
+  registerIpcHandler(IPC_CHANNELS.GIT_PROJECT_LOG, async (_, projectId: string, count?: number): Promise<GitLogEntry[]> => {
+    return withProjectGit(projectId, [], (git) => git.log(count ?? 50));
+  });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_BRANCH, async (_, projectId: string): Promise<string> => {
+    return withProjectGit(projectId, '', (git) => git.getCurrentBranch());
+  });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_COMMIT_DETAIL, async (_, projectId: string, hash: string): Promise<GitCommitDetail> => {
+    if (!/^[0-9a-f]{4,40}$/i.test(hash)) {
+      throw new Error('Invalid commit hash');
+    }
+    return withProjectGit(projectId, { hash, body: '', files: [] }, (git) => git.getCommitDetail(hash));
   });
 }

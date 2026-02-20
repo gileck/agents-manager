@@ -18,6 +18,7 @@ import { FeatureDetailPage } from './pages/FeatureDetailPage';
 import { ChatPage } from './pages/ChatPage';
 import { TelegramPage } from './pages/TelegramPage';
 import { CostPage } from './pages/CostPage';
+import { SourceControlPage } from './pages/SourceControlPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
@@ -84,6 +85,7 @@ function AppRoutes() {
         <Route path="theme" element={<ThemePage />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="cost" element={<CostPage />} />
+        <Route path="source-control" element={<SourceControlPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>

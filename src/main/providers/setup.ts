@@ -82,6 +82,7 @@ export interface AppServices {
   featureStore: IFeatureStore;
   agentDefinitionStore: IAgentDefinitionStore;
   createWorktreeManager: (path: string) => IWorktreeManager;
+  createGitOps: (cwd: string) => import('../interfaces/git-ops').IGitOps;
   agentSupervisor: AgentSupervisor;
   timelineService: TimelineService;
   workflowReviewSupervisor: WorkflowReviewSupervisor;
@@ -203,6 +204,7 @@ export function createAppServices(db: Database.Database): AppServices {
     featureStore,
     agentDefinitionStore,
     createWorktreeManager,
+    createGitOps,
     agentSupervisor,
     timelineService,
     workflowReviewSupervisor,
