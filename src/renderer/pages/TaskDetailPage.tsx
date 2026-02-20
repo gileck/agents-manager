@@ -25,7 +25,7 @@ import type {
   Task, Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus, PlanComment,
 } from '../../shared/types';
-import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
+import { usePipelineStatusMeta, type StatusMeta } from '../hooks/usePipelineStatusMeta';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -369,6 +369,7 @@ export function TaskDetailPage() {
           primaryTransitions={primaryTransitions}
           transitioning={transitioning}
           stoppingAgent={stoppingAgent}
+          statusMeta={statusMeta}
           onTransition={handleTransition}
           onStopAgent={handleStopAgent}
           onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
@@ -1191,6 +1192,7 @@ function StatusActionBar({
   primaryTransitions,
   transitioning,
   stoppingAgent,
+  statusMeta,
   onTransition,
   onStopAgent,
   onNavigateToRun,
@@ -1205,6 +1207,7 @@ function StatusActionBar({
   primaryTransitions: Transition[];
   transitioning: string | null;
   stoppingAgent: boolean;
+  statusMeta: StatusMeta;
   onTransition: (toStatus: string) => void;
   onStopAgent: () => void;
   onNavigateToRun: (runId: string) => void;
@@ -1229,8 +1232,8 @@ function StatusActionBar({
 
   const status = task.status;
 
-  // Open: show primary forward transitions
-  if (status === 'open') {
+  // Ready category (open, reported, etc.): show primary forward transitions
+  if (statusMeta.isReady) {
     if (!primaryTransitions.length) return null;
     return (
       <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
@@ -1247,8 +1250,8 @@ function StatusActionBar({
     );
   }
 
-  // Planning / Implementing with running agent
-  if ((status === 'planning' || status === 'implementing') && hasRunningAgent && activeRun) {
+  // Agent running with active agent
+  if (statusMeta.isAgentRunning && hasRunningAgent && activeRun) {
     return (
       <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#22c55e' }}>
         <span className="relative flex h-3 w-3">
@@ -1273,8 +1276,8 @@ function StatusActionBar({
     );
   }
 
-  // Planning / Implementing — agent just finished, post-completion work in progress
-  if ((status === 'planning' || status === 'implementing') && isFinalizing) {
+  // Agent running — agent just finished, post-completion work in progress
+  if (statusMeta.isAgentRunning && isFinalizing) {
     return (
       <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#3b82f6' }}>
         <span className="relative flex h-3 w-3">
@@ -1296,8 +1299,8 @@ function StatusActionBar({
     );
   }
 
-  // Planning / Implementing stuck (failed or no agent)
-  if ((status === 'planning' || status === 'implementing') && isStuck) {
+  // Agent running stuck (failed or no agent)
+  if (statusMeta.isAgentRunning && isStuck) {
     return (
       <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
         <span className="text-sm font-medium" style={{ color: '#dc2626' }}>
@@ -1328,35 +1331,44 @@ function StatusActionBar({
     );
   }
 
-  // Plan Review
-  if (status === 'plan_review') {
+  // Human review (plan_review, investigation_review, pr_review, etc.)
+  if (statusMeta.isHumanReview) {
+    // PR review has special handling for the PR link
+    if (status === 'pr_review') {
+      return (
+        <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+          {task.prLink ? (
+            <a
+              href={task.prLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-500 hover:underline break-all"
+            >
+              {task.prLink}
+            </a>
+          ) : (
+            <span className="text-sm text-muted-foreground animate-pulse">Creating PR...</span>
+          )}
+          {primaryTransitions.map((t) => (
+            <Button
+              key={t.to}
+              variant={t.to === 'done' ? 'default' : 'outline'}
+              onClick={() => onTransition(t.to)}
+              disabled={transitioning !== null}
+            >
+              {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+            </Button>
+          ))}
+        </div>
+      );
+    }
+    // Generic human review (plan_review, investigation_review, etc.)
     return (
-      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#3b82f6' }}>
-        <span className="text-sm">Review the plan in the <strong>Plan</strong> tab, then approve or request changes.</span>
-      </div>
-    );
-  }
-
-  // PR Review
-  if (status === 'pr_review') {
-    return (
-      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
-        {task.prLink ? (
-          <a
-            href={task.prLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-blue-500 hover:underline break-all"
-          >
-            {task.prLink}
-          </a>
-        ) : (
-          <span className="text-sm text-muted-foreground animate-pulse">Creating PR...</span>
-        )}
+      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap" style={{ borderColor: '#3b82f6' }}>
+        <span className="text-sm">Review the output, then approve or request changes.</span>
         {primaryTransitions.map((t) => (
           <Button
             key={t.to}
-            variant={t.to === 'done' ? 'default' : 'outline'}
             onClick={() => onTransition(t.to)}
             disabled={transitioning !== null}
           >
@@ -1367,8 +1379,8 @@ function StatusActionBar({
     );
   }
 
-  // Needs Info
-  if (status === 'needs_info') {
+  // Waiting for input (needs_info, etc.)
+  if (statusMeta.isWaitingForInput) {
     return (
       <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#fffbeb', border: '1px solid #fbbf24' }}>
         <span className="text-sm font-medium" style={{ color: '#d97706' }}>
@@ -1379,8 +1391,8 @@ function StatusActionBar({
     );
   }
 
-  // Done
-  if (status === 'done') {
+  // Terminal (done, resolved, etc.)
+  if (statusMeta.isTerminal) {
     return (
       <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac' }}>
         <span style={{ color: '#16a34a' }}>&#10003;</span>
