@@ -52,7 +52,8 @@ export function openDatabase(flagPath?: string): { db: Database.Database; servic
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  const db = new Database(dbPath);
+  const nativeBinding = process.env.BETTER_SQLITE3_BINDING || undefined;
+  const db = new Database(dbPath, { nativeBinding });
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 

@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, readFileSync, writeFileSync, openSync, closeSync, constants as fsConstants } from 'fs';
+import { existsSync, readFileSync, writeFileSync, openSync, closeSync, symlinkSync, constants as fsConstants } from 'fs';
 import { join } from 'path';
 import type { Worktree } from '../../shared/types';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
@@ -65,6 +65,18 @@ export class LocalWorktreeManager implements IWorktreeManager {
     } catch {
       // Branch may already exist from a prior run — retry without -b
       await this.git(['worktree', 'add', wtPath, branch]);
+    }
+
+    // Symlink node_modules from the main project so native modules (e.g.
+    // better-sqlite3) resolve correctly inside the worktree.
+    const wtNodeModules = join(wtPath, 'node_modules');
+    const srcNodeModules = join(this.projectPath, 'node_modules');
+    if (!existsSync(wtNodeModules) && existsSync(srcNodeModules)) {
+      try {
+        symlinkSync(srcNodeModules, wtNodeModules, 'junction');
+      } catch {
+        // Non-fatal — agent may still work if it doesn't need native modules
+      }
     }
 
     return { path: wtPath, branch, taskId, locked: false };
