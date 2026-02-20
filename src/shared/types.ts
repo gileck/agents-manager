@@ -231,6 +231,7 @@ export interface Task {
   tags: string[];
   parentTaskId: string | null;
   featureId: string | null;
+  domain: string | null;
   assignee: string | null;
   prLink: string | null;
   branchName: string | null;
@@ -252,6 +253,7 @@ export interface TaskCreateInput {
   tags?: string[];
   parentTaskId?: string;
   featureId?: string;
+  domain?: string;
   assignee?: string;
   prLink?: string;
   branchName?: string;
@@ -267,6 +269,7 @@ export interface TaskUpdateInput {
   tags?: string[];
   parentTaskId?: string | null;
   featureId?: string | null;
+  domain?: string | null;
   assignee?: string | null;
   prLink?: string | null;
   branchName?: string | null;
@@ -284,6 +287,7 @@ export interface TaskFilter {
   assignee?: string;
   parentTaskId?: string | null;
   featureId?: string | null;
+  domain?: string;
   tag?: string;
   /** Free-text search across title and description (case-insensitive substring match) */
   search?: string;

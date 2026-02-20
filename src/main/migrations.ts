@@ -594,6 +594,10 @@ export function getMigrations(): Migration[] {
       name: '046_seed_workflow_reviewer_agent_definition',
       sql: getSeedWorkflowReviewerSql(),
     },
+    {
+      name: '047_add_domain_column',
+      sql: `ALTER TABLE tasks ADD COLUMN domain TEXT`,
+    },
   ];
 }
 

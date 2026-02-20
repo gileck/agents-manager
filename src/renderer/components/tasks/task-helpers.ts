@@ -9,7 +9,7 @@ export const PRIORITY_LABELS: Record<number, string> = {
 
 export type SortField = 'created' | 'updated' | 'priority' | 'status' | 'title';
 export type SortDirection = 'asc' | 'desc';
-export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline' | 'feature';
+export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline' | 'feature' | 'domain';
 
 export function sortTasks(tasks: Task[], field: SortField, direction: SortDirection): Task[] {
   const sorted = [...tasks].sort((a, b) => {
@@ -65,6 +65,9 @@ export function groupTasks(
           ? (featureMap?.get(task.featureId)?.title ?? task.featureId)
           : 'No Feature';
         break;
+      case 'domain':
+        key = task.domain ?? 'No Domain';
+        break;
       default:
         key = 'all';
     }
@@ -88,6 +91,14 @@ export function collectTags(tasks: Task[]): string[] {
   return Array.from(tagSet).sort();
 }
 
+export function collectDomains(tasks: Task[]): string[] {
+  const domainSet = new Set<string>();
+  for (const task of tasks) {
+    if (task.domain) domainSet.add(task.domain);
+  }
+  return Array.from(domainSet).sort();
+}
+
 export function countActiveFilters(filters: {
   search?: string;
   status?: string;
@@ -96,6 +107,7 @@ export function countActiveFilters(filters: {
   assignee?: string;
   tag?: string;
   featureId?: string;
+  domain?: string;
 }): number {
   let count = 0;
   if (filters.search) count++;
@@ -105,6 +117,7 @@ export function countActiveFilters(filters: {
   if (filters.assignee) count++;
   if (filters.tag) count++;
   if (filters.featureId) count++;
+  if (filters.domain) count++;
   return count;
 }
 

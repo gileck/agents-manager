@@ -17,6 +17,7 @@ export interface FilterState {
   assignee: string;
   tag: string;
   featureId: string;
+  domain: string;
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -27,6 +28,7 @@ export const EMPTY_FILTERS: FilterState = {
   assignee: '',
   tag: '',
   featureId: '',
+  domain: '',
 };
 
 interface TaskFilterBarProps {
@@ -36,6 +38,7 @@ interface TaskFilterBarProps {
   pipelines: Pipeline[];
   tags: string[];
   features?: Feature[];
+  domains?: string[];
 }
 
 function useDebouncedCallback(callback: (value: string) => void, delay: number) {
@@ -47,7 +50,7 @@ function useDebouncedCallback(callback: (value: string) => void, delay: number) 
   };
 }
 
-export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, tags, features }: TaskFilterBarProps) {
+export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, tags, features, domains }: TaskFilterBarProps) {
   const [localSearch, setLocalSearch] = useState(filters.search);
   const [localAssignee, setLocalAssignee] = useState(filters.assignee);
 
@@ -87,6 +90,7 @@ export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, t
       : (features?.find((f) => f.id === filters.featureId)?.title ?? filters.featureId);
     activeChips.push({ key: 'featureId', label: `feature: ${fLabel}` });
   }
+  if (filters.domain) activeChips.push({ key: 'domain', label: `domain: ${filters.domain}` });
 
   return (
     <div className="space-y-2">
@@ -170,6 +174,19 @@ export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, t
               <SelectItem value="__none__">No feature</SelectItem>
               {features.map((f) => (
                 <SelectItem key={f.id} value={f.id}>{f.title}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {domains && domains.length > 0 && (
+          <Select value={filters.domain} onValueChange={(v) => update({ domain: v === '__all__' ? '' : v })}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Domain" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All domains</SelectItem>
+              {domains.map((d) => (
+                <SelectItem key={d} value={d}>{d}</SelectItem>
               ))}
             </SelectContent>
           </Select>

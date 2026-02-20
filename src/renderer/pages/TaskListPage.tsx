@@ -16,7 +16,7 @@ import { TaskGroupedList } from '../components/tasks/TaskGroupedList';
 import { TaskCreateDialog } from '../components/tasks/TaskCreateDialog';
 import { TaskDeleteDialog, BulkDeleteDialog } from '../components/tasks/TaskDeleteDialogs';
 import { useFeatures } from '../hooks/useFeatures';
-import { sortTasks, collectTags, buildPipelineMap, buildFeatureMap } from '../components/tasks/task-helpers';
+import { sortTasks, collectTags, collectDomains, buildPipelineMap, buildFeatureMap } from '../components/tasks/task-helpers';
 import type { FilterState } from '../components/tasks/TaskFilterBar';
 import type { SortField, SortDirection, GroupBy } from '../components/tasks/task-helpers';
 import { toast } from 'sonner';
@@ -58,6 +58,7 @@ export function TaskListPage() {
   if (filters.priority) taskFilter.priority = Number(filters.priority);
   if (filters.pipelineId) taskFilter.pipelineId = filters.pipelineId;
   if (filters.tag) taskFilter.tag = filters.tag;
+  if (filters.domain) taskFilter.domain = filters.domain;
 
   if (filters.featureId) {
     if (filters.featureId === '__none__') {
@@ -75,6 +76,7 @@ export function TaskListPage() {
   const pipelineMap = useMemo(() => buildPipelineMap(pipelines), [pipelines]);
   const featureMap = useMemo(() => buildFeatureMap(features), [features]);
   const availableTags = useMemo(() => collectTags(tasks), [tasks]);
+  const availableDomains = useMemo(() => collectDomains(tasks), [tasks]);
   const sortedTasks = useMemo(() => sortTasks(tasks, sortField, sortDirection), [tasks, sortField, sortDirection]);
   const allStatuses = useMemo(
     () => pipelines.flatMap((p) => p.statuses).reduce<string[]>((acc, s) => {
@@ -189,6 +191,7 @@ export function TaskListPage() {
       description: task.description ?? undefined,
       priority: task.priority,
       assignee: task.assignee ?? undefined,
+      domain: task.domain ?? undefined,
       tags: task.tags,
     });
     navigate(`/tasks/${newTask.id}`);
@@ -252,6 +255,7 @@ export function TaskListPage() {
                 <SelectItem value="priority">Priority</SelectItem>
                 <SelectItem value="pipeline">Pipeline</SelectItem>
                 <SelectItem value="feature">Feature</SelectItem>
+                <SelectItem value="domain">Domain</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -286,6 +290,7 @@ export function TaskListPage() {
           pipelines={pipelines}
           tags={availableTags}
           features={features}
+          domains={availableDomains}
         />
       </div>
 

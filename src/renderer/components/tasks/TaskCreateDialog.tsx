@@ -69,6 +69,14 @@ export function TaskCreateDialog({
               placeholder="Optional description"
             />
           </div>
+          <div className="space-y-2">
+            <Label>Domain</Label>
+            <Input
+              value={form.domain ?? ''}
+              onChange={(e) => onFormChange({ ...form, domain: e.target.value || undefined })}
+              placeholder="e.g., Authentication, Payments"
+            />
+          </div>
           {features && features.length > 0 && (
             <div className="space-y-2">
               <Label>Feature</Label>

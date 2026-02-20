@@ -18,6 +18,7 @@ interface TaskRow {
   pr_link: string | null;
   branch_name: string | null;
   feature_id: string | null;
+  domain: string | null;
   plan: string | null;
   subtasks: string;
   plan_comments: string;
@@ -38,6 +39,7 @@ function rowToTask(row: TaskRow): Task {
     tags: parseJson<string[]>(row.tags, []),
     parentTaskId: row.parent_task_id,
     featureId: row.feature_id,
+    domain: row.domain,
     assignee: row.assignee,
     prLink: row.pr_link,
     branchName: row.branch_name,
@@ -101,6 +103,10 @@ export class SqliteTaskStore implements ITaskStore {
         values.push(filter.featureId);
       }
     }
+    if (filter?.domain) {
+      conditions.push('domain = ?');
+      values.push(filter.domain);
+    }
     if (filter?.tag) {
       conditions.push("EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)");
       values.push(filter.tag);
@@ -132,8 +138,8 @@ export class SqliteTaskStore implements ITaskStore {
     }
 
     this.db.prepare(`
-      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, subtasks, plan_comments, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, domain, assignee, pr_link, branch_name, plan, subtasks, plan_comments, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.projectId,
@@ -145,6 +151,7 @@ export class SqliteTaskStore implements ITaskStore {
       JSON.stringify(input.tags ?? []),
       input.parentTaskId ?? null,
       input.featureId ?? null,
+      input.domain ?? null,
       input.assignee ?? null,
       input.prLink ?? null,
       input.branchName ?? null,
@@ -193,6 +200,10 @@ export class SqliteTaskStore implements ITaskStore {
     if (input.featureId !== undefined) {
       updates.push('feature_id = ?');
       values.push(input.featureId);
+    }
+    if (input.domain !== undefined) {
+      updates.push('domain = ?');
+      values.push(input.domain);
     }
     if (input.assignee !== undefined) {
       updates.push('assignee = ?');

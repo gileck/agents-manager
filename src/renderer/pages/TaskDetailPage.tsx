@@ -154,6 +154,7 @@ export function TaskDetailPage() {
         description: task.description ?? '',
         priority: task.priority,
         assignee: task.assignee ?? '',
+        domain: task.domain ?? '',
         featureId: task.featureId,
       });
       setEditOpen(true);
@@ -270,6 +271,7 @@ export function TaskDetailPage() {
         description: task.description ?? undefined,
         priority: task.priority,
         assignee: task.assignee ?? undefined,
+        domain: task.domain ?? undefined,
         tags: task.tags,
       });
       navigate(`/tasks/${newTask.id}`);
@@ -418,6 +420,9 @@ export function TaskDetailPage() {
 
                 <span className="text-sm text-muted-foreground">Assignee</span>
                 <span className="text-sm">{task.assignee || 'Unassigned'}</span>
+
+                <span className="text-sm text-muted-foreground">Domain</span>
+                <span className="text-sm">{task.domain || 'None'}</span>
 
                 <span className="text-sm text-muted-foreground">Description</span>
                 <span className="text-sm">{task.description || 'No description'}</span>
@@ -698,6 +703,14 @@ export function TaskDetailPage() {
               <Input
                 value={editForm.assignee ?? ''}
                 onChange={(e) => setEditForm({ ...editForm, assignee: e.target.value || null })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Domain</Label>
+              <Input
+                value={(editForm.domain as string) ?? ''}
+                onChange={(e) => setEditForm({ ...editForm, domain: e.target.value || null })}
+                placeholder="e.g., Authentication, Payments"
               />
             </div>
             {features.length > 0 && (
