@@ -87,6 +87,7 @@ const IPC_CHANNELS = {
   GIT_SHOW: 'git:show',
   TASK_WORKFLOW_REVIEW: 'task:workflow-review',
   DASHBOARD_STATS: 'dashboard:stats',
+  OPEN_IN_CHROME: 'shell:open-in-chrome',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -273,6 +274,12 @@ const api = {
   dashboard: {
     stats: (): Promise<DashboardStats> =>
       ipcRenderer.invoke(IPC_CHANNELS.DASHBOARD_STATS),
+  },
+
+  // Shell operations
+  shell: {
+    openInChrome: (url: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.OPEN_IN_CHROME, url),
   },
 
   // Event listeners (main -> renderer)

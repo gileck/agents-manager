@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, shell } from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
 import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
 import { sendToRenderer } from '@template/main/core/window';
@@ -506,5 +506,31 @@ export function registerIpcHandlers(services: AppServices): void {
 
   registerIpcHandler(IPC_CHANNELS.DASHBOARD_STATS, async () => {
     return services.workflowService.getDashboardStats();
+  });
+
+  // ============================================
+  // Shell Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.OPEN_IN_CHROME, async (_, url: string) => {
+    // Validate URL to prevent command injection
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error(`Invalid URL: ${url}`);
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error(`Unsupported protocol: ${parsed.protocol}`);
+    }
+
+    if (process.platform === 'darwin') {
+      const { execFile: execFileCb } = await import('child_process');
+      const { promisify } = await import('util');
+      const execFileAsync = promisify(execFileCb);
+      await execFileAsync('open', ['-a', 'Google Chrome', url]);
+    } else {
+      await shell.openExternal(url);
+    }
   });
 }

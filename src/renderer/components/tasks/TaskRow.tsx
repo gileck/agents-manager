@@ -90,7 +90,13 @@ export function TaskRow({
               </span>
             )}
             {task.prLink && (
-              <GitPullRequest className="h-4 w-4 text-muted-foreground" />
+              <button
+                onClick={(e) => { e.stopPropagation(); window.api.shell.openInChrome(task.prLink!); }}
+                title="Open PR in Chrome"
+                className="cursor-pointer hover:text-blue-500 transition-colors"
+              >
+                <GitPullRequest className="h-4 w-4" />
+              </button>
             )}
             {task.assignee && (
               <span className="text-sm text-muted-foreground">@{task.assignee}</span>

@@ -58,15 +58,13 @@ export function TaskInfoPanel({ task, run }: TaskInfoPanelProps) {
           </div>
         )}
         {task.prLink && (
-          <a
-            href={task.prLink}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1 text-blue-500 hover:underline"
+          <button
+            onClick={() => window.api.shell.openInChrome(task.prLink!)}
+            className="flex items-center gap-1 text-blue-500 hover:underline cursor-pointer"
           >
             <ExternalLink className="h-3 w-3" />
             PR
-          </a>
+          </button>
         )}
       </div>
 
