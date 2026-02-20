@@ -52,7 +52,7 @@ export function WorkflowReviewTab({
   taskId,
   contextEntries,
   agentRuns,
-  isFinalStatus,
+  isFinalStatus: _isFinalStatus,
   onReviewTriggered,
 }: WorkflowReviewTabProps) {
   const [triggering, setTriggering] = useState(false);
@@ -85,7 +85,7 @@ export function WorkflowReviewTab({
         <Button
           size="sm"
           onClick={handleTriggerReview}
-          disabled={!isFinalStatus || isReviewerRunning || triggering}
+          disabled={isReviewerRunning || triggering}
         >
           {isReviewerRunning ? 'Review in Progress...' : triggering ? 'Starting...' : 'Review Workflow'}
         </Button>
@@ -97,7 +97,7 @@ export function WorkflowReviewTab({
 
         {!reviewData && !isReviewerRunning && (
           <p className="text-sm text-muted-foreground">
-            No workflow review yet. {isFinalStatus ? 'Click "Review Workflow" to analyze the task execution.' : 'Reviews are available after the task reaches a final status.'}
+            No workflow review yet. Click "Review Workflow" to analyze the task execution.
           </p>
         )}
 
