@@ -184,6 +184,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         break;
       }
       case 'implement': {
+        const amCli = `node ${context.project.path}/bootstrap-cli.js`;
         const lines = [
           `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`,
         ];
@@ -191,9 +192,9 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           lines.push(
             '',
             '## IMPORTANT: Subtask Progress Tracking',
-            'You MUST update subtask status via the `am` CLI as you work. Do NOT use TodoWrite — use these bash commands instead:',
-            `  am tasks subtask update ${task.id} --name "<subtask name>" --status in_progress   # before starting a subtask`,
-            `  am tasks subtask update ${task.id} --name "<subtask name>" --status done           # after completing a subtask`,
+            'You MUST update subtask status via the CLI as you work. Do NOT use TodoWrite — use these bash commands instead:',
+            `  ${amCli} tasks subtask update ${task.id} --name "<subtask name>" --status in_progress   # before starting a subtask`,
+            `  ${amCli} tasks subtask update ${task.id} --name "<subtask name>" --status done           # after completing a subtask`,
             '',
             'Current subtasks:',
           );
@@ -219,6 +220,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         break;
       }
       case 'investigate': {
+        const invAmCli = `node ${context.project.path}/bootstrap-cli.js`;
         const invLines = [
           `You are a bug investigator. Analyze the following bug report, investigate the root cause, and suggest a fix with concrete steps.`,
           ``,
@@ -227,8 +229,8 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           `## Instructions`,
           `1. Read the bug report carefully — it may contain debug logs, error traces, timeline entries, and context from the reporter.`,
           `2. Use the CLI to gather additional debugging info about this task:`,
-          `   - \`am tasks get ${task.id} --json\` — full task details`,
-          `   - \`am events list --task ${task.id} --json\` — task event log`,
+          `   - \`${invAmCli} tasks get ${task.id} --json\` — full task details`,
+          `   - \`${invAmCli} events list --task ${task.id} --json\` — task event log`,
           `3. Investigate the codebase to find the root cause.`,
           `4. Write a detailed investigation report with your findings.`,
           `5. Suggest a concrete fix plan.`,
@@ -241,8 +243,8 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
             ``,
             `## Related Task`,
             `This bug references task \`${relatedTaskId}\`. Use the CLI to inspect it:`,
-            `  am tasks get ${relatedTaskId} --json`,
-            `  am events list --task ${relatedTaskId} --json`,
+            `  ${invAmCli} tasks get ${relatedTaskId} --json`,
+            `  ${invAmCli} events list --task ${relatedTaskId} --json`,
           );
         }
         if (task.subtasks && task.subtasks.length > 0) {
