@@ -6,6 +6,7 @@ export interface AppConfig {
   defaultPipeline?: string;
   agentTimeout?: number;
   maxConcurrentAgents?: number;
+  telegram?: { botToken?: string; chatId?: string };
   [key: string]: unknown;
 }
 

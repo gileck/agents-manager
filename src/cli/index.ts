@@ -11,6 +11,7 @@ import { registerEventsCommands } from './commands/events';
 import { registerPromptsCommands } from './commands/prompts';
 import { registerPipelinesCommands } from './commands/pipelines';
 import { registerStatusCommand } from './commands/status';
+import { registerTelegramCommands } from './commands/telegram';
 
 const program = new Command();
 
@@ -47,6 +48,7 @@ registerEventsCommands(program, getServices);
 registerPromptsCommands(program, getServices);
 registerPipelinesCommands(program, getServices);
 registerStatusCommand(program, getServices);
+registerTelegramCommands(program, getServices);
 
 // Run
 program.parseAsync(process.argv).catch((err: Error) => {

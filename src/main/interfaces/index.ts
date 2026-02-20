@@ -18,3 +18,4 @@ export type { INotificationRouter } from './notification-router';
 export type { IWorkflowService } from './workflow-service';
 export type { ITaskContextStore } from './task-context-store';
 export type { IFeatureStore } from './feature-store';
+export type { ITelegramBotService } from './telegram-bot-service';

@@ -10,7 +10,6 @@ import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentFramework } from '../interfaces/agent-framework';
-import type { INotificationRouter } from '../interfaces/notification-router';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
@@ -36,7 +35,7 @@ import { WorkflowService } from '../services/workflow-service';
 import { LocalGitOps } from '../services/local-git-ops';
 import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
-import { StubNotificationRouter } from '../services/stub-notification-router';
+import { MultiChannelNotificationRouter } from '../services/multi-channel-notification-router';
 import { ClaudeCodeAgent } from '../agents/claude-code-agent';
 import { PrReviewerAgent } from '../agents/pr-reviewer-agent';
 import { AgentSupervisor } from '../services/agent-supervisor';
@@ -70,7 +69,7 @@ export interface AppServices {
   taskPhaseStore: ITaskPhaseStore;
   pendingPromptStore: IPendingPromptStore;
   agentFramework: IAgentFramework;
-  notificationRouter: INotificationRouter;
+  notificationRouter: MultiChannelNotificationRouter;
   agentService: IAgentService;
   workflowService: IWorkflowService;
   taskContextStore: ITaskContextStore;
@@ -106,13 +105,11 @@ export function createAppServices(db: Database.Database): AppServices {
   const createGitOps = (cwd: string) => new LocalGitOps(cwd);
   const createWorktreeManager = (path: string) => new LocalWorktreeManager(path);
   const createScmPlatform = (path: string) => new GitHubScmPlatform(path);
-  let notificationRouter: INotificationRouter;
+  const notificationRouter = new MultiChannelNotificationRouter();
   try {
     const { DesktopNotificationRouter } = require('../services/desktop-notification-router');
-    notificationRouter = new DesktopNotificationRouter();
-  } catch {
-    notificationRouter = new StubNotificationRouter();
-  }
+    notificationRouter.addRouter(new DesktopNotificationRouter());
+  } catch { /* Not in Electron */ }
 
   // Agent framework + adapters
   const agentFramework = new AgentFrameworkImpl();
