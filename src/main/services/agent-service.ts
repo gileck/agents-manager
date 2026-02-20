@@ -381,8 +381,8 @@ export class AgentService implements IAgentService {
         data: { exitCode: result.exitCode, outcome: result.outcome, outputLength: result.output?.length ?? 0 },
       }).catch(() => {});
 
-      // Post-agent validation loop (skip for plan/plan_revision mode — no code changes to validate)
-      const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision' && context.mode !== 'investigate'
+      // Post-agent validation loop (skip for plan/plan_revision/investigate/technical_design modes — no code changes to validate)
+      const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision' && context.mode !== 'investigate' && context.mode !== 'technical_design' && context.mode !== 'technical_design_revision'
         ? (context.project.config?.validationCommands as string[] | undefined) ?? []
         : [];
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
@@ -480,7 +480,7 @@ export class AgentService implements IAgentService {
         }
       }
 
-      // Extract plan, subtasks, and context from plan/plan_revision output
+      // Extract plan, subtasks, and context from plan/plan_revision/investigate output
       if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate')) {
         const so = result.structuredOutput as { plan?: string; planSummary?: string; investigationSummary?: string; subtasks?: string[] } | undefined;
         if (so?.plan) {
@@ -515,12 +515,36 @@ export class AgentService implements IAgentService {
         }
       }
 
+      // Extract technical design from technical_design/technical_design_revision output
+      if (result.exitCode === 0 && (context.mode === 'technical_design' || context.mode === 'technical_design_revision')) {
+        const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string; subtasks?: string[] } | undefined;
+        if (so?.technicalDesign) {
+          this.taskEventLog.log({
+            taskId,
+            category: 'agent_debug',
+            severity: 'debug',
+            message: `Extracting technical design from structured output: hasDesign=${!!so.technicalDesign}, hasSubtasks=${!!so.subtasks}, subtaskCount=${so.subtasks?.length ?? 0}`,
+          }).catch(() => {});
+          const updates: import('../../shared/types').TaskUpdateInput = { technicalDesign: so.technicalDesign };
+          if (so.subtasks && so.subtasks.length > 0) {
+            updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
+          }
+          await this.taskStore.updateTask(taskId, updates);
+        } else {
+          // Fallback: store raw output as technical design (only if non-empty to avoid overwriting valid design on bad runs)
+          const fallback = this.extractPlan(result.output);
+          if (fallback) {
+            await this.taskStore.updateTask(taskId, { technicalDesign: fallback });
+          }
+        }
+      }
+
       // Save context entry for successful runs
       if (result.exitCode === 0) {
         try {
           // Use structured output summary when available, fall back to parsing
-          const so = result.structuredOutput as { summary?: string; planSummary?: string; investigationSummary?: string } | undefined;
-          const structuredSummary = so?.investigationSummary ?? so?.planSummary ?? so?.summary;
+          const so = result.structuredOutput as { summary?: string; planSummary?: string; investigationSummary?: string; designSummary?: string } | undefined;
+          const structuredSummary = so?.investigationSummary ?? so?.designSummary ?? so?.planSummary ?? so?.summary;
           const summary = structuredSummary || this.extractContextSummary(result.output);
           const entryType = this.getContextEntryType(agentType, context.mode, result.outcome);
           this.taskEventLog.log({
@@ -804,6 +828,8 @@ export class AgentService implements IAgentService {
       case 'implement': return 'implementation_summary';
       case 'request_changes': return 'fix_summary';
       case 'resolve_conflicts': return 'conflict_resolution_summary';
+      case 'technical_design': return 'technical_design_summary';
+      case 'technical_design_revision': return 'technical_design_revision_summary';
       default: return 'agent_output';
     }
   }

@@ -110,8 +110,14 @@ export function TaskDetailPage() {
     prevHasRunning.current = hasRunningAgent;
   }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
 
-  const initialTab = task?.status === 'plan_review' ? 'plan' : 'overview';
+  const initialTab = task?.status === 'plan_review' ? 'plan' : task?.status === 'design_review' ? 'design' : 'overview';
   const [tab, setTab] = useState(initialTab);
+
+  // Auto-switch to relevant tab when entering review statuses
+  useEffect(() => {
+    if (task?.status === 'plan_review') setTab('plan');
+    else if (task?.status === 'design_review') setTab('design');
+  }, [task?.status]);
 
   // Refetch agent runs when switching to the agents tab
   useEffect(() => {
@@ -154,6 +160,7 @@ export function TaskDetailPage() {
         description: task.description ?? '',
         priority: task.priority,
         assignee: task.assignee ?? '',
+        domain: task.domain ?? '',
         featureId: task.featureId,
       });
       setEditOpen(true);
@@ -270,6 +277,7 @@ export function TaskDetailPage() {
         description: task.description ?? undefined,
         priority: task.priority,
         assignee: task.assignee ?? undefined,
+        domain: task.domain ?? undefined,
         tags: task.tags,
       });
       navigate(`/tasks/${newTask.id}`);
@@ -397,6 +405,7 @@ export function TaskDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="plan">Plan</TabsTrigger>
+          <TabsTrigger value="design">Technical Design</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
@@ -418,6 +427,9 @@ export function TaskDetailPage() {
 
                 <span className="text-sm text-muted-foreground">Assignee</span>
                 <span className="text-sm">{task.assignee || 'Unassigned'}</span>
+
+                <span className="text-sm text-muted-foreground">Domain</span>
+                <span className="text-sm">{task.domain || 'None'}</span>
 
                 <span className="text-sm text-muted-foreground">Description</span>
                 <span className="text-sm">{task.description || 'No description'}</span>
@@ -546,6 +558,33 @@ export function TaskDetailPage() {
             <PlanReviewSection
               taskId={id!}
               planComments={task.planComments}
+              transitions={transitions ?? []}
+              transitioning={transitioning}
+              onTransition={handleTransition}
+              onRefetch={refetch}
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="design">
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Technical Design</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {task.technicalDesign ? (
+                <PlanMarkdown content={task.technicalDesign} />
+              ) : (
+                <p className="text-sm text-muted-foreground">No technical design yet. A design document will appear here after the design agent completes.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Design Review Actions */}
+          {task.status === 'design_review' && (
+            <DesignReviewSection
+              taskId={id!}
+              designComments={task.technicalDesignComments}
               transitions={transitions ?? []}
               transitioning={transitioning}
               onTransition={handleTransition}
@@ -698,6 +737,14 @@ export function TaskDetailPage() {
               <Input
                 value={editForm.assignee ?? ''}
                 onChange={(e) => setEditForm({ ...editForm, assignee: e.target.value || null })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Domain</Label>
+              <Input
+                value={(editForm.domain as string) ?? ''}
+                onChange={(e) => setEditForm({ ...editForm, domain: e.target.value || null })}
+                placeholder="e.g., Authentication, Payments"
               />
             </div>
             {features.length > 0 && (
@@ -896,6 +943,103 @@ function PlanReviewSection({
               disabled={saving || transitioning !== null || !newComment.trim()}
             >
               {transitioning === reviseTransition.to ? 'Requesting...' : 'Request Plan Changes'}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Design Review Section */
+function DesignReviewSection({
+  taskId,
+  designComments,
+  transitions,
+  transitioning,
+  onTransition,
+  onRefetch,
+}: {
+  taskId: string;
+  designComments: PlanComment[];
+  transitions: Transition[];
+  transitioning: string | null;
+  onTransition: (toStatus: string) => Promise<void> | void;
+  onRefetch: () => Promise<void> | void;
+}) {
+  const [newComment, setNewComment] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const approveTransition = transitions.find((t) => t.to === 'implementing');
+  const reviseTransition = transitions.find((t) => t.to === 'designing');
+
+  const handleAction = async (toStatus: string) => {
+    setSaving(true);
+    try {
+      if (newComment.trim()) {
+        const comment: PlanComment = {
+          author: 'admin',
+          content: newComment.trim(),
+          createdAt: Date.now(),
+        };
+        await window.api.tasks.update(taskId, {
+          technicalDesignComments: [...(designComments ?? []), comment],
+        });
+        setNewComment('');
+        await onRefetch();
+      }
+      await onTransition(toStatus);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="mt-4 border-blue-400">
+      <CardHeader className="py-3">
+        <CardTitle className="text-base">Design Review</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {designComments && designComments.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {designComments.map((comment, i) => (
+              <div key={i} className="rounded-md bg-muted px-3 py-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-semibold">{comment.author}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(comment.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Textarea
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="Add feedback for the design agent..."
+          rows={3}
+          className="mb-3"
+        />
+
+        <div className="flex gap-2">
+          {approveTransition && (
+            <Button
+              onClick={() => handleAction(approveTransition.to)}
+              disabled={saving || transitioning !== null}
+            >
+              {transitioning === approveTransition.to ? 'Approving...' : 'Approve & Implement'}
+            </Button>
+          )}
+          {reviseTransition && (
+            <Button
+              variant="outline"
+              onClick={() => handleAction(reviseTransition.to)}
+              disabled={saving || transitioning !== null || !newComment.trim()}
+            >
+              {transitioning === reviseTransition.to ? 'Requesting...' : 'Request Design Changes'}
             </Button>
           )}
         </div>

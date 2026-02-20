@@ -18,9 +18,12 @@ interface TaskRow {
   pr_link: string | null;
   branch_name: string | null;
   feature_id: string | null;
+  domain: string | null;
   plan: string | null;
+  technical_design: string | null;
   subtasks: string;
   plan_comments: string;
+  technical_design_comments: string;
   metadata: string;
   created_at: number;
   updated_at: number;
@@ -38,12 +41,15 @@ function rowToTask(row: TaskRow): Task {
     tags: parseJson<string[]>(row.tags, []),
     parentTaskId: row.parent_task_id,
     featureId: row.feature_id,
+    domain: row.domain,
     assignee: row.assignee,
     prLink: row.pr_link,
     branchName: row.branch_name,
     plan: row.plan,
+    technicalDesign: row.technical_design,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),
+    technicalDesignComments: parseJson<PlanComment[]>(row.technical_design_comments, []),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -101,6 +107,10 @@ export class SqliteTaskStore implements ITaskStore {
         values.push(filter.featureId);
       }
     }
+    if (filter?.domain) {
+      conditions.push('domain = ?');
+      values.push(filter.domain);
+    }
     if (filter?.tag) {
       conditions.push("EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)");
       values.push(filter.tag);
@@ -132,8 +142,8 @@ export class SqliteTaskStore implements ITaskStore {
     }
 
     this.db.prepare(`
-      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, subtasks, plan_comments, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, domain, assignee, pr_link, branch_name, plan, technical_design, subtasks, plan_comments, technical_design_comments, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.projectId,
@@ -145,11 +155,14 @@ export class SqliteTaskStore implements ITaskStore {
       JSON.stringify(input.tags ?? []),
       input.parentTaskId ?? null,
       input.featureId ?? null,
+      input.domain ?? null,
       input.assignee ?? null,
       input.prLink ?? null,
       input.branchName ?? null,
       null,
+      null,
       JSON.stringify(input.subtasks ?? []),
+      '[]',
       '[]',
       JSON.stringify(input.metadata ?? {}),
       timestamp,
@@ -194,6 +207,10 @@ export class SqliteTaskStore implements ITaskStore {
       updates.push('feature_id = ?');
       values.push(input.featureId);
     }
+    if (input.domain !== undefined) {
+      updates.push('domain = ?');
+      values.push(input.domain);
+    }
     if (input.assignee !== undefined) {
       updates.push('assignee = ?');
       values.push(input.assignee);
@@ -210,6 +227,10 @@ export class SqliteTaskStore implements ITaskStore {
       updates.push('plan = ?');
       values.push(input.plan);
     }
+    if (input.technicalDesign !== undefined) {
+      updates.push('technical_design = ?');
+      values.push(input.technicalDesign);
+    }
     if (input.subtasks !== undefined) {
       updates.push('subtasks = ?');
       values.push(JSON.stringify(input.subtasks));
@@ -217,6 +238,10 @@ export class SqliteTaskStore implements ITaskStore {
     if (input.planComments !== undefined) {
       updates.push('plan_comments = ?');
       values.push(JSON.stringify(input.planComments));
+    }
+    if (input.technicalDesignComments !== undefined) {
+      updates.push('technical_design_comments = ?');
+      values.push(JSON.stringify(input.technicalDesignComments));
     }
     if (input.metadata !== undefined) {
       updates.push('metadata = ?');
@@ -276,7 +301,7 @@ export class SqliteTaskStore implements ITaskStore {
       // Reset task record fields
       this.db.prepare(`
         UPDATE tasks
-        SET status = ?, plan = NULL, subtasks = '[]', plan_comments = '[]',
+        SET status = ?, plan = NULL, technical_design = NULL, subtasks = '[]', plan_comments = '[]', technical_design_comments = '[]',
             pr_link = NULL, branch_name = NULL, updated_at = ?
         WHERE id = ?
       `).run(firstStatus, now(), id);

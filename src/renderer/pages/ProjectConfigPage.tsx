@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@template/renderer/components/ui/card';
@@ -23,7 +23,7 @@ let nextCmdId = 0;
 export function ProjectConfigPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: project, loading, error, refetch } = useIpc<Project | null>(
+  const { data: project, loading, error } = useIpc<Project | null>(
     () => window.api.projects.get(id!),
     [id]
   );
@@ -37,11 +37,17 @@ export function ProjectConfigPage() {
   const [maxValidationRetries, setMaxValidationRetries] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [telegramTesting, setTelegramTesting] = useState(false);
+
+  // Track whether we've loaded initial data (to skip auto-save on first populate)
+  const initialized = useRef(false);
+  const projectConfigRef = useRef<Record<string, unknown>>({});
 
   useEffect(() => {
     if (!project) return;
     const c = project.config ?? {};
+    projectConfigRef.current = c;
+    initialized.current = false; // prevent auto-save during setState batch
     setModel((c.model as string) || '__default__');
     setAgentTimeout(c.agentTimeout != null ? String(c.agentTimeout) : '');
     setMaxConcurrentAgents(c.maxConcurrentAgents != null ? String(c.maxConcurrentAgents) : '');
@@ -56,51 +62,71 @@ export function ProjectConfigPage() {
     const tg = (c.telegram as Record<string, unknown>) ?? {};
     setTelegramBotToken((tg.botToken as string) ?? '');
     setTelegramChatId((tg.chatId as string) ?? '');
+    // Mark initialized after React processes the state batch
+    requestAnimationFrame(() => { initialized.current = true; });
   }, [project]);
 
-  const handleSave = async () => {
-    if (!id || !project) return;
-    setSaving(true);
-    try {
-      const managed: Record<string, unknown> = {
-        model: model === '__default__' ? undefined : model,
-        agentTimeout: agentTimeout ? Number(agentTimeout) : undefined,
-        maxConcurrentAgents: maxConcurrentAgents ? Number(maxConcurrentAgents) : undefined,
-        defaultBranch: defaultBranch || undefined,
-        pullMainAfterMerge,
-        validationCommands: validationCommands.length > 0 ? validationCommands.map(v => v.cmd) : undefined,
-        maxValidationRetries: maxValidationRetries ? Number(maxValidationRetries) : undefined,
-        telegram: (telegramBotToken || telegramChatId)
-          ? { botToken: telegramBotToken || undefined, chatId: telegramChatId || undefined }
-          : undefined,
-      };
+  const saveConfig = useCallback(async (
+    fields: {
+      model: string; agentTimeout: string; maxConcurrentAgents: string;
+      defaultBranch: string; pullMainAfterMerge: boolean;
+      validationCommands: Array<{ id: number; cmd: string }>;
+      maxValidationRetries: string; telegramBotToken: string; telegramChatId: string;
+    }
+  ) => {
+    if (!id) return;
+    const managed: Record<string, unknown> = {
+      model: fields.model === '__default__' ? undefined : fields.model,
+      agentTimeout: fields.agentTimeout ? Number(fields.agentTimeout) : undefined,
+      maxConcurrentAgents: fields.maxConcurrentAgents ? Number(fields.maxConcurrentAgents) : undefined,
+      defaultBranch: fields.defaultBranch || undefined,
+      pullMainAfterMerge: fields.pullMainAfterMerge,
+      validationCommands: fields.validationCommands.length > 0 ? fields.validationCommands.map(v => v.cmd) : undefined,
+      maxValidationRetries: fields.maxValidationRetries ? Number(fields.maxValidationRetries) : undefined,
+      telegram: (fields.telegramBotToken || fields.telegramChatId)
+        ? { botToken: fields.telegramBotToken || undefined, chatId: fields.telegramChatId || undefined }
+        : undefined,
+    };
 
-      // Spread existing config first, then overlay managed fields (strip undefined)
-      const config: Record<string, unknown> = { ...project.config };
-      for (const [key, value] of Object.entries(managed)) {
-        if (value === undefined) {
-          delete config[key];
-        } else {
-          config[key] = value;
-        }
+    const config: Record<string, unknown> = { ...projectConfigRef.current };
+    for (const [key, value] of Object.entries(managed)) {
+      if (value === undefined) {
+        delete config[key];
+      } else {
+        config[key] = value;
       }
+    }
 
+    try {
       await window.api.projects.update(id, { config });
-      await refetch();
-      toast.success('Configuration saved');
+      projectConfigRef.current = config;
     } catch {
       toast.error('Failed to save configuration');
-    } finally {
-      setSaving(false);
     }
-  };
+  }, [id]);
+
+  // Auto-save with debounce whenever any field changes
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    if (!initialized.current) return;
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      saveConfig({
+        model, agentTimeout, maxConcurrentAgents, defaultBranch,
+        pullMainAfterMerge, validationCommands, maxValidationRetries,
+        telegramBotToken, telegramChatId,
+      });
+    }, 500);
+    return () => clearTimeout(timerRef.current);
+  }, [model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
+      validationCommands, maxValidationRetries, telegramBotToken, telegramChatId, saveConfig]);
 
   const addValidationCommand = () =>
-    setValidationCommands([...validationCommands, { id: nextCmdId++, cmd: '' }]);
+    setValidationCommands(prev => [...prev, { id: nextCmdId++, cmd: '' }]);
   const removeValidationCommand = (cmdId: number) =>
-    setValidationCommands(validationCommands.filter(v => v.id !== cmdId));
+    setValidationCommands(prev => prev.filter(v => v.id !== cmdId));
   const updateValidationCommand = (cmdId: number, value: string) =>
-    setValidationCommands(validationCommands.map(v => (v.id === cmdId ? { ...v, cmd: value } : v)));
+    setValidationCommands(prev => prev.map(v => (v.id === cmdId ? { ...v, cmd: value } : v)));
 
   if (loading) {
     return (
@@ -124,14 +150,9 @@ export function ProjectConfigPage() {
         &larr; Back to project
       </Button>
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Configuration</h1>
-          <p className="text-muted-foreground mt-1">{project.name}</p>
-        </div>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save'}
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Configuration</h1>
+        <p className="text-muted-foreground mt-1">{project.name}</p>
       </div>
 
       <div className="max-w-2xl space-y-6">
@@ -296,6 +317,26 @@ export function ProjectConfigPage() {
                   value={telegramChatId}
                   onChange={(e) => setTelegramChatId(e.target.value)}
                 />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!telegramBotToken || !telegramChatId || telegramTesting}
+                  onClick={async () => {
+                    setTelegramTesting(true);
+                    try {
+                      await window.api.telegram.test(telegramBotToken, telegramChatId);
+                      toast.success('Test message sent successfully');
+                    } catch (err) {
+                      toast.error(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
+                    } finally {
+                      setTelegramTesting(false);
+                    }
+                  }}
+                >
+                  {telegramTesting ? 'Sending...' : 'Test Notifications'}
+                </Button>
               </div>
             </div>
           </CardContent>

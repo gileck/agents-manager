@@ -68,6 +68,11 @@ export function TaskRow({
                   {featureName}
                 </Badge>
               )}
+              {task.domain && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                  {task.domain}
+                </Badge>
+              )}
               {task.tags.slice(0, 3).map((tag) => (
                 <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
                   {tag}

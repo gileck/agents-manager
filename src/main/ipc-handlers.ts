@@ -509,6 +509,26 @@ export function registerIpcHandlers(services: AppServices): void {
   });
 
   // ============================================
+  // Telegram Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.TELEGRAM_TEST, async (_, botToken: string, chatId: string) => {
+    if (!botToken || !chatId) {
+      throw new Error('Bot token and chat ID are required');
+    }
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: 'Test notification from Agents Manager' }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as Record<string, unknown>).description as string ?? `Telegram API error: ${res.status}`);
+    }
+  });
+
+  // ============================================
   // Shell Operations
   // ============================================
 

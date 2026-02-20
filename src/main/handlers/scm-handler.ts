@@ -37,19 +37,10 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       return { success: false, error: `Project ${task.projectId} has no path` };
     }
 
-    // Remove worktree before merge so --delete-branch can clean up the local branch
-    const worktreeManager = deps.createWorktreeManager(project.path);
-    try {
-      await worktreeManager.unlock(task.id);
-      await worktreeManager.delete(task.id);
-      await ghLog('Worktree removed before merge', 'info', { taskId: task.id });
-    } catch (err) {
-      await ghLog(`Worktree cleanup before merge failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
-    }
-
     const scmPlatform = deps.createScmPlatform(project.path);
 
-    // Pre-merge mergeability check (safety net for conflicts)
+    // Pre-merge mergeability check BEFORE worktree deletion so the worktree
+    // is preserved for recovery if the PR can't be merged.
     try {
       const mergeable = await scmPlatform.isPRMergeable(prUrl);
       if (!mergeable) {
@@ -61,6 +52,17 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       // If the mergeability check itself fails, log and continue
       // to let GitHub's own merge logic be the final arbiter
       await ghLog(`Mergeability check failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
+    }
+
+    // Remove worktree before merge so --delete-branch can clean up the local branch.
+    // Done after mergeability check so the worktree is preserved if merge will fail.
+    const worktreeManager = deps.createWorktreeManager(project.path);
+    try {
+      await worktreeManager.unlock(task.id);
+      await worktreeManager.delete(task.id);
+      await ghLog('Worktree removed before merge', 'info', { taskId: task.id });
+    } catch (err) {
+      await ghLog(`Worktree cleanup before merge failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
     }
 
     await ghLog(`Merging PR: ${prUrl}`);
@@ -173,6 +175,15 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
         error: err instanceof Error ? err.message : String(err),
       });
       return { success: false, error: 'Failed to push branch' };
+    }
+
+    // If a PR already exists for this task, the force-push above updated it.
+    // Skip creation and return success.
+    const existingPrArtifacts = await deps.taskArtifactStore.getArtifactsForTask(task.id, 'pr');
+    if (existingPrArtifacts.length > 0) {
+      const existingUrl = existingPrArtifacts[existingPrArtifacts.length - 1].data.url as string;
+      await ghLog('PR already exists — force-push updated it', 'info', { url: existingUrl });
+      return { success: true };
     }
 
     // Create PR

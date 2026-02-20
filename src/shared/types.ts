@@ -231,12 +231,15 @@ export interface Task {
   tags: string[];
   parentTaskId: string | null;
   featureId: string | null;
+  domain: string | null;
   assignee: string | null;
   prLink: string | null;
   branchName: string | null;
   plan: string | null;
+  technicalDesign: string | null;
   subtasks: Subtask[];
   planComments: PlanComment[];
+  technicalDesignComments: PlanComment[];
   metadata: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
@@ -252,6 +255,7 @@ export interface TaskCreateInput {
   tags?: string[];
   parentTaskId?: string;
   featureId?: string;
+  domain?: string;
   assignee?: string;
   prLink?: string;
   branchName?: string;
@@ -267,12 +271,15 @@ export interface TaskUpdateInput {
   tags?: string[];
   parentTaskId?: string | null;
   featureId?: string | null;
+  domain?: string | null;
   assignee?: string | null;
   prLink?: string | null;
   branchName?: string | null;
   plan?: string | null;
+  technicalDesign?: string | null;
   subtasks?: Subtask[];
   planComments?: PlanComment[];
+  technicalDesignComments?: PlanComment[];
   metadata?: Record<string, unknown>;
 }
 
@@ -284,6 +291,7 @@ export interface TaskFilter {
   assignee?: string;
   parentTaskId?: string | null;
   featureId?: string | null;
+  domain?: string;
   tag?: string;
   /** Free-text search across title and description (case-insensitive substring match) */
   search?: string;
@@ -397,7 +405,7 @@ export type HookFn = (task: Task, transition: Transition, context: TransitionCon
 // ============================================
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
-export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision' | 'investigate' | 'resolve_conflicts';
+export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision' | 'investigate' | 'resolve_conflicts' | 'technical_design' | 'technical_design_revision';
 
 export interface AgentRun {
   id: string;
