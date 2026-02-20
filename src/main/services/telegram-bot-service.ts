@@ -5,7 +5,7 @@ import type { IProjectStore } from '../interfaces/project-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
-import type { TaskUpdateInput } from '../../shared/types';
+import type { TaskUpdateInput, TelegramBotLogEntry } from '../../shared/types';
 
 interface PendingAction {
   type: 'create_title' | 'edit_field';
@@ -28,6 +28,7 @@ export class TelegramBotService implements ITelegramBotService {
   private deps: BotDeps;
   private projectId = '';
   private chatId = '';
+  public onLog?: (entry: TelegramBotLogEntry) => void;
 
   constructor(deps: BotDeps) {
     this.deps = deps;
@@ -48,7 +49,7 @@ export class TelegramBotService implements ITelegramBotService {
 
     this.registerHandlers();
 
-    await this.bot.sendMessage(chatId, `Bot started for project *${esc(project.name)}*`, {
+    await this.send(chatId, `Bot started for project *${esc(project.name)}*`, {
       parse_mode: 'MarkdownV2',
     });
   }
@@ -70,23 +71,27 @@ export class TelegramBotService implements ITelegramBotService {
 
     bot.onText(/\/tasks$/, (msg) => {
       if (!this.isAllowed(msg)) return;
+      this.log('in', msg.text ?? '/tasks');
       this.handleTasks(msg.chat.id).catch(this.logError);
     });
 
     bot.onText(/\/task (\S+)/, (msg, match) => {
       if (!this.isAllowed(msg)) return;
+      this.log('in', msg.text ?? `/task ${match![1]}`);
       this.handleTaskDetail(msg.chat.id, match![1].trim()).catch(this.logError);
     });
 
     bot.onText(/\/create$/, (msg) => {
       if (!this.isAllowed(msg)) return;
+      this.log('in', msg.text ?? '/create');
       this.pendingActions.set(msg.chat.id, { type: 'create_title' });
-      bot.sendMessage(msg.chat.id, 'Enter the task title:').catch(this.logError);
+      this.send(msg.chat.id, 'Enter the task title:').catch(this.logError);
     });
 
     bot.onText(/\/help$/, (msg) => {
       if (!this.isAllowed(msg)) return;
-      bot.sendMessage(msg.chat.id, [
+      this.log('in', msg.text ?? '/help');
+      this.send(msg.chat.id, [
         '*Available commands:*',
         '/tasks \\- List project tasks',
         '/task <id> \\- Show task details',
@@ -99,6 +104,7 @@ export class TelegramBotService implements ITelegramBotService {
       if (!this.isAllowed(msg)) return;
       if (msg.text?.startsWith('/')) return;
 
+      this.log('in', msg.text ?? '');
       const pending = this.pendingActions.get(msg.chat.id);
       if (!pending) return;
       this.pendingActions.delete(msg.chat.id);
@@ -115,13 +121,13 @@ export class TelegramBotService implements ITelegramBotService {
       const chatId = query.message.chat.id;
       if (String(chatId) !== this.chatId) return;
 
+      this.log('in', `[callback] ${query.data}`);
       bot.answerCallbackQuery(query.id).catch(this.logError);
       this.handleCallback(chatId, query.data).catch(this.logError);
     });
   }
 
   private async handleCallback(chatId: number, data: string): Promise<void> {
-    const bot = this.bot!;
     // Short prefixes to stay within Telegram's 64-byte callback_data limit
     if (data.startsWith('v:')) {
       await this.handleTaskDetail(chatId, data.slice(2));
@@ -137,12 +143,12 @@ export class TelegramBotService implements ITelegramBotService {
       const taskId = data.slice(3, sep);
       const field = data.slice(sep + 1);
       this.pendingActions.set(chatId, { type: 'edit_field', taskId, field });
-      await bot.sendMessage(chatId, `Enter new value for *${esc(field)}*:`, {
+      await this.send(chatId, `Enter new value for *${esc(field)}*:`, {
         parse_mode: 'MarkdownV2',
       });
     } else if (data.startsWith('d:')) {
       const taskId = data.slice(2);
-      await bot.sendMessage(chatId, `Delete task \`${taskId}\`?`, {
+      await this.send(chatId, `Delete task \`${taskId}\`?`, {
         parse_mode: 'MarkdownV2',
         reply_markup: {
           inline_keyboard: [[
@@ -163,7 +169,7 @@ export class TelegramBotService implements ITelegramBotService {
   private async handleTasks(chatId: number): Promise<void> {
     const tasks = await this.deps.taskStore.listTasks({ projectId: this.projectId });
     if (tasks.length === 0) {
-      await this.bot!.sendMessage(chatId, 'No tasks found\\.');
+      await this.send(chatId, 'No tasks found\\.');
       return;
     }
 
@@ -172,7 +178,7 @@ export class TelegramBotService implements ITelegramBotService {
       callback_data: `v:${t.id}`,
     }]));
 
-    await this.bot!.sendMessage(chatId, `*Tasks* \\(${tasks.length}\\):`, {
+    await this.send(chatId, `*Tasks* \\(${tasks.length}\\):`, {
       parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: buttons },
     });
@@ -181,7 +187,7 @@ export class TelegramBotService implements ITelegramBotService {
   private async handleTaskDetail(chatId: number, taskId: string): Promise<void> {
     const task = await this.deps.taskStore.getTask(taskId);
     if (!task) {
-      await this.bot!.sendMessage(chatId, `Task not found: ${taskId}`);
+      await this.send(chatId, `Task not found: ${taskId}`);
       return;
     }
 
@@ -194,7 +200,7 @@ export class TelegramBotService implements ITelegramBotService {
     if (task.description) lines.push(`\n${esc(task.description)}`);
     if (task.assignee) lines.push(`Assignee: ${esc(task.assignee)}`);
 
-    await this.bot!.sendMessage(chatId, lines.join('\n'), {
+    await this.send(chatId, lines.join('\n'), {
       parse_mode: 'MarkdownV2',
       reply_markup: {
         inline_keyboard: [[
@@ -212,7 +218,7 @@ export class TelegramBotService implements ITelegramBotService {
 
     const transitions = await this.deps.pipelineEngine.getValidTransitions(task, 'manual');
     if (transitions.length === 0) {
-      await this.bot!.sendMessage(chatId, 'No valid transitions available\\.');
+      await this.send(chatId, 'No valid transitions available\\.');
       return;
     }
 
@@ -221,7 +227,7 @@ export class TelegramBotService implements ITelegramBotService {
       callback_data: `t:${taskId}:${tr.to}`,
     }]));
 
-    await this.bot!.sendMessage(chatId, 'Select transition:', {
+    await this.send(chatId, 'Select transition:', {
       reply_markup: { inline_keyboard: buttons },
     });
   }
@@ -229,10 +235,10 @@ export class TelegramBotService implements ITelegramBotService {
   private async handleTransition(chatId: number, taskId: string, status: string): Promise<void> {
     const result = await this.deps.workflowService.transitionTask(taskId, status, 'telegram');
     if (result.success) {
-      await this.bot!.sendMessage(chatId, `Transitioned to \`${status}\``, { parse_mode: 'MarkdownV2' });
+      await this.send(chatId, `Transitioned to \`${status}\``, { parse_mode: 'MarkdownV2' });
       await this.handleTaskDetail(chatId, taskId);
     } else {
-      await this.bot!.sendMessage(chatId, `Transition failed: ${result.error}`);
+      await this.send(chatId, `Transition failed: ${result.error}`);
     }
   }
 
@@ -243,7 +249,7 @@ export class TelegramBotService implements ITelegramBotService {
       callback_data: `ef:${taskId}:${f}`,
     }]));
 
-    await this.bot!.sendMessage(chatId, 'Select field to edit:', {
+    await this.send(chatId, 'Select field to edit:', {
       reply_markup: { inline_keyboard: buttons },
     });
   }
@@ -253,7 +259,7 @@ export class TelegramBotService implements ITelegramBotService {
     if (field === 'priority') {
       const num = parseInt(value, 10);
       if (isNaN(num) || num < 0) {
-        await this.bot!.sendMessage(chatId, 'Priority must be a non\\-negative number\\.');
+        await this.send(chatId, 'Priority must be a non\\-negative number\\.');
         return;
       }
       update.priority = num;
@@ -267,22 +273,22 @@ export class TelegramBotService implements ITelegramBotService {
 
     const task = await this.deps.workflowService.updateTask(taskId, update);
     if (task) {
-      await this.bot!.sendMessage(chatId, `Updated *${esc(field)}*`, { parse_mode: 'MarkdownV2' });
+      await this.send(chatId, `Updated *${esc(field)}*`, { parse_mode: 'MarkdownV2' });
       await this.handleTaskDetail(chatId, taskId);
     } else {
-      await this.bot!.sendMessage(chatId, 'Update failed\\.');
+      await this.send(chatId, 'Update failed\\.');
     }
   }
 
   private async handleCreateTask(chatId: number, title: string): Promise<void> {
     if (!title.trim()) {
-      await this.bot!.sendMessage(chatId, 'Title cannot be empty\\.');
+      await this.send(chatId, 'Title cannot be empty\\.');
       return;
     }
 
     const pipelines = await this.deps.pipelineStore.listPipelines();
     if (pipelines.length === 0) {
-      await this.bot!.sendMessage(chatId, 'No pipelines available\\.');
+      await this.send(chatId, 'No pipelines available\\.');
       return;
     }
 
@@ -292,7 +298,7 @@ export class TelegramBotService implements ITelegramBotService {
       title: title.trim(),
     });
 
-    await this.bot!.sendMessage(chatId, `Created task \`${task.id}\`: *${esc(task.title)}*`, {
+    await this.send(chatId, `Created task \`${task.id}\`: *${esc(task.title)}*`, {
       parse_mode: 'MarkdownV2',
     });
   }
@@ -300,10 +306,22 @@ export class TelegramBotService implements ITelegramBotService {
   private async handleDelete(chatId: number, taskId: string): Promise<void> {
     const deleted = await this.deps.workflowService.deleteTask(taskId);
     if (deleted) {
-      await this.bot!.sendMessage(chatId, `Deleted task \`${taskId}\``, { parse_mode: 'MarkdownV2' });
+      await this.send(chatId, `Deleted task \`${taskId}\``, { parse_mode: 'MarkdownV2' });
     } else {
-      await this.bot!.sendMessage(chatId, 'Delete failed\\.');
+      await this.send(chatId, 'Delete failed\\.');
     }
+  }
+
+  private log(direction: 'in' | 'out', message: string): void {
+    if (this.onLog) {
+      this.onLog({ timestamp: Date.now(), direction, message });
+    }
+  }
+
+  private async send(chatId: number | string, text: string, opts?: TelegramBot.SendMessageOptions): Promise<TelegramBot.Message | undefined> {
+    if (!this.bot) return undefined;
+    this.log('out', text);
+    return this.bot.sendMessage(chatId, text, opts);
   }
 
   private logError = (err: unknown): void => {

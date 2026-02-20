@@ -108,6 +108,10 @@ export const IPC_CHANNELS = {
 
   // Telegram
   TELEGRAM_TEST: 'telegram:test',
+  TELEGRAM_BOT_START: 'telegram:bot-start',
+  TELEGRAM_BOT_STOP: 'telegram:bot-stop',
+  TELEGRAM_BOT_STATUS: 'telegram:bot-status',
+  TELEGRAM_BOT_LOG: 'telegram:bot-log',
 
   // Shell
   OPEN_IN_CHROME: 'shell:open-in-chrome',

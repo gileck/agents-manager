@@ -35,6 +35,7 @@ export function ProjectConfigPage() {
   const [pullMainAfterMerge, setPullMainAfterMerge] = useState(false);
   const [validationCommands, setValidationCommands] = useState<Array<{ id: number; cmd: string }>>([]);
   const [maxValidationRetries, setMaxValidationRetries] = useState('');
+  const [telegramEnabled, setTelegramEnabled] = useState(false);
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramTesting, setTelegramTesting] = useState(false);
@@ -60,6 +61,7 @@ export function ProjectConfigPage() {
     );
     setMaxValidationRetries(c.maxValidationRetries != null ? String(c.maxValidationRetries) : '');
     const tg = (c.telegram as Record<string, unknown>) ?? {};
+    setTelegramEnabled(!!tg.enabled);
     setTelegramBotToken((tg.botToken as string) ?? '');
     setTelegramChatId((tg.chatId as string) ?? '');
     // Mark initialized after React processes the state batch
@@ -71,7 +73,8 @@ export function ProjectConfigPage() {
       model: string; agentTimeout: string; maxConcurrentAgents: string;
       defaultBranch: string; pullMainAfterMerge: boolean;
       validationCommands: Array<{ id: number; cmd: string }>;
-      maxValidationRetries: string; telegramBotToken: string; telegramChatId: string;
+      maxValidationRetries: string; telegramEnabled: boolean;
+      telegramBotToken: string; telegramChatId: string;
     }
   ) => {
     if (!id) return;
@@ -83,9 +86,11 @@ export function ProjectConfigPage() {
       pullMainAfterMerge: fields.pullMainAfterMerge,
       validationCommands: fields.validationCommands.length > 0 ? fields.validationCommands.map(v => v.cmd) : undefined,
       maxValidationRetries: fields.maxValidationRetries ? Number(fields.maxValidationRetries) : undefined,
-      telegram: (fields.telegramBotToken || fields.telegramChatId)
-        ? { botToken: fields.telegramBotToken || undefined, chatId: fields.telegramChatId || undefined }
-        : undefined,
+      telegram: {
+        enabled: fields.telegramEnabled,
+        botToken: fields.telegramBotToken || undefined,
+        chatId: fields.telegramChatId || undefined,
+      },
     };
 
     const config: Record<string, unknown> = { ...projectConfigRef.current };
@@ -114,12 +119,12 @@ export function ProjectConfigPage() {
       saveConfig({
         model, agentTimeout, maxConcurrentAgents, defaultBranch,
         pullMainAfterMerge, validationCommands, maxValidationRetries,
-        telegramBotToken, telegramChatId,
+        telegramEnabled, telegramBotToken, telegramChatId,
       });
     }, 500);
     return () => clearTimeout(timerRef.current);
   }, [model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
-      validationCommands, maxValidationRetries, telegramBotToken, telegramChatId, saveConfig]);
+      validationCommands, maxValidationRetries, telegramEnabled, telegramBotToken, telegramChatId, saveConfig]);
 
   const addValidationCommand = () =>
     setValidationCommands(prev => [...prev, { id: nextCmdId++, cmd: '' }]);
@@ -289,55 +294,75 @@ export function ProjectConfigPage() {
           </CardContent>
         </Card>
 
-        {/* Notifications */}
+        {/* Telegram Bot */}
         <Card>
           <CardHeader>
-            <CardTitle>Notifications</CardTitle>
-            <CardDescription>Configure Telegram notifications for this project</CardDescription>
+            <CardTitle>Telegram Bot</CardTitle>
+            <CardDescription>Configure Telegram bot and notifications for this project</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label htmlFor="telegramBotToken">Telegram Bot Token</Label>
-                <Input
-                  id="telegramBotToken"
-                  type="password"
-                  style={inputWidth}
-                  placeholder="Bot token"
-                  value={telegramBotToken}
-                  onChange={(e) => setTelegramBotToken(e.target.value)}
+                <Label htmlFor="telegramEnabled">Enable Telegram Bot</Label>
+                <Switch
+                  id="telegramEnabled"
+                  checked={telegramEnabled}
+                  onCheckedChange={setTelegramEnabled}
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="telegramChatId">Telegram Chat ID</Label>
-                <Input
-                  id="telegramChatId"
-                  style={inputWidth}
-                  placeholder="Chat ID"
-                  value={telegramChatId}
-                  onChange={(e) => setTelegramChatId(e.target.value)}
-                />
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!telegramBotToken || !telegramChatId || telegramTesting}
-                  onClick={async () => {
-                    setTelegramTesting(true);
-                    try {
-                      await window.api.telegram.test(telegramBotToken, telegramChatId);
-                      toast.success('Test message sent successfully');
-                    } catch (err) {
-                      toast.error(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
-                    } finally {
-                      setTelegramTesting(false);
-                    }
-                  }}
-                >
-                  {telegramTesting ? 'Sending...' : 'Test Notifications'}
-                </Button>
-              </div>
+              {telegramEnabled && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="telegramBotToken">Bot Token</Label>
+                    <Input
+                      id="telegramBotToken"
+                      type="password"
+                      style={inputWidth}
+                      placeholder="Bot token"
+                      value={telegramBotToken}
+                      onChange={(e) => setTelegramBotToken(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="telegramChatId">Chat ID</Label>
+                    <Input
+                      id="telegramChatId"
+                      style={inputWidth}
+                      placeholder="Chat ID"
+                      value={telegramChatId}
+                      onChange={(e) => setTelegramChatId(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!telegramBotToken || !telegramChatId}
+                      onClick={() => navigate(`/projects/${id}/telegram`)}
+                    >
+                      Open Telegram Bot Page
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!telegramBotToken || !telegramChatId || telegramTesting}
+                      onClick={async () => {
+                        setTelegramTesting(true);
+                        try {
+                          await window.api.telegram.test(telegramBotToken, telegramChatId);
+                          toast.success('Test message sent successfully');
+                        } catch (err) {
+                          toast.error(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
+                        } finally {
+                          setTelegramTesting(false);
+                        }
+                      }}
+                    >
+                      {telegramTesting ? 'Sending...' : 'Test Notifications'}
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

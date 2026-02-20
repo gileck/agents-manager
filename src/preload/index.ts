@@ -18,6 +18,7 @@ import type {
   GitLogEntry,
   Worktree,
   ChatMessage,
+  TelegramBotLogEntry,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -89,6 +90,10 @@ const IPC_CHANNELS = {
   TASK_WORKFLOW_REVIEW: 'task:workflow-review',
   DASHBOARD_STATS: 'dashboard:stats',
   TELEGRAM_TEST: 'telegram:test',
+  TELEGRAM_BOT_START: 'telegram:bot-start',
+  TELEGRAM_BOT_STOP: 'telegram:bot-stop',
+  TELEGRAM_BOT_STATUS: 'telegram:bot-status',
+  TELEGRAM_BOT_LOG: 'telegram:bot-log',
   OPEN_IN_CHROME: 'shell:open-in-chrome',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
@@ -288,6 +293,12 @@ const api = {
   telegram: {
     test: (botToken: string, chatId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_TEST, botToken, chatId),
+    startBot: (projectId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_BOT_START, projectId),
+    stopBot: (projectId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_BOT_STOP, projectId),
+    botStatus: (projectId: string): Promise<{ running: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_BOT_STATUS, projectId),
   },
 
   // Chat operations
@@ -331,6 +342,11 @@ const api = {
       const listener = (_: IpcRendererEvent, projectId: string, chunk: string) => callback(projectId, chunk);
       ipcRenderer.on(IPC_CHANNELS.CHAT_OUTPUT, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_OUTPUT, listener);
+    },
+    telegramBotLog: (callback: (projectId: string, entry: TelegramBotLogEntry) => void) => {
+      const listener = (_: IpcRendererEvent, projectId: string, entry: TelegramBotLogEntry) => callback(projectId, entry);
+      ipcRenderer.on(IPC_CHANNELS.TELEGRAM_BOT_LOG, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TELEGRAM_BOT_LOG, listener);
     },
   },
 };

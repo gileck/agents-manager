@@ -641,6 +641,12 @@ export interface Notification {
   channel: string;
 }
 
+export interface TelegramBotLogEntry {
+  timestamp: number;
+  direction: 'in' | 'out';
+  message: string;
+}
+
 // ============================================
 // Phase 4: Dashboard Types
 // ============================================
