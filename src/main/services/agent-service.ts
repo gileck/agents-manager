@@ -361,10 +361,81 @@ export class AgentService implements IAgentService {
       this.agentRunStore.updateRun(run.id, { prompt }).catch(() => {});
     };
 
+    // Wrap onMessage to intercept TodoWrite/Task tool_use events for subtask sync
+    const hasSubtaskTracking = (context.mode === 'implement' || context.mode === 'request_changes') && task.subtasks && task.subtasks.length > 0;
+    const currentSubtasks = hasSubtaskTracking ? [...task.subtasks] : [];
+    const sdkTaskIdToSubtaskName = new Map<string, string>();
+
+    const mapSdkStatus = (sdkStatus: string): import('../../shared/types').SubtaskStatus | null => {
+      switch (sdkStatus) {
+        case 'pending': return 'open';
+        case 'in_progress': return 'in_progress';
+        case 'completed': return 'done';
+        default: return null;
+      }
+    };
+
+    const wrappedOnMessage = hasSubtaskTracking
+      ? (msg: AgentChatMessage) => {
+          if (msg.type === 'tool_use') {
+            try {
+              if (msg.toolName === 'TodoWrite') {
+                const parsed = JSON.parse(msg.input);
+                const todos: Array<{ content?: string; subject?: string; status?: string }> = parsed.todos ?? parsed;
+                if (Array.isArray(todos)) {
+                  let changed = false;
+                  for (const todo of todos) {
+                    const todoName = (todo.content ?? todo.subject ?? '').trim().toLowerCase();
+                    const mappedStatus = mapSdkStatus(todo.status ?? '');
+                    if (!todoName || !mappedStatus) continue;
+                    const idx = currentSubtasks.findIndex(s => s.name.trim().toLowerCase() === todoName);
+                    if (idx !== -1 && currentSubtasks[idx].status !== mappedStatus) {
+                      currentSubtasks[idx] = { ...currentSubtasks[idx], status: mappedStatus };
+                      changed = true;
+                    }
+                  }
+                  if (changed) {
+                    this.taskStore.updateTask(taskId, { subtasks: [...currentSubtasks] }).catch((err) => {
+                      onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
+                    });
+                  }
+                }
+              } else if (msg.toolName === 'TaskCreate') {
+                const parsed = JSON.parse(msg.input);
+                const subject = (parsed.subject ?? parsed.description ?? '').trim().toLowerCase();
+                const match = currentSubtasks.find(s => s.name.trim().toLowerCase() === subject);
+                if (match && msg.toolId) {
+                  sdkTaskIdToSubtaskName.set(msg.toolId, match.name);
+                }
+              } else if (msg.toolName === 'TaskUpdate') {
+                const parsed = JSON.parse(msg.input);
+                const sdkTaskId = parsed.taskId ?? parsed.id ?? '';
+                const subtaskName = sdkTaskIdToSubtaskName.get(sdkTaskId);
+                if (subtaskName) {
+                  const mappedStatus = mapSdkStatus(parsed.status ?? '');
+                  if (mappedStatus) {
+                    const idx = currentSubtasks.findIndex(s => s.name === subtaskName);
+                    if (idx !== -1 && currentSubtasks[idx].status !== mappedStatus) {
+                      currentSubtasks[idx] = { ...currentSubtasks[idx], status: mappedStatus };
+                      this.taskStore.updateTask(taskId, { subtasks: [...currentSubtasks] }).catch((err) => {
+                        onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
+                      });
+                    }
+                  }
+                }
+              }
+            } catch (err) {
+              onLog(`Subtask sync error: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+          onMessage?.(msg);
+        }
+      : onMessage;
+
     let result: import('../../shared/types').AgentRunResult | undefined;
     try {
       try {
-        result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt, onMessage);
+        result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt, wrappedOnMessage);
       } catch (err) {
         clearInterval(flushInterval);
         const errorMsg = err instanceof Error ? err.message : String(err);

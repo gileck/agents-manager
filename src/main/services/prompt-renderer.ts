@@ -60,16 +60,15 @@ export class PromptRenderer {
     }
 
     if (task.subtasks && task.subtasks.length > 0) {
-      const lines = ['', '## Subtasks', 'Track your progress by updating subtask status as you work:'];
+      const lines = [
+        '',
+        '## IMPORTANT: Subtask Progress Tracking',
+        'Create a todo list with the following subtasks and update their status as you work through them:',
+        '',
+      ];
       for (const st of task.subtasks) {
         lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
       }
-      lines.push(
-        '',
-        'Use the CLI to update subtask status as you complete each step:',
-        `  am tasks subtask update ${task.id} --name "subtask name" --status in_progress`,
-        `  am tasks subtask update ${task.id} --name "subtask name" --status done`,
-      );
       return lines.join('\n');
     }
 

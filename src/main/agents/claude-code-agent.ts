@@ -184,7 +184,6 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         break;
       }
       case 'implement': {
-        const amCli = `node ${context.project.path}/bootstrap-cli.js`;
         const lines = [
           `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`,
         ];
@@ -192,11 +191,8 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           lines.push(
             '',
             '## IMPORTANT: Subtask Progress Tracking',
-            'You MUST update subtask status via the CLI as you work. Do NOT use TodoWrite — use these bash commands instead:',
-            `  ${amCli} tasks subtask update ${task.id} --name "<subtask name>" --status in_progress   # before starting a subtask`,
-            `  ${amCli} tasks subtask update ${task.id} --name "<subtask name>" --status done           # after completing a subtask`,
+            'Create a todo list with the following subtasks and update their status as you work through them:',
             '',
-            'Current subtasks:',
           );
           for (const st of task.subtasks) {
             lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
