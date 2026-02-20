@@ -1,11 +1,11 @@
 import { ipcMain, IpcMainInvokeEvent } from 'electron';
 
-export type IpcHandler<TArgs extends any[] = any[], TReturn = any> = (
+export type IpcHandler<TArgs extends unknown[] = unknown[], TReturn = unknown> = (
   event: IpcMainInvokeEvent,
   ...args: TArgs
 ) => Promise<TReturn> | TReturn;
 
-export function registerIpcHandler<TArgs extends any[], TReturn>(
+export function registerIpcHandler<TArgs extends unknown[], TReturn>(
   channel: string,
   handler: IpcHandler<TArgs, TReturn>
 ): void {
@@ -16,7 +16,7 @@ export function removeIpcHandler(channel: string): void {
   ipcMain.removeHandler(channel);
 }
 
-export function validateInput(input: any, requiredFields: string[]): void {
+export function validateInput(input: unknown, requiredFields: string[]): void {
   if (!input || typeof input !== 'object') {
     throw new Error('Invalid input: must be an object');
   }
@@ -27,7 +27,7 @@ export function validateInput(input: any, requiredFields: string[]): void {
   }
 }
 
-export function validateId(id: any, fieldName: string = 'id'): string {
+export function validateId(id: unknown, fieldName: string = 'id'): string {
   if (typeof id !== 'string' || !id.trim()) {
     throw new Error(`Invalid ${fieldName}: must be a non-empty string`);
   }

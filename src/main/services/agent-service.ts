@@ -561,12 +561,21 @@ export class AgentService implements IAgentService {
             }
           }
           if (agentType === 'task-workflow-reviewer') {
-            entryData.verdict = (result.structuredOutput as any)?.overallVerdict;
-            entryData.findings = (result.structuredOutput as any)?.findings;
-            entryData.codeImprovements = (result.structuredOutput as any)?.codeImprovements;
-            entryData.processImprovements = (result.structuredOutput as any)?.processImprovements;
-            entryData.tokenCostAnalysis = (result.structuredOutput as any)?.tokenCostAnalysis;
-            entryData.executionSummary = (result.structuredOutput as any)?.executionSummary;
+            interface WorkflowReviewerOutput {
+              overallVerdict?: string;
+              findings?: unknown;
+              codeImprovements?: unknown;
+              processImprovements?: unknown;
+              tokenCostAnalysis?: unknown;
+              executionSummary?: unknown;
+            }
+            const so = result.structuredOutput as WorkflowReviewerOutput | undefined;
+            entryData.verdict = so?.overallVerdict;
+            entryData.findings = so?.findings;
+            entryData.codeImprovements = so?.codeImprovements;
+            entryData.processImprovements = so?.processImprovements;
+            entryData.tokenCostAnalysis = so?.tokenCostAnalysis;
+            entryData.executionSummary = so?.executionSummary;
           }
           const entrySource = agentType === 'pr-reviewer' ? 'reviewer'
             : agentType === 'task-workflow-reviewer' ? 'workflow-reviewer'
@@ -785,9 +794,10 @@ export class AgentService implements IAgentService {
     for (const cmd of commands) {
       try {
         await execAsync(cmd, { cwd, env: getShellEnv(), timeout: 60_000, maxBuffer: 10 * 1024 * 1024 });
-      } catch (err: any) {
-        const exitCode = err.code ?? '?';
-        results.push(`$ ${cmd} (exit ${exitCode})\n${err.stdout ?? ''}${err.stderr ?? ''}`);
+      } catch (err: unknown) {
+        const e = err as { code?: number | string; stdout?: string; stderr?: string };
+        const exitCode = e.code ?? '?';
+        results.push(`$ ${cmd} (exit ${exitCode})\n${e.stdout ?? ''}${e.stderr ?? ''}`);
       }
     }
     return results.length === 0

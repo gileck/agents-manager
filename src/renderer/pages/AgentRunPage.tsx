@@ -167,7 +167,7 @@ export function AgentRunPage() {
             if (task) {
               navigate(`/tasks/${task.id}`);
             } else {
-              navigate(-1 as any);
+              (navigate as (delta: number) => void)(-1);
             }
           }}
         >

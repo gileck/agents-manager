@@ -80,7 +80,7 @@ export function getLogsByRunId(runId: string, limit = 1000): LogEntry[] {
   const db = getDatabase();
   const rows = db
     .prepare('SELECT * FROM logs WHERE run_id = ? ORDER BY timestamp ASC LIMIT ?')
-    .all(runId, limit) as any[];
+    .all(runId, limit) as { id: string; run_id: string; timestamp: string; level: string; message: string }[];
 
   return rows.map(row => ({
     id: row.id,

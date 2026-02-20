@@ -11,7 +11,9 @@ function createContext(taskId: string = 'test-task'): AgentContext {
   } as AgentContext;
 }
 
-async function* mockQueryGenerator(messages: any[]) {
+interface SdkStreamMessage { type: string; subtype?: string; message?: { content: { type: string; text?: string; name?: string; input?: unknown }[] }; result?: string; errors?: string[]; structured_output?: Record<string, unknown>; usage?: { input_tokens: number; output_tokens: number }; summary?: string }
+
+async function* mockQueryGenerator(messages: SdkStreamMessage[]) {
   for (const msg of messages) {
     yield msg;
   }
@@ -24,12 +26,14 @@ describe('PrReviewerAgent', () => {
   beforeEach(() => {
     agent = new PrReviewerAgent();
     mockQuery = vi.fn();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.spyOn(agent as any, 'loadQuery').mockResolvedValue(mockQuery);
   });
 
   describe('getOutputFormat', () => {
     it('returns correct schema shape with enum-restricted verdict', () => {
-      const format = (agent as any).getOutputFormat(createContext()) as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const format = (agent as any).getOutputFormat(createContext()) as { type: string; schema: Record<string, unknown> } | undefined;
       expect(format).toBeDefined();
       expect(format.type).toBe('json_schema');
       expect(format.schema.type).toBe('object');
@@ -65,7 +69,7 @@ describe('PrReviewerAgent', () => {
 
     it('uses project defaultBranch', () => {
       const ctx = createContext();
-      ctx.project = { id: 'proj-1', name: 'Test', path: '/tmp', config: { defaultBranch: 'develop' } } as any;
+      ctx.project = { id: 'proj-1', name: 'Test', path: '/tmp', description: null, createdAt: Date.now(), updatedAt: Date.now(), config: { defaultBranch: 'develop' } };
       const prompt = agent.buildPrompt(ctx);
       expect(prompt).toContain('git diff develop..HEAD');
     });
@@ -110,7 +114,7 @@ describe('PrReviewerAgent', () => {
     });
 
     it('falls back to output slice when structured output partial (no summary)', () => {
-      const so = { verdict: 'changes_requested' } as any;
+      const so = { verdict: 'changes_requested' } as Partial<{ verdict: string; summary: string; comments: string[] }>;
       const result = agent.buildResult(0, 'a'.repeat(600), 'approved', undefined, 10, 5, so);
       expect(result.outcome).toBe('changes_requested');
       expect(result.payload).toBeDefined();

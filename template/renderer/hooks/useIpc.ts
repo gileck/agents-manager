@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 export function useIpc<T>(
   fetcher: () => Promise<T>,
-  deps: any[] = []
+  deps: readonly unknown[] = []
 ): {
   data: T | null;
   loading: boolean;

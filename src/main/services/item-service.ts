@@ -1,6 +1,8 @@
 import { getDatabase, generateId } from '@template/main/services/database';
 import type { Item, ItemCreateInput, ItemUpdateInput } from '../../shared/types';
 
+interface ItemRow { id: string; name: string; description: string | null; created_at: string; updated_at: string; }
+
 export function createItem(input: ItemCreateInput): Item {
   const db = getDatabase();
   const id = generateId();
@@ -22,7 +24,7 @@ export function createItem(input: ItemCreateInput): Item {
 
 export function getItem(id: string): Item | null {
   const db = getDatabase();
-  const row = db.prepare('SELECT * FROM items WHERE id = ?').get(id) as any;
+  const row = db.prepare('SELECT * FROM items WHERE id = ?').get(id) as ItemRow | undefined;
 
   if (!row) return null;
 
@@ -37,7 +39,7 @@ export function getItem(id: string): Item | null {
 
 export function listItems(): Item[] {
   const db = getDatabase();
-  const rows = db.prepare('SELECT * FROM items ORDER BY created_at DESC').all() as any[];
+  const rows = db.prepare('SELECT * FROM items ORDER BY created_at DESC').all() as ItemRow[];
 
   return rows.map(row => ({
     id: row.id,
@@ -53,7 +55,7 @@ export function updateItem(id: string, input: ItemUpdateInput): Item | null {
   const now = new Date().toISOString();
 
   const updates: string[] = [];
-  const values: any[] = [];
+  const values: (string | number | null)[] = [];
 
   if (input.name !== undefined) {
     updates.push('name = ?');

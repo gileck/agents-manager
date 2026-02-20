@@ -1,4 +1,5 @@
 import { openDatabase } from '../src/cli/db';
+import type { Transition, TransitionHook } from '../src/shared/types';
 
 const { services, db } = openDatabase();
 
@@ -8,16 +9,16 @@ async function main() {
 
   const pipeline = await services.pipelineStore.getPipeline(task.pipelineId);
   if (!pipeline) { console.error('Pipeline not found'); return; }
-  const transitions = pipeline.transitions as any[];
+  const transitions = pipeline.transitions;
 
   // Update pr_review → implementing (changes_requested) to use request_changes mode
   const changesRequested = transitions.find(
     (t) => t.from === 'pr_review' && t.to === 'implementing' && t.trigger === 'agent' && t.agentOutcome === 'changes_requested'
   );
   if (changesRequested) {
-    const hook = changesRequested.hooks?.find((h: any) => h.name === 'start_agent');
-    if (hook && hook.params?.mode === 'implement') {
-      hook.params.mode = 'request_changes';
+    const hook = changesRequested.hooks?.find((h: TransitionHook) => h.name === 'start_agent');
+    if (hook && (hook.params as Record<string, unknown> | undefined)?.mode === 'implement') {
+      (hook.params as Record<string, unknown>).mode = 'request_changes';
       console.log('Updated changes_requested transition mode: implement → request_changes');
     } else {
       console.log('Hook already has correct mode or not found');
@@ -32,10 +33,10 @@ async function main() {
   // Verify
   const updated = await services.pipelineStore.getPipeline(pipeline.id);
   if (!updated) { console.error('Failed to read back pipeline'); db.close(); return; }
-  const prTransitions = (updated.transitions as any[]).filter((t) => t.from === 'pr_review');
+  const prTransitions = updated.transitions.filter((t: Transition) => t.from === 'pr_review');
   console.log('\nPR review transitions now:');
   for (const t of prTransitions) {
-    const hooks = t.hooks?.map((h: any) => `${h.name}(${JSON.stringify(h.params || {})})`).join(', ') || 'none';
+    const hooks = t.hooks?.map((h: TransitionHook) => `${h.name}(${JSON.stringify(h.params || {})})`).join(', ') || 'none';
     console.log(`  ${t.from} -> ${t.to} [${t.trigger}:${t.agentOutcome || t.label}] hooks: ${hooks}`);
   }
 

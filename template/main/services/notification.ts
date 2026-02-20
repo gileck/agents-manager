@@ -8,7 +8,7 @@ export interface NotificationAction {
 
 export interface NotificationOptions extends NotificationConstructorOptions {
   actions?: NotificationAction[];
-  onAction?: (event: any, index: number) => void;
+  onAction?: (event: Electron.Event, index: number) => void;
   onClick?: () => void;
   onClose?: () => void;
 }

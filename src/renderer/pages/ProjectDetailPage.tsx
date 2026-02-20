@@ -92,7 +92,7 @@ export function ProjectDetailPage() {
 
   return (
     <div className="p-8">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1 as any)}>
+      <Button variant="ghost" size="sm" className="mb-4" onClick={() => (navigate as (delta: number) => void)(-1)}>
         &larr; Back
       </Button>
 

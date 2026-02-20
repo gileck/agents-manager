@@ -10,8 +10,10 @@ function createContext(taskId: string = 'test-task'): AgentContext {
   };
 }
 
+interface SdkStreamMessage { type: string; subtype?: string; message?: { content: { type: string; text?: string; name?: string; input?: unknown; id?: string }[] }; result?: string; errors?: string[]; structured_output?: Record<string, unknown>; usage?: { input_tokens: number; output_tokens: number }; summary?: string }
+
 // Helper to create a mock async generator from an array of messages
-async function* mockQueryGenerator(messages: any[]) {
+async function* mockQueryGenerator(messages: SdkStreamMessage[]) {
   for (const msg of messages) {
     yield msg;
   }
@@ -26,6 +28,7 @@ describe('ClaudeCodeAgent onOutput streaming', () => {
     mockQuery = vi.fn();
 
     // Mock the private loadQuery method to return our mock
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.spyOn(agent as any, 'loadQuery').mockResolvedValue(mockQuery);
   });
 

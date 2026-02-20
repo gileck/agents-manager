@@ -50,7 +50,7 @@ export function SettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="theme">Theme</Label>
-                  <Select value={theme} onValueChange={(value: any) => handleThemeChange(value)}>
+                  <Select value={theme} onValueChange={(value: string) => handleThemeChange(value as 'light' | 'dark' | 'system')}>
                     <SelectTrigger id="theme" className="w-32">
                       <SelectValue />
                     </SelectTrigger>

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export function createInvokeHandler<TArgs extends any[], TReturn>(
+export function createInvokeHandler<TArgs extends unknown[], TReturn>(
   channel: string
 ) {
   return (...args: TArgs): Promise<TReturn> => ipcRenderer.invoke(channel, ...args);

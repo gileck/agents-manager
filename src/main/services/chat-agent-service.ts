@@ -3,7 +3,7 @@ import type { IProjectStore } from '../interfaces/project-store';
 import type { ChatMessage } from '../../shared/types';
 import { SandboxGuard } from './sandbox-guard';
 
-const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
+const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
 interface SdkTextBlock { type: 'text'; text: string }
 interface SdkToolUseBlock { type: 'tool_use'; name: string; input?: unknown }
@@ -248,8 +248,8 @@ export class ChatAgentService {
     }
   }
 
-  private async loadQuery(): Promise<any> {
+  private async loadQuery(): Promise<(opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
     const mod = await importESM('@anthropic-ai/claude-agent-sdk');
-    return mod.query;
+    return mod.query as (opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>;
   }
 }

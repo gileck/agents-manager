@@ -6,7 +6,7 @@ import { SandboxGuard } from '../services/sandbox-guard';
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
 // but the SDK is ESM-only (.mjs). This bypasses that transformation.
-const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
+const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
 interface SdkTextBlock { type: 'text'; text: string }
 interface SdkToolUseBlock { type: 'tool_use'; name: string; input?: unknown }
@@ -222,8 +222,8 @@ export abstract class BaseClaudeAgent implements IAgent {
     this.runningAbortControllers.delete(runId);
   }
 
-  protected async loadQuery(): Promise<any> {
+  protected async loadQuery(): Promise<(opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
     const mod = await importESM('@anthropic-ai/claude-agent-sdk');
-    return mod.query;
+    return mod.query as (opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>;
   }
 }

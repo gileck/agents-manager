@@ -34,10 +34,10 @@ export function createWindow(): BrowserWindow {
 
   // Store listener references for cleanup
   const listeners = {
-    failLoad: (_event: any, errorCode: number, errorDescription: string, validatedURL: string) => {
+    failLoad: (_event: Electron.Event, errorCode: number, errorDescription: string, validatedURL: string) => {
       console.error('Renderer failed to load:', { errorCode, errorDescription, validatedURL });
     },
-    processGone: (_event: any, details: any) => {
+    processGone: (_event: Electron.Event, details: Electron.RenderProcessGoneDetails) => {
       console.error('Renderer process gone:', details);
     },
     unresponsive: () => {
