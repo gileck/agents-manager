@@ -472,7 +472,6 @@ export function createTestContext(): TestContext {
     createWorktreeManager: () => worktreeManager,
     createGitOps: () => gitOps,
     createScmPlatform: () => scmPlatform,
-    workflowService,
   });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerNotificationHandler(pipelineEngine, { notificationRouter });

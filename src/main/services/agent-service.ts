@@ -19,8 +19,10 @@ import type { IAgentService } from '../interfaces/agent-service';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
+import type { TaskReviewReportBuilder } from './task-review-report-builder';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import * as path from 'path';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
 import { getShellEnv } from './shell-env';
@@ -44,6 +46,7 @@ export class AgentService implements IAgentService {
     private createGitOps: (cwd: string) => IGitOps,
     private taskContextStore: ITaskContextStore,
     private agentDefinitionStore: IAgentDefinitionStore,
+    private taskReviewReportBuilder?: TaskReviewReportBuilder,
   ) {}
 
   async recoverOrphanedRuns(): Promise<AgentRun[]> {
@@ -177,8 +180,17 @@ export class AgentService implements IAgentService {
 
       // Fetch and rebase onto origin/main so the branch only contains agent
       // changes and never inherits unpushed local commits from other tasks.
+      // Skip rebase for resolve_conflicts — the agent handles rebase itself.
       await gitOps.fetch('origin');
-      try {
+      if (mode === 'resolve_conflicts') {
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'info',
+          message: 'Skipping pre-agent rebase for resolve_conflicts mode (agent will rebase)',
+          data: { taskId },
+        });
+      } else try {
         await gitOps.rebase('origin/main');
         await this.taskEventLog.log({
           taskId,
@@ -572,7 +584,8 @@ export class AgentService implements IAgentService {
         }
 
         // Early conflict detection: rebase check before transition
-        if (effectiveOutcome === 'pr_ready') {
+        // Skip for resolve_conflicts mode — the agent itself handles the rebase
+        if (effectiveOutcome === 'pr_ready' && context.mode !== 'resolve_conflicts') {
           try {
             const gitOps = this.createGitOps(worktree.path);
             await gitOps.fetch('origin');
@@ -759,6 +772,7 @@ export class AgentService implements IAgentService {
       case 'investigate': return 'investigation_summary';
       case 'implement': return 'implementation_summary';
       case 'request_changes': return 'fix_summary';
+      case 'resolve_conflicts': return 'conflict_resolution_summary';
       default: return 'agent_output';
     }
   }

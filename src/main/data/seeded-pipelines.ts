@@ -153,7 +153,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'resolve_conflicts', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // PR push retry (handles conflicts arising after agent-service check or after request_changes)
     { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
-      guards: [{ name: 'max_retries', params: { max: 3 } }],
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [
         { name: 'push_and_create_pr', policy: 'required' },
         { name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' },
@@ -248,7 +248,7 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'resolve_conflicts', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // PR push retry (handles conflicts arising after agent-service check or after request_changes)
     { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
-      guards: [{ name: 'max_retries', params: { max: 3 } }],
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [
         { name: 'push_and_create_pr', policy: 'required' },
         { name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' },
