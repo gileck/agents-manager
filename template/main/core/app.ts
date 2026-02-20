@@ -9,6 +9,7 @@ export interface AppConfig {
   singleInstance?: boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let mainWindow: BrowserWindow | null = null;
 let updateInterval: NodeJS.Timeout | null = null;
 

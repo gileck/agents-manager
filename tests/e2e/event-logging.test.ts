@@ -20,7 +20,7 @@ describe('Event Logging', () => {
 
   it('should log status_change event on transition', async () => {
     const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    await ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    await ctx.transitionTo(task.id, 'in_progress');
 
     const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'status_change' });
     expect(events).toHaveLength(1);
@@ -34,7 +34,7 @@ describe('Event Logging', () => {
 
   it('should filter events by category', async () => {
     const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    await ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    await ctx.transitionTo(task.id, 'in_progress');
 
     // Add a system event manually
     await ctx.taskEventLog.log({

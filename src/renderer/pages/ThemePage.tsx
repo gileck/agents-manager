@@ -3,11 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ColorPicker } from '../components/ColorPicker';
 import { useThemeConfig } from '../hooks/useThemeConfig';
 import { THEME_PRESETS, COLOR_GROUPS, COLOR_LABELS } from '../theme-presets';
-import { hslStringToHex } from '../utils/color-utils';
 import type { ThemeColors } from '../../shared/types';
 import { Check, RotateCcw, Palette } from 'lucide-react';
 

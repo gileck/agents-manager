@@ -28,7 +28,7 @@ function useSelectContext() {
   return context;
 }
 
-function Select({ value, onValueChange, children, disabled, className }: SelectProps) {
+function Select({ value, onValueChange, children, disabled: _disabled, className }: SelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
 
   return (
@@ -65,10 +65,14 @@ function SelectTrigger({ children, className, id }: SelectTriggerProps) {
 
 interface SelectValueProps {
   placeholder?: string;
+  children?: React.ReactNode;
 }
 
-function SelectValue({ placeholder }: SelectValueProps) {
+function SelectValue({ placeholder, children }: SelectValueProps) {
   const { value } = useSelectContext();
+  if (children) {
+    return <span className={cn(!value && 'text-muted-foreground')}>{children}</span>;
+  }
   return <span className={cn(!value && 'text-muted-foreground')}>{value || placeholder}</span>;
 }
 

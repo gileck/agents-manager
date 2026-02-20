@@ -25,8 +25,7 @@ describe('Prompt Response Flow', () => {
   it('should create PendingPrompt with questions when agent returns needs_info', async () => {
     ctx.scriptedAgent.setScript(humanInTheLoop);
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
+    await ctx.transitionTo(taskId, 'planning');
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -41,8 +40,7 @@ describe('Prompt Response Flow', () => {
   it('should transition task to needs_info status', async () => {
     ctx.scriptedAgent.setScript(humanInTheLoop);
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
+    await ctx.transitionTo(taskId, 'planning');
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
@@ -54,8 +52,7 @@ describe('Prompt Response Flow', () => {
   it('should answer prompt and log activity when responding', async () => {
     ctx.scriptedAgent.setScript(humanInTheLoop);
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
+    await ctx.transitionTo(taskId, 'planning');
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
@@ -75,8 +72,7 @@ describe('Prompt Response Flow', () => {
   it('should transition task back after prompt response via info_provided', async () => {
     ctx.scriptedAgent.setScript(humanInTheLoop);
 
-    const task = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
+    await ctx.transitionTo(taskId, 'planning');
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 

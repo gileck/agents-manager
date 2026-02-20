@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
@@ -17,7 +17,7 @@ import { useTasks } from '../hooks/useTasks';
 import { usePipelines } from '../hooks/usePipelines';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import {
-  buildPipelineMap, computeFeatureStatus, computeDependencyLayers, formatRelativeTimestamp, PRIORITY_LABELS,
+  buildPipelineMap, computeFeatureStatus, computeDependencyLayers, formatRelativeTimestamp,
 } from '../components/tasks/task-helpers';
 import type { Task, FeatureStatus, FeatureUpdateInput, TaskCreateInput, AppSettings } from '../../shared/types';
 

@@ -48,8 +48,7 @@ describe('Multi-Phase Tasks', () => {
     await ctx.agentService.waitForCompletion(planRun.id);
 
     // Manually approve plan → move to implementing
-    const planReviewTask = await ctx.taskStore.getTask(taskId);
-    await ctx.pipelineEngine.executeTransition(planReviewTask!, 'implementing', { trigger: 'manual' });
+    await ctx.transitionTo(taskId, 'implementing');
 
     // Run implement phase
     ctx.scriptedAgent.setScript(happyImplement);

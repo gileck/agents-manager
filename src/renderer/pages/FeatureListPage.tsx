@@ -26,7 +26,7 @@ export function FeatureListPage() {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
   const navigate = useNavigate();
 
-  const { features, loading, error, refetch } = useFeatures(
+  const { features, loading, error } = useFeatures(
     currentProjectId ? { projectId: currentProjectId } : undefined
   );
   const { tasks } = useTasks(currentProjectId ? { projectId: currentProjectId } : undefined);

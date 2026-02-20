@@ -1,17 +1,14 @@
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { INotificationRouter } from '../interfaces/notification-router';
-import type { Task, Transition } from '../../shared/types';
+import type { Task, Transition, TransitionContext, HookResult } from '../../shared/types';
 
 export function registerNotificationHandler(
   engine: IPipelineEngine,
   deps: { notificationRouter: INotificationRouter },
 ): void {
-  engine.registerHook('notify', async (task: Task, transition: Transition) => {
-    const hookDef = transition.hooks?.find((h) => h.name === 'notify');
-    const params = hookDef?.params ?? {};
-
-    const titleTemplate = (params.titleTemplate as string) ?? 'Task update';
-    const bodyTemplate = (params.bodyTemplate as string) ?? '{taskTitle}: {fromStatus} → {toStatus}';
+  engine.registerHook('notify', async (task: Task, transition: Transition, _context: TransitionContext, params?: Record<string, unknown>): Promise<HookResult> => {
+    const titleTemplate = (params?.titleTemplate as string) ?? 'Task update';
+    const bodyTemplate = (params?.bodyTemplate as string) ?? '{taskTitle}: {fromStatus} → {toStatus}';
 
     const replacements: Record<string, string> = {
       '{taskTitle}': task.title,
@@ -33,5 +30,7 @@ export function registerNotificationHandler(
       body: applyTemplate(bodyTemplate),
       channel: 'desktop',
     });
+
+    return { success: true };
   });
 }

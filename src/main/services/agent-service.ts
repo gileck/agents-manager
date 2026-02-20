@@ -46,6 +46,65 @@ export class AgentService implements IAgentService {
     private agentDefinitionStore: IAgentDefinitionStore,
   ) {}
 
+  async recoverOrphanedRuns(): Promise<AgentRun[]> {
+    const activeRuns = await this.agentRunStore.getActiveRuns();
+    if (activeRuns.length === 0) return [];
+
+    const recovered: AgentRun[] = [];
+
+    for (const run of activeRuns) {
+      try {
+        const completedAt = now();
+
+        // Mark run as failed/interrupted
+        await this.agentRunStore.updateRun(run.id, {
+          status: 'failed',
+          outcome: 'interrupted',
+          completedAt,
+          output: (run.output ?? '') + '\n[Interrupted by app shutdown]',
+        });
+
+        // Fail the active phase
+        const phase = await this.taskPhaseStore.getActivePhase(run.taskId);
+        if (phase) {
+          await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
+        }
+
+        // Unlock worktree
+        try {
+          const task = await this.taskStore.getTask(run.taskId);
+          if (task) {
+            const project = await this.projectStore.getProject(task.projectId);
+            if (project?.path) {
+              const wm = this.createWorktreeManager(project.path);
+              await wm.unlock(run.taskId);
+            }
+          }
+        } catch {
+          // Worktree may not exist — safe to ignore
+        }
+
+        // Expire pending prompts
+        await this.pendingPromptStore.expirePromptsForRun(run.id);
+
+        // Log event
+        await this.taskEventLog.log({
+          taskId: run.taskId,
+          category: 'agent',
+          severity: 'warning',
+          message: 'Agent run interrupted by app shutdown',
+          data: { agentRunId: run.id, agentType: run.agentType, mode: run.mode },
+        });
+
+        recovered.push({ ...run, status: 'failed', outcome: 'interrupted', completedAt });
+      } catch (err) {
+        console.error(`Failed to recover orphaned run ${run.id}:`, err);
+      }
+    }
+
+    return recovered;
+  }
+
   async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void): Promise<AgentRun> {
     // 1. Fetch task + project
     const task = await this.taskStore.getTask(taskId);
@@ -119,21 +178,34 @@ export class AgentService implements IAgentService {
       // Fetch and rebase onto origin/main so the branch only contains agent
       // changes and never inherits unpushed local commits from other tasks.
       await gitOps.fetch('origin');
-      await gitOps.rebase('origin/main');
-      await this.taskEventLog.log({
-        taskId,
-        category: 'worktree',
-        severity: 'info',
-        message: 'Worktree rebased onto origin/main',
-        data: { taskId },
-      });
+      try {
+        await gitOps.rebase('origin/main');
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'info',
+          message: 'Worktree rebased onto origin/main',
+          data: { taskId },
+        });
+      } catch (rebaseErr) {
+        // Abort the broken rebase so the worktree is left in a usable state
+        try { await gitOps.rebaseAbort(); } catch { /* may not be in rebase state */ }
+        const errorMsg = rebaseErr instanceof Error ? rebaseErr.message : String(rebaseErr);
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'warning',
+          message: `Rebase failed and aborted: ${errorMsg}`,
+          data: { taskId, error: errorMsg },
+        });
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       await this.taskEventLog.log({
         taskId,
         category: 'worktree',
         severity: 'warning',
-        message: `Worktree clean/rebase failed: ${errorMsg}`,
+        message: `Worktree clean failed: ${errorMsg}`,
         data: { taskId, error: errorMsg },
       });
     }
@@ -158,13 +230,14 @@ export class AgentService implements IAgentService {
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
 
-    // Look up agent definition by mode and resolve prompt template
+    // Look up agent definition by convention-based ID and pass modeConfig to context
     try {
-      const agentDef = await this.agentDefinitionStore.getDefinitionByMode(mode);
+      const defId = `agent-def-${agentType}`;
+      const agentDef = await this.agentDefinitionStore.getDefinition(defId);
       if (agentDef) {
         const modeConfig = agentDef.modes.find(m => m.mode === mode);
-        if (modeConfig?.promptTemplate) {
-          context.resolvedPrompt = this.resolvePromptTemplate(modeConfig.promptTemplate, context);
+        if (modeConfig) {
+          context.modeConfig = modeConfig;
         }
       }
     } catch {
@@ -207,11 +280,18 @@ export class AgentService implements IAgentService {
       }).catch(() => {}); // fire-and-forget
     };
 
-    // Buffer output and periodically flush to DB so it survives page refreshes
+    // Buffer output and periodically flush to DB so it survives page refreshes.
+    // Cap the buffer to prevent unbounded memory growth.
+    const MAX_OUTPUT_BUFFER = 5 * 1024 * 1024; // 5 MB
     let outputBuffer = '';
     const wrappedOnOutput = onOutput
       ? (chunk: string) => {
-          outputBuffer += chunk;
+          if (outputBuffer.length < MAX_OUTPUT_BUFFER) {
+            outputBuffer += chunk;
+            if (outputBuffer.length > MAX_OUTPUT_BUFFER) {
+              outputBuffer = outputBuffer.slice(0, MAX_OUTPUT_BUFFER) + '\n[output truncated]';
+            }
+          }
           onOutput(chunk);
         }
       : undefined;
@@ -463,7 +543,7 @@ export class AgentService implements IAgentService {
           }).catch(() => {});
           try {
             const gitOps = this.createGitOps(worktree.path);
-            const diffContent = await gitOps.diff('main', worktree.branch);
+            const diffContent = await gitOps.diff('origin/main', worktree.branch);
             this.taskEventLog.log({
               taskId,
               category: 'agent_debug',
@@ -475,10 +555,10 @@ export class AgentService implements IAgentService {
                 taskId,
                 category: 'agent',
                 severity: 'warning',
-                message: 'Agent reported pr_ready but no changes detected on branch — skipping transition',
+                message: 'Agent reported pr_ready but no changes detected on branch — using no_changes outcome',
                 data: { branch: worktree.branch },
               });
-              effectiveOutcome = undefined;
+              effectiveOutcome = 'no_changes';
             }
           } catch (err) {
             await this.taskEventLog.log({
@@ -553,6 +633,8 @@ export class AgentService implements IAgentService {
         // Last resort — can't even update the run
       }
     } finally {
+      // Delete the promise reference first to prevent leaks even if cleanup throws
+      this.backgroundPromises.delete(run.id);
       clearInterval(flushInterval);
       this.taskEventLog.log({
         taskId,
@@ -560,8 +642,11 @@ export class AgentService implements IAgentService {
         severity: 'debug',
         message: `Agent background execution cleanup: runId=${run.id}`,
       }).catch(() => {});
-      this.backgroundPromises.delete(run.id);
     }
+  }
+
+  getActiveRunIds(): string[] {
+    return Array.from(this.backgroundPromises.keys());
   }
 
   async waitForCompletion(runId: string): Promise<void> {
@@ -584,6 +669,20 @@ export class AgentService implements IAgentService {
     });
 
     await this.pendingPromptStore.expirePromptsForRun(runId);
+
+    // Unlock worktree so subsequent runs can acquire it
+    try {
+      const task = await this.taskStore.getTask(run.taskId);
+      if (task) {
+        const project = await this.projectStore.getProject(task.projectId);
+        if (project?.path) {
+          const wm = this.createWorktreeManager(project.path);
+          await wm.unlock(run.taskId);
+        }
+      }
+    } catch {
+      // Worktree may not exist — safe to ignore
+    }
   }
 
   private async runValidation(commands: string[], cwd: string): Promise<{ passed: boolean; output: string }> {
@@ -656,100 +755,6 @@ export class AgentService implements IAgentService {
       // Invalid JSON
     }
     return [];
-  }
-
-  private resolvePromptTemplate(template: string, context: AgentContext): string {
-    const { task } = context;
-    const desc = task.description ? ` ${task.description}` : '';
-
-    // Build subtasks section
-    let subtasksSection = '';
-    if (context.mode === 'plan' || context.mode === 'investigate') {
-      subtasksSection = [
-        '',
-        'At the end of your plan, include a "## Subtasks" section with a JSON array of subtask names that break down the implementation into concrete steps. Example:',
-        '## Subtasks',
-        '```json',
-        '["Set up database schema", "Implement API endpoint", "Add unit tests"]',
-        '```',
-      ].join('\n');
-    } else if (task.subtasks && task.subtasks.length > 0) {
-      const lines = ['', '## Subtasks', 'Track your progress by updating subtask status as you work:'];
-      for (const st of task.subtasks) {
-        lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
-      }
-      lines.push(
-        '',
-        'Use the CLI to update subtask status as you complete each step:',
-        `  am tasks subtask update ${task.id} --name "subtask name" --status in_progress`,
-        `  am tasks subtask update ${task.id} --name "subtask name" --status done`,
-      );
-      subtasksSection = lines.join('\n');
-    }
-
-    // Build plan section
-    let planSection = '';
-    if (task.plan) {
-      planSection = `\n## Plan\n${task.plan}`;
-    }
-
-    // Build prior review section
-    let priorReviewSection = '';
-    const hasPriorReview = context.taskContext?.some(
-      e => e.entryType === 'review_feedback' || e.entryType === 'fix_summary'
-    );
-    if (hasPriorReview) {
-      priorReviewSection = [
-        'This is a RE-REVIEW. Previous review feedback and fixes are in the Task Context above.',
-        'Verify ALL previously requested changes were addressed before approving.',
-        '',
-      ].join('\n');
-    }
-
-    // Build plan comments section
-    let planCommentsSection = '';
-    if (task.planComments && task.planComments.length > 0) {
-      const lines = ['', '## Admin Feedback'];
-      for (const comment of task.planComments) {
-        const time = new Date(comment.createdAt).toLocaleString();
-        lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-      }
-      planCommentsSection = lines.join('\n');
-    }
-
-    // Build related task section for bug reports
-    let relatedTaskSection = '';
-    const relatedTaskId = task.metadata?.relatedTaskId as string | undefined;
-    if (relatedTaskId) {
-      relatedTaskSection = [
-        '',
-        '## Related Task',
-        `This bug references task \`${relatedTaskId}\`. Use the CLI to inspect it:`,
-        `  am tasks get ${relatedTaskId} --json`,
-        `  am events list --task ${relatedTaskId} --json`,
-      ].join('\n');
-    }
-
-    // Use replacer functions to avoid $-pattern interpretation in replacement strings
-    let prompt = template
-      .replace(/\{taskTitle\}/g, () => task.title)
-      .replace(/\{taskDescription\}/g, () => desc)
-      .replace(/\{taskId\}/g, () => task.id)
-      .replace(/\{subtasksSection\}/g, () => subtasksSection)
-      .replace(/\{planSection\}/g, () => planSection)
-      .replace(/\{planCommentsSection\}/g, () => planCommentsSection)
-      .replace(/\{priorReviewSection\}/g, () => priorReviewSection)
-      .replace(/\{relatedTaskSection\}/g, () => relatedTaskSection);
-
-    // Append standard suffix
-    prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
-
-    // Append validation errors if present
-    if (context.validationErrors) {
-      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
-    }
-
-    return prompt;
   }
 
   private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {

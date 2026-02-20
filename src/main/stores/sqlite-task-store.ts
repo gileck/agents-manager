@@ -234,19 +234,22 @@ export class SqliteTaskStore implements ITaskStore {
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    // Delete all related records that reference this task
-    this.db.prepare('DELETE FROM task_context_entries WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM agent_runs WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM task_dependencies WHERE task_id = ? OR depends_on_task_id = ?').run(id, id);
-    // Clear parent reference on child tasks
-    this.db.prepare('UPDATE tasks SET parent_task_id = NULL WHERE parent_task_id = ?').run(id);
-    const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
-    return result.changes > 0;
+    const txn = this.db.transaction(() => {
+      // Delete all related records that reference this task
+      this.db.prepare('DELETE FROM task_context_entries WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM agent_runs WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM task_dependencies WHERE task_id = ? OR depends_on_task_id = ?').run(id, id);
+      // Clear parent reference on child tasks
+      this.db.prepare('UPDATE tasks SET parent_task_id = NULL WHERE parent_task_id = ?').run(id);
+      const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+      return result.changes > 0;
+    });
+    return txn();
   }
 
   async resetTask(id: string): Promise<Task | null> {
@@ -260,22 +263,25 @@ export class SqliteTaskStore implements ITaskStore {
       firstStatus = pipeline.statuses[0].name;
     }
 
-    // Delete all related records (same as deleteTask, but keep task_dependencies)
-    this.db.prepare('DELETE FROM task_context_entries WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM agent_runs WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
-    this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);
+    const txn = this.db.transaction(() => {
+      // Delete all related records (same as deleteTask, but keep task_dependencies)
+      this.db.prepare('DELETE FROM task_context_entries WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM agent_runs WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
+      this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);
 
-    // Reset task record fields
-    this.db.prepare(`
-      UPDATE tasks
-      SET status = ?, plan = NULL, subtasks = '[]', plan_comments = '[]',
-          pr_link = NULL, branch_name = NULL, updated_at = ?
-      WHERE id = ?
-    `).run(firstStatus, now(), id);
+      // Reset task record fields
+      this.db.prepare(`
+        UPDATE tasks
+        SET status = ?, plan = NULL, subtasks = '[]', plan_comments = '[]',
+            pr_link = NULL, branch_name = NULL, updated_at = ?
+        WHERE id = ?
+      `).run(firstStatus, now(), id);
+    });
+    txn();
 
     return this.getTask(id);
   }

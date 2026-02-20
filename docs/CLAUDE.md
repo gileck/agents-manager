@@ -21,6 +21,11 @@ npm run start:devtools # Build and run with DevTools
 npm run electron       # Run without rebuilding (no DevTools)
 npm run electron:debug # Run without rebuilding (with DevTools)
 
+# Validation
+yarn checks            # Run TypeScript type-checking + ESLint (ALWAYS run after changing code)
+yarn typecheck         # TypeScript only (all tsconfig projects)
+yarn lint              # ESLint only
+
 # Production / Deployment
 npm run dist           # Build distributable .app bundle
 npm run deploy         # Build, install to /Applications, and launch
@@ -28,6 +33,8 @@ npm run deploy         # Build, install to /Applications, and launch
 # Watch mode
 npm run dev            # Watch all three targets in parallel
 ```
+
+**Important:** Always run `yarn checks` after modifying code to ensure TypeScript and lint validations pass. A pre-commit hook enforces this automatically on every commit.
 
 ## Deployment
 
@@ -50,6 +57,23 @@ The deploy script (`scripts/deploy.sh`):
 - Kills any running instance
 - Installs to `/Applications/`
 - Launches the app
+
+## Documentation Reference
+
+Comprehensive implementation-grounded reference docs for each major domain:
+
+| Document | Domain |
+|----------|--------|
+| [architecture-overview.md](./architecture-overview.md) | System architecture, composition root, single-execution-engine principle |
+| [pipeline-engine.md](./pipeline-engine.md) | State machine, transitions, guards, hooks, seeded pipelines |
+| [agent-system.md](./agent-system.md) | Agent types, execution lifecycle, prompts, validation, context accumulation |
+| [task-management.md](./task-management.md) | Tasks, dependencies, subtasks, features, filtering |
+| [git-scm-integration.md](./git-scm-integration.md) | Worktrees, git ops, PR lifecycle, branch strategy |
+| [data-layer.md](./data-layer.md) | SQLite schema, stores, migrations |
+| [workflow-service.md](./workflow-service.md) | WorkflowService orchestration, activity logging, prompt handling |
+| [cli-reference.md](./cli-reference.md) | CLI tool (`am`), commands, project context |
+| [ipc-and-renderer.md](./ipc-and-renderer.md) | IPC channels, renderer pages, hooks, streaming |
+| [event-system.md](./event-system.md) | Events, activity log, transition history, debug timeline |
 
 ## Architecture
 

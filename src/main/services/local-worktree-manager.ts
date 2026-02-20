@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, readFileSync, appendFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, openSync, closeSync, constants as fsConstants } from 'fs';
 import { join } from 'path';
 import type { Worktree } from '../../shared/types';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
@@ -31,12 +31,22 @@ export class LocalWorktreeManager implements IWorktreeManager {
     const gitignorePath = join(this.projectPath, '.gitignore');
     const entry = `${WORKTREE_DIR}/`;
 
-    if (existsSync(gitignorePath)) {
-      const content = readFileSync(gitignorePath, 'utf-8');
-      if (content.includes(entry)) return;
-      appendFileSync(gitignorePath, `\n${entry}\n`);
-    } else {
-      appendFileSync(gitignorePath, `${entry}\n`);
+    // Use O_CREAT | O_RDWR to atomically open-or-create, then read and conditionally append.
+    // This avoids the TOCTOU race between existsSync/readFileSync/appendFileSync.
+    let fd: number;
+    try {
+      fd = openSync(gitignorePath, fsConstants.O_CREAT | fsConstants.O_RDWR, 0o644);
+    } catch {
+      return;
+    }
+    try {
+      const content = readFileSync(fd, 'utf-8');
+      if (!content.includes(entry)) {
+        const prefix = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
+        writeFileSync(fd, `${prefix}${entry}\n`);
+      }
+    } finally {
+      closeSync(fd);
     }
   }
 
@@ -129,7 +139,7 @@ export class LocalWorktreeManager implements IWorktreeManager {
         } else if (line.startsWith('branch ')) {
           // "branch refs/heads/foo" → "foo"
           branch = line.slice('branch '.length).replace('refs/heads/', '');
-        } else if (line === 'locked') {
+        } else if (line === 'locked' || line.startsWith('locked ')) {
           locked = true;
         }
       }

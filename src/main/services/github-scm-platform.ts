@@ -19,9 +19,14 @@ export class GitHubScmPlatform implements IScmPlatform {
     return stdout.trim();
   }
 
-  private extractPRNumber(url: string): number {
-    const match = url.match(/\/pull\/(\d+)/);
-    if (!match) throw new Error(`Cannot extract PR number from URL: ${url}`);
+  private extractPRNumber(urlOrNumber: string | number): number {
+    if (typeof urlOrNumber === 'number') return urlOrNumber;
+    // Try numeric string first
+    const asNum = Number(urlOrNumber);
+    if (Number.isFinite(asNum) && asNum > 0) return asNum;
+    // Extract from URL pattern
+    const match = urlOrNumber.match(/\/pull\/(\d+)/);
+    if (!match) throw new Error(`Cannot extract PR number from URL: ${urlOrNumber}`);
     return parseInt(match[1], 10);
   }
 

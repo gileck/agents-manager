@@ -25,16 +25,14 @@ import type {
   Task, Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus, PlanComment,
 } from '../../shared/types';
-
-// Agent pipeline statuses that have specific bar rendering
-const AGENT_STATUSES = new Set(['open', 'planning', 'implementing', 'plan_review', 'pr_review', 'needs_info', 'done',
-  'reported', 'investigating', 'investigation_review']);
+import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { task, loading, error, refetch } = useTask(id!);
   const { pipeline } = usePipeline(task?.pipelineId);
+  const statusMeta = usePipelineStatusMeta(task, pipeline);
   const { features } = useFeatures(task ? { projectId: task.projectId } : undefined);
 
   const { data: transitions, refetch: refetchTransitions } = useIpc<Transition[]>(
@@ -73,10 +71,11 @@ export function TaskDetailPage() {
   );
 
   // Derived agent state
+  const isAgentPipeline = pipeline?.statuses.some((s) => s.category === 'agent_running') ?? false;
   const hasRunningAgent = agentRuns?.some((r) => r.status === 'running') ?? false;
   const activeRun = agentRuns?.find((r) => r.status === 'running') ?? null;
   const lastRun = agentRuns?.[0] ?? null;
-  const isAgentPhase = task?.status === 'planning' || task?.status === 'implementing' || task?.status === 'investigating';
+  const isAgentPhase = statusMeta.isAgentRunning;
   // After agent completes, post-completion work (git push, PR creation) may take
   // several seconds before transitioning the task. Don't show "stuck" during this window.
   const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
@@ -85,8 +84,8 @@ export function TaskDetailPage() {
   const isStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null && !isFinalizing;
 
   // Poll while agent is running, needs_info, finalizing, stuck, or waiting for PR
-  const awaitingPr = task?.status === 'pr_review' && !task.prLink;
-  const shouldPoll = hasRunningAgent || task?.status === 'needs_info' || isFinalizing || isStuck || awaitingPr;
+  const awaitingPr = statusMeta.isHumanReview && !task?.prLink;
+  const shouldPoll = hasRunningAgent || statusMeta.isWaitingForInput || isFinalizing || isStuck || awaitingPr;
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -110,14 +109,8 @@ export function TaskDetailPage() {
     prevHasRunning.current = hasRunningAgent;
   }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
 
-  const [tab, setTab] = useState('overview');
-
-  // Auto-switch to Plan tab when task enters plan_review
-  useEffect(() => {
-    if (task?.status === 'plan_review') {
-      setTab('plan');
-    }
-  }, [task?.status]);
+  const initialTab = task?.status === 'plan_review' ? 'plan' : 'overview';
+  const [tab, setTab] = useState(initialTab);
 
   // Refetch agent runs when switching to the agents tab
   useEffect(() => {
@@ -138,10 +131,13 @@ export function TaskDetailPage() {
   const [duplicating, setDuplicating] = useState(false);
   const [stoppingAgent, setStoppingAgent] = useState(false);
 
-  // Prompt response state
-  const [promptResponse, setPromptResponse] = useState('');
+  // Prompt response state — per-prompt to avoid cross-prompt interference
+  const [promptResponses, setPromptResponses] = useState<Record<string, string>>({});
   const [responding, setResponding] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
+  const getPromptResponse = (promptId: string) => promptResponses[promptId] ?? '';
+  const setPromptResponse = (promptId: string, value: string) =>
+    setPromptResponses(prev => ({ ...prev, [promptId]: value }));
 
   // Auto-dismiss transition error after 15 seconds
   useEffect(() => {
@@ -217,11 +213,11 @@ export function TaskDetailPage() {
     setResponding(true);
     setPromptError(null);
     try {
-      const result = await window.api.prompts.respond(promptId, { answer: promptResponse });
+      const result = await window.api.prompts.respond(promptId, { answer: getPromptResponse(promptId) });
       if (!result) {
         setPromptError('This prompt has already been answered.');
       } else {
-        setPromptResponse('');
+        setPromptResponse(promptId, '');
       }
       await refetchPrompts();
       await refetch();
@@ -298,15 +294,29 @@ export function TaskDetailPage() {
   }
 
   // Determine which transitions are "primary" (shown in the status bar)
-  // vs "secondary" (shown at bottom of overview)
-  const isAgentPipeline = AGENT_STATUSES.has(task.status);
-  const primaryTransitionTargets = getPrimaryTransitionTargets(task.status, isStuck);
-  const primaryTransitions = isAgentPipeline
-    ? (transitions ?? []).filter((t) => primaryTransitionTargets.has(t.to))
-    : (transitions ?? []); // Non-agent pipelines: all transitions in bar
-  const secondaryTransitions = isAgentPipeline
-    ? (transitions ?? []).filter((t) => !primaryTransitionTargets.has(t.to))
-    : [];
+  // vs "secondary" (shown at bottom of overview).
+  // Uses pipeline status categories instead of hardcoded status names.
+  const hasCategories = statusMeta.category !== undefined;
+  const allTransitions = transitions ?? [];
+  let primaryTransitions: Transition[];
+  let secondaryTransitions: Transition[];
+  if (!hasCategories) {
+    // Non-categorized pipelines: all transitions in bar
+    primaryTransitions = allTransitions;
+    secondaryTransitions = [];
+  } else if (statusMeta.isReady || statusMeta.isHumanReview) {
+    // Ready / human review: all transitions are primary actions
+    primaryTransitions = allTransitions;
+    secondaryTransitions = [];
+  } else if (statusMeta.isAgentRunning) {
+    // Agent running: only show cancel/recovery when stuck
+    primaryTransitions = isStuck ? allTransitions : [];
+    secondaryTransitions = isStuck ? [] : allTransitions;
+  } else {
+    // Terminal / waiting_for_input: no primary actions
+    primaryTransitions = [];
+    secondaryTransitions = allTransitions;
+  }
 
   return (
     <div className="p-8">
@@ -462,8 +472,8 @@ export function TaskDetailPage() {
           {/* Dependencies */}
           <DependenciesSection taskId={id!} projectId={task.projectId} />
 
-          {/* Pending Prompt UI (needs_info) */}
-          {task.status === 'needs_info' && pendingPrompts && pendingPrompts.length > 0 && (
+          {/* Pending Prompt UI — show whenever there are pending prompts, not just in needs_info */}
+          {pendingPrompts && pendingPrompts.some(p => p.status === 'pending') && (
             <Card className="mt-4 border-amber-400">
               <CardHeader className="py-3">
                 <CardTitle className="text-base text-amber-600">Agent needs more information</CardTitle>
@@ -475,8 +485,8 @@ export function TaskDetailPage() {
                       {renderPromptQuestions(prompt.payload)}
                     </div>
                     <Textarea
-                      value={promptResponse}
-                      onChange={(e) => setPromptResponse(e.target.value)}
+                      value={getPromptResponse(prompt.id)}
+                      onChange={(e) => setPromptResponse(prompt.id, e.target.value)}
                       placeholder="Type your response..."
                       rows={3}
                     />
@@ -485,7 +495,7 @@ export function TaskDetailPage() {
                     )}
                     <Button
                       onClick={() => handlePromptRespond(prompt.id)}
-                      disabled={responding || !promptResponse.trim()}
+                      disabled={responding || !getPromptResponse(prompt.id).trim()}
                     >
                       {responding ? 'Submitting...' : 'Submit Response'}
                     </Button>
@@ -763,34 +773,6 @@ export function TaskDetailPage() {
   );
 }
 
-/** Determine which transition targets are "primary" for the status action bar */
-function getPrimaryTransitionTargets(status: string, isStuck: boolean): Set<string> {
-  switch (status) {
-    case 'open':
-      return new Set(['planning', 'implementing']);
-    case 'planning':
-      return isStuck ? new Set(['open']) : new Set();
-    case 'implementing':
-      return isStuck ? new Set(['open', 'plan_review', 'reported', 'investigation_review']) : new Set();
-    case 'plan_review':
-      return new Set(); // Actions moved to Plan tab
-    case 'pr_review':
-      return new Set(['done', 'implementing']);
-    case 'needs_info':
-      return new Set();
-    case 'done':
-      return new Set();
-    // Bug-agent pipeline statuses
-    case 'reported':
-      return new Set(['investigating', 'implementing']);
-    case 'investigating':
-      return isStuck ? new Set(['reported']) : new Set();
-    case 'investigation_review':
-      return new Set(['implementing', 'investigating']);
-    default:
-      return new Set(); // Fallback: handled by isAgentPipeline=false path
-  }
-}
 
 /** Render prompt questions from payload */
 function renderPromptQuestions(payload: Record<string, unknown>) {
@@ -1873,6 +1855,44 @@ function computeDisplayPath(
     return { displayPath, currentIndex, skippedStatuses };
   }
 
+  // Collapse consecutive duplicates (from self-transitions like retries)
+  const collapsed: string[] = [];
+  for (const s of visitedStatuses) {
+    if (collapsed.length === 0 || collapsed[collapsed.length - 1] !== s) {
+      collapsed.push(s);
+    }
+  }
+
+  // Check for loops: non-consecutive revisits (e.g. pr_review → implementing)
+  const seenOnce = new Set<string>();
+  let hasLoops = false;
+  for (const s of collapsed) {
+    if (seenOnce.has(s)) { hasLoops = true; break; }
+    seenOnce.add(s);
+  }
+
+  if (hasLoops) {
+    // Show full history including loops so the revisit is visible
+    const historyPath = [...collapsed];
+    if (historyPath[historyPath.length - 1] !== currentStatus) {
+      historyPath.push(currentStatus);
+    }
+    const currentIndex = historyPath.length - 1;
+
+    // Project forward using happy path from current status
+    const happyIdx = happyPath.indexOf(currentStatus);
+    let future: string[];
+    if (happyIdx >= 0) {
+      future = happyPath.slice(happyIdx + 1);
+    } else {
+      // Fallback: project forward excluding already-shown statuses
+      future = projectForward(currentStatus, pipeline, new Set(historyPath));
+    }
+
+    const displayPath = [...historyPath, ...future];
+    return { displayPath, currentIndex, skippedStatuses };
+  }
+
   // Dedup visited preserving order
   const seen = new Set<string>();
   const deduped: string[] = [];
@@ -1978,7 +1998,7 @@ function PipelineProgress({
             const connectorSkipped = isSkipped || prevSkipped;
 
             return (
-              <React.Fragment key={statusName}>
+              <React.Fragment key={`${statusName}-${i}`}>
                 {/* Connector line */}
                 {i > 0 && (
                   <div
@@ -2064,30 +2084,41 @@ function PipelineProgress({
   );
 }
 
-/** Build a map of status details from transition entries */
-function buildStatusDetailsMap(
+/** Build a map of status details indexed by position in the display path */
+function buildPositionDetailsMap(
+  displayPath: string[],
   transitionEntries: DebugTimelineEntry[],
-): Map<string, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }> {
+): Map<number, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }> {
   const sorted = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
-  const map = new Map<string, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }>();
+  const result = new Map<number, { timestamp: number; trigger?: string; guardResults?: unknown; duration?: number }>();
 
+  let pathPos = 0;
   for (let i = 0; i < sorted.length; i++) {
     const entry = sorted[i];
     const toStatus = entry.data?.toStatus as string | undefined;
     if (!toStatus) continue;
 
+    // Find next matching position in display path
+    let matchPos = pathPos + 1;
+    while (matchPos < displayPath.length && displayPath[matchPos] !== toStatus) {
+      matchPos++;
+    }
+    if (matchPos >= displayPath.length) continue;
+
     const nextTimestamp = i + 1 < sorted.length ? sorted[i + 1].timestamp : undefined;
     const duration = nextTimestamp != null ? nextTimestamp - entry.timestamp : undefined;
 
-    map.set(toStatus, {
+    result.set(matchPos, {
       timestamp: entry.timestamp,
       trigger: entry.data?.trigger as string | undefined,
       guardResults: entry.data?.guardResults,
       duration,
     });
+
+    pathPos = matchPos;
   }
 
-  return map;
+  return result;
 }
 
 /** Format a duration in ms to a human-readable string */
@@ -2118,8 +2149,8 @@ function PipelineVertical({
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
   const agenticStatuses = computeAgenticStatuses(pipeline);
-  const statusDetailsMap = buildStatusDetailsMap(transitionEntries);
   const { displayPath, currentIndex, skippedStatuses } = computeDisplayPath(pipeline, currentStatus, transitionEntries);
+  const positionDetailsMap = buildPositionDetailsMap(displayPath, transitionEntries);
 
   const toggleStep = (idx: number) => {
     const next = new Set(expandedSteps);
@@ -2140,7 +2171,7 @@ function PipelineVertical({
             const isAgentic = agenticStatuses.has(statusName);
             const statusDef = pipeline.statuses.find((s) => s.name === statusName);
             const isFinalCurrent = isCurrent && statusDef?.isFinal;
-            const details = statusDetailsMap.get(statusName);
+            const details = positionDetailsMap.get(i);
             const hasDetails = !isSkipped && (isCompleted || isFinalCurrent || (isCurrent && details));
             const expanded = expandedSteps.has(i);
 
@@ -2160,7 +2191,7 @@ function PipelineVertical({
               : undefined;
 
             return (
-              <div key={statusName} className="flex" style={{ opacity: isSkipped ? 0.5 : 1 }}>
+              <div key={`${statusName}-${i}`} className="flex" style={{ opacity: isSkipped ? 0.5 : 1 }}>
                 {/* Left column: node + connector */}
                 <div className="flex flex-col items-center mr-4" style={{ width: 28 }}>
                   {/* Node */}

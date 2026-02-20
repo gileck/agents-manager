@@ -37,9 +37,18 @@ import { LocalGitOps } from '../services/local-git-ops';
 import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
 import { StubNotificationRouter } from '../services/stub-notification-router';
-import { ScriptedAgent, happyPlan } from '../agents/scripted-agent';
 import { ClaudeCodeAgent } from '../agents/claude-code-agent';
 import { PrReviewerAgent } from '../agents/pr-reviewer-agent';
+import { AgentSupervisor } from '../services/agent-supervisor';
+import { TimelineService } from '../services/timeline/timeline-service';
+import { EventSource } from '../services/timeline/sources/event-source';
+import { ActivitySource } from '../services/timeline/sources/activity-source';
+import { TransitionSource } from '../services/timeline/sources/transition-source';
+import { AgentRunSource } from '../services/timeline/sources/agent-run-source';
+import { PhaseSource } from '../services/timeline/sources/phase-source';
+import { ArtifactSource } from '../services/timeline/sources/artifact-source';
+import { PromptSource } from '../services/timeline/sources/prompt-source';
+import { ContextSource } from '../services/timeline/sources/context-source';
 import { registerCoreGuards } from '../handlers/core-guards';
 import { registerAgentHandler } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
@@ -68,6 +77,8 @@ export interface AppServices {
   featureStore: IFeatureStore;
   agentDefinitionStore: IAgentDefinitionStore;
   createWorktreeManager: (path: string) => IWorktreeManager;
+  agentSupervisor: AgentSupervisor;
+  timelineService: TimelineService;
 }
 
 export function createAppServices(db: Database.Database): AppServices {
@@ -107,7 +118,6 @@ export function createAppServices(db: Database.Database): AppServices {
   const agentFramework = new AgentFrameworkImpl();
   agentFramework.registerAgent(new ClaudeCodeAgent());
   agentFramework.registerAgent(new PrReviewerAgent());
-  agentFramework.registerAgent(new ScriptedAgent(happyPlan));
 
   // Agent service
   const agentService = new AgentService(
@@ -122,7 +132,23 @@ export function createAppServices(db: Database.Database): AppServices {
     taskStore, projectStore, pipelineEngine, pipelineStore,
     taskEventLog, activityLog, agentRunStore, pendingPromptStore,
     taskArtifactStore, agentService, createScmPlatform, createWorktreeManager,
+    createGitOps,
   );
+
+  // Supervisor for detecting ghost/timed-out agent runs
+  const agentSupervisor = new AgentSupervisor(agentRunStore, agentService, taskEventLog);
+
+  // Timeline service for debug timeline
+  const timelineService = new TimelineService([
+    new EventSource(db),
+    new ActivitySource(db),
+    new TransitionSource(db),
+    new AgentRunSource(db),
+    new PhaseSource(db),
+    new ArtifactSource(db),
+    new PromptSource(db),
+    new ContextSource(db),
+  ]);
 
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
@@ -153,5 +179,7 @@ export function createAppServices(db: Database.Database): AppServices {
     featureStore,
     agentDefinitionStore,
     createWorktreeManager,
+    agentSupervisor,
+    timelineService,
   };
 }

@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@template/renderer/lib/utils';
 import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Palette, Settings, Bug } from 'lucide-react';
-import { useCurrentProject } from '../../contexts/CurrentProjectContext';
+import { ActiveAgentsList } from './ActiveAgentsList';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -20,8 +20,6 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onReportBug }: SidebarProps) {
-  const { currentProject } = useCurrentProject();
-
   return (
     <aside className="w-56 border-r border-border bg-card flex flex-col">
       {/* Logo */}
@@ -30,13 +28,10 @@ export function Sidebar({ onReportBug }: SidebarProps) {
           <LayoutDashboard className="h-5 w-5 text-blue-500 mr-2" />
           <span className="font-semibold text-sm">Agents Manager</span>
         </div>
-        <div className="mt-2 text-xs text-muted-foreground truncate">
-          {currentProject ? currentProject.name : 'No project selected'}
-        </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-2">
+      <nav className="flex-1 overflow-y-auto min-h-0 p-2">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -55,6 +50,9 @@ export function Sidebar({ onReportBug }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
+
+      {/* Active Agents */}
+      <ActiveAgentsList />
 
       {/* Footer */}
       <div className="p-4 border-t border-border">
