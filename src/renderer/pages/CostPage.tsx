@@ -55,8 +55,8 @@ export function CostPage() {
     let inputTokens = 0;
     let outputTokens = 0;
     for (const run of runs) {
-      inputTokens += run.costInputTokens ?? 0;
-      outputTokens += run.costOutputTokens ?? 0;
+      inputTokens += Number(run.costInputTokens) || 0;
+      outputTokens += Number(run.costOutputTokens) || 0;
     }
     return {
       inputTokens,
@@ -73,8 +73,8 @@ export function CostPage() {
       const date = new Date(run.startedAt);
       const key = formatPeriodKey(date, timeGranularity);
       const existing = periodMap.get(key) ?? { inputTokens: 0, outputTokens: 0, runs: 0 };
-      existing.inputTokens += run.costInputTokens ?? 0;
-      existing.outputTokens += run.costOutputTokens ?? 0;
+      existing.inputTokens += Number(run.costInputTokens) || 0;
+      existing.outputTokens += Number(run.costOutputTokens) || 0;
       existing.runs += 1;
       periodMap.set(key, existing);
     }
@@ -93,8 +93,8 @@ export function CostPage() {
     const taskMap = new Map<string, { inputTokens: number; outputTokens: number; runs: number }>();
     for (const run of runs) {
       const existing = taskMap.get(run.taskId) ?? { inputTokens: 0, outputTokens: 0, runs: 0 };
-      existing.inputTokens += run.costInputTokens ?? 0;
-      existing.outputTokens += run.costOutputTokens ?? 0;
+      existing.inputTokens += Number(run.costInputTokens) || 0;
+      existing.outputTokens += Number(run.costOutputTokens) || 0;
       existing.runs += 1;
       taskMap.set(run.taskId, existing);
     }
@@ -155,7 +155,7 @@ export function CostPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="p-6 space-y-6 max-w-6xl overflow-hidden">
       <h1 className="text-2xl font-bold">Cost Overview</h1>
 
       {/* Summary cards */}
@@ -250,10 +250,10 @@ export function CostPage() {
           {taskCosts.length === 0 ? (
             <p className="py-4 text-sm text-muted-foreground">No data available.</p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
-                  <th className="py-2 pr-3">Task</th>
+                  <th className="py-2 pr-3" style={{ width: '40%' }}>Task</th>
                   <th className="py-2 pr-3 cursor-pointer select-none" onClick={() => handleTaskSort('inputTokens')}>
                     Input Tokens{sortIndicator('inputTokens')}
                   </th>
@@ -271,7 +271,7 @@ export function CostPage() {
               <tbody>
                 {taskCosts.map((row) => (
                   <tr key={row.taskId} className="border-b last:border-0">
-                    <td className="py-2 pr-3 max-w-xs truncate" title={row.title}>{row.title}</td>
+                    <td className="py-2 pr-3 overflow-hidden text-ellipsis whitespace-nowrap" title={row.title}>{row.title}</td>
                     <td className="py-2 pr-3 font-mono">{formatTokens(row.inputTokens)}</td>
                     <td className="py-2 pr-3 font-mono">{formatTokens(row.outputTokens)}</td>
                     <td className="py-2 pr-3 font-mono">{row.runs}</td>

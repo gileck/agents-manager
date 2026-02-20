@@ -18,8 +18,8 @@ export function TaskCostPanel({ runs }: TaskCostPanelProps) {
     let inputTokens = 0;
     let outputTokens = 0;
     for (const run of runs) {
-      inputTokens += run.costInputTokens ?? 0;
-      outputTokens += run.costOutputTokens ?? 0;
+      inputTokens += Number(run.costInputTokens) || 0;
+      outputTokens += Number(run.costOutputTokens) || 0;
     }
     return {
       inputTokens,
@@ -39,12 +39,12 @@ export function TaskCostPanel({ runs }: TaskCostPanelProps) {
           vb = calculateCost(b.costInputTokens, b.costOutputTokens);
           break;
         case 'inputTokens':
-          va = a.costInputTokens ?? 0;
-          vb = b.costInputTokens ?? 0;
+          va = Number(a.costInputTokens) || 0;
+          vb = Number(b.costInputTokens) || 0;
           break;
         case 'outputTokens':
-          va = a.costOutputTokens ?? 0;
-          vb = b.costOutputTokens ?? 0;
+          va = Number(a.costOutputTokens) || 0;
+          vb = Number(b.costOutputTokens) || 0;
           break;
         case 'duration':
           va = a.completedAt && a.startedAt ? a.completedAt - a.startedAt : 0;

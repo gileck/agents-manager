@@ -8,8 +8,8 @@ interface AgentRunCostPanelProps {
 }
 
 export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
-  const inputTokens = run.costInputTokens ?? 0;
-  const outputTokens = run.costOutputTokens ?? 0;
+  const inputTokens = Number(run.costInputTokens) || 0;
+  const outputTokens = Number(run.costOutputTokens) || 0;
   const totalTokens = inputTokens + outputTokens;
 
   const inputCost = calculateCost(inputTokens, 0);

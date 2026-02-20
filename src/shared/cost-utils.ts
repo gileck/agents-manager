@@ -24,8 +24,8 @@ export function calculateCost(
   model?: string
 ): number {
   const pricing = (model && MODEL_PRICING[model]) || DEFAULT_PRICING;
-  const input = inputTokens ?? 0;
-  const output = outputTokens ?? 0;
+  const input = Number(inputTokens) || 0;
+  const output = Number(outputTokens) || 0;
   return (input / 1_000_000) * pricing.inputPerMTok + (output / 1_000_000) * pricing.outputPerMTok;
 }
 
@@ -33,7 +33,7 @@ export function calculateCost(
  * Format a dollar amount for display.
  */
 export function formatCost(dollars: number): string {
-  if (dollars === 0) return '$0.00';
+  if (!Number.isFinite(dollars) || dollars === 0) return '$0.00';
   if (dollars < 0.01) {
     return `$${dollars.toFixed(4)}`;
   }
@@ -44,5 +44,5 @@ export function formatCost(dollars: number): string {
  * Format a token count with locale-aware thousand separators.
  */
 export function formatTokens(count: number | null | undefined): string {
-  return (count ?? 0).toLocaleString();
+  return (Number(count) || 0).toLocaleString();
 }
