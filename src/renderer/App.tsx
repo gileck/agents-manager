@@ -10,11 +10,13 @@ import { TaskListPage } from './pages/TaskListPage';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { AgentRunPage } from './pages/AgentRunPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ThemePage } from './pages/ThemePage';
 import { AgentDefinitionsPage } from './pages/AgentDefinitionsPage';
 import { PipelinesPage } from './pages/PipelinesPage';
 import { FeatureListPage } from './pages/FeatureListPage';
 import { FeatureDetailPage } from './pages/FeatureDetailPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
+import { useThemeConfig } from './hooks/useThemeConfig';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/toaster';
@@ -24,6 +26,8 @@ function AppRoutes() {
 
   // Initialize theme on app load
   useTheme();
+  // Initialize custom theme overrides (CSS variable customizations)
+  useThemeConfig();
 
   useEffect(() => {
     // Listen for navigation events from main process
@@ -73,6 +77,7 @@ function AppRoutes() {
         <Route path="features" element={<FeatureListPage />} />
         <Route path="features/:id" element={<FeatureDetailPage />} />
         <Route path="pipelines" element={<PipelinesPage />} />
+        <Route path="theme" element={<ThemePage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
