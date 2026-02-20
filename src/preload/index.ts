@@ -17,6 +17,7 @@ import type {
   DebugTimelineEntry,
   GitLogEntry,
   Worktree,
+  ChatMessage,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -89,6 +90,12 @@ const IPC_CHANNELS = {
   DASHBOARD_STATS: 'dashboard:stats',
   TELEGRAM_TEST: 'telegram:test',
   OPEN_IN_CHROME: 'shell:open-in-chrome',
+  CHAT_SEND: 'chat:send',
+  CHAT_STOP: 'chat:stop',
+  CHAT_MESSAGES: 'chat:messages',
+  CHAT_CLEAR: 'chat:clear',
+  CHAT_SUMMARIZE: 'chat:summarize',
+  CHAT_OUTPUT: 'chat:output',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -283,6 +290,20 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_TEST, botToken, chatId),
   },
 
+  // Chat operations
+  chat: {
+    send: (projectId: string, message: string): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, projectId, message),
+    stop: (projectId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, projectId),
+    messages: (projectId: string): Promise<ChatMessage[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_MESSAGES, projectId),
+    clear: (projectId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR, projectId),
+    summarize: (projectId: string): Promise<ChatMessage[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SUMMARIZE, projectId),
+  },
+
   // Shell operations
   shell: {
     openInChrome: (url: string): Promise<void> =>
@@ -305,6 +326,11 @@ const api = {
       const listener = (_: IpcRendererEvent, runs: AgentRun[]) => callback(runs);
       ipcRenderer.on(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, listener);
+    },
+    chatOutput: (callback: (projectId: string, chunk: string) => void) => {
+      const listener = (_: IpcRendererEvent, projectId: string, chunk: string) => callback(projectId, chunk);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_OUTPUT, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_OUTPUT, listener);
     },
   },
 };

@@ -16,6 +16,7 @@ import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IFeatureStore } from '../interfaces/feature-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
+import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
 import { SqliteTaskStore } from '../stores/sqlite-task-store';
@@ -28,6 +29,7 @@ import { SqlitePendingPromptStore } from '../stores/sqlite-pending-prompt-store'
 import { SqliteTaskContextStore } from '../stores/sqlite-task-context-store';
 import { SqliteFeatureStore } from '../stores/sqlite-feature-store';
 import { SqliteAgentDefinitionStore } from '../stores/sqlite-agent-definition-store';
+import { SqliteChatMessageStore } from '../stores/sqlite-chat-message-store';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
@@ -56,6 +58,7 @@ import { registerAgentHandler } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
 import { registerPromptHandler } from '../handlers/prompt-handler';
 import { registerScmHandler } from '../handlers/scm-handler';
+import { ChatAgentService } from '../services/chat-agent-service';
 
 export interface AppServices {
   db: Database.Database;
@@ -82,6 +85,8 @@ export interface AppServices {
   agentSupervisor: AgentSupervisor;
   timelineService: TimelineService;
   workflowReviewSupervisor: WorkflowReviewSupervisor;
+  chatMessageStore: IChatMessageStore;
+  chatAgentService: ChatAgentService;
 }
 
 export function createAppServices(db: Database.Database): AppServices {
@@ -104,6 +109,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const taskContextStore = new SqliteTaskContextStore(db);
   const featureStore = new SqliteFeatureStore(db);
   const agentDefinitionStore = new SqliteAgentDefinitionStore(db);
+  const chatMessageStore = new SqliteChatMessageStore(db);
 
   // Phase 2 infrastructure — factory functions create project-scoped instances
   const createGitOps = (cwd: string) => new LocalGitOps(cwd);
@@ -165,6 +171,9 @@ export function createAppServices(db: Database.Database): AppServices {
     workflowService, agentRunStore, taskEventLog,
   );
 
+  // Chat agent service
+  const chatAgentService = new ChatAgentService(chatMessageStore, projectStore);
+
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
   registerNotificationHandler(pipelineEngine, { notificationRouter });
@@ -197,5 +206,7 @@ export function createAppServices(db: Database.Database): AppServices {
     agentSupervisor,
     timelineService,
     workflowReviewSupervisor,
+    chatMessageStore,
+    chatAgentService,
   };
 }

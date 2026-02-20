@@ -614,6 +614,19 @@ export function getMigrations(): Migration[] {
       name: '051_seed_technical_design_agent_definition',
       sql: getAddTechnicalDesignModeSql(),
     },
+    {
+      name: '052_create_chat_messages',
+      sql: `
+        CREATE TABLE IF NOT EXISTS chat_messages (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
+          content TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_project ON chat_messages(project_id, created_at)
+      `,
+    },
   ];
 }
 

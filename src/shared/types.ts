@@ -657,3 +657,23 @@ export interface DashboardStats {
   activeAgentRuns: number;
   recentActivityCount: number;
 }
+
+// ============================================
+// Chat Types
+// ============================================
+
+export type ChatMessageRole = 'user' | 'assistant' | 'system';
+
+export interface ChatMessage {
+  id: string;
+  projectId: string;
+  role: ChatMessageRole;
+  content: string;
+  createdAt: number;
+}
+
+export interface ChatMessageCreateInput {
+  projectId: string;
+  role: ChatMessageRole;
+  content: string;
+}

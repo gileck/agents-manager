@@ -529,6 +529,38 @@ export function registerIpcHandlers(services: AppServices): void {
   });
 
   // ============================================
+  // Chat Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SEND, async (_, projectId: string, message: string) => {
+    validateId(projectId);
+    if (!message || typeof message !== 'string') throw new Error('Message is required');
+    return services.chatAgentService.send(projectId, message, (chunk) => {
+      sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, projectId, chunk);
+    });
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_STOP, async (_, projectId: string) => {
+    validateId(projectId);
+    services.chatAgentService.stop(projectId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_MESSAGES, async (_, projectId: string) => {
+    validateId(projectId);
+    return services.chatAgentService.getMessages(projectId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_CLEAR, async (_, projectId: string) => {
+    validateId(projectId);
+    return services.chatAgentService.clearMessages(projectId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SUMMARIZE, async (_, projectId: string) => {
+    validateId(projectId);
+    return services.chatAgentService.summarizeMessages(projectId);
+  });
+
+  // ============================================
   // Shell Operations
   // ============================================
 

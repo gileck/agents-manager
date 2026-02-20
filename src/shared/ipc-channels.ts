@@ -111,4 +111,12 @@ export const IPC_CHANNELS = {
 
   // Shell
   OPEN_IN_CHROME: 'shell:open-in-chrome',
+
+  // Chat
+  CHAT_SEND: 'chat:send',
+  CHAT_STOP: 'chat:stop',
+  CHAT_MESSAGES: 'chat:messages',
+  CHAT_CLEAR: 'chat:clear',
+  CHAT_SUMMARIZE: 'chat:summarize',
+  CHAT_OUTPUT: 'chat:output',
 } as const;

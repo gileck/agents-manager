@@ -15,6 +15,7 @@ import { AgentDefinitionsPage } from './pages/AgentDefinitionsPage';
 import { PipelinesPage } from './pages/PipelinesPage';
 import { FeatureListPage } from './pages/FeatureListPage';
 import { FeatureDetailPage } from './pages/FeatureDetailPage';
+import { ChatPage } from './pages/ChatPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
@@ -78,6 +79,7 @@ function AppRoutes() {
         <Route path="features/:id" element={<FeatureDetailPage />} />
         <Route path="pipelines" element={<PipelinesPage />} />
         <Route path="theme" element={<ThemePage />} />
+        <Route path="chat" element={<ChatPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
