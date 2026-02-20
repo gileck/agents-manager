@@ -37,6 +37,9 @@ initializeApp({
       // Start the agent supervisor to detect ghost/timed-out runs
       services.agentSupervisor.start();
 
+      // Start the workflow review supervisor to auto-review completed tasks
+      services.workflowReviewSupervisor.start(5 * 60 * 1000);
+
       // Recover orphaned agent runs from previous session
       services.agentService.recoverOrphanedRuns().then((recovered) => {
         if (recovered.length > 0) {

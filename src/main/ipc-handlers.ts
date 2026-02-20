@@ -492,6 +492,15 @@ export function registerIpcHandlers(services: AppServices): void {
   });
 
   // ============================================
+  // Workflow Review
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.TASK_WORKFLOW_REVIEW, async (_, taskId: string) => {
+    validateId(taskId);
+    return services.workflowService.startAgent(taskId, 'review', 'task-workflow-reviewer');
+  });
+
+  // ============================================
   // Dashboard Operations
   // ============================================
 

@@ -222,6 +222,25 @@ export class AgentService implements IAgentService {
       });
     }
 
+    // Build review report file in the worktree for the workflow reviewer
+    if (agentType === 'task-workflow-reviewer' && this.taskReviewReportBuilder) {
+      try {
+        const reportPath = path.join(worktree.path, '.task-review-report.txt');
+        await this.taskReviewReportBuilder.buildReport(taskId, reportPath);
+        await this.taskEventLog.log({
+          taskId, category: 'agent_debug', severity: 'debug',
+          message: `Review report written to ${reportPath}`,
+        });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        await this.taskEventLog.log({
+          taskId, category: 'agent', severity: 'warning',
+          message: `Failed to build review report: ${errorMsg}`,
+          data: { error: errorMsg },
+        });
+      }
+    }
+
     // 6. Log event
     await this.taskEventLog.log({
       taskId,
@@ -517,9 +536,20 @@ export class AgentService implements IAgentService {
               entryData.comments = result.payload.comments;
             }
           }
+          if (agentType === 'task-workflow-reviewer') {
+            entryData.verdict = (result.structuredOutput as any)?.overallVerdict;
+            entryData.findings = (result.structuredOutput as any)?.findings;
+            entryData.codeImprovements = (result.structuredOutput as any)?.codeImprovements;
+            entryData.processImprovements = (result.structuredOutput as any)?.processImprovements;
+            entryData.tokenCostAnalysis = (result.structuredOutput as any)?.tokenCostAnalysis;
+            entryData.executionSummary = (result.structuredOutput as any)?.executionSummary;
+          }
+          const entrySource = agentType === 'pr-reviewer' ? 'reviewer'
+            : agentType === 'task-workflow-reviewer' ? 'workflow-reviewer'
+            : 'agent';
           await this.taskContextStore.addEntry({
             taskId, agentRunId: run.id,
-            source: agentType === 'pr-reviewer' ? 'reviewer' : 'agent',
+            source: entrySource,
             entryType, summary, data: entryData,
           });
         } catch (err) {
@@ -765,6 +795,7 @@ export class AgentService implements IAgentService {
   }
 
   private getContextEntryType(agentType: string, mode: AgentMode, outcome?: string): string {
+    if (agentType === 'task-workflow-reviewer') return 'workflow_review';
     if (agentType === 'pr-reviewer') return outcome === 'approved' ? 'review_approved' : 'review_feedback';
     switch (mode) {
       case 'plan': return 'plan_summary';

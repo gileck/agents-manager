@@ -18,6 +18,7 @@ import { usePipeline } from '../hooks/usePipelines';
 import { useFeatures } from '../hooks/useFeatures';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { GitTab } from '../components/tasks/GitTab';
+import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -400,6 +401,7 @@ export function TaskDetailPage() {
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
           <TabsTrigger value="context">Context</TabsTrigger>
+          <TabsTrigger value="review">Review</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
@@ -629,6 +631,16 @@ export function TaskDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="review">
+          <WorkflowReviewTab
+            taskId={id!}
+            contextEntries={contextEntries ?? null}
+            agentRuns={agentRuns ?? null}
+            isFinalStatus={statusMeta.isTerminal}
+            onReviewTriggered={() => { refetchAgentRuns(); refetchContext(); }}
+          />
         </TabsContent>
 
         <TabsContent value="git">
@@ -1557,6 +1569,7 @@ function ArtifactCard({ artifact }: { artifact: TaskArtifact }) {
 const CONTEXT_SOURCE_COLORS: Record<string, string> = {
   agent: '#3b82f6',
   reviewer: '#f59e0b',
+  'workflow-reviewer': '#e879f9',
   system: '#6b7280',
   user: '#8b5cf6',
 };

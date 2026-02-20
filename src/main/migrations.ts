@@ -590,6 +590,10 @@ export function getMigrations(): Migration[] {
       name: '045_reseed_pipelines_conflict_detection',
       sql: getReseedPipelinesSql(),
     },
+    {
+      name: '046_seed_workflow_reviewer_agent_definition',
+      sql: getSeedWorkflowReviewerSql(),
+    },
   ];
 }
 
@@ -1119,4 +1123,16 @@ function getSeedPipelinesSql(): string {
     return `INSERT OR IGNORE INTO pipelines (id, name, description, statuses, transitions, task_type, created_at, updated_at) VALUES ('${id}', '${name}', '${desc}', '${statuses}', '${transitions}', '${taskType}', ${now}, ${now})`;
   });
   return statements.join(';\n');
+}
+
+function getSeedWorkflowReviewerSql(): string {
+  const ts = Date.now();
+  const modes = JSON.stringify([
+    {
+      mode: 'review',
+      promptTemplate: '',
+      timeout: 300000,
+    },
+  ]);
+  return `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, created_at, updated_at) VALUES ('agent-def-task-workflow-reviewer', 'Workflow Reviewer', 'Reviews completed task execution end-to-end', 'claude-code', '${escSql(modes)}', 1, ${ts}, ${ts})`;
 }

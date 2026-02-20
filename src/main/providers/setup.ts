@@ -38,7 +38,10 @@ import { GitHubScmPlatform } from '../services/github-scm-platform';
 import { MultiChannelNotificationRouter } from '../services/multi-channel-notification-router';
 import { ClaudeCodeAgent } from '../agents/claude-code-agent';
 import { PrReviewerAgent } from '../agents/pr-reviewer-agent';
+import { TaskWorkflowReviewerAgent } from '../agents/task-workflow-reviewer-agent';
 import { AgentSupervisor } from '../services/agent-supervisor';
+import { TaskReviewReportBuilder } from '../services/task-review-report-builder';
+import { WorkflowReviewSupervisor } from '../services/workflow-review-supervisor';
 import { TimelineService } from '../services/timeline/timeline-service';
 import { EventSource } from '../services/timeline/sources/event-source';
 import { ActivitySource } from '../services/timeline/sources/activity-source';
@@ -78,6 +81,7 @@ export interface AppServices {
   createWorktreeManager: (path: string) => IWorktreeManager;
   agentSupervisor: AgentSupervisor;
   timelineService: TimelineService;
+  workflowReviewSupervisor: WorkflowReviewSupervisor;
 }
 
 export function createAppServices(db: Database.Database): AppServices {
@@ -111,10 +115,29 @@ export function createAppServices(db: Database.Database): AppServices {
     notificationRouter.addRouter(new DesktopNotificationRouter());
   } catch { /* Not in Electron */ }
 
+  // Timeline service (created before AgentService because TaskReviewReportBuilder needs it)
+  const timelineService = new TimelineService([
+    new EventSource(db),
+    new ActivitySource(db),
+    new TransitionSource(db),
+    new AgentRunSource(db),
+    new PhaseSource(db),
+    new ArtifactSource(db),
+    new PromptSource(db),
+    new ContextSource(db),
+  ]);
+
   // Agent framework + adapters
   const agentFramework = new AgentFrameworkImpl();
   agentFramework.registerAgent(new ClaudeCodeAgent());
   agentFramework.registerAgent(new PrReviewerAgent());
+  agentFramework.registerAgent(new TaskWorkflowReviewerAgent());
+
+  // Report builder for workflow reviewer agent
+  const taskReviewReportBuilder = new TaskReviewReportBuilder(
+    agentRunStore, taskEventLog, taskContextStore,
+    taskArtifactStore, taskStore, timelineService,
+  );
 
   // Agent service
   const agentService = new AgentService(
@@ -122,6 +145,7 @@ export function createAppServices(db: Database.Database): AppServices {
     taskStore, projectStore, pipelineEngine,
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
     createGitOps, taskContextStore, agentDefinitionStore,
+    taskReviewReportBuilder,
   );
 
   // Workflow service
@@ -135,17 +159,11 @@ export function createAppServices(db: Database.Database): AppServices {
   // Supervisor for detecting ghost/timed-out agent runs
   const agentSupervisor = new AgentSupervisor(agentRunStore, agentService, taskEventLog);
 
-  // Timeline service for debug timeline
-  const timelineService = new TimelineService([
-    new EventSource(db),
-    new ActivitySource(db),
-    new TransitionSource(db),
-    new AgentRunSource(db),
-    new PhaseSource(db),
-    new ArtifactSource(db),
-    new PromptSource(db),
-    new ContextSource(db),
-  ]);
+  // Supervisor for automatic workflow reviews of completed tasks
+  const workflowReviewSupervisor = new WorkflowReviewSupervisor(
+    taskStore, taskContextStore, pipelineStore,
+    workflowService, agentRunStore, taskEventLog,
+  );
 
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
@@ -178,5 +196,6 @@ export function createAppServices(db: Database.Database): AppServices {
     createWorktreeManager,
     agentSupervisor,
     timelineService,
+    workflowReviewSupervisor,
   };
 }

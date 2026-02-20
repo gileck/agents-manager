@@ -100,6 +100,9 @@ export const IPC_CHANNELS = {
   GIT_LOG: 'git:log',
   GIT_SHOW: 'git:show',
 
+  // Workflow review
+  TASK_WORKFLOW_REVIEW: 'task:workflow-review',
+
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;

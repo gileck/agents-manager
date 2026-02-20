@@ -85,6 +85,7 @@ const IPC_CHANNELS = {
   GIT_PULL: 'git:pull',
   GIT_LOG: 'git:log',
   GIT_SHOW: 'git:show',
+  TASK_WORKFLOW_REVIEW: 'task:workflow-review',
   DASHBOARD_STATS: 'dashboard:stats',
 } as const;
 
@@ -164,6 +165,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEBUG_TIMELINE, taskId),
     worktree: (taskId: string): Promise<Worktree | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE, taskId),
+    workflowReview: (taskId: string): Promise<AgentRun> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKFLOW_REVIEW, taskId),
   },
 
   // Feature operations
