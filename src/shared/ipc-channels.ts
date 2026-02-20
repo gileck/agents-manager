@@ -51,6 +51,7 @@ export const IPC_CHANNELS = {
   AGENT_OUTPUT: 'agent:output',
   AGENT_ACTIVE_TASK_IDS: 'agent:active-task-ids',
   AGENT_ACTIVE_RUNS: 'agent:active-runs',
+  AGENT_ALL_RUNS: 'agent:all-runs',
   AGENT_INTERRUPTED_RUNS: 'agent:interrupted-runs',
 
   // Event operations

@@ -17,6 +17,7 @@ import { FeatureListPage } from './pages/FeatureListPage';
 import { FeatureDetailPage } from './pages/FeatureDetailPage';
 import { ChatPage } from './pages/ChatPage';
 import { TelegramPage } from './pages/TelegramPage';
+import { CostPage } from './pages/CostPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
@@ -82,6 +83,7 @@ function AppRoutes() {
         <Route path="pipelines" element={<PipelinesPage />} />
         <Route path="theme" element={<ThemePage />} />
         <Route path="chat" element={<ChatPage />} />
+        <Route path="cost" element={<CostPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>

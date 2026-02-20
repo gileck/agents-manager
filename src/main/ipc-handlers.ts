@@ -265,6 +265,10 @@ export function registerIpcHandlers(services: AppServices): void {
     return services.agentRunStore.getActiveRuns();
   });
 
+  registerIpcHandler(IPC_CHANNELS.AGENT_ALL_RUNS, async () => {
+    return services.agentRunStore.getAllRuns();
+  });
+
   // ============================================
   // Event Operations
   // ============================================

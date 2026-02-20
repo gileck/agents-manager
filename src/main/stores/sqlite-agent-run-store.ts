@@ -119,4 +119,9 @@ export class SqliteAgentRunStore implements IAgentRunStore {
     const rows = this.db.prepare("SELECT * FROM agent_runs WHERE status = 'running'").all() as AgentRunRow[];
     return rows.map(rowToRun);
   }
+
+  async getAllRuns(): Promise<AgentRun[]> {
+    const rows = this.db.prepare('SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT 1000').all() as AgentRunRow[];
+    return rows.map(rowToRun);
+  }
 }

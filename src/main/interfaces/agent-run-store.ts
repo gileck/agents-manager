@@ -6,4 +6,5 @@ export interface IAgentRunStore {
   getRun(id: string): Promise<AgentRun | null>;
   getRunsForTask(taskId: string): Promise<AgentRun[]>;
   getActiveRuns(): Promise<AgentRun[]>;
+  getAllRuns(): Promise<AgentRun[]>;
 }

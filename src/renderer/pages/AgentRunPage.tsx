@@ -11,6 +11,7 @@ import { SubtasksPanel } from '../components/agent-run/SubtasksPanel';
 import { GitChangesPanel } from '../components/agent-run/GitChangesPanel';
 import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
+import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
 import type { AgentRun, Task } from '../../shared/types';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
@@ -246,6 +247,7 @@ export function AgentRunPage() {
           </TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="task">Task Details</TabsTrigger>
+          <TabsTrigger value="cost">Cost</TabsTrigger>
           <TabsTrigger value="json">JSON Output</TabsTrigger>
         </TabsList>
 
@@ -280,6 +282,10 @@ export function AgentRunPage() {
           ) : (
             <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
           )}
+        </TabsContent>
+
+        <TabsContent value="cost" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+          <AgentRunCostPanel run={run} />
         </TabsContent>
 
         <TabsContent value="json" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">

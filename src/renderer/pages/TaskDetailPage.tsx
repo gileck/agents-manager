@@ -19,6 +19,7 @@ import { useFeatures } from '../hooks/useFeatures';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { GitTab } from '../components/tasks/GitTab';
 import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
+import { TaskCostPanel } from '../components/task/TaskCostPanel';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -409,6 +410,7 @@ export function TaskDetailPage() {
           <TabsTrigger value="agents">Agent Runs</TabsTrigger>
           <TabsTrigger value="context">Context</TabsTrigger>
           <TabsTrigger value="review">Review</TabsTrigger>
+          <TabsTrigger value="cost">Cost</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
@@ -673,6 +675,10 @@ export function TaskDetailPage() {
             isFinalStatus={statusMeta.isTerminal}
             onReviewTriggered={() => { refetchAgentRuns(); refetchContext(); }}
           />
+        </TabsContent>
+
+        <TabsContent value="cost">
+          <TaskCostPanel runs={agentRuns ?? []} />
         </TabsContent>
 
         <TabsContent value="git">
