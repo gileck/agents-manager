@@ -104,6 +104,7 @@ export function ProjectDetailPage() {
           )}
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate(`/projects/${id}/config`)}>Configuration</Button>
           <Button variant="outline" onClick={openEdit}>Edit</Button>
           <Button variant="destructive" onClick={handleDelete}>Delete</Button>
         </div>
@@ -117,18 +118,6 @@ export function ProjectDetailPage() {
           </CardContent>
         </Card>
       )}
-
-      <Card className="mb-6">
-        <CardContent className="py-3">
-          <span className="text-sm text-muted-foreground">Model: </span>
-          <span className="text-sm font-mono">
-            {MODEL_OPTIONS.find(o => o.value === (project.config?.model as string))?.label ?? 'Default'}
-          </span>
-          <span className="mx-3 text-muted-foreground">|</span>
-          <span className="text-sm text-muted-foreground">Pull main after merge: </span>
-          <span className="text-sm font-mono">{project.config?.pullMainAfterMerge ? 'Yes' : 'No'}</span>
-        </CardContent>
-      </Card>
 
       <h2 className="text-xl font-semibold mb-4">Tasks ({tasks.length})</h2>
 
