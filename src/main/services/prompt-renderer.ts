@@ -12,6 +12,7 @@ export class PromptRenderer {
       '{priorReviewSection}': this.buildPriorReviewSection(context),
       '{relatedTaskSection}': this.buildRelatedTaskSection(context),
       '{defaultBranch}': this.buildDefaultBranch(context),
+      '{skipSummary}': '',
     };
 
     // Use replacer functions to avoid $-pattern interpretation in replacement strings
@@ -20,8 +21,10 @@ export class PromptRenderer {
       prompt = prompt.replaceAll(key, value);
     }
 
-    // Append standard suffix
-    prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
+    // Append standard suffix only when template does not opt out via {skipSummary}
+    if (!template.includes('{skipSummary}')) {
+      prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
+    }
 
     // Append validation errors if present
     if (context.validationErrors) {

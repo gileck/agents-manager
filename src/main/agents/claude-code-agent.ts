@@ -19,7 +19,15 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
   }
 
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
-    return config.timeout || (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate' ? 5 * 60 * 1000 : 10 * 60 * 1000);
+    if (config.timeout) return config.timeout;
+    switch (context.mode) {
+      case 'plan':
+      case 'plan_revision':
+      case 'investigate':
+        return 5 * 60 * 1000;
+      default:
+        return 10 * 60 * 1000;
+    }
   }
 
   protected getOutputFormat(context: AgentContext): object | undefined {

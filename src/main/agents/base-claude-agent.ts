@@ -8,6 +8,29 @@ import { SandboxGuard } from '../services/sandbox-guard';
 // but the SDK is ESM-only (.mjs). This bypasses that transformation.
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
 
+interface SdkTextBlock { type: 'text'; text: string }
+interface SdkToolUseBlock { type: 'tool_use'; name: string; input?: unknown }
+type SdkContentBlock = SdkTextBlock | SdkToolUseBlock;
+
+interface SdkAssistantMessage {
+  type: 'assistant';
+  message: { content: SdkContentBlock[] };
+}
+interface SdkResultMessage {
+  type: 'result';
+  subtype: string;
+  errors?: string[];
+  structured_output?: Record<string, unknown>;
+  usage?: { input_tokens: number; output_tokens: number };
+}
+interface SdkOtherMessage {
+  type: string;
+  message?: { content?: SdkContentBlock[] };
+  summary?: string;
+  result?: string;
+}
+type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkOtherMessage;
+
 export abstract class BaseClaudeAgent implements IAgent {
   abstract readonly type: string;
 
@@ -125,17 +148,16 @@ export abstract class BaseClaudeAgent implements IAgent {
             },
           },
         },
-      })) {
+      }) as AsyncIterable<SdkStreamMessage>) {
         messageCount++;
         if (messageCount % 25 === 0) {
           log(`SDK message loop heartbeat: ${messageCount} messages processed`);
         }
-        const msg = message as any;
 
         if (message.type === 'assistant') {
-          const content = msg.message?.content ?? [];
-          for (const block of content) {
-            if ('text' in block && typeof block.text === 'string') {
+          const assistantMsg = message as SdkAssistantMessage;
+          for (const block of assistantMsg.message.content) {
+            if (block.type === 'text') {
               emit(block.text + '\n');
             } else if (block.type === 'tool_use') {
               const input = JSON.stringify(block.input ?? {});
@@ -144,26 +166,28 @@ export abstract class BaseClaudeAgent implements IAgent {
             }
           }
         } else if (message.type === 'result') {
-          if (msg.subtype !== 'success') {
+          const resultMsg = message as SdkResultMessage;
+          if (resultMsg.subtype !== 'success') {
             isError = true;
-            errorMessage = msg.errors?.join('\n') || 'Agent execution failed';
+            errorMessage = resultMsg.errors?.join('\n') || 'Agent execution failed';
           }
-          if (msg.structured_output) {
-            structuredOutput = msg.structured_output;
+          if (resultMsg.structured_output) {
+            structuredOutput = resultMsg.structured_output;
           }
-          costInputTokens = msg.usage?.input_tokens;
-          costOutputTokens = msg.usage?.output_tokens;
+          costInputTokens = resultMsg.usage?.input_tokens;
+          costOutputTokens = resultMsg.usage?.output_tokens;
         } else {
-          if (msg.message?.content) {
-            for (const block of msg.message.content) {
-              if ('text' in block && typeof block.text === 'string') {
+          const otherMsg = message as SdkOtherMessage;
+          if (otherMsg.message?.content) {
+            for (const block of otherMsg.message.content) {
+              if (block.type === 'text') {
                 emit(`[${message.type}] ${block.text}\n`);
               }
             }
-          } else if (typeof msg.summary === 'string') {
-            emit(`[${message.type}] ${msg.summary}\n`);
-          } else if (typeof msg.result === 'string') {
-            emit(`[${message.type}] ${msg.result}\n`);
+          } else if (typeof otherMsg.summary === 'string') {
+            emit(`[${message.type}] ${otherMsg.summary}\n`);
+          } else if (typeof otherMsg.result === 'string') {
+            emit(`[${message.type}] ${otherMsg.result}\n`);
           }
         }
       }

@@ -1,11 +1,43 @@
 import type { AgentContext, AgentRunResult } from '../../shared/types';
 import { BaseClaudeAgent } from './base-claude-agent';
 
+interface ReviewStructuredOutput {
+  verdict: 'approved' | 'changes_requested';
+  summary: string;
+  comments: string[];
+}
+
 export class PrReviewerAgent extends BaseClaudeAgent {
   readonly type = 'pr-reviewer';
 
   protected getMaxTurns(_context: AgentContext): number {
     return 50;
+  }
+
+  protected getOutputFormat(_context: AgentContext): object | undefined {
+    return {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        properties: {
+          verdict: {
+            type: 'string',
+            enum: ['approved', 'changes_requested'],
+            description: 'Whether the review approves the changes or requests modifications',
+          },
+          summary: {
+            type: 'string',
+            description: 'A concise summary of the review findings',
+          },
+          comments: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Specific review comments or issues found. Empty array if approved.',
+          },
+        },
+        required: ['verdict', 'summary', 'comments'],
+      },
+    };
   }
 
   buildPrompt(context: AgentContext): string {
@@ -35,56 +67,43 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       `1. Run \`git diff ${defaultBranch}..HEAD\` to see all changes made in this branch.`,
       '2. Review the diff for code quality, correctness, style, and completeness against the task description.',
       '3. Provide a concise review.',
-      '4. End your response with a "## Summary" section briefly describing your review findings.',
-      '5. End your output with exactly one of these verdicts on its own line:',
-      '   REVIEW_VERDICT: APPROVED',
-      '   REVIEW_VERDICT: CHANGES_REQUESTED',
       '',
-      'If the changes look good, use APPROVED. If there are issues that need fixing, use CHANGES_REQUESTED and explain what needs to change.',
+      'Your output will be captured as structured JSON with three fields:',
+      '- "verdict": either "approved" or "changes_requested"',
+      '- "summary": a concise summary of your review findings',
+      '- "comments": an array of specific review comments (empty array if approved)',
     );
 
     return lines.join('\n');
   }
 
-  inferOutcome(_mode: string, exitCode: number, output: string): string {
+  inferOutcome(_mode: string, exitCode: number, _output: string): string {
     if (exitCode !== 0) return 'failed';
-    if (output.includes('REVIEW_VERDICT: CHANGES_REQUESTED')) return 'changes_requested';
     return 'approved';
   }
 
-  buildResult(exitCode: number, output: string, outcome: string, error?: string, costInputTokens?: number, costOutputTokens?: number): AgentRunResult {
-    const result: AgentRunResult = { exitCode, output, outcome, error, costInputTokens, costOutputTokens };
+  buildResult(exitCode: number, output: string, outcome: string, error?: string, costInputTokens?: number, costOutputTokens?: number, structuredOutput?: Record<string, unknown>, prompt?: string): AgentRunResult {
+    const so = structuredOutput as ReviewStructuredOutput | undefined;
+    const effectiveOutcome = so?.verdict ?? outcome;
 
-    if (outcome === 'changes_requested') {
+    const result: AgentRunResult = {
+      exitCode,
+      output,
+      outcome: effectiveOutcome,
+      error,
+      costInputTokens,
+      costOutputTokens,
+      structuredOutput,
+      prompt,
+    };
+
+    if (effectiveOutcome === 'changes_requested') {
       result.payload = {
-        summary: output.slice(-500),
-        comments: this.extractComments(output),
+        summary: so?.summary ?? output.slice(-500),
+        comments: so?.comments ?? [],
       };
     }
 
     return result;
-  }
-
-  /** Extract review comments/issues from reviewer output. */
-  private extractComments(output: string): string[] {
-    const comments: string[] = [];
-    // Match numbered list items that look like review feedback (e.g., "1. Fix X", "- Issue: Y")
-    const lines = output.split('\n');
-    let inChangesSection = false;
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.includes('CHANGES_REQUESTED') || trimmed.toLowerCase().includes('changes requested') || trimmed.toLowerCase().includes('issues found')) {
-        inChangesSection = true;
-        continue;
-      }
-      if (trimmed.startsWith('REVIEW_VERDICT:') || trimmed.startsWith('## Summary')) {
-        inChangesSection = false;
-        continue;
-      }
-      if (inChangesSection && (trimmed.match(/^\d+\./) || trimmed.startsWith('- '))) {
-        comments.push(trimmed.replace(/^\d+\.\s*/, '').replace(/^- /, ''));
-      }
-    }
-    return comments;
   }
 }

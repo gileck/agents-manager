@@ -17,6 +17,9 @@ const MODEL_OPTIONS = [
   { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5-20251001' },
 ];
 
+const inputWidth = { width: '224px' };
+let nextCmdId = 0;
+
 export function ProjectConfigPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -30,7 +33,7 @@ export function ProjectConfigPage() {
   const [maxConcurrentAgents, setMaxConcurrentAgents] = useState('');
   const [defaultBranch, setDefaultBranch] = useState('');
   const [pullMainAfterMerge, setPullMainAfterMerge] = useState(false);
-  const [validationCommands, setValidationCommands] = useState<string[]>([]);
+  const [validationCommands, setValidationCommands] = useState<Array<{ id: number; cmd: string }>>([]);
   const [maxValidationRetries, setMaxValidationRetries] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
@@ -44,7 +47,11 @@ export function ProjectConfigPage() {
     setMaxConcurrentAgents(c.maxConcurrentAgents != null ? String(c.maxConcurrentAgents) : '');
     setDefaultBranch((c.defaultBranch as string) ?? '');
     setPullMainAfterMerge(!!c.pullMainAfterMerge);
-    setValidationCommands(Array.isArray(c.validationCommands) ? (c.validationCommands as string[]) : []);
+    setValidationCommands(
+      Array.isArray(c.validationCommands)
+        ? (c.validationCommands as string[]).map(cmd => ({ id: nextCmdId++, cmd }))
+        : []
+    );
     setMaxValidationRetries(c.maxValidationRetries != null ? String(c.maxValidationRetries) : '');
     const tg = (c.telegram as Record<string, unknown>) ?? {};
     setTelegramBotToken((tg.botToken as string) ?? '');
@@ -61,7 +68,7 @@ export function ProjectConfigPage() {
         maxConcurrentAgents: maxConcurrentAgents ? Number(maxConcurrentAgents) : undefined,
         defaultBranch: defaultBranch || undefined,
         pullMainAfterMerge,
-        validationCommands: validationCommands.length > 0 ? validationCommands : undefined,
+        validationCommands: validationCommands.length > 0 ? validationCommands.map(v => v.cmd) : undefined,
         maxValidationRetries: maxValidationRetries ? Number(maxValidationRetries) : undefined,
         telegram: (telegramBotToken || telegramChatId)
           ? { botToken: telegramBotToken || undefined, chatId: telegramChatId || undefined }
@@ -88,11 +95,12 @@ export function ProjectConfigPage() {
     }
   };
 
-  const addValidationCommand = () => setValidationCommands([...validationCommands, '']);
-  const removeValidationCommand = (index: number) =>
-    setValidationCommands(validationCommands.filter((_, i) => i !== index));
-  const updateValidationCommand = (index: number, value: string) =>
-    setValidationCommands(validationCommands.map((cmd, i) => (i === index ? value : cmd)));
+  const addValidationCommand = () =>
+    setValidationCommands([...validationCommands, { id: nextCmdId++, cmd: '' }]);
+  const removeValidationCommand = (cmdId: number) =>
+    setValidationCommands(validationCommands.filter(v => v.id !== cmdId));
+  const updateValidationCommand = (cmdId: number, value: string) =>
+    setValidationCommands(validationCommands.map(v => (v.id === cmdId ? { ...v, cmd: value } : v)));
 
   if (loading) {
     return (
@@ -137,8 +145,9 @@ export function ProjectConfigPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="model">Model</Label>
+                <div style={inputWidth}>
                 <Select value={model} onValueChange={setModel}>
-                  <SelectTrigger id="model" className="w-56">
+                  <SelectTrigger id="model">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -147,13 +156,14 @@ export function ProjectConfigPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="agentTimeout">Agent Timeout (seconds)</Label>
                 <Input
                   id="agentTimeout"
                   type="number"
-                  className="w-56"
+                  style={inputWidth}
                   placeholder="300"
                   value={agentTimeout}
                   onChange={(e) => setAgentTimeout(e.target.value)}
@@ -164,7 +174,7 @@ export function ProjectConfigPage() {
                 <Input
                   id="maxConcurrentAgents"
                   type="number"
-                  className="w-56"
+                  style={inputWidth}
                   placeholder="3"
                   value={maxConcurrentAgents}
                   onChange={(e) => setMaxConcurrentAgents(e.target.value)}
@@ -186,7 +196,7 @@ export function ProjectConfigPage() {
                 <Label htmlFor="defaultBranch">Default Branch</Label>
                 <Input
                   id="defaultBranch"
-                  className="w-56"
+                  style={inputWidth}
                   placeholder="main"
                   value={defaultBranch}
                   onChange={(e) => setDefaultBranch(e.target.value)}
@@ -223,17 +233,17 @@ export function ProjectConfigPage() {
                   <p className="text-sm text-muted-foreground">No validation commands configured.</p>
                 ) : (
                   <div className="space-y-2">
-                    {validationCommands.map((cmd, i) => (
-                      <div key={i} className="flex gap-2">
+                    {validationCommands.map((v) => (
+                      <div key={v.id} className="flex gap-2">
                         <Input
-                          value={cmd}
+                          value={v.cmd}
                           placeholder="e.g. npm test"
-                          onChange={(e) => updateValidationCommand(i, e.target.value)}
+                          onChange={(e) => updateValidationCommand(v.id, e.target.value)}
                         />
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => removeValidationCommand(i)}
+                          onClick={() => removeValidationCommand(v.id)}
                           className="shrink-0"
                         >
                           Remove
@@ -248,7 +258,7 @@ export function ProjectConfigPage() {
                 <Input
                   id="maxValidationRetries"
                   type="number"
-                  className="w-56"
+                  style={inputWidth}
                   placeholder="3"
                   value={maxValidationRetries}
                   onChange={(e) => setMaxValidationRetries(e.target.value)}
@@ -270,7 +280,8 @@ export function ProjectConfigPage() {
                 <Label htmlFor="telegramBotToken">Telegram Bot Token</Label>
                 <Input
                   id="telegramBotToken"
-                  className="w-56"
+                  type="password"
+                  style={inputWidth}
                   placeholder="Bot token"
                   value={telegramBotToken}
                   onChange={(e) => setTelegramBotToken(e.target.value)}
@@ -280,7 +291,7 @@ export function ProjectConfigPage() {
                 <Label htmlFor="telegramChatId">Telegram Chat ID</Label>
                 <Input
                   id="telegramChatId"
-                  className="w-56"
+                  style={inputWidth}
                   placeholder="Chat ID"
                   value={telegramChatId}
                   onChange={(e) => setTelegramChatId(e.target.value)}
