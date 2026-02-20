@@ -33,6 +33,15 @@ export function AgentDefinitionCard({ definition, onEdit, onDelete }: AgentDefin
                 </Badge>
               ))}
             </div>
+            {definition.skills.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap mt-1.5">
+                {definition.skills.map((skill) => (
+                  <Badge key={skill} variant="secondary" className="text-xs font-mono">
+                    /{skill}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1 ml-4 flex-shrink-0">
             <Button variant="ghost" size="icon" onClick={() => onEdit(definition)}>

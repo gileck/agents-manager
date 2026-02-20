@@ -6,6 +6,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
+import { Badge } from '../ui/badge';
 import { Plus, X } from 'lucide-react';
 
 interface AgentDefinitionDialogProps {
@@ -35,6 +36,8 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
   const [systemPrompt, setSystemPrompt] = useState('');
   const [timeout, setTimeout_] = useState('');
   const [modes, setModes] = useState<AgentModeConfig[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +50,8 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
         setModel(definition.model ?? '');
         setSystemPrompt(definition.systemPrompt ?? '');
         setTimeout_(definition.timeout ? String(definition.timeout) : '');
+        setSkills([...definition.skills]);
+        setSkillInput('');
         setModes(definition.modes.length > 0 ? [...definition.modes] : [{ ...EMPTY_MODE }]);
       } else {
         setName('');
@@ -55,6 +60,8 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
         setModel('');
         setSystemPrompt('');
         setTimeout_('');
+        setSkills([]);
+        setSkillInput('');
         setModes([{ ...EMPTY_MODE }]);
       }
     }
@@ -75,6 +82,7 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
           modes: filteredModes,
           systemPrompt: systemPrompt.trim() || null,
           timeout: timeout ? Number(timeout) : null,
+          skills,
         };
         await onSave(input, definition.id);
       } else {
@@ -86,6 +94,7 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
           modes: filteredModes,
           systemPrompt: systemPrompt.trim() || undefined,
           timeout: timeout ? Number(timeout) : undefined,
+          skills: skills.length > 0 ? skills : undefined,
         };
         await onSave(input);
       }
@@ -95,6 +104,18 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
     } finally {
       setSaving(false);
     }
+  };
+
+  const addSkill = () => {
+    const trimmed = skillInput.trim();
+    if (trimmed && !skills.includes(trimmed) && /^[\w:.-]+$/.test(trimmed)) {
+      setSkills([...skills, trimmed]);
+    }
+    setSkillInput('');
+  };
+
+  const removeSkill = (skill: string) => {
+    setSkills(skills.filter(s => s !== skill));
   };
 
   const addMode = () => setModes([...modes, { ...EMPTY_MODE }]);
@@ -158,6 +179,43 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
           <div className="space-y-2">
             <Label>Timeout (ms, optional)</Label>
             <Input value={timeout} onChange={(e) => setTimeout_(e.target.value)} placeholder="600000" type="number" />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Skills (optional)</Label>
+            <div className="flex gap-2">
+              <Input
+                value={skillInput}
+                onChange={(e) => setSkillInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addSkill();
+                  }
+                }}
+                placeholder="e.g. pr-review-toolkit:review-pr"
+                className="flex-1"
+              />
+              <Button variant="outline" size="sm" onClick={addSkill} disabled={!skillInput.trim()}>
+                Add
+              </Button>
+            </div>
+            {skills.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap mt-1">
+                {skills.map((skill) => (
+                  <Badge key={skill} variant="secondary" className="text-xs gap-1">
+                    /{skill}
+                    <button
+                      type="button"
+                      onClick={() => removeSkill(skill)}
+                      className="ml-0.5 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">

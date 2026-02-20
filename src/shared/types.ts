@@ -532,6 +532,7 @@ export interface AgentContext {
   validationErrors?: string;
   resolvedPrompt?: string;
   modeConfig?: AgentModeConfig;
+  skills?: string[];
 }
 
 export interface AgentConfig {
@@ -576,6 +577,7 @@ export interface AgentDefinition {
   modes: AgentModeConfig[];
   systemPrompt: string | null;
   timeout: number | null;
+  skills: string[];
   isBuiltIn: boolean;
   createdAt: number;
   updatedAt: number;
@@ -589,6 +591,7 @@ export interface AgentDefinitionCreateInput {
   modes?: AgentModeConfig[];
   systemPrompt?: string;
   timeout?: number;
+  skills?: string[];
 }
 
 export interface AgentDefinitionUpdateInput {
@@ -599,6 +602,7 @@ export interface AgentDefinitionUpdateInput {
   modes?: AgentModeConfig[];
   systemPrompt?: string | null;
   timeout?: number | null;
+  skills?: string[];
 }
 
 export interface Worktree {

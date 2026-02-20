@@ -76,6 +76,11 @@ export abstract class BaseClaudeAgent implements IAgent {
       prompt = renderer.render(context.modeConfig.promptTemplate, context);
     } else {
       prompt = context.resolvedPrompt ?? this.buildPrompt(context);
+      // Only append skills for non-template prompts (templates use {skillsSection})
+      if (context.skills?.length) {
+        const skillsList = context.skills.map(s => `- /${s}`).join('\n');
+        prompt += `\n\n## Available Skills\nYou have access to the following skills. Use the Skill tool to invoke them:\n${skillsList}`;
+      }
     }
     if (context.taskContext?.length) {
       const block = context.taskContext.map(e => {

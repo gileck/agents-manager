@@ -270,6 +270,9 @@ export class AgentService implements IAgentService {
         if (modeConfig) {
           context.modeConfig = modeConfig;
         }
+        if (agentDef.skills.length > 0) {
+          context.skills = agentDef.skills;
+        }
       }
     } catch {
       // Fall through to hardcoded buildPrompt if lookup fails

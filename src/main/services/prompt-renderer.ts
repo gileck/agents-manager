@@ -14,6 +14,7 @@ export class PromptRenderer {
       '{technicalDesignSection}': this.buildTechnicalDesignSection(context),
       '{technicalDesignCommentsSection}': this.buildTechnicalDesignCommentsSection(context),
       '{defaultBranch}': this.buildDefaultBranch(context),
+      '{skillsSection}': this.buildSkillsSection(context),
       '{skipSummary}': '',
     };
 
@@ -145,5 +146,16 @@ export class PromptRenderer {
 
   private buildDefaultBranch(context: AgentContext): string {
     return (context.project.config?.defaultBranch as string) || 'main';
+  }
+
+  private buildSkillsSection(context: AgentContext): string {
+    if (context.skills && context.skills.length > 0) {
+      const lines = ['', '## Available Skills', 'You have access to the following skills. Use the Skill tool to invoke them:'];
+      for (const skill of context.skills) {
+        lines.push(`- /${skill}`);
+      }
+      return lines.join('\n');
+    }
+    return '';
   }
 }

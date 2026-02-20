@@ -12,6 +12,7 @@ interface AgentDefinitionRow {
   modes: string;
   system_prompt: string | null;
   timeout: number | null;
+  skills: string;
   is_built_in: number;
   created_at: number;
   updated_at: number;
@@ -27,6 +28,7 @@ function rowToDefinition(row: AgentDefinitionRow): AgentDefinition {
     modes: parseJson<AgentModeConfig[]>(row.modes, []),
     systemPrompt: row.system_prompt,
     timeout: row.timeout,
+    skills: parseJson<string[]>(row.skills, []),
     isBuiltIn: row.is_built_in === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -67,8 +69,8 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
     const timestamp = now();
 
     this.db.prepare(`
-      INSERT INTO agent_definitions (id, name, description, engine, model, modes, system_prompt, timeout, is_built_in, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      INSERT INTO agent_definitions (id, name, description, engine, model, modes, system_prompt, timeout, skills, is_built_in, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `).run(
       id,
       input.name,
@@ -78,6 +80,7 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
       JSON.stringify(input.modes ?? []),
       input.systemPrompt ?? null,
       input.timeout ?? null,
+      JSON.stringify(input.skills ?? []),
       timestamp,
       timestamp,
     );
@@ -119,6 +122,10 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
     if (input.timeout !== undefined) {
       updates.push('timeout = ?');
       values.push(input.timeout);
+    }
+    if (input.skills !== undefined) {
+      updates.push('skills = ?');
+      values.push(JSON.stringify(input.skills));
     }
 
     if (updates.length === 0) return existing;
