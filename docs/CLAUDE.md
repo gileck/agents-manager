@@ -90,6 +90,7 @@ Comprehensive implementation-grounded reference docs for each major domain:
 | [data-layer.md](./data-layer.md) | SQLite schema, stores, migrations |
 | [workflow-service.md](./workflow-service.md) | WorkflowService orchestration, activity logging, prompt handling |
 | [cli-reference.md](./cli-reference.md) | CLI tool (`am`), commands, project context |
+| [cli-native-bindings.md](./cli-native-bindings.md) | Dual native builds (Electron + Node), worktree symlinks, `npx agents-manager` |
 | [ipc-and-renderer.md](./ipc-and-renderer.md) | IPC channels, renderer pages, hooks, streaming |
 | [event-system.md](./event-system.md) | Events, activity log, transition history, debug timeline |
 | [testing.md](./testing.md) | Test infrastructure, TestContext, factories, best practices |
@@ -352,16 +353,11 @@ export function getShellEnv(): NodeJS.ProcessEnv {
 
 ### 9. Native Module Version Mismatch (`NODE_MODULE_VERSION` Error)
 
-**Problem:** App crashes on startup with `NODE_MODULE_VERSION` mismatch for `better-sqlite3`. All IPC handlers fail with "No handler registered" because the database can't initialize.
+**Problem:** `better-sqlite3` crashes with `NODE_MODULE_VERSION` mismatch because Electron and system Node need different ABI versions of the native binary.
 
-**Cause:** Native modules compiled for system Node.js don't match Electron's bundled Node.js. Happens after switching Node versions (nvm/fnm) or running `npm install`.
+**Solution:** The project maintains dual builds (`build/` for Electron, `build-node/` for system Node). Both are created automatically by `postinstall`. The CLI selects the correct binary via the `nativeBinding` option.
 
-**Solution:**
-```bash
-npx electron-rebuild -f -w better-sqlite3
-```
-
-This template includes `electron-rebuild` as a postinstall script, so it runs automatically after `npm install`.
+See [cli-native-bindings.md](./cli-native-bindings.md) for full details and troubleshooting.
 
 ## Patterns & Best Practices
 
