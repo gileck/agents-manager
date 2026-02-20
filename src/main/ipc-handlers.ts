@@ -507,4 +507,13 @@ export function registerIpcHandlers(services: AppServices): void {
   registerIpcHandler(IPC_CHANNELS.DASHBOARD_STATS, async () => {
     return services.workflowService.getDashboardStats();
   });
+
+  // ============================================
+  // Shell Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.OPEN_IN_CHROME, async (_, url: string) => {
+    const { execFile } = await import('child_process');
+    execFile('open', ['-a', 'Google Chrome', url]);
+  });
 }

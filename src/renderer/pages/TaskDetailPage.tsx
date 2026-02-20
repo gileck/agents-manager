@@ -437,14 +437,12 @@ export function TaskDetailPage() {
                 {task.prLink && (
                   <>
                     <span className="text-sm text-muted-foreground">PR</span>
-                    <a
-                      href={task.prLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-500 hover:underline break-all"
+                    <button
+                      onClick={() => window.api.shell.openInChrome(task.prLink!)}
+                      className="text-sm text-blue-500 hover:underline break-all text-left cursor-pointer"
                     >
                       {task.prLink}
-                    </a>
+                    </button>
                   </>
                 )}
 
@@ -1350,14 +1348,12 @@ function StatusActionBar({
       return (
         <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
           {task.prLink ? (
-            <a
-              href={task.prLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-blue-500 hover:underline break-all"
+            <button
+              onClick={() => window.api.shell.openInChrome(task.prLink!)}
+              className="text-sm text-blue-500 hover:underline break-all text-left cursor-pointer"
             >
               {task.prLink}
-            </a>
+            </button>
           ) : (
             <span className="text-sm text-muted-foreground animate-pulse">Creating PR...</span>
           )}
