@@ -75,21 +75,24 @@ export const BUG_PIPELINE: SeededPipeline = {
 export const AGENT_PIPELINE: SeededPipeline = {
   id: 'pipeline-agent',
   name: 'Agent-Driven',
-  description: 'Agent-driven workflow with plan, implement, and review phases',
+  description: 'Agent-driven workflow with tech design, plan, implement, and review phases',
   taskType: 'agent',
   statuses: [
     { name: 'open', label: 'Open', category: 'ready', position: 0 },
-    { name: 'planning', label: 'Planning', category: 'agent_running', position: 1 },
-    { name: 'plan_review', label: 'Plan Review', category: 'human_review', position: 2 },
-    { name: 'designing', label: 'Designing', category: 'agent_running', position: 3 },
-    { name: 'design_review', label: 'Design Review', category: 'human_review', position: 4 },
+    { name: 'designing', label: 'Designing', category: 'agent_running', position: 1 },
+    { name: 'design_review', label: 'Design Review', category: 'human_review', position: 2 },
+    { name: 'planning', label: 'Planning', category: 'agent_running', position: 3 },
+    { name: 'plan_review', label: 'Plan Review', category: 'human_review', position: 4 },
     { name: 'implementing', label: 'Implementing', category: 'agent_running', position: 5 },
     { name: 'pr_review', label: 'PR Review', category: 'human_review', position: 6 },
     { name: 'needs_info', label: 'Needs Info', category: 'waiting_for_input', position: 7 },
     { name: 'done', label: 'Done', isFinal: true, category: 'terminal', position: 8 },
   ],
   transitions: [
-    // Manual transitions that auto-start agents via hooks
+    // From open: 3 options — tech design (skippable), plan (skippable), implement (required)
+    { from: 'open', to: 'designing', trigger: 'manual', label: 'Start Tech Design',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'technical_design', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'open', to: 'planning', trigger: 'manual', label: 'Start Planning',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
@@ -99,9 +102,6 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'plan_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
-    { from: 'plan_review', to: 'designing', trigger: 'manual', label: 'Start Technical Design',
-      guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'technical_design', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'plan_review', to: 'planning', trigger: 'manual', label: 'Request Plan Changes',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'plan_revision', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
@@ -110,7 +110,10 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
       hooks: [{ name: 'merge_pr', policy: 'required' }] },
-    // Design review transitions
+    // Design review transitions — approve to plan, skip to implement, or request changes
+    { from: 'design_review', to: 'planning', trigger: 'manual', label: 'Approve & Plan',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'design_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
