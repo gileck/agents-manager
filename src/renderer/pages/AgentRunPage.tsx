@@ -12,6 +12,10 @@ import { GitChangesPanel } from '../components/agent-run/GitChangesPanel';
 import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
+import { ChatMessageList } from '../components/chat/ChatMessageList';
+import { ChatInput } from '../components/chat/ChatInput';
+import { ContextSidebar } from '../components/chat/ContextSidebar';
+import { useAgentStream } from '../contexts/AgentStreamContext';
 import type { AgentRun, Task } from '../../shared/types';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
@@ -37,6 +41,12 @@ export function AgentRunPage() {
     [run?.taskId]
   );
 
+  // --- Agent stream context (for chat persistence across route changes) ---
+  const { getMessages, addMessage, isActive } = useAgentStream();
+  const taskId = run?.taskId;
+  const messages = taskId ? getMessages(taskId) : [];
+  const [isQueued, setIsQueued] = useState(false);
+
   // --- Streaming output ---
   const [streamOutput, setStreamOutput] = useState('');
   const initializedFromDb = useRef(false);
@@ -51,8 +61,8 @@ export function AgentRunPage() {
 
   useEffect(() => {
     if (!run) return;
-    const unsubscribe = window.api.on.agentOutput((taskId: string, chunk: string) => {
-      if (taskId === run.taskId) {
+    const unsubscribe = window.api.on.agentOutput((tid: string, chunk: string) => {
+      if (tid === run.taskId) {
         setStreamOutput((prev) => prev + chunk);
       }
     });
@@ -72,6 +82,18 @@ export function AgentRunPage() {
     const id = setInterval(refetchTask, 3000);
     return () => clearInterval(id);
   }, [run?.status, refetchTask]);
+
+  // --- Subscribe to status changes for refetch ---
+  useEffect(() => {
+    if (!taskId) return;
+    const unsub = window.api?.on?.agentStatus?.((tid: string) => {
+      if (tid === taskId) {
+        refetch();
+        setIsQueued(false);
+      }
+    });
+    return () => { unsub?.(); };
+  }, [taskId, refetch]);
 
   // --- Git diff/stat polling (10s while running) ---
   const [gitDiff, setGitDiff] = useState<string | null>(null);
@@ -112,6 +134,9 @@ export function AgentRunPage() {
   // --- Section visibility ---
   const [metadataCollapsed, setMetadataCollapsed] = useState(false);
 
+  // --- Sidebar toggle ---
+  const [showSidebar, setShowSidebar] = useState(false);
+
   // --- Actions ---
   const [restarting, setRestarting] = useState(false);
 
@@ -130,6 +155,15 @@ export function AgentRunPage() {
     } finally {
       setRestarting(false);
     }
+  };
+
+  const handleSendMessage = async (text: string) => {
+    if (!taskId) return;
+    addMessage(taskId, { type: 'user', text, timestamp: Date.now() });
+    if (isRunning) {
+      setIsQueued(true);
+    }
+    await window.api.agents.sendMessage(taskId, text);
   };
 
   // --- Loading / error states (only on initial load, not during refetches) ---
@@ -151,7 +185,7 @@ export function AgentRunPage() {
 
   if (!run) return null;
 
-  const isRunning = run.status === 'running';
+  const isRunning = run.status === 'running' || (taskId ? isActive(taskId) : false);
   const displayOutput = isRunning ? streamOutput : (run.output || streamOutput);
   const outcomeMessage = run.outcome ? OUTCOME_MESSAGES[run.outcome] : null;
   const subtasks = task?.subtasks ?? [];
@@ -182,6 +216,18 @@ export function AgentRunPage() {
         </h1>
         <span className="text-sm text-muted-foreground">{run.mode} / {run.agentType}</span>
         <div className="ml-auto flex gap-2">
+          {messages.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSidebar(!showSidebar)}
+              title="Toggle token usage sidebar"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 16V8m4 8v-5m4 5V5m4 11v-3" />
+              </svg>
+            </Button>
+          )}
           {isRunning && (
             <Button variant="destructive" size="sm" onClick={handleStop}>Stop</Button>
           )}
@@ -234,67 +280,95 @@ export function AgentRunPage() {
         </div>
       )}
 
-      {/* Main tabs — fill remaining space */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 px-6 pt-3">
-        <TabsList>
-          <TabsTrigger value="output">
-            Output
-            {isRunning && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block animate-pulse" />}
-          </TabsTrigger>
-          <TabsTrigger value="prompt">Prompt</TabsTrigger>
-          <TabsTrigger value="subtasks">
-            Subtasks{subtasks.length > 0 && ` (${doneCount}/${subtasks.length})`}
-          </TabsTrigger>
-          <TabsTrigger value="git">Git</TabsTrigger>
-          <TabsTrigger value="task">Task Details</TabsTrigger>
-          <TabsTrigger value="cost">Cost</TabsTrigger>
-          <TabsTrigger value="json">JSON Output</TabsTrigger>
-        </TabsList>
+      {/* Main content — tabs + optional sidebar */}
+      <div className="flex flex-1 min-h-0">
+        {/* Main tabs — fill remaining space */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 px-6 pt-3">
+          <TabsList>
+            <TabsTrigger value="output">
+              Output
+              {isRunning && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block animate-pulse" />}
+            </TabsTrigger>
+            {messages.length > 0 && (
+              <TabsTrigger value="chat">
+                Chat
+                {isRunning && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-blue-500 inline-block animate-pulse" />}
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="prompt">Prompt</TabsTrigger>
+            <TabsTrigger value="subtasks">
+              Subtasks{subtasks.length > 0 && ` (${doneCount}/${subtasks.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="git">Git</TabsTrigger>
+            <TabsTrigger value="task">Task Details</TabsTrigger>
+            <TabsTrigger value="cost">Cost</TabsTrigger>
+            <TabsTrigger value="json">JSON Output</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="output" className="flex-1 min-h-0 flex flex-col pb-3">
-          <OutputPanel
-            output={displayOutput}
-            startedAt={run.startedAt}
-            isRunning={isRunning}
-          />
-        </TabsContent>
+          <TabsContent value="output" className="flex-1 min-h-0 flex flex-col pb-3">
+            <OutputPanel
+              output={displayOutput}
+              startedAt={run.startedAt}
+              isRunning={isRunning}
+            />
+          </TabsContent>
 
-        <TabsContent value="prompt" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
-          <PromptPanel prompt={run.prompt} />
-        </TabsContent>
-
-        <TabsContent value="subtasks" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-          <SubtasksPanel subtasks={subtasks} />
-        </TabsContent>
-
-        <TabsContent value="git" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-          <GitChangesPanel
-            diff={gitDiff}
-            stat={gitStat}
-            onRefresh={fetchGit}
-            loading={gitLoading}
-          />
-        </TabsContent>
-
-        <TabsContent value="task" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-          {task ? (
-            <TaskInfoPanel task={task} run={run} />
-          ) : (
-            <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
+          {messages.length > 0 && (
+            <TabsContent value="chat" className="flex-1 min-h-0 flex flex-col pb-3">
+              <div className="flex-1 min-h-0 flex flex-col">
+                <ChatMessageList messages={messages} isRunning={isRunning} />
+                <ChatInput
+                  onSend={handleSendMessage}
+                  onStop={handleStop}
+                  isRunning={isRunning}
+                  isQueued={isQueued}
+                />
+              </div>
+            </TabsContent>
           )}
-        </TabsContent>
 
-        <TabsContent value="cost" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-          <AgentRunCostPanel run={run} />
-        </TabsContent>
+          <TabsContent value="prompt" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
+            <PromptPanel prompt={run.prompt} />
+          </TabsContent>
 
-        <TabsContent value="json" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
-          <JSONOutputPanel
-            payload={run.payload}
-            isRunning={isRunning}
-          />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="subtasks" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+            <SubtasksPanel subtasks={subtasks} />
+          </TabsContent>
+
+          <TabsContent value="git" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+            <GitChangesPanel
+              diff={gitDiff}
+              stat={gitStat}
+              onRefresh={fetchGit}
+              loading={gitLoading}
+            />
+          </TabsContent>
+
+          <TabsContent value="task" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+            {task ? (
+              <TaskInfoPanel task={task} run={run} />
+            ) : (
+              <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
+            )}
+          </TabsContent>
+
+          <TabsContent value="cost" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+            <AgentRunCostPanel run={run} />
+          </TabsContent>
+
+          <TabsContent value="json" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
+            <JSONOutputPanel
+              payload={run.payload}
+              isRunning={isRunning}
+            />
+          </TabsContent>
+        </Tabs>
+
+        {/* Token usage sidebar */}
+        {showSidebar && messages.length > 0 && (
+          <ContextSidebar messages={messages} run={run} />
+        )}
+      </div>
     </div>
   );
 }

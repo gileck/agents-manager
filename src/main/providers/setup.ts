@@ -152,7 +152,7 @@ export function createAppServices(db: Database.Database): AppServices {
     taskStore, projectStore, pipelineEngine,
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
     createGitOps, taskContextStore, agentDefinitionStore,
-    taskReviewReportBuilder,
+    taskReviewReportBuilder, notificationRouter,
   );
 
   // Workflow service

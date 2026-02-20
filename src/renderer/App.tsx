@@ -24,6 +24,7 @@ import { useThemeConfig } from './hooks/useThemeConfig';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/toaster';
+import { AgentStreamProvider } from './contexts/AgentStreamContext';
 
 function AppRoutes() {
   const navigate = useNavigate();
@@ -94,11 +95,13 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <CurrentProjectProvider>
-      <ErrorBoundary>
-        <AppRoutes />
-      </ErrorBoundary>
-      <Toaster />
-    </CurrentProjectProvider>
+    <AgentStreamProvider>
+      <CurrentProjectProvider>
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
+        <Toaster />
+      </CurrentProjectProvider>
+    </AgentStreamProvider>
   );
 }

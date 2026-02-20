@@ -1,4 +1,4 @@
-import type { AgentContext, AgentConfig, AgentRunResult } from '../../shared/types';
+import type { AgentContext, AgentConfig, AgentRunResult, AgentChatMessage } from '../../shared/types';
 import type { IAgent } from '../interfaces/agent';
 import { PromptRenderer } from '../services/prompt-renderer';
 import { SandboxGuard } from '../services/sandbox-guard';
@@ -70,7 +70,7 @@ export abstract class BaseClaudeAgent implements IAgent {
     }
   }
 
-  async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void, onPromptBuilt?: (prompt: string) => void): Promise<AgentRunResult> {
+  async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void, onPromptBuilt?: (prompt: string) => void, onMessage?: (msg: AgentChatMessage) => void): Promise<AgentRunResult> {
     this.lastCostInputTokens = undefined;
     this.lastCostOutputTokens = undefined;
 
@@ -171,9 +171,11 @@ export abstract class BaseClaudeAgent implements IAgent {
           for (const block of assistantMsg.message.content) {
             if (block.type === 'text') {
               emit(block.text + '\n');
+              onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
             } else if (block.type === 'tool_use') {
               const input = JSON.stringify(block.input ?? {});
               emit(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
+              onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input: input.slice(0, 2000), timestamp: Date.now() });
             }
           }
         } else if (message.type === 'result') {
@@ -189,6 +191,9 @@ export abstract class BaseClaudeAgent implements IAgent {
           costOutputTokens = resultMsg.usage?.output_tokens;
           this.lastCostInputTokens = costInputTokens;
           this.lastCostOutputTokens = costOutputTokens;
+          if (costInputTokens != null || costOutputTokens != null) {
+            onMessage?.({ type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, timestamp: Date.now() });
+          }
         } else {
           const otherMsg = message as SdkOtherMessage;
           if (otherMsg.message?.content) {
@@ -201,6 +206,10 @@ export abstract class BaseClaudeAgent implements IAgent {
             emit(`[${message.type}] ${otherMsg.summary}\n`);
           } else if (typeof otherMsg.result === 'string') {
             emit(`[${message.type}] ${otherMsg.result}\n`);
+            // Emit tool_result for tool-type messages
+            if (message.type === 'tool') {
+              onMessage?.({ type: 'tool_result', toolId: (otherMsg as unknown as { tool_use_id?: string }).tool_use_id, result: otherMsg.result, timestamp: Date.now() });
+            }
           }
         }
       }

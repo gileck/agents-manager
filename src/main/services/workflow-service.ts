@@ -7,6 +7,7 @@ import type {
   AgentMode,
   PendingPrompt,
   DashboardStats,
+  AgentChatMessage,
 } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IProjectStore } from '../interfaces/project-store';
@@ -130,7 +131,7 @@ export class WorkflowService implements IWorkflowService {
     return result;
   }
 
-  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'claude-code', onOutput?: (chunk: string) => void): Promise<AgentRun> {
+  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'claude-code', onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
     await this.activityLog.log({
       action: 'agent_start',
       entityType: 'agent_run',
@@ -139,7 +140,7 @@ export class WorkflowService implements IWorkflowService {
       data: { agentType, mode },
     });
 
-    const run = await this.agentService.execute(taskId, mode, agentType, onOutput);
+    const run = await this.agentService.execute(taskId, mode, agentType, onOutput, onMessage, onStatusChange);
     return run;
   }
 

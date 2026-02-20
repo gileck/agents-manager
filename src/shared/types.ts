@@ -533,7 +533,61 @@ export interface AgentContext {
   resolvedPrompt?: string;
   modeConfig?: AgentModeConfig;
   skills?: string[];
+  customPrompt?: string;
 }
+
+// ============================================
+// Agent Chat Message Types (for agent run streaming UI)
+// ============================================
+
+export interface AgentChatMessageAssistantText {
+  type: 'assistant_text';
+  text: string;
+  timestamp: number;
+}
+
+export interface AgentChatMessageToolUse {
+  type: 'tool_use';
+  toolName: string;
+  toolId?: string;
+  input: string;
+  timestamp: number;
+}
+
+export interface AgentChatMessageToolResult {
+  type: 'tool_result';
+  toolId?: string;
+  result: string;
+  timestamp: number;
+}
+
+export interface AgentChatMessageUser {
+  type: 'user';
+  text: string;
+  timestamp: number;
+}
+
+export interface AgentChatMessageStatus {
+  type: 'status';
+  status: AgentRunStatus;
+  message: string;
+  timestamp: number;
+}
+
+export interface AgentChatMessageUsage {
+  type: 'usage';
+  inputTokens: number;
+  outputTokens: number;
+  timestamp: number;
+}
+
+export type AgentChatMessage =
+  | AgentChatMessageAssistantText
+  | AgentChatMessageToolUse
+  | AgentChatMessageToolResult
+  | AgentChatMessageUser
+  | AgentChatMessageStatus
+  | AgentChatMessageUsage;
 
 export interface AgentConfig {
   model?: string;

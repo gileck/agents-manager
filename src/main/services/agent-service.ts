@@ -4,6 +4,7 @@ import type {
   AgentContext,
   AgentConfig,
   TransitionContext,
+  AgentChatMessage,
 } from '../../shared/types';
 import type { IAgentFramework } from '../interfaces/agent-framework';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
@@ -19,6 +20,7 @@ import type { IAgentService } from '../interfaces/agent-service';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
+import type { INotificationRouter } from '../interfaces/notification-router';
 import type { TaskReviewReportBuilder } from './task-review-report-builder';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -31,6 +33,8 @@ const execAsync = promisify(exec);
 
 export class AgentService implements IAgentService {
   private backgroundPromises = new Map<string, Promise<void>>();
+  private messageQueues = new Map<string, string[]>();
+  private activeCallbacks = new Map<string, { onOutput?: (chunk: string) => void; onMessage?: (msg: AgentChatMessage) => void; onStatusChange?: (status: string) => void }>();
 
   constructor(
     private agentFramework: IAgentFramework,
@@ -47,6 +51,7 @@ export class AgentService implements IAgentService {
     private taskContextStore: ITaskContextStore,
     private agentDefinitionStore: IAgentDefinitionStore,
     private taskReviewReportBuilder?: TaskReviewReportBuilder,
+    private notificationRouter?: INotificationRouter,
   ) {}
 
   async recoverOrphanedRuns(): Promise<AgentRun[]> {
@@ -108,7 +113,13 @@ export class AgentService implements IAgentService {
     return recovered;
   }
 
-  async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void): Promise<AgentRun> {
+  queueMessage(taskId: string, message: string): void {
+    const queue = this.messageQueues.get(taskId) || [];
+    queue.push(message);
+    this.messageQueues.set(taskId, queue);
+  }
+
+  async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
     // 1. Fetch task + project
     const task = await this.taskStore.getTask(taskId);
     if (!task) throw new Error(`Task not found: ${taskId}`);
@@ -251,11 +262,17 @@ export class AgentService implements IAgentService {
     });
 
     // 6. Build context — agent runs in the worktree, not the main checkout
+    // Consume any queued message as customPrompt
+    const queue = this.messageQueues.get(taskId);
+    const customPrompt = queue && queue.length > 0 ? queue.shift() : undefined;
+    if (queue && queue.length === 0) this.messageQueues.delete(taskId);
+
     const context: AgentContext = {
       task,
       project,
       workdir: worktree.path,
       mode,
+      customPrompt,
     };
 
     // Load accumulated task context entries for the agent
@@ -282,12 +299,15 @@ export class AgentService implements IAgentService {
       model: context.project.config?.model as string | undefined,
     };
 
-    // 7. Fire-and-forget agent execution in background
+    // 7. Store active callbacks for this task
+    this.activeCallbacks.set(taskId, { onOutput, onMessage, onStatusChange });
+
+    // 8. Fire-and-forget agent execution in background
     const agent = this.agentFramework.getAgent(agentType);
-    const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, worktreeManager, agentType, onOutput);
+    const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, worktreeManager, agentType, onOutput, onMessage, onStatusChange);
     this.backgroundPromises.set(run.id, promise);
 
-    // 8. Return run immediately (status: 'running')
+    // 9. Return run immediately (status: 'running')
     return run;
   }
 
@@ -302,6 +322,8 @@ export class AgentService implements IAgentService {
     worktreeManager: IWorktreeManager,
     agentType: string,
     onOutput?: (chunk: string) => void,
+    onMessage?: (msg: AgentChatMessage) => void,
+    onStatusChange?: (status: string) => void,
   ): Promise<void> {
     const taskId = task.id;
     const onLog = (message: string, data?: Record<string, unknown>) => {
@@ -342,7 +364,7 @@ export class AgentService implements IAgentService {
     let result: import('../../shared/types').AgentRunResult | undefined;
     try {
       try {
-        result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt);
+        result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt, onMessage);
       } catch (err) {
         clearInterval(flushInterval);
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -753,6 +775,30 @@ export class AgentService implements IAgentService {
         message: `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}`,
         data: { agentRunId: run.id, exitCode: result.exitCode, outcome: result.outcome },
       });
+
+      // Emit status change
+      const finalStatus = result.exitCode === 0 ? 'completed' : 'failed';
+      onStatusChange?.(finalStatus);
+      onMessage?.({ type: 'status', status: finalStatus, message: `Agent ${finalStatus}`, timestamp: Date.now() });
+
+      // Send native notification
+      try {
+        this.notificationRouter?.send({
+          taskId,
+          title: `Agent ${finalStatus}`,
+          body: `${agentType} agent ${finalStatus} for task: ${task.title}`,
+          channel: run.id,
+        });
+      } catch { /* notification failure is non-fatal */ }
+
+      // Check message queue for follow-up messages
+      const pendingQueue = this.messageQueues.get(taskId);
+      if (pendingQueue && pendingQueue.length > 0) {
+        try {
+          const callbacks = this.activeCallbacks.get(taskId);
+          await this.execute(taskId, context.mode, agentType, callbacks?.onOutput, callbacks?.onMessage, callbacks?.onStatusChange);
+        } catch { /* queue processing failure is non-fatal */ }
+      }
     } catch (outerErr) {
       // FATAL: catch any unhandled error in post-agent processing to prevent silent hangs
       const errMsg = outerErr instanceof Error ? outerErr.message : String(outerErr);
@@ -786,6 +832,10 @@ export class AgentService implements IAgentService {
         severity: 'debug',
         message: `Agent background execution cleanup: runId=${run.id}`,
       }).catch(() => {});
+      // Clean up callbacks if no more queued messages
+      if (!this.messageQueues.has(taskId)) {
+        this.activeCallbacks.delete(taskId);
+      }
     }
   }
 
@@ -806,6 +856,10 @@ export class AgentService implements IAgentService {
 
     const agent = this.agentFramework.getAgent(run.agentType);
     await agent.stop(run.taskId);
+
+    // Clear any queued messages to prevent stale messages from being sent on future runs
+    this.messageQueues.delete(run.taskId);
+    this.activeCallbacks.delete(run.taskId);
 
     await this.agentRunStore.updateRun(runId, {
       status: 'cancelled',

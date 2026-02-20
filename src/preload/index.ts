@@ -5,7 +5,7 @@ import type {
   Task, TaskCreateInput, TaskUpdateInput, TaskFilter,
   Feature, FeatureCreateInput, FeatureUpdateInput, FeatureFilter,
   Pipeline, Transition,
-  AgentRun, AgentMode,
+  AgentRun, AgentMode, AgentRunStatus,
   AgentDefinition, AgentDefinitionCreateInput, AgentDefinitionUpdateInput,
   TaskEvent, TaskEventFilter,
   ActivityEntry, ActivityFilter,
@@ -19,6 +19,7 @@ import type {
   GitCommitDetail,
   Worktree,
   ChatMessage,
+  AgentChatMessage,
   TelegramBotLogEntry,
 } from '../shared/types';
 
@@ -62,6 +63,9 @@ const IPC_CHANNELS = {
   AGENT_ACTIVE_RUNS: 'agent:active-runs',
   AGENT_ALL_RUNS: 'agent:all-runs',
   AGENT_INTERRUPTED_RUNS: 'agent:interrupted-runs',
+  AGENT_MESSAGE: 'agent:message',
+  AGENT_STATUS: 'agent:status',
+  AGENT_SEND_MESSAGE: 'agent:send-message',
   EVENT_LIST: 'event:list',
   ACTIVITY_LIST: 'activity:list',
   PROMPT_LIST: 'prompt:list',
@@ -241,6 +245,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_ACTIVE_RUNS),
     allRuns: (): Promise<AgentRun[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_ALL_RUNS),
+    sendMessage: (taskId: string, message: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_SEND_MESSAGE, taskId, message),
   },
 
   // Event operations
@@ -354,6 +360,16 @@ const api = {
       const listener = (_: IpcRendererEvent, runs: AgentRun[]) => callback(runs);
       ipcRenderer.on(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, listener);
+    },
+    agentMessage: (callback: (taskId: string, msg: AgentChatMessage) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string, msg: AgentChatMessage) => callback(taskId, msg);
+      ipcRenderer.on(IPC_CHANNELS.AGENT_MESSAGE, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_MESSAGE, listener);
+    },
+    agentStatus: (callback: (taskId: string, status: AgentRunStatus) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string, status: AgentRunStatus) => callback(taskId, status);
+      ipcRenderer.on(IPC_CHANNELS.AGENT_STATUS, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_STATUS, listener);
     },
     chatOutput: (callback: (projectId: string, chunk: string) => void) => {
       const listener = (_: IpcRendererEvent, projectId: string, chunk: string) => callback(projectId, chunk);
