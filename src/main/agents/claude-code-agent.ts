@@ -151,6 +151,21 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         const lines = [
           `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`,
         ];
+        if (task.subtasks && task.subtasks.length > 0) {
+          lines.push(
+            '',
+            '## IMPORTANT: Subtask Progress Tracking',
+            'You MUST update subtask status via the `am` CLI as you work. Do NOT use TodoWrite — use these bash commands instead:',
+            `  am tasks subtask update ${task.id} --name "<subtask name>" --status in_progress   # before starting a subtask`,
+            `  am tasks subtask update ${task.id} --name "<subtask name>" --status done           # after completing a subtask`,
+            '',
+            'Current subtasks:',
+          );
+          for (const st of task.subtasks) {
+            lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
+          }
+          lines.push('');
+        }
         if (task.plan) {
           lines.push('', '## Plan', task.plan);
         }
@@ -160,24 +175,6 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
             const time = new Date(comment.createdAt).toLocaleString();
             lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
           }
-        }
-        if (task.subtasks && task.subtasks.length > 0) {
-          lines.push('', '## Subtasks', 'Track your progress by updating subtask status as you work:');
-          for (const st of task.subtasks) {
-            lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
-          }
-          lines.push(
-            '',
-            `Use the CLI to update subtask status as you complete each step:`,
-            `  am tasks subtask update ${task.id} --name "subtask name" --status in_progress`,
-            `  am tasks subtask update ${task.id} --name "subtask name" --status done`,
-          );
-        } else {
-          lines.push(
-            '',
-            `If you want to track progress, create subtasks via CLI:`,
-            `  am tasks subtask add ${task.id} --name "step description"`,
-          );
         }
         prompt = lines.join('\n');
         break;
