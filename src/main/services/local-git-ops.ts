@@ -114,8 +114,8 @@ export class LocalGitOps implements IGitOps {
   }
 
   async getCommitDetail(hash: string): Promise<GitCommitDetail> {
-    const body = await this.git(['log', '-1', '--format=%b', '--', hash]);
-    const filesOutput = await this.git(['diff-tree', '--no-commit-id', '--name-status', '-r', '--', hash]);
+    const body = await this.git(['log', '-1', '--format=%b', hash]);
+    const filesOutput = await this.git(['diff', '--name-status', `${hash}^`, hash]);
     const files: GitFileChange[] = filesOutput
       .split('\n')
       .filter(Boolean)
