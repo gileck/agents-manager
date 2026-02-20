@@ -168,8 +168,10 @@ function applyMigrations(db: Database.Database): void {
       pr_link TEXT,
       branch_name TEXT,
       plan TEXT,
+      technical_design TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
       plan_comments TEXT NOT NULL DEFAULT '[]',
+      technical_design_comments TEXT NOT NULL DEFAULT '[]',
       metadata TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
@@ -317,6 +319,7 @@ function applyMigrations(db: Database.Database): void {
       modes TEXT NOT NULL DEFAULT '[]',
       system_prompt TEXT,
       timeout INTEGER,
+      skills TEXT NOT NULL DEFAULT '[]',
       is_built_in INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -444,7 +447,7 @@ export function createTestContext(): TestContext {
   agentFramework.registerAgent(scriptedAgent);
   agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'claude-code'));
 
-  // Agent service
+  // Agent service (pass factory functions that return the shared stubs)
   const agentService = new AgentService(
     agentFramework, agentRunStore,
     () => worktreeManager,
