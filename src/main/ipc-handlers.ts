@@ -634,6 +634,10 @@ export function registerIpcHandlers(services: AppServices): void {
     return services.chatAgentService.summarizeMessages(projectId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.CHAT_COSTS, async () => {
+    return services.chatMessageStore.getCostSummary();
+  });
+
   // ============================================
   // Shell Operations
   // ============================================

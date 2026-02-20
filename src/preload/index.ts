@@ -103,6 +103,7 @@ const IPC_CHANNELS = {
   CHAT_CLEAR: 'chat:clear',
   CHAT_SUMMARIZE: 'chat:summarize',
   CHAT_OUTPUT: 'chat:output',
+  CHAT_COSTS: 'chat:costs',
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
   GIT_COMMIT_DETAIL: 'git:commit-detail',
@@ -327,6 +328,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR, projectId),
     summarize: (projectId: string): Promise<ChatMessage[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SUMMARIZE, projectId),
+    costs: (): Promise<{ inputTokens: number; outputTokens: number }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_COSTS),
   },
 
   // Shell operations

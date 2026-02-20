@@ -128,6 +128,14 @@ export class ChatAgentService {
     const messages = await this.chatMessageStore.getMessagesForProject(projectId);
     if (messages.length === 0) return [];
 
+    // Sum historical costs from existing messages
+    let historicalInputTokens = 0;
+    let historicalOutputTokens = 0;
+    for (const m of messages) {
+      historicalInputTokens += m.costInputTokens ?? 0;
+      historicalOutputTokens += m.costOutputTokens ?? 0;
+    }
+
     // Build a summarization prompt
     const conversationText = messages.map((m) => {
       const roleLabel = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
@@ -137,6 +145,8 @@ export class ChatAgentService {
     const summaryPrompt = `Summarize the following conversation concisely. Capture key topics discussed, decisions made, and important context. Output only the summary text, nothing else.\n\n${conversationText}`;
 
     let summaryText = '';
+    let summaryCostInput: number | undefined;
+    let summaryCostOutput: number | undefined;
     try {
       const query = await this.loadQuery();
       for await (const message of query({
@@ -152,6 +162,10 @@ export class ChatAgentService {
               summaryText += block.text;
             }
           }
+        } else if (message.type === 'result') {
+          const resultMsg = message as SdkResultMessage;
+          summaryCostInput = resultMsg.usage?.input_tokens;
+          summaryCostOutput = resultMsg.usage?.output_tokens;
         }
       }
     } catch (err) {
@@ -162,8 +176,18 @@ export class ChatAgentService {
       summaryText = `Conversation summary: ${messages.length} messages exchanged.`;
     }
 
+    // Combine historical costs + summarization costs onto the summary message
+    const totalInputTokens = historicalInputTokens + (summaryCostInput ?? 0);
+    const totalOutputTokens = historicalOutputTokens + (summaryCostOutput ?? 0);
+
     const result = await this.chatMessageStore.replaceAllMessages(projectId, [
-      { projectId, role: 'system', content: `[Conversation Summary]\n\n${summaryText}` },
+      {
+        projectId,
+        role: 'system',
+        content: `[Conversation Summary]\n\n${summaryText}`,
+        costInputTokens: totalInputTokens || undefined,
+        costOutputTokens: totalOutputTokens || undefined,
+      },
     ]);
 
     return result;
@@ -182,6 +206,8 @@ export class ChatAgentService {
     const sandboxGuard = new SandboxGuard([], [projectPath]);
 
     let resultText = '';
+    let costInputTokens: number | undefined;
+    let costOutputTokens: number | undefined;
 
     try {
       for await (const message of query({
@@ -219,7 +245,9 @@ export class ChatAgentService {
             }
           }
         } else if (message.type === 'result') {
-          // Done
+          const resultMsg = message as SdkResultMessage;
+          costInputTokens = resultMsg.usage?.input_tokens;
+          costOutputTokens = resultMsg.usage?.output_tokens;
         } else {
           const otherMsg = message as SdkOtherMessage;
           if (otherMsg.message?.content) {
@@ -235,12 +263,14 @@ export class ChatAgentService {
     } finally {
       this.runningControllers.delete(projectId);
 
-      // Persist assistant response
+      // Persist assistant response with cost data
       if (resultText.trim()) {
         await this.chatMessageStore.addMessage({
           projectId,
           role: 'assistant',
           content: resultText,
+          costInputTokens,
+          costOutputTokens,
         });
       }
 

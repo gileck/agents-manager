@@ -34,6 +34,10 @@ type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkOtherMessage
 export abstract class BaseClaudeAgent implements IAgent {
   abstract readonly type: string;
 
+  /** Partial cost data accessible even when execute() throws. */
+  lastCostInputTokens: number | undefined;
+  lastCostOutputTokens: number | undefined;
+
   private runningAbortControllers = new Map<string, AbortController>();
 
   abstract buildPrompt(context: AgentContext): string;
@@ -67,6 +71,9 @@ export abstract class BaseClaudeAgent implements IAgent {
   }
 
   async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void, onPromptBuilt?: (prompt: string) => void): Promise<AgentRunResult> {
+    this.lastCostInputTokens = undefined;
+    this.lastCostOutputTokens = undefined;
+
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     const query = await this.loadQuery();
 
@@ -180,6 +187,8 @@ export abstract class BaseClaudeAgent implements IAgent {
           }
           costInputTokens = resultMsg.usage?.input_tokens;
           costOutputTokens = resultMsg.usage?.output_tokens;
+          this.lastCostInputTokens = costInputTokens;
+          this.lastCostOutputTokens = costOutputTokens;
         } else {
           const otherMsg = message as SdkOtherMessage;
           if (otherMsg.message?.content) {

@@ -691,10 +691,14 @@ export interface ChatMessage {
   role: ChatMessageRole;
   content: string;
   createdAt: number;
+  costInputTokens: number | null;
+  costOutputTokens: number | null;
 }
 
 export interface ChatMessageCreateInput {
   projectId: string;
   role: ChatMessageRole;
   content: string;
+  costInputTokens?: number;
+  costOutputTokens?: number;
 }

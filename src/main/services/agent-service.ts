@@ -339,20 +339,25 @@ export class AgentService implements IAgentService {
       this.agentRunStore.updateRun(run.id, { prompt }).catch(() => {});
     };
 
+    let result: import('../../shared/types').AgentRunResult | undefined;
     try {
-      let result;
       try {
         result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt);
       } catch (err) {
         clearInterval(flushInterval);
         const errorMsg = err instanceof Error ? err.message : String(err);
         const completedAt = now();
+        // Recover partial cost data from agent if available
+        const partialInputTokens = 'lastCostInputTokens' in agent ? (agent as { lastCostInputTokens?: number }).lastCostInputTokens : undefined;
+        const partialOutputTokens = 'lastCostOutputTokens' in agent ? (agent as { lastCostOutputTokens?: number }).lastCostOutputTokens : undefined;
         await this.agentRunStore.updateRun(run.id, {
           status: 'failed',
           output: errorMsg,
           outcome: 'failed',
           exitCode: 1,
           completedAt,
+          costInputTokens: partialInputTokens,
+          costOutputTokens: partialOutputTokens,
         });
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
         await this.taskEventLog.log({
@@ -391,6 +396,10 @@ export class AgentService implements IAgentService {
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
       let validationAttempts = 0;
 
+      // Track accumulated costs across validation retries
+      let accumulatedInputTokens = result.costInputTokens ?? 0;
+      let accumulatedOutputTokens = result.costOutputTokens ?? 0;
+
       if (validationCommands.length > 0) {
         this.taskEventLog.log({
           taskId,
@@ -417,8 +426,18 @@ export class AgentService implements IAgentService {
         try {
           result = await agent.execute(context, config, wrappedOnOutput, onLog);
         } catch (err) {
-          result = { exitCode: 1, output: err instanceof Error ? err.message : String(err), outcome: 'failed' };
+          const retryPartialInput = 'lastCostInputTokens' in agent ? (agent as { lastCostInputTokens?: number }).lastCostInputTokens : undefined;
+          const retryPartialOutput = 'lastCostOutputTokens' in agent ? (agent as { lastCostOutputTokens?: number }).lastCostOutputTokens : undefined;
+          result = { exitCode: 1, output: err instanceof Error ? err.message : String(err), outcome: 'failed', costInputTokens: retryPartialInput, costOutputTokens: retryPartialOutput };
         }
+        accumulatedInputTokens += result.costInputTokens ?? 0;
+        accumulatedOutputTokens += result.costOutputTokens ?? 0;
+      }
+
+      // Patch result with accumulated costs if retries occurred
+      if (validationAttempts > 0) {
+        result.costInputTokens = accumulatedInputTokens;
+        result.costOutputTokens = accumulatedOutputTokens;
       }
 
       // Final validation check after retries exhausted
@@ -751,6 +770,8 @@ export class AgentService implements IAgentService {
           exitCode: 1,
           output: `Internal error: ${errMsg}`,
           completedAt: now(),
+          costInputTokens: result?.costInputTokens,
+          costOutputTokens: result?.costOutputTokens,
         });
       } catch {
         // Last resort — can't even update the run

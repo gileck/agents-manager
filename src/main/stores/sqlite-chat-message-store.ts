@@ -9,6 +9,8 @@ interface ChatMessageRow {
   role: string;
   content: string;
   created_at: number;
+  cost_input_tokens: number | null;
+  cost_output_tokens: number | null;
 }
 
 function rowToMessage(row: ChatMessageRow): ChatMessage {
@@ -18,6 +20,8 @@ function rowToMessage(row: ChatMessageRow): ChatMessage {
     role: row.role as ChatMessage['role'],
     content: row.content,
     createdAt: row.created_at,
+    costInputTokens: row.cost_input_tokens,
+    costOutputTokens: row.cost_output_tokens,
   };
 }
 
@@ -29,8 +33,8 @@ export class SqliteChatMessageStore implements IChatMessageStore {
     const timestamp = now();
 
     this.db.prepare(
-      'INSERT INTO chat_messages (id, project_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(id, input.projectId, input.role, input.content, timestamp);
+      'INSERT INTO chat_messages (id, project_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, input.projectId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null);
 
     return {
       id,
@@ -38,6 +42,8 @@ export class SqliteChatMessageStore implements IChatMessageStore {
       role: input.role,
       content: input.content,
       createdAt: timestamp,
+      costInputTokens: input.costInputTokens ?? null,
+      costOutputTokens: input.costOutputTokens ?? null,
     };
   }
 
@@ -59,24 +65,33 @@ export class SqliteChatMessageStore implements IChatMessageStore {
       this.db.prepare('DELETE FROM chat_messages WHERE project_id = ?').run(projectId);
 
       const insert = this.db.prepare(
-        'INSERT INTO chat_messages (id, project_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO chat_messages (id, project_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
       );
 
       for (const msg of messages) {
         const id = generateId();
         const timestamp = now();
-        insert.run(id, projectId, msg.role, msg.content, timestamp);
+        insert.run(id, projectId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null);
         result.push({
           id,
           projectId,
           role: msg.role,
           content: msg.content,
           createdAt: timestamp,
+          costInputTokens: msg.costInputTokens ?? null,
+          costOutputTokens: msg.costOutputTokens ?? null,
         });
       }
     });
 
     txn();
     return result;
+  }
+
+  async getCostSummary(): Promise<{ inputTokens: number; outputTokens: number }> {
+    const row = this.db.prepare(
+      'SELECT COALESCE(SUM(cost_input_tokens), 0) AS input_tokens, COALESCE(SUM(cost_output_tokens), 0) AS output_tokens FROM chat_messages'
+    ).get() as { input_tokens: number; output_tokens: number };
+    return { inputTokens: row.input_tokens, outputTokens: row.output_tokens };
   }
 }

@@ -43,6 +43,11 @@ export function CostPage() {
     []
   );
 
+  const { data: chatCosts, loading: chatCostsLoading } = useIpc<{ inputTokens: number; outputTokens: number }>(
+    () => window.api.chat.costs(),
+    []
+  );
+
   const [timeGranularity, setTimeGranularity] = useState<TimeGranularity>('day');
   const [taskSortField, setTaskSortField] = useState<TaskSortField>('cost');
   const [taskSortDir, setTaskSortDir] = useState<SortDir>('desc');
@@ -50,21 +55,28 @@ export function CostPage() {
   const runs = allRuns ?? [];
   const taskList = tasks ?? [];
 
-  // Summary
+  // Summary (agent runs + chat)
   const summary = useMemo(() => {
-    let inputTokens = 0;
-    let outputTokens = 0;
+    let agentInputTokens = 0;
+    let agentOutputTokens = 0;
     for (const run of runs) {
-      inputTokens += Number(run.costInputTokens) || 0;
-      outputTokens += Number(run.costOutputTokens) || 0;
+      agentInputTokens += Number(run.costInputTokens) || 0;
+      agentOutputTokens += Number(run.costOutputTokens) || 0;
     }
+    const chatInput = chatCosts?.inputTokens ?? 0;
+    const chatOutput = chatCosts?.outputTokens ?? 0;
+    const inputTokens = agentInputTokens + chatInput;
+    const outputTokens = agentOutputTokens + chatOutput;
     return {
       inputTokens,
       outputTokens,
       totalCost: calculateCost(inputTokens, outputTokens),
       totalRuns: runs.length,
+      chatInputTokens: chatInput,
+      chatOutputTokens: chatOutput,
+      chatCost: calculateCost(chatInput, chatOutput),
     };
-  }, [runs]);
+  }, [runs, chatCosts]);
 
   // Time aggregation
   const timePeriods = useMemo(() => {
@@ -144,7 +156,7 @@ export function CostPage() {
   const sortIndicator = (field: TaskSortField) =>
     taskSortField === field ? (taskSortDir === 'desc' ? ' \u25BC' : ' \u25B2') : '';
 
-  const loading = runsLoading || tasksLoading;
+  const loading = runsLoading || tasksLoading || chatCostsLoading;
 
   if (loading && runs.length === 0) {
     return (
@@ -193,6 +205,14 @@ export function CostPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Cost breakdown by source */}
+      {summary.chatCost > 0 && (
+        <div className="text-xs text-muted-foreground flex gap-4">
+          <span>Agent Runs: {formatCost(summary.totalCost - summary.chatCost)}</span>
+          <span>Chat: {formatCost(summary.chatCost)}</span>
+        </div>
+      )}
 
       {/* Time aggregation */}
       <Card>

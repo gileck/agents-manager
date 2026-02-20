@@ -124,6 +124,7 @@ export const IPC_CHANNELS = {
   CHAT_CLEAR: 'chat:clear',
   CHAT_SUMMARIZE: 'chat:summarize',
   CHAT_OUTPUT: 'chat:output',
+  CHAT_COSTS: 'chat:costs',
 
   // Source Control (project-scoped)
   GIT_PROJECT_LOG: 'git:project-log',

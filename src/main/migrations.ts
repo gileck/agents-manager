@@ -639,6 +639,13 @@ export function getMigrations(): Migration[] {
       name: '055_reseed_pipelines_design_before_plan',
       sql: getReseedPipelinesSql(),
     },
+    {
+      name: '056_add_cost_to_chat_messages',
+      sql: `
+        ALTER TABLE chat_messages ADD COLUMN cost_input_tokens INTEGER;
+        ALTER TABLE chat_messages ADD COLUMN cost_output_tokens INTEGER
+      `,
+    },
   ];
 }
 

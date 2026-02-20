@@ -5,4 +5,5 @@ export interface IChatMessageStore {
   getMessagesForProject(projectId: string): Promise<ChatMessage[]>;
   clearMessages(projectId: string): Promise<void>;
   replaceAllMessages(projectId: string, messages: ChatMessageCreateInput[]): Promise<ChatMessage[]>;
+  getCostSummary(): Promise<{ inputTokens: number; outputTokens: number }>;
 }
