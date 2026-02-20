@@ -6,6 +6,7 @@ import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { IScmPlatform } from '../interfaces/scm-platform';
+import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { Task, Transition, TransitionContext, HookResult } from '../../shared/types';
 
 export interface ScmHandlerDeps {
@@ -16,6 +17,7 @@ export interface ScmHandlerDeps {
   createWorktreeManager: (projectPath: string) => IWorktreeManager;
   createGitOps: (cwd: string) => IGitOps;
   createScmPlatform: (repoPath: string) => IScmPlatform;
+  workflowService: IWorkflowService;
 }
 
 export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps): void {
@@ -48,6 +50,22 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     }
 
     const scmPlatform = deps.createScmPlatform(project.path);
+
+    // Pre-merge mergeability check (safety net for conflicts)
+    try {
+      const mergeable = await scmPlatform.isPRMergeable(prUrl);
+      if (!mergeable) {
+        const msg = 'PR is not mergeable (likely has conflicts with base branch)';
+        await ghLog(msg, 'error', { url: prUrl });
+        throw new Error(msg);
+      }
+    } catch (err) {
+      // If the mergeability check itself fails (not the result), log and continue
+      // to let GitHub's own merge logic be the final arbiter
+      if (err instanceof Error && err.message.includes('not mergeable')) throw err;
+      await ghLog(`Mergeability check failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
+    }
+
     await ghLog(`Merging PR: ${prUrl}`);
     try {
       await scmPlatform.mergePR(prUrl);
@@ -119,7 +137,20 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       await gitOps.rebase('origin/main');
       await gitLog('Rebased onto origin/main before push');
     } catch (err) {
-      await gitLog(`Rebase onto origin/main failed: ${err instanceof Error ? err.message : String(err)}`, 'warning');
+      // Abort the broken rebase so the worktree is usable
+      try { await gitOps.rebaseAbort(); } catch { /* may not be in rebase state */ }
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await gitLog(`Rebase onto origin/main failed (merge conflicts): ${errorMsg}`, 'error');
+
+      // Start a resolve_conflicts agent to fix the conflicts
+      try {
+        await deps.workflowService.startAgent(task.id, 'resolve_conflicts', 'claude-code');
+        await gitLog('Started resolve_conflicts agent to fix merge conflicts');
+      } catch (startErr) {
+        await gitLog(`Failed to start resolve_conflicts agent: ${startErr instanceof Error ? startErr.message : String(startErr)}`, 'warning');
+      }
+
+      return { success: false, error: 'Merge conflicts detected — resolve_conflicts agent started' };
     }
 
     // Collect diff against origin/main (what GitHub will compare against)

@@ -13,6 +13,8 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
       case 'implement':
       case 'request_changes':
         return 200;
+      case 'resolve_conflicts':
+        return 50;
       default:
         return 100;
     }
@@ -24,6 +26,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
       case 'plan':
       case 'plan_revision':
       case 'investigate':
+      case 'resolve_conflicts':
         return 5 * 60 * 1000;
       default:
         return 10 * 60 * 1000;
@@ -85,6 +88,17 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
             type: 'object',
             properties: {
               summary: { type: 'string', description: 'A short summary of the fixes made to address reviewer feedback' },
+            },
+            required: ['summary'],
+          },
+        };
+      case 'resolve_conflicts':
+        return {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              summary: { type: 'string', description: 'A short summary of how merge conflicts were resolved' },
             },
             required: ['summary'],
           },
@@ -222,6 +236,23 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         prompt = invLines.join('\n');
         break;
       }
+      case 'resolve_conflicts': {
+        const conflictLines = [
+          `The branch for this task has merge conflicts with origin/main. Resolve them so the branch can be pushed cleanly.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+          ``,
+          `## Instructions`,
+          `1. Run \`git fetch origin\` to get the latest main.`,
+          `2. Run \`git rebase origin/main\` to start the rebase.`,
+          `3. For each conflict, open the conflicting files, resolve the conflicts, then \`git add\` the resolved files.`,
+          `4. Run \`git rebase --continue\` after resolving each conflict.`,
+          `5. Once the rebase is complete, verify the project builds (\`npm run build\` or equivalent).`,
+          `6. Do NOT push — the pipeline will handle pushing after you finish.`,
+        ];
+        prompt = conflictLines.join('\n');
+        break;
+      }
       case 'request_changes': {
         const rcLines = [
           `A code reviewer has reviewed the changes on this branch and requested changes.`,
@@ -274,6 +305,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
       case 'investigate': return 'investigation_complete';
       case 'implement': return 'pr_ready';
       case 'request_changes': return 'pr_ready';
+      case 'resolve_conflicts': return 'pr_ready';
       default: return 'completed';
     }
   }

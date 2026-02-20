@@ -235,7 +235,7 @@ function applyMigrations(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
       agent_type TEXT NOT NULL,
-      mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review','request_changes','plan_revision','investigate')),
+      mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review','request_changes','plan_revision','investigate','resolve_conflicts')),
       status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')),
       output TEXT,
       outcome TEXT,
@@ -472,6 +472,7 @@ export function createTestContext(): TestContext {
     createWorktreeManager: () => worktreeManager,
     createGitOps: () => gitOps,
     createScmPlatform: () => scmPlatform,
+    workflowService,
   });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerNotificationHandler(pipelineEngine, { notificationRouter });

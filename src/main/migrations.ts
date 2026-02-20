@@ -582,6 +582,14 @@ export function getMigrations(): Migration[] {
       name: '043_reseed_pipeline_categories',
       sql: getReseedPipelinesSql(),
     },
+    {
+      name: '044_widen_agent_runs_for_resolve_conflicts',
+      sql: getWidenAgentRunsForResolveConflictsSql(),
+    },
+    {
+      name: '045_reseed_pipelines_conflict_detection',
+      sql: getReseedPipelinesSql(),
+    },
   ];
 }
 
@@ -996,6 +1004,107 @@ function getAddInvestigateModeSql(): string {
   // Actually, we'll just use a direct UPDATE that reads and appends via SQLite JSON functions.
   const modeJson = escSql(JSON.stringify(investigateMode));
   return `UPDATE agent_definitions SET modes = json_insert(modes, '$[#]', json('${modeJson}')), updated_at = ${ts} WHERE id = 'agent-def-claude-code'`;
+}
+
+function getWidenAgentRunsForResolveConflictsSql(): string {
+  return `
+    -- Rebuild agent_runs to widen the mode CHECK constraint to include resolve_conflicts.
+    -- task_phases and pending_prompts have FKs to agent_runs,
+    -- so we must rebuild them too (drop children first, then parent).
+
+    -- 1. Rebuild task_phases without FK to agent_runs
+    CREATE TABLE task_phases_tmp (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')),
+      agent_run_id TEXT,
+      started_at INTEGER,
+      completed_at INTEGER,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    );
+    INSERT INTO task_phases_tmp SELECT * FROM task_phases;
+    DROP TABLE task_phases;
+
+    -- 2. Rebuild pending_prompts without FK to agent_runs
+    CREATE TABLE pending_prompts_tmp (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      agent_run_id TEXT NOT NULL,
+      prompt_type TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      response TEXT,
+      status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')),
+      created_at INTEGER NOT NULL,
+      answered_at INTEGER,
+      resume_outcome TEXT,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    );
+    INSERT INTO pending_prompts_tmp SELECT * FROM pending_prompts;
+    DROP TABLE pending_prompts;
+
+    -- 3. Now rebuild agent_runs with updated CHECK
+    CREATE TABLE agent_runs_new (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      agent_type TEXT NOT NULL,
+      mode TEXT NOT NULL CHECK(mode IN ('plan','implement','review','request_changes','plan_revision','investigate','resolve_conflicts')),
+      status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')),
+      output TEXT,
+      outcome TEXT,
+      payload TEXT,
+      prompt TEXT,
+      exit_code INTEGER,
+      started_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      cost_input_tokens INTEGER,
+      cost_output_tokens INTEGER,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    );
+    INSERT INTO agent_runs_new SELECT * FROM agent_runs;
+    DROP TABLE agent_runs;
+    ALTER TABLE agent_runs_new RENAME TO agent_runs;
+
+    -- 4. Restore task_phases with FK to new agent_runs
+    CREATE TABLE task_phases (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')),
+      agent_run_id TEXT,
+      started_at INTEGER,
+      completed_at INTEGER,
+      FOREIGN KEY(task_id) REFERENCES tasks(id),
+      FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+    );
+    INSERT INTO task_phases SELECT * FROM task_phases_tmp;
+    DROP TABLE task_phases_tmp;
+
+    -- 5. Restore pending_prompts with FK to new agent_runs
+    CREATE TABLE pending_prompts (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      agent_run_id TEXT NOT NULL,
+      prompt_type TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      response TEXT,
+      status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')),
+      created_at INTEGER NOT NULL,
+      answered_at INTEGER,
+      resume_outcome TEXT,
+      FOREIGN KEY(task_id) REFERENCES tasks(id),
+      FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id)
+    );
+    INSERT INTO pending_prompts SELECT * FROM pending_prompts_tmp;
+    DROP TABLE pending_prompts_tmp;
+
+    -- 6. Recreate all indexes
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_task_id ON agent_runs(task_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+    CREATE INDEX IF NOT EXISTS idx_task_phases_task_id ON task_phases(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
+  `;
 }
 
 function getSeedPipelinesSql(): string {

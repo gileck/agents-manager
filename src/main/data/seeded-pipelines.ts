@@ -147,10 +147,23 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' }] },
     // No changes detected on branch after implementation
     { from: 'implementing', to: 'open', trigger: 'agent', agentOutcome: 'no_changes' },
+    // Merge conflict detection — self-loop to resolve conflicts
+    { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'conflicts_detected',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'resolve_conflicts', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+    // PR push retry (handles conflicts arising after agent-service check or after request_changes)
+    { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
+      guards: [{ name: 'max_retries', params: { max: 3 } }],
+      hooks: [
+        { name: 'push_and_create_pr', policy: 'required' },
+        { name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' },
+      ] },
     // Recovery: cancel agent phases back to open
     { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },
     { from: 'implementing', to: 'open', trigger: 'manual', label: 'Cancel Implementation' },
     { from: 'implementing', to: 'plan_review', trigger: 'manual', label: 'Back to Plan Review' },
+    // Manual recovery if merge_pr safety net catches a conflict
+    { from: 'done', to: 'pr_review', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],
 };
 
@@ -229,10 +242,23 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' }] },
     // No changes detected on branch after implementation
     { from: 'implementing', to: 'reported', trigger: 'agent', agentOutcome: 'no_changes' },
+    // Merge conflict detection — self-loop to resolve conflicts
+    { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'conflicts_detected',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'resolve_conflicts', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+    // PR push retry (handles conflicts arising after agent-service check or after request_changes)
+    { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
+      guards: [{ name: 'max_retries', params: { max: 3 } }],
+      hooks: [
+        { name: 'push_and_create_pr', policy: 'required' },
+        { name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' },
+      ] },
     // Recovery
     { from: 'investigating', to: 'reported', trigger: 'manual', label: 'Cancel Investigation' },
     { from: 'implementing', to: 'reported', trigger: 'manual', label: 'Cancel Implementation' },
     { from: 'implementing', to: 'investigation_review', trigger: 'manual', label: 'Back to Investigation Review' },
+    // Manual recovery if merge_pr safety net catches a conflict
+    { from: 'done', to: 'pr_review', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],
 };
 

@@ -49,6 +49,13 @@ export class GitHubScmPlatform implements IScmPlatform {
     await this.gh(['pr', 'merge', String(prNumber), '--squash', '--delete-branch']);
   }
 
+  async isPRMergeable(prUrl: string): Promise<boolean> {
+    const prNumber = this.extractPRNumber(prUrl);
+    const output = await this.gh(['pr', 'view', String(prNumber), '--json', 'mergeable']);
+    const data = JSON.parse(output);
+    return data.mergeable === 'MERGEABLE';
+  }
+
   async getPRStatus(prUrl: string): Promise<PRStatus> {
     const prNumber = this.extractPRNumber(prUrl);
     const output = await this.gh(['pr', 'view', String(prNumber), '--json', 'state']);

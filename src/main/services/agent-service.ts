@@ -571,6 +571,34 @@ export class AgentService implements IAgentService {
           }
         }
 
+        // Early conflict detection: rebase check before transition
+        if (effectiveOutcome === 'pr_ready') {
+          try {
+            const gitOps = this.createGitOps(worktree.path);
+            await gitOps.fetch('origin');
+            await gitOps.rebase('origin/main');
+            await this.taskEventLog.log({
+              taskId,
+              category: 'git',
+              severity: 'info',
+              message: 'Pre-transition rebase onto origin/main succeeded',
+            });
+          } catch {
+            try {
+              const gitOps = this.createGitOps(worktree.path);
+              await gitOps.rebaseAbort();
+            } catch { /* may not be in rebase state */ }
+            await this.taskEventLog.log({
+              taskId,
+              category: 'git',
+              severity: 'warning',
+              message: 'Merge conflicts with origin/main detected — switching to conflicts_detected outcome',
+              data: { branch: worktree.branch },
+            });
+            effectiveOutcome = 'conflicts_detected';
+          }
+        }
+
         if (effectiveOutcome) {
           this.taskEventLog.log({
             taskId,

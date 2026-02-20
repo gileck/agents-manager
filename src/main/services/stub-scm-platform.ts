@@ -20,6 +20,10 @@ export class StubScmPlatform implements IScmPlatform {
     this.prStatuses.set(prUrl, 'merged');
   }
 
+  async isPRMergeable(_prUrl: string): Promise<boolean> {
+    return true;
+  }
+
   async getPRStatus(prUrl: string): Promise<PRStatus> {
     return this.prStatuses.get(prUrl) ?? 'open';
   }

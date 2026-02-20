@@ -154,6 +154,7 @@ export function createAppServices(db: Database.Database): AppServices {
   registerScmHandler(pipelineEngine, {
     projectStore, taskStore, taskArtifactStore, taskEventLog,
     createWorktreeManager, createGitOps, createScmPlatform,
+    workflowService,
   });
 
   return {
