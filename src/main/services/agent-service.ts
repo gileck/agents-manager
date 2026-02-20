@@ -478,8 +478,8 @@ export class AgentService implements IAgentService {
         taskId,
         category: 'agent_debug',
         severity: 'debug',
-        message: `Agent execute() returned: exitCode=${result.exitCode}, outcome=${result.outcome}, outputLength=${result.output?.length ?? 0}, costTokens=${result.costInputTokens ?? 0}/${result.costOutputTokens ?? 0}, hasStructuredOutput=${!!result.structuredOutput}`,
-        data: { exitCode: result.exitCode, outcome: result.outcome, outputLength: result.output?.length ?? 0 },
+        message: `Agent execute() returned: exitCode=${result.exitCode}, outcome=${result.outcome}, outputLength=${result.output?.length ?? 0}, costTokens=${result.costInputTokens ?? 0}/${result.costOutputTokens ?? 0}, hasStructuredOutput=${!!result.structuredOutput}${result.error ? `, error=${result.error}` : ''}`,
+        data: { exitCode: result.exitCode, outcome: result.outcome, outputLength: result.output?.length ?? 0, ...(result.error ? { error: result.error } : {}) },
       }).catch(() => {});
 
       // Post-agent validation loop (skip for plan/plan_revision/investigate/technical_design modes — no code changes to validate)
@@ -844,7 +844,14 @@ export class AgentService implements IAgentService {
         category: 'agent',
         severity: result.exitCode === 0 ? 'info' : 'error',
         message: `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}`,
-        data: { agentRunId: run.id, exitCode: result.exitCode, outcome: result.outcome },
+        data: {
+          agentRunId: run.id,
+          exitCode: result.exitCode,
+          outcome: result.outcome,
+          ...(result.error ? { error: result.error } : {}),
+          costInputTokens: result.costInputTokens,
+          costOutputTokens: result.costOutputTokens,
+        },
       });
 
       // Emit status change

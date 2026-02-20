@@ -107,7 +107,8 @@ export abstract class BaseClaudeAgent implements IAgent {
     const runId = context.task.id;
     this.runningAbortControllers.set(runId, abortController);
 
-    const timer = setTimeout(() => abortController.abort(), timeout);
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; abortController.abort(); }, timeout);
 
     let resultText = '';
     let costInputTokens: number | undefined;
@@ -140,6 +141,8 @@ export abstract class BaseClaudeAgent implements IAgent {
       maxTurns,
       hasOutputFormat: !!outputFormat,
     });
+
+    const startTime = Date.now();
 
     try {
       for await (const message of query({
@@ -219,10 +222,19 @@ export abstract class BaseClaudeAgent implements IAgent {
       log(`SDK message loop completed: ${messageCount} messages, hasStructuredOutput=${!!structuredOutput}, isError=${isError}`);
     } catch (err) {
       isError = true;
-      const isAbort = err instanceof Error && err.name === 'AbortError';
-      errorMessage = err instanceof Error ? err.message : String(err);
-      if (isAbort) {
-        log(`Agent timed out after ${timeout}ms (${messageCount} messages processed)`);
+      // The SDK's AbortError class is minified so err.name !== 'AbortError'.
+      // Use the timedOut flag (set by our setTimeout callback) and the abort
+      // signal to distinguish timeout, user-abort, and execution errors.
+      const sdkError = err instanceof Error ? err.message : String(err);
+      errorMessage = sdkError;
+      if (timedOut) {
+        const elapsed = Date.now() - startTime;
+        errorMessage = `Agent timed out after ${Math.round(elapsed / 1000)}s (timeout=${Math.round(timeout / 1000)}s, ${messageCount} messages processed)`;
+        log(`${errorMessage} [sdk: ${sdkError}]`);
+      } else if (abortController.signal.aborted) {
+        const elapsed = Date.now() - startTime;
+        errorMessage = `Agent aborted after ${Math.round(elapsed / 1000)}s (${messageCount} messages processed)`;
+        log(`${errorMessage} [sdk: ${sdkError}]`);
       } else {
         log(`Agent execution error: ${errorMessage}`);
       }
@@ -231,10 +243,11 @@ export abstract class BaseClaudeAgent implements IAgent {
       this.runningAbortControllers.delete(runId);
     }
 
+    const elapsed = Date.now() - startTime;
     const exitCode = isError ? 1 : 0;
     const outcome = this.inferOutcome(context.mode, exitCode, resultText);
 
-    log(`Agent returning: exitCode=${exitCode}, outcome=${outcome}, outputLength=${resultText.length}, hasStructuredOutput=${!!structuredOutput}`);
+    log(`Agent returning: exitCode=${exitCode}, outcome=${outcome}, outputLength=${resultText.length}, hasStructuredOutput=${!!structuredOutput}, duration=${Math.round(elapsed / 1000)}s, messages=${messageCount}, error=${errorMessage ?? 'none'}`);
 
     const output = resultText || errorMessage || '';
     return this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens, structuredOutput, prompt);

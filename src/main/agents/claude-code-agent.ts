@@ -25,6 +25,9 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
     if (config.timeout) return config.timeout;
     switch (context.mode) {
+      case 'implement':
+      case 'request_changes':
+        return 15 * 60 * 1000; // 15 min — implementation tasks need more time
       case 'plan':
       case 'plan_revision':
       case 'investigate':
