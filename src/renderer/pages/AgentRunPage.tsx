@@ -14,8 +14,7 @@ import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
-import { useAgentStream } from '../contexts/AgentStreamContext';
-import type { AgentRun, Task } from '../../shared/types';
+import type { AgentRun, Task, AgentChatMessage } from '../../shared/types';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
   plan_complete: 'Plan is ready for review. Go to task to review and approve.',
@@ -40,13 +39,11 @@ export function AgentRunPage() {
     [run?.taskId]
   );
 
-  // --- Agent stream context (for chat persistence across route changes) ---
-  const { getMessages, isActive } = useAgentStream();
   const taskId = run?.taskId;
-  const messages = taskId ? getMessages(taskId) : [];
 
-  // --- Streaming output ---
+  // --- Streaming output (raw text + structured messages from the same run) ---
   const [streamOutput, setStreamOutput] = useState('');
+  const [messages, setMessages] = useState<AgentChatMessage[]>([]);
   const initializedFromDb = useRef(false);
 
   useEffect(() => {
@@ -59,12 +56,22 @@ export function AgentRunPage() {
 
   useEffect(() => {
     if (!run) return;
-    const unsubscribe = window.api.on.agentOutput((tid: string, chunk: string) => {
+    // Reset both streams when the run changes
+    setStreamOutput('');
+    setMessages([]);
+    initializedFromDb.current = false;
+
+    const unsubOutput = window.api.on.agentOutput((tid: string, chunk: string) => {
       if (tid === run.taskId) {
         setStreamOutput((prev) => prev + chunk);
       }
     });
-    return () => { unsubscribe(); };
+    const unsubMessage = window.api.on.agentMessage((tid: string, msg: AgentChatMessage) => {
+      if (tid === run.taskId) {
+        setMessages((prev) => [...prev, msg]);
+      }
+    });
+    return () => { unsubOutput(); unsubMessage(); };
   }, [run?.taskId]);
 
   // --- Poll agent run (2s while running) ---
@@ -176,7 +183,7 @@ export function AgentRunPage() {
 
   if (!run) return null;
 
-  const isRunning = run.status === 'running' || (taskId ? isActive(taskId) : false);
+  const isRunning = run.status === 'running';
   const displayOutput = isRunning ? streamOutput : (run.output || streamOutput);
   const outcomeMessage = run.outcome ? OUTCOME_MESSAGES[run.outcome] : null;
   const subtasks = task?.subtasks ?? [];
