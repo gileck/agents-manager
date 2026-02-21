@@ -17,6 +17,7 @@ import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IFeatureStore } from '../interfaces/feature-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
+import type { IKanbanBoardStore } from '../interfaces/kanban-board-store';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
 import { SqliteTaskStore } from '../stores/sqlite-task-store';
@@ -30,6 +31,7 @@ import { SqliteTaskContextStore } from '../stores/sqlite-task-context-store';
 import { SqliteFeatureStore } from '../stores/sqlite-feature-store';
 import { SqliteAgentDefinitionStore } from '../stores/sqlite-agent-definition-store';
 import { SqliteChatMessageStore } from '../stores/sqlite-chat-message-store';
+import { SqliteKanbanBoardStore } from '../stores/sqlite-kanban-board-store';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
@@ -82,6 +84,7 @@ export interface AppServices {
   taskContextStore: ITaskContextStore;
   featureStore: IFeatureStore;
   agentDefinitionStore: IAgentDefinitionStore;
+  kanbanBoardStore: IKanbanBoardStore;
   createWorktreeManager: (path: string) => IWorktreeManager;
   createGitOps: (cwd: string) => import('../interfaces/git-ops').IGitOps;
   agentSupervisor: AgentSupervisor;
@@ -112,6 +115,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const featureStore = new SqliteFeatureStore(db);
   const agentDefinitionStore = new SqliteAgentDefinitionStore(db);
   const chatMessageStore = new SqliteChatMessageStore(db);
+  const kanbanBoardStore = new SqliteKanbanBoardStore(db);
 
   // Phase 2 infrastructure — factory functions create project-scoped instances
   const createGitOps = (cwd: string) => new LocalGitOps(cwd);
@@ -207,6 +211,7 @@ export function createAppServices(db: Database.Database): AppServices {
     taskContextStore,
     featureStore,
     agentDefinitionStore,
+    kanbanBoardStore,
     createWorktreeManager,
     createGitOps,
     agentSupervisor,

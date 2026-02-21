@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@template/renderer/lib/utils';
-import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Palette, GitBranch, Settings, Bug, SlidersHorizontal, MessageSquare, DollarSign } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Palette, GitBranch, Settings, Bug, SlidersHorizontal, MessageSquare, DollarSign, Trello } from 'lucide-react';
 import { ActiveAgentsList } from './ActiveAgentsList';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 
@@ -9,6 +9,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/projects', icon: FolderOpen, label: 'Projects' },
   { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
+  { to: '/kanban', icon: Trello, label: 'Kanban' },
   { to: '/features', icon: Layers, label: 'Features' },
   { to: '/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/cost', icon: DollarSign, label: 'Cost' },

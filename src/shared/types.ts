@@ -841,3 +841,59 @@ export interface ChatMessageCreateInput {
   costInputTokens?: number;
   costOutputTokens?: number;
 }
+
+// ============================================
+// Kanban Board Types
+// ============================================
+
+export interface KanbanBoardConfig {
+  id: string;
+  projectId: string;
+  name: string;
+  columns: KanbanColumn[];
+  filters: KanbanFilters;
+  sortBy: 'priority' | 'created' | 'updated' | 'manual';
+  sortDirection: 'asc' | 'desc';
+  cardHeight: 'compact' | 'normal' | 'expanded';
+  showSubtasks: boolean;
+  showAssignee: boolean;
+  showTags: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface KanbanColumn {
+  id: string;
+  title: string;
+  statuses: string[];
+  color?: string;
+  collapsed: boolean;
+  order: number;
+  wip?: number;
+}
+
+export interface KanbanFilters {
+  pipelineId?: string;
+  assignee?: string;
+  tags?: string[];
+  featureId?: string;
+  search?: string;
+}
+
+export interface KanbanBoardCreateInput {
+  projectId: string;
+  name: string;
+  columns?: KanbanColumn[];
+}
+
+export interface KanbanBoardUpdateInput {
+  name?: string;
+  columns?: KanbanColumn[];
+  filters?: KanbanFilters;
+  sortBy?: 'priority' | 'created' | 'updated' | 'manual';
+  sortDirection?: 'asc' | 'desc';
+  cardHeight?: 'compact' | 'normal' | 'expanded';
+  showSubtasks?: boolean;
+  showAssignee?: boolean;
+  showTags?: boolean;
+}

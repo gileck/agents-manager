@@ -140,4 +140,12 @@ export const IPC_CHANNELS = {
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
   GIT_COMMIT_DETAIL: 'git:commit-detail',
+
+  // Kanban Board operations
+  KANBAN_BOARD_GET: 'kanban-board:get',
+  KANBAN_BOARD_GET_BY_PROJECT: 'kanban-board:get-by-project',
+  KANBAN_BOARD_LIST: 'kanban-board:list',
+  KANBAN_BOARD_CREATE: 'kanban-board:create',
+  KANBAN_BOARD_UPDATE: 'kanban-board:update',
+  KANBAN_BOARD_DELETE: 'kanban-board:delete',
 } as const;
