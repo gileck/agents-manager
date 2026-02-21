@@ -2,6 +2,10 @@
 
 Project-specific notes and context for Claude Code.
 
+## Package Manager
+
+**Always use `yarn` as the package manager. Never use `npm`.**
+
 ## Project Overview
 
 A production-ready Electron template for building macOS menu bar apps. Built with:
@@ -15,11 +19,11 @@ A production-ready Electron template for building macOS menu bar apps. Built wit
 
 ```bash
 # Development
-npm run build          # Build all (main + preload + renderer)
-npm run start          # Build and run (no DevTools)
-npm run start:devtools # Build and run with DevTools
-npm run electron       # Run without rebuilding (no DevTools)
-npm run electron:debug # Run without rebuilding (with DevTools)
+yarn build             # Build all (main + preload + renderer)
+yarn start             # Build and run (no DevTools)
+yarn start:devtools    # Build and run with DevTools
+yarn electron          # Run without rebuilding (no DevTools)
+yarn electron:debug    # Run without rebuilding (with DevTools)
 
 # Validation
 yarn checks            # Run TypeScript type-checking + ESLint (ALWAYS run after changing code)
@@ -27,11 +31,11 @@ yarn typecheck         # TypeScript only (all tsconfig projects)
 yarn lint              # ESLint only
 
 # Production / Deployment
-npm run dist           # Build distributable .app bundle
-npm run deploy         # Build, install to /Applications, and launch
+yarn dist              # Build distributable .app bundle
+yarn deploy            # Build, install to /Applications, and launch
 
 # Watch mode
-npm run dev            # Watch all three targets in parallel
+yarn dev               # Watch all three targets in parallel
 ```
 
 **Important:** Always run `yarn checks` after modifying code to ensure TypeScript and lint validations pass. A pre-commit hook enforces this automatically on every commit.
@@ -60,13 +64,13 @@ To install the app to your Mac and add it to the Dock:
 
 1. **First time:**
    ```bash
-   npm run deploy
+   yarn deploy
    ```
    Then drag your app from Applications to your Dock.
 
 2. **After code changes:**
    ```bash
-   npm run deploy
+   yarn deploy
    ```
    The Dock icon automatically uses the updated version.
 
@@ -455,10 +459,10 @@ function killProcessTree(pid: number) {
 
 ## Development Tips
 
-1. **Development mode:** `npm run start` builds and runs the app, use `npm run start:devtools` for DevTools
-2. **Quick restart:** After changes, just run `npm run start` again (auto-kills previous instance)
+1. **Development mode:** `yarn start` builds and runs the app, use `yarn start:devtools` for DevTools
+2. **Quick restart:** After changes, just run `yarn start` again (auto-kills previous instance)
 3. **Console logs:** Main process logs appear in terminal, renderer logs appear in DevTools
-4. **Hot reload:** Use `npm run dev` for watch mode (separate terminal windows for main/preload/renderer)
+4. **Hot reload:** Use `yarn dev` for watch mode (separate terminal windows for main/preload/renderer)
 5. **Template code:** Never modify files in `template/` — all customization goes in `src/`
 
 ## App Behavior
@@ -497,7 +501,7 @@ The `.gitignore` file excludes common build artifacts and temporary files from v
 - `build/`, `out/` - Alternative build directories
 
 **Dependencies:**
-- `node_modules/` - NPM packages (use `npm install` to restore)
+- `node_modules/` - Packages (use `yarn install` to restore)
 
 **System files:**
 - `.DS_Store` - macOS Finder metadata

@@ -40,11 +40,21 @@ If the rebase had conflicts that required resolution, do a quick review of the r
 
 ### 6. Merge changes to main
 
-Merge the current worktree branch into `main`. Use:
+Fast-forward main to the current branch. Since we already rebased onto main in step 4, this produces a clean linear history with no merge commit.
+
+Because `main` is checked out in the main worktree, you cannot `git checkout main` from a worktree. Instead, run the merge from the main worktree directory:
 
 ```bash
-git checkout main && git merge - && git checkout -
+git -C <main-worktree-path> merge --ff-only <current-branch-name>
 ```
+
+For example, if the main worktree is at `/Users/gileck/Projects/agents-manager` and the current branch is `worktree-my-feature`:
+
+```bash
+git -C /Users/gileck/Projects/agents-manager merge --ff-only worktree-my-feature
+```
+
+If fast-forward fails, it means the rebase in step 4 didn't fully incorporate main. Re-run `git rebase main`, resolve any conflicts, run checks again, then retry the fast-forward merge.
 
 ### 7. Summarize and notify
 
