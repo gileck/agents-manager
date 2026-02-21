@@ -38,6 +38,12 @@ export const IPC_CHANNELS = {
   TASK_DEPENDENTS: 'task:dependents',
   TASK_ADD_DEPENDENCY: 'task:add-dependency',
   TASK_REMOVE_DEPENDENCY: 'task:remove-dependency',
+  TASK_ALL_TRANSITIONS: 'task:all-transitions',
+  TASK_FORCE_TRANSITION: 'task:force-transition',
+  TASK_GUARD_CHECK: 'task:guard-check',
+  TASK_HOOK_RETRY: 'task:hook-retry',
+  TASK_PIPELINE_DIAGNOSTICS: 'task:pipeline-diagnostics',
+  TASK_ADVANCE_PHASE: 'task:advance-phase',
 
   // Pipeline operations
   PIPELINE_LIST: 'pipeline:list',

@@ -736,6 +736,66 @@ export interface TelegramBotLogEntry {
 }
 
 // ============================================
+// Pipeline Control & Diagnostics Types
+// ============================================
+
+export interface GuardCheckResult {
+  canTransition: boolean;
+  results: Array<{ guard: string; allowed: boolean; reason?: string }>;
+}
+
+export interface TransitionWithGuards extends Transition {
+  guardStatus?: GuardCheckResult;
+}
+
+export interface AllTransitionsResult {
+  manual: TransitionWithGuards[];
+  agent: TransitionWithGuards[];
+  system: TransitionWithGuards[];
+}
+
+export interface HookRetryResult {
+  success: boolean;
+  hookName: string;
+  error?: string;
+}
+
+export interface HookFailureRecord {
+  id: string;
+  taskId: string;
+  hookName: string;
+  error: string;
+  policy: HookExecutionPolicy;
+  transitionFrom: string;
+  transitionTo: string;
+  timestamp: number;
+  retryable: boolean;
+}
+
+export interface PipelineDiagnostics {
+  taskId: string;
+  currentStatus: string;
+  statusMeta: {
+    label: string;
+    category?: StatusCategory;
+    isFinal?: boolean;
+    color?: string;
+  };
+  allTransitions: AllTransitionsResult;
+  recentHookFailures: HookFailureRecord[];
+  phases: ImplementationPhase[] | null;
+  activePhaseIndex: number;
+  agentState: {
+    hasRunningAgent: boolean;
+    lastRunStatus: AgentRunStatus | null;
+    lastRunError: string | null;
+    totalFailedRuns: number;
+  };
+  isStuck: boolean;
+  stuckReason?: string;
+}
+
+// ============================================
 // Phase 4: Dashboard Types
 // ============================================
 

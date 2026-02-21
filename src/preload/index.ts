@@ -21,6 +21,11 @@ import type {
   ChatMessage,
   AgentChatMessage,
   TelegramBotLogEntry,
+  AllTransitionsResult,
+  GuardCheckResult,
+  HookRetryResult,
+  PipelineDiagnostics,
+  TransitionTrigger,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -52,6 +57,12 @@ const IPC_CHANNELS = {
   TASK_DEPENDENTS: 'task:dependents',
   TASK_ADD_DEPENDENCY: 'task:add-dependency',
   TASK_REMOVE_DEPENDENCY: 'task:remove-dependency',
+  TASK_ALL_TRANSITIONS: 'task:all-transitions',
+  TASK_FORCE_TRANSITION: 'task:force-transition',
+  TASK_GUARD_CHECK: 'task:guard-check',
+  TASK_HOOK_RETRY: 'task:hook-retry',
+  TASK_PIPELINE_DIAGNOSTICS: 'task:pipeline-diagnostics',
+  TASK_ADVANCE_PHASE: 'task:advance-phase',
   PIPELINE_LIST: 'pipeline:list',
   PIPELINE_GET: 'pipeline:get',
   AGENT_START: 'agent:start',
@@ -184,6 +195,18 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_ADD_DEPENDENCY, taskId, dependsOnTaskId),
     removeDependency: (taskId: string, dependsOnTaskId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_REMOVE_DEPENDENCY, taskId, dependsOnTaskId),
+    allTransitions: (taskId: string): Promise<AllTransitionsResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_ALL_TRANSITIONS, taskId),
+    forceTransition: (taskId: string, toStatus: string, actor?: string): Promise<TransitionResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_FORCE_TRANSITION, taskId, toStatus, actor),
+    guardCheck: (taskId: string, toStatus: string, trigger: TransitionTrigger): Promise<GuardCheckResult | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_GUARD_CHECK, taskId, toStatus, trigger),
+    hookRetry: (taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string): Promise<HookRetryResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_HOOK_RETRY, taskId, hookName, transitionFrom, transitionTo),
+    pipelineDiagnostics: (taskId: string): Promise<PipelineDiagnostics | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_PIPELINE_DIAGNOSTICS, taskId),
+    advancePhase: (taskId: string): Promise<TransitionResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_ADVANCE_PHASE, taskId),
     contextEntries: (taskId: string): Promise<TaskContextEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_CONTEXT_ENTRIES, taskId),
     debugTimeline: (taskId: string): Promise<DebugTimelineEntry[]> =>

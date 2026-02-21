@@ -220,6 +220,40 @@ export function registerIpcHandlers(services: AppServices): void {
     await services.taskStore.removeDependency(taskId, dependsOnTaskId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.TASK_ALL_TRANSITIONS, async (_, taskId: string) => {
+    validateId(taskId);
+    const task = await services.taskStore.getTask(taskId);
+    if (!task) return { manual: [], agent: [], system: [] };
+    return services.pipelineEngine.getAllTransitions(task);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_FORCE_TRANSITION, async (_, taskId: string, toStatus: string, actor?: string) => {
+    validateId(taskId);
+    return services.workflowService.forceTransitionTask(taskId, toStatus, actor);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_GUARD_CHECK, async (_, taskId: string, toStatus: string, trigger: string) => {
+    validateId(taskId);
+    const task = await services.taskStore.getTask(taskId);
+    if (!task) return null;
+    return services.pipelineEngine.checkGuards(task, toStatus, trigger as 'manual' | 'agent' | 'system');
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_HOOK_RETRY, async (_, taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string) => {
+    validateId(taskId);
+    return services.workflowService.retryHook(taskId, hookName, transitionFrom, transitionTo);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_PIPELINE_DIAGNOSTICS, async (_, taskId: string) => {
+    validateId(taskId);
+    return services.workflowService.getPipelineDiagnostics(taskId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_ADVANCE_PHASE, async (_, taskId: string) => {
+    validateId(taskId);
+    return services.workflowService.advancePhase(taskId);
+  });
+
   // ============================================
   // Pipeline Operations
   // ============================================

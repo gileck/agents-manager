@@ -8,7 +8,12 @@ import type {
   PendingPrompt,
   DashboardStats,
   AgentChatMessage,
+  PipelineDiagnostics,
+  HookRetryResult,
+  HookFailureRecord,
+  Transition,
 } from '../../shared/types';
+import { getActivePhaseIndex } from '../../shared/phase-utils';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
@@ -244,6 +249,230 @@ export class WorkflowService implements IWorkflowService {
       activeAgentRuns: activeRuns.length,
       recentActivityCount: recentActivity.length,
     };
+  }
+
+  async forceTransitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult> {
+    const task = await this.taskStore.getTask(taskId);
+    if (!task) return { success: false, error: `Task not found: ${taskId}` };
+
+    const result = await this.pipelineEngine.executeForceTransition(task, toStatus, {
+      trigger: 'manual',
+      actor,
+    });
+
+    if (result.success) {
+      await this.activityLog.log({
+        action: 'transition',
+        entityType: 'task',
+        entityId: taskId,
+        summary: `Force-transitioned task from ${task.status} to ${toStatus}`,
+        data: { fromStatus: task.status, toStatus, actor, forced: true },
+      });
+    }
+
+    return result;
+  }
+
+  async getPipelineDiagnostics(taskId: string): Promise<PipelineDiagnostics | null> {
+    const task = await this.taskStore.getTask(taskId);
+    if (!task) return null;
+
+    const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+    if (!pipeline) return null;
+
+    const currentStatusDef = pipeline.statuses.find((s) => s.name === task.status);
+
+    // Get all transitions grouped by trigger with guard pre-checks for manual ones
+    const allTransitions = await this.pipelineEngine.getAllTransitions(task);
+
+    // Pre-check guards for manual transitions
+    for (const t of allTransitions.manual) {
+      t.guardStatus = await this.pipelineEngine.checkGuards(task, t.to, 'manual') ?? undefined;
+    }
+
+    // Get recent hook failures from task events
+    const recentEvents = await this.taskEventLog.getEvents({
+      taskId,
+      since: Date.now() - 86400000, // last 24 hours
+    });
+
+    const hookFailures: HookFailureRecord[] = recentEvents
+      .filter((e) => e.category === 'system' && (e.severity === 'error' || e.severity === 'warning')
+        && e.data?.hook && typeof e.data.hook === 'string')
+      .map((e) => {
+        const retryableHooks = ['merge_pr', 'push_and_create_pr', 'advance_phase', 'delete_worktree'];
+        return {
+          id: e.id,
+          taskId: e.taskId,
+          hookName: e.data.hook as string,
+          error: (e.data.error as string) ?? e.message,
+          policy: (e.data.policy as HookFailureRecord['policy']) ?? 'best_effort',
+          transitionFrom: (e.data.fromStatus as string) ?? '',
+          transitionTo: (e.data.toStatus as string) ?? '',
+          timestamp: e.createdAt,
+          retryable: retryableHooks.includes(e.data.hook as string),
+        };
+      });
+
+    // Agent state
+    const agentRuns = await this.agentRunStore.getRunsForTask(taskId);
+    const latestRun = agentRuns[0] ?? null;
+    const failedRuns = agentRuns.filter((r) => r.status === 'failed' || r.status === 'cancelled');
+    const hasRunningAgent = agentRuns.some((r) => r.status === 'running');
+
+    // Stuck detection
+    const isAgentPhase = currentStatusDef?.category === 'agent_running';
+    let isStuck = false;
+    let stuckReason: string | undefined;
+
+    if (isAgentPhase && !hasRunningAgent) {
+      // Agent phase but no agent running
+      const isFinalizing = latestRun?.status === 'completed' && latestRun.completedAt != null
+        && (Date.now() - latestRun.completedAt) < 30000;
+      if (!isFinalizing) {
+        isStuck = true;
+        if (latestRun?.status === 'failed') {
+          stuckReason = `Agent failed: ${latestRun.error ?? 'unknown error'}`;
+        } else {
+          stuckReason = 'Agent phase but no agent is running';
+        }
+      }
+    }
+
+    // Check for done + pending phases with failed advance_phase
+    if (currentStatusDef?.category === 'terminal' && task.phases) {
+      const pendingPhases = task.phases.filter((p) => p.status === 'pending');
+      if (pendingPhases.length > 0) {
+        const advanceFailure = hookFailures.find((f) => f.hookName === 'advance_phase');
+        if (advanceFailure) {
+          isStuck = true;
+          stuckReason = `Phase advance failed: ${advanceFailure.error}`;
+        }
+      }
+    }
+
+    return {
+      taskId,
+      currentStatus: task.status,
+      statusMeta: {
+        label: currentStatusDef?.label ?? task.status,
+        category: currentStatusDef?.category,
+        isFinal: currentStatusDef?.isFinal,
+        color: currentStatusDef?.color,
+      },
+      allTransitions,
+      recentHookFailures: hookFailures,
+      phases: task.phases,
+      activePhaseIndex: getActivePhaseIndex(task.phases),
+      agentState: {
+        hasRunningAgent,
+        lastRunStatus: latestRun?.status ?? null,
+        lastRunError: latestRun?.error ?? null,
+        totalFailedRuns: failedRuns.length,
+      },
+      isStuck,
+      stuckReason,
+    };
+  }
+
+  async retryHook(taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string): Promise<HookRetryResult> {
+    const task = await this.taskStore.getTask(taskId);
+    if (!task) return { success: false, hookName, error: `Task not found: ${taskId}` };
+
+    const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+    if (!pipeline) return { success: false, hookName, error: `Pipeline not found: ${task.pipelineId}` };
+
+    // Find the transition that would have this hook
+    let transition: Transition | undefined;
+    if (transitionFrom && transitionTo) {
+      transition = pipeline.transitions.find(
+        (t) => (t.from === transitionFrom || t.from === '*') && t.to === transitionTo
+          && t.hooks?.some((h) => h.name === hookName),
+      );
+    }
+    if (!transition) {
+      // Fallback: search all transitions for this hook
+      transition = pipeline.transitions.find(
+        (t) => t.hooks?.some((h) => h.name === hookName),
+      );
+    }
+    if (!transition) {
+      return { success: false, hookName, error: `No transition found with hook "${hookName}"` };
+    }
+
+    const result = await this.pipelineEngine.retryHook(task, hookName, transition, {
+      trigger: 'manual',
+      data: { retry: true },
+    });
+
+    if (result.success) {
+      await this.activityLog.log({
+        action: 'system',
+        entityType: 'task',
+        entityId: taskId,
+        summary: `Retried hook "${hookName}" successfully`,
+        data: { hookName },
+      });
+    }
+
+    return result;
+  }
+
+  async advancePhase(taskId: string): Promise<TransitionResult> {
+    const task = await this.taskStore.getTask(taskId);
+    if (!task) return { success: false, error: `Task not found: ${taskId}` };
+
+    const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+    if (!pipeline) return { success: false, error: `Pipeline not found: ${task.pipelineId}` };
+
+    // Find the advance_phase hook's transition (done -> implementing, trigger: system)
+    const advanceTransition = pipeline.transitions.find(
+      (t) => t.trigger === 'system' && t.hooks?.some((h) => h.name === 'advance_phase'),
+    );
+
+    if (!advanceTransition) {
+      // No system transition with advance_phase hook — try to manually invoke the hook
+      // via the done -> implementing transition
+      const systemTransition = pipeline.transitions.find(
+        (t) => t.from === task.status && t.trigger === 'system',
+      );
+      if (systemTransition) {
+        return this.pipelineEngine.executeTransition(task, systemTransition.to, {
+          trigger: 'system',
+          data: { reason: 'manual_advance_phase' },
+        });
+      }
+      return { success: false, error: 'No advance_phase transition found in pipeline' };
+    }
+
+    // Trigger the transition that has the advance_phase hook (typically done -> done for advance_phase,
+    // but the hook itself triggers done -> implementing internally)
+    // We directly invoke the advance_phase hook's logic by finding a matching system transition
+    const matchingTransition = pipeline.transitions.find(
+      (t) => (t.from === task.status || t.from === '*') && t.trigger === 'system'
+        && t.hooks?.some((h) => h.name === 'advance_phase'),
+    );
+
+    if (!matchingTransition) {
+      return { success: false, error: `No system transition from "${task.status}" with advance_phase hook` };
+    }
+
+    const result = await this.pipelineEngine.executeTransition(task, matchingTransition.to, {
+      trigger: 'system',
+      data: { reason: 'manual_advance_phase' },
+    });
+
+    if (result.success) {
+      await this.activityLog.log({
+        action: 'transition',
+        entityType: 'task',
+        entityId: taskId,
+        summary: `Manually advanced phase for task`,
+        data: { fromStatus: task.status, toStatus: matchingTransition.to },
+      });
+    }
+
+    return result;
   }
 
   async mergePR(taskId: string): Promise<void> {

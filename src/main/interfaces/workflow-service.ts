@@ -8,6 +8,8 @@ import type {
   PendingPrompt,
   DashboardStats,
   AgentChatMessage,
+  PipelineDiagnostics,
+  HookRetryResult,
 } from '../../shared/types';
 
 export interface IWorkflowService {
@@ -16,6 +18,10 @@ export interface IWorkflowService {
   deleteTask(id: string): Promise<boolean>;
   resetTask(id: string): Promise<Task | null>;
   transitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult>;
+  forceTransitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult>;
+  getPipelineDiagnostics(taskId: string): Promise<PipelineDiagnostics | null>;
+  retryHook(taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string): Promise<HookRetryResult>;
+  advancePhase(taskId: string): Promise<TransitionResult>;
   startAgent(taskId: string, mode: AgentMode, agentType?: string, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun>;
   stopAgent(runId: string): Promise<void>;
   respondToPrompt(promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null>;
