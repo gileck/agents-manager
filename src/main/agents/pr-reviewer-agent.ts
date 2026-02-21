@@ -63,15 +63,27 @@ export class PrReviewerAgent extends BaseClaudeAgent {
 
     const defaultBranch = (context.project.config?.defaultBranch as string) || 'main';
     lines.push(
-      'Steps:',
+      '## Steps',
       `1. Run \`git diff ${defaultBranch}..HEAD\` to see all changes made in this branch.`,
-      '2. Review the diff for code quality, correctness, style, and completeness against the task description.',
-      '3. Provide a concise review.',
+      '2. Review the diff using the criteria below.',
+      '3. Make every comment actionable — say what to change, not just what is wrong.',
       '',
-      'Your output will be captured as structured JSON with three fields:',
-      '- "verdict": either "approved" or "changes_requested"',
-      '- "summary": a concise summary of your review findings',
-      '- "comments": an array of specific review comments (empty array if approved)',
+      '## Review Criteria',
+      '**Must-check (block if violated):**',
+      '- Correctness — does the code do what the task requires?',
+      '- Security — no hardcoded secrets, no SQL injection, no path traversal, no XSS',
+      '- Data integrity — no silent data loss, no unhandled nulls in critical paths',
+      '',
+      '**Should-check (block if significant):**',
+      '- Error handling — are failures surfaced, not swallowed?',
+      '- Test coverage — are new code paths tested?',
+      '- Code quality — duplication, overly complex logic, missing types',
+      '',
+      '**Nice-to-have (mention but do not block):**',
+      '- Style nits, naming preferences, minor formatting',
+      '',
+      '## Approval Threshold',
+      'Approve if there are no must-check violations and no significant should-check issues.',
     );
 
     return lines.join('\n');

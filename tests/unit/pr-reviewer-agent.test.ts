@@ -44,11 +44,12 @@ describe('PrReviewerAgent', () => {
   });
 
   describe('buildPrompt', () => {
-    it('contains JSON field descriptions and no REVIEW_VERDICT text', () => {
+    it('contains tiered review criteria and no REVIEW_VERDICT text', () => {
       const prompt = agent.buildPrompt(createContext());
-      expect(prompt).toContain('"verdict"');
-      expect(prompt).toContain('"summary"');
-      expect(prompt).toContain('"comments"');
+      expect(prompt).toContain('Must-check');
+      expect(prompt).toContain('Should-check');
+      expect(prompt).toContain('Nice-to-have');
+      expect(prompt).toContain('Approval Threshold');
       expect(prompt).not.toContain('REVIEW_VERDICT');
     });
 

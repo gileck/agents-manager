@@ -219,7 +219,15 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
     switch (mode) {
       case 'plan': {
         const planLines = [
-          `Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`,
+          `You are a senior software engineer. Analyze this task and create a detailed implementation plan. Task: ${task.title}.${desc}`,
+          ``,
+          `## Instructions`,
+          `1. **Explore the codebase first.** Read relevant files, understand the directory structure, and identify existing patterns before planning.`,
+          `2. Describe the current state — what exists today and what needs to change.`,
+          `3. Outline your approach — the high-level strategy, key decisions, and any alternatives you considered.`,
+          `4. List specific files to create or modify, with a short description of each change.`,
+          `5. Identify edge cases, error handling, and potential risks.`,
+          `6. Break the plan into 3-8 concrete subtasks. Each subtask should be independently testable and ordered by dependency.`,
         ];
         if (task.planComments && task.planComments.length > 0) {
           planLines.push('', '## Admin Feedback');
@@ -228,13 +236,6 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
             planLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
           }
         }
-        planLines.push(
-          ``,
-          `Your output will be captured as structured JSON with three fields:`,
-          `- "plan": the full implementation plan as markdown`,
-          `- "planSummary": a short 2-3 sentence summary of the plan`,
-          `- "subtasks": an array of concrete implementation step names`,
-        );
         prompt = planLines.join('\n');
         break;
       }
@@ -256,17 +257,24 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         }
         prLines.push(
           '',
-          'Your output will be captured as structured JSON with three fields:',
-          '- "plan": the revised full implementation plan as markdown',
-          '- "planSummary": a short 2-3 sentence summary of the revised plan',
-          '- "subtasks": an array of concrete implementation step names',
+          '## Revision Guidelines',
+          '- Address every piece of feedback — do not skip or partially address any comment.',
+          '- If feedback is ambiguous, interpret it in the most reasonable way and note your interpretation.',
+          '- Keep parts of the plan that were not criticized — only revise what the feedback targets.',
         );
         prompt = prLines.join('\n');
         break;
       }
       case 'implement': {
         const lines = [
-          `Implement the changes for this task. After making all changes, stage and commit them with git (git add the relevant files, then git commit with a descriptive message). Task: ${task.title}.${desc}`,
+          `Implement the changes for this task. Task: ${task.title}.${desc}`,
+          ``,
+          `## Instructions`,
+          `1. **Read the files you will modify first.** Understand existing patterns, naming conventions, and code style before writing anything.`,
+          `2. Follow existing patterns — match the style of surrounding code.`,
+          `3. Make focused changes — only modify what is necessary for this task.`,
+          `4. After making all changes, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass. Fix any errors before committing.`,
+          `5. Stage and commit with a descriptive message (git add the relevant files, then git commit).`,
         ];
         if (task.subtasks && task.subtasks.length > 0) {
           lines.push(
@@ -309,9 +317,11 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           `   - \`${invAmCli} tasks get ${task.id} --json\` — full task details`,
           `   - \`${invAmCli} events list --task ${task.id} --json\` — task event log`,
           `3. Investigate the codebase to find the root cause.`,
-          `4. Write a detailed investigation report with your findings.`,
-          `5. Suggest a concrete fix plan.`,
-          `6. Break the fix into subtasks.`,
+          `4. Attempt to reproduce the issue — run relevant commands or tests to confirm the bug.`,
+          `5. Write a detailed investigation report with your findings.`,
+          `6. Check existing test coverage for the affected code and note any gaps.`,
+          `7. Suggest a concrete fix plan, including any tests that should be added or updated.`,
+          `8. Break the fix into subtasks.`,
         ];
         // Include related task info if available in metadata
         const relatedTaskId = task.metadata?.relatedTaskId as string | undefined;
@@ -330,13 +340,6 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
             invLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
           }
         }
-        invLines.push(
-          ``,
-          `Your output will be captured as structured JSON with three fields:`,
-          `- "plan": a detailed investigation report as markdown (root cause analysis, findings, fix suggestion)`,
-          `- "investigationSummary": a short 2-3 sentence summary of the investigation findings`,
-          `- "subtasks": an array of concrete fix step names`,
-        );
         prompt = invLines.join('\n');
         break;
       }
@@ -367,14 +370,11 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           '   - **Data Model Changes** — schema/type changes if needed',
           '   - **API/Interface Changes** — new or modified interfaces',
           '   - **Key Implementation Details** — algorithms, patterns, edge cases',
+          '   - **Migration Strategy** — how to roll out the change safely (if applicable)',
+          '   - **Performance Considerations** — scalability, latency, resource usage',
           '   - **Dependencies** — new packages, existing utilities to reuse',
           '   - **Testing Strategy** — what to test and how',
           '   - **Risk Assessment** — potential issues and mitigations',
-          '',
-          'Your output will be captured as structured JSON with three fields:',
-          '- "technicalDesign": the full technical design document as markdown',
-          '- "designSummary": a short 2-3 sentence summary of the technical design',
-          '- "subtasks": an array of concrete implementation step names derived from the design',
         );
         prompt = tdLines.join('\n');
         break;
@@ -400,12 +400,11 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         }
         tdrLines.push(
           '',
-          'Revise the technical design to address all feedback. Produce an updated design document.',
-          '',
-          'Your output will be captured as structured JSON with three fields:',
-          '- "technicalDesign": the revised full technical design document as markdown',
-          '- "designSummary": a short 2-3 sentence summary of the revised technical design',
-          '- "subtasks": an array of concrete implementation step names derived from the design',
+          '## Revision Guidelines',
+          '- Address every piece of feedback — do not skip or partially address any comment.',
+          '- If feedback conflicts with a technical constraint, explain the constraint and propose an alternative that satisfies the intent.',
+          '- Keep parts of the design that were not criticized — only revise what the feedback targets.',
+          '- Produce an updated design document.',
         );
         prompt = tdrLines.join('\n');
         break;
@@ -418,11 +417,12 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           ``,
           `## Instructions`,
           `1. Run \`git fetch origin\` to get the latest main.`,
-          `2. Run \`git rebase origin/main\` to start the rebase.`,
-          `3. For each conflict, open the conflicting files, resolve the conflicts, then \`git add\` the resolved files.`,
-          `4. Run \`git rebase --continue\` after resolving each conflict.`,
-          `5. Once the rebase is complete, verify the project builds (\`npm run build\` or equivalent).`,
-          `6. Do NOT push — the pipeline will handle pushing after you finish.`,
+          `2. Read the conflicting files and understand both sides before rebasing — know what main changed and what this branch changed.`,
+          `3. Run \`git rebase origin/main\` to start the rebase.`,
+          `4. For each conflict, resolve by preserving the intent of both changes, then \`git add\` the resolved files.`,
+          `5. Run \`git rebase --continue\` after resolving each conflict.`,
+          `6. Once the rebase is complete, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass.`,
+          `7. Do NOT push — the pipeline will handle pushing after you finish.`,
         ];
         prompt = conflictLines.join('\n');
         break;
@@ -452,14 +452,16 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           `## Instructions`,
           `1. Read the reviewer's feedback in the Task Context above carefully.`,
           `2. Fix every issue mentioned — do not skip or ignore any feedback.`,
-          `3. After making all fixes, stage and commit with a descriptive message.`,
+          `3. Do not make unrelated changes — only fix what the reviewer asked for.`,
+          `4. Run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass.`,
+          `5. Stage and commit with a descriptive message that references which reviewer feedback was addressed.`,
         );
         prompt = rcLines.join('\n');
         break;
       }
       case 'plan_resume': {
         const prLines = [
-          `Continue creating the implementation plan for this task using the user's decisions.`,
+          `You are a senior software engineer. Continue creating the implementation plan for this task using the user's decisions.`,
           ``,
           `Task: ${task.title}.${desc}`,
         ];
@@ -475,19 +477,15 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           '## Instructions',
           '1. Review the user\'s answers to your questions in the Task Context above.',
           '2. Use their decisions to guide your implementation plan.',
-          '3. Produce a complete implementation plan.',
-          '',
-          'Your output will be captured as structured JSON with three fields:',
-          '- "plan": the full implementation plan as markdown',
-          '- "planSummary": a short 2-3 sentence summary of the plan',
-          '- "subtasks": an array of concrete implementation step names',
+          '3. **Explore the codebase** to ground your plan in real file paths and existing patterns.',
+          '4. Produce a complete implementation plan with 3-8 concrete, independently testable subtasks ordered by dependency.',
         );
         prompt = prLines.join('\n');
         break;
       }
       case 'implement_resume': {
         const irLines = [
-          `Continue implementing the changes for this task using the user's decisions. After making all changes, stage and commit them with git. Task: ${task.title}.${desc}`,
+          `Continue implementing the changes for this task using the user's decisions. Task: ${task.title}.${desc}`,
         ];
         if (task.subtasks && task.subtasks.length > 0) {
           irLines.push(
@@ -512,7 +510,9 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           '## Instructions',
           '1. Review the user\'s answers to your questions in the Task Context above.',
           '2. Use their decisions to guide your implementation.',
-          '3. Implement the changes, then stage and commit with a descriptive message.',
+          '3. Follow existing patterns — match the style of surrounding code. Make focused changes only.',
+          '4. Run `yarn checks` (or the project\'s equivalent) to ensure TypeScript and lint pass before committing.',
+          '5. Stage and commit with a descriptive message.',
         );
         prompt = irLines.join('\n');
         break;
@@ -535,13 +535,8 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           '1. Review the user\'s answers to your questions in the Task Context above.',
           '2. Use their decisions to guide your investigation.',
           '3. Write a detailed investigation report with your findings.',
-          '4. Suggest a concrete fix plan.',
+          '4. Suggest a concrete fix plan, including any tests that should be added or updated.',
           '5. Break the fix into subtasks.',
-          '',
-          'Your output will be captured as structured JSON with three fields:',
-          '- "plan": a detailed investigation report as markdown (root cause analysis, findings, fix suggestion)',
-          '- "investigationSummary": a short 2-3 sentence summary of the investigation findings',
-          '- "subtasks": an array of concrete fix step names',
         );
         prompt = ivrLines.join('\n');
         break;
@@ -569,14 +564,11 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           '   - **Data Model Changes** — schema/type changes if needed',
           '   - **API/Interface Changes** — new or modified interfaces',
           '   - **Key Implementation Details** — algorithms, patterns, edge cases',
+          '   - **Migration Strategy** — how to roll out the change safely (if applicable)',
+          '   - **Performance Considerations** — scalability, latency, resource usage',
           '   - **Dependencies** — new packages, existing utilities to reuse',
           '   - **Testing Strategy** — what to test and how',
           '   - **Risk Assessment** — potential issues and mitigations',
-          '',
-          'Your output will be captured as structured JSON with three fields:',
-          '- "technicalDesign": the full technical design document as markdown',
-          '- "designSummary": a short 2-3 sentence summary of the technical design',
-          '- "subtasks": an array of concrete implementation step names derived from the design',
         );
         prompt = tdrLines.join('\n');
         break;
