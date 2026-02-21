@@ -131,8 +131,8 @@ export function AgentRunPage() {
   // --- Section visibility ---
   const [metadataCollapsed, setMetadataCollapsed] = useState(false);
 
-  // --- Sidebar toggle ---
-  const [showSidebar, setShowSidebar] = useState(false);
+  // --- Sidebar toggle (default open so users see live token usage) ---
+  const [showSidebar, setShowSidebar] = useState(true);
 
   // --- Output mode (raw vs rendered) ---
   const [outputMode, setOutputMode] = useState<OutputMode>('raw');

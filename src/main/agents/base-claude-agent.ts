@@ -196,6 +196,8 @@ export abstract class BaseClaudeAgent implements IAgent {
           if (assistantMsg.message.usage) {
             this.accumulatedInputTokens += assistantMsg.message.usage.input_tokens;
             this.accumulatedOutputTokens += assistantMsg.message.usage.output_tokens;
+            // Emit live usage so the renderer sidebar updates during the run
+            onMessage?.({ type: 'usage', inputTokens: this.accumulatedInputTokens, outputTokens: this.accumulatedOutputTokens, timestamp: Date.now() });
           }
           for (const block of assistantMsg.message.content) {
             if (block.type === 'text') {
