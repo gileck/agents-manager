@@ -1,4 +1,5 @@
 import type { AgentContext, AgentRunResult } from '../../shared/types';
+import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 import { BaseClaudeAgent } from './base-claude-agent';
 
 interface ReviewStructuredOutput {
@@ -48,6 +49,9 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       e => e.entryType === 'review_feedback' || e.entryType === 'fix_summary'
     );
 
+    const activePhase = getActivePhase(task.phases);
+    const multiPhase = isMultiPhase(task);
+
     const lines = [
       `You are a code reviewer. Review the changes in this branch for the following task: ${task.title}.${desc}`,
       '',
@@ -61,6 +65,30 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       );
     }
 
+    // Phase context: tell the reviewer which phase this PR covers
+    if (multiPhase && activePhase) {
+      const phaseIdx = getActivePhaseIndex(task.phases);
+      const totalPhases = task.phases?.length ?? 0;
+      lines.push(
+        `## Phase Context: ${activePhase.name} (${phaseIdx + 1} of ${totalPhases})`,
+        `This PR covers **only Phase ${phaseIdx + 1}**: "${activePhase.name}".`,
+        'Review ONLY the deliverables listed below. Do NOT flag missing work that belongs to later phases.',
+        '',
+        '### Phase Deliverables (must all be present and correct)',
+      );
+      for (const st of activePhase.subtasks) {
+        lines.push(`- ${st.name}`);
+      }
+      const completedPhases = (task.phases ?? []).filter(p => p.status === 'completed');
+      if (completedPhases.length > 0) {
+        lines.push('', '### Previously Completed Phases (already merged — do not re-review)');
+        for (const cp of completedPhases) {
+          lines.push(`- ${cp.name}${cp.prLink ? ` (PR: ${cp.prLink})` : ''}`);
+        }
+      }
+      lines.push('');
+    }
+
     const defaultBranch = (context.project.config?.defaultBranch as string) || 'main';
     lines.push(
       '## Steps',
@@ -70,7 +98,9 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       '',
       '## Review Criteria',
       '**Must-check (block if violated):**',
-      '- Correctness — does the code do what the task requires?',
+      multiPhase && activePhase
+        ? `- Completeness — are all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables implemented?`
+        : '- Correctness — does the code do what the task requires?',
       '- Security — no hardcoded secrets, no SQL injection, no path traversal, no XSS',
       '- Data integrity — no silent data loss, no unhandled nulls in critical paths',
       '',
@@ -83,7 +113,9 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       '- Style nits, naming preferences, minor formatting',
       '',
       '## Approval Threshold',
-      'Approve if there are no must-check violations and no significant should-check issues.',
+      multiPhase && activePhase
+        ? `Approve if all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables are complete, there are no must-check violations, and no significant should-check issues.`
+        : 'Approve if there are no must-check violations and no significant should-check issues.',
     );
 
     return lines.join('\n');
