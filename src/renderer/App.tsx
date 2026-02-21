@@ -8,7 +8,6 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectConfigPage } from './pages/ProjectConfigPage';
 import { TaskListPage } from './pages/TaskListPage';
 import { TaskDetailPage } from './pages/TaskDetailPage';
-import { KanbanPage } from './pages/KanbanPage';
 import { AgentRunPage } from './pages/AgentRunPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ThemePage } from './pages/ThemePage';
@@ -103,7 +102,6 @@ function AppRoutes() {
         <Route path="projects/:id/config" element={<ProjectConfigPage />} />
         <Route path="projects/:id/telegram" element={<TelegramPage />} />
         <Route path="tasks" element={<TaskListPage />} />
-        <Route path="tasks/kanban" element={<KanbanPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
         <Route path="agents" element={<AgentDefinitionsPage />} />
         <Route path="agents/:runId" element={<AgentRunPage />} />
