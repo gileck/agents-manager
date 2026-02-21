@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { Button } from '../components/ui/button';
 import { Plus } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
@@ -7,15 +8,44 @@ import { useKanbanBoard } from '../hooks/useKanbanBoard';
 import { useTasks } from '../hooks/useTasks';
 import { usePipelines } from '../hooks/usePipelines';
 import { KanbanColumn } from '../components/kanban/KanbanColumn';
+import { KanbanDragOverlay } from '../components/kanban/KanbanDragOverlay';
+import { useKanbanDragDrop } from '../hooks/useKanbanDragDrop';
 import { toast } from 'sonner';
-import type { Task, KanbanColumn as KanbanColumnType, KanbanBoardCreateInput } from '../../shared/types';
+import type { Task, KanbanColumn as KanbanColumnType, KanbanBoardCreateInput, TransitionResult } from '../../shared/types';
 
 export function KanbanBoardPage() {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
   const navigate = useNavigate();
   const { board, loading: boardLoading, refetch: refetchBoard } = useKanbanBoard(currentProjectId);
-  const { tasks, loading: tasksLoading } = useTasks(currentProjectId ? { projectId: currentProjectId } : undefined);
+  const { tasks, loading: tasksLoading, refetch: refetchTasks } = useTasks(currentProjectId ? { projectId: currentProjectId } : undefined);
   const { pipelines } = usePipelines();
+
+  // Setup drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px movement required before drag starts
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  // Handle task move with transition
+  const handleTaskMove = useCallback(async (taskId: string, newStatus: string): Promise<TransitionResult> => {
+    const result = await window.api.tasks.transition(taskId, newStatus, 'manual');
+
+    // Refetch tasks to get updated state
+    await refetchTasks();
+
+    return result;
+  }, [refetchTasks]);
+
+  // Setup drag and drop handlers
+  const { activeTask, handleDragStart, handleDragEnd, handleDragCancel } = useKanbanDragDrop({
+    tasks,
+    columns: board?.columns || [],
+    onTaskMove: handleTaskMove,
+  });
 
   // Initialize board if it doesn't exist
   useEffect(() => {
@@ -118,34 +148,43 @@ export function KanbanBoardPage() {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b">
-        <div>
-          <h1 className="text-2xl font-bold">{board.name}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
-          </p>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div className="h-full flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b">
+          <div>
+            <h1 className="text-2xl font-bold">{board.name}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
+            </p>
+          </div>
+          <Button onClick={handleCreateTask}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Task
+          </Button>
         </div>
-        <Button onClick={handleCreateTask}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Task
-        </Button>
+
+        <div className="flex-1 overflow-x-auto p-4">
+          <div className="flex gap-4 h-full">
+            {board.columns
+              .sort((a, b) => a.order - b.order)
+              .map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  tasks={tasksByColumn.get(column.id) || []}
+                  onCardClick={handleCardClick}
+                />
+              ))}
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-x-auto p-4">
-        <div className="flex gap-4 h-full">
-          {board.columns
-            .sort((a, b) => a.order - b.order)
-            .map((column) => (
-              <KanbanColumn
-                key={column.id}
-                column={column}
-                tasks={tasksByColumn.get(column.id) || []}
-                onCardClick={handleCardClick}
-              />
-            ))}
-        </div>
-      </div>
-    </div>
+      <KanbanDragOverlay activeTask={activeTask} />
+    </DndContext>
   );
 }
