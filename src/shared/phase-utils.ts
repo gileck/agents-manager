@@ -21,10 +21,10 @@ export function isMultiPhase(task: Pick<Task, 'phases'>): boolean {
   return !!task.phases && task.phases.length > 1;
 }
 
-/** Returns true if there are any pending phases remaining. */
+/** Returns true if there are any uncompleted phases remaining (pending or in_progress). */
 export function hasPendingPhases(phases: ImplementationPhase[] | null | undefined): boolean {
   if (!phases || phases.length === 0) return false;
-  return phases.some(p => p.status === 'pending');
+  return phases.some(p => p.status !== 'completed');
 }
 
 /** Flattens all subtasks from all phases into a single array. */
