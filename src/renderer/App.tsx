@@ -19,6 +19,7 @@ import { ChatPage } from './pages/ChatPage';
 import { TelegramPage } from './pages/TelegramPage';
 import { CostPage } from './pages/CostPage';
 import { SourceControlPage } from './pages/SourceControlPage';
+import { KanbanBoardPage } from './pages/KanbanBoardPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
@@ -102,6 +103,7 @@ function AppRoutes() {
         <Route path="projects/:id/telegram" element={<TelegramPage />} />
         <Route path="tasks" element={<TaskListPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
+        <Route path="kanban" element={<KanbanBoardPage />} />
         <Route path="agents" element={<AgentDefinitionsPage />} />
         <Route path="agents/:runId" element={<AgentRunPage />} />
         <Route path="features" element={<FeatureListPage />} />

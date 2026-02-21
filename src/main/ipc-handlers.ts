@@ -27,6 +27,8 @@ import type {
   TelegramBotLogEntry,
   GitLogEntry,
   GitCommitDetail,
+  KanbanBoardCreateInput,
+  KanbanBoardUpdateInput,
 } from '../shared/types';
 import { TelegramBotService } from './services/telegram-bot-service';
 import { TelegramNotificationRouter } from './services/telegram-notification-router';
@@ -427,6 +429,40 @@ export function registerIpcHandlers(services: AppServices): void {
   registerIpcHandler(IPC_CHANNELS.FEATURE_DELETE, async (_, id: string) => {
     validateId(id);
     return services.featureStore.deleteFeature(id);
+  });
+
+  // ============================================
+  // Kanban Board Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.KANBAN_BOARD_GET, async (_, id: string) => {
+    validateId(id);
+    return services.kanbanBoardStore.getBoard(id);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.KANBAN_BOARD_GET_BY_PROJECT, async (_, projectId: string) => {
+    validateId(projectId);
+    return services.kanbanBoardStore.getBoardByProject(projectId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.KANBAN_BOARD_LIST, async (_, projectId: string) => {
+    validateId(projectId);
+    return services.kanbanBoardStore.listBoards(projectId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.KANBAN_BOARD_CREATE, async (_, input: { projectId: string; name: string; columns?: unknown[] }) => {
+    validateInput(input, ['projectId', 'name']);
+    return services.kanbanBoardStore.createBoard(input as KanbanBoardCreateInput);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.KANBAN_BOARD_UPDATE, async (_, id: string, input: unknown) => {
+    validateId(id);
+    return services.kanbanBoardStore.updateBoard(id, input as KanbanBoardUpdateInput);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.KANBAN_BOARD_DELETE, async (_, id: string) => {
+    validateId(id);
+    return services.kanbanBoardStore.deleteBoard(id);
   });
 
   // ============================================
