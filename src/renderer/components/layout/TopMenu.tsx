@@ -23,9 +23,9 @@ export function TopMenu() {
   };
 
   return (
-    <div className="h-12 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
+    <div className="h-12 border-b border-border bg-card flex items-center px-4 shrink-0">
       {/* Left: Project Selector */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-1">
         <FolderOpen className="h-4 w-4 text-muted-foreground" />
         <Select
           value={currentProjectId || ''}
@@ -46,19 +46,26 @@ export function TopMenu() {
         </Select>
       </div>
 
+      {/* Center: Title */}
+      <div className="flex-1 flex justify-center">
+        <h1 className="text-lg font-semibold text-foreground">Hello World</h1>
+      </div>
+
       {/* Right: Theme Toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleTheme}
-        title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
-      >
-        {resolvedTheme === 'dark' ? (
-          <Sun className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <Moon className="h-4 w-4 text-muted-foreground" />
-        )}
-      </Button>
+      <div className="flex-1 flex justify-end">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {resolvedTheme === 'dark' ? (
+            <Sun className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Moon className="h-4 w-4 text-muted-foreground" />
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
