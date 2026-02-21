@@ -70,9 +70,7 @@ describe('Pipeline Auto-Transition', () => {
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
-    const rows = ctx.db.prepare(
-      "SELECT * FROM transition_history WHERE task_id = ? AND trigger = 'agent' ORDER BY created_at ASC",
-    ).all(taskId) as Array<{ from_status: string; to_status: string; trigger: string }>;
+    const rows = ctx.getTransitionHistory(taskId).filter((r) => r.trigger === 'agent');
 
     expect(rows.length).toBeGreaterThanOrEqual(1);
     const planReviewTransition = rows.find((r) => r.to_status === 'plan_review');

@@ -35,6 +35,15 @@ export function createTaskInput(
   };
 }
 
+export function createMultipleTaskInputs(
+  projectId: string,
+  pipelineId: string,
+  count: number,
+  overrides?: Partial<TaskCreateInput>,
+): TaskCreateInput[] {
+  return Array.from({ length: count }, () => createTaskInput(projectId, pipelineId, overrides));
+}
+
 export function createAgentRunInput(
   taskId: string,
   overrides?: Partial<Omit<AgentRunCreateInput, 'taskId'>>,

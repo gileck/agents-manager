@@ -86,8 +86,7 @@ describe('Pipeline Transitions', () => {
       actor: 'test-user',
     });
 
-    interface TransitionHistoryRow { id: string; task_id: string; from_status: string; to_status: string; trigger: string; actor: string | null; created_at: string; }
-    const rows = ctx.db.prepare('SELECT * FROM transition_history WHERE task_id = ?').all(task.id) as TransitionHistoryRow[];
+    const rows = ctx.getTransitionHistory(task.id);
     expect(rows).toHaveLength(1);
     expect(rows[0].from_status).toBe('open');
     expect(rows[0].to_status).toBe('in_progress');

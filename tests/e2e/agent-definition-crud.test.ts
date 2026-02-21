@@ -21,9 +21,10 @@ describe('Agent Definition CRUD', () => {
     const builtIn = defs.filter(d => d.isBuiltIn);
     expect(builtIn.length).toBeGreaterThanOrEqual(2);
 
-    const implementor = builtIn.find(d => d.id === 'agent-def-claude-code');
-    expect(implementor).toBeDefined();
-    expect(implementor!.name).toBe('Implementor');
+    const planAgent = builtIn.find(d => d.id === 'agent-def-claude-code');
+    expect(planAgent).toBeDefined();
+    // Production migrations rename this from 'Implementor' -> 'Claude Code Agent' -> 'Plan Agent'
+    expect(planAgent!.name).toBe('Plan Agent');
 
     const reviewer = builtIn.find(d => d.id === 'agent-def-pr-reviewer');
     expect(reviewer).toBeDefined();
