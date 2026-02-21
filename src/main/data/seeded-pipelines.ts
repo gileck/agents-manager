@@ -190,6 +190,9 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'done', to: 'implementing', trigger: 'system',
       guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+    { from: 'done', to: 'implementing', trigger: 'manual', label: 'Retry Next Phase',
+      guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // Recovery: cancel agent phases back to open
     { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },
     { from: 'designing', to: 'open', trigger: 'manual', label: 'Cancel Design' },
@@ -314,6 +317,9 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       ] },
     // Phase cycling: done → implementing when more phases remain
     { from: 'done', to: 'implementing', trigger: 'system',
+      guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+    { from: 'done', to: 'implementing', trigger: 'manual', label: 'Retry Next Phase',
       guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // Recovery
