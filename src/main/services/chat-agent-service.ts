@@ -1,6 +1,6 @@
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import type { IProjectStore } from '../interfaces/project-store';
-import type { ChatMessage } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage } from '../../shared/types';
 import { SandboxGuard } from './sandbox-guard';
 
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
@@ -59,6 +59,7 @@ export class ChatAgentService {
     projectId: string,
     message: string,
     onOutput: (chunk: string) => void,
+    onMessage?: (msg: AgentChatMessage) => void,
   ): Promise<{ userMessage: ChatMessage; sessionId: string }> {
     // Abort any previous running chat for this project
     this.stop(projectId);
@@ -97,7 +98,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(projectId, abortController);
 
-    this.runAgent(projectId, projectPath, prompt, abortController, onOutput).catch((err) => {
+    this.runAgent(projectId, projectPath, prompt, abortController, onOutput, onMessage).catch((err) => {
       onOutput(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
       onOutput(CHAT_COMPLETE_SENTINEL);
     });
@@ -199,6 +200,7 @@ export class ChatAgentService {
     prompt: string,
     abortController: AbortController,
     onOutput: (chunk: string) => void,
+    onMessage?: (msg: AgentChatMessage) => void,
   ): Promise<void> {
     const query = await this.loadQuery();
 
@@ -208,6 +210,14 @@ export class ChatAgentService {
     let resultText = '';
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
+
+    // Track tool_use IDs in FIFO order so we can match tool_result events
+    const pendingToolIds: string[] = [];
+
+    // Safe wrapper: IPC delivery failure should not abort the agent stream
+    const emitMessage = (msg: AgentChatMessage) => {
+      try { onMessage?.(msg); } catch { /* IPC delivery failure is non-fatal */ }
+    };
 
     try {
       for await (const message of query({
@@ -239,22 +249,55 @@ export class ChatAgentService {
             if (block.type === 'text') {
               resultText += block.text;
               onOutput(block.text);
+              emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
             } else if (block.type === 'tool_use') {
+              const toolBlock = block as SdkToolUseBlock & { id?: string };
+              if (toolBlock.id) pendingToolIds.push(toolBlock.id);
               const toolSummary = `\n> Tool: ${block.name}\n`;
               onOutput(toolSummary);
+              emitMessage({
+                type: 'tool_use',
+                toolName: block.name,
+                toolId: toolBlock.id,
+                input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? {}, null, 2),
+                timestamp: Date.now(),
+              });
             }
           }
         } else if (message.type === 'result') {
           const resultMsg = message as SdkResultMessage;
           costInputTokens = resultMsg.usage?.input_tokens;
           costOutputTokens = resultMsg.usage?.output_tokens;
+          if (costInputTokens != null && costOutputTokens != null) {
+            emitMessage({
+              type: 'usage',
+              inputTokens: costInputTokens,
+              outputTokens: costOutputTokens,
+              timestamp: Date.now(),
+            });
+          }
         } else {
+          const raw = message as unknown as Record<string, unknown>;
+          // Check if this is a tool_result message
+          if (raw.type === 'tool_result' || raw.subtype === 'tool_result') {
+            const resultContent = (typeof raw.result === 'string' ? raw.result : '')
+              || (typeof raw.summary === 'string' ? raw.summary : '')
+              || '(no output)';
+            const matchedToolId = pendingToolIds.shift();
+            emitMessage({
+              type: 'tool_result',
+              toolId: matchedToolId,
+              result: resultContent,
+              timestamp: Date.now(),
+            });
+          }
           const otherMsg = message as SdkOtherMessage;
           if (otherMsg.message?.content) {
             for (const block of otherMsg.message.content) {
               if (block.type === 'text') {
                 resultText += block.text;
                 onOutput(block.text);
+                emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
               }
             }
           }

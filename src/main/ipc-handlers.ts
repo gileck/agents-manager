@@ -633,9 +633,12 @@ export function registerIpcHandlers(services: AppServices): void {
   registerIpcHandler(IPC_CHANNELS.CHAT_SEND, async (_, projectId: string, message: string) => {
     validateId(projectId);
     if (!message || typeof message !== 'string') throw new Error('Message is required');
-    return services.chatAgentService.send(projectId, message, (chunk) => {
-      sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, projectId, chunk);
-    });
+    return services.chatAgentService.send(
+      projectId,
+      message,
+      (chunk) => sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, projectId, chunk),
+      (msg) => sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, projectId, msg),
+    );
   });
 
   registerIpcHandler(IPC_CHANNELS.CHAT_STOP, async (_, projectId: string) => {

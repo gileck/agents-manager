@@ -107,6 +107,7 @@ const IPC_CHANNELS = {
   CHAT_CLEAR: 'chat:clear',
   CHAT_SUMMARIZE: 'chat:summarize',
   CHAT_OUTPUT: 'chat:output',
+  CHAT_MESSAGE: 'chat:message',
   CHAT_COSTS: 'chat:costs',
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
@@ -375,6 +376,11 @@ const api = {
       const listener = (_: IpcRendererEvent, projectId: string, chunk: string) => callback(projectId, chunk);
       ipcRenderer.on(IPC_CHANNELS.CHAT_OUTPUT, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_OUTPUT, listener);
+    },
+    chatMessage: (callback: (projectId: string, msg: AgentChatMessage) => void) => {
+      const listener = (_: IpcRendererEvent, projectId: string, msg: AgentChatMessage) => callback(projectId, msg);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_MESSAGE, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_MESSAGE, listener);
     },
     telegramBotLog: (callback: (projectId: string, entry: TelegramBotLogEntry) => void) => {
       const listener = (_: IpcRendererEvent, projectId: string, entry: TelegramBotLogEntry) => callback(projectId, entry);

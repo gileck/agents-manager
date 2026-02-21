@@ -12,8 +12,7 @@ import { GitChangesPanel } from '../components/agent-run/GitChangesPanel';
 import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
-import { ChatMessageList } from '../components/chat/ChatMessageList';
-import { ChatInput } from '../components/chat/ChatInput';
+import { AgentChat } from '../components/chat/AgentChat';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
 import { useAgentStream } from '../contexts/AgentStreamContext';
 import type { AgentRun, Task } from '../../shared/types';
@@ -328,15 +327,14 @@ export function AgentRunPage() {
 
           {messages.length > 0 && (
             <TabsContent value="chat" className="flex-1 min-h-0 flex flex-col pb-3">
-              <div className="flex-1 min-h-0 flex flex-col">
-                <ChatMessageList messages={messages} isRunning={isRunning} />
-                <ChatInput
-                  onSend={handleSendMessage}
-                  onStop={handleStop}
-                  isRunning={isRunning}
-                  isQueued={isQueued}
-                />
-              </div>
+              <AgentChat
+                messages={messages}
+                isRunning={isRunning}
+                isQueued={isQueued}
+                onSend={handleSendMessage}
+                onStop={handleStop}
+                run={run}
+              />
             </TabsContent>
           )}
 
