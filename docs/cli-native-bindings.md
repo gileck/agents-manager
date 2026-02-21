@@ -3,8 +3,8 @@
 ## Problem
 
 The project runs in two runtimes:
-- **Electron** (main app) — uses its own Node ABI (e.g. MODULE_VERSION 119)
-- **System Node** (CLI, tests, agents in worktrees) — uses a different ABI (e.g. MODULE_VERSION 127)
+- **Electron** (main app) — uses its own Node ABI
+- **System Node** (CLI, tests, agents in worktrees) — uses a different ABI
 
 `better-sqlite3` is a native module that must be compiled for a specific Node ABI. A single binary can't serve both runtimes.
 
@@ -14,14 +14,16 @@ Two builds of the native module coexist inside `node_modules/better-sqlite3/`:
 
 | Directory | Runtime | Created by |
 |-----------|---------|------------|
-| `build/` | Electron | `electron-rebuild` (postinstall) |
+| `build/` | Electron | `@electron/rebuild` (postinstall) |
 | `build-node/` | System Node | `npm run rebuild:node` (postinstall) |
 
 Both are created automatically during `npm install` / `yarn` via the `postinstall` script:
 
 ```
-"postinstall": "electron-rebuild -f -w better-sqlite3 && npm run rebuild:node"
+"postinstall": "npx @electron/rebuild -f -w better-sqlite3 && npm run rebuild:node"
 ```
+
+Since better-sqlite3 v12.6.x ships prebuilt binaries for both Electron and Node, this downloads precompiled binaries rather than compiling from source — making installs fast and reliable.
 
 ### How `rebuild:node` works
 
@@ -34,11 +36,14 @@ mv build build-node             # move to build-node/
 mv build-electron-bak build     # restore Electron build
 ```
 
-### How the CLI selects the right binary
+### How the CLI and tests select the right binary
 
 1. `bootstrap-cli.js` checks if `build-node/` exists and sets `BETTER_SQLITE3_BINDING` env var
 2. `src/cli/db.ts` reads the env var and passes it as `nativeBinding` option to `better-sqlite3`
-3. The Electron app ignores this — it loads from `build/` as usual
+3. Test scripts set `BETTER_SQLITE3_BINDING` in the environment so tests use the Node binary
+4. The Electron app ignores this — it loads from `build/` as usual
+
+No directory swapping is needed — both builds coexist permanently and the correct one is selected via the `nativeBinding` option.
 
 ## Worktree Support
 

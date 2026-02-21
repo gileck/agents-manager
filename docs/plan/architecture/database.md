@@ -771,14 +771,14 @@ WAL mode (enabled at startup) allows concurrent reads to proceed while a write t
 
 ### 1. Electron + better-sqlite3 Compatibility
 
-Electron 39+ requires C++20 for native modules, which causes build failures with better-sqlite3. The project pins **Electron 28.x** for stable native module support.
+Resolved in better-sqlite3 v12.6.x which includes C++20 fixes and ships prebuilt binaries for Electron 29-40+.
 
 ### 2. Native Module Version Mismatch
 
 After switching Node versions (via nvm, fnm, etc.) or running `npm install`, better-sqlite3 may throw a `NODE_MODULE_VERSION` mismatch error at startup. Fix:
 
 ```bash
-npx electron-rebuild -f -w better-sqlite3
+npx @electron/rebuild -f -w better-sqlite3
 ```
 
 This is also configured as a postinstall script in `package.json`.

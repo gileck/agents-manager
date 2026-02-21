@@ -8,7 +8,7 @@ See also: [workflow-service.md](workflow-service.md) | [pipeline/ui.md](pipeline
 
 ## Overview
 
-- **Electron 28 + React 19 + TypeScript** -- the renderer process is a standard React SPA running inside a BrowserWindow
+- **Electron 40 + React 19 + TypeScript** -- the renderer process is a standard React SPA running inside a BrowserWindow
 - **Tailwind CSS** for styling, with inline style fallbacks for grids, explicit widths, and colored backgrounds (see Known Issues in CLAUDE.md)
 - **Thin UI layer** -- the renderer displays state and sends commands. Zero business logic lives in the renderer process. All mutations go through the WorkflowService via IPC.
 - **Pipeline-driven** -- the UI never hardcodes statuses, transitions, or workflow rules. It always asks the pipeline engine what to display and what actions are valid.

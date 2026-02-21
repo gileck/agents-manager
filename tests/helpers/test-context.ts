@@ -107,7 +107,8 @@ function applyMigrations(db: Database.Database): void {
 export function createTestContext(): TestContext {
   resetCounters();
 
-  const db = new Database(':memory:');
+  const nativeBinding = process.env.BETTER_SQLITE3_BINDING || undefined;
+  const db = new Database(':memory:', { nativeBinding });
   db.pragma('journal_mode = WAL');
 
   // Apply migrations before enabling foreign keys to avoid issues

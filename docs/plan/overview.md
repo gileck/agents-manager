@@ -6,7 +6,7 @@ A macOS desktop app for managing AI coding agents working on your projects. It c
 
 ## Tech Stack
 
-- **Electron 28** - desktop app framework
+- **Electron 40** - desktop app framework
 - **React 19 + TypeScript** - UI
 - **Tailwind CSS** - styling
 - **better-sqlite3** - local database

@@ -137,7 +137,7 @@ yarn pack           # Build without packaging (for testing)
 
 ## Tech Stack
 
-- **Electron 28** - Native desktop app framework
+- **Electron 40** - Native desktop app framework
 - **React 19** - UI library
 - **TypeScript** - Type safety
 - **Tailwind CSS** - Utility-first CSS

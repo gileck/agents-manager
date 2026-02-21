@@ -19,7 +19,7 @@ echo "🔨 Building TypeScript..."
 npm run build
 
 echo "🔧 Rebuilding native modules for Electron..."
-npx electron-rebuild -f -w better-sqlite3
+npx @electron/rebuild -f -w better-sqlite3
 
 echo "📦 Packaging with electron-builder..."
 npx electron-builder --dir

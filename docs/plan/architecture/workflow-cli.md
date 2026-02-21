@@ -969,7 +969,7 @@ src/
     "cli-table3": "^0.6.3",
     "inquirer": "^9.2.0",
     "ora": "^7.0.1",
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^12.6.2"
   }
 }
 ```

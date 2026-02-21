@@ -9,7 +9,7 @@ Project-specific notes and context for Claude Code.
 ## Project Overview
 
 A production-ready Electron template for building macOS menu bar apps. Built with:
-- **Electron 28** (downgraded from 39 for better-sqlite3 compatibility)
+- **Electron 40** + **better-sqlite3 12.6.x** (with prebuilt binaries)
 - **React 19** + **TypeScript**
 - **Tailwind CSS** + **Shadcn-style UI components**
 - **SQLite** (better-sqlite3) for persistence
@@ -188,11 +188,12 @@ Also use inline styles as fallbacks in Layout/Sidebar components.
 
 ### 2. Electron + better-sqlite3 Compatibility
 
-**Problem:** Electron 39+ requires C++20 for native modules, causing build failures with better-sqlite3.
+**Problem:** Previously, Electron 39+ required C++20 for native modules, causing build failures with better-sqlite3.
 
-**Solution:** Use Electron 28.x which has stable native module support:
+**Solution:** Resolved in better-sqlite3 v12.6.x which includes C++20 fixes and ships prebuilt binaries for Electron 29-40+. No need to pin Electron to an old version:
 ```json
-"electron": "^28.3.3"
+"electron": "^40.2.1",
+"better-sqlite3": "^12.6.2"
 ```
 
 ### 3. TypeScript with SQLite
