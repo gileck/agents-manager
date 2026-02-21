@@ -271,6 +271,24 @@ export class PipelineEngine implements IPipelineEngine {
       }
     }
 
+    // If any required hook failed, roll back the status change
+    const requiredFailures = hookFailures.filter(f => f.policy === 'required');
+    if (requiredFailures.length > 0) {
+      await this.taskStore.updateTask(task.id, { status: task.status });
+      await this.taskEventLog.log({
+        taskId: task.id,
+        category: 'system',
+        severity: 'error',
+        message: `Transition ${task.status} → ${toStatus} rolled back: required hook(s) failed`,
+        data: { failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
+      });
+      return {
+        success: false,
+        error: requiredFailures.map(f => `${f.hook}: ${f.error}`).join('; '),
+        hookFailures,
+      };
+    }
+
     // Log status_change event
     await this.taskEventLog.log({
       taskId: task.id,
