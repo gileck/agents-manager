@@ -76,14 +76,15 @@ export function OutputToolbar({
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
-      {hasMessages && onOutputModeChange && (
-        <div className="flex items-center border border-border rounded overflow-hidden mr-1">
+      {onOutputModeChange && (
+        <div className={cn('flex items-center border border-border rounded overflow-hidden mr-1', !hasMessages && 'opacity-50')}>
           <button
             className={cn(
               'px-2 py-1 text-xs font-medium transition-colors',
               outputMode === 'raw' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => onOutputModeChange('raw')}
+            disabled={!hasMessages}
           >
             Raw
           </button>
@@ -93,6 +94,7 @@ export function OutputToolbar({
               outputMode === 'rendered' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => onOutputModeChange('rendered')}
+            disabled={!hasMessages}
           >
             Rendered
           </button>

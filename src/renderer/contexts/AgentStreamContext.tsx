@@ -9,6 +9,8 @@ interface AgentStreamState {
   clearMessages(taskId: string): void;
   isActive(taskId: string): boolean;
   activeTaskIds: Set<string>;
+  /** Incremented on every message/status change so consumers re-render. */
+  revision: number;
 }
 
 const AgentStreamContext = createContext<AgentStreamState | null>(null);
@@ -16,7 +18,7 @@ const AgentStreamContext = createContext<AgentStreamState | null>(null);
 export function AgentStreamProvider({ children }: { children: React.ReactNode }) {
   const messagesRef = useRef(new Map<string, AgentChatMessage[]>());
   const activeRef = useRef(new Set<string>());
-  const [, setRevision] = useState(0);
+  const [revision, setRevision] = useState(0);
 
   const bump = useCallback(() => setRevision((r) => r + 1), []);
 
@@ -76,7 +78,7 @@ export function AgentStreamProvider({ children }: { children: React.ReactNode })
   }, [addMessage, bump]);
 
   return (
-    <AgentStreamContext.Provider value={{ getMessages, addMessage, clearMessages, isActive, activeTaskIds }}>
+    <AgentStreamContext.Provider value={{ getMessages, addMessage, clearMessages, isActive, activeTaskIds, revision }}>
       {children}
     </AgentStreamContext.Provider>
   );
