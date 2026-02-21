@@ -92,7 +92,7 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       if (hasPriorReview) {
         lines.push(
           `This is a RE-REVIEW. Check only that Phase ${phaseIdx + 1} issues raised previously are fixed.`,
-          `⚠️ Ignore any prior requests for features outside Phase ${phaseIdx + 1} (e.g., drag-and-drop, filter UI, sorting UI — those are later phases).`,
+          `⚠️ Ignore any prior requests for features that belong to later phases (listed above). Those will be implemented in separate PRs.`,
           '',
         );
       }
