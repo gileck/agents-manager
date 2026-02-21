@@ -22,7 +22,15 @@ import type { IAgentService } from '../interfaces/agent-service';
 import type { IScmPlatform } from '../interfaces/scm-platform';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { IGitOps } from '../interfaces/git-ops';
+import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IWorkflowService } from '../interfaces/workflow-service';
+
+interface QuestionResponse {
+  questionId: string;
+  selectedOptionId?: string;
+  answer?: string;
+  customText?: string;
+}
 
 export class WorkflowService implements IWorkflowService {
   constructor(
@@ -39,6 +47,7 @@ export class WorkflowService implements IWorkflowService {
     private createScmPlatform: (repoPath: string) => IScmPlatform,
     private createWorktreeManager: (path: string) => IWorktreeManager,
     private createGitOps?: (cwd: string) => IGitOps,
+    private taskContextStore?: ITaskContextStore,
   ) {}
 
   async createTask(input: TaskCreateInput): Promise<Task> {
@@ -174,6 +183,19 @@ export class WorkflowService implements IWorkflowService {
       data: { promptId, response },
     });
 
+    // Store Q&A as task context entry so the resumed agent sees it
+    if (this.taskContextStore) {
+      const questions = (prompt.payload as Record<string, unknown>)?.questions;
+      const summary = this.formatQASummary(questions, response);
+      await this.taskContextStore.addEntry({
+        taskId: prompt.taskId,
+        source: 'user',
+        entryType: 'user_input',
+        summary,
+        data: { questions, answers: response, promptId },
+      });
+    }
+
     // Try to resume via the outcome stored on the prompt
     if (prompt.resumeOutcome) {
       const task = await this.taskStore.getTask(prompt.taskId);
@@ -255,6 +277,41 @@ export class WorkflowService implements IWorkflowService {
         await this.pipelineEngine.executeTransition(task, doneTransition.to, { trigger: 'manual' });
       }
     }
+  }
+
+  private formatQASummary(questions: unknown, answers: Record<string, unknown>): string {
+    const qs = Array.isArray(questions) ? questions as Array<Record<string, unknown>> : [];
+    const answerList = (answers as { answers?: QuestionResponse[] })?.answers ?? [];
+
+    // Legacy plain-text response format
+    if (qs.length === 0 && answerList.length === 0) {
+      const plainAnswer = (answers as { answer?: string })?.answer;
+      if (plainAnswer) return `The user responded: ${plainAnswer}`;
+      return 'The user responded to the agent prompt.';
+    }
+
+    // Fallback responses (no structured questions, but has answer items)
+    if (qs.length === 0 && answerList.length > 0) {
+      for (const a of answerList) {
+        if (a.answer) return `The user responded: ${a.answer}`;
+      }
+      return 'The user responded to the agent prompt.';
+    }
+
+    const lines = ['The user answered your questions:'];
+    for (const q of qs) {
+      const a = answerList.find(ar => ar.questionId === q.id);
+      lines.push('', `**Q: ${q.question}**`);
+      if (q.context) lines.push(`Context: ${q.context}`);
+      if (a?.selectedOptionId) {
+        const options = Array.isArray(q.options) ? q.options as Array<Record<string, unknown>> : [];
+        const opt = options.find(o => o.id === a.selectedOptionId);
+        lines.push(`Selected: ${opt?.label ?? a.selectedOptionId}`);
+      }
+      if (a?.answer) lines.push(`Answer: ${a.answer}`);
+      if (a?.customText) lines.push(`Notes: ${a.customText}`);
+    }
+    return lines.join('\n');
   }
 
   private async cleanupWorktree(task: Task): Promise<void> {

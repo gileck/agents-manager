@@ -167,6 +167,8 @@ export function createTestContext(): TestContext {
     taskArtifactStore, agentService,
     () => scmPlatform,
     () => worktreeManager,
+    undefined, // createGitOps
+    taskContextStore,
   );
 
   // Register production hooks (scm, prompt, notification)

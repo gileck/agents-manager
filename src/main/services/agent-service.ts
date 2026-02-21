@@ -384,7 +384,7 @@ export class AgentService implements IAgentService {
     };
 
     // Wrap onMessage to intercept TodoWrite/Task tool_use events for subtask sync
-    const hasSubtaskTracking = (context.mode === 'implement' || context.mode === 'request_changes') && task.subtasks && task.subtasks.length > 0;
+    const hasSubtaskTracking = (context.mode === 'implement' || context.mode === 'implement_resume' || context.mode === 'request_changes') && task.subtasks && task.subtasks.length > 0;
     const currentSubtasks = hasSubtaskTracking ? [...task.subtasks] : [];
     const sdkTaskIdToSubtaskName = new Map<string, string>();
 
@@ -508,7 +508,9 @@ export class AgentService implements IAgentService {
       }).catch(() => {});
 
       // Post-agent validation loop (skip for plan/plan_revision/investigate/technical_design modes — no code changes to validate)
-      const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision' && context.mode !== 'investigate' && context.mode !== 'technical_design' && context.mode !== 'technical_design_revision'
+      const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision' && context.mode !== 'plan_resume'
+        && context.mode !== 'investigate' && context.mode !== 'investigate_resume'
+        && context.mode !== 'technical_design' && context.mode !== 'technical_design_revision' && context.mode !== 'technical_design_resume'
         ? (context.project.config?.validationCommands as string[] | undefined) ?? []
         : [];
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
@@ -624,7 +626,7 @@ export class AgentService implements IAgentService {
       }
 
       // Extract plan, subtasks, and context from plan/plan_revision/investigate output
-      if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate')) {
+      if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'plan_resume' || context.mode === 'investigate' || context.mode === 'investigate_resume')) {
         const so = result.structuredOutput as { plan?: string; planSummary?: string; investigationSummary?: string; subtasks?: string[] } | undefined;
         if (so?.plan) {
           this.taskEventLog.log({
@@ -659,7 +661,7 @@ export class AgentService implements IAgentService {
       }
 
       // Extract technical design from technical_design/technical_design_revision output
-      if (result.exitCode === 0 && (context.mode === 'technical_design' || context.mode === 'technical_design_revision')) {
+      if (result.exitCode === 0 && (context.mode === 'technical_design' || context.mode === 'technical_design_revision' || context.mode === 'technical_design_resume')) {
         const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string; subtasks?: string[] } | undefined;
         if (so?.technicalDesign) {
           this.taskEventLog.log({
@@ -1043,12 +1045,16 @@ export class AgentService implements IAgentService {
     switch (mode) {
       case 'plan': return 'plan_summary';
       case 'plan_revision': return 'plan_revision_summary';
+      case 'plan_resume': return 'plan_summary';
       case 'investigate': return 'investigation_summary';
+      case 'investigate_resume': return 'investigation_summary';
       case 'implement': return 'implementation_summary';
+      case 'implement_resume': return 'implementation_summary';
       case 'request_changes': return 'fix_summary';
       case 'resolve_conflicts': return 'conflict_resolution_summary';
       case 'technical_design': return 'technical_design_summary';
       case 'technical_design_revision': return 'technical_design_revision_summary';
+      case 'technical_design_resume': return 'technical_design_summary';
       default: return 'agent_output';
     }
   }

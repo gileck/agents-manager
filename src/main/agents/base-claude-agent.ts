@@ -145,7 +145,8 @@ export abstract class BaseClaudeAgent implements IAgent {
     const outputFormat = this.getOutputFormat(context);
 
     // Set up sandbox guard — restrict file access to worktree
-    const isReadOnlyMode = context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate';
+    const isReadOnlyMode = context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'plan_resume'
+      || context.mode === 'investigate' || context.mode === 'investigate_resume';
     const sandboxGuard = new SandboxGuard(
       [workdir],
       isReadOnlyMode && context.project?.path ? [context.project.path] : [],
@@ -267,12 +268,21 @@ export abstract class BaseClaudeAgent implements IAgent {
 
     const elapsed = Date.now() - startTime;
     const exitCode = isError ? 1 : 0;
-    const outcome = this.inferOutcome(context.mode, exitCode, resultText);
+    let outcome = this.inferOutcome(context.mode, exitCode, resultText);
+
+    // Allow agent to override outcome via structured output
+    let payload: Record<string, unknown> | undefined;
+    if (exitCode === 0 && structuredOutput?.outcome === 'needs_info' && Array.isArray(structuredOutput?.questions) && structuredOutput.questions.length > 0) {
+      outcome = 'needs_info';
+      payload = { questions: structuredOutput.questions };
+    }
 
     log(`Agent returning: exitCode=${exitCode}, outcome=${outcome}, outputLength=${resultText.length}, hasStructuredOutput=${!!structuredOutput}, duration=${Math.round(elapsed / 1000)}s, messages=${messageCount}, error=${errorMessage ?? 'none'}`);
 
     const output = resultText || errorMessage || '';
-    return this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens, structuredOutput, prompt);
+    const result = this.buildResult(exitCode, output, outcome, isError ? errorMessage : undefined, costInputTokens, costOutputTokens, structuredOutput, prompt);
+    if (payload) result.payload = payload;
+    return result;
   }
 
   async stop(runId: string): Promise<void> {

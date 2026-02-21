@@ -28,6 +28,7 @@ import type {
   DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus, PlanComment,
 } from '../../shared/types';
 import { usePipelineStatusMeta, type StatusMeta } from '../hooks/usePipelineStatusMeta';
+import { QuestionForm } from '../components/prompts/QuestionForm';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -139,13 +140,9 @@ export function TaskDetailPage() {
   const [duplicating, setDuplicating] = useState(false);
   const [stoppingAgent, setStoppingAgent] = useState(false);
 
-  // Prompt response state — per-prompt to avoid cross-prompt interference
-  const [promptResponses, setPromptResponses] = useState<Record<string, string>>({});
+  // Prompt response state
   const [responding, setResponding] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
-  const getPromptResponse = (promptId: string) => promptResponses[promptId] ?? '';
-  const setPromptResponse = (promptId: string, value: string) =>
-    setPromptResponses(prev => ({ ...prev, [promptId]: value }));
 
   // Auto-dismiss transition error after 15 seconds
   useEffect(() => {
@@ -217,15 +214,13 @@ export function TaskDetailPage() {
     }
   };
 
-  const handlePromptRespond = async (promptId: string) => {
+  const handleStructuredPromptRespond = async (promptId: string, responses: import('../components/prompts/QuestionForm').QuestionResponse[]) => {
     setResponding(true);
     setPromptError(null);
     try {
-      const result = await window.api.prompts.respond(promptId, { answer: getPromptResponse(promptId) });
+      const result = await window.api.prompts.respond(promptId, { answers: responses });
       if (!result) {
         setPromptError('This prompt has already been answered.');
-      } else {
-        setPromptResponse(promptId, '');
       }
       await refetchPrompts();
       await refetch();
@@ -486,30 +481,17 @@ export function TaskDetailPage() {
           {pendingPrompts && pendingPrompts.some(p => p.status === 'pending') && (
             <Card className="mt-4 border-amber-400">
               <CardHeader className="py-3">
-                <CardTitle className="text-base text-amber-600">Agent needs more information</CardTitle>
+                <CardTitle className="text-base text-amber-600">Agent needs your input</CardTitle>
               </CardHeader>
               <CardContent>
                 {pendingPrompts.filter((p) => p.status === 'pending').map((prompt) => (
-                  <div key={prompt.id} className="space-y-3">
-                    <div className="text-sm">
-                      {renderPromptQuestions(prompt.payload)}
-                    </div>
-                    <Textarea
-                      value={getPromptResponse(prompt.id)}
-                      onChange={(e) => setPromptResponse(prompt.id, e.target.value)}
-                      placeholder="Type your response..."
-                      rows={3}
-                    />
-                    {promptError && (
-                      <p className="text-sm text-destructive">{promptError}</p>
-                    )}
-                    <Button
-                      onClick={() => handlePromptRespond(prompt.id)}
-                      disabled={responding || !getPromptResponse(prompt.id).trim()}
-                    >
-                      {responding ? 'Submitting...' : 'Submit Response'}
-                    </Button>
-                  </div>
+                  <QuestionForm
+                    key={prompt.id}
+                    prompt={prompt}
+                    onSubmit={(responses) => handleStructuredPromptRespond(prompt.id, responses)}
+                    submitting={responding}
+                    error={promptError}
+                  />
                 ))}
               </CardContent>
             </Card>
@@ -825,22 +807,6 @@ export function TaskDetailPage() {
 }
 
 
-/** Render prompt questions from payload */
-function renderPromptQuestions(payload: Record<string, unknown>) {
-  if (Array.isArray(payload.questions)) {
-    return (
-      <ul className="list-disc ml-4 space-y-1">
-        {payload.questions.map((q: unknown, i: number) => (
-          <li key={i}>{String(q)}</li>
-        ))}
-      </ul>
-    );
-  }
-  if (typeof payload.question === 'string') {
-    return <p>{payload.question}</p>;
-  }
-  return <p>The agent needs additional information to proceed.</p>;
-}
 
 /** Plan Review Section — comment history, new comment, approve/request changes */
 function PlanReviewSection({

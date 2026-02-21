@@ -160,7 +160,7 @@ export function createAppServices(db: Database.Database): AppServices {
     taskStore, projectStore, pipelineEngine, pipelineStore,
     taskEventLog, activityLog, agentRunStore, pendingPromptStore,
     taskArtifactStore, agentService, createScmPlatform, createWorktreeManager,
-    createGitOps,
+    createGitOps, taskContextStore,
   );
 
   // Supervisor for detecting ghost/timed-out agent runs

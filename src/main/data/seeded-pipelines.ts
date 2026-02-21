@@ -148,12 +148,12 @@ export const AGENT_PIPELINE: SeededPipeline = {
       ] },
     // Human-in-the-loop resume (auto-start agent after info provided)
     { from: 'needs_info', to: 'planning', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'plan', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+      hooks: [{ name: 'start_agent', params: { mode: 'plan_resume', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+      hooks: [{ name: 'start_agent', params: { mode: 'implement_resume', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // Human-in-the-loop resume for designing
     { from: 'needs_info', to: 'designing', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'technical_design', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+      hooks: [{ name: 'start_agent', params: { mode: 'technical_design_resume', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // Auto-retry on agent failure (self-transitions gated by max_retries)
     { from: 'planning', to: 'planning', trigger: 'agent', agentOutcome: 'failed',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
@@ -271,11 +271,11 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       ] },
     // Human-in-the-loop resume
     { from: 'needs_info', to: 'investigating', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'investigate', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+      hooks: [{ name: 'start_agent', params: { mode: 'investigate_resume', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'needs_info', to: 'designing', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'technical_design', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+      hooks: [{ name: 'start_agent', params: { mode: 'technical_design_resume', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
+      hooks: [{ name: 'start_agent', params: { mode: 'implement_resume', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // Auto-retry on failure
     { from: 'investigating', to: 'investigating', trigger: 'agent', agentOutcome: 'failed',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],

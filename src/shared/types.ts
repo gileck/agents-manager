@@ -401,7 +401,8 @@ export type HookFn = (task: Task, transition: Transition, context: TransitionCon
 // ============================================
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
-export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision' | 'investigate' | 'resolve_conflicts' | 'technical_design' | 'technical_design_revision';
+export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision' | 'investigate' | 'resolve_conflicts' | 'technical_design' | 'technical_design_revision'
+  | 'plan_resume' | 'implement_resume' | 'investigate_resume' | 'technical_design_resume';
 
 export interface AgentRun {
   id: string;
