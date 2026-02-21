@@ -514,14 +514,18 @@ export class AgentService implements IAgentService {
           message: `Agent ${agentType} failed: ${errorMsg}`,
           data: { agentRunId: run.id, error: errorMsg },
         });
-        await worktreeManager.unlock(taskId);
-        await this.taskEventLog.log({
-          taskId,
-          category: 'worktree',
-          severity: 'debug',
-          message: 'Worktree unlocked',
-          data: { taskId },
-        });
+        try {
+          await worktreeManager.unlock(taskId);
+          await this.taskEventLog.log({
+            taskId,
+            category: 'worktree',
+            severity: 'debug',
+            message: 'Worktree unlocked',
+            data: { taskId },
+          });
+        } catch {
+          // Worktree may have been deleted by a transition hook — safe to ignore
+        }
 
         // Attempt failure transition (pipeline may retry via hooks)
         await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
@@ -899,15 +903,20 @@ export class AgentService implements IAgentService {
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
       }
 
-      // Cleanup — unlock before retry transition so the new agent can acquire the lock
-      await worktreeManager.unlock(taskId);
-      await this.taskEventLog.log({
-        taskId,
-        category: 'worktree',
-        severity: 'debug',
-        message: 'Worktree unlocked',
-        data: { taskId },
-      });
+      // Cleanup — unlock before retry transition so the new agent can acquire the lock.
+      // The worktree may already be deleted by hooks (e.g. advance_phase, merge_pr).
+      try {
+        await worktreeManager.unlock(taskId);
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'debug',
+          message: 'Worktree unlocked',
+          data: { taskId },
+        });
+      } catch {
+        // Worktree may have been deleted by a transition hook — safe to ignore
+      }
 
       // For failed runs, attempt failure transition (pipeline may retry via hooks)
       if (result.exitCode !== 0) {
