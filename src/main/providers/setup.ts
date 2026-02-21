@@ -185,8 +185,7 @@ export function createAppServices(db: Database.Database): AppServices {
     createWorktreeManager, createGitOps, createScmPlatform,
   });
   registerPhaseHandler(pipelineEngine, {
-    taskStore, projectStore, taskEventLog, pipelineEngine,
-    createWorktreeManager,
+    taskStore, taskEventLog, pipelineEngine,
   });
 
   return {

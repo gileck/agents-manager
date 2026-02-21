@@ -1,17 +1,13 @@
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { ITaskStore } from '../interfaces/task-store';
-import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
-import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { Task, Transition, TransitionContext, HookResult } from '../../shared/types';
 import { getActivePhaseIndex, hasPendingPhases } from '../../shared/phase-utils';
 
 export interface PhaseHandlerDeps {
   taskStore: ITaskStore;
-  projectStore: IProjectStore;
   taskEventLog: ITaskEventLog;
   pipelineEngine: IPipelineEngine;
-  createWorktreeManager: (projectPath: string) => IWorktreeManager;
 }
 
 export function registerPhaseHandler(engine: IPipelineEngine, deps: PhaseHandlerDeps): void {
@@ -86,20 +82,9 @@ export function registerPhaseHandler(engine: IPipelineEngine, deps: PhaseHandler
       return { success: false, error: `Failed to update phases: ${errMsg}` };
     }
 
-    // Delete worktree so the next phase gets a fresh branch
-    try {
-      const project = await deps.projectStore.getProject(task.projectId);
-      if (project?.path) {
-        const wm = deps.createWorktreeManager(project.path);
-        try { await wm.unlock(task.id); } catch (unlockErr) {
-          await log(`advance_phase: worktree unlock failed (expected if not locked): ${unlockErr instanceof Error ? unlockErr.message : String(unlockErr)}`, 'debug');
-        }
-        await wm.delete(task.id);
-        await log('advance_phase: worktree deleted for fresh branch', 'debug');
-      }
-    } catch (err) {
-      await log(`advance_phase: worktree cleanup failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
-    }
+    // Worktree deletion is handled by merge_pr (which runs before advance_phase),
+    // so we don't need to delete it here. The next phase's start_agent hook will
+    // create a fresh worktree off main.
 
     // Trigger system transition done → implementing
     // We need the fresh task (with updated phases) for the pipeline engine
