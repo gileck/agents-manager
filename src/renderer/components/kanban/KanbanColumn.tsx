@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { KanbanCard } from './KanbanCard';
@@ -30,16 +32,29 @@ export function KanbanColumn({
   sortBy,
   sortDirection,
 }: KanbanColumnProps) {
+  // Set up droppable zone for this column
+  const { setNodeRef, isOver } = useDroppable({
+    id: status.name,
+  });
+
   // Sort tasks within the column
   const sortedTasks = useMemo(() => {
     return sortTasks(tasks, sortBy, sortDirection);
   }, [tasks, sortBy, sortDirection]);
 
+  // Get task IDs for sortable context
+  const taskIds = useMemo(() => sortedTasks.map(task => task.id), [sortedTasks]);
+
   // Get status color
   const statusColor = status.color || '#666';
 
   return (
-    <div className="bg-card rounded-lg border border-border shadow-sm flex flex-col max-h-[calc(100vh-200px)]">
+    <div
+      ref={setNodeRef}
+      className={`bg-card rounded-lg border border-border shadow-sm flex flex-col max-h-[calc(100vh-200px)] transition-colors ${
+        isOver ? 'ring-2 ring-primary ring-opacity-50 bg-accent/10' : ''
+      }`}
+    >
       {/* Column Header */}
       <div
         className="p-3 border-b border-border cursor-pointer hover:bg-muted/50 transition-colors"
@@ -79,15 +94,17 @@ export function KanbanColumn({
               <p className="text-sm text-muted-foreground">No tasks</p>
             </div>
           ) : (
-            sortedTasks.map((task) => (
-              <KanbanCard
-                key={task.id}
-                task={task}
-                pipeline={pipeline}
-                pipelineMap={pipelineMap}
-                onStatusChange={onStatusChange}
-              />
-            ))
+            <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+              {sortedTasks.map((task) => (
+                <KanbanCard
+                  key={task.id}
+                  task={task}
+                  pipeline={pipeline}
+                  pipelineMap={pipelineMap}
+                  onStatusChange={onStatusChange}
+                />
+              ))}
+            </SortableContext>
           )}
         </div>
       )}

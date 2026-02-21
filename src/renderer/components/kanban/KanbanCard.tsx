@@ -1,5 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import type { BadgeProps } from '../ui/badge';
@@ -30,6 +32,16 @@ export function KanbanCard({
   onStatusChange,
 }: KanbanCardProps) {
   const navigate = useNavigate();
+
+  // Set up sortable for drag and drop
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
 
   const handleClick = () => {
     navigate(`/tasks/${task.id}`);
@@ -62,9 +74,19 @@ export function KanbanCard({
     }
   };
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
     <Card
-      className="cursor-pointer hover:bg-accent/50 transition-colors group"
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="cursor-pointer hover:bg-accent/50 transition-colors group touch-none"
       onClick={handleClick}
     >
       <CardContent className="p-3">
