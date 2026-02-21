@@ -222,16 +222,20 @@ describe('Hook Execution Policies', () => {
     const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipeline.id));
     const result = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
 
-    // Transition still succeeds (hooks run after the DB transaction)
-    expect(result.success).toBe(true);
-    expect(result.task!.status).toBe('in_progress');
+    // Transition fails and status is rolled back when a required hook fails
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Required hook rejected');
 
-    // But hookFailures should be populated
+    // hookFailures should be populated
     expect(result.hookFailures).toBeDefined();
     expect(result.hookFailures!.length).toBe(1);
     expect(result.hookFailures![0].hook).toBe('required_hook');
     expect(result.hookFailures![0].error).toBe('Required hook rejected');
     expect(result.hookFailures![0].policy).toBe('required');
+
+    // Status should be rolled back to original
+    const updated = await ctx.taskStore.getTask(task.id);
+    expect(updated!.status).toBe('open');
 
     // Verify the error was logged with 'error' severity for required policy
     const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'system', severity: 'error' });
