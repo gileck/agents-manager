@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
-import { createProjectInput, resetCounters } from '../helpers/factories';
+import { createProjectInput, createTaskInput, createFeatureInput, resetCounters } from '../helpers/factories';
+import { SIMPLE_PIPELINE } from '../../src/main/data/seeded-pipelines';
 
 describe('Project CRUD', () => {
   let ctx: TestContext;
@@ -92,5 +93,54 @@ describe('Project CRUD', () => {
     const project = await ctx.projectStore.createProject(input);
 
     expect(project.path).toBe('/home/user/project');
+  });
+
+  // Cascade delete behavior tests
+  // NOTE: deleteProject does NOT cascade-delete child records. With foreign_keys = ON,
+  // deleting a project that has tasks or features referencing it will throw a constraint error.
+
+  it('should throw when deleting a project that has tasks (foreign key constraint)', async () => {
+    const project = await ctx.projectStore.createProject(createProjectInput());
+    await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+
+    // Foreign key constraint prevents deleting a project with tasks
+    await expect(ctx.projectStore.deleteProject(project.id)).rejects.toThrow();
+  });
+
+  it('should throw when deleting a project that has tasks with artifacts (foreign key constraint)', async () => {
+    const project = await ctx.projectStore.createProject(createProjectInput());
+    const task = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    await ctx.taskArtifactStore.createArtifact({
+      taskId: task.id,
+      type: 'branch',
+      data: { name: 'feature/test' },
+    });
+
+    // Cannot delete project because tasks reference it
+    await expect(ctx.projectStore.deleteProject(project.id)).rejects.toThrow();
+  });
+
+  it('should throw when deleting a project that has features (foreign key constraint)', async () => {
+    const project = await ctx.projectStore.createProject(createProjectInput());
+    await ctx.featureStore.createFeature(createFeatureInput(project.id));
+
+    // Foreign key constraint prevents deleting a project with features
+    await expect(ctx.projectStore.deleteProject(project.id)).rejects.toThrow();
+  });
+
+  it('should allow deleting a project after its tasks are deleted first', async () => {
+    const project = await ctx.projectStore.createProject(createProjectInput());
+    const task1 = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+
+    // Delete tasks first, then project
+    await ctx.taskStore.deleteTask(task1.id);
+    await ctx.taskStore.deleteTask(task2.id);
+    const deleted = await ctx.projectStore.deleteProject(project.id);
+
+    expect(deleted).toBe(true);
+    expect(await ctx.projectStore.getProject(project.id)).toBeNull();
   });
 });

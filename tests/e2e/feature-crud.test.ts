@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createFeatureInput, createTaskInput, resetCounters } from '../helpers/factories';
+import { SIMPLE_PIPELINE } from '../../src/main/data/seeded-pipelines';
 
 describe('Feature CRUD', () => {
   let ctx: TestContext;
@@ -127,5 +128,63 @@ describe('Feature CRUD', () => {
   it('should return false when deleting non-existent feature', async () => {
     const result = await ctx.featureStore.deleteFeature('non-existent');
     expect(result).toBe(false);
+  });
+
+  it('should unlink all tasks when deleting a feature with multiple linked tasks', async () => {
+    const project = await ctx.projectStore.createProject(createProjectInput());
+    const feature = await ctx.featureStore.createFeature(createFeatureInput(project.id));
+
+    const task1 = await ctx.taskStore.createTask(
+      createTaskInput(project.id, SIMPLE_PIPELINE.id, { featureId: feature.id }),
+    );
+    const task2 = await ctx.taskStore.createTask(
+      createTaskInput(project.id, SIMPLE_PIPELINE.id, { featureId: feature.id }),
+    );
+    const task3 = await ctx.taskStore.createTask(
+      createTaskInput(project.id, SIMPLE_PIPELINE.id, { featureId: feature.id }),
+    );
+
+    // Verify all tasks are linked to the feature
+    expect(task1.featureId).toBe(feature.id);
+    expect(task2.featureId).toBe(feature.id);
+    expect(task3.featureId).toBe(feature.id);
+
+    await ctx.featureStore.deleteFeature(feature.id);
+
+    // All tasks should have featureId set to null
+    const updatedTask1 = await ctx.taskStore.getTask(task1.id);
+    const updatedTask2 = await ctx.taskStore.getTask(task2.id);
+    const updatedTask3 = await ctx.taskStore.getTask(task3.id);
+
+    expect(updatedTask1!.featureId).toBeNull();
+    expect(updatedTask2!.featureId).toBeNull();
+    expect(updatedTask3!.featureId).toBeNull();
+
+    // Tasks should still exist (not deleted)
+    expect(updatedTask1).not.toBeNull();
+    expect(updatedTask2).not.toBeNull();
+    expect(updatedTask3).not.toBeNull();
+  });
+
+  it('should not change task status when feature is deleted (only featureId is unlinked)', async () => {
+    const project = await ctx.projectStore.createProject(createProjectInput());
+    const feature = await ctx.featureStore.createFeature(createFeatureInput(project.id));
+
+    const task = await ctx.taskStore.createTask(
+      createTaskInput(project.id, SIMPLE_PIPELINE.id, { featureId: feature.id }),
+    );
+
+    // Transition the task to in_progress so it's not in the default status
+    await ctx.transitionTo(task.id, 'in_progress');
+    const inProgressTask = await ctx.taskStore.getTask(task.id);
+    expect(inProgressTask!.status).toBe('in_progress');
+
+    // Delete the feature
+    await ctx.featureStore.deleteFeature(feature.id);
+
+    // Task status should remain unchanged (still in_progress)
+    const updatedTask = await ctx.taskStore.getTask(task.id);
+    expect(updatedTask!.featureId).toBeNull();
+    expect(updatedTask!.status).toBe('in_progress');
   });
 });
