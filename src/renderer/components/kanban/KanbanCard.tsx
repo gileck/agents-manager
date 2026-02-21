@@ -8,10 +8,11 @@ import type { Task } from '../../../shared/types';
 
 interface KanbanCardProps {
   task: Task;
-  onClick?: () => void;
+  onClick?: (event: React.MouseEvent) => void;
+  isSelected?: boolean;
 }
 
-export function KanbanCard({ task, onClick }: KanbanCardProps) {
+export const KanbanCard = React.memo(function KanbanCard({ task, onClick, isSelected }: KanbanCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: {
@@ -25,11 +26,18 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (onClick) {
+      onClick(e);
+    }
+  };
+
   return (
     <Card
       ref={setNodeRef}
       style={style}
-      className={`p-3 transition-shadow ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+      className={`p-3 transition-all ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} ${isSelected ? 'ring-2 ring-primary bg-primary/5' : ''} [&[data-kanban-selected=true]]:ring-2 [&[data-kanban-selected=true]]:ring-primary`}
+      data-task-id={task.id}
     >
       <div className="flex gap-2">
         <div
@@ -39,7 +47,7 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
         >
           <GripVertical className="w-4 h-4 text-muted-foreground" />
         </div>
-        <div className="flex-1 space-y-2 cursor-pointer" onClick={onClick}>
+        <div className="flex-1 space-y-2 cursor-pointer" onClick={handleClick}>
           <div className="font-medium text-sm">{task.title}</div>
           {task.description && (
             <div className="text-xs text-muted-foreground line-clamp-2">
@@ -64,4 +72,4 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
       </div>
     </Card>
   );
-}
+});
