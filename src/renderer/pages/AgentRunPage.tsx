@@ -343,7 +343,7 @@ export function AgentRunPage() {
           </TabsContent>
 
           <TabsContent value="subtasks" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-            <SubtasksPanel subtasks={subtasks} />
+            <SubtasksPanel subtasks={subtasks} phases={task?.phases} />
           </TabsContent>
 
           <TabsContent value="git" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">

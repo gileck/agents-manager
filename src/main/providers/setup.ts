@@ -58,6 +58,7 @@ import { registerAgentHandler } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
 import { registerPromptHandler } from '../handlers/prompt-handler';
 import { registerScmHandler } from '../handlers/scm-handler';
+import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
 
 export interface AppServices {
@@ -182,6 +183,10 @@ export function createAppServices(db: Database.Database): AppServices {
   registerScmHandler(pipelineEngine, {
     projectStore, taskStore, taskArtifactStore, taskEventLog,
     createWorktreeManager, createGitOps, createScmPlatform,
+  });
+  registerPhaseHandler(pipelineEngine, {
+    taskStore, projectStore, taskEventLog, pipelineEngine,
+    createWorktreeManager,
   });
 
   return {

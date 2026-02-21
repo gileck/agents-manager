@@ -109,7 +109,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
-      hooks: [{ name: 'merge_pr', policy: 'required' }] },
+      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
     // Design review transitions — approve to plan, skip to implement, or request changes
     { from: 'design_review', to: 'planning', trigger: 'manual', label: 'Approve & Plan',
       guards: [{ name: 'no_running_agent' }],
@@ -166,7 +166,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // PR review agent outcomes
     { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
-      hooks: [{ name: 'merge_pr', policy: 'required' }] },
+      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
     { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
@@ -186,6 +186,10 @@ export const AGENT_PIPELINE: SeededPipeline = {
         { name: 'push_and_create_pr', policy: 'required' },
         { name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' },
       ] },
+    // Phase cycling: done → implementing when more phases remain
+    { from: 'done', to: 'implementing', trigger: 'system',
+      guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // Recovery: cancel agent phases back to open
     { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },
     { from: 'designing', to: 'open', trigger: 'manual', label: 'Cancel Design' },
@@ -242,7 +246,7 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
-      hooks: [{ name: 'merge_pr', policy: 'required' }] },
+      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
     // Agent outcome auto-transitions
     { from: 'investigating', to: 'investigation_review', trigger: 'agent', agentOutcome: 'investigation_complete',
       hooks: [{ name: 'notify', params: { titleTemplate: 'Investigation ready', bodyTemplate: 'Investigation ready: {taskTitle}' }, policy: 'best_effort' }] },
@@ -288,7 +292,7 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // PR review agent outcomes
     { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
-      hooks: [{ name: 'merge_pr', policy: 'required' }] },
+      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
     { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
@@ -308,6 +312,10 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
         { name: 'push_and_create_pr', policy: 'required' },
         { name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' },
       ] },
+    // Phase cycling: done → implementing when more phases remain
+    { from: 'done', to: 'implementing', trigger: 'system',
+      guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // Recovery
     { from: 'investigating', to: 'reported', trigger: 'manual', label: 'Cancel Investigation' },
     { from: 'designing', to: 'reported', trigger: 'manual', label: 'Cancel Design' },

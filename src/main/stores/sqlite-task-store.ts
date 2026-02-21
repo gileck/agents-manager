@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Task, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, PlanComment } from '../../shared/types';
+import type { Task, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, ImplementationPhase, PlanComment } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import { generateId, now, parseJson } from './utils';
@@ -21,6 +21,7 @@ interface TaskRow {
   plan: string | null;
   technical_design: string | null;
   subtasks: string;
+  phases: string | null;
   plan_comments: string;
   technical_design_comments: string;
   metadata: string;
@@ -46,6 +47,7 @@ function rowToTask(row: TaskRow): Task {
     plan: row.plan,
     technicalDesign: row.technical_design,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
+    phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),
     technicalDesignComments: parseJson<PlanComment[]>(row.technical_design_comments, []),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
@@ -136,8 +138,8 @@ export class SqliteTaskStore implements ITaskStore {
     }
 
     this.db.prepare(`
-      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, subtasks, plan_comments, technical_design_comments, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.projectId,
@@ -155,6 +157,7 @@ export class SqliteTaskStore implements ITaskStore {
       null,
       null,
       JSON.stringify(input.subtasks ?? []),
+      input.phases ? JSON.stringify(input.phases) : null,
       '[]',
       '[]',
       JSON.stringify(input.metadata ?? {}),
@@ -224,6 +227,10 @@ export class SqliteTaskStore implements ITaskStore {
       updates.push('subtasks = ?');
       values.push(JSON.stringify(input.subtasks));
     }
+    if (input.phases !== undefined) {
+      updates.push('phases = ?');
+      values.push(input.phases ? JSON.stringify(input.phases) : null);
+    }
     if (input.planComments !== undefined) {
       updates.push('plan_comments = ?');
       values.push(JSON.stringify(input.planComments));
@@ -290,7 +297,7 @@ export class SqliteTaskStore implements ITaskStore {
       // Reset task record fields
       this.db.prepare(`
         UPDATE tasks
-        SET status = ?, plan = NULL, technical_design = NULL, subtasks = '[]', plan_comments = '[]', technical_design_comments = '[]',
+        SET status = ?, plan = NULL, technical_design = NULL, subtasks = '[]', phases = NULL, plan_comments = '[]', technical_design_comments = '[]',
             pr_link = NULL, branch_name = NULL, updated_at = ?
         WHERE id = ?
       `).run(firstStatus, now(), id);

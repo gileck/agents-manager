@@ -28,6 +28,7 @@ import * as path from 'path';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
 import { getShellEnv } from './shell-env';
+import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 
 const execAsync = promisify(exec);
 
@@ -148,7 +149,14 @@ export class AgentService implements IAgentService {
     // 4. Prepare environment
     let worktree = await worktreeManager.get(taskId);
     if (!worktree) {
-      const branch = `task/${taskId}/${mode}`;
+      // Phase-aware branch naming: append /phase-{n} for multi-phase tasks
+      let branch = `task/${taskId}/${mode}`;
+      if (isMultiPhase(task)) {
+        const phaseIdx = getActivePhaseIndex(task.phases);
+        if (phaseIdx >= 0) {
+          branch = `task/${taskId}/implement/phase-${phaseIdx + 1}`;
+        }
+      }
       worktree = await worktreeManager.create(branch, taskId);
       await this.taskEventLog.log({
         taskId,
@@ -384,9 +392,30 @@ export class AgentService implements IAgentService {
     };
 
     // Wrap onMessage to intercept TodoWrite/Task tool_use events for subtask sync
-    const hasSubtaskTracking = (context.mode === 'implement' || context.mode === 'implement_resume' || context.mode === 'request_changes') && task.subtasks && task.subtasks.length > 0;
-    const currentSubtasks = hasSubtaskTracking ? [...task.subtasks] : [];
+    // Phase-aware: use active phase's subtasks when multi-phase
+    const activePhaseForSync = getActivePhase(task.phases);
+    const activePhaseIdxForSync = getActivePhaseIndex(task.phases);
+    const effectiveSubtasks = (isMultiPhase(task) && activePhaseForSync) ? activePhaseForSync.subtasks : task.subtasks;
+    const hasSubtaskTracking = (context.mode === 'implement' || context.mode === 'implement_resume' || context.mode === 'request_changes') && effectiveSubtasks && effectiveSubtasks.length > 0;
+    const currentSubtasks = hasSubtaskTracking ? [...effectiveSubtasks] : [];
     const sdkTaskIdToSubtaskName = new Map<string, string>();
+
+    // Helper to persist subtask changes — writes to phase subtasks when multi-phase
+    const persistSubtaskChanges = () => {
+      if (isMultiPhase(task) && activePhaseIdxForSync >= 0 && task.phases) {
+        if (activePhaseIdxForSync >= task.phases.length) {
+          onLog(`persistSubtaskChanges: phase index ${activePhaseIdxForSync} out of bounds (${task.phases.length} phases)`);
+          return this.taskStore.updateTask(taskId, { subtasks: [...currentSubtasks] });
+        }
+        const updatedPhases = [...task.phases];
+        updatedPhases[activePhaseIdxForSync] = {
+          ...updatedPhases[activePhaseIdxForSync],
+          subtasks: [...currentSubtasks],
+        };
+        return this.taskStore.updateTask(taskId, { phases: updatedPhases });
+      }
+      return this.taskStore.updateTask(taskId, { subtasks: [...currentSubtasks] });
+    };
 
     const mapSdkStatus = (sdkStatus: string): import('../../shared/types').SubtaskStatus | null => {
       switch (sdkStatus) {
@@ -417,7 +446,7 @@ export class AgentService implements IAgentService {
                     }
                   }
                   if (changed) {
-                    this.taskStore.updateTask(taskId, { subtasks: [...currentSubtasks] }).catch((err) => {
+                    persistSubtaskChanges().catch((err) => {
                       onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
                     });
                   }
@@ -439,7 +468,7 @@ export class AgentService implements IAgentService {
                     const idx = currentSubtasks.findIndex(s => s.name === subtaskName);
                     if (idx !== -1 && currentSubtasks[idx].status !== mappedStatus) {
                       currentSubtasks[idx] = { ...currentSubtasks[idx], status: mappedStatus };
-                      this.taskStore.updateTask(taskId, { subtasks: [...currentSubtasks] }).catch((err) => {
+                      persistSubtaskChanges().catch((err) => {
                         onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
                       });
                     }
@@ -627,16 +656,33 @@ export class AgentService implements IAgentService {
 
       // Extract plan, subtasks, and context from plan/plan_revision/investigate output
       if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'plan_resume' || context.mode === 'investigate' || context.mode === 'investigate_resume')) {
-        const so = result.structuredOutput as { plan?: string; planSummary?: string; investigationSummary?: string; subtasks?: string[] } | undefined;
+        const so = result.structuredOutput as { plan?: string; planSummary?: string; investigationSummary?: string; subtasks?: string[]; phases?: Array<{ name: string; subtasks: string[] }> } | undefined;
         if (so?.plan) {
           this.taskEventLog.log({
             taskId,
             category: 'agent_debug',
             severity: 'debug',
-            message: `Extracting plan from structured output: hasPlan=${!!so.plan}, hasSubtasks=${!!so.subtasks}, subtaskCount=${so.subtasks?.length ?? 0}`,
+            message: `Extracting plan from structured output: hasPlan=${!!so.plan}, hasSubtasks=${!!so.subtasks}, subtaskCount=${so.subtasks?.length ?? 0}, hasPhases=${!!so.phases}, phaseCount=${so.phases?.length ?? 0}`,
           }).catch(() => {});
           const updates: import('../../shared/types').TaskUpdateInput = { plan: so.plan };
-          if (so.subtasks && so.subtasks.length > 0) {
+          // Check for multi-phase output
+          if (so.phases && so.phases.length > 1) {
+            const phases: import('../../shared/types').ImplementationPhase[] = so.phases.map((p, idx) => ({
+              id: `phase-${idx + 1}`,
+              name: p.name,
+              status: idx === 0 ? 'in_progress' as const : 'pending' as const,
+              subtasks: p.subtasks.map(name => ({ name, status: 'open' as const })),
+            }));
+            updates.phases = phases;
+            updates.subtasks = []; // subtasks live inside phases
+            this.taskEventLog.log({
+              taskId,
+              category: 'agent_debug',
+              severity: 'info',
+              message: `Multi-phase plan created with ${phases.length} phases`,
+              data: { phaseNames: phases.map(p => p.name) },
+            }).catch(() => {});
+          } else if (so.subtasks && so.subtasks.length > 0) {
             updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
           }
           await this.taskStore.updateTask(taskId, updates);

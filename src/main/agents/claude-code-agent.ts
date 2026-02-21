@@ -1,4 +1,5 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
+import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 import { BaseClaudeAgent } from './base-claude-agent';
 
 /** Shared schema fields that let any agent ask interactive questions. */
@@ -125,7 +126,23 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
               subtasks: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Concrete implementation steps that break down the plan',
+                description: 'Concrete implementation steps that break down the plan. Use this for single-phase tasks (most tasks).',
+              },
+              phases: {
+                type: 'array',
+                description: 'Optional: For large tasks that should be implemented in multiple sequential phases, each with its own PR. Only use when the task is genuinely large enough to warrant separate PRs. Most tasks should use flat subtasks instead.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string', description: 'Phase name, e.g. "Phase 1: Data Model & Migration"' },
+                    subtasks: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: 'Subtasks belonging to this phase',
+                    },
+                  },
+                  required: ['name', 'subtasks'],
+                },
               },
               ...getInteractiveFields(),
             },
@@ -228,6 +245,13 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           `4. List specific files to create or modify, with a short description of each change.`,
           `5. Identify edge cases, error handling, and potential risks.`,
           `6. Break the plan into 3-8 concrete subtasks. Each subtask should be independently testable and ordered by dependency.`,
+          ``,
+          `## Multi-Phase Tasks (Optional)`,
+          `For large tasks that would result in a massive PR, you can organize subtasks into sequential **implementation phases**.`,
+          `Each phase gets its own implementation run and PR. Use phases only when the task is genuinely large (e.g. 10+ files across multiple domains).`,
+          `Most tasks should use flat subtasks. If you use phases, provide 2-4 phases with clear boundaries.`,
+          `Output phases in the "phases" array field. Each phase has a "name" and its own "subtasks" array.`,
+          `When using phases, the "subtasks" field should be empty (subtasks live inside phases).`,
         ];
         if (task.planComments && task.planComments.length > 0) {
           planLines.push('', '## Admin Feedback');
@@ -276,7 +300,35 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
           `4. After making all changes, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass. Fix any errors before committing.`,
           `5. Stage and commit with a descriptive message (git add the relevant files, then git commit).`,
         ];
-        if (task.subtasks && task.subtasks.length > 0) {
+        // Phase-aware subtask display
+        const activePhase = getActivePhase(task.phases);
+        if (isMultiPhase(task) && activePhase) {
+          const phaseIdx = getActivePhaseIndex(task.phases);
+          const totalPhases = task.phases?.length ?? 0;
+          lines.push(
+            '',
+            `## Current Phase: ${activePhase.name} (${phaseIdx + 1}/${totalPhases})`,
+            'You are implementing ONLY this phase. Focus on the subtasks listed below.',
+          );
+          // Show completed phases as brief summary
+          const completedPhases = (task.phases ?? []).filter(p => p.status === 'completed');
+          if (completedPhases.length > 0) {
+            lines.push('', '### Previously Completed Phases');
+            for (const cp of completedPhases) {
+              lines.push(`- ${cp.name} (completed${cp.prLink ? `, PR: ${cp.prLink}` : ''})`);
+            }
+          }
+          lines.push(
+            '',
+            '## IMPORTANT: Subtask Progress Tracking',
+            'Create a todo list with the following subtasks and update their status as you work through them:',
+            '',
+          );
+          for (const st of activePhase.subtasks) {
+            lines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
+          }
+          lines.push('');
+        } else if (task.subtasks && task.subtasks.length > 0) {
           lines.push(
             '',
             '## IMPORTANT: Subtask Progress Tracking',
@@ -487,7 +539,24 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
         const irLines = [
           `Continue implementing the changes for this task using the user's decisions. Task: ${task.title}.${desc}`,
         ];
-        if (task.subtasks && task.subtasks.length > 0) {
+        // Phase-aware subtask display
+        const irActivePhase = getActivePhase(task.phases);
+        if (isMultiPhase(task) && irActivePhase) {
+          const irPhaseIdx = getActivePhaseIndex(task.phases);
+          const irTotalPhases = task.phases?.length ?? 0;
+          irLines.push(
+            '',
+            `## Current Phase: ${irActivePhase.name} (${irPhaseIdx + 1}/${irTotalPhases})`,
+            '',
+            '## IMPORTANT: Subtask Progress Tracking',
+            'Create a todo list with the following subtasks and update their status as you work through them:',
+            '',
+          );
+          for (const st of irActivePhase.subtasks) {
+            irLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
+          }
+          irLines.push('');
+        } else if (task.subtasks && task.subtasks.length > 0) {
           irLines.push(
             '',
             '## IMPORTANT: Subtask Progress Tracking',

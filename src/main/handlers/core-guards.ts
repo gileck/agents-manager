@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { Task, Transition, TransitionContext, GuardResult } from '../../shared/types';
+import { hasPendingPhases } from '../../shared/phase-utils';
 
 export function registerCoreGuards(engine: IPipelineEngine, _db: Database.Database): void {
   engine.registerGuard('has_pr', (task: Task): GuardResult => {
@@ -56,5 +57,12 @@ export function registerCoreGuards(engine: IPipelineEngine, _db: Database.Databa
       return { allowed: false, reason: 'An agent is already running for this task' };
     }
     return { allowed: true };
+  });
+
+  engine.registerGuard('has_pending_phases', (task: Task): GuardResult => {
+    if (hasPendingPhases(task.phases)) {
+      return { allowed: true };
+    }
+    return { allowed: false, reason: 'No pending implementation phases' };
   });
 }

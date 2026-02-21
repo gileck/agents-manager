@@ -7,6 +7,7 @@ import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { IScmPlatform } from '../interfaces/scm-platform';
 import type { Task, Transition, TransitionContext, HookResult } from '../../shared/types';
+import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 
 export interface ScmHandlerDeps {
   projectStore: IProjectStore;
@@ -191,9 +192,24 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     try {
       const freshTask = await deps.taskStore.getTask(task.id);
       const baseBranch = (project.config?.defaultBranch as string) || 'main';
+
+      // Phase-aware PR title and body
+      let prTitle = freshTask?.title ?? 'PR';
+      let prBody = `Automated PR for task ${task.id}`;
+      if (freshTask && isMultiPhase(freshTask)) {
+        const activePhase = getActivePhase(freshTask.phases);
+        const phaseIdx = getActivePhaseIndex(freshTask.phases);
+        const totalPhases = freshTask.phases?.length ?? 0;
+        if (activePhase && phaseIdx >= 0) {
+          prTitle = `[Phase ${phaseIdx + 1}/${totalPhases}] ${freshTask.title}`;
+          const subtaskList = activePhase.subtasks.map(s => `- [ ] ${s.name}`).join('\n');
+          prBody = `## ${activePhase.name}\n\nPhase ${phaseIdx + 1} of ${totalPhases} for task ${task.id}\n\n### Subtasks\n${subtaskList}`;
+        }
+      }
+
       const prInfo = await scmPlatform.createPR({
-        title: freshTask?.title ?? 'PR',
-        body: `Automated PR for task ${task.id}`,
+        title: prTitle,
+        body: prBody,
         head: branch,
         base: baseBranch,
       });

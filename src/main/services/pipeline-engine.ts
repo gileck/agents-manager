@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type {
   Task,
   Subtask,
+  ImplementationPhase,
   PlanComment,
   Transition,
   TransitionTrigger,
@@ -36,6 +37,7 @@ interface TaskRow {
   plan: string | null;
   technical_design: string | null;
   subtasks: string;
+  phases: string | null;
   plan_comments: string;
   technical_design_comments: string;
   metadata: string;
@@ -61,6 +63,7 @@ function rowToTask(row: TaskRow): Task {
     plan: row.plan,
     technicalDesign: row.technical_design,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
+    phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),
     technicalDesignComments: parseJson<PlanComment[]>(row.technical_design_comments, []),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),

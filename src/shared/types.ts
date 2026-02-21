@@ -212,6 +212,17 @@ export interface Subtask {
   status: SubtaskStatus;
 }
 
+// Implementation phase types (for multi-phase tasks)
+export type ImplementationPhaseStatus = 'pending' | 'in_progress' | 'completed';
+
+export interface ImplementationPhase {
+  id: string;           // "phase-1", "phase-2", etc.
+  name: string;         // "Phase 1: Data Model & Migration"
+  status: ImplementationPhaseStatus;
+  subtasks: Subtask[];
+  prLink?: string;      // PR URL for this phase (set after merge)
+}
+
 // Plan comment types
 export interface PlanComment {
   author: string;
@@ -237,6 +248,7 @@ export interface Task {
   plan: string | null;
   technicalDesign: string | null;
   subtasks: Subtask[];
+  phases: ImplementationPhase[] | null;
   planComments: PlanComment[];
   technicalDesignComments: PlanComment[];
   metadata: Record<string, unknown>;
@@ -258,6 +270,7 @@ export interface TaskCreateInput {
   prLink?: string;
   branchName?: string;
   subtasks?: Subtask[];
+  phases?: ImplementationPhase[] | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -275,6 +288,7 @@ export interface TaskUpdateInput {
   plan?: string | null;
   technicalDesign?: string | null;
   subtasks?: Subtask[];
+  phases?: ImplementationPhase[] | null;
   planComments?: PlanComment[];
   technicalDesignComments?: PlanComment[];
   metadata?: Record<string, unknown>;

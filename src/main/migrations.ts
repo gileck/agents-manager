@@ -667,6 +667,14 @@ export function getMigrations(): Migration[] {
       name: '060_update_agent_prompt_templates',
       sql: getUpdateAgentPromptTemplatesSql(),
     },
+    {
+      name: '061_add_phases_column',
+      sql: `ALTER TABLE tasks ADD COLUMN phases TEXT`,
+    },
+    {
+      name: '062_reseed_pipelines_phases',
+      sql: getReseedPipelinesSql(),
+    },
   ];
 }
 
