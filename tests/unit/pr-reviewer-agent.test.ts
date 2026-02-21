@@ -72,12 +72,12 @@ describe('PrReviewerAgent', () => {
       const ctx = createContext();
       ctx.project = { id: 'proj-1', name: 'Test', path: '/tmp', description: null, createdAt: Date.now(), updatedAt: Date.now(), config: { defaultBranch: 'develop' } };
       const prompt = agent.buildPrompt(ctx);
-      expect(prompt).toContain('git diff develop..HEAD');
+      expect(prompt).toContain('git diff origin/develop..HEAD');
     });
 
     it('defaults to main when no defaultBranch configured', () => {
       const prompt = agent.buildPrompt(createContext());
-      expect(prompt).toContain('git diff main..HEAD');
+      expect(prompt).toContain('git diff origin/main..HEAD');
     });
   });
 

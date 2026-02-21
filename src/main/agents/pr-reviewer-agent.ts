@@ -113,7 +113,7 @@ export class PrReviewerAgent extends BaseClaudeAgent {
 
     lines.push(
       '## Steps',
-      `1. Run \`git diff ${defaultBranch}..HEAD\` to see all changes made in this branch.`,
+      `1. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
       '2. Review the diff using the criteria below.',
       '3. Make every comment actionable — say what to change, not just what is wrong.',
       '',
