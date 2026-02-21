@@ -16,8 +16,11 @@ import {
 import { useTask, useTasks } from '../hooks/useTasks';
 import { usePipeline } from '../hooks/usePipelines';
 import { useFeatures } from '../hooks/useFeatures';
+import { usePipelineDiagnostics } from '../hooks/usePipelineDiagnostics';
+import { useHookRetry } from '../hooks/useHookRetry';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { PipelineControlPanel } from '../components/pipeline/PipelineControlPanel';
+import { HookFailureBanner } from '../components/pipeline/HookFailureBanner';
 import { DebuggerPanel } from '../components/pipeline/DebuggerPanel';
 import { PipelineProgress } from '../components/pipeline/PipelineProgress';
 import { PipelineVertical } from '../components/pipeline/PipelineVertical';
@@ -152,6 +155,11 @@ export function TaskDetailPage() {
   // Hook failure alerts from transitions
   const [hookFailureAlerts, setHookFailureAlerts] = useState<HookFailure[]>([]);
 
+  // Diagnostics hooks lifted from PipelineControlPanel
+  const { diagnostics, refetch: refetchDiagnostics, error: diagnosticsError } = usePipelineDiagnostics(id!, task?.status ?? '');
+  const { retry, retrying } = useHookRetry();
+  const [dismissedFailureIds, setDismissedFailureIds] = useState<Set<string>>(new Set());
+
   // Auto-dismiss transition error after 15 seconds
   useEffect(() => {
     if (!transitionError) return;
@@ -179,6 +187,8 @@ export function TaskDetailPage() {
       await window.api.tasks.update(id, editForm);
       setEditOpen(false);
       await refetch();
+    } catch (err) {
+      setTransitionError(err instanceof Error ? err.message : 'Failed to save task. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -259,6 +269,9 @@ export function TaskDetailPage() {
     try {
       await window.api.tasks.delete(id);
       navigate('/tasks');
+    } catch (err) {
+      setTransitionError(err instanceof Error ? err.message : 'Failed to delete task. Please try again.');
+      setDeleteOpen(false);
     } finally {
       setDeleting(false);
     }
@@ -276,6 +289,9 @@ export function TaskDetailPage() {
       await refetchPrompts();
       await refetchDebug();
       await refetchContext();
+    } catch (err) {
+      setTransitionError(err instanceof Error ? err.message : 'Failed to reset task. Please try again.');
+      setResetOpen(false);
     } finally {
       setResetting(false);
     }
@@ -295,10 +311,25 @@ export function TaskDetailPage() {
         tags: task.tags,
       });
       navigate(`/tasks/${newTask.id}`);
+    } catch (err) {
+      setTransitionError(err instanceof Error ? err.message : 'Failed to duplicate task. Please try again.');
     } finally {
       setDuplicating(false);
     }
   };
+
+  const handleRetryHook = useCallback(async (hookName: string, from: string, to: string) => {
+    const result = await retry(id!, hookName, from, to);
+    if (result.success) {
+      refetchDiagnostics();
+    } else {
+      setTransitionError(`Hook retry failed for "${hookName}": ${result.error ?? 'Unknown error'}`);
+    }
+  }, [id, retry, refetchDiagnostics]);
+
+  const handleDismissFailure = useCallback((failureId: string) => {
+    setDismissedFailureIds((prev) => new Set([...prev, failureId]));
+  }, []);
 
   if (loading && !task) {
     return (
@@ -341,86 +372,156 @@ export function TaskDetailPage() {
     secondaryTransitions = allTransitions;
   }
 
-  return (
-    <div className="p-8">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={() => (navigate as (delta: number) => void)(-1)}>
-        &larr; Back
-      </Button>
+  const visibleDiagnosticFailures = (diagnostics?.recentHookFailures ?? [])
+    .filter((f) => !dismissedFailureIds.has(f.id));
+  const hasVisibleBanners = transitionError !== null || diagnosticsError !== null || hookFailureAlerts.length > 0 || visibleDiagnosticFailures.length > 0;
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <PipelineBadge status={task.status} pipeline={pipeline} />
-          <div>
-            <h1 className="text-3xl font-bold">{task.title}</h1>
-            {worktree && (
-              <p className="text-xs text-muted-foreground mt-1 font-mono">
-                Worktree: {worktree.branch}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleDuplicate} disabled={duplicating}>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+
+      {/* 1. TOPNAV */}
+      <div style={{
+        display: 'flex', alignItems: 'center', height: 44, minHeight: 44,
+        borderBottom: '1px solid var(--border)', padding: '0 24px', gap: 8, flexShrink: 0,
+        background: 'var(--card)',
+      }}>
+        <button
+          onClick={() => (navigate as (delta: number) => void)(-1)}
+          style={{ fontSize: 13, color: 'var(--muted-foreground)', cursor: 'pointer', background: 'none', border: 'none', padding: '2px 4px' }}
+        >
+          ← Back
+        </button>
+        <span style={{ color: 'var(--border)', fontSize: 13 }}>/</span>
+        <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Tasks</span>
+        <span style={{ color: 'var(--border)', fontSize: 13 }}>/</span>
+        <span style={{ fontSize: 13, color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
+          {task.title}
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <Button variant="outline" size="sm" onClick={handleDuplicate} disabled={duplicating}>
             {duplicating ? 'Duplicating...' : 'Duplicate'}
           </Button>
-          <Button variant="outline" onClick={openEdit}>Edit</Button>
-          <Button variant="outline" onClick={() => setResetOpen(true)} disabled={hasRunningAgent}>Reset</Button>
-          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>Delete</Button>
+          <Button variant="outline" size="sm" onClick={openEdit}>Edit</Button>
+          <Button variant="outline" size="sm" onClick={() => setResetOpen(true)} disabled={hasRunningAgent}>Reset</Button>
+          <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>Delete</Button>
         </div>
       </div>
 
-      {/* Inline compact pipeline progress bar */}
+      {/* 2. HERO — title, meta row, action strip */}
+      <div style={{ padding: '18px 24px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{task.title}</h1>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12, color: 'var(--muted-foreground)' }}>
+          <PipelineBadge status={task.status} pipeline={pipeline} />
+          {pipeline && <><span>·</span><span>{pipeline.name}</span></>}
+          {task.featureId && <><span>·</span><span>{task.featureId}</span></>}
+          {task.priority !== undefined && <><span>·</span><span>P{task.priority}</span></>}
+          <span>·</span>
+          <span>{new Date(task.createdAt).toLocaleDateString()}</span>
+          {worktree && (
+            <>
+              <span>·</span>
+              <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--primary)', backgroundColor: 'rgba(59,130,246,0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                {worktree.path ?? worktree.branch}
+              </span>
+            </>
+          )}
+        </div>
+        {/* Action strip */}
+        <div style={{ borderTop: '1px solid var(--border)', padding: '10px 0' }}>
+          {(!isAgentPipeline || agentRuns !== null) && (
+            <PipelineControlPanel
+              taskId={id!}
+              task={task}
+              isAgentPipeline={isAgentPipeline}
+              hasRunningAgent={hasRunningAgent}
+              activeRun={activeRun}
+              lastRun={lastRun}
+              isStuck={isStuck}
+              isFinalizing={isFinalizing}
+              primaryTransitions={primaryTransitions}
+              transitioning={transitioning}
+              stoppingAgent={stoppingAgent}
+              statusMeta={statusMeta}
+              pipelineStatuses={pipeline?.statuses ?? []}
+              onTransition={handleTransition}
+              onStopAgent={handleStopAgent}
+              onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
+              onHookFailures={(failures) => setHookFailureAlerts((prev) => [...prev, ...failures])}
+              diagnostics={diagnostics}
+              refetchDiagnostics={refetchDiagnostics}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* 3. PIPELINE BAR — horizontally scrollable */}
       {pipeline && (
-        <PipelineProgress
-          pipeline={pipeline}
-          currentStatus={task.status}
-          transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
-          agentState={hasRunningAgent ? 'running' : isStuck ? 'failed' : 'idle'}
-        />
-      )}
-
-      {/* Pipeline Control Panel — defer for agent pipelines until agentRuns loads */}
-      {(!isAgentPipeline || agentRuns !== null) && (
-        <PipelineControlPanel
-          taskId={id!}
-          task={task}
-          isAgentPipeline={isAgentPipeline}
-          hasRunningAgent={hasRunningAgent}
-          activeRun={activeRun}
-          lastRun={lastRun}
-          isStuck={isStuck}
-          isFinalizing={isFinalizing}
-          primaryTransitions={primaryTransitions}
-          transitioning={transitioning}
-          stoppingAgent={stoppingAgent}
-          statusMeta={statusMeta}
-          pipelineStatuses={pipeline?.statuses ?? []}
-          onTransition={handleTransition}
-          onStopAgent={handleStopAgent}
-          onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
-          hookFailureAlerts={hookFailureAlerts}
-          onDismissHookAlert={(i) => setHookFailureAlerts((prev) => prev.filter((_, idx) => idx !== i))}
-        />
-      )}
-
-      {/* Transition Error Banner */}
-      {transitionError && (
-        <div
-          className="mb-4 rounded-md px-4 py-3 text-sm text-white flex items-center justify-between"
-          style={{ backgroundColor: '#dc2626' }}
-        >
-          <span>{transitionError}</span>
-          <button
-            className="ml-4 text-white hover:opacity-80 font-bold text-lg leading-none"
-            onClick={() => setTransitionError(null)}
-          >
-            &times;
-          </button>
+        <div style={{ borderBottom: '1px solid var(--border)', flexShrink: 0, overflowX: 'auto', background: 'var(--card)' }}>
+          <PipelineProgress
+            pipeline={pipeline}
+            currentStatus={task.status}
+            transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
+            agentState={hasRunningAgent ? 'running' : isStuck ? 'failed' : 'idle'}
+          />
         </div>
       )}
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+      {/* 4. HOOK FAILURE BANNERS — pinned above tabs */}
+      {hasVisibleBanners && (
+        <div style={{ flexShrink: 0, borderBottom: '1px solid var(--border)' }}>
+          {transitionError && (
+            <div style={{
+              padding: '8px 24px', background: '#1c0a0a',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13,
+            }}>
+              <span style={{ color: '#f87171' }}>{transitionError}</span>
+              <button onClick={() => setTransitionError(null)} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>&times;</button>
+            </div>
+          )}
+          {diagnosticsError && (
+            <div style={{
+              padding: '8px 24px', background: '#1c0a0a',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13,
+            }}>
+              <span style={{ color: '#f87171' }}>Could not load pipeline diagnostics: {diagnosticsError}</span>
+            </div>
+          )}
+          {hookFailureAlerts.length > 0 && (
+            <div style={{ padding: '4px 24px' }}>
+              {hookFailureAlerts.map((f, i) => (
+                <div
+                  key={i}
+                  style={{ display: 'flex', alignItems: 'start', gap: 12, padding: '8px 0', fontSize: 13 }}
+                >
+                  <span style={{ color: '#d97706', marginTop: 2 }}>⚠</span>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontWeight: 600, color: '#d97706' }}>Hook "{f.hook}" failed ({f.policy})</span>
+                    <p style={{ fontSize: 12, marginTop: 2, color: '#d97706' }}>{f.error}</p>
+                  </div>
+                  <button
+                    style={{ color: 'var(--muted-foreground)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
+                    onClick={() => setHookFailureAlerts((prev) => prev.filter((_, idx) => idx !== i))}
+                  >&times;</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {visibleDiagnosticFailures.length > 0 && (
+            <div style={{ padding: '0 24px' }}>
+              <HookFailureBanner
+                failures={visibleDiagnosticFailures}
+                retrying={retrying}
+                onRetry={handleRetryHook}
+                onDismiss={handleDismissFailure}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 5. TAB BAR + SCROLLABLE CONTENT */}
+      <Tabs value={tab} onValueChange={setTab} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+        <TabsList style={{ flexShrink: 0, borderBottom: '1px solid var(--border)', borderRadius: 0, padding: '0 24px', justifyContent: 'flex-start', height: 40 }}>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="plan">Plan</TabsTrigger>
           <TabsTrigger value="design">Technical Design</TabsTrigger>
@@ -433,67 +534,78 @@ export function TaskDetailPage() {
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
         <TabsContent value="overview">
-          <Card className="mt-4">
-            <CardContent className="py-4">
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '0.75rem', alignItems: 'start' }}>
-                <span className="text-sm text-muted-foreground">Status</span>
-                <PipelineBadge status={task.status} pipeline={pipeline} />
+          {/* Description */}
+          {task.description && (
+            <Card className="mt-4">
+              <CardHeader className="py-3">
+                <CardTitle className="text-base">Description</CardTitle>
+              </CardHeader>
+              <CardContent className="pb-4">
+                <p className="text-sm whitespace-pre-wrap">{task.description}</p>
+              </CardContent>
+            </Card>
+          )}
 
-                <span className="text-sm text-muted-foreground">Priority</span>
-                <Badge variant="outline">P{task.priority}</Badge>
+          {/* Extra metadata — only fields not already shown in the hero */}
+          {(task.featureId || task.prLink || task.branchName || task.tags.length > 0 || task.assignee) && (
+            <Card className="mt-4">
+              <CardContent className="py-4">
+                <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: '0.625rem', alignItems: 'start' }}>
+                  {task.assignee && (
+                    <>
+                      <span className="text-sm text-muted-foreground">Assignee</span>
+                      <span className="text-sm">{task.assignee}</span>
+                    </>
+                  )}
 
-                <span className="text-sm text-muted-foreground">Assignee</span>
-                <span className="text-sm">{task.assignee || 'Unassigned'}</span>
+                  {task.featureId && (
+                    <>
+                      <span className="text-sm text-muted-foreground">Feature</span>
+                      <span
+                        className="text-sm text-blue-500 hover:underline cursor-pointer"
+                        onClick={() => navigate(`/features/${task.featureId}`)}
+                      >
+                        {features.find((f) => f.id === task.featureId)?.title ?? task.featureId}
+                      </span>
+                    </>
+                  )}
 
-                <span className="text-sm text-muted-foreground">Description</span>
-                <span className="text-sm">{task.description || 'No description'}</span>
+                  {task.prLink && (
+                    <>
+                      <span className="text-sm text-muted-foreground">PR</span>
+                      <button
+                        onClick={() => window.api.shell.openInChrome(task.prLink!)}
+                        className="text-sm text-blue-500 hover:underline break-all text-left cursor-pointer"
+                      >
+                        {task.prLink}
+                      </button>
+                    </>
+                  )}
 
-                {task.featureId && (
-                  <>
-                    <span className="text-sm text-muted-foreground">Feature</span>
-                    <span
-                      className="text-sm text-blue-500 hover:underline cursor-pointer"
-                      onClick={() => navigate(`/features/${task.featureId}`)}
-                    >
-                      {features.find((f) => f.id === task.featureId)?.title ?? task.featureId}
-                    </span>
-                  </>
-                )}
+                  {task.branchName && (
+                    <>
+                      <span className="text-sm text-muted-foreground">Branch</span>
+                      <span className="text-sm font-mono">{task.branchName}</span>
+                    </>
+                  )}
 
-                {task.prLink && (
-                  <>
-                    <span className="text-sm text-muted-foreground">PR</span>
-                    <button
-                      onClick={() => window.api.shell.openInChrome(task.prLink!)}
-                      className="text-sm text-blue-500 hover:underline break-all text-left cursor-pointer"
-                    >
-                      {task.prLink}
-                    </button>
-                  </>
-                )}
-
-                {task.branchName && (
-                  <>
-                    <span className="text-sm text-muted-foreground">Branch</span>
-                    <span className="text-sm font-mono">{task.branchName}</span>
-                  </>
-                )}
-
-                {task.tags.length > 0 && (
-                  <>
-                    <span className="text-sm text-muted-foreground">Tags</span>
-                    <div className="flex gap-1">
-                      {task.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">{tag}</Badge>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  {task.tags.length > 0 && (
+                    <>
+                      <span className="text-sm text-muted-foreground">Tags</span>
+                      <div className="flex gap-1">
+                        {task.tags.map((tag) => (
+                          <Badge key={tag} variant="secondary">{tag}</Badge>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Subtasks — phased or flat */}
           {task.phases && task.phases.length > 1 ? (
@@ -711,6 +823,7 @@ export function TaskDetailPage() {
             </Card>
           )}
         </TabsContent>
+        </div>
       </Tabs>
 
       {/* Edit Dialog */}

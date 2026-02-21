@@ -9,60 +9,107 @@ interface HookFailureBannerProps {
   onDismiss: (failureId: string) => void;
 }
 
-const POLICY_COLORS: Record<string, { bg: string; text: string }> = {
-  required: { bg: '#fef2f2', text: '#dc2626' },
-  best_effort: { bg: '#fffbeb', text: '#d97706' },
-  fire_and_forget: { bg: '#f0f9ff', text: '#0284c7' },
+const POLICY_COLORS: Record<string, { bg: string; border: string; text: string; badgeBg: string }> = {
+  required:        { bg: '#2d1111', border: '#7f1d1d', text: '#f87171', badgeBg: '#3f1515' },
+  best_effort:     { bg: '#2d1d00', border: '#78350f', text: '#fbbf24', badgeBg: '#3f2800' },
+  fire_and_forget: { bg: '#0c1a2d', border: '#1e3a5f', text: '#60a5fa', badgeBg: '#0f2240' },
 };
+
+type GroupedFailure = {
+  key: string;
+  latest: HookFailureRecord;
+  ids: string[];
+  count: number;
+};
+
+function groupFailures(failures: HookFailureRecord[]): GroupedFailure[] {
+  const map = new Map<string, GroupedFailure>();
+  for (const f of failures) {
+    const key = `${f.hookName}|${f.error}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.ids.push(f.id);
+      existing.count++;
+      if (f.timestamp > existing.latest.timestamp) existing.latest = f;
+    } else {
+      map.set(key, { key, latest: f, ids: [f.id], count: 1 });
+    }
+  }
+  return Array.from(map.values());
+}
 
 export function HookFailureBanner({ failures, retrying, onRetry, onDismiss }: HookFailureBannerProps) {
   if (failures.length === 0) return null;
 
+  const groups = groupFailures(failures);
+
   return (
-    <div className="mb-4 space-y-2">
-      {failures.map((failure) => {
-        const colors = POLICY_COLORS[failure.policy] ?? POLICY_COLORS.best_effort;
+    <div style={{ marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {groups.map((group) => {
+        const { latest, ids, count } = group;
+        const resolvedColors = POLICY_COLORS[latest.policy];
+        if (!resolvedColors) {
+          console.warn(`HookFailureBanner: Unknown hook policy "${latest.policy}", falling back to best_effort styling`);
+        }
+        const colors = resolvedColors ?? POLICY_COLORS.best_effort;
+
         return (
           <div
-            key={failure.id}
-            className="rounded-md px-4 py-3 flex items-start gap-3 text-sm"
-            style={{ backgroundColor: colors.bg, border: `1px solid ${colors.text}33` }}
+            key={group.key}
+            style={{
+              borderRadius: 6,
+              padding: '10px 14px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              fontSize: 13,
+              backgroundColor: colors.bg,
+              border: `1px solid ${colors.border}`,
+            }}
           >
-            <span style={{ color: colors.text, marginTop: '2px', flexShrink: 0 }}>&#9888;</span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium" style={{ color: colors.text }}>
-                  Hook failed: {failure.hookName}
+            <span style={{ color: colors.text, marginTop: 1, flexShrink: 0 }}>⚠</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 600, color: colors.text }}>
+                  Hook failed: {latest.hookName}
                 </span>
-                <span
-                  className="px-1.5 py-0.5 rounded text-xs font-mono"
-                  style={{ backgroundColor: `${colors.text}15`, color: colors.text }}
-                >
-                  {failure.policy}
+                <span style={{
+                  padding: '1px 6px', borderRadius: 4, fontSize: 11, fontFamily: 'monospace',
+                  backgroundColor: colors.badgeBg, color: colors.text, border: `1px solid ${colors.border}`,
+                }}>
+                  {latest.policy}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(failure.timestamp).toLocaleTimeString()}
+                {count > 1 && (
+                  <span style={{
+                    padding: '1px 7px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+                    backgroundColor: colors.border, color: '#fff',
+                  }}>
+                    ×{count}
+                  </span>
+                )}
+                <span style={{ fontSize: 11, color: '#6b7280' }}>
+                  {new Date(latest.timestamp).toLocaleTimeString()}
                 </span>
               </div>
-              <p className="text-xs mt-1" style={{ color: colors.text }}>
-                {failure.error}
+              <p style={{ fontSize: 12, marginTop: 3, color: colors.text, opacity: 0.85 }}>
+                {latest.error}
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {failure.retryable && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              {latest.retryable && (
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={retrying === failure.hookName}
-                  onClick={() => onRetry(failure.hookName, failure.transitionFrom, failure.transitionTo)}
-                  style={{ borderColor: colors.text, color: colors.text }}
+                  disabled={retrying === latest.hookName}
+                  onClick={() => onRetry(latest.hookName, latest.transitionFrom, latest.transitionTo)}
+                  style={{ borderColor: colors.border, color: colors.text }}
                 >
-                  {retrying === failure.hookName ? 'Retrying...' : 'Retry'}
+                  {retrying === latest.hookName ? 'Retrying...' : 'Retry'}
                 </Button>
               )}
               <button
-                className="text-muted-foreground hover:opacity-80 text-lg leading-none"
-                onClick={() => onDismiss(failure.id)}
+                onClick={() => ids.forEach((id) => onDismiss(id))}
+                style={{ color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
               >
                 &times;
               </button>

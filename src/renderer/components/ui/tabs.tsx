@@ -21,12 +21,13 @@ interface TabsProps {
   onValueChange: (value: string) => void;
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-function Tabs({ value, onValueChange, children, className }: TabsProps) {
+function Tabs({ value, onValueChange, children, className, style }: TabsProps) {
   return (
     <TabsContext.Provider value={{ value, onValueChange }}>
-      <div className={cn('', className)}>{children}</div>
+      <div className={cn('', className)} style={style}>{children}</div>
     </TabsContext.Provider>
   );
 }
@@ -34,15 +35,17 @@ function Tabs({ value, onValueChange, children, className }: TabsProps) {
 interface TabsListProps {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-function TabsList({ children, className }: TabsListProps) {
+function TabsList({ children, className, style }: TabsListProps) {
   return (
     <div
       className={cn(
         'inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
         className
       )}
+      style={style}
     >
       {children}
     </div>

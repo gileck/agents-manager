@@ -92,6 +92,14 @@
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
+/* Keyframe animations used by inline styles (Tailwind animate-ping not used in pipeline) */
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
 /* Terminal/Log viewer styles */
 .log-viewer {
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
