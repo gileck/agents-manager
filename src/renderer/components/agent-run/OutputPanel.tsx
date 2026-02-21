@@ -18,6 +18,7 @@ interface OutputPanelProps {
 
 export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns, messageCount, outputMode = 'raw', onOutputModeChange, messages = [] }: OutputPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
+  const [showTimestamps, setShowTimestamps] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [currentMatch, setCurrentMatch] = useState(0);
@@ -131,9 +132,11 @@ export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns,
         outputMode={outputMode}
         onOutputModeChange={onOutputModeChange}
         hasMessages={hasMessages}
+        showTimestamps={showTimestamps}
+        onShowTimestampsToggle={() => setShowTimestamps((s) => !s)}
       />
       {outputMode === 'rendered' && hasMessages ? (
-        <RenderedOutputPanel messages={messages} isRunning={isRunning} />
+        <RenderedOutputPanel messages={messages} isRunning={isRunning} startedAt={startedAt} showTimestamps={showTimestamps} />
       ) : (
         <pre
           ref={preRef}

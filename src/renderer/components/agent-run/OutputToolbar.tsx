@@ -9,6 +9,7 @@ import {
   Search,
   ChevronUp,
   ChevronDown,
+  Clock,
 } from 'lucide-react';
 
 export type OutputMode = 'raw' | 'rendered';
@@ -31,6 +32,8 @@ interface OutputToolbarProps {
   outputMode?: OutputMode;
   onOutputModeChange?: (mode: OutputMode) => void;
   hasMessages?: boolean;
+  showTimestamps?: boolean;
+  onShowTimestampsToggle?: () => void;
 }
 
 export function OutputToolbar({
@@ -51,6 +54,8 @@ export function OutputToolbar({
   outputMode = 'raw',
   onOutputModeChange,
   hasMessages = false,
+  showTimestamps = false,
+  onShowTimestampsToggle,
 }: OutputToolbarProps) {
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState('');
@@ -92,6 +97,18 @@ export function OutputToolbar({
             Rendered
           </button>
         </div>
+      )}
+
+      {outputMode === 'rendered' && onShowTimestampsToggle && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('h-7 w-7', showTimestamps && 'bg-accent text-accent-foreground')}
+          onClick={onShowTimestampsToggle}
+          title="Toggle timestamps"
+        >
+          <Clock className="h-3.5 w-3.5" />
+        </Button>
       )}
 
       <Button

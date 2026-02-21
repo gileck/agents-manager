@@ -7,6 +7,15 @@ import { TodoPanel, type TodoItem } from './TodoPanel';
 interface RenderedOutputPanelProps {
   messages: AgentChatMessage[];
   isRunning: boolean;
+  startedAt?: number;
+  showTimestamps?: boolean;
+}
+
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `+${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function extractLatestTodos(messages: AgentChatMessage[]): TodoItem[] {
@@ -24,7 +33,7 @@ function extractLatestTodos(messages: AgentChatMessage[]): TodoItem[] {
   return latestTodos;
 }
 
-export function RenderedOutputPanel({ messages, isRunning }: RenderedOutputPanelProps) {
+export function RenderedOutputPanel({ messages, isRunning, startedAt, showTimestamps = false }: RenderedOutputPanelProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -57,14 +66,25 @@ export function RenderedOutputPanel({ messages, isRunning }: RenderedOutputPanel
   // Render messages (memoized to avoid re-running JSON parsing on scroll)
   const rendered = useMemo(() => {
     const nodes: React.ReactNode[] = [];
+    const ts = (timestamp: number) => {
+      if (!showTimestamps || !startedAt) return null;
+      return (
+        <span className="text-xs text-muted-foreground font-mono mr-2 flex-shrink-0" style={{ minWidth: '44px' }}>
+          {formatElapsed(timestamp - startedAt)}
+        </span>
+      );
+    };
     let i = 0;
     while (i < messages.length) {
       const msg = messages[i];
 
       if (msg.type === 'assistant_text') {
         nodes.push(
-          <div key={i} className="py-1">
-            <MarkdownContent content={msg.text} />
+          <div key={i} className="py-1 flex">
+            {ts(msg.timestamp)}
+            <div className="flex-1 min-w-0">
+              <MarkdownContent content={msg.text} />
+            </div>
           </div>
         );
       } else if (msg.type === 'tool_use') {
@@ -80,27 +100,35 @@ export function RenderedOutputPanel({ messages, isRunning }: RenderedOutputPanel
         }
         const Renderer = getToolRenderer(toolUse.toolName);
         nodes.push(
-          <Renderer
-            key={toolUseIdx}
-            toolUse={toolUse}
-            toolResult={toolResult}
-            expanded={expandedTools.has(toolUseIdx)}
-            onToggle={() => toggleTool(toolUseIdx)}
-          />
+          <div key={toolUseIdx} className="flex">
+            {ts(toolUse.timestamp)}
+            <div className="flex-1 min-w-0">
+              <Renderer
+                toolUse={toolUse}
+                toolResult={toolResult}
+                expanded={expandedTools.has(toolUseIdx)}
+                onToggle={() => toggleTool(toolUseIdx)}
+              />
+            </div>
+          </div>
         );
       } else if (msg.type === 'tool_result') {
         // Orphaned tool_result
         nodes.push(
-          <div key={i} className="border border-border rounded p-2 my-1 text-xs">
-            <span className="text-muted-foreground">Tool result:</span>
-            <pre className="mt-1 overflow-x-auto whitespace-pre-wrap max-h-24 overflow-y-auto text-xs">
-              {msg.result.length > 1000 ? msg.result.slice(0, 1000) + '\n...' : msg.result}
-            </pre>
+          <div key={i} className="flex">
+            {ts(msg.timestamp)}
+            <div className="flex-1 min-w-0 border border-border rounded p-2 my-1 text-xs">
+              <span className="text-muted-foreground">Tool result:</span>
+              <pre className="mt-1 overflow-x-auto whitespace-pre-wrap max-h-24 overflow-y-auto text-xs">
+                {msg.result.length > 1000 ? msg.result.slice(0, 1000) + '\n...' : msg.result}
+              </pre>
+            </div>
           </div>
         );
       } else if (msg.type === 'user') {
         nodes.push(
           <div key={i} className="flex justify-end py-1">
+            {ts(msg.timestamp)}
             <div className="bg-primary text-primary-foreground rounded-lg px-3 py-1.5 max-w-[80%]">
               <p className="text-sm">{msg.text}</p>
             </div>
@@ -108,10 +136,13 @@ export function RenderedOutputPanel({ messages, isRunning }: RenderedOutputPanel
         );
       } else if (msg.type === 'status') {
         nodes.push(
-          <div key={i} className="text-center py-1">
-            <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
-              {msg.message}
-            </span>
+          <div key={i} className="flex items-center py-1">
+            {ts(msg.timestamp)}
+            <div className="flex-1 text-center">
+              <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                {msg.message}
+              </span>
+            </div>
           </div>
         );
       }
@@ -120,7 +151,7 @@ export function RenderedOutputPanel({ messages, isRunning }: RenderedOutputPanel
       i++;
     }
     return nodes;
-  }, [messages, expandedTools, toggleTool]);
+  }, [messages, expandedTools, toggleTool, showTimestamps, startedAt]);
 
   return (
     <div className="flex flex-1 min-h-0">
