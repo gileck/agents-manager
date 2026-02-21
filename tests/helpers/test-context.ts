@@ -39,6 +39,8 @@ import { registerCoreGuards } from '../../src/main/handlers/core-guards';
 import { registerScmHandler } from '../../src/main/handlers/scm-handler';
 import { registerPromptHandler } from '../../src/main/handlers/prompt-handler';
 import { registerNotificationHandler } from '../../src/main/handlers/notification-handler';
+import { registerAgentHandler } from '../../src/main/handlers/agent-handler';
+import { registerPhaseHandler } from '../../src/main/handlers/phase-handler';
 import { ScriptedAgent, happyPlan } from '../../src/main/agents/scripted-agent';
 import { getMigrations } from '../../src/main/migrations';
 import { resetCounters, createTaskInput } from './factories';
@@ -184,6 +186,8 @@ export function createTestContext(): TestContext {
   });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerNotificationHandler(pipelineEngine, { notificationRouter });
+  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
+  registerPhaseHandler(pipelineEngine, { taskStore, taskEventLog, pipelineEngine });
 
   const transitionTo = async (taskId: string, toStatus: string): Promise<Task> => {
     const task = await taskStore.getTask(taskId);
