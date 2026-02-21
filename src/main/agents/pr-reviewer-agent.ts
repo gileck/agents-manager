@@ -43,7 +43,6 @@ export class PrReviewerAgent extends BaseClaudeAgent {
 
   buildPrompt(context: AgentContext): string {
     const { task } = context;
-    const desc = task.description ? ` ${task.description}` : '';
 
     const hasPriorReview = context.taskContext?.some(
       e => e.entryType === 'review_feedback' || e.entryType === 'fix_summary'
@@ -51,45 +50,67 @@ export class PrReviewerAgent extends BaseClaudeAgent {
 
     const activePhase = getActivePhase(task.phases);
     const multiPhase = isMultiPhase(task);
+    const defaultBranch = (context.project.config?.defaultBranch as string) || 'main';
 
-    const lines = [
-      `You are a code reviewer. Review the changes in this branch for the following task: ${task.title}.${desc}`,
-      '',
-    ];
+    const lines: string[] = [];
 
-    if (hasPriorReview) {
-      lines.push(
-        'This is a RE-REVIEW. Previous review feedback and fixes are in the Task Context above.',
-        'Verify ALL previously requested changes were addressed before approving.',
-        '',
-      );
-    }
-
-    // Phase context: tell the reviewer which phase this PR covers
     if (multiPhase && activePhase) {
       const phaseIdx = getActivePhaseIndex(task.phases);
       const totalPhases = task.phases?.length ?? 0;
+      const pendingPhases = (task.phases ?? []).filter(p => p.status === 'pending');
+      const completedPhases = (task.phases ?? []).filter(p => p.status === 'completed');
+
+      // Lead with phase framing — do NOT include the full task description,
+      // which lists features from all phases and would mislead the reviewer.
       lines.push(
-        `## Phase Context: ${activePhase.name} (${phaseIdx + 1} of ${totalPhases})`,
-        `This PR covers **only Phase ${phaseIdx + 1}**: "${activePhase.name}".`,
-        'Review ONLY the deliverables listed below. Do NOT flag missing work that belongs to later phases.',
+        `You are a code reviewer. Task: **${task.title}** (multi-phase, ${totalPhases} phases total).`,
         '',
-        '### Phase Deliverables (must all be present and correct)',
+        `## ⚠️ SCOPE: Phase ${phaseIdx + 1} of ${totalPhases} only — "${activePhase.name}"`,
+        `This PR implements **only Phase ${phaseIdx + 1}**. Features belonging to later phases are intentionally absent.`,
+        `Do NOT flag missing functionality that belongs to a later phase.`,
+        '',
+        `### Phase ${phaseIdx + 1} Deliverables — the ONLY things to check for completeness:`,
       );
       for (const st of activePhase.subtasks) {
         lines.push(`- ${st.name}`);
       }
-      const completedPhases = (task.phases ?? []).filter(p => p.status === 'completed');
+
+      if (pendingPhases.length > 0) {
+        lines.push('', `### Later phases (NOT part of this PR — do not flag as missing):`);
+        for (const pp of pendingPhases) {
+          lines.push(`- ${pp.name}`);
+        }
+      }
       if (completedPhases.length > 0) {
-        lines.push('', '### Previously Completed Phases (already merged — do not re-review)');
+        lines.push('', `### Already merged phases (do not re-review):`);
         for (const cp of completedPhases) {
-          lines.push(`- ${cp.name}${cp.prLink ? ` (PR: ${cp.prLink})` : ''}`);
+          lines.push(`- ${cp.name}${cp.prLink ? ` — ${cp.prLink}` : ''}`);
         }
       }
       lines.push('');
+
+      if (hasPriorReview) {
+        lines.push(
+          `This is a RE-REVIEW. Check only that Phase ${phaseIdx + 1} issues raised previously are fixed.`,
+          `⚠️ Ignore any prior requests for features that belong to later phases (listed above). Those will be implemented in separate PRs.`,
+          '',
+        );
+      }
+    } else {
+      const desc = task.description ? ` ${task.description}` : '';
+      lines.push(
+        `You are a code reviewer. Review the changes in this branch for the following task: ${task.title}.${desc}`,
+        '',
+      );
+      if (hasPriorReview) {
+        lines.push(
+          'This is a RE-REVIEW. Previous review feedback and fixes are in the Task Context above.',
+          'Verify ALL previously requested changes were addressed before approving.',
+          '',
+        );
+      }
     }
 
-    const defaultBranch = (context.project.config?.defaultBranch as string) || 'main';
     lines.push(
       '## Steps',
       `1. Run \`git diff ${defaultBranch}..HEAD\` to see all changes made in this branch.`,
@@ -99,7 +120,7 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       '## Review Criteria',
       '**Must-check (block if violated):**',
       multiPhase && activePhase
-        ? `- Completeness — are all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables implemented?`
+        ? `- Completeness — are all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables above implemented?`
         : '- Correctness — does the code do what the task requires?',
       '- Security — no hardcoded secrets, no SQL injection, no path traversal, no XSS',
       '- Data integrity — no silent data loss, no unhandled nulls in critical paths',
@@ -114,7 +135,7 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       '',
       '## Approval Threshold',
       multiPhase && activePhase
-        ? `Approve if all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables are complete, there are no must-check violations, and no significant should-check issues.`
+        ? `Approve if all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables are present, no must-check violations, and no significant should-check issues.`
         : 'Approve if there are no must-check violations and no significant should-check issues.',
     );
 
