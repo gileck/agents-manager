@@ -178,13 +178,18 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       return { success: false, error: 'Failed to push branch' };
     }
 
-    // If a PR already exists for this task, the force-push above updated it.
-    // Skip creation and return success.
+    // If a PR already exists for this task on the same branch, the force-push
+    // above updated it. Skip creation and return success. For multi-phase tasks,
+    // each phase uses a different branch and needs its own PR.
     const existingPrArtifacts = await deps.taskArtifactStore.getArtifactsForTask(task.id, 'pr');
     if (existingPrArtifacts.length > 0) {
-      const existingUrl = existingPrArtifacts[existingPrArtifacts.length - 1].data.url as string;
-      await ghLog('PR already exists — force-push updated it', 'info', { url: existingUrl });
-      return { success: true };
+      const latestPr = existingPrArtifacts[existingPrArtifacts.length - 1];
+      const prBranch = latestPr.data.branch as string | undefined;
+      if (prBranch === branch) {
+        await ghLog('PR already exists for this branch — force-push updated it', 'info', { url: latestPr.data.url, branch });
+        return { success: true };
+      }
+      await ghLog('Existing PR is for a different branch — creating new PR for this phase', 'info', { existingBranch: prBranch, currentBranch: branch });
     }
 
     // Create PR
@@ -217,7 +222,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       await deps.taskArtifactStore.createArtifact({
         taskId: task.id,
         type: 'pr',
-        data: { url: prInfo.url, number: prInfo.number },
+        data: { url: prInfo.url, number: prInfo.number, branch },
       });
 
       await deps.taskStore.updateTask(task.id, {
