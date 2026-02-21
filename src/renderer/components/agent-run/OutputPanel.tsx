@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { OutputToolbar } from './OutputToolbar';
+import { OutputToolbar, type OutputMode } from './OutputToolbar';
+import { RenderedOutputPanel } from './RenderedOutputPanel';
 import { stripAnsi } from '@template/renderer/lib/utils';
+import type { AgentChatMessage } from '../../../shared/types';
 
 interface OutputPanelProps {
   output: string;
@@ -9,9 +11,12 @@ interface OutputPanelProps {
   timeoutMs?: number | null;
   maxTurns?: number | null;
   messageCount?: number | null;
+  outputMode?: OutputMode;
+  onOutputModeChange?: (mode: OutputMode) => void;
+  messages?: AgentChatMessage[];
 }
 
-export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns, messageCount }: OutputPanelProps) {
+export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns, messageCount, outputMode = 'raw', onOutputModeChange, messages = [] }: OutputPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -104,6 +109,8 @@ export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns,
     setCurrentMatch((c) => (c < matches.length - 1 ? c + 1 : 0));
   };
 
+  const hasMessages = messages.length > 0;
+
   return (
     <div className="flex flex-col border rounded-md overflow-hidden flex-1 min-h-0">
       <OutputToolbar
@@ -121,17 +128,24 @@ export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns,
         timeoutMs={timeoutMs}
         maxTurns={maxTurns}
         messageCount={messageCount}
+        outputMode={outputMode}
+        onOutputModeChange={onOutputModeChange}
+        hasMessages={hasMessages}
       />
-      <pre
-        ref={preRef}
-        onScroll={handleScroll}
-        className="text-xs bg-muted p-4 overflow-auto whitespace-pre-wrap flex-1"
-        style={{ minHeight: '200px' }}
-      >
-        {typeof highlighted === 'string' && !highlighted
-          ? (isRunning ? 'Waiting for output...' : '')
-          : highlighted}
-      </pre>
+      {outputMode === 'rendered' && hasMessages ? (
+        <RenderedOutputPanel messages={messages} isRunning={isRunning} />
+      ) : (
+        <pre
+          ref={preRef}
+          onScroll={handleScroll}
+          className="text-xs bg-muted p-4 overflow-auto whitespace-pre-wrap flex-1"
+          style={{ minHeight: '200px' }}
+        >
+          {typeof highlighted === 'string' && !highlighted
+            ? (isRunning ? 'Waiting for output...' : '')
+            : highlighted}
+        </pre>
+      )}
     </div>
   );
 }

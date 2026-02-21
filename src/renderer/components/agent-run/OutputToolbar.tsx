@@ -11,6 +11,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
+export type OutputMode = 'raw' | 'rendered';
+
 interface OutputToolbarProps {
   autoScroll: boolean;
   onAutoScrollToggle: () => void;
@@ -26,6 +28,9 @@ interface OutputToolbarProps {
   timeoutMs?: number | null;
   maxTurns?: number | null;
   messageCount?: number | null;
+  outputMode?: OutputMode;
+  onOutputModeChange?: (mode: OutputMode) => void;
+  hasMessages?: boolean;
 }
 
 export function OutputToolbar({
@@ -43,6 +48,9 @@ export function OutputToolbar({
   timeoutMs,
   maxTurns,
   messageCount,
+  outputMode = 'raw',
+  onOutputModeChange,
+  hasMessages = false,
 }: OutputToolbarProps) {
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState('');
@@ -63,6 +71,29 @@ export function OutputToolbar({
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
+      {hasMessages && onOutputModeChange && (
+        <div className="flex items-center border border-border rounded overflow-hidden mr-1">
+          <button
+            className={cn(
+              'px-2 py-1 text-xs font-medium transition-colors',
+              outputMode === 'raw' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => onOutputModeChange('raw')}
+          >
+            Raw
+          </button>
+          <button
+            className={cn(
+              'px-2 py-1 text-xs font-medium transition-colors',
+              outputMode === 'rendered' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => onOutputModeChange('rendered')}
+          >
+            Rendered
+          </button>
+        </div>
+      )}
+
       <Button
         variant="ghost"
         size="icon"

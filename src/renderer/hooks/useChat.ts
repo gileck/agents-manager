@@ -136,6 +136,28 @@ export function useChat(projectId: string | null) {
     [dbMessages, streamingMessages],
   );
 
+  // Compute token usage from DB messages + streaming usage messages
+  const tokenUsage = useMemo(() => {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    // Sum from DB messages (costInputTokens / costOutputTokens fields)
+    for (const msg of dbMessages) {
+      if (msg.costInputTokens) inputTokens += msg.costInputTokens;
+      if (msg.costOutputTokens) outputTokens += msg.costOutputTokens;
+    }
+    // Add latest streaming usage on top of DB totals
+    // (SDK reports cumulative totals for the current turn only)
+    let streamInput = 0;
+    let streamOutput = 0;
+    for (const msg of streamingMessages) {
+      if (msg.type === 'usage') {
+        streamInput = msg.inputTokens;
+        streamOutput = msg.outputTokens;
+      }
+    }
+    return { inputTokens: inputTokens + streamInput, outputTokens: outputTokens + streamOutput };
+  }, [dbMessages, streamingMessages]);
+
   return {
     messages,
     isStreaming,
@@ -145,5 +167,6 @@ export function useChat(projectId: string | null) {
     stopChat,
     clearChat,
     summarizeChat,
+    tokenUsage,
   };
 }

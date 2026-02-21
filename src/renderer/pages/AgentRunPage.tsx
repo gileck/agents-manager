@@ -6,13 +6,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { OutputPanel } from '../components/agent-run/OutputPanel';
+import type { OutputMode } from '../components/agent-run/OutputToolbar';
 import { PromptPanel } from '../components/agent-run/PromptPanel';
 import { SubtasksPanel } from '../components/agent-run/SubtasksPanel';
 import { GitChangesPanel } from '../components/agent-run/GitChangesPanel';
 import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
-import { AgentChat } from '../components/chat/AgentChat';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
 import { useAgentStream } from '../contexts/AgentStreamContext';
 import type { AgentRun, Task } from '../../shared/types';
@@ -41,10 +41,9 @@ export function AgentRunPage() {
   );
 
   // --- Agent stream context (for chat persistence across route changes) ---
-  const { getMessages, addMessage, isActive } = useAgentStream();
+  const { getMessages, isActive } = useAgentStream();
   const taskId = run?.taskId;
   const messages = taskId ? getMessages(taskId) : [];
-  const [isQueued, setIsQueued] = useState(false);
 
   // --- Streaming output ---
   const [streamOutput, setStreamOutput] = useState('');
@@ -88,7 +87,6 @@ export function AgentRunPage() {
     const unsub = window.api?.on?.agentStatus?.((tid: string) => {
       if (tid === taskId) {
         refetch();
-        setIsQueued(false);
       }
     });
     return () => { unsub?.(); };
@@ -136,6 +134,9 @@ export function AgentRunPage() {
   // --- Sidebar toggle ---
   const [showSidebar, setShowSidebar] = useState(false);
 
+  // --- Output mode (raw vs rendered) ---
+  const [outputMode, setOutputMode] = useState<OutputMode>('raw');
+
   // --- Actions ---
   const [restarting, setRestarting] = useState(false);
 
@@ -154,15 +155,6 @@ export function AgentRunPage() {
     } finally {
       setRestarting(false);
     }
-  };
-
-  const handleSendMessage = async (text: string) => {
-    if (!taskId) return;
-    addMessage(taskId, { type: 'user', text, timestamp: Date.now() });
-    if (isRunning) {
-      setIsQueued(true);
-    }
-    await window.api.agents.sendMessage(taskId, text);
   };
 
   // --- Loading / error states (only on initial load, not during refetches) ---
@@ -298,12 +290,6 @@ export function AgentRunPage() {
               Output
               {isRunning && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block animate-pulse" />}
             </TabsTrigger>
-            {messages.length > 0 && (
-              <TabsTrigger value="chat">
-                Chat
-                {isRunning && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-blue-500 inline-block animate-pulse" />}
-              </TabsTrigger>
-            )}
             <TabsTrigger value="prompt">Prompt</TabsTrigger>
             <TabsTrigger value="subtasks">
               Subtasks{subtasks.length > 0 && ` (${doneCount}/${subtasks.length})`}
@@ -322,21 +308,11 @@ export function AgentRunPage() {
               timeoutMs={run.timeoutMs}
               maxTurns={run.maxTurns}
               messageCount={run.messageCount}
+              outputMode={outputMode}
+              onOutputModeChange={setOutputMode}
+              messages={messages}
             />
           </TabsContent>
-
-          {messages.length > 0 && (
-            <TabsContent value="chat" className="flex-1 min-h-0 flex flex-col pb-3">
-              <AgentChat
-                messages={messages}
-                isRunning={isRunning}
-                isQueued={isQueued}
-                onSend={handleSendMessage}
-                onStop={handleStop}
-                run={run}
-              />
-            </TabsContent>
-          )}
 
           <TabsContent value="prompt" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
             <PromptPanel prompt={run.prompt} />

@@ -3,7 +3,8 @@ import type { AgentChatMessage, AgentRun } from '../../../shared/types';
 
 interface ContextSidebarProps {
   messages: AgentChatMessage[];
-  run: AgentRun | null;
+  run?: AgentRun | null;
+  tokenUsage?: { inputTokens: number; outputTokens: number };
 }
 
 // Claude pricing per million tokens (approximate)
@@ -11,14 +12,21 @@ const INPUT_COST_PER_MILLION = 3.0;
 const OUTPUT_COST_PER_MILLION = 15.0;
 const CONTEXT_WINDOW = 200_000;
 
-export function ContextSidebar({ messages, run }: ContextSidebarProps) {
+export function ContextSidebar({ messages, run, tokenUsage }: ContextSidebarProps) {
   // Use the latest usage message (SDK reports cumulative totals)
   let totalInput = 0;
   let totalOutput = 0;
-  for (const msg of messages) {
-    if (msg.type === 'usage') {
-      totalInput = msg.inputTokens;
-      totalOutput = msg.outputTokens;
+
+  if (tokenUsage) {
+    // Use pre-computed token usage (from ChatPage)
+    totalInput = tokenUsage.inputTokens;
+    totalOutput = tokenUsage.outputTokens;
+  } else {
+    for (const msg of messages) {
+      if (msg.type === 'usage') {
+        totalInput = msg.inputTokens;
+        totalOutput = msg.outputTokens;
+      }
     }
   }
 
