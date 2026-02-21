@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -44,21 +44,18 @@ export function AgentRunPage() {
 
   // --- Streaming messages (structured AgentChatMessage[] from the agent run) ---
   const [streamMessages, setStreamMessages] = useState<AgentChatMessage[]>([]);
-  const initializedFromDb = useRef(false);
-
-  useEffect(() => {
-    if (!run || initializedFromDb.current) return;
-    if (run.status === 'running' && run.messages && run.messages.length > 0) {
-      setStreamMessages(run.messages);
-    }
-    initializedFromDb.current = true;
-  }, [run]);
 
   useEffect(() => {
     if (!run) return;
-    setStreamMessages([]);
-    initializedFromDb.current = false;
 
+    // Initialize from DB messages if reconnecting to a running agent
+    if (run.status === 'running' && run.messages && run.messages.length > 0) {
+      setStreamMessages(run.messages);
+    } else {
+      setStreamMessages([]);
+    }
+
+    // Subscribe to live messages
     const unsubMessage = window.api.on.agentMessage((tid: string, msg: AgentChatMessage) => {
       if (tid === run.taskId) {
         setStreamMessages((prev) => [...prev, msg]);

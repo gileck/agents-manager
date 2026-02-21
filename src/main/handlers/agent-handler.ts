@@ -21,11 +21,12 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
     const mode = params.mode as AgentMode;
     const agentType = params.agentType as string;
     // Fire-and-forget: agent runs asynchronously via WorkflowService (logs activity)
-    deps.workflowService.startAgent(task.id, mode, agentType, (chunk) => {
-      try {
-        sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, task.id, chunk);
-      } catch { /* window may be closed */ }
-    }).catch(async (err) => {
+    deps.workflowService.startAgent(
+      task.id, mode, agentType,
+      (chunk) => { try { sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, task.id, chunk); } catch { /* window may be closed */ } },
+      (msg) => { try { sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, task.id, msg); } catch { /* window may be closed */ } },
+      (status) => { try { sendToRenderer(IPC_CHANNELS.AGENT_STATUS, task.id, status); } catch { /* window may be closed */ } },
+    ).catch(async (err) => {
       const msg = err instanceof Error ? err.message : String(err);
       try {
         await deps.taskEventLog.log({
