@@ -26,21 +26,23 @@ function rowToBoard(row: KanbanBoardRow): KanbanBoardConfig {
   try {
     columns = JSON.parse(row.columns);
     if (!Array.isArray(columns)) {
-      throw new Error('Invalid columns format');
+      throw new Error('Columns must be an array');
     }
   } catch (error) {
-    console.error('Failed to parse kanban board columns:', error);
-    columns = [];
+    const errorMsg = `Corrupted kanban board data for board ${row.id}: invalid columns format. Raw data: ${row.columns}`;
+    console.error(errorMsg, error);
+    throw new Error(errorMsg);
   }
 
   try {
     filters = JSON.parse(row.filters);
     if (typeof filters !== 'object' || filters === null || Array.isArray(filters)) {
-      throw new Error('Invalid filters format');
+      throw new Error('Filters must be an object');
     }
   } catch (error) {
-    console.error('Failed to parse kanban board filters:', error);
-    filters = {};
+    const errorMsg = `Corrupted kanban board data for board ${row.id}: invalid filters format. Raw data: ${row.filters}`;
+    console.error(errorMsg, error);
+    throw new Error(errorMsg);
   }
 
   return {
