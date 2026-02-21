@@ -21,7 +21,12 @@ export function isMultiPhase(task: Pick<Task, 'phases'>): boolean {
   return !!task.phases && task.phases.length > 1;
 }
 
-/** Returns true if there are any uncompleted phases remaining (pending or in_progress). */
+/**
+ * Returns true if there are any uncompleted phases remaining (pending or in_progress).
+ * Note: treating 'in_progress' as non-completed provides crash recovery —
+ * if advance_phase partially applies (marks current phase completed but fails before
+ * activating the next), the guard still passes and the next pending phase can be activated.
+ */
 export function hasPendingPhases(phases: ImplementationPhase[] | null | undefined): boolean {
   if (!phases || phases.length === 0) return false;
   return phases.some(p => p.status !== 'completed');
