@@ -679,6 +679,28 @@ export function getMigrations(): Migration[] {
       name: '063_add_messages_to_agent_runs',
       sql: `ALTER TABLE agent_runs ADD COLUMN messages TEXT`,
     },
+    {
+      name: '064_create_kanban_boards',
+      sql: `
+        CREATE TABLE IF NOT EXISTS kanban_boards (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          columns TEXT NOT NULL DEFAULT '[]',
+          filters TEXT NOT NULL DEFAULT '{}',
+          sort_by TEXT NOT NULL DEFAULT 'manual',
+          sort_direction TEXT NOT NULL DEFAULT 'asc',
+          card_height TEXT NOT NULL DEFAULT 'normal',
+          show_subtasks INTEGER NOT NULL DEFAULT 1,
+          show_assignee INTEGER NOT NULL DEFAULT 1,
+          show_tags INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_kanban_boards_project_id ON kanban_boards(project_id)
+      `,
+    },
   ];
 }
 

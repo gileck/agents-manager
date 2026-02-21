@@ -26,6 +26,9 @@ import type {
   HookRetryResult,
   PipelineDiagnostics,
   TransitionTrigger,
+  KanbanBoardConfig,
+  KanbanBoardCreateInput,
+  KanbanBoardUpdateInput,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -123,6 +126,12 @@ const IPC_CHANNELS = {
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
   GIT_COMMIT_DETAIL: 'git:commit-detail',
+  KANBAN_BOARD_GET: 'kanban-board:get',
+  KANBAN_BOARD_GET_BY_PROJECT: 'kanban-board:get-by-project',
+  KANBAN_BOARD_LIST: 'kanban-board:list',
+  KANBAN_BOARD_CREATE: 'kanban-board:create',
+  KANBAN_BOARD_UPDATE: 'kanban-board:update',
+  KANBAN_BOARD_DELETE: 'kanban-board:delete',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -229,6 +238,22 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.FEATURE_UPDATE, id, input),
     delete: (id: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.FEATURE_DELETE, id),
+  },
+
+  // Kanban Board operations
+  kanbanBoards: {
+    get: (id: string): Promise<KanbanBoardConfig | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.KANBAN_BOARD_GET, id),
+    getByProject: (projectId: string): Promise<KanbanBoardConfig | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.KANBAN_BOARD_GET_BY_PROJECT, projectId),
+    list: (projectId: string): Promise<KanbanBoardConfig[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.KANBAN_BOARD_LIST, projectId),
+    create: (input: KanbanBoardCreateInput): Promise<KanbanBoardConfig> =>
+      ipcRenderer.invoke(IPC_CHANNELS.KANBAN_BOARD_CREATE, input),
+    update: (id: string, input: KanbanBoardUpdateInput): Promise<KanbanBoardConfig | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.KANBAN_BOARD_UPDATE, id, input),
+    delete: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.KANBAN_BOARD_DELETE, id),
   },
 
   // Agent definition operations
