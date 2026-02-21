@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { OutputToolbar, type OutputMode } from './OutputToolbar';
 import { RenderedOutputPanel } from './RenderedOutputPanel';
 import { stripAnsi } from '@template/renderer/lib/utils';
-import type { AgentChatMessage } from '../../../shared/types';
+import { parseRawOutput } from './parseRawOutput';
 
 interface OutputPanelProps {
   output: string;
@@ -13,10 +13,9 @@ interface OutputPanelProps {
   messageCount?: number | null;
   outputMode?: OutputMode;
   onOutputModeChange?: (mode: OutputMode) => void;
-  messages?: AgentChatMessage[];
 }
 
-export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns, messageCount, outputMode = 'raw', onOutputModeChange, messages = [] }: OutputPanelProps) {
+export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns, messageCount, outputMode = 'raw', onOutputModeChange }: OutputPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [showTimestamps, setShowTimestamps] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,6 +25,7 @@ export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns,
   const matchRefs = useRef<(HTMLElement | null)[]>([]);
 
   const cleanOutput = useMemo(() => stripAnsi(output), [output]);
+  const messages = useMemo(() => parseRawOutput(cleanOutput), [cleanOutput]);
 
   // Debounce search
   useEffect(() => {
@@ -110,7 +110,7 @@ export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns,
     setCurrentMatch((c) => (c < matches.length - 1 ? c + 1 : 0));
   };
 
-  const hasMessages = messages.length > 0;
+  const hasOutput = cleanOutput.length > 0;
 
   return (
     <div className="flex flex-col border rounded-md overflow-hidden flex-1 min-h-0">
@@ -131,11 +131,11 @@ export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns,
         messageCount={messageCount}
         outputMode={outputMode}
         onOutputModeChange={onOutputModeChange}
-        hasMessages={hasMessages}
+        hasOutput={hasOutput}
         showTimestamps={showTimestamps}
         onShowTimestampsToggle={() => setShowTimestamps((s) => !s)}
       />
-      {outputMode === 'rendered' && hasMessages ? (
+      {outputMode === 'rendered' && hasOutput ? (
         <RenderedOutputPanel messages={messages} isRunning={isRunning} startedAt={startedAt} showTimestamps={showTimestamps} />
       ) : (
         <pre

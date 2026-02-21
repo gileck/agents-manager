@@ -14,7 +14,7 @@ import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
-import type { AgentRun, Task, AgentChatMessage } from '../../shared/types';
+import type { AgentRun, Task } from '../../shared/types';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
   plan_complete: 'Plan is ready for review. Go to task to review and approve.',
@@ -41,9 +41,8 @@ export function AgentRunPage() {
 
   const taskId = run?.taskId;
 
-  // --- Streaming output (raw text + structured messages from the same run) ---
+  // --- Streaming output (raw text from the agent run) ---
   const [streamOutput, setStreamOutput] = useState('');
-  const [messages, setMessages] = useState<AgentChatMessage[]>([]);
   const initializedFromDb = useRef(false);
 
   useEffect(() => {
@@ -56,9 +55,7 @@ export function AgentRunPage() {
 
   useEffect(() => {
     if (!run) return;
-    // Reset both streams when the run changes
     setStreamOutput('');
-    setMessages([]);
     initializedFromDb.current = false;
 
     const unsubOutput = window.api.on.agentOutput((tid: string, chunk: string) => {
@@ -66,12 +63,7 @@ export function AgentRunPage() {
         setStreamOutput((prev) => prev + chunk);
       }
     });
-    const unsubMessage = window.api.on.agentMessage((tid: string, msg: AgentChatMessage) => {
-      if (tid === run.taskId) {
-        setMessages((prev) => [...prev, msg]);
-      }
-    });
-    return () => { unsubOutput(); unsubMessage(); };
+    return () => { unsubOutput(); };
   }, [run?.taskId]);
 
   // --- Poll agent run (2s while running) ---
@@ -214,7 +206,7 @@ export function AgentRunPage() {
         </h1>
         <span className="text-sm text-muted-foreground">{run.mode} / {run.agentType}</span>
         <div className="ml-auto flex gap-2">
-          {messages.length > 0 && (
+          {(isRunning || run.costInputTokens || run.costOutputTokens) && (
             <Button
               variant="outline"
               size="sm"
@@ -317,7 +309,6 @@ export function AgentRunPage() {
               messageCount={run.messageCount}
               outputMode={outputMode}
               onOutputModeChange={setOutputMode}
-              messages={messages}
             />
           </TabsContent>
 
@@ -359,8 +350,8 @@ export function AgentRunPage() {
         </Tabs>
 
         {/* Token usage sidebar */}
-        {showSidebar && messages.length > 0 && (
-          <ContextSidebar messages={messages} run={run} />
+        {showSidebar && (isRunning || run.costInputTokens || run.costOutputTokens) && (
+          <ContextSidebar messages={[]} run={run} />
         )}
       </div>
     </div>
