@@ -110,6 +110,9 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
       hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
+    { from: 'pr_review', to: 'pr_review', trigger: 'manual', label: 'Re-run PR Review',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' }] },
     // Design review transitions — approve to plan, skip to implement, or request changes
     { from: 'design_review', to: 'planning', trigger: 'manual', label: 'Approve & Plan',
       guards: [{ name: 'no_running_agent' }],
@@ -250,6 +253,9 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
       hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
+    { from: 'pr_review', to: 'pr_review', trigger: 'manual', label: 'Re-run PR Review',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'review', agentType: 'pr-reviewer' }, policy: 'fire_and_forget' }] },
     // Agent outcome auto-transitions
     { from: 'investigating', to: 'investigation_review', trigger: 'agent', agentOutcome: 'investigation_complete',
       hooks: [{ name: 'notify', params: { titleTemplate: 'Investigation ready', bodyTemplate: 'Investigation ready: {taskTitle}' }, policy: 'best_effort' }] },
