@@ -45,6 +45,31 @@ function AppRoutes() {
     };
   }, [navigate]);
 
+  // Listen for agent failures and show toast notifications
+  useEffect(() => {
+    const unsubscribe = window.api?.on?.agentStatus?.(async (taskId: string, status: string) => {
+      if (status === 'failed' || status === 'timed_out') {
+        try {
+          // Fetch the latest runs for this task to get the error
+          const runs = await window.api.agents.runs(taskId);
+          const failedRun = runs?.find((r: { status: string }) => r.status === status);
+          const errorMsg = failedRun?.error || `Agent ${status.replace('_', ' ')}`;
+          toast.error(errorMsg, {
+            duration: 15000,
+            action: failedRun ? {
+              label: 'View Run',
+              onClick: () => navigate(`/agents/${failedRun.id}`),
+            } : undefined,
+          });
+        } catch (err) {
+          console.error('Failed to fetch agent run details for failure toast:', err);
+          toast.error(`Agent ${status.replace('_', ' ')}`, { duration: 15000 });
+        }
+      }
+    });
+    return () => { unsubscribe?.(); };
+  }, [navigate]);
+
   useEffect(() => {
     const unsubscribe = window.api?.on?.agentInterruptedRuns?.((runs) => {
       for (const run of runs) {

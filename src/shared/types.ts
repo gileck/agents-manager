@@ -418,6 +418,10 @@ export interface AgentRun {
   costInputTokens: number | null;
   costOutputTokens: number | null;
   prompt: string | null;
+  error: string | null;
+  timeoutMs: number | null;
+  maxTurns: number | null;
+  messageCount: number | null;
 }
 
 export interface AgentRunCreateInput {
@@ -436,6 +440,10 @@ export interface AgentRunUpdateInput {
   costInputTokens?: number;
   costOutputTokens?: number;
   prompt?: string;
+  error?: string;
+  timeoutMs?: number;
+  maxTurns?: number;
+  messageCount?: number;
 }
 
 export type ArtifactType = 'branch' | 'pr' | 'commit' | 'diff' | 'document';

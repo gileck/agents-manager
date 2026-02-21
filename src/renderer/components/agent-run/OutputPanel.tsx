@@ -6,9 +6,12 @@ interface OutputPanelProps {
   output: string;
   startedAt: number;
   isRunning: boolean;
+  timeoutMs?: number | null;
+  maxTurns?: number | null;
+  messageCount?: number | null;
 }
 
-export function OutputPanel({ output, startedAt, isRunning }: OutputPanelProps) {
+export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns, messageCount }: OutputPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -115,6 +118,9 @@ export function OutputPanel({ output, startedAt, isRunning }: OutputPanelProps) 
         onNextMatch={handleNext}
         startedAt={startedAt}
         isRunning={isRunning}
+        timeoutMs={timeoutMs}
+        maxTurns={maxTurns}
+        messageCount={messageCount}
       />
       <pre
         ref={preRef}

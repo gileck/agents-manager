@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { calculateCost, formatCost, formatTokens } from '../../../shared/cost-utils';
 import type { AgentRun } from '../../../shared/types';
@@ -16,8 +16,20 @@ export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
   const outputCost = calculateCost(0, outputTokens);
   const totalCost = inputCost + outputCost;
 
+  const isRunning = run.status === 'running';
+
+  // Use a ticking timer for live duration during running state
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!isRunning) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isRunning]);
+
   const duration = run.completedAt && run.startedAt
     ? (run.completedAt - run.startedAt) / 1000
+    : isRunning && run.startedAt
+    ? (now - run.startedAt) / 1000
     : null;
 
   const costPerMinute = duration && duration > 0
@@ -27,7 +39,9 @@ export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
   if (inputTokens === 0 && outputTokens === 0) {
     return (
       <div className="p-4">
-        <p className="text-sm text-muted-foreground">No token usage data available for this run.</p>
+        <p className="text-sm text-muted-foreground">
+          {isRunning ? 'Waiting for token usage data...' : 'No token usage data available for this run.'}
+        </p>
       </div>
     );
   }

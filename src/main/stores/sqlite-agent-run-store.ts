@@ -18,6 +18,10 @@ interface AgentRunRow {
   cost_input_tokens: number | null;
   cost_output_tokens: number | null;
   prompt: string | null;
+  error: string | null;
+  timeout_ms: number | null;
+  max_turns: number | null;
+  message_count: number | null;
 }
 
 function rowToRun(row: AgentRunRow): AgentRun {
@@ -36,6 +40,10 @@ function rowToRun(row: AgentRunRow): AgentRun {
     costInputTokens: row.cost_input_tokens,
     costOutputTokens: row.cost_output_tokens,
     prompt: row.prompt,
+    error: row.error ?? null,
+    timeoutMs: row.timeout_ms ?? null,
+    maxTurns: row.max_turns ?? null,
+    messageCount: row.message_count ?? null,
   };
 }
 
@@ -96,6 +104,22 @@ export class SqliteAgentRunStore implements IAgentRunStore {
     if (input.prompt !== undefined) {
       updates.push('prompt = ?');
       values.push(input.prompt);
+    }
+    if (input.error !== undefined) {
+      updates.push('error = ?');
+      values.push(input.error);
+    }
+    if (input.timeoutMs !== undefined) {
+      updates.push('timeout_ms = ?');
+      values.push(input.timeoutMs);
+    }
+    if (input.maxTurns !== undefined) {
+      updates.push('max_turns = ?');
+      values.push(input.maxTurns);
+    }
+    if (input.messageCount !== undefined) {
+      updates.push('message_count = ?');
+      values.push(input.messageCount);
     }
 
     if (updates.length === 0) return existing;

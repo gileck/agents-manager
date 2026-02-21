@@ -23,6 +23,9 @@ interface OutputToolbarProps {
   onNextMatch: () => void;
   startedAt: number;
   isRunning: boolean;
+  timeoutMs?: number | null;
+  maxTurns?: number | null;
+  messageCount?: number | null;
 }
 
 export function OutputToolbar({
@@ -37,6 +40,9 @@ export function OutputToolbar({
   onNextMatch,
   startedAt,
   isRunning,
+  timeoutMs,
+  maxTurns,
+  messageCount,
 }: OutputToolbarProps) {
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState('');
@@ -100,7 +106,16 @@ export function OutputToolbar({
         )}
       </div>
 
-      <span className="ml-auto text-xs text-muted-foreground font-mono">{elapsed}</span>
+      <div className="ml-auto flex items-center gap-3">
+        {messageCount != null && messageCount > 0 && (
+          <span className="text-xs text-muted-foreground font-mono">
+            Msgs: {messageCount}{maxTurns ? ` / ${maxTurns}` : ''}
+          </span>
+        )}
+        <span className="text-xs text-muted-foreground font-mono">
+          {elapsed}{timeoutMs ? ` / ${formatDuration(timeoutMs)}` : ''}
+        </span>
+      </div>
     </div>
   );
 }

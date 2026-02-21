@@ -1451,7 +1451,7 @@ function StatusActionBar({
     return (
       <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
         <span className="text-sm font-medium" style={{ color: '#dc2626' }}>
-          Agent failed or not running
+          {lastRun?.error || 'Agent failed or not running'}
         </span>
         {lastRun && (
           <button

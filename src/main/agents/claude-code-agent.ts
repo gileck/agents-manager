@@ -27,7 +27,7 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
     switch (context.mode) {
       case 'implement':
       case 'request_changes':
-        return 15 * 60 * 1000; // 15 min — implementation tasks need more time
+        return 30 * 60 * 1000; // 30 min — implementation tasks need more time
       case 'plan':
       case 'plan_revision':
       case 'investigate':

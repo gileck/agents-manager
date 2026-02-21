@@ -351,9 +351,31 @@ export class AgentService implements IAgentService {
           onOutput(chunk);
         }
       : undefined;
+    let metadataFlushed = false;
+    let flushErrorCount = 0;
     const flushInterval = setInterval(() => {
+      const flushData: import('../../shared/types').AgentRunUpdateInput = {};
       if (outputBuffer) {
-        this.agentRunStore.updateRun(run.id, { output: outputBuffer }).catch(() => {});
+        flushData.output = outputBuffer;
+      }
+      // Flush live cost and progress data from agent
+      const agentAny = agent as { accumulatedInputTokens?: number; accumulatedOutputTokens?: number; lastMessageCount?: number; lastTimeout?: number; lastMaxTurns?: number };
+      if (agentAny.accumulatedInputTokens != null && agentAny.accumulatedInputTokens > 0) flushData.costInputTokens = agentAny.accumulatedInputTokens;
+      if (agentAny.accumulatedOutputTokens != null && agentAny.accumulatedOutputTokens > 0) flushData.costOutputTokens = agentAny.accumulatedOutputTokens;
+      if (agentAny.lastMessageCount != null && agentAny.lastMessageCount > 0) flushData.messageCount = agentAny.lastMessageCount;
+      // Flush timeout/maxTurns once
+      if (!metadataFlushed) {
+        if (agentAny.lastTimeout != null) flushData.timeoutMs = agentAny.lastTimeout;
+        if (agentAny.lastMaxTurns != null) flushData.maxTurns = agentAny.lastMaxTurns;
+        if (agentAny.lastTimeout != null || agentAny.lastMaxTurns != null) metadataFlushed = true;
+      }
+      if (Object.keys(flushData).length > 0) {
+        this.agentRunStore.updateRun(run.id, flushData).catch((err) => {
+          flushErrorCount++;
+          if (flushErrorCount === 1 || flushErrorCount % 10 === 0) {
+            onLog(`Flush to DB failed (count=${flushErrorCount}): ${err instanceof Error ? err.message : String(err)}`);
+          }
+        });
       }
     }, 3000);
 
@@ -443,14 +465,17 @@ export class AgentService implements IAgentService {
         // Recover partial cost data from agent if available
         const partialInputTokens = 'lastCostInputTokens' in agent ? (agent as { lastCostInputTokens?: number }).lastCostInputTokens : undefined;
         const partialOutputTokens = 'lastCostOutputTokens' in agent ? (agent as { lastCostOutputTokens?: number }).lastCostOutputTokens : undefined;
+        const partialMessageCount = 'lastMessageCount' in agent ? (agent as { lastMessageCount?: number }).lastMessageCount : undefined;
         await this.agentRunStore.updateRun(run.id, {
           status: 'failed',
           output: errorMsg,
+          error: errorMsg,
           outcome: 'failed',
           exitCode: 1,
           completedAt,
           costInputTokens: partialInputTokens,
           costOutputTokens: partialOutputTokens,
+          messageCount: partialMessageCount,
         });
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
         await this.taskEventLog.log({
@@ -562,6 +587,7 @@ export class AgentService implements IAgentService {
       // Update run
       const completedAt = now();
       const runStatus = result.exitCode === 0 ? 'completed' : 'failed';
+      const finalMessageCount = 'lastMessageCount' in agent ? (agent as { lastMessageCount?: number }).lastMessageCount : undefined;
       await this.agentRunStore.updateRun(run.id, {
         status: runStatus,
         output: result.output,
@@ -572,6 +598,8 @@ export class AgentService implements IAgentService {
         costInputTokens: result.costInputTokens,
         costOutputTokens: result.costOutputTokens,
         prompt: result.prompt,
+        error: result.error,
+        messageCount: finalMessageCount,
       });
       this.taskEventLog.log({
         taskId,
@@ -857,7 +885,8 @@ export class AgentService implements IAgentService {
       // Emit status change
       const finalStatus = result.exitCode === 0 ? 'completed' : 'failed';
       onStatusChange?.(finalStatus);
-      onMessage?.({ type: 'status', status: finalStatus, message: `Agent ${finalStatus}`, timestamp: Date.now() });
+      const statusMessage = result.error ? `Agent ${finalStatus}: ${result.error}` : `Agent ${finalStatus}`;
+      onMessage?.({ type: 'status', status: finalStatus, message: statusMessage, timestamp: Date.now() });
 
       // Send native notification
       try {
@@ -888,18 +917,26 @@ export class AgentService implements IAgentService {
         data: { agentRunId: run.id, error: errMsg },
       }).catch(() => {});
       try {
+        const fatalMessageCount = 'lastMessageCount' in agent ? (agent as { lastMessageCount?: number }).lastMessageCount : undefined;
         await this.agentRunStore.updateRun(run.id, {
           status: 'failed',
           outcome: 'failed',
           exitCode: 1,
           output: `Internal error: ${errMsg}`,
+          error: `Internal error: ${errMsg}`,
           completedAt: now(),
           costInputTokens: result?.costInputTokens,
           costOutputTokens: result?.costOutputTokens,
+          messageCount: fatalMessageCount,
         });
       } catch {
         // Last resort — can't even update the run
       }
+      // Notify UI even for fatal errors
+      try {
+        onStatusChange?.('failed');
+        onMessage?.({ type: 'status', status: 'failed', message: `Internal error: ${errMsg}`, timestamp: Date.now() });
+      } catch { /* notification failure is non-fatal in the fatal handler */ }
     } finally {
       // Delete the promise reference first to prevent leaks even if cleanup throws
       this.backgroundPromises.delete(run.id);

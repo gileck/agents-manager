@@ -646,6 +646,15 @@ export function getMigrations(): Migration[] {
         ALTER TABLE chat_messages ADD COLUMN cost_output_tokens INTEGER
       `,
     },
+    {
+      name: '057_add_agent_run_progress_fields',
+      sql: `
+        ALTER TABLE agent_runs ADD COLUMN error TEXT;
+        ALTER TABLE agent_runs ADD COLUMN timeout_ms INTEGER;
+        ALTER TABLE agent_runs ADD COLUMN max_turns INTEGER;
+        ALTER TABLE agent_runs ADD COLUMN message_count INTEGER
+      `,
+    },
   ];
 }
 

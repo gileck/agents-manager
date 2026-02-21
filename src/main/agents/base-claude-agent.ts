@@ -14,7 +14,7 @@ type SdkContentBlock = SdkTextBlock | SdkToolUseBlock;
 
 interface SdkAssistantMessage {
   type: 'assistant';
-  message: { content: SdkContentBlock[] };
+  message: { content: SdkContentBlock[]; usage?: { input_tokens: number; output_tokens: number } };
 }
 interface SdkResultMessage {
   type: 'result';
@@ -37,6 +37,17 @@ export abstract class BaseClaudeAgent implements IAgent {
   /** Partial cost data accessible even when execute() throws. */
   lastCostInputTokens: number | undefined;
   lastCostOutputTokens: number | undefined;
+
+  /** Accumulated running totals updated from each assistant message's usage. */
+  accumulatedInputTokens = 0;
+  accumulatedOutputTokens = 0;
+
+  /** Number of SDK messages processed so far. */
+  lastMessageCount = 0;
+
+  /** The timeout and maxTurns used for the current/last run. */
+  lastTimeout: number | undefined;
+  lastMaxTurns: number | undefined;
 
   private runningAbortControllers = new Map<string, AbortController>();
 
@@ -73,6 +84,9 @@ export abstract class BaseClaudeAgent implements IAgent {
   async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, onLog?: (message: string, data?: Record<string, unknown>) => void, onPromptBuilt?: (prompt: string) => void, onMessage?: (msg: AgentChatMessage) => void): Promise<AgentRunResult> {
     this.lastCostInputTokens = undefined;
     this.lastCostOutputTokens = undefined;
+    this.accumulatedInputTokens = 0;
+    this.accumulatedOutputTokens = 0;
+    this.lastMessageCount = 0;
 
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     const query = await this.loadQuery();
@@ -102,6 +116,9 @@ export abstract class BaseClaudeAgent implements IAgent {
     }
     const workdir = context.workdir;
     const timeout = this.getTimeout(context, config);
+    const maxTurns = this.getMaxTurns(context);
+    this.lastTimeout = timeout;
+    this.lastMaxTurns = maxTurns;
 
     const abortController = new AbortController();
     const runId = context.task.id;
@@ -126,7 +143,6 @@ export abstract class BaseClaudeAgent implements IAgent {
     log(`Starting agent run: mode=${context.mode}, workdir=${workdir}, timeout=${timeout}ms, model=${config.model ?? 'default'}`);
 
     const outputFormat = this.getOutputFormat(context);
-    const maxTurns = this.getMaxTurns(context);
 
     // Set up sandbox guard — restrict file access to worktree
     const isReadOnlyMode = context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'investigate';
@@ -168,12 +184,18 @@ export abstract class BaseClaudeAgent implements IAgent {
         },
       }) as AsyncIterable<SdkStreamMessage>) {
         messageCount++;
+        this.lastMessageCount = messageCount;
         if (messageCount % 25 === 0) {
           log(`SDK message loop heartbeat: ${messageCount} messages processed`);
         }
 
         if (message.type === 'assistant') {
           const assistantMsg = message as SdkAssistantMessage;
+          // Accumulate per-message usage if available
+          if (assistantMsg.message.usage) {
+            this.accumulatedInputTokens += assistantMsg.message.usage.input_tokens;
+            this.accumulatedOutputTokens += assistantMsg.message.usage.output_tokens;
+          }
           for (const block of assistantMsg.message.content) {
             if (block.type === 'text') {
               emit(block.text + '\n');
