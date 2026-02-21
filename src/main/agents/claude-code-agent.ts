@@ -178,14 +178,9 @@ export class ClaudeCodeAgent extends BaseClaudeAgent {
             properties: {
               technicalDesign: { type: 'string', description: 'The full technical design document as markdown' },
               designSummary: { type: 'string', description: 'A short 2-3 sentence summary of the technical design' },
-              subtasks: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Concrete implementation steps derived from the design',
-              },
               ...getInteractiveFields(),
             },
-            required: ['technicalDesign', 'designSummary', 'subtasks'],
+            required: ['technicalDesign', 'designSummary'],
           },
         };
       case 'implement':

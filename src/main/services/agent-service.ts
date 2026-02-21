@@ -712,35 +712,15 @@ export class AgentService implements IAgentService {
 
       // Extract technical design from technical_design/technical_design_revision output
       if (result.exitCode === 0 && (context.mode === 'technical_design' || context.mode === 'technical_design_revision' || context.mode === 'technical_design_resume')) {
-        const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string; subtasks?: string[] } | undefined;
+        const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string } | undefined;
         if (so?.technicalDesign) {
           this.taskEventLog.log({
             taskId,
             category: 'agent_debug',
             severity: 'debug',
-            message: `Extracting technical design from structured output: hasDesign=${!!so.technicalDesign}, hasSubtasks=${!!so.subtasks}, subtaskCount=${so.subtasks?.length ?? 0}`,
+            message: `Extracting technical design from structured output: hasDesign=${!!so.technicalDesign}`,
           }).catch(() => {});
-          const updates: import('../../shared/types').TaskUpdateInput = { technicalDesign: so.technicalDesign };
-          if (so.subtasks && so.subtasks.length > 0) {
-            // During revision, only overwrite subtasks if none have been started yet
-            if (context.mode === 'technical_design_revision') {
-              const current = await this.taskStore.getTask(taskId);
-              const allOpen = !current?.subtasks?.some(s => s.status !== 'open');
-              if (allOpen) {
-                updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
-              } else {
-                this.taskEventLog.log({
-                  taskId,
-                  category: 'agent_debug',
-                  severity: 'debug',
-                  message: 'Skipping subtask overwrite during revision — some subtasks already started',
-                }).catch(() => {});
-              }
-            } else {
-              updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
-            }
-          }
-          await this.taskStore.updateTask(taskId, updates);
+          await this.taskStore.updateTask(taskId, { technicalDesign: so.technicalDesign });
         } else {
           // Fallback: store raw output as technical design (only if non-empty to avoid overwriting valid design on bad runs)
           const fallback = this.extractPlan(result.output);
