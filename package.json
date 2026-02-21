@@ -14,6 +14,8 @@
     "build:renderer": "webpack --config config/webpack.renderer.config.js",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "cd node_modules/better-sqlite3 && rm -rf build-node && mv build build-electron-bak 2>/dev/null; npx prebuild-install -r node && mv build build-node; mv build-electron-bak build 2>/dev/null; true",
+    "sqlite:use-node": "cd node_modules/better-sqlite3 && if [ ! -d build-node ]; then npm run --prefix ../.. rebuild:node; fi && if [ -d build-node ]; then mv build build-electron && mv build-node build; fi",
+    "sqlite:use-electron": "cd node_modules/better-sqlite3 && if [ -d build-electron ]; then mv build build-node; mv build-electron build; fi",
     "prestart": "pkill -f 'Agents Manager' 2>/dev/null || true; pkill -f 'electron .' 2>/dev/null || true; pkill -f Electron 2>/dev/null || true",
     "start": "npm run rebuild:electron && npm run build && electron .",
     "start:devtools": "npm run rebuild:electron && npm run build && ELECTRON_DEBUG=1 electron .",
@@ -30,9 +32,9 @@
     "lint": "eslint src/ template/ tests/",
     "typecheck": "tsc --noEmit -p config/tsconfig.main.json && tsc --noEmit -p config/tsconfig.preload.json && tsc --noEmit -p config/tsconfig.renderer.json && tsc --noEmit -p config/tsconfig.cli.json",
     "checks": "yarn typecheck && yarn lint",
-    "test": "npm run rebuild:node && vitest run",
-    "test:watch": "npm run rebuild:node && vitest",
-    "test:coverage": "npm run rebuild:node && vitest run --coverage",
+    "test": "npm run sqlite:use-node && vitest run; EXIT=$?; npm run sqlite:use-electron; exit $EXIT",
+    "test:watch": "npm run sqlite:use-node && vitest; EXIT=$?; npm run sqlite:use-electron; exit $EXIT",
+    "test:coverage": "npm run sqlite:use-node && vitest run --coverage; EXIT=$?; npm run sqlite:use-electron; exit $EXIT",
     "postinstall": "electron-rebuild -f -w better-sqlite3 && npm run rebuild:node"
   },
   "keywords": [
