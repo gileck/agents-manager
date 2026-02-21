@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
 import { AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
-import type { AgentRunResult as _AgentRunResult } from '../../src/shared/types';
 
 describe('Agent Output Streaming', () => {
   let ctx: TestContext;
@@ -32,21 +31,41 @@ describe('Agent Output Streaming', () => {
       outcome: 'plan_complete',
     }));
 
+    // No output chunks set, so onOutput should not receive anything
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted', onOutput);
     await ctx.agentService.waitForCompletion(run.id);
 
-    // ScriptedAgent doesn't call onOutput, so chunks should be empty
-    // This test verifies the plumbing compiles and runs without error
     expect(chunks).toEqual([]);
+  });
+
+  it('should receive output chunks via onOutput when outputChunks are set', async () => {
+    const chunks: string[] = [];
+    const onOutput = (chunk: string) => chunks.push(chunk);
+
+    ctx.scriptedAgent.setOutputChunks(['chunk1', 'chunk2', 'chunk3']);
+    ctx.scriptedAgent.setScript(async () => ({
+      exitCode: 0,
+      output: 'chunk1chunk2chunk3',
+      outcome: 'plan_complete',
+    }));
+
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted', onOutput);
+    await ctx.agentService.waitForCompletion(run.id);
+
+    // Verify onOutput received the chunks from ScriptedAgent
+    expect(chunks).toContain('chunk1');
+    expect(chunks).toContain('chunk2');
+    expect(chunks).toContain('chunk3');
   });
 
   it('should thread onOutput from workflowService.startAgent() to agentService.execute()', async () => {
     const chunks: string[] = [];
     const onOutput = (chunk: string) => chunks.push(chunk);
 
+    ctx.scriptedAgent.setOutputChunks(['part-a', 'part-b']);
     ctx.scriptedAgent.setScript(async () => ({
       exitCode: 0,
-      output: 'Done',
+      output: 'part-apart-b',
       outcome: 'plan_complete',
     }));
 
@@ -56,28 +75,37 @@ describe('Agent Output Streaming', () => {
 
     expect(completedRun!.status).toBe('completed');
     expect(completedRun!.outcome).toBe('plan_complete');
+    expect(chunks).toContain('part-a');
+    expect(chunks).toContain('part-b');
   });
 
-  it('should call onOutput when agent produces output chunks', async () => {
+  it('should complete without error when no onOutput is provided', async () => {
+    ctx.scriptedAgent.setOutputChunks(['chunk1', 'chunk2']);
+    ctx.scriptedAgent.setScript(async () => ({
+      exitCode: 0,
+      output: 'Done',
+      outcome: 'plan_complete',
+    }));
+
+    // No onOutput callback provided
+    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
+    const completedRun = await ctx.agentRunStore.getRun(run.id);
+
+    expect(completedRun!.status).toBe('completed');
+    expect(completedRun!.outcome).toBe('plan_complete');
+  });
+
+  it('should verify onOutput function is passed to agent.execute()', async () => {
     const chunks: string[] = [];
     const onOutput = (chunk: string) => chunks.push(chunk);
 
-    // Create a script that manually calls onOutput to simulate streaming
-    ctx.scriptedAgent.setScript(async (_context, _config, outputCallback) => {
-      outputCallback?.('chunk1');
-      outputCallback?.('chunk2');
-      outputCallback?.('chunk3');
-      return {
-        exitCode: 0,
-        output: 'chunk1chunk2chunk3',
-        outcome: 'plan_complete',
-      };
-    });
+    ctx.scriptedAgent.setScript(async () => ({
+      exitCode: 0,
+      output: 'Done',
+      outcome: 'plan_complete',
+    }));
 
-    // But wait - ScriptedAgent.execute() ignores _onOutput.
-    // Let's use agentService directly and verify the callback works at that level.
-    // We need to update the scripted agent to forward onOutput.
-    // For now, test the plumbing by spying on the agent.
     const executeSpy = vi.spyOn(ctx.scriptedAgent, 'execute');
 
     const run = await ctx.agentService.execute(taskId, 'plan', 'scripted', onOutput);
@@ -87,8 +115,8 @@ describe('Agent Output Streaming', () => {
     expect(executeSpy).toHaveBeenCalledOnce();
     const callArgs = executeSpy.mock.calls[0];
     // AgentService wraps onOutput in a buffering lambda, so check it's a function
-    // that delegates to the original by invoking it
     expect(typeof callArgs[2]).toBe('function');
+    // Invoke the wrapper to verify it delegates to original callback
     callArgs[2]!('test-chunk');
     expect(chunks).toContain('test-chunk');
   });

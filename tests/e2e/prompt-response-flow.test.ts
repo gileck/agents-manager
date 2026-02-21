@@ -80,8 +80,8 @@ describe('Prompt Response Flow', () => {
     await ctx.workflowService.respondToPrompt(prompts[0].id, { answer: 'details here' });
 
     const updatedTask = await ctx.taskStore.getTask(taskId);
-    // The pipeline has transitions from needs_info to planning or implementing with agentOutcome: info_provided
-    // Since we came from planning, and both transitions exist, the first matching one should fire
-    expect(['planning', 'implementing']).toContain(updatedTask!.status);
+    // The prompt was created from 'planning' status, so resumeToStatus='planning'
+    // respondToPrompt uses this to find the exact needs_info -> planning transition
+    expect(updatedTask!.status).toBe('planning');
   });
 });

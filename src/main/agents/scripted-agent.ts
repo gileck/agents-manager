@@ -44,6 +44,7 @@ export const humanInTheLoop: AgentScript = async () => ({
 export class ScriptedAgent implements IAgent {
   readonly type: string;
   private script: AgentScript;
+  private outputChunks: string[] = [];
 
   constructor(defaultScript: AgentScript, type: string = 'scripted') {
     this.type = type;
@@ -54,7 +55,16 @@ export class ScriptedAgent implements IAgent {
     this.script = script;
   }
 
-  async execute(context: AgentContext, config: AgentConfig, _onOutput?: (chunk: string) => void, _onLog?: (message: string, data?: Record<string, unknown>) => void, _onPromptBuilt?: (prompt: string) => void, _onMessage?: unknown): Promise<AgentRunResult> {
+  setOutputChunks(chunks: string[]): void {
+    this.outputChunks = chunks;
+  }
+
+  async execute(context: AgentContext, config: AgentConfig, onOutput?: (chunk: string) => void, _onLog?: (message: string, data?: Record<string, unknown>) => void, _onPromptBuilt?: (prompt: string) => void, _onMessage?: unknown): Promise<AgentRunResult> {
+    if (onOutput && this.outputChunks.length > 0) {
+      for (const chunk of this.outputChunks) {
+        onOutput(chunk);
+      }
+    }
     return this.script(context, config);
   }
 
