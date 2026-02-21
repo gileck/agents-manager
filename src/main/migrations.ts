@@ -675,6 +675,10 @@ export function getMigrations(): Migration[] {
       name: '062_reseed_pipelines_phases',
       sql: getReseedPipelinesSql(),
     },
+    {
+      name: '063_add_messages_to_agent_runs',
+      sql: `ALTER TABLE agent_runs ADD COLUMN messages TEXT`,
+    },
   ];
 }
 

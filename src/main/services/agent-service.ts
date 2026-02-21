@@ -66,11 +66,14 @@ export class AgentService implements IAgentService {
         const completedAt = now();
 
         // Mark run as failed/interrupted
+        const shutdownMsg: AgentChatMessage = { type: 'status', status: 'failed', message: 'Interrupted by app shutdown', timestamp: completedAt };
+        const recoveredMessages = [...(run.messages ?? []), shutdownMsg];
         await this.agentRunStore.updateRun(run.id, {
           status: 'failed',
           outcome: 'interrupted',
           completedAt,
           output: (run.output ?? '') + '\n[Interrupted by app shutdown]',
+          messages: recoveredMessages,
         });
 
         // Fail the active phase
@@ -359,12 +362,20 @@ export class AgentService implements IAgentService {
           onOutput(chunk);
         }
       : undefined;
+
+    // Buffer messages and periodically flush to DB
+    const MAX_MESSAGES_BUFFER = 10_000;
+    const messagesBuffer: import('../../shared/types').AgentChatMessage[] = [];
+
     let metadataFlushed = false;
     let flushErrorCount = 0;
     const flushInterval = setInterval(() => {
       const flushData: import('../../shared/types').AgentRunUpdateInput = {};
       if (outputBuffer) {
         flushData.output = outputBuffer;
+      }
+      if (messagesBuffer.length > 0) {
+        flushData.messages = [...messagesBuffer];
       }
       // Flush live cost and progress data from agent
       const agentAny = agent as { accumulatedInputTokens?: number; accumulatedOutputTokens?: number; lastMessageCount?: number; lastTimeout?: number; lastMaxTurns?: number };
@@ -426,6 +437,14 @@ export class AgentService implements IAgentService {
       }
     };
 
+    // Wrap onMessage to buffer messages for DB persistence
+    const bufferingOnMessage = (msg: AgentChatMessage) => {
+      if (messagesBuffer.length < MAX_MESSAGES_BUFFER) {
+        messagesBuffer.push(msg);
+      }
+      onMessage?.(msg);
+    };
+
     const wrappedOnMessage = hasSubtaskTracking
       ? (msg: AgentChatMessage) => {
           if (msg.type === 'tool_use') {
@@ -479,9 +498,9 @@ export class AgentService implements IAgentService {
               onLog(`Subtask sync error: ${err instanceof Error ? err.message : String(err)}`);
             }
           }
-          onMessage?.(msg);
+          bufferingOnMessage(msg);
         }
-      : onMessage;
+      : bufferingOnMessage;
 
     let result: import('../../shared/types').AgentRunResult | undefined;
     try {
@@ -635,6 +654,7 @@ export class AgentService implements IAgentService {
         prompt: result.prompt,
         error: result.error,
         messageCount: finalMessageCount,
+        messages: [...messagesBuffer],
       });
       this.taskEventLog.log({
         taskId,

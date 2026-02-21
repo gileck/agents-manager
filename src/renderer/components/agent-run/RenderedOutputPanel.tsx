@@ -67,7 +67,7 @@ export function RenderedOutputPanel({ messages, isRunning, startedAt, showTimest
   const rendered = useMemo(() => {
     const nodes: React.ReactNode[] = [];
     const ts = (timestamp: number) => {
-      if (!showTimestamps || !startedAt) return null;
+      if (!showTimestamps || !startedAt || !timestamp) return null;
       return (
         <span className="text-xs text-muted-foreground font-mono mr-2 flex-shrink-0" style={{ minWidth: '44px' }}>
           {formatElapsed(timestamp - startedAt)}

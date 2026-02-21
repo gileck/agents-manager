@@ -14,7 +14,8 @@ import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
-import type { AgentRun, Task } from '../../shared/types';
+import type { AgentRun, Task, AgentChatMessage } from '../../shared/types';
+import { messagesToRawText } from '../../shared/agent-message-utils';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
   plan_complete: 'Plan is ready for review. Go to task to review and approve.',
@@ -41,29 +42,29 @@ export function AgentRunPage() {
 
   const taskId = run?.taskId;
 
-  // --- Streaming output (raw text from the agent run) ---
-  const [streamOutput, setStreamOutput] = useState('');
+  // --- Streaming messages (structured AgentChatMessage[] from the agent run) ---
+  const [streamMessages, setStreamMessages] = useState<AgentChatMessage[]>([]);
   const initializedFromDb = useRef(false);
 
   useEffect(() => {
     if (!run || initializedFromDb.current) return;
-    if (run.status === 'running' && run.output) {
-      setStreamOutput(run.output);
+    if (run.status === 'running' && run.messages && run.messages.length > 0) {
+      setStreamMessages(run.messages);
     }
     initializedFromDb.current = true;
   }, [run]);
 
   useEffect(() => {
     if (!run) return;
-    setStreamOutput('');
+    setStreamMessages([]);
     initializedFromDb.current = false;
 
-    const unsubOutput = window.api.on.agentOutput((tid: string, chunk: string) => {
+    const unsubMessage = window.api.on.agentMessage((tid: string, msg: AgentChatMessage) => {
       if (tid === run.taskId) {
-        setStreamOutput((prev) => prev + chunk);
+        setStreamMessages((prev) => [...prev, msg]);
       }
     });
-    return () => { unsubOutput(); };
+    return () => { unsubMessage(); };
   }, [run?.taskId]);
 
   // --- Poll agent run (2s while running) ---
@@ -176,7 +177,8 @@ export function AgentRunPage() {
   if (!run) return null;
 
   const isRunning = run.status === 'running';
-  const displayOutput = isRunning ? streamOutput : (run.output || streamOutput);
+  const displayMessages = isRunning ? streamMessages : (run?.messages ?? streamMessages);
+  const displayOutput = displayMessages.length > 0 ? messagesToRawText(displayMessages) : (run.output || '');
   const outcomeMessage = run.outcome ? OUTCOME_MESSAGES[run.outcome] : null;
   const subtasks = task?.subtasks ?? [];
   const doneCount = subtasks.filter((s) => s.status === 'done').length;
@@ -302,6 +304,7 @@ export function AgentRunPage() {
           <TabsContent value="output" className="flex-1 min-h-0 flex flex-col pb-3">
             <OutputPanel
               output={displayOutput}
+              messages={displayMessages}
               startedAt={run.startedAt}
               isRunning={isRunning}
               timeoutMs={run.timeoutMs}
@@ -351,7 +354,7 @@ export function AgentRunPage() {
 
         {/* Token usage sidebar */}
         {showSidebar && (isRunning || run.costInputTokens || run.costOutputTokens) && (
-          <ContextSidebar messages={[]} run={run} />
+          <ContextSidebar messages={displayMessages} run={run} />
         )}
       </div>
     </div>

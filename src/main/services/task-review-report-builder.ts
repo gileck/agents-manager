@@ -5,6 +5,7 @@ import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { TimelineService } from './timeline/timeline-service';
+import { messagesToRawText } from '../../shared/agent-message-utils';
 
 export class TaskReviewReportBuilder {
   constructor(
@@ -95,9 +96,10 @@ export class TaskReviewReportBuilder {
         lines.push(``);
       }
 
-      if (run.output) {
+      const runOutput = run.messages ? messagesToRawText(run.messages) : run.output;
+      if (runOutput) {
         lines.push(`[[ AGENT_RUN_OUTPUT:START id=${run.id} ]]`);
-        lines.push(run.output);
+        lines.push(runOutput);
         lines.push(`[[ AGENT_RUN_OUTPUT:END id=${run.id} ]]`);
         lines.push(``);
       }

@@ -1,6 +1,7 @@
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
+import type { AgentChatMessage } from '../../shared/types';
 import { now } from '../stores/utils';
 
 export class AgentSupervisor {
@@ -36,11 +37,14 @@ export class AgentSupervisor {
       // Ghost run: in DB as running but not tracked in memory
       if (!activeRunIds.has(run.id)) {
         const completedAt = now();
+        const statusMsg: AgentChatMessage = { type: 'status', status: 'failed', message: 'Detected as ghost run by supervisor', timestamp: completedAt };
+        const updatedMessages = [...(run.messages ?? []), statusMsg];
         await this.agentRunStore.updateRun(run.id, {
           status: 'failed',
           outcome: 'interrupted',
           completedAt,
           output: (run.output ?? '') + '\n[Detected as ghost run by supervisor]',
+          messages: updatedMessages,
         });
 
         await this.taskEventLog.log({
@@ -62,10 +66,14 @@ export class AgentSupervisor {
           // Agent may have already completed
         }
 
+        const timedOutAt = now();
+        const timeoutMsg: AgentChatMessage = { type: 'status', status: 'timed_out', message: 'Timed out by supervisor', timestamp: timedOutAt };
+        const timedOutMessages = [...(run.messages ?? []), timeoutMsg];
         await this.agentRunStore.updateRun(run.id, {
           status: 'timed_out',
-          completedAt: now(),
+          completedAt: timedOutAt,
           output: (run.output ?? '') + '\n[Timed out by supervisor]',
+          messages: timedOutMessages,
         });
 
         await this.taskEventLog.log({

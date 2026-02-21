@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { OutputToolbar, type OutputMode } from './OutputToolbar';
 import { RenderedOutputPanel } from './RenderedOutputPanel';
 import { stripAnsi } from '@template/renderer/lib/utils';
-import { parseRawOutput } from './parseRawOutput';
+import type { AgentChatMessage } from '../../../shared/types';
 
 interface OutputPanelProps {
   output: string;
+  messages?: AgentChatMessage[];
   startedAt: number;
   isRunning: boolean;
   timeoutMs?: number | null;
@@ -15,7 +16,7 @@ interface OutputPanelProps {
   onOutputModeChange?: (mode: OutputMode) => void;
 }
 
-export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns, messageCount, outputMode = 'raw', onOutputModeChange }: OutputPanelProps) {
+export function OutputPanel({ output, messages = [], startedAt, isRunning, timeoutMs, maxTurns, messageCount, outputMode = 'raw', onOutputModeChange }: OutputPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [showTimestamps, setShowTimestamps] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,7 +26,6 @@ export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns,
   const matchRefs = useRef<(HTMLElement | null)[]>([]);
 
   const cleanOutput = useMemo(() => stripAnsi(output), [output]);
-  const messages = useMemo(() => parseRawOutput(cleanOutput), [cleanOutput]);
 
   // Debounce search
   useEffect(() => {
@@ -110,7 +110,7 @@ export function OutputPanel({ output, startedAt, isRunning, timeoutMs, maxTurns,
     setCurrentMatch((c) => (c < matches.length - 1 ? c + 1 : 0));
   };
 
-  const hasOutput = cleanOutput.length > 0;
+  const hasOutput = cleanOutput.length > 0 || messages.length > 0;
 
   return (
     <div className="flex flex-col border rounded-md overflow-hidden flex-1 min-h-0">

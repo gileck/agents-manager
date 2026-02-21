@@ -437,6 +437,7 @@ export interface AgentRun {
   timeoutMs: number | null;
   maxTurns: number | null;
   messageCount: number | null;
+  messages: AgentChatMessage[] | null;
 }
 
 export interface AgentRunCreateInput {
@@ -459,6 +460,7 @@ export interface AgentRunUpdateInput {
   timeoutMs?: number;
   maxTurns?: number;
   messageCount?: number;
+  messages?: AgentChatMessage[];
 }
 
 export type ArtifactType = 'branch' | 'pr' | 'commit' | 'diff' | 'document';
