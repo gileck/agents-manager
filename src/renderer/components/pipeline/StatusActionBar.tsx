@@ -266,13 +266,8 @@ export function StatusActionBar({
       );
     }
 
-    // Simple task complete
-    return (
-      <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac' }}>
-        <span style={{ color: '#16a34a' }}>&#10003;</span>
-        <span className="text-sm font-medium" style={{ color: '#16a34a' }}>Task complete</span>
-      </div>
-    );
+    // Simple task complete - no status bar needed
+    return null;
   }
 
   return null;
