@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
@@ -13,7 +12,7 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '../components/ui/select';
-import { useTask, useTasks } from '../hooks/useTasks';
+import { useTask } from '../hooks/useTasks';
 import { usePipeline } from '../hooks/usePipelines';
 import { useFeatures } from '../hooks/useFeatures';
 import { usePipelineDiagnostics } from '../hooks/usePipelineDiagnostics';
@@ -21,24 +20,22 @@ import { useHookRetry } from '../hooks/useHookRetry';
 import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import { PipelineControlPanel } from '../components/pipeline/PipelineControlPanel';
 import { HookFailureBanner } from '../components/pipeline/HookFailureBanner';
-import { DebuggerPanel } from '../components/pipeline/DebuggerPanel';
 import { PipelineProgress } from '../components/pipeline/PipelineProgress';
-import { PipelineVertical } from '../components/pipeline/PipelineVertical';
-import { GitTab } from '../components/tasks/GitTab';
 import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
-import { TaskCostPanel } from '../components/task/TaskCostPanel';
 import { useIpc } from '@template/renderer/hooks/useIpc';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import type {
-  Task, Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
-  DebugTimelineEntry, Worktree, TaskContextEntry, Subtask, SubtaskStatus, PlanComment,
-  ImplementationPhase, HookFailure,
+  Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
+  DebugTimelineEntry, Worktree, TaskContextEntry, HookFailure,
 } from '../../shared/types';
 import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
-import { QuestionForm } from '../components/prompts/QuestionForm';
 import { useTaskChat } from '../hooks/useTaskChat';
 import { AgentChat } from '../components/chat/AgentChat';
+
+import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
+import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
+import { PlanReviewSection } from '../components/task-detail/PlanReviewSection';
+import { DesignReviewSection } from '../components/task-detail/DesignReviewSection';
+import type { QuestionResponse } from '../components/prompts/QuestionForm';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -92,8 +89,6 @@ export function TaskDetailPage() {
   const activeRun = agentRuns?.find((r) => r.status === 'running') ?? null;
   const lastRun = agentRuns?.[0] ?? null;
   const isAgentPhase = statusMeta.isAgentRunning;
-  // After agent completes, post-completion work (git push, PR creation) may take
-  // several seconds before transitioning the task. Don't show "stuck" during this window.
   const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
     && lastRun?.status === 'completed' && lastRun.completedAt != null
     && (Date.now() - lastRun.completedAt) < 30000;
@@ -125,7 +120,7 @@ export function TaskDetailPage() {
     prevHasRunning.current = hasRunningAgent;
   }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
 
-  const initialTab = task?.status === 'plan_review' ? 'plan' : task?.status === 'design_review' ? 'design' : 'overview';
+  const initialTab = task?.status === 'plan_review' ? 'plan' : task?.status === 'design_review' ? 'design' : 'details';
   const [tab, setTab] = useState(initialTab);
 
   // Auto-switch to relevant tab when entering review statuses
@@ -133,13 +128,6 @@ export function TaskDetailPage() {
     if (task?.status === 'plan_review') setTab('plan');
     else if (task?.status === 'design_review') setTab('design');
   }, [task?.status]);
-
-  // Refetch agent runs when switching to the agents tab
-  useEffect(() => {
-    if (tab === 'agents') {
-      refetchAgentRuns();
-    }
-  }, [tab, refetchAgentRuns]);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<TaskUpdateInput>({});
@@ -214,7 +202,6 @@ export function TaskDetailPage() {
     try {
       const result = await window.api.tasks.transition(id, toStatus);
       if (result.success) {
-        // Surface hook failures from successful transitions
         if (result.hookFailures && result.hookFailures.length > 0) {
           setHookFailureAlerts((prev) => [...prev, ...result.hookFailures!]);
         }
@@ -249,7 +236,7 @@ export function TaskDetailPage() {
     }
   };
 
-  const handleStructuredPromptRespond = async (promptId: string, responses: import('../components/prompts/QuestionForm').QuestionResponse[]) => {
+  const handleStructuredPromptRespond = async (promptId: string, responses: QuestionResponse[]) => {
     setResponding(true);
     setPromptError(null);
     try {
@@ -324,11 +311,15 @@ export function TaskDetailPage() {
   };
 
   const handleRetryHook = useCallback(async (hookName: string, from: string, to: string) => {
-    const result = await retry(id!, hookName, from, to);
-    if (result.success) {
-      refetchDiagnostics();
-    } else {
-      setTransitionError(`Hook retry failed for "${hookName}": ${result.error ?? 'Unknown error'}`);
+    try {
+      const result = await retry(id!, hookName, from, to);
+      if (result.success) {
+        refetchDiagnostics();
+      } else {
+        setTransitionError(`Hook retry failed for "${hookName}": ${result.error ?? 'Unknown error'}`);
+      }
+    } catch (err) {
+      setTransitionError(err instanceof Error ? err.message : `Hook retry failed for "${hookName}"`);
     }
   }, [id, retry, refetchDiagnostics]);
 
@@ -352,27 +343,21 @@ export function TaskDetailPage() {
     );
   }
 
-  // Determine which transitions are "primary" (shown in the status bar)
-  // vs "secondary" (shown at bottom of overview).
-  // Uses pipeline status categories instead of hardcoded status names.
+  // Determine primary vs secondary transitions
   const hasCategories = statusMeta.category !== undefined;
   const allTransitions = transitions ?? [];
   let primaryTransitions: Transition[];
   let secondaryTransitions: Transition[];
   if (!hasCategories) {
-    // Non-categorized pipelines: all transitions in bar
     primaryTransitions = allTransitions;
     secondaryTransitions = [];
   } else if (statusMeta.isReady || statusMeta.isHumanReview) {
-    // Ready / human review: all transitions are primary actions
     primaryTransitions = allTransitions;
     secondaryTransitions = [];
   } else if (statusMeta.isAgentRunning) {
-    // Agent running: only show cancel/recovery when stuck
     primaryTransitions = isStuck ? allTransitions : [];
     secondaryTransitions = isStuck ? [] : allTransitions;
   } else {
-    // Terminal / waiting_for_input: no primary actions
     primaryTransitions = [];
     secondaryTransitions = allTransitions;
   }
@@ -380,6 +365,11 @@ export function TaskDetailPage() {
   const visibleDiagnosticFailures = (diagnostics?.recentHookFailures ?? [])
     .filter((f) => !dismissedFailureIds.has(f.id));
   const hasVisibleBanners = transitionError !== null || diagnosticsError !== null || hookFailureAlerts.length > 0 || visibleDiagnosticFailures.length > 0;
+
+  // Tab content indicators
+  const hasPlan = !!task.plan;
+  const hasDesign = !!task.technicalDesign;
+  const hasReview = contextEntries?.some(e => e.entryType === 'workflow_review') ?? false;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -412,7 +402,7 @@ export function TaskDetailPage() {
         </div>
       </div>
 
-      {/* 2. HERO — title, meta row, action strip */}
+      {/* 2. HERO */}
       <div style={{ padding: '18px 24px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{task.title}</h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12, color: 'var(--muted-foreground)' }}>
@@ -459,7 +449,7 @@ export function TaskDetailPage() {
         </div>
       </div>
 
-      {/* 3. PIPELINE BAR — horizontally scrollable */}
+      {/* 3. PIPELINE BAR */}
       {pipeline && (
         <div style={{ borderBottom: '1px solid var(--border)', flexShrink: 0, overflowX: 'auto', background: 'var(--card)' }}>
           <PipelineProgress
@@ -471,7 +461,7 @@ export function TaskDetailPage() {
         </div>
       )}
 
-      {/* 4. HOOK FAILURE BANNERS — pinned above tabs */}
+      {/* 4. HOOK FAILURE BANNERS */}
       {hasVisibleBanners && (
         <div style={{ flexShrink: 0, borderBottom: '1px solid var(--border)' }}>
           {transitionError && (
@@ -498,9 +488,9 @@ export function TaskDetailPage() {
                   key={i}
                   style={{ display: 'flex', alignItems: 'start', gap: 12, padding: '8px 0', fontSize: 13 }}
                 >
-                  <span style={{ color: '#d97706', marginTop: 2 }}>⚠</span>
+                  <span style={{ color: '#d97706', marginTop: 2 }}>&#x26A0;</span>
                   <div style={{ flex: 1 }}>
-                    <span style={{ fontWeight: 600, color: '#d97706' }}>Hook "{f.hook}" failed ({f.policy})</span>
+                    <span style={{ fontWeight: 600, color: '#d97706' }}>Hook &quot;{f.hook}&quot; failed ({f.policy})</span>
                     <p style={{ fontSize: 12, marginTop: 2, color: '#d97706' }}>{f.error}</p>
                   </div>
                   <button
@@ -527,141 +517,41 @@ export function TaskDetailPage() {
       {/* 5. TAB BAR + SCROLLABLE CONTENT */}
       <Tabs value={tab} onValueChange={setTab} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         <TabsList style={{ flexShrink: 0, borderBottom: '1px solid var(--border)', borderRadius: 0, padding: '0 24px', justifyContent: 'flex-start', height: 40 }}>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="plan">Plan</TabsTrigger>
-          <TabsTrigger value="design">Technical Design</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
-          <TabsTrigger value="agents">Agent Runs</TabsTrigger>
-          <TabsTrigger value="context">Context</TabsTrigger>
-          <TabsTrigger value="review">Review</TabsTrigger>
-          <TabsTrigger value="cost">Cost</TabsTrigger>
-          <TabsTrigger value="git">Git</TabsTrigger>
-          <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+          <TabsTrigger value="details">Task Details</TabsTrigger>
+          <TabsTrigger value="plan" className={hasPlan ? '' : 'opacity-40'}>
+            <span className="flex items-center gap-1.5">
+              Plan
+              {hasPlan && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="design" className={hasDesign ? '' : 'opacity-40'}>
+            <span className="flex items-center gap-1.5">
+              Technical Design
+              {hasDesign && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
+            </span>
+          </TabsTrigger>
           <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="review" className={hasReview ? '' : 'opacity-40'}>Review</TabsTrigger>
         </TabsList>
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
-        <TabsContent value="overview">
-          {/* Description */}
-          {task.description && (
-            <Card className="mt-4">
-              <CardHeader className="py-3">
-                <CardTitle className="text-base">Description</CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4">
-                <p className="text-sm whitespace-pre-wrap">{task.description}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Extra metadata — only fields not already shown in the hero */}
-          {(task.featureId || task.prLink || task.branchName || task.tags.length > 0 || task.assignee) && (
-            <Card className="mt-4">
-              <CardContent className="py-4">
-                <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: '0.625rem', alignItems: 'start' }}>
-                  {task.assignee && (
-                    <>
-                      <span className="text-sm text-muted-foreground">Assignee</span>
-                      <span className="text-sm">{task.assignee}</span>
-                    </>
-                  )}
-
-                  {task.featureId && (
-                    <>
-                      <span className="text-sm text-muted-foreground">Feature</span>
-                      <span
-                        className="text-sm text-blue-500 hover:underline cursor-pointer"
-                        onClick={() => navigate(`/features/${task.featureId}`)}
-                      >
-                        {features.find((f) => f.id === task.featureId)?.title ?? task.featureId}
-                      </span>
-                    </>
-                  )}
-
-                  {task.prLink && (
-                    <>
-                      <span className="text-sm text-muted-foreground">PR</span>
-                      <button
-                        onClick={() => window.api.shell.openInChrome(task.prLink!)}
-                        className="text-sm text-blue-500 hover:underline break-all text-left cursor-pointer"
-                      >
-                        {task.prLink}
-                      </button>
-                    </>
-                  )}
-
-                  {task.branchName && (
-                    <>
-                      <span className="text-sm text-muted-foreground">Branch</span>
-                      <span className="text-sm font-mono">{task.branchName}</span>
-                    </>
-                  )}
-
-                  {task.tags.length > 0 && (
-                    <>
-                      <span className="text-sm text-muted-foreground">Tags</span>
-                      <div className="flex gap-1">
-                        {task.tags.map((tag) => (
-                          <Badge key={tag} variant="secondary">{tag}</Badge>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Subtasks — phased or flat */}
-          {task.phases && task.phases.length > 1 ? (
-            <PhasedSubtasksSection taskId={id!} phases={task.phases} onUpdate={refetch} />
-          ) : (
-            <SubtasksSection taskId={id!} subtasks={task.subtasks} onUpdate={refetch} />
-          )}
-
-          {/* Dependencies */}
-          <DependenciesSection taskId={id!} projectId={task.projectId} />
-
-          {/* Pending Prompt UI — show whenever there are pending prompts, not just in needs_info */}
-          {pendingPrompts && pendingPrompts.some(p => p.status === 'pending') && (
-            <Card className="mt-4 border-amber-400">
-              <CardHeader className="py-3">
-                <CardTitle className="text-base text-amber-600">Agent needs your input</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {pendingPrompts.filter((p) => p.status === 'pending').map((prompt) => (
-                  <QuestionForm
-                    key={prompt.id}
-                    prompt={prompt}
-                    onSubmit={(responses) => handleStructuredPromptRespond(prompt.id, responses)}
-                    submitting={responding}
-                    error={promptError}
-                  />
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Secondary transitions at bottom of Overview */}
-          {secondaryTransitions.length > 0 && (
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-xs text-muted-foreground mb-2">Other actions:</p>
-              <div className="flex gap-2 flex-wrap">
-                {secondaryTransitions.map((t) => (
-                  <Button
-                    key={t.to}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleTransition(t.to)}
-                    disabled={transitioning !== null}
-                  >
-                    {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
+        <TabsContent value="details">
+          <TaskDetailDashboard
+            task={task}
+            taskId={id!}
+            agentRuns={agentRuns}
+            artifacts={artifacts}
+            pendingPrompts={pendingPrompts}
+            debugTimeline={debugTimeline}
+            contextEntries={contextEntries}
+            secondaryTransitions={secondaryTransitions}
+            transitioning={transitioning}
+            responding={responding}
+            promptError={promptError}
+            onTransition={handleTransition}
+            onPromptRespond={handleStructuredPromptRespond}
+            onRefetch={refetch}
+          />
         </TabsContent>
 
         <TabsContent value="plan">
@@ -678,7 +568,6 @@ export function TaskDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Plan Review Actions */}
           {task.status === 'plan_review' && (
             <PlanReviewSection
               taskId={id!}
@@ -705,7 +594,6 @@ export function TaskDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Design Review Actions */}
           {task.status === 'design_review' && (
             <DesignReviewSection
               taskId={id!}
@@ -715,118 +603,6 @@ export function TaskDetailPage() {
               onTransition={handleTransition}
               onRefetch={refetch}
             />
-          )}
-        </TabsContent>
-
-        <TabsContent value="timeline">
-          <DebuggerPanel entries={debugTimeline ?? []} />
-        </TabsContent>
-
-        <TabsContent value="artifacts">
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>Artifacts</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!artifacts || artifacts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No artifacts.</p>
-              ) : (
-                <div className="space-y-3">
-                  {artifacts.map((artifact) => (
-                    <ArtifactCard key={artifact.id} artifact={artifact} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="agents">
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>Agent Runs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!agentRuns || agentRuns.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No agent runs.</p>
-              ) : (
-                <div className="space-y-3">
-                  {agentRuns.map((run) => (
-                    <Card
-                      key={run.id}
-                      className="cursor-pointer hover:bg-accent/50 transition-colors"
-                      onClick={() => navigate(`/agents/${run.id}`)}
-                    >
-                      <CardContent className="py-3">
-                        <div className="flex items-center gap-3">
-                          <Badge variant={run.status === 'completed' ? 'success' : run.status === 'running' ? 'default' : 'destructive'}>
-                            {run.status}
-                          </Badge>
-                          <span className="text-sm">{run.mode} / {run.agentType}</span>
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            {new Date(run.startedAt).toLocaleString()}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="context">
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>Task Context</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!contextEntries || contextEntries.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No context entries yet. Entries are added as agents complete their work.</p>
-              ) : (
-                <div className="space-y-3">
-                  {contextEntries.map((entry) => (
-                    <ContextEntryCard key={entry.id} entry={entry} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="review">
-          <WorkflowReviewTab
-            taskId={id!}
-            contextEntries={contextEntries ?? null}
-            agentRuns={agentRuns ?? null}
-            isFinalStatus={statusMeta.isTerminal}
-            onReviewTriggered={() => { refetchAgentRuns(); refetchContext(); }}
-          />
-        </TabsContent>
-
-        <TabsContent value="cost">
-          <TaskCostPanel runs={agentRuns ?? []} />
-        </TabsContent>
-
-        <TabsContent value="git">
-          <GitTab taskId={id!} />
-        </TabsContent>
-
-        <TabsContent value="pipeline">
-          {pipeline ? (
-            <PipelineVertical
-              pipeline={pipeline}
-              currentStatus={task.status}
-              transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
-              agentState={hasRunningAgent ? 'running' : isStuck ? 'failed' : 'idle'}
-            />
-          ) : (
-            <Card className="mt-4">
-              <CardContent className="py-4">
-                <p className="text-sm text-muted-foreground">Pipeline not loaded.</p>
-              </CardContent>
-            </Card>
           )}
         </TabsContent>
 
@@ -857,6 +633,16 @@ export function TaskDetailPage() {
               />
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="review">
+          <WorkflowReviewTab
+            taskId={id!}
+            contextEntries={contextEntries ?? null}
+            agentRuns={agentRuns ?? null}
+            isFinalStatus={statusMeta.isTerminal}
+            onReviewTriggered={() => { refetchAgentRuns(); refetchContext(); }}
+          />
         </TabsContent>
         </div>
       </Tabs>
@@ -978,830 +764,6 @@ export function TaskDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-
-
-/** Plan Review Section — comment history, new comment, approve/request changes */
-function PlanReviewSection({
-  taskId,
-  planComments,
-  transitions,
-  transitioning,
-  onTransition,
-  onRefetch,
-}: {
-  taskId: string;
-  planComments: PlanComment[];
-  transitions: Transition[];
-  transitioning: string | null;
-  onTransition: (toStatus: string) => Promise<void> | void;
-  onRefetch: () => Promise<void> | void;
-}) {
-  const [newComment, setNewComment] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const approveTransition = transitions.find((t) => t.to === 'implementing');
-  const reviseTransition = transitions.find((t) => t.to === 'planning');
-
-  const handleAction = async (toStatus: string) => {
-    setSaving(true);
-    try {
-      // Save comment if provided
-      if (newComment.trim()) {
-        const comment: PlanComment = {
-          author: 'admin',
-          content: newComment.trim(),
-          createdAt: Date.now(),
-        };
-        await window.api.tasks.update(taskId, {
-          planComments: [...(planComments ?? []), comment],
-        });
-        setNewComment('');
-        await onRefetch();
-      }
-      // Trigger transition — await to keep buttons disabled until complete
-      await onTransition(toStatus);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card className="mt-4 border-blue-400">
-      <CardHeader className="py-3">
-        <CardTitle className="text-base">Plan Review</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Comment history */}
-        {planComments && planComments.length > 0 && (
-          <div className="space-y-2 mb-4">
-            {planComments.map((comment, i) => (
-              <div key={i} className="rounded-md bg-muted px-3 py-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold">{comment.author}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(comment.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* New comment textarea */}
-        <Textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Add feedback for the planning agent..."
-          rows={3}
-          className="mb-3"
-        />
-
-        {/* Action buttons */}
-        <div className="flex gap-2">
-          {approveTransition && (
-            <Button
-              onClick={() => handleAction(approveTransition.to)}
-              disabled={saving || transitioning !== null}
-            >
-              {transitioning === approveTransition.to ? 'Approving...' : 'Approve & Implement'}
-            </Button>
-          )}
-          {reviseTransition && (
-            <Button
-              variant="outline"
-              onClick={() => handleAction(reviseTransition.to)}
-              disabled={saving || transitioning !== null || !newComment.trim()}
-            >
-              {transitioning === reviseTransition.to ? 'Requesting...' : 'Request Plan Changes'}
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Design Review Section */
-function DesignReviewSection({
-  taskId,
-  designComments,
-  transitions,
-  transitioning,
-  onTransition,
-  onRefetch,
-}: {
-  taskId: string;
-  designComments: PlanComment[];
-  transitions: Transition[];
-  transitioning: string | null;
-  onTransition: (toStatus: string) => Promise<void> | void;
-  onRefetch: () => Promise<void> | void;
-}) {
-  const [newComment, setNewComment] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const approveTransition = transitions.find((t) => t.to === 'implementing');
-  const reviseTransition = transitions.find((t) => t.to === 'designing');
-
-  const handleAction = async (toStatus: string) => {
-    setSaving(true);
-    try {
-      if (newComment.trim()) {
-        const comment: PlanComment = {
-          author: 'admin',
-          content: newComment.trim(),
-          createdAt: Date.now(),
-        };
-        await window.api.tasks.update(taskId, {
-          technicalDesignComments: [...(designComments ?? []), comment],
-        });
-        setNewComment('');
-        await onRefetch();
-      }
-      await onTransition(toStatus);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card className="mt-4 border-blue-400">
-      <CardHeader className="py-3">
-        <CardTitle className="text-base">Design Review</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {designComments && designComments.length > 0 && (
-          <div className="space-y-2 mb-4">
-            {designComments.map((comment, i) => (
-              <div key={i} className="rounded-md bg-muted px-3 py-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold">{comment.author}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(comment.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <Textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Add feedback for the design agent..."
-          rows={3}
-          className="mb-3"
-        />
-
-        <div className="flex gap-2">
-          {approveTransition && (
-            <Button
-              onClick={() => handleAction(approveTransition.to)}
-              disabled={saving || transitioning !== null}
-            >
-              {transitioning === approveTransition.to ? 'Approving...' : 'Approve & Implement'}
-            </Button>
-          )}
-          {reviseTransition && (
-            <Button
-              variant="outline"
-              onClick={() => handleAction(reviseTransition.to)}
-              disabled={saving || transitioning !== null || !newComment.trim()}
-            >
-              {transitioning === reviseTransition.to ? 'Requesting...' : 'Request Design Changes'}
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Subtasks Section */
-function PhasedSubtasksSection({
-  taskId,
-  phases,
-  onUpdate,
-}: {
-  taskId: string;
-  phases: ImplementationPhase[];
-  onUpdate: () => void;
-}) {
-  const [expandedPhases, setExpandedPhases] = useState<Record<string, boolean>>(() => {
-    // Auto-expand the active phase
-    const initial: Record<string, boolean> = {};
-    for (const p of phases) {
-      initial[p.id] = p.status === 'in_progress';
-    }
-    return initial;
-  });
-
-  const togglePhase = (phaseId: string) => {
-    setExpandedPhases(prev => ({ ...prev, [phaseId]: !prev[phaseId] }));
-  };
-
-  const cycleSubtaskStatus = async (phaseIdx: number, subtaskIdx: number) => {
-    const order: SubtaskStatus[] = ['open', 'in_progress', 'done'];
-    const phase = phases[phaseIdx];
-    const current = phase.subtasks[subtaskIdx].status;
-    const next = order[(order.indexOf(current) + 1) % order.length];
-    const updatedPhases = phases.map((p, pi) =>
-      pi === phaseIdx
-        ? { ...p, subtasks: p.subtasks.map((s, si) => si === subtaskIdx ? { ...s, status: next } : s) }
-        : p
-    );
-    await window.api.tasks.update(taskId, { phases: updatedPhases });
-    onUpdate();
-  };
-
-  const totalSubtasks = phases.reduce((sum, p) => sum + p.subtasks.length, 0);
-  const totalDone = phases.reduce((sum, p) => sum + p.subtasks.filter(s => s.status === 'done').length, 0);
-  const completedPhases = phases.filter(p => p.status === 'completed').length;
-
-  const phaseStatusColor = (status: string) => {
-    if (status === 'completed') return '#22c55e';
-    if (status === 'in_progress') return '#3b82f6';
-    return '#9ca3af';
-  };
-
-  return (
-    <Card className="mt-4">
-      <CardHeader className="py-3 flex flex-row items-center justify-between">
-        <CardTitle className="text-base">
-          Implementation Phases
-          <span className="text-sm font-normal text-muted-foreground ml-2">
-            {completedPhases}/{phases.length} phases &middot; {totalDone}/{totalSubtasks} subtasks done
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Overall progress bar */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full bg-green-500 transition-all"
-              style={{ width: totalSubtasks > 0 ? `${(totalDone / totalSubtasks) * 100}%` : '0%' }}
-            />
-          </div>
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {totalSubtasks > 0 ? Math.round((totalDone / totalSubtasks) * 100) : 0}%
-          </span>
-        </div>
-
-        <div className="space-y-2">
-          {phases.map((phase, phaseIdx) => {
-            const phaseDone = phase.subtasks.filter(s => s.status === 'done').length;
-            const isExpanded = expandedPhases[phase.id] ?? false;
-
-            return (
-              <div key={phase.id} className="border rounded-md overflow-hidden">
-                {/* Phase header */}
-                <button
-                  onClick={() => togglePhase(phase.id)}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left"
-                >
-                  <span className="text-xs" style={{ color: phaseStatusColor(phase.status) }}>
-                    {isExpanded ? '\u25BC' : '\u25B6'}
-                  </span>
-                  <span
-                    className="inline-block w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: phaseStatusColor(phase.status) }}
-                  />
-                  <span className="text-sm font-medium flex-1 truncate">{phase.name}</span>
-                  <Badge
-                    variant={phase.status === 'completed' ? 'success' : phase.status === 'in_progress' ? 'default' : 'outline'}
-                    className="text-xs"
-                  >
-                    {phase.status.replace('_', ' ')}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {phaseDone}/{phase.subtasks.length}
-                  </span>
-                  {phase.prLink && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); window.api.shell.openInChrome(phase.prLink!); }}
-                      className="text-xs text-blue-500 hover:underline ml-1"
-                    >
-                      PR
-                    </button>
-                  )}
-                </button>
-
-                {/* Phase subtasks */}
-                {isExpanded && phase.subtasks.length > 0 && (
-                  <div className="px-3 pb-2 space-y-1">
-                    {phase.subtasks.map((st, stIdx) => (
-                      <div key={stIdx} className="flex items-center gap-2 group py-1 pl-4">
-                        <button
-                          onClick={() => cycleSubtaskStatus(phaseIdx, stIdx)}
-                          className="flex items-center justify-center w-4 h-4 rounded-full border-2 shrink-0 transition-colors"
-                          style={{
-                            borderColor: st.status === 'done' ? '#22c55e' : st.status === 'in_progress' ? '#3b82f6' : '#d1d5db',
-                            backgroundColor: st.status === 'done' ? '#22c55e' : 'transparent',
-                          }}
-                          title={`Status: ${st.status} (click to cycle)`}
-                        >
-                          {st.status === 'done' && (
-                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                              <path d="M2.5 6l2.5 2.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                          {st.status === 'in_progress' && (
-                            <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#3b82f6' }} />
-                          )}
-                        </button>
-                        <span
-                          className="text-sm flex-1"
-                          style={{
-                            textDecoration: st.status === 'done' ? 'line-through' : undefined,
-                            color: st.status === 'done' ? '#9ca3af' : undefined,
-                          }}
-                        >
-                          {st.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SubtasksSection({
-  taskId,
-  subtasks,
-  onUpdate,
-}: {
-  taskId: string;
-  subtasks: Subtask[];
-  onUpdate: () => void;
-}) {
-  const [newName, setNewName] = useState('');
-  const [adding, setAdding] = useState(false);
-
-  const updateSubtasks = useCallback(async (updated: Subtask[]) => {
-    await window.api.tasks.update(taskId, { subtasks: updated });
-    onUpdate();
-  }, [taskId, onUpdate]);
-
-  const handleAdd = async () => {
-    if (!newName.trim()) return;
-    setAdding(true);
-    try {
-      await updateSubtasks([...subtasks, { name: newName.trim(), status: 'open' }]);
-      setNewName('');
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const cycleStatus = (index: number) => {
-    const order: SubtaskStatus[] = ['open', 'in_progress', 'done'];
-    const current = subtasks[index].status;
-    const next = order[(order.indexOf(current) + 1) % order.length];
-    const updated = subtasks.map((s, i) => (i === index ? { ...s, status: next } : s));
-    updateSubtasks(updated);
-  };
-
-  const removeSubtask = (index: number) => {
-    updateSubtasks(subtasks.filter((_, i) => i !== index));
-  };
-
-  const doneCount = subtasks.filter((s) => s.status === 'done').length;
-
-  return (
-    <Card className="mt-4">
-      <CardHeader className="py-3 flex flex-row items-center justify-between">
-        <CardTitle className="text-base">
-          Subtasks
-          {subtasks.length > 0 && (
-            <span className="text-sm font-normal text-muted-foreground ml-2">
-              {doneCount}/{subtasks.length} done
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {subtasks.length > 0 && (
-          <div className="space-y-1 mb-3">
-            {subtasks.map((st, i) => (
-              <div key={i} className="flex items-center gap-2 group py-1">
-                <button
-                  onClick={() => cycleStatus(i)}
-                  className="flex items-center justify-center w-5 h-5 rounded-full border-2 shrink-0 transition-colors"
-                  style={{
-                    borderColor: st.status === 'done' ? '#22c55e' : st.status === 'in_progress' ? '#3b82f6' : '#d1d5db',
-                    backgroundColor: st.status === 'done' ? '#22c55e' : 'transparent',
-                  }}
-                  title={`Status: ${st.status} (click to cycle)`}
-                >
-                  {st.status === 'done' && (
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M2.5 6l2.5 2.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                  {st.status === 'in_progress' && (
-                    <span
-                      className="inline-block w-2 h-2 rounded-full animate-pulse"
-                      style={{ backgroundColor: '#3b82f6' }}
-                    />
-                  )}
-                </button>
-                <span
-                  className="text-sm flex-1"
-                  style={{
-                    textDecoration: st.status === 'done' ? 'line-through' : undefined,
-                    color: st.status === 'done' ? '#9ca3af' : undefined,
-                  }}
-                >
-                  {st.name}
-                </span>
-                <button
-                  onClick={() => removeSubtask(i)}
-                  className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity text-sm px-1"
-                  title="Remove subtask"
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Add a subtask..."
-            className="flex-1"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleAdd();
-            }}
-          />
-          <Button size="sm" onClick={handleAdd} disabled={adding || !newName.trim()}>
-            Add
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Dependencies Section — Blocked By + Blocks */
-function DependenciesSection({
-  taskId,
-  projectId,
-}: {
-  taskId: string;
-  projectId: string;
-}) {
-  const navigate = useNavigate();
-
-  const { data: blockedBy, refetch: refetchDeps } = useIpc<Task[]>(
-    () => window.api.tasks.dependencies(taskId),
-    [taskId],
-  );
-
-  const { data: blocks, refetch: refetchDependents } = useIpc<Task[]>(
-    () => window.api.tasks.dependents(taskId),
-    [taskId],
-  );
-
-  const { tasks: projectTasks } = useTasks({ projectId });
-
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [removing, setRemoving] = useState<string | null>(null);
-
-  const blockedByIds = new Set((blockedBy ?? []).map((t) => t.id));
-  const availableTasks = projectTasks.filter(
-    (t) => t.id !== taskId && !blockedByIds.has(t.id),
-  );
-
-  const handleAdd = async (depTaskId: string) => {
-    await window.api.tasks.addDependency(taskId, depTaskId);
-    setPickerOpen(false);
-    await refetchDeps();
-    await refetchDependents();
-  };
-
-  const handleRemove = async (depTaskId: string) => {
-    setRemoving(depTaskId);
-    try {
-      await window.api.tasks.removeDependency(taskId, depTaskId);
-      await refetchDeps();
-      await refetchDependents();
-    } finally {
-      setRemoving(null);
-    }
-  };
-
-  return (
-    <Card className="mt-4">
-      <CardHeader className="py-3">
-        <CardTitle className="text-base">Dependencies</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Blocked By */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Blocked By</span>
-            <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)}>
-              Add
-            </Button>
-          </div>
-          {(!blockedBy || blockedBy.length === 0) ? (
-            <p className="text-xs text-muted-foreground">No dependencies.</p>
-          ) : (
-            <div className="space-y-1">
-              {blockedBy.map((dep) => (
-                <div key={dep.id} className="flex items-center gap-2 group py-1">
-                  <Badge variant="outline" className="text-[10px] shrink-0">{dep.status}</Badge>
-                  <span
-                    className="text-sm text-blue-500 hover:underline cursor-pointer truncate flex-1"
-                    onClick={() => navigate(`/tasks/${dep.id}`)}
-                  >
-                    {dep.title}
-                  </span>
-                  <button
-                    onClick={() => handleRemove(dep.id)}
-                    disabled={removing === dep.id}
-                    className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity text-sm px-1"
-                    title="Remove dependency"
-                  >
-                    {removing === dep.id ? '...' : '\u00d7'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Blocks */}
-        <div>
-          <span className="text-sm font-medium text-muted-foreground block mb-2">Blocks</span>
-          {(!blocks || blocks.length === 0) ? (
-            <p className="text-xs text-muted-foreground">No tasks depend on this task.</p>
-          ) : (
-            <div className="space-y-1">
-              {blocks.map((dep) => (
-                <div key={dep.id} className="flex items-center gap-2 py-1">
-                  <Badge variant="outline" className="text-[10px] shrink-0">{dep.status}</Badge>
-                  <span
-                    className="text-sm text-blue-500 hover:underline cursor-pointer truncate"
-                    onClick={() => navigate(`/tasks/${dep.id}`)}
-                  >
-                    {dep.title}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Add Dependency Picker */}
-        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Dependency</DialogTitle>
-            </DialogHeader>
-            <DependencyPicker tasks={availableTasks} onSelect={handleAdd} />
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Simple searchable picker for selecting a task dependency */
-function DependencyPicker({
-  tasks,
-  onSelect,
-}: {
-  tasks: Task[];
-  onSelect: (taskId: string) => void;
-}) {
-  const [search, setSearch] = useState('');
-  const filtered = tasks.filter((t) =>
-    t.title.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  return (
-    <div className="py-2 space-y-3">
-      <Input
-        placeholder="Search tasks..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        autoFocus
-      />
-      <div className="max-h-60 overflow-y-auto space-y-1">
-        {filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">No matching tasks.</p>
-        ) : (
-          filtered.map((t) => (
-            <div
-              key={t.id}
-              className="flex items-center gap-2 px-2 py-2 rounded hover:bg-accent cursor-pointer"
-              onClick={() => onSelect(t.id)}
-            >
-              <Badge variant="outline" className="text-[10px] shrink-0">{t.status}</Badge>
-              <span className="text-sm truncate">{t.title}</span>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Markdown renderer for the Plan tab with tables, code blocks, and file links */
-function PlanMarkdown({ content }: { content: string }) {
-  return (
-    <div className="plan-markdown text-sm leading-relaxed">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          table: ({ children }) => (
-            <div className="overflow-x-auto my-3">
-              <table className="min-w-full border-collapse border border-border text-sm">
-                {children}
-              </table>
-            </div>
-          ),
-          thead: ({ children }) => (
-            <thead className="bg-muted">{children}</thead>
-          ),
-          th: ({ children }) => (
-            <th className="border border-border px-3 py-1.5 text-left font-medium">{children}</th>
-          ),
-          td: ({ children }) => (
-            <td className="border border-border px-3 py-1.5">{children}</td>
-          ),
-          code: ({ className, children, ...props }) => {
-            const isInline = !className;
-            if (isInline) {
-              return (
-                <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
-                  {children}
-                </code>
-              );
-            }
-            const lang = className?.replace('language-', '') ?? '';
-            return (
-              <div className="my-3 rounded-md border overflow-hidden">
-                {lang && (
-                  <div className="px-3 py-1 bg-muted border-b text-xs text-muted-foreground font-mono">
-                    {lang}
-                  </div>
-                )}
-                <pre className="p-3 overflow-x-auto bg-muted/30 text-xs">
-                  <code className="font-mono" {...props}>{children}</code>
-                </pre>
-              </div>
-            );
-          },
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:underline"
-            >
-              {children}
-            </a>
-          ),
-          h1: ({ children }) => <h1 className="text-xl font-bold mt-6 mb-2">{children}</h1>,
-          h2: ({ children }) => <h2 className="text-lg font-bold mt-5 mb-2">{children}</h2>,
-          h3: ({ children }) => <h3 className="text-base font-semibold mt-4 mb-1">{children}</h3>,
-          h4: ({ children }) => <h4 className="text-sm font-semibold mt-3 mb-1">{children}</h4>,
-          p: ({ children }) => <p className="my-2">{children}</p>,
-          ul: ({ children }) => <ul className="list-disc ml-5 my-2 space-y-1">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal ml-5 my-2 space-y-1">{children}</ol>,
-          li: ({ children }) => <li>{children}</li>,
-          blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-muted-foreground/30 pl-4 my-3 text-muted-foreground italic">
-              {children}
-            </blockquote>
-          ),
-          hr: () => <hr className="my-4 border-border" />,
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
-function ArtifactCard({ artifact }: { artifact: TaskArtifact }) {
-  const data = artifact.data as Record<string, unknown>;
-
-  if (artifact.type === 'pr') {
-    const url = data.url as string;
-    const number = data.number as number;
-    return (
-      <div className="flex items-center gap-3 rounded-md border px-4 py-3">
-        <span className="text-lg">&#x1F517;</span>
-        <div className="flex-1">
-          <div className="text-sm font-medium">Pull Request #{number}</div>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-blue-500 hover:underline break-all"
-          >
-            {url}
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  if (artifact.type === 'branch') {
-    const branch = data.branch as string;
-    return (
-      <div className="flex items-center gap-3 rounded-md border px-4 py-3">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-muted-foreground shrink-0">
-          <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Z" />
-        </svg>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium">Branch</div>
-          <code className="text-xs text-muted-foreground break-all">{branch}</code>
-        </div>
-      </div>
-    );
-  }
-
-  if (artifact.type === 'diff') {
-    const diff = data.diff as string;
-    const lines = diff.split('\n');
-    return (
-      <div className="rounded-md border overflow-hidden">
-        <div className="px-4 py-2 border-b bg-muted/50 flex items-center gap-2">
-          <span className="text-sm font-medium">Diff</span>
-          <span className="text-xs text-muted-foreground">({lines.length} lines)</span>
-        </div>
-        <pre className="text-xs p-3 overflow-x-auto max-h-80 overflow-y-auto">
-          {lines.map((line, i) => {
-            let color = 'inherit';
-            if (line.startsWith('+') && !line.startsWith('+++')) color = '#22c55e';
-            else if (line.startsWith('-') && !line.startsWith('---')) color = '#ef4444';
-            else if (line.startsWith('@@')) color = '#6b7280';
-            return <div key={i} style={{ color }}>{line || ' '}</div>;
-          })}
-        </pre>
-      </div>
-    );
-  }
-
-  // Fallback for unknown types
-  return (
-    <div className="flex items-start gap-2 rounded-md border px-4 py-3">
-      <Badge variant="outline">{artifact.type}</Badge>
-      <pre className="text-xs bg-muted p-2 rounded flex-1 overflow-x-auto">
-        {JSON.stringify(data, null, 2)}
-      </pre>
-    </div>
-  );
-}
-
-const CONTEXT_SOURCE_COLORS: Record<string, string> = {
-  agent: '#3b82f6',
-  reviewer: '#f59e0b',
-  'workflow-reviewer': '#e879f9',
-  system: '#6b7280',
-  user: '#8b5cf6',
-};
-
-function ContextEntryCard({ entry }: { entry: TaskContextEntry }) {
-  const sourceColor = CONTEXT_SOURCE_COLORS[entry.source] ?? '#6b7280';
-  return (
-    <div className="rounded-md border px-4 py-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span
-          className="px-2 py-0.5 rounded text-xs font-semibold text-white"
-          style={{ backgroundColor: sourceColor }}
-        >
-          {entry.source}
-        </span>
-        <span className="text-xs text-muted-foreground font-medium">
-          {entry.entryType.replace(/_/g, ' ')}
-        </span>
-        <span className="text-xs text-muted-foreground ml-auto">
-          {new Date(entry.createdAt).toLocaleString()}
-        </span>
-      </div>
-      <pre className="text-sm whitespace-pre-wrap break-words bg-muted p-3 rounded max-h-[400px] overflow-y-auto">
-        {entry.summary}
-      </pre>
     </div>
   );
 }
