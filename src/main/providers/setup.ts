@@ -62,6 +62,7 @@ import { registerPromptHandler } from '../handlers/prompt-handler';
 import { registerScmHandler } from '../handlers/scm-handler';
 import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
+import { TaskChatAgentService } from '../services/task-chat-agent-service';
 
 export interface AppServices {
   db: Database.Database;
@@ -92,6 +93,7 @@ export interface AppServices {
   workflowReviewSupervisor: WorkflowReviewSupervisor;
   chatMessageStore: IChatMessageStore;
   chatAgentService: ChatAgentService;
+  taskChatAgentService: TaskChatAgentService;
 }
 
 export function createAppServices(db: Database.Database): AppServices {
@@ -180,6 +182,9 @@ export function createAppServices(db: Database.Database): AppServices {
   // Chat agent service
   const chatAgentService = new ChatAgentService(chatMessageStore, projectStore);
 
+  // Task chat agent service
+  const taskChatAgentService = new TaskChatAgentService(chatMessageStore, taskStore, projectStore, pipelineStore);
+
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
   registerNotificationHandler(pipelineEngine, { notificationRouter });
@@ -219,5 +224,6 @@ export function createAppServices(db: Database.Database): AppServices {
     workflowReviewSupervisor,
     chatMessageStore,
     chatAgentService,
+    taskChatAgentService,
   };
 }

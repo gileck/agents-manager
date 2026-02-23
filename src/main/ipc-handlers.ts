@@ -736,6 +736,36 @@ export function registerIpcHandlers(services: AppServices): void {
   });
 
   // ============================================
+  // Task Chat Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.TASK_CHAT_SEND, async (_, taskId: string, message: string) => {
+    validateId(taskId);
+    if (!message || typeof message !== 'string') throw new Error('Message is required');
+    return services.taskChatAgentService.send(
+      taskId,
+      message,
+      (chunk) => sendToRenderer(IPC_CHANNELS.TASK_CHAT_OUTPUT, taskId, chunk),
+      (msg) => sendToRenderer(IPC_CHANNELS.TASK_CHAT_MESSAGE, taskId, msg),
+    );
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_CHAT_STOP, async (_, taskId: string) => {
+    validateId(taskId);
+    services.taskChatAgentService.stop(taskId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_CHAT_MESSAGES, async (_, taskId: string) => {
+    validateId(taskId);
+    return services.taskChatAgentService.getMessages(taskId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_CHAT_CLEAR, async (_, taskId: string) => {
+    validateId(taskId);
+    return services.taskChatAgentService.clearMessages(taskId);
+  });
+
+  // ============================================
   // Shell Operations
   // ============================================
 

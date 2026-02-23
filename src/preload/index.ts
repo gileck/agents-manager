@@ -123,6 +123,12 @@ const IPC_CHANNELS = {
   CHAT_OUTPUT: 'chat:output',
   CHAT_MESSAGE: 'chat:message',
   CHAT_COSTS: 'chat:costs',
+  TASK_CHAT_SEND: 'task-chat:send',
+  TASK_CHAT_STOP: 'task-chat:stop',
+  TASK_CHAT_MESSAGES: 'task-chat:messages',
+  TASK_CHAT_CLEAR: 'task-chat:clear',
+  TASK_CHAT_OUTPUT: 'task-chat:output',
+  TASK_CHAT_MESSAGE: 'task-chat:message',
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
   GIT_COMMIT_DETAIL: 'git:commit-detail',
@@ -387,6 +393,18 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COSTS),
   },
 
+  // Task chat operations
+  taskChat: {
+    send: (taskId: string, message: string): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_CHAT_SEND, taskId, message),
+    stop: (taskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_CHAT_STOP, taskId),
+    messages: (taskId: string): Promise<ChatMessage[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_CHAT_MESSAGES, taskId),
+    clear: (taskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_CHAT_CLEAR, taskId),
+  },
+
   // Shell operations
   shell: {
     openInChrome: (url: string): Promise<void> =>
@@ -429,6 +447,16 @@ const api = {
       const listener = (_: IpcRendererEvent, projectId: string, msg: AgentChatMessage) => callback(projectId, msg);
       ipcRenderer.on(IPC_CHANNELS.CHAT_MESSAGE, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_MESSAGE, listener);
+    },
+    taskChatOutput: (callback: (taskId: string, chunk: string) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string, chunk: string) => callback(taskId, chunk);
+      ipcRenderer.on(IPC_CHANNELS.TASK_CHAT_OUTPUT, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_CHAT_OUTPUT, listener);
+    },
+    taskChatMessage: (callback: (taskId: string, msg: AgentChatMessage) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string, msg: AgentChatMessage) => callback(taskId, msg);
+      ipcRenderer.on(IPC_CHANNELS.TASK_CHAT_MESSAGE, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_CHAT_MESSAGE, listener);
     },
     telegramBotLog: (callback: (projectId: string, entry: TelegramBotLogEntry) => void) => {
       const listener = (_: IpcRendererEvent, projectId: string, entry: TelegramBotLogEntry) => callback(projectId, entry);

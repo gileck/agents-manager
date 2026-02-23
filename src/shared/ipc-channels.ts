@@ -136,6 +136,14 @@ export const IPC_CHANNELS = {
   CHAT_MESSAGE: 'chat:message',
   CHAT_COSTS: 'chat:costs',
 
+  // Task Chat
+  TASK_CHAT_SEND: 'task-chat:send',
+  TASK_CHAT_STOP: 'task-chat:stop',
+  TASK_CHAT_MESSAGES: 'task-chat:messages',
+  TASK_CHAT_CLEAR: 'task-chat:clear',
+  TASK_CHAT_OUTPUT: 'task-chat:output',
+  TASK_CHAT_MESSAGE: 'task-chat:message',
+
   // Source Control (project-scoped)
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
