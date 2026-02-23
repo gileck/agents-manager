@@ -99,7 +99,7 @@ export function KanbanBoardPage() {
 
       if (!board) {
         // Create a default board with columns from the first pipeline
-        const firstPipeline = pipelines.find(p => p.taskType === 'task');
+        const firstPipeline = pipelines.find(p => p.taskType === 'agent') ?? pipelines[0];
         if (!firstPipeline) return;
 
         const defaultColumns: KanbanColumnType[] = firstPipeline.statuses.map((status, index) => ({
