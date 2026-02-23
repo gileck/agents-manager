@@ -59,7 +59,7 @@ export function ArtifactsCard({ artifacts }: ArtifactsCardProps) {
               const info = artifactLabel(artifact);
               return (
                 <div key={artifact.id} className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 shrink-0">
+                  <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded text-purple-400 shrink-0" style={{ backgroundColor: 'rgba(168, 85, 247, 0.1)' }}>
                     {info.type}
                   </span>
                   {info.url ? (
