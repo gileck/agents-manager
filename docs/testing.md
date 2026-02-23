@@ -1,3 +1,18 @@
+---
+title: Testing
+description: Test infrastructure, TestContext, factories, and best practices
+summary: 157 tests run in ~750ms via Vitest. Use createTestContext() for a full in-memory service graph. Use ctx.transitionTo() for manual transitions, ctx.scriptedAgent.setScript() to control agent behavior.
+priority: 2
+guidelines:
+  - "Always call ctx.cleanup() in afterEach to close the in-memory DB"
+  - "Use SEEDED_PIPELINES.length instead of hardcoded counts"
+  - "Call resetCounters() in beforeEach when using factories"
+  - "Use AGENT_PIPELINE.id for agent tests, SIMPLE_PIPELINE.id for basic flows"
+key_points:
+  - "npx vitest run — run all tests; npx vitest run <file> — run single file"
+  - "ctx.transitionTo(taskId, status) — throws with guard details on failure"
+  - "Pre-built scripts: happyPlan, happyImplement, humanInTheLoop"
+---
 # Testing
 
 ## Running Tests

@@ -1,0 +1,8 @@
+header: |
+  # Agents Manager — Claude Code Notes
+
+  This file provides Claude with context about the codebase. It is auto-generated from `docs/` files.
+  Run `yarn build:claude` to regenerate.
+docs_paths:
+  - docs/
+default_priority: 3

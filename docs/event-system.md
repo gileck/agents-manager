@@ -1,3 +1,13 @@
+---
+title: Event System
+description: Events, activity log, transition history, and debug timeline
+summary: Three log systems — activity log (per-task timeline), transition history (status change audit trail), and the debug timeline (detailed agent turn events). All stored in SQLite.
+priority: 4
+key_points:
+  - "Activity log: src/main/stores/activity-log-store.ts"
+  - "Transition history: recorded on every successful pipeline transition"
+  - "Debug timeline: agent turns, tool calls, and output chunks"
+---
 # Event System
 
 Events, activity log, transition history, and debug timeline.

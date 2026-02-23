@@ -1,3 +1,13 @@
+---
+title: CLI Native Bindings
+description: Dual native builds for Electron and Node ABI coexistence
+summary: better-sqlite3 requires separate builds for Electron (build/) and system Node (build-node/). Both are created by postinstall. The CLI selects the correct binary via the nativeBinding option.
+priority: 3
+key_points:
+  - "build/ is for Electron ABI; build-node/ is for system Node ABI"
+  - "Both built automatically by postinstall script"
+  - "NODE_MODULE_VERSION mismatch = wrong binary selected — check nativeBinding option"
+---
 # CLI Native Bindings (Electron + Node Coexistence)
 
 ## Problem

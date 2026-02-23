@@ -1,3 +1,13 @@
+---
+title: Workflow Service
+description: Central orchestration, activity logging, and prompt handling
+summary: WorkflowService is the single entry point for all business operations — task CRUD, transitions, agent management, prompt handling. All IPC handlers and CLI commands delegate to it.
+priority: 2
+key_points:
+  - "File: src/main/services/workflow-service.ts"
+  - "Interface: src/main/interfaces/workflow-service.ts"
+  - "All business logic goes here — never in IPC handlers or CLI commands"
+---
 # Workflow Service
 
 Central orchestration, activity logging, and prompt handling.

@@ -1,3 +1,13 @@
+---
+title: Architecture Overview
+description: System architecture, composition root, and the single-execution-engine principle
+summary: All business logic lives in src/main/services/ (WorkflowService). The Electron renderer and CLI are UI-only interfaces that share the same createAppServices(db) composition root and SQLite database.
+priority: 1
+key_points:
+  - "NEVER add business logic to the renderer or CLI — all logic goes in WorkflowService"
+  - "src/ is application code; template/ is framework infrastructure (DO NOT MODIFY)"
+  - "Both UIs use createAppServices(db) → same WorkflowService → same SQLite file"
+---
 # Architecture Overview
 
 System architecture, composition root, and the single-execution-engine principle.

@@ -1,3 +1,13 @@
+---
+title: CLI Reference
+description: The am command-line tool, commands, and project context
+summary: The am CLI is built with Commander.js and shares the same WorkflowService and SQLite database as the Electron app. It instantiates services via createAppServices(db) directly — no IPC needed.
+priority: 3
+key_points:
+  - "File: src/cli/index.ts"
+  - "Run via: npx agents-manager or am (if installed globally)"
+  - "CLI is UI-only — no business logic; delegates everything to WorkflowService"
+---
 # CLI Reference
 
 The `am` command-line tool, commands, and project context.

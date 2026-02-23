@@ -30,6 +30,7 @@
     "lint": "eslint src/ template/ tests/",
     "typecheck": "tsc --noEmit -p config/tsconfig.main.json && tsc --noEmit -p config/tsconfig.preload.json && tsc --noEmit -p config/tsconfig.renderer.json && tsc --noEmit -p config/tsconfig.cli.json",
     "checks": "yarn typecheck && yarn lint",
+    "build:claude": "npx tsx ~/.claude/skills/build-claude-md/index.ts CLAUDE.md",
     "test": "BETTER_SQLITE3_BINDING=node_modules/better-sqlite3/build-node/Release/better_sqlite3.node vitest run",
     "test:watch": "BETTER_SQLITE3_BINDING=node_modules/better-sqlite3/build-node/Release/better_sqlite3.node vitest",
     "test:coverage": "BETTER_SQLITE3_BINDING=node_modules/better-sqlite3/build-node/Release/better_sqlite3.node vitest run --coverage",

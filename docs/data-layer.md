@@ -1,3 +1,13 @@
+---
+title: Data Layer
+description: SQLite schema, stores, and migrations
+summary: better-sqlite3 with WAL mode. DB path resolves from --db flag, AM_DB_PATH env, or ~/Library/Application Support/agents-manager/agents-manager.db. Migrations run at startup via src/main/migrations.ts.
+priority: 3
+key_points:
+  - "All stores are in src/main/stores/ — task-store, project-store, pipeline-store, etc."
+  - "Migrations: src/main/migrations.ts — additive only, never destructive"
+  - "Cast db.prepare().all() results: as { field: type }[]"
+---
 # Data Layer
 
 SQLite schema, stores, and migrations.

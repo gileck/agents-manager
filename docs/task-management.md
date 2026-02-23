@@ -1,3 +1,13 @@
+---
+title: Task Management
+description: Tasks, dependencies, subtasks, features, and filtering
+summary: "Tasks are the core work unit, each bound to a project and pipeline. Tasks support dependencies (blockedBy), subtasks, and feature grouping. File: src/main/services/task-store.ts."
+priority: 3
+key_points:
+  - "Task fields: id, projectId, pipelineId, title, description, status, featureId"
+  - "Dependencies tracked via task_dependencies table (blockedBy relationship)"
+  - "Subtasks share the parent task's pipeline and project"
+---
 # Task Management
 
 Tasks, dependencies, subtasks, features, and filtering.

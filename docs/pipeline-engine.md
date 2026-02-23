@@ -1,3 +1,13 @@
+---
+title: Pipeline Engine
+description: State machine, transitions, guards, hooks, and seeded pipelines
+summary: "PipelineEngine drives task state transitions. Transitions have triggers (manual/agent/system), guards (blocking checks), and hooks (async side-effects). Two seeded pipelines: AGENT_PIPELINE and SIMPLE_PIPELINE."
+priority: 2
+key_points:
+  - "Guards are synchronous and block transitions; hooks are async side-effects after success"
+  - "Use AGENT_PIPELINE.id for agent workflow tests, SIMPLE_PIPELINE.id for basic flows"
+  - "File: src/main/services/pipeline-engine.ts"
+---
 # Pipeline Engine
 
 State machine, transitions, guards, hooks, and seeded pipelines.

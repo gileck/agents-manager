@@ -1,3 +1,13 @@
+---
+title: Agent System
+description: Agent types, execution lifecycle, prompts, validation, and context accumulation
+summary: ClaudeCodeAgent handles plan/implement/review phases; PrReviewerAgent handles code review. All agents extend BaseClaudeAgent. ScriptedAgent is the test mock with pre-written scripts.
+priority: 2
+key_points:
+  - "File: src/main/agents/ — ClaudeCodeAgent, PrReviewerAgent, ScriptedAgent"
+  - "BaseClaudeAgent.execute() accumulates context across turns"
+  - "Prompt templates live in src/main/agents/prompts/"
+---
 # Agent System
 
 Agent types, execution lifecycle, prompts, validation, and context accumulation.

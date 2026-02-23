@@ -1,3 +1,13 @@
+---
+title: Git & SCM Integration
+description: Worktrees, git operations, PR lifecycle, and branch strategy
+summary: LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<slug> convention.
+priority: 3
+key_points:
+  - "Interface: IWorktreeManager in src/main/interfaces/worktree-manager.ts"
+  - "Implementation: LocalWorktreeManager in src/main/services/local-worktree-manager.ts"
+  - "Branch naming: task/<taskId>/<slug>"
+---
 # Git & SCM Integration
 
 Worktrees, git operations, PR lifecycle, and branch strategy.

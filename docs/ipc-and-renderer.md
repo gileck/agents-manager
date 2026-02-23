@@ -1,3 +1,13 @@
+---
+title: IPC and Renderer
+description: IPC channels, renderer pages, hooks, and streaming
+summary: 57+ IPC channels defined in src/shared/ipc-channels.ts. Renderer pages in src/renderer/pages/. Custom hooks in src/renderer/hooks/ use window.api (the preload bridge) to call IPC handlers.
+priority: 3
+key_points:
+  - "IPC channels: src/shared/ipc-channels.ts"
+  - "Renderer calls window.api.<method>() — never direct DB access"
+  - "Streaming uses onMessage callback pattern for live agent output"
+---
 # IPC and Renderer
 
 IPC channels, renderer pages, hooks, and streaming.
