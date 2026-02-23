@@ -140,24 +140,24 @@ export class TaskChatAgentService {
     lines.push('');
     lines.push('## Capabilities');
     lines.push('- Read and explore project files (Read, Glob, Grep, LS tools)');
-    lines.push('- Run `am` CLI commands to manage THIS task (via Bash tool)');
+    lines.push('- Run `npx agents-manager` CLI commands to manage THIS task (via Bash tool)');
     lines.push('- Answer questions about the task, code, and project');
     lines.push('');
     lines.push('## Rules');
     lines.push('- You MUST NOT modify any files. Do not use Write, Edit, MultiEdit, or NotebookEdit tools.');
-    lines.push(`- Focus on task #${task.id}. Use \`am tasks get ${task.id}\` to refresh task state.`);
+    lines.push(`- Focus on task #${task.id}. Use \`npx agents-manager tasks get ${task.id}\` to refresh task state.`);
     lines.push('- Be concise and helpful. Format responses with markdown when useful.');
     lines.push('- When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.');
     lines.push('');
     lines.push('## Useful commands');
-    lines.push(`- am tasks get ${task.id}`);
-    lines.push(`- am tasks update ${task.id} --title/--description/--priority/--assignee`);
-    lines.push(`- am tasks transition ${task.id} <status>`);
-    lines.push(`- am tasks transitions ${task.id}`);
-    lines.push(`- am tasks subtask list/add/update/remove ${task.id}`);
-    lines.push(`- am deps list/add/remove ${task.id}`);
-    lines.push(`- am events list --task ${task.id}`);
-    lines.push(`- am prompts list --task ${task.id}`);
+    lines.push(`- npx agents-manager tasks get ${task.id}`);
+    lines.push(`- npx agents-manager tasks update ${task.id} --title/--description/--priority/--assignee`);
+    lines.push(`- npx agents-manager tasks transition ${task.id} <status>`);
+    lines.push(`- npx agents-manager tasks transitions ${task.id}`);
+    lines.push(`- npx agents-manager tasks subtask list/add/update/remove ${task.id}`);
+    lines.push(`- npx agents-manager deps list/add/remove ${task.id}`);
+    lines.push(`- npx agents-manager events list --task ${task.id}`);
+    lines.push(`- npx agents-manager prompts list --task ${task.id}`);
 
     return lines.join('\n');
   }
