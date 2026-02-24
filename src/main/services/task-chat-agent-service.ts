@@ -180,10 +180,8 @@ export class TaskChatAgentService {
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
 
-    const pendingToolIds: string[] = [];
-
     const emitMessage = (msg: AgentChatMessage) => {
-      try { onMessage?.(msg); } catch { /* IPC delivery failure is non-fatal */ }
+      try { onMessage?.(msg); } catch (err) { console.warn('[TaskChatAgentService] emitMessage failed:', err); }
     };
 
     try {
@@ -218,7 +216,6 @@ export class TaskChatAgentService {
               emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
             } else if (block.type === 'tool_use') {
               const toolBlock = block as SdkToolUseBlock & { id?: string };
-              if (toolBlock.id) pendingToolIds.push(toolBlock.id);
               const toolSummary = `\n> Tool: ${block.name}\n`;
               onOutput(toolSummary);
               emitMessage({
@@ -232,6 +229,11 @@ export class TaskChatAgentService {
           }
         } else if (message.type === 'result') {
           const resultMsg = message as SdkResultMessage;
+          if (resultMsg.errors?.length) {
+            const errorText = `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
+            onOutput(errorText);
+            emitMessage({ type: 'assistant_text', text: errorText, timestamp: Date.now() });
+          }
           costInputTokens = resultMsg.usage?.input_tokens;
           costOutputTokens = resultMsg.usage?.output_tokens;
           if (costInputTokens != null && costOutputTokens != null) {
@@ -242,20 +244,26 @@ export class TaskChatAgentService {
               timestamp: Date.now(),
             });
           }
-        } else {
-          const raw = message as unknown as Record<string, unknown>;
-          if (raw.type === 'tool_result' || raw.subtype === 'tool_result') {
-            const resultContent = (typeof raw.result === 'string' ? raw.result : '')
-              || (typeof raw.summary === 'string' ? raw.summary : '')
-              || '(no output)';
-            const matchedToolId = pendingToolIds.shift();
-            emitMessage({
-              type: 'tool_result',
-              toolId: matchedToolId,
-              result: resultContent,
-              timestamp: Date.now(),
-            });
+        } else if (message.type === 'user') {
+          // SDK emits tool results as SDKUserMessage with tool_result content blocks
+          const userMsg = message as unknown as { message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown }> } };
+          if (!userMsg.message?.content) {
+            console.warn('[TaskChatAgentService] user message with unexpected structure:', JSON.stringify(message).slice(0, 200));
+          } else {
+            for (const block of userMsg.message.content) {
+              if (block.type === 'tool_result' && block.tool_use_id) {
+                const resultContent = typeof block.content === 'string' ? block.content
+                  : (Array.isArray(block.content) ? block.content.map((b: { text?: string }) => b.text || '').join('') : '(no output)');
+                emitMessage({
+                  type: 'tool_result',
+                  toolId: block.tool_use_id,
+                  result: resultContent,
+                  timestamp: Date.now(),
+                });
+              }
+            }
           }
+        } else {
           const otherMsg = message as SdkOtherMessage;
           if (otherMsg.message?.content) {
             for (const block of otherMsg.message.content) {
@@ -269,16 +277,23 @@ export class TaskChatAgentService {
         }
       }
     } finally {
-      this.runningControllers.delete(taskId);
+      // Only delete if this is still the active controller (avoids race with a new send())
+      if (this.runningControllers.get(taskId) === abortController) {
+        this.runningControllers.delete(taskId);
+      }
 
       if (resultText.trim()) {
-        await this.chatMessageStore.addMessage({
-          projectId: scopeKey,
-          role: 'assistant',
-          content: resultText,
-          costInputTokens,
-          costOutputTokens,
-        });
+        try {
+          await this.chatMessageStore.addMessage({
+            projectId: scopeKey,
+            role: 'assistant',
+            content: resultText,
+            costInputTokens,
+            costOutputTokens,
+          });
+        } catch (persistErr) {
+          console.error('[TaskChatAgentService] Failed to persist assistant response:', persistErr);
+        }
       }
 
       onOutput(CHAT_COMPLETE_SENTINEL);

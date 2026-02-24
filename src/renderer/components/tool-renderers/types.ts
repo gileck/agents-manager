@@ -1,4 +1,4 @@
-import type { AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../../shared/types';
+import type { AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
 
 export interface ToolRendererProps {
   toolUse: AgentChatMessageToolUse;

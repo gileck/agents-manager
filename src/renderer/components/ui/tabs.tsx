@@ -85,9 +85,10 @@ interface TabsContentProps {
   value: string;
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-function TabsContent({ value, children, className }: TabsContentProps) {
+function TabsContent({ value, children, className, style }: TabsContentProps) {
   const { value: selectedValue } = useTabsContext();
 
   if (selectedValue !== value) {
@@ -100,6 +101,7 @@ function TabsContent({ value, children, className }: TabsContentProps) {
         'mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         className
       )}
+      style={style}
     >
       {children}
     </div>

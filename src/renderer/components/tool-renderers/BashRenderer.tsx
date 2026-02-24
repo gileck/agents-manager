@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ToolRendererProps } from './types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 
 function parseSummary(input: string): { command: string; description?: string } {
   try {
@@ -25,6 +26,7 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
   const { command, description } = parseSummary(toolUse.input);
   const shortCmd = command.length > 60 ? command.slice(0, 60) + '...' : command;
   const duration = toolResult ? toolResult.timestamp - toolUse.timestamp : null;
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
     <div className="border border-border rounded my-1 overflow-hidden">
@@ -44,18 +46,39 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
       </button>
       {expanded && toolResult && (
         <div className="border-t border-border">
-          <pre className="text-xs bg-muted p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
-            {toolResult.result.length > 3000
-              ? toolResult.result.slice(0, 3000) + '\n... (truncated)'
-              : toolResult.result}
+          <pre className="text-xs bg-muted p-2 overflow-x-auto whitespace-pre-wrap" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            {toolResult.result}
           </pre>
+          {toolResult.result.length > 500 && (
+            <div className="px-2 py-1 border-t border-border">
+              <button
+                className="text-xs text-primary hover:underline"
+                onClick={(e) => { e.stopPropagation(); setDialogOpen(true); }}
+              >
+                View Full Output
+              </button>
+            </div>
+          )}
         </div>
       )}
-      {expanded && !toolResult && (
+      {!expanded && !toolResult && (
         <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
           Running...
         </div>
       )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-4xl" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">
+              <span className="text-green-500">$ </span>{command}
+            </DialogTitle>
+          </DialogHeader>
+          <pre className="text-xs bg-muted p-3 rounded overflow-auto whitespace-pre-wrap" style={{ flex: 1, minHeight: 0 }}>
+            {toolResult?.result}
+          </pre>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

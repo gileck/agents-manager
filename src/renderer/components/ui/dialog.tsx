@@ -55,9 +55,10 @@ function DialogTrigger({ children, asChild }: DialogTriggerProps) {
 interface DialogContentProps {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-function DialogContent({ children, className }: DialogContentProps) {
+function DialogContent({ children, className, style }: DialogContentProps) {
   const { open, onOpenChange } = useDialogContext();
 
   React.useEffect(() => {
@@ -88,8 +89,8 @@ function DialogContent({ children, className }: DialogContentProps) {
         onClick={() => onOpenChange(false)}
       />
       {/* Content */}
-      <div className={cn("fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg", className)}>
-        <div>{children}</div>
+      <div className={cn("fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg", className)} style={style}>
+        {children}
         <button
           type="button"
           onClick={() => onOpenChange(false)}

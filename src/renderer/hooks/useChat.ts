@@ -46,13 +46,11 @@ export function useChat(projectId: string | null) {
       if (incomingProjectId !== projectId) return;
 
       if (chunk === CHAT_COMPLETE_SENTINEL) {
+        if (!streamingRef.current) return; // discard stale sentinel from aborted agent
         streamingRef.current = false;
         setIsStreaming(false);
-        setStreamingMessages([]);
-        // Reload messages from DB
-        window.api.chat.messages(projectId)
-          .then(setDbMessages)
-          .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
+        // Keep streaming messages as-is (they have the full turn including tools + text).
+        // DB reload happens on next sendMessage to avoid race conditions.
         return;
       }
 
@@ -81,13 +79,18 @@ export function useChat(projectId: string | null) {
     if (!projectId || !message.trim()) return;
 
     setError(null);
+    // Reload DB to capture previous turn's persisted messages, then clear streaming
+    try {
+      const fresh = await window.api.chat.messages(projectId);
+      setDbMessages(fresh);
+    } catch (err) { console.warn('[useChat] DB reload failed, using cached state:', err); }
     setStreamingMessages([]);
+    // Disarm stale sentinels before arming for new turn
+    streamingRef.current = false;
     setIsStreaming(true);
-    streamingRef.current = true;
 
     try {
       const { userMessage } = await window.api.chat.send(projectId, message);
-      // Optimistically add user message
       setDbMessages((prev) => [...prev, userMessage]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -98,6 +101,8 @@ export function useChat(projectId: string | null) {
 
   const stopChat = useCallback(() => {
     if (!projectId) return;
+    streamingRef.current = false;
+    setIsStreaming(false);
     window.api.chat.stop(projectId).catch((err: Error) => {
       setError(`Failed to stop chat: ${err.message}`);
     });
@@ -107,6 +112,7 @@ export function useChat(projectId: string | null) {
     if (!projectId) return;
     try {
       await window.api.chat.clear(projectId);
+      streamingRef.current = false;
       setDbMessages([]);
       setStreamingMessages([]);
       setIsStreaming(false);

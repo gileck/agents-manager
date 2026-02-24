@@ -22,8 +22,6 @@ export function useTaskChat(taskId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const streamingRef = useRef(false);
-  // Session counter to ignore stale sentinels from aborted previous agents
-  const sessionRef = useRef(0);
 
   // Load messages on mount or taskId change
   useEffect(() => {
@@ -52,10 +50,8 @@ export function useTaskChat(taskId: string | null) {
         if (!streamingRef.current) return;
         streamingRef.current = false;
         setIsStreaming(false);
-        setStreamingMessages([]);
-        window.api.taskChat.messages(taskId)
-          .then(setDbMessages)
-          .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
+        // Keep streaming messages as-is (they have the full turn including tools + text).
+        // DB reload happens on next sendMessage to avoid race conditions.
         return;
       }
 
@@ -83,10 +79,12 @@ export function useTaskChat(taskId: string | null) {
   const sendMessage = useCallback(async (message: string) => {
     if (!taskId || !message.trim()) return;
 
-    // Bump session so stale sentinels from aborted agents are ignored
-    sessionRef.current += 1;
-
     setError(null);
+    // Reload DB to capture previous turn's persisted messages, then clear streaming
+    try {
+      const fresh = await window.api.taskChat.messages(taskId);
+      setDbMessages(fresh);
+    } catch (err) { console.warn('[useTaskChat] DB reload failed, using cached state:', err); }
     setStreamingMessages([]);
     // Reset streamingRef before setting isStreaming so that a stale sentinel
     // arriving between now and the first chunk of the new stream is ignored
@@ -105,6 +103,8 @@ export function useTaskChat(taskId: string | null) {
 
   const stopChat = useCallback(() => {
     if (!taskId) return;
+    streamingRef.current = false;
+    setIsStreaming(false);
     window.api.taskChat.stop(taskId).catch((err: Error) => {
       setError(`Failed to stop chat: ${err.message}`);
     });
@@ -114,6 +114,7 @@ export function useTaskChat(taskId: string | null) {
     if (!taskId) return;
     try {
       await window.api.taskChat.clear(taskId);
+      streamingRef.current = false;
       setDbMessages([]);
       setStreamingMessages([]);
       setIsStreaming(false);

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
 import { MarkdownContent } from '../chat/MarkdownContent';
-import { getToolRenderer } from './tool-renderers';
+import { getToolRenderer } from '../tool-renderers';
 import { TodoPanel, type TodoItem } from './TodoPanel';
 
 interface RenderedOutputPanelProps {
@@ -74,8 +74,16 @@ export function RenderedOutputPanel({ messages, isRunning, startedAt, showTimest
         </span>
       );
     };
-    let i = 0;
-    while (i < messages.length) {
+    // Pre-build toolId → toolResult map so parallel tool calls get matched
+    const resultMap = new Map<string, AgentChatMessageToolResult>();
+    for (const msg of messages) {
+      if (msg.type === 'tool_result' && msg.toolId) {
+        resultMap.set(msg.toolId, msg as AgentChatMessageToolResult);
+      }
+    }
+    const matchedResultIds = new Set<string>();
+
+    for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
 
       if (msg.type === 'assistant_text') {
@@ -89,38 +97,32 @@ export function RenderedOutputPanel({ messages, isRunning, startedAt, showTimest
         );
       } else if (msg.type === 'tool_use') {
         const toolUse = msg as AgentChatMessageToolUse;
-        const toolUseIdx = i;
-        let toolResult: AgentChatMessageToolResult | undefined;
-        if (i + 1 < messages.length && messages[i + 1].type === 'tool_result') {
-          const candidate = messages[i + 1] as AgentChatMessageToolResult;
-          if (candidate.toolId === toolUse.toolId || !toolUse.toolId) {
-            toolResult = candidate;
-            i++;
-          }
-        }
+        const toolResult = toolUse.toolId ? resultMap.get(toolUse.toolId) : undefined;
+        if (toolResult?.toolId) matchedResultIds.add(toolResult.toolId);
         const Renderer = getToolRenderer(toolUse.toolName);
         nodes.push(
-          <div key={toolUseIdx} className="flex">
+          <div key={i} className="flex">
             {ts(toolUse.timestamp)}
             <div className="flex-1 min-w-0">
               <Renderer
                 toolUse={toolUse}
                 toolResult={toolResult}
-                expanded={expandedTools.has(toolUseIdx)}
-                onToggle={() => toggleTool(toolUseIdx)}
+                expanded={expandedTools.has(i)}
+                onToggle={() => toggleTool(i)}
               />
             </div>
           </div>
         );
       } else if (msg.type === 'tool_result') {
-        // Orphaned tool_result
+        const result = msg as AgentChatMessageToolResult;
+        if (result.toolId && matchedResultIds.has(result.toolId)) continue; // already paired
         nodes.push(
           <div key={i} className="flex">
             {ts(msg.timestamp)}
             <div className="flex-1 min-w-0 border border-border rounded p-2 my-1 text-xs">
               <span className="text-muted-foreground">Tool result:</span>
               <pre className="mt-1 overflow-x-auto whitespace-pre-wrap max-h-24 overflow-y-auto text-xs">
-                {msg.result.length > 1000 ? msg.result.slice(0, 1000) + '\n...' : msg.result}
+                {result.result.length > 1000 ? result.result.slice(0, 1000) + '\n...' : result.result}
               </pre>
             </div>
           </div>
@@ -147,8 +149,6 @@ export function RenderedOutputPanel({ messages, isRunning, startedAt, showTimest
         );
       }
       // usage messages are skipped (shown in sidebar)
-
-      i++;
     }
     return nodes;
   }, [messages, expandedTools, toggleTool, showTimestamps, startedAt]);

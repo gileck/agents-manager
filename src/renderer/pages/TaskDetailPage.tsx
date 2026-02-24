@@ -619,8 +619,8 @@ export function TaskDetailPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="chat">
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', margin: '-20px -24px 0' }}>
+        <TabsContent value="chat" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, margin: '-20px -24px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 16px 0', flexShrink: 0 }}>
               {taskChat.messages.length > 0 && (
                 <button
@@ -631,7 +631,7 @@ export function TaskDetailPage() {
                 </button>
               )}
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <AgentChat
                 messages={taskChat.messages}
                 isRunning={taskChat.isStreaming}

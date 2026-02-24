@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
-import { ToolCallBlock } from './ToolCallBlock';
+import { getToolRenderer } from '../tool-renderers';
 
 interface ChatMessageListProps {
   messages: AgentChatMessage[];
@@ -10,70 +10,87 @@ interface ChatMessageListProps {
 
 export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
+
+  const toggleTool = useCallback((index: number) => {
+    setExpandedTools((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  // Group consecutive tool_use + tool_result pairs by toolId
-  const rendered: React.ReactNode[] = [];
-  let i = 0;
-  while (i < messages.length) {
-    const msg = messages[i];
-
-    if (msg.type === 'assistant_text') {
-      rendered.push(
-        <div key={i} className="py-2">
-          <MarkdownContent content={msg.text} />
-        </div>
-      );
-    } else if (msg.type === 'tool_use') {
-      // Look ahead for a matching tool_result
-      const toolUse = msg as AgentChatMessageToolUse;
-      const toolUseIdx = i; // stable key before potential increment
-      let toolResult: AgentChatMessageToolResult | undefined;
-      if (i + 1 < messages.length && messages[i + 1].type === 'tool_result') {
-        const candidate = messages[i + 1] as AgentChatMessageToolResult;
-        if (candidate.toolId === toolUse.toolId || !toolUse.toolId) {
-          toolResult = candidate;
-          i++; // skip the tool_result since we pair it
-        }
+  const rendered = useMemo(() => {
+    // Pre-build toolId → toolResult map so parallel tool calls get matched
+    const resultMap = new Map<string, AgentChatMessageToolResult>();
+    for (const msg of messages) {
+      if (msg.type === 'tool_result' && msg.toolId) {
+        resultMap.set(msg.toolId, msg as AgentChatMessageToolResult);
       }
-      rendered.push(
-        <ToolCallBlock key={toolUseIdx} toolUse={toolUse} toolResult={toolResult} />
-      );
-    } else if (msg.type === 'tool_result') {
-      // Orphaned tool_result (no preceding tool_use match)
-      rendered.push(
-        <div key={i} className="border border-border rounded p-2 my-2 text-xs">
-          <span className="text-muted-foreground">Tool result:</span>
-          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
-            {msg.result.length > 2000 ? msg.result.slice(0, 2000) + '\n...' : msg.result}
-          </pre>
-        </div>
-      );
-    } else if (msg.type === 'user') {
-      rendered.push(
-        <div key={i} className="flex justify-end py-2">
-          <div className="bg-primary text-primary-foreground rounded-lg px-4 py-2 max-w-[80%]">
-            <p className="text-sm">{msg.text}</p>
-          </div>
-        </div>
-      );
-    } else if (msg.type === 'status') {
-      rendered.push(
-        <div key={i} className="text-center py-2">
-          <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
-            {msg.message}
-          </span>
-        </div>
-      );
-    } else if (msg.type === 'usage') {
-      // Usage messages are rendered in the sidebar, not inline
     }
+    const matchedResultIds = new Set<string>();
 
-    i++;
-  }
+    const nodes: React.ReactNode[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+
+      if (msg.type === 'assistant_text') {
+        nodes.push(
+          <div key={i} className="py-2">
+            <MarkdownContent content={msg.text} />
+          </div>
+        );
+      } else if (msg.type === 'tool_use') {
+        const toolUse = msg as AgentChatMessageToolUse;
+        const toolResult = toolUse.toolId ? resultMap.get(toolUse.toolId) : undefined;
+        if (toolResult?.toolId) matchedResultIds.add(toolResult.toolId);
+        const Renderer = getToolRenderer(toolUse.toolName);
+        nodes.push(
+          <Renderer
+            key={i}
+            toolUse={toolUse}
+            toolResult={toolResult}
+            expanded={expandedTools.has(i)}
+            onToggle={() => toggleTool(i)}
+          />
+        );
+      } else if (msg.type === 'tool_result') {
+        const result = msg as AgentChatMessageToolResult;
+        if (result.toolId && matchedResultIds.has(result.toolId)) continue; // already paired
+        nodes.push(
+          <div key={i} className="border border-border rounded p-2 my-2 text-xs">
+            <span className="text-muted-foreground">Tool result:</span>
+            <pre className="mt-1 overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
+              {result.result.length > 2000 ? result.result.slice(0, 2000) + '\n...' : result.result}
+            </pre>
+          </div>
+        );
+      } else if (msg.type === 'user') {
+        nodes.push(
+          <div key={i} className="flex justify-end py-2">
+            <div className="bg-primary text-primary-foreground rounded-lg px-4 py-2 max-w-[80%]">
+              <p className="text-sm">{msg.text}</p>
+            </div>
+          </div>
+        );
+      } else if (msg.type === 'status') {
+        nodes.push(
+          <div key={i} className="text-center py-2">
+            <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
+              {msg.message}
+            </span>
+          </div>
+        );
+      }
+      // usage messages are skipped
+    }
+    return nodes;
+  }, [messages, expandedTools, toggleTool]);
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-2">

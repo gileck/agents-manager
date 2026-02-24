@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ToolRendererProps } from './types';
-import type { TodoItem } from '../TodoPanel';
+import type { TodoItem } from '../agent-run/TodoPanel';
 import { ToolResultPreview } from './ToolResultPreview';
 
 function parseTodos(input: string): TodoItem[] {
