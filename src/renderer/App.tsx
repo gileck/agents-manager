@@ -22,6 +22,7 @@ import { SourceControlPage } from './pages/SourceControlPage';
 import { KanbanBoardPage } from './pages/KanbanBoardPage';
 import { useTheme } from '@template/renderer/hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
+import { useRouteRestore } from './hooks/useRouteRestore';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/toaster';
@@ -33,6 +34,8 @@ function AppRoutes() {
   useTheme();
   // Initialize custom theme overrides (CSS variable customizations)
   useThemeConfig();
+  // Restore last visited route on app start and save on navigation
+  useRouteRestore();
 
   useEffect(() => {
     // Listen for navigation events from main process

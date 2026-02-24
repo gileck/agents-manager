@@ -38,6 +38,7 @@ import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
 import { PlanReviewSection } from '../components/task-detail/PlanReviewSection';
 import { DesignReviewSection } from '../components/task-detail/DesignReviewSection';
 import type { QuestionResponse } from '../components/prompts/QuestionForm';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -123,7 +124,7 @@ export function TaskDetailPage() {
   }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
 
   const initialTab = task?.status === 'plan_review' ? 'plan' : task?.status === 'design_review' ? 'design' : 'details';
-  const [tab, setTab] = useState(initialTab);
+  const [tab, setTab] = useLocalStorage(`taskDetail.tab.${id}`, initialTab);
 
   // Auto-switch to relevant tab when entering review statuses
   useEffect(() => {

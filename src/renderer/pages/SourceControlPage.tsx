@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import type { GitLogEntry, GitCommitDetail } from '../../shared/types';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 function fileStatusIcon(status: string) {
   switch (status) {
@@ -135,7 +136,7 @@ function CommitRow({ commit, projectId }: CommitRowProps) {
 export function SourceControlPage() {
   const { projects, loading: projectsLoading } = useProjects();
   const projectsWithPath = projects.filter((p) => p.path);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useLocalStorage<string | null>('sourceControl.selectedProjectId', null);
 
   // Auto-select first project with a path
   const activeProjectId = selectedProjectId ?? projectsWithPath[0]?.id ?? null;

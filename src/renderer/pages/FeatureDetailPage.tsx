@@ -20,6 +20,7 @@ import {
   buildPipelineMap, computeFeatureStatus, computeDependencyLayers, formatRelativeTimestamp,
 } from '../components/tasks/task-helpers';
 import type { Task, FeatureStatus, FeatureUpdateInput, TaskCreateInput, AppSettings } from '../../shared/types';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 const STATUS_COLORS: Record<FeatureStatus, { bg: string; text: string; label: string }> = {
   open: { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-700 dark:text-gray-300', label: 'Open' },
@@ -58,7 +59,7 @@ export function FeatureDetailPage() {
   const [creatingTask, setCreatingTask] = useState(false);
 
   // View toggle: list vs layers
-  const [viewMode, setViewMode] = useState<'list' | 'layers'>('list');
+  const [viewMode, setViewMode] = useLocalStorage<'list' | 'layers'>('featureDetail.viewMode', 'list');
 
   // Dependency layers data
   const [depsMap, setDepsMap] = useState<Map<string, string[]>>(new Map());

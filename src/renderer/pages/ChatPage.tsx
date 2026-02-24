@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Trash2, FileText, MessageSquare } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useChat } from '../hooks/useChat';
 import { AgentChat } from '../components/chat/AgentChat';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 export function ChatPage() {
   const { currentProjectId, currentProject } = useCurrentProject();
@@ -18,7 +19,7 @@ export function ChatPage() {
     summarizeChat,
     tokenUsage,
   } = useChat(currentProjectId);
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [showSidebar, setShowSidebar] = useLocalStorage('chat.showSidebar', false);
 
   if (!currentProjectId) {
     return (

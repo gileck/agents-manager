@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { calculateCost, formatCost, formatTokens } from '../../shared/cost-utils';
 import type { AgentRun, Task } from '../../shared/types';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 type TimeGranularity = 'day' | 'week' | 'month';
 type TaskSortField = 'cost' | 'inputTokens' | 'outputTokens' | 'runs';
@@ -48,9 +49,9 @@ export function CostPage() {
     []
   );
 
-  const [timeGranularity, setTimeGranularity] = useState<TimeGranularity>('day');
-  const [taskSortField, setTaskSortField] = useState<TaskSortField>('cost');
-  const [taskSortDir, setTaskSortDir] = useState<SortDir>('desc');
+  const [timeGranularity, setTimeGranularity] = useLocalStorage<TimeGranularity>('cost.timeGranularity', 'day');
+  const [taskSortField, setTaskSortField] = useLocalStorage<TaskSortField>('cost.taskSortField', 'cost');
+  const [taskSortDir, setTaskSortDir] = useLocalStorage<SortDir>('cost.taskSortDir', 'desc');
 
   const runs = allRuns ?? [];
   const taskList = tasks ?? [];

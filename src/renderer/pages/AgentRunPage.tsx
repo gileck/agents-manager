@@ -16,6 +16,7 @@ import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
 import type { AgentRun, Task, AgentChatMessage } from '../../shared/types';
 import { messagesToRawText } from '../../shared/agent-message-utils';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
   plan_complete: 'Plan is ready for review. Go to task to review and approve.',
@@ -123,16 +124,16 @@ export function AgentRunPage() {
   }, [run?.status, fetchGit]);
 
   // --- Tab state ---
-  const [activeTab, setActiveTab] = useState('output');
+  const [activeTab, setActiveTab] = useLocalStorage('agentRun.activeTab', 'output');
 
   // --- Section visibility ---
-  const [metadataCollapsed, setMetadataCollapsed] = useState(false);
+  const [metadataCollapsed, setMetadataCollapsed] = useLocalStorage('agentRun.metadataCollapsed', false);
 
   // --- Sidebar toggle (default open so users see live token usage) ---
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showSidebar, setShowSidebar] = useLocalStorage('agentRun.showSidebar', true);
 
   // --- Output mode (raw vs rendered) ---
-  const [outputMode, setOutputMode] = useState<OutputMode>('raw');
+  const [outputMode, setOutputMode] = useLocalStorage<OutputMode>('agentRun.outputMode', 'raw');
 
   // --- Actions ---
   const [restarting, setRestarting] = useState(false);

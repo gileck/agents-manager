@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -9,6 +9,7 @@ import { useThemeConfig } from '../hooks/useThemeConfig';
 import { THEME_PRESETS, COLOR_GROUPS, COLOR_LABELS } from '../theme-presets';
 import type { ThemeColors } from '../../shared/types';
 import { Check, RotateCcw, Palette } from 'lucide-react';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 const RADIUS_OPTIONS = ['0rem', '0.25rem', '0.5rem', '0.75rem', '1rem'];
 
@@ -21,7 +22,7 @@ export function ThemePage() {
     updateRadius,
   } = useThemeConfig();
 
-  const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+  const [colorMode, setColorMode] = useLocalStorage<'light' | 'dark'>('theme.colorMode', 'light');
 
   const currentColors = colorMode === 'light' ? themeConfig.colors : themeConfig.darkColors;
 
