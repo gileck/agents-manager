@@ -791,6 +791,44 @@ export function registerIpcHandlers(services: AppServices): void {
     }
   });
 
+  registerIpcHandler(IPC_CHANNELS.OPEN_IN_ITERM, async (_, dirPath: string) => {
+    if (!dirPath || typeof dirPath !== 'string') throw new Error('Invalid directory path');
+    const { isAbsolute } = await import('path');
+    if (!isAbsolute(dirPath)) throw new Error('Path must be absolute');
+    const { existsSync } = await import('fs');
+    if (!existsSync(dirPath)) throw new Error(`Directory does not exist: ${dirPath}`);
+    const { execFile: execFileCb } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFileCb);
+    const env = (await import('./services/shell-env')).getShellEnv();
+    const script = `
+      on run argv
+        set dirPath to item 1 of argv
+        tell application "iTerm"
+          activate
+          set newWindow to (create window with default profile)
+          tell current session of newWindow
+            write text "cd " & quoted form of dirPath
+          end tell
+        end tell
+      end run
+    `;
+    await execFileAsync('osascript', ['-e', script, dirPath], { env });
+  });
+
+  registerIpcHandler(IPC_CHANNELS.OPEN_IN_VSCODE, async (_, dirPath: string) => {
+    if (!dirPath || typeof dirPath !== 'string') throw new Error('Invalid directory path');
+    const { isAbsolute } = await import('path');
+    if (!isAbsolute(dirPath)) throw new Error('Path must be absolute');
+    const { existsSync } = await import('fs');
+    if (!existsSync(dirPath)) throw new Error(`Directory does not exist: ${dirPath}`);
+    const { execFile: execFileCb } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFileCb);
+    const env = (await import('./services/shell-env')).getShellEnv();
+    await execFileAsync('code', [dirPath], { env });
+  });
+
   // ============================================
   // Source Control Operations (project-scoped)
   // ============================================

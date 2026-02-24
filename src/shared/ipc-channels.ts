@@ -125,6 +125,8 @@ export const IPC_CHANNELS = {
 
   // Shell
   OPEN_IN_CHROME: 'shell:open-in-chrome',
+  OPEN_IN_ITERM: 'shell:open-in-iterm',
+  OPEN_IN_VSCODE: 'shell:open-in-vscode',
 
   // Chat
   CHAT_SEND: 'chat:send',

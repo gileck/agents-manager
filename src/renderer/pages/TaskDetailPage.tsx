@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import itermIcon from '../assets/iterm-icon.png';
+import vscodeIcon from '../assets/vscode-icon.png';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -393,6 +395,16 @@ export function TaskDetailPage() {
           {task.title}
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {worktree?.path && (
+            <>
+              <Button variant="outline" size="sm" title="Open in iTerm" onClick={() => window.api.shell.openInIterm(worktree.path)}>
+                <img src={itermIcon} alt="iTerm" width={16} height={16} />
+              </Button>
+              <Button variant="outline" size="sm" title="Open in VS Code" onClick={() => window.api.shell.openInVscode(worktree.path)}>
+                <img src={vscodeIcon} alt="VS Code" width={16} height={16} />
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm" onClick={handleDuplicate} disabled={duplicating}>
             {duplicating ? 'Duplicating...' : 'Duplicate'}
           </Button>
