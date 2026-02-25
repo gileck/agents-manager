@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChatSession } from '../../shared/types';
 
+const storageKey = (projectId: string) => `chat.currentSessionId.${projectId}`;
+
 export function useChatSessions(projectId: string | null) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -28,12 +30,15 @@ export function useChatSessions(projectId: string | null) {
           return window.api.chatSession.create(projectId, 'General').then((newSession) => {
             setSessions([newSession]);
             setCurrentSessionId(newSession.id);
+            localStorage.setItem(storageKey(projectId), newSession.id);
           });
         } else {
-          // Set the first session as current if none selected
-          if (!currentSessionId || !loadedSessions.find(s => s.id === currentSessionId)) {
-            setCurrentSessionId(loadedSessions[0].id);
-          }
+          // Restore persisted session if it still exists, otherwise fall back to first
+          const stored = localStorage.getItem(storageKey(projectId));
+          const restoredSession = stored && loadedSessions.find(s => s.id === stored);
+          const nextId = restoredSession ? stored : loadedSessions[0].id;
+          setCurrentSessionId(nextId);
+          localStorage.setItem(storageKey(projectId), nextId);
         }
       })
       .catch((err: Error) => setError(err.message))
@@ -48,6 +53,7 @@ export function useChatSessions(projectId: string | null) {
         const newSession = await window.api.chatSession.create(projectId, name);
         setSessions((prev) => [...prev, newSession]);
         setCurrentSessionId(newSession.id);
+        localStorage.setItem(storageKey(projectId), newSession.id);
         return newSession;
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -89,6 +95,7 @@ export function useChatSessions(projectId: string | null) {
             const remainingSessions = sessions.filter((s) => s.id !== sessionId);
             if (remainingSessions.length > 0) {
               setCurrentSessionId(remainingSessions[0].id);
+              if (projectId) localStorage.setItem(storageKey(projectId), remainingSessions[0].id);
             }
           }
         }
@@ -105,8 +112,9 @@ export function useChatSessions(projectId: string | null) {
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
       setCurrentSessionId(sessionId);
+      if (projectId) localStorage.setItem(storageKey(projectId), sessionId);
     }
-  }, [sessions]);
+  }, [sessions, projectId]);
 
   return {
     sessions,
