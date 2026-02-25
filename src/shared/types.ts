@@ -827,7 +827,7 @@ export type ChatMessageRole = 'user' | 'assistant' | 'system';
 
 export interface ChatMessage {
   id: string;
-  projectId: string;
+  sessionId: string;
   role: ChatMessageRole;
   content: string;
   createdAt: number;
@@ -836,11 +836,40 @@ export interface ChatMessage {
 }
 
 export interface ChatMessageCreateInput {
-  projectId: string;
+  sessionId: string;
   role: ChatMessageRole;
   content: string;
   costInputTokens?: number;
   costOutputTokens?: number;
+}
+
+// Chat Session types
+export interface ChatSession {
+  id: string;
+  projectId: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ChatSessionCreateInput {
+  projectId: string;
+  name: string;
+}
+
+export interface ChatSessionUpdateInput {
+  name: string;
+}
+
+export interface RunningAgent {
+  sessionId: string;
+  sessionName: string;
+  projectId: string;
+  projectName: string;
+  status: 'running' | 'completed' | 'failed';
+  startedAt: number;
+  lastActivity: number;
+  messagePreview?: string;
 }
 
 // ============================================

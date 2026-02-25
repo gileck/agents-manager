@@ -20,6 +20,8 @@ import type {
   Worktree,
   ChatMessage,
   AgentChatMessage,
+  ChatSession,
+  RunningAgent,
   TelegramBotLogEntry,
   AllTransitionsResult,
   GuardCheckResult,
@@ -123,6 +125,11 @@ const IPC_CHANNELS = {
   CHAT_OUTPUT: 'chat:output',
   CHAT_MESSAGE: 'chat:message',
   CHAT_COSTS: 'chat:costs',
+  CHAT_SESSION_CREATE: 'chat:session:create',
+  CHAT_SESSION_LIST: 'chat:session:list',
+  CHAT_SESSION_UPDATE: 'chat:session:update',
+  CHAT_SESSION_DELETE: 'chat:session:delete',
+  CHAT_AGENTS_LIST: 'chat:agents:list',
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
   GIT_COMMIT_DETAIL: 'git:commit-detail',
@@ -373,18 +380,32 @@ const api = {
 
   // Chat operations
   chat: {
-    send: (projectId: string, message: string): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, projectId, message),
-    stop: (projectId: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, projectId),
-    messages: (projectId: string): Promise<ChatMessage[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_MESSAGES, projectId),
-    clear: (projectId: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR, projectId),
-    summarize: (projectId: string): Promise<ChatMessage[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SUMMARIZE, projectId),
+    send: (sessionId: string, message: string): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, sessionId, message),
+    stop: (sessionId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, sessionId),
+    messages: (sessionId: string): Promise<ChatMessage[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_MESSAGES, sessionId),
+    clear: (sessionId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR, sessionId),
+    summarize: (sessionId: string): Promise<ChatMessage[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SUMMARIZE, sessionId),
     costs: (): Promise<{ inputTokens: number; outputTokens: number }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COSTS),
+  },
+
+  // Chat session operations
+  chatSession: {
+    create: (projectId: string, name: string): Promise<ChatSession> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_CREATE, { projectId, name }),
+    list: (projectId: string): Promise<ChatSession[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST, projectId),
+    update: (sessionId: string, name: string): Promise<ChatSession | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, { name }),
+    delete: (sessionId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
+    listAgents: (): Promise<RunningAgent[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_AGENTS_LIST),
   },
 
   // Shell operations
@@ -420,13 +441,13 @@ const api = {
       ipcRenderer.on(IPC_CHANNELS.AGENT_STATUS, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_STATUS, listener);
     },
-    chatOutput: (callback: (projectId: string, chunk: string) => void) => {
-      const listener = (_: IpcRendererEvent, projectId: string, chunk: string) => callback(projectId, chunk);
+    chatOutput: (callback: (sessionId: string, chunk: string) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, chunk: string) => callback(sessionId, chunk);
       ipcRenderer.on(IPC_CHANNELS.CHAT_OUTPUT, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_OUTPUT, listener);
     },
-    chatMessage: (callback: (projectId: string, msg: AgentChatMessage) => void) => {
-      const listener = (_: IpcRendererEvent, projectId: string, msg: AgentChatMessage) => callback(projectId, msg);
+    chatMessage: (callback: (sessionId: string, msg: AgentChatMessage) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, msg: AgentChatMessage) => callback(sessionId, msg);
       ipcRenderer.on(IPC_CHANNELS.CHAT_MESSAGE, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_MESSAGE, listener);
     },
