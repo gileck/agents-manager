@@ -292,6 +292,7 @@ export interface TaskUpdateInput {
   planComments?: PlanComment[];
   technicalDesignComments?: PlanComment[];
   metadata?: Record<string, unknown>;
+  pipelineId?: string;
 }
 
 export interface TaskFilter {
