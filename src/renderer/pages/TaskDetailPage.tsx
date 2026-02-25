@@ -546,9 +546,9 @@ export function TaskDetailPage() {
           <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="review" className={hasReview ? '' : 'opacity-40'}>Review</TabsTrigger>
         </TabsList>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-        <TabsContent value="details">
+        <TabsContent value="details" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <TaskDetailDashboard
             task={task}
             taskId={id!}
@@ -567,7 +567,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="plan">
+        <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <Card className="mt-4">
             <CardHeader>
               <CardTitle>Plan</CardTitle>
@@ -593,7 +593,7 @@ export function TaskDetailPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="design">
+        <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <Card className="mt-4">
             <CardHeader>
               <CardTitle>Technical Design</CardTitle>
@@ -620,7 +620,7 @@ export function TaskDetailPage() {
         </TabsContent>
 
         <TabsContent value="chat" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, margin: '-20px -24px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 16px 0', flexShrink: 0 }}>
               {taskChat.messages.length > 0 && (
                 <button
@@ -648,7 +648,7 @@ export function TaskDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="review">
+        <TabsContent value="review" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <WorkflowReviewTab
             taskId={id!}
             contextEntries={contextEntries ?? null}
