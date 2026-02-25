@@ -3,6 +3,7 @@ import type { AppServices } from '../../main/providers/setup';
 import type { Subtask, SubtaskStatus } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject } from '../context';
+import { getSetting } from '@template/main/services/settings-service';
 
 export function registerTaskCommands(program: Command, getServices: () => AppServices): void {
   const tasks = program.command('tasks').description('Manage tasks');
@@ -85,13 +86,21 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
 
       let pipelineId = cmdOpts.pipeline;
       if (!pipelineId) {
-        const pipelines = await services.pipelineStore.listPipelines();
-        if (pipelines.length === 0) {
-          console.error('No pipelines available. Create one first.');
-          process.exitCode = 1;
-          return;
+        // Try to get default from settings
+        const defaultPipelineId = getSetting('default_pipeline_id', '');
+
+        if (defaultPipelineId) {
+          pipelineId = defaultPipelineId;
+        } else {
+          // Fall back to first pipeline
+          const pipelines = await services.pipelineStore.listPipelines();
+          if (pipelines.length === 0) {
+            console.error('No pipelines available. Create one first.');
+            process.exitCode = 1;
+            return;
+          }
+          pipelineId = pipelines[0].id;
         }
-        pipelineId = pipelines[0].id;
       }
 
       const task = await services.workflowService.createTask({
