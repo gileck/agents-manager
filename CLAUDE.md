@@ -140,13 +140,13 @@ Dual native builds for Electron and Node ABI coexistence
 
 ## CLI Reference
 
-The am command-line tool, commands, and project context
+The agents-manager command-line tool, commands, and project context
 
-**Summary:** The am CLI is built with Commander.js and shares the same WorkflowService and SQLite database as the Electron app. It instantiates services via createAppServices(db) directly — no IPC needed.
+**Summary:** The agents-manager CLI is built with Commander.js and shares the same WorkflowService and SQLite database as the Electron app. It instantiates services via createAppServices(db) directly — no IPC needed.
 
 **Key Points:**
 - File: src/cli/index.ts
-- Run via: npx agents-manager or am (if installed globally)
+- Run via: npx agents-manager
 - CLI is UI-only — no business logic; delegates everything to WorkflowService
 
 **Docs:** [cli-reference.md](docs/cli-reference.md)

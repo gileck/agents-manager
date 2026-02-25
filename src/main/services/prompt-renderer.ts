@@ -116,8 +116,8 @@ export class PromptRenderer {
         '',
         '## Related Task',
         `This bug references task \`${relatedTaskId}\`. Use the CLI to inspect it:`,
-        `  am tasks get ${relatedTaskId} --json`,
-        `  am events list --task ${relatedTaskId} --json`,
+        `  npx agents-manager tasks get ${relatedTaskId} --json`,
+        `  npx agents-manager events list --task ${relatedTaskId} --json`,
       ].join('\n');
     }
     return '';

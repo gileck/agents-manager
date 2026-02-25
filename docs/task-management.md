@@ -110,8 +110,8 @@ interface Subtask {
 
 **Populated by:** The plan agent during `plan` or `plan_revision` mode. The agent's structured output includes a `subtasks` array of step names.
 
-**Tracked via CLI:** The `am tasks subtask` command group allows agents to update subtask status during execution:
-- `am tasks subtask update <taskId> --name "Step 1" --status done`
+**Tracked via CLI:** The `npx agents-manager tasks subtask` command group allows agents to update subtask status during execution:
+- `npx agents-manager tasks subtask update <taskId> --name "Step 1" --status done`
 
 This allows agents running in worktrees to report progress by calling the CLI.
 

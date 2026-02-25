@@ -1,16 +1,16 @@
 ---
 title: CLI Reference
-description: The am command-line tool, commands, and project context
-summary: The am CLI is built with Commander.js and shares the same WorkflowService and SQLite database as the Electron app. It instantiates services via createAppServices(db) directly — no IPC needed.
+description: The agents-manager command-line tool, commands, and project context
+summary: The agents-manager CLI is built with Commander.js and shares the same WorkflowService and SQLite database as the Electron app. It instantiates services via createAppServices(db) directly — no IPC needed.
 priority: 3
 key_points:
   - "File: src/cli/index.ts"
-  - "Run via: npx agents-manager or am (if installed globally)"
+  - "Run via: npx agents-manager"
   - "CLI is UI-only — no business logic; delegates everything to WorkflowService"
 ---
 # CLI Reference
 
-The `am` command-line tool, commands, and project context.
+The `npx agents-manager` command-line tool, commands, and project context.
 
 ## Overview
 
@@ -19,7 +19,7 @@ The `am` command-line tool, commands, and project context.
 The CLI is built with Commander.js and provides terminal access to the same services and database used by the Electron app.
 
 ```bash
-am [options] <command> [subcommand]
+npx agents-manager [options] <command> [subcommand]
 ```
 
 ### Global Options
@@ -57,71 +57,71 @@ The database is closed on process exit via `process.on('exit')`.
 ### `projects` — Project Management
 
 ```bash
-am projects list|ls                          # List all projects
-am projects get <id>                         # Get project details
-am projects create --name <n> [--desc] [--path]  # Create project
-am projects update <id> [--name] [--desc] [--path]  # Update project
-am projects delete <id>                      # Delete project
+npx agents-manager projects list|ls                          # List all projects
+npx agents-manager projects get <id>                         # Get project details
+npx agents-manager projects create --name <n> [--desc] [--path]  # Create project
+npx agents-manager projects update <id> [--name] [--desc] [--path]  # Update project
+npx agents-manager projects delete <id>                      # Delete project
 ```
 
 ### `tasks` — Task Management
 
 ```bash
-am tasks list|ls [--status] [--priority] [--assignee]  # List tasks (requires project)
-am tasks get|show <id>                       # Get task with deps and valid transitions
-am tasks create --title <t> [--desc] [--pipeline] [--priority] [--assignee] [--tags]
-am tasks update <id> [--title] [--desc] [--priority] [--assignee] [--tags]
-am tasks delete <id>                         # Delete task
-am tasks transition|move <id> <status> [--actor]  # Transition task
-am tasks transitions <id>                    # Show valid transitions
-am tasks start <id> [--actor]                # Transition to first non-initial status
+npx agents-manager tasks list|ls [--status] [--priority] [--assignee]  # List tasks (requires project)
+npx agents-manager tasks get|show <id>                       # Get task with deps and valid transitions
+npx agents-manager tasks create --title <t> [--desc] [--pipeline] [--priority] [--assignee] [--tags]
+npx agents-manager tasks update <id> [--title] [--desc] [--priority] [--assignee] [--tags]
+npx agents-manager tasks delete <id>                         # Delete task
+npx agents-manager tasks transition|move <id> <status> [--actor]  # Transition task
+npx agents-manager tasks transitions <id>                    # Show valid transitions
+npx agents-manager tasks start <id> [--actor]                # Transition to first non-initial status
 ```
 
 #### Subtask Subcommand
 
 ```bash
-am tasks subtask list|ls <taskId>            # List subtasks
-am tasks subtask add <taskId> --name <n> [--status]  # Add subtask
-am tasks subtask update <taskId> --name <n> --status <s>  # Update subtask
-am tasks subtask remove <taskId> --name <n>  # Remove subtask
-am tasks subtask set <taskId> --subtasks <json>  # Replace all subtasks
+npx agents-manager tasks subtask list|ls <taskId>            # List subtasks
+npx agents-manager tasks subtask add <taskId> --name <n> [--status]  # Add subtask
+npx agents-manager tasks subtask update <taskId> --name <n> --status <s>  # Update subtask
+npx agents-manager tasks subtask remove <taskId> --name <n>  # Remove subtask
+npx agents-manager tasks subtask set <taskId> --subtasks <json>  # Replace all subtasks
 ```
 
 ### `agent` — Agent Run Management
 
 ```bash
-am agent start <taskId> [--mode] [--type]    # Start agent (default mode: plan, default type: scripted)
-am agent stop <runId>                        # Stop running agent
-am agent runs [--task] [--active]            # List agent runs
-am agent get|show <runId>                    # Get agent run details
+npx agents-manager agent start <taskId> [--mode] [--type]    # Start agent (default mode: plan, default type: scripted)
+npx agents-manager agent stop <runId>                        # Stop running agent
+npx agents-manager agent runs [--task] [--active]            # List agent runs
+npx agents-manager agent get|show <runId>                    # Get agent run details
 ```
 
 ### `pipelines` — Pipeline Viewing
 
 ```bash
-am pipelines list|ls                         # List all pipelines
-am pipelines get <id>                        # Get pipeline details
+npx agents-manager pipelines list|ls                         # List all pipelines
+npx agents-manager pipelines get <id>                        # Get pipeline details
 ```
 
 ### `prompts` — Prompt Management
 
 ```bash
-am prompts list --task <taskId>              # List pending prompts
-am prompts respond <id> --response <json>    # Respond to a prompt
+npx agents-manager prompts list --task <taskId>              # List pending prompts
+npx agents-manager prompts respond <id> --response <json>    # Respond to a prompt
 ```
 
 ### `deps` — Dependency Management
 
 ```bash
-am deps list <taskId>                        # List task dependencies
-am deps add <taskId> <depId>                 # Add dependency
-am deps remove <taskId> <depId>              # Remove dependency
+npx agents-manager deps list <taskId>                        # List task dependencies
+npx agents-manager deps add <taskId> <depId>                 # Add dependency
+npx agents-manager deps remove <taskId> <depId>              # Remove dependency
 ```
 
 ### `events` — Task Events
 
 ```bash
-am events list --task <taskId> [--category]  # List task events
+npx agents-manager events list --task <taskId> [--category]  # List task events
 ```
 
 Categories: `status_change`, `field_update`, `dependency_change`, `comment`, `system`, `agent`, `agent_debug`, `git`, `github`, `worktree`
@@ -129,7 +129,7 @@ Categories: `status_change`, `field_update`, `dependency_change`, `comment`, `sy
 ### `status` — Dashboard
 
 ```bash
-am status                                    # Show system dashboard
+npx agents-manager status                                    # Show system dashboard
 ```
 
 Displays: project count, task count, tasks by status, active agents, pending prompts.
@@ -163,12 +163,12 @@ Two helper functions:
 Agents running in worktrees can call the CLI to update task state. For example, an agent can update subtask progress:
 
 ```bash
-am tasks subtask update <taskId> --name "Step 1" --status done
+npx agents-manager tasks subtask update <taskId> --name "Step 1" --status done
 ```
 
 This works because:
 - The CLI opens the same database file
-- The agent worktree has `am` accessible via PATH
+- The agent worktree has `npx agents-manager` accessible via PATH
 - SQLite WAL mode handles concurrent access
 
 ## Edge Cases
