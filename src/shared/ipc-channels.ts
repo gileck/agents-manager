@@ -136,6 +136,13 @@ export const IPC_CHANNELS = {
   CHAT_MESSAGE: 'chat:message',
   CHAT_COSTS: 'chat:costs',
 
+  // Chat sessions
+  CHAT_SESSION_CREATE: 'chat:session:create',
+  CHAT_SESSION_LIST: 'chat:session:list',
+  CHAT_SESSION_UPDATE: 'chat:session:update',
+  CHAT_SESSION_DELETE: 'chat:session:delete',
+  CHAT_AGENTS_LIST: 'chat:agents:list',
+
   // Source Control (project-scoped)
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',

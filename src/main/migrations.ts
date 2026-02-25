@@ -705,6 +705,40 @@ export function getMigrations(): Migration[] {
       name: '065_set_default_pipeline_agent',
       sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('default_pipeline_id', 'pipeline-agent')`,
     },
+    {
+      name: '066_create_project_chat_sessions',
+      sql: `
+        CREATE TABLE IF NOT EXISTS project_chat_sessions (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_sessions_project ON project_chat_sessions(project_id)
+      `,
+    },
+    {
+      name: '067_update_chat_messages_to_sessions',
+      sql: `
+        -- Drop the existing chat_messages table and recreate with session_id
+        DROP TABLE IF EXISTS chat_messages;
+
+        CREATE TABLE chat_messages (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
+          content TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          cost_input_tokens INTEGER,
+          cost_output_tokens INTEGER,
+          FOREIGN KEY (session_id) REFERENCES project_chat_sessions(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX idx_chat_messages_session ON chat_messages(session_id, created_at)
+      `,
+    },
   ];
 }
 

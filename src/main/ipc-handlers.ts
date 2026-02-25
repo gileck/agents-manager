@@ -700,39 +700,74 @@ export function registerIpcHandlers(services: AppServices): void {
   // Chat Operations
   // ============================================
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SEND, async (_, projectId: string, message: string) => {
-    validateId(projectId);
+  registerIpcHandler(IPC_CHANNELS.CHAT_SEND, async (_, sessionId: string, message: string) => {
+    validateId(sessionId);
     if (!message || typeof message !== 'string') throw new Error('Message is required');
     return services.chatAgentService.send(
-      projectId,
+      sessionId,
       message,
-      (chunk) => sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, projectId, chunk),
-      (msg) => sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, projectId, msg),
+      (chunk) => sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, chunk),
+      (msg) => sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, msg),
     );
   });
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_STOP, async (_, projectId: string) => {
-    validateId(projectId);
-    services.chatAgentService.stop(projectId);
+  registerIpcHandler(IPC_CHANNELS.CHAT_STOP, async (_, sessionId: string) => {
+    validateId(sessionId);
+    services.chatAgentService.stop(sessionId);
   });
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_MESSAGES, async (_, projectId: string) => {
-    validateId(projectId);
-    return services.chatAgentService.getMessages(projectId);
+  registerIpcHandler(IPC_CHANNELS.CHAT_MESSAGES, async (_, sessionId: string) => {
+    validateId(sessionId);
+    return services.chatAgentService.getMessages(sessionId);
   });
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_CLEAR, async (_, projectId: string) => {
-    validateId(projectId);
-    return services.chatAgentService.clearMessages(projectId);
+  registerIpcHandler(IPC_CHANNELS.CHAT_CLEAR, async (_, sessionId: string) => {
+    validateId(sessionId);
+    return services.chatAgentService.clearMessages(sessionId);
   });
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SUMMARIZE, async (_, projectId: string) => {
-    validateId(projectId);
-    return services.chatAgentService.summarizeMessages(projectId);
+  registerIpcHandler(IPC_CHANNELS.CHAT_SUMMARIZE, async (_, sessionId: string) => {
+    validateId(sessionId);
+    return services.chatAgentService.summarizeMessages(sessionId);
   });
 
   registerIpcHandler(IPC_CHANNELS.CHAT_COSTS, async () => {
     return services.chatMessageStore.getCostSummary();
+  });
+
+  // ============================================
+  // Chat Session Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_CREATE, async (_, input: { projectId: string; name: string }) => {
+    validateId(input.projectId);
+    if (!input.name || typeof input.name !== 'string') throw new Error('Session name is required');
+    return services.chatSessionStore.createSession({
+      projectId: input.projectId,
+      name: input.name,
+    });
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_LIST, async (_, projectId: string) => {
+    validateId(projectId);
+    return services.chatSessionStore.listSessionsForProject(projectId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name: string }) => {
+    validateId(sessionId);
+    if (!input.name || typeof input.name !== 'string') throw new Error('Session name is required');
+    return services.chatSessionStore.updateSession(sessionId, { name: input.name });
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_DELETE, async (_, sessionId: string) => {
+    validateId(sessionId);
+    // Stop any running agent for this session before deleting
+    services.chatAgentService.stop(sessionId);
+    return services.chatSessionStore.deleteSession(sessionId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_AGENTS_LIST, async () => {
+    return services.chatAgentService.getRunningAgents();
   });
 
   // ============================================

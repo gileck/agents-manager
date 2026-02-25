@@ -1,4 +1,5 @@
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
+import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { ChatMessage, AgentChatMessage } from '../../shared/types';
 import { SandboxGuard } from './sandbox-guard';
@@ -47,38 +48,70 @@ const SYSTEM_PROMPT = `You are a project assistant with read-only access to the 
 - Be concise and helpful. Format responses with markdown when useful.
 - When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.`;
 
+export interface RunningAgent {
+  sessionId: string;
+  sessionName: string;
+  projectId: string;
+  projectName: string;
+  status: 'running' | 'completed' | 'failed';
+  startedAt: number;
+  lastActivity: number;
+  messagePreview?: string;
+}
+
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
+  private runningAgents = new Map<string, RunningAgent>();
 
   constructor(
     private chatMessageStore: IChatMessageStore,
+    private chatSessionStore: IChatSessionStore,
     private projectStore: IProjectStore,
   ) {}
 
   async send(
-    projectId: string,
+    sessionId: string,
     message: string,
     onOutput: (chunk: string) => void,
     onMessage?: (msg: AgentChatMessage) => void,
   ): Promise<{ userMessage: ChatMessage; sessionId: string }> {
-    // Abort any previous running chat for this project
-    this.stop(projectId);
+    // Get session to find project
+    const session = await this.chatSessionStore.getSession(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Don't abort previous running chat - allow parallel execution
+    // but do check if there's already one running for this session
+    if (this.runningControllers.has(sessionId)) {
+      throw new Error('An agent is already running for this session');
+    }
 
     // Persist user message
     const userMessage = await this.chatMessageStore.addMessage({
-      projectId,
+      sessionId,
       role: 'user',
       content: message,
     });
 
-    const sessionId = userMessage.id;
-
     // Load project for path info
-    const project = await this.projectStore.getProject(projectId);
+    const project = await this.projectStore.getProject(session.projectId);
     const projectPath = project?.path || process.cwd();
 
+    // Track running agent
+    this.runningAgents.set(sessionId, {
+      sessionId,
+      sessionName: session.name,
+      projectId: session.projectId,
+      projectName: project?.name || 'Unknown Project',
+      status: 'running',
+      startedAt: Date.now(),
+      lastActivity: Date.now(),
+      messagePreview: message.slice(0, 100),
+    });
+
     // Load conversation history
-    const history = await this.chatMessageStore.getMessagesForProject(projectId);
+    const history = await this.chatMessageStore.getMessagesForSession(sessionId);
 
     // Build prompt with conversation history
     const conversationLines: string[] = [];
@@ -96,37 +129,47 @@ export class ChatAgentService {
 
     // Run agent in background
     const abortController = new AbortController();
-    this.runningControllers.set(projectId, abortController);
+    this.runningControllers.set(sessionId, abortController);
 
-    this.runAgent(projectId, projectPath, prompt, abortController, onOutput, onMessage).catch((err) => {
+    this.runAgent(sessionId, projectPath, prompt, abortController, onOutput, onMessage).catch((err) => {
       onOutput(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
       onOutput(CHAT_COMPLETE_SENTINEL);
+      const agent = this.runningAgents.get(sessionId);
+      if (agent) {
+        agent.status = 'failed';
+        agent.lastActivity = Date.now();
+      }
     });
 
     return { userMessage, sessionId };
   }
 
-  stop(projectId: string): void {
-    const controller = this.runningControllers.get(projectId);
+  stop(sessionId: string): void {
+    const controller = this.runningControllers.get(sessionId);
     if (controller) {
       controller.abort();
-      this.runningControllers.delete(projectId);
+      this.runningControllers.delete(sessionId);
+      const agent = this.runningAgents.get(sessionId);
+      if (agent && agent.status === 'running') {
+        agent.status = 'failed';
+        agent.lastActivity = Date.now();
+      }
     }
   }
 
-  async getMessages(projectId: string): Promise<ChatMessage[]> {
-    return this.chatMessageStore.getMessagesForProject(projectId);
+  async getMessages(sessionId: string): Promise<ChatMessage[]> {
+    return this.chatMessageStore.getMessagesForSession(sessionId);
   }
 
-  async clearMessages(projectId: string): Promise<void> {
-    this.stop(projectId);
-    return this.chatMessageStore.clearMessages(projectId);
+  async clearMessages(sessionId: string): Promise<void> {
+    this.stop(sessionId);
+    return this.chatMessageStore.clearMessages(sessionId);
   }
 
-  async summarizeMessages(projectId: string): Promise<ChatMessage[]> {
-    this.stop(projectId);
+  async summarizeMessages(sessionId: string): Promise<ChatMessage[]> {
+    this.stop(sessionId);
 
-    const messages = await this.chatMessageStore.getMessagesForProject(projectId);
+    const messages = await this.chatMessageStore.getMessagesForSession(sessionId);
     if (messages.length === 0) return [];
 
     // Sum historical costs from existing messages
@@ -181,9 +224,9 @@ export class ChatAgentService {
     const totalInputTokens = historicalInputTokens + (summaryCostInput ?? 0);
     const totalOutputTokens = historicalOutputTokens + (summaryCostOutput ?? 0);
 
-    const result = await this.chatMessageStore.replaceAllMessages(projectId, [
+    const result = await this.chatMessageStore.replaceAllMessages(sessionId, [
       {
-        projectId,
+        sessionId,
         role: 'system',
         content: `[Conversation Summary]\n\n${summaryText}`,
         costInputTokens: totalInputTokens || undefined,
@@ -194,8 +237,19 @@ export class ChatAgentService {
     return result;
   }
 
+  async getRunningAgents(): Promise<RunningAgent[]> {
+    // Clean up stale agents (older than 1 hour)
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    for (const [sessionId, agent] of this.runningAgents) {
+      if (agent.status !== 'running' && agent.lastActivity < oneHourAgo) {
+        this.runningAgents.delete(sessionId);
+      }
+    }
+    return Array.from(this.runningAgents.values());
+  }
+
   private async runAgent(
-    projectId: string,
+    sessionId: string,
     projectPath: string,
     prompt: string,
     abortController: AbortController,
@@ -216,7 +270,14 @@ export class ChatAgentService {
 
     // Safe wrapper: IPC delivery failure should not abort the agent stream
     const emitMessage = (msg: AgentChatMessage) => {
-      try { onMessage?.(msg); } catch { /* IPC delivery failure is non-fatal */ }
+      try {
+        onMessage?.(msg);
+        // Update last activity
+        const agent = this.runningAgents.get(sessionId);
+        if (agent) {
+          agent.lastActivity = Date.now();
+        }
+      } catch { /* IPC delivery failure is non-fatal */ }
     };
 
     try {
@@ -303,13 +364,20 @@ export class ChatAgentService {
           }
         }
       }
+
+      // Mark as completed successfully
+      const agent = this.runningAgents.get(sessionId);
+      if (agent) {
+        agent.status = 'completed';
+        agent.lastActivity = Date.now();
+      }
     } finally {
-      this.runningControllers.delete(projectId);
+      this.runningControllers.delete(sessionId);
 
       // Persist assistant response with cost data
       if (resultText.trim()) {
         await this.chatMessageStore.addMessage({
-          projectId,
+          sessionId,
           role: 'assistant',
           content: resultText,
           costInputTokens,
