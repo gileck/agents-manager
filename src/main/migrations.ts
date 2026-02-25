@@ -701,6 +701,10 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_kanban_boards_project_id ON kanban_boards(project_id)
       `,
     },
+    {
+      name: '065_set_default_pipeline_agent',
+      sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('default_pipeline_id', 'pipeline-agent')`,
+    },
   ];
 }
 

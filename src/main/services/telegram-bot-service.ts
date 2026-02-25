@@ -6,6 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { TaskUpdateInput, TelegramBotLogEntry } from '../../shared/types';
+import { getSetting } from '@template/main/services/settings-service';
 
 interface PendingAction {
   type: 'create_title' | 'edit_field';
@@ -292,9 +293,13 @@ export class TelegramBotService implements ITelegramBotService {
       return;
     }
 
+    // Get default pipeline from settings or fall back to first pipeline
+    const defaultPipelineId = getSetting('default_pipeline_id', '');
+    const pipelineId = defaultPipelineId || pipelines[0].id;
+
     const task = await this.deps.workflowService.createTask({
       projectId: this.projectId,
-      pipelineId: pipelines[0].id,
+      pipelineId,
       title: title.trim(),
     });
 
