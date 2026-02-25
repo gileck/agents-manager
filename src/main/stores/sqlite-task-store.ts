@@ -243,6 +243,10 @@ export class SqliteTaskStore implements ITaskStore {
       updates.push('metadata = ?');
       values.push(JSON.stringify(input.metadata));
     }
+    if (input.pipelineId !== undefined) {
+      updates.push('pipeline_id = ?');
+      values.push(input.pipelineId);
+    }
 
     if (updates.length === 0) return existing;
 

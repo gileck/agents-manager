@@ -123,12 +123,14 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
     .option('--tags <tags>', 'Comma-separated tags')
+    .option('--pipeline <id>', 'Pipeline ID')
     .action(async (id: string, cmdOpts: {
       title?: string;
       description?: string;
       priority?: number;
       assignee?: string;
       tags?: string;
+      pipeline?: string;
     }) => {
       const opts = program.opts() as OutputOptions;
       const services = getServices();
@@ -138,6 +140,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
         priority: cmdOpts.priority,
         assignee: cmdOpts.assignee,
         tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
+        pipelineId: cmdOpts.pipeline,
       });
       if (!task) {
         console.error(`Task not found: ${id}`);
