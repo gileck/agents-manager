@@ -15,7 +15,7 @@ function convertDbMessages(dbMessages: ChatMessage[]): AgentChatMessage[] {
   });
 }
 
-export function useChat(projectId: string | null) {
+export function useChat(sessionId: string | null) {
   const [dbMessages, setDbMessages] = useState<ChatMessage[]>([]);
   const [streamingMessages, setStreamingMessages] = useState<AgentChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -23,34 +23,37 @@ export function useChat(projectId: string | null) {
   const [error, setError] = useState<string | null>(null);
   const streamingRef = useRef(false);
 
-  // Load messages on mount or project change
+  // Load messages on mount or session change
   useEffect(() => {
-    if (!projectId) {
+    if (!sessionId) {
       setDbMessages([]);
       return;
     }
 
     setLoading(true);
     setError(null);
-    window.api.chat.messages(projectId)
+    window.api.chat.messages(sessionId)
       .then(setDbMessages)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [projectId]);
+  }, [sessionId]);
 
   // Subscribe to chat output (for streaming state and completion sentinel)
   useEffect(() => {
-    if (!projectId) return;
+    if (!sessionId) return;
 
     const unsubscribe = window.api.on.chatOutput((incomingProjectId: string, chunk: string) => {
-      if (incomingProjectId !== projectId) return;
+      if (incomingProjectId !== sessionId) return;
 
       if (chunk === CHAT_COMPLETE_SENTINEL) {
         if (!streamingRef.current) return; // discard stale sentinel from aborted agent
         streamingRef.current = false;
         setIsStreaming(false);
-        // Keep streaming messages as-is (they have the full turn including tools + text).
-        // DB reload happens on next sendMessage to avoid race conditions.
+        setStreamingMessages([]);
+        // Reload messages from DB
+        window.api.chat.messages(sessionId)
+          .then(setDbMessages)
+          .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
         return;
       }
 
@@ -61,71 +64,63 @@ export function useChat(projectId: string | null) {
     });
 
     return () => { unsubscribe(); };
-  }, [projectId]);
+  }, [sessionId]);
 
   // Subscribe to structured chat messages
   useEffect(() => {
-    if (!projectId) return;
+    if (!sessionId) return;
 
     const unsubscribe = window.api.on.chatMessage((incomingProjectId: string, msg: AgentChatMessage) => {
-      if (incomingProjectId !== projectId) return;
+      if (incomingProjectId !== sessionId) return;
       setStreamingMessages((prev) => [...prev, msg]);
     });
 
     return () => { unsubscribe(); };
-  }, [projectId]);
+  }, [sessionId]);
 
   const sendMessage = useCallback(async (message: string) => {
-    if (!projectId || !message.trim()) return;
+    if (!sessionId || !message.trim()) return;
 
     setError(null);
-    // Reload DB to capture previous turn's persisted messages, then clear streaming
-    try {
-      const fresh = await window.api.chat.messages(projectId);
-      setDbMessages(fresh);
-    } catch (err) { console.warn('[useChat] DB reload failed, using cached state:', err); }
     setStreamingMessages([]);
-    // Disarm stale sentinels before arming for new turn
     streamingRef.current = false;
     setIsStreaming(true);
 
     try {
-      const { userMessage } = await window.api.chat.send(projectId, message);
+      const { userMessage } = await window.api.chat.send(sessionId, message);
+      // Optimistically add user message
       setDbMessages((prev) => [...prev, userMessage]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setIsStreaming(false);
       streamingRef.current = false;
     }
-  }, [projectId]);
+  }, [sessionId]);
 
   const stopChat = useCallback(() => {
-    if (!projectId) return;
-    streamingRef.current = false;
-    setIsStreaming(false);
-    window.api.chat.stop(projectId).catch((err: Error) => {
+    if (!sessionId) return;
+    window.api.chat.stop(sessionId).catch((err: Error) => {
       setError(`Failed to stop chat: ${err.message}`);
     });
-  }, [projectId]);
+  }, [sessionId]);
 
   const clearChat = useCallback(async () => {
-    if (!projectId) return;
+    if (!sessionId) return;
     try {
-      await window.api.chat.clear(projectId);
-      streamingRef.current = false;
+      await window.api.chat.clear(sessionId);
       setDbMessages([]);
       setStreamingMessages([]);
       setIsStreaming(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [projectId]);
+  }, [sessionId]);
 
   const summarizeChat = useCallback(async () => {
-    if (!projectId) return;
+    if (!sessionId) return;
     try {
       setLoading(true);
-      const summaryMessages = await window.api.chat.summarize(projectId);
+      const summaryMessages = await window.api.chat.summarize(sessionId);
       setDbMessages(summaryMessages);
       setStreamingMessages([]);
       setIsStreaming(false);
@@ -134,7 +129,7 @@ export function useChat(projectId: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [sessionId]);
 
   // Combine converted DB messages with streaming messages (memoized)
   const messages = useMemo<AgentChatMessage[]>(

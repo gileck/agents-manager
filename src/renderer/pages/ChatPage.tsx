@@ -1,13 +1,33 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { Trash2, FileText, MessageSquare } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useChat } from '../hooks/useChat';
+import { useChatSessions } from '../hooks/useChatSessions';
+import { useActiveAgents } from '../hooks/useActiveAgents';
 import { AgentChat } from '../components/chat/AgentChat';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { SessionTabs } from '../components/chat/SessionTabs';
+import { ActiveAgentsPanel } from '../components/chat/ActiveAgentsPanel';
+import { useNavigate } from 'react-router-dom';
 
 export function ChatPage() {
   const { currentProjectId, currentProject } = useCurrentProject();
+  const navigate = useNavigate();
+  const {
+    sessions,
+    currentSessionId,
+    createSession,
+    renameSession,
+    deleteSession,
+    switchSession,
+    loading: sessionsLoading,
+  } = useChatSessions(currentProjectId);
+
+  const {
+    agents,
+    stopAgent,
+  } = useActiveAgents();
+
   const {
     messages,
     isStreaming,
@@ -18,8 +38,8 @@ export function ChatPage() {
     clearChat,
     summarizeChat,
     tokenUsage,
-  } = useChat(currentProjectId);
-  const [showSidebar, setShowSidebar] = useLocalStorage('chat.showSidebar', false);
+  } = useChat(currentSessionId);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   if (!currentProjectId) {
     return (
@@ -32,6 +52,18 @@ export function ChatPage() {
       </div>
     );
   }
+
+  const handleNavigateToSession = useCallback((sessionId: string) => {
+    const agent = agents.find(a => a.sessionId === sessionId);
+    if (agent) {
+      // Navigate to the project if different
+      if (agent.projectId !== currentProjectId) {
+        navigate(`/projects/${agent.projectId}/chat`);
+      }
+      // Switch to the session
+      switchSession(sessionId);
+    }
+  }, [agents, currentProjectId, navigate, switchSession]);
 
   return (
     <div className="flex flex-col h-full">
@@ -80,6 +112,19 @@ export function ChatPage() {
         </div>
       </div>
 
+      {/* Session tabs */}
+      {currentProjectId && !sessionsLoading && (
+        <SessionTabs
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          activeAgents={agents}
+          onSessionChange={switchSession}
+          onSessionCreate={createSession}
+          onSessionRename={renameSession}
+          onSessionDelete={deleteSession}
+        />
+      )}
+
       {error && (
         <div className="text-center text-destructive text-sm py-2 px-6">
           Error: {error}
@@ -87,28 +132,35 @@ export function ChatPage() {
       )}
 
       <div className="flex flex-1 min-h-0">
-        {loading && messages.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            Loading messages...
-          </div>
-        ) : (
-          <AgentChat
-            messages={messages}
-            isRunning={isStreaming}
-            onSend={sendMessage}
-            onStop={stopChat}
-            emptyState={
-              <div className="text-center text-muted-foreground py-16">
-                <MessageSquare className="h-8 w-8 mx-auto mb-3 opacity-40" />
-                <p className="text-sm">Start a conversation about your project</p>
-                <p className="text-xs mt-1 opacity-70">Ask about code, manage tasks, or explore the codebase</p>
-              </div>
-            }
-          />
-        )}
+        <div className="flex-1 flex flex-col min-w-0">
+          {loading && messages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              Loading messages...
+            </div>
+          ) : (
+            <AgentChat
+              messages={messages}
+              isRunning={isStreaming}
+              onSend={sendMessage}
+              onStop={stopChat}
+              emptyState={
+                <div className="text-center text-muted-foreground py-16">
+                  <MessageSquare className="h-8 w-8 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm">Start a conversation about your project</p>
+                  <p className="text-xs mt-1 opacity-70">Ask about code, manage tasks, or explore the codebase</p>
+                </div>
+              }
+            />
+          )}
+        </div>
         {showSidebar && messages.length > 0 && (
           <ContextSidebar messages={messages} tokenUsage={tokenUsage} />
         )}
+        <ActiveAgentsPanel
+          agents={agents}
+          onNavigateToSession={handleNavigateToSession}
+          onStopAgent={stopAgent}
+        />
       </div>
     </div>
   );
