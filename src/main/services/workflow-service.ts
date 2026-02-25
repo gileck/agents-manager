@@ -67,14 +67,100 @@ export class WorkflowService implements IWorkflowService {
   }
 
   async updateTask(id: string, input: TaskUpdateInput): Promise<Task | null> {
+    // Get the existing task first
+    const existingTask = await this.taskStore.getTask(id);
+    if (!existingTask) return null;
+
+    // Check if pipeline is being changed
+    if (input.pipelineId && input.pipelineId !== existingTask.pipelineId) {
+      // Validate that the new pipeline exists
+      const newPipeline = await this.pipelineStore.getPipeline(input.pipelineId);
+      if (!newPipeline) {
+        throw new Error(`Pipeline not found: ${input.pipelineId}`);
+      }
+
+      // Check if task has running agents
+      const agentRuns = await this.agentRunStore.getRunsForTask(id);
+      const hasRunningAgent = agentRuns.some((r) => r.status === 'running');
+      if (hasRunningAgent) {
+        throw new Error('Cannot change pipeline while agent is running');
+      }
+
+      // Map the current status to the new pipeline
+      let newStatus = existingTask.status;
+      const statusExists = newPipeline.statuses.some((s) => s.name === existingTask.status);
+      if (!statusExists) {
+        // Try to find a status with the same name
+        const sameNameStatus = newPipeline.statuses.find((s) => s.name === existingTask.status);
+        if (sameNameStatus) {
+          newStatus = sameNameStatus.name;
+        } else {
+          // Fall back to first status of the new pipeline
+          newStatus = newPipeline.statuses[0]?.name || 'open';
+          await this.taskEventLog.log({
+            taskId: id,
+            category: 'system',
+            severity: 'warning',
+            message: `Status "${existingTask.status}" not found in new pipeline, resetting to "${newStatus}"`,
+            data: { oldStatus: existingTask.status, newStatus, oldPipeline: existingTask.pipelineId, newPipeline: input.pipelineId },
+          });
+        }
+      }
+
+      // Update the status in the input if it's being changed
+      if (newStatus !== existingTask.status) {
+        input.status = newStatus;
+      }
+
+      // Reset phases when changing pipelines (phases are pipeline-specific)
+      if (existingTask.phases) {
+        input.phases = null;
+        await this.taskEventLog.log({
+          taskId: id,
+          category: 'system',
+          severity: 'info',
+          message: 'Clearing phases due to pipeline change',
+          data: { oldPipeline: existingTask.pipelineId, newPipeline: input.pipelineId },
+        });
+      }
+    }
+
     const task = await this.taskStore.updateTask(id, input);
     if (task) {
-      await this.activityLog.log({
-        action: 'update',
-        entityType: 'task',
-        entityId: id,
-        summary: `Updated task: ${task.title}`,
-      });
+      // Enhanced activity logging for pipeline changes
+      if (input.pipelineId && input.pipelineId !== existingTask.pipelineId) {
+        await this.activityLog.log({
+          action: 'update',
+          entityType: 'task',
+          entityId: id,
+          summary: `Changed pipeline for task: ${task.title}`,
+          data: {
+            oldPipeline: existingTask.pipelineId,
+            newPipeline: input.pipelineId,
+            oldStatus: existingTask.status,
+            newStatus: task.status,
+          },
+        });
+        await this.taskEventLog.log({
+          taskId: id,
+          category: 'field_update',
+          severity: 'info',
+          message: `Pipeline changed from ${existingTask.pipelineId} to ${input.pipelineId}`,
+          data: {
+            oldPipeline: existingTask.pipelineId,
+            newPipeline: input.pipelineId,
+            oldStatus: existingTask.status,
+            newStatus: task.status,
+          },
+        });
+      } else {
+        await this.activityLog.log({
+          action: 'update',
+          entityType: 'task',
+          entityId: id,
+          summary: `Updated task: ${task.title}`,
+        });
+      }
     }
     return task;
   }

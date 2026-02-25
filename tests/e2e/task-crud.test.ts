@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { SIMPLE_PIPELINE } from '../../src/main/data/seeded-pipelines';
+import { SIMPLE_PIPELINE, FEATURE_PIPELINE } from '../../src/main/data/seeded-pipelines';
 
 describe('Task CRUD', () => {
   let ctx: TestContext;
@@ -140,5 +140,20 @@ describe('Task CRUD', () => {
     const children = await ctx.taskStore.listTasks({ parentTaskId: parent.id });
     expect(children).toHaveLength(1);
     expect(children[0].parentTaskId).toBe(parent.id);
+  });
+
+  it('should update a task pipeline', async () => {
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    expect(task.pipelineId).toBe(SIMPLE_PIPELINE.id);
+    expect(task.status).toBe('open');
+
+    const updated = await ctx.taskStore.updateTask(task.id, {
+      pipelineId: FEATURE_PIPELINE.id,
+    });
+
+    expect(updated).not.toBeNull();
+    expect(updated!.pipelineId).toBe(FEATURE_PIPELINE.id);
+    // Status should remain the same since 'open' exists in both pipelines
+    expect(updated!.status).toBe('open');
   });
 });

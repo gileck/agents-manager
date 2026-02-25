@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import itermIcon from '../assets/iterm-icon.png';
 import vscodeIcon from '../assets/vscode-icon.png';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -25,9 +24,11 @@ import { HookFailureBanner } from '../components/pipeline/HookFailureBanner';
 import { PipelineProgress } from '../components/pipeline/PipelineProgress';
 import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
 import { useIpc } from '@template/renderer/hooks/useIpc';
+import { PlanReviewCard } from '../components/plan/PlanReviewCard';
 import type {
   Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, HookFailure,
+  PlanComment,
 } from '../../shared/types';
 import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
 import { useTaskChat } from '../hooks/useTaskChat';
@@ -35,8 +36,6 @@ import { AgentChat } from '../components/chat/AgentChat';
 
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
-import { PlanReviewSection } from '../components/task-detail/PlanReviewSection';
-import { DesignReviewSection } from '../components/task-detail/DesignReviewSection';
 import type { QuestionResponse } from '../components/prompts/QuestionForm';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
@@ -567,56 +566,64 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto' }}>
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>Plan</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {task.plan ? (
-                <PlanMarkdown content={task.plan} />
-              ) : (
-                <p className="text-sm text-muted-foreground">No plan yet. A plan will appear here after the planning agent completes.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {task.status === 'plan_review' && (
-            <PlanReviewSection
-              taskId={id!}
-              planComments={task.planComments}
-              transitions={transitions ?? []}
-              transitioning={transitioning}
-              onTransition={handleTransition}
-              onRefetch={refetch}
-            />
-          )}
+        <TabsContent value="plan">
+          <PlanReviewCard
+            title="Plan"
+            content={task.plan}
+            emptyContentMessage="No plan yet. A plan will appear here after the planning agent completes."
+            comments={task.planComments || []}
+            isReviewStatus={task.status === 'plan_review'}
+            transitions={transitions ?? []}
+            transitioning={transitioning}
+            commentPlaceholder="Add feedback for the planning agent..."
+            approveToStatus="implementing"
+            reviseToStatus="planning"
+            onAction={async (toStatus, comment) => {
+              if (comment.trim()) {
+                const newComment: PlanComment = {
+                  author: 'admin',
+                  content: comment.trim(),
+                  createdAt: Date.now(),
+                };
+                await window.api.tasks.update(id!, {
+                  planComments: [...(task.planComments ?? []), newComment],
+                });
+                await refetch();
+              }
+              await handleTransition(toStatus);
+            }}
+            renderContent={(content) => <PlanMarkdown content={content} />}
+          />
         </TabsContent>
 
-        <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto' }}>
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>Technical Design</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {task.technicalDesign ? (
-                <PlanMarkdown content={task.technicalDesign} />
-              ) : (
-                <p className="text-sm text-muted-foreground">No technical design yet. A design document will appear here after the design agent completes.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {task.status === 'design_review' && (
-            <DesignReviewSection
-              taskId={id!}
-              designComments={task.technicalDesignComments}
-              transitions={transitions ?? []}
-              transitioning={transitioning}
-              onTransition={handleTransition}
-              onRefetch={refetch}
-            />
-          )}
+        <TabsContent value="design">
+          <PlanReviewCard
+            title="Technical Design"
+            content={task.technicalDesign}
+            emptyContentMessage="No technical design yet. A design document will appear here after the design agent completes."
+            comments={task.technicalDesignComments || []}
+            isReviewStatus={task.status === 'design_review'}
+            transitions={transitions ?? []}
+            transitioning={transitioning}
+            commentPlaceholder="Add feedback for the design agent..."
+            approveToStatus="implementing"
+            reviseToStatus="designing"
+            onAction={async (toStatus, comment) => {
+              if (comment.trim()) {
+                const newComment: PlanComment = {
+                  author: 'admin',
+                  content: comment.trim(),
+                  createdAt: Date.now(),
+                };
+                await window.api.tasks.update(id!, {
+                  technicalDesignComments: [...(task.technicalDesignComments ?? []), newComment],
+                });
+                await refetch();
+              }
+              await handleTransition(toStatus);
+            }}
+            renderContent={(content) => <PlanMarkdown content={content} />}
+          />
         </TabsContent>
 
         <TabsContent value="chat" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -780,3 +787,4 @@ export function TaskDetailPage() {
     </div>
   );
 }
+

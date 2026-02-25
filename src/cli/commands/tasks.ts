@@ -3,6 +3,7 @@ import type { AppServices } from '../../main/providers/setup';
 import type { Subtask, SubtaskStatus } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject } from '../context';
+import { getSetting } from '@template/main/services/settings-service';
 
 export function registerTaskCommands(program: Command, getServices: () => AppServices): void {
   const tasks = program.command('tasks').description('Manage tasks');
@@ -85,13 +86,21 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
 
       let pipelineId = cmdOpts.pipeline;
       if (!pipelineId) {
-        const pipelines = await services.pipelineStore.listPipelines();
-        if (pipelines.length === 0) {
-          console.error('No pipelines available. Create one first.');
-          process.exitCode = 1;
-          return;
+        // Try to get default from settings
+        const defaultPipelineId = getSetting('default_pipeline_id', '');
+
+        if (defaultPipelineId) {
+          pipelineId = defaultPipelineId;
+        } else {
+          // Fall back to first pipeline
+          const pipelines = await services.pipelineStore.listPipelines();
+          if (pipelines.length === 0) {
+            console.error('No pipelines available. Create one first.');
+            process.exitCode = 1;
+            return;
+          }
+          pipelineId = pipelines[0].id;
         }
-        pipelineId = pipelines[0].id;
       }
 
       const task = await services.workflowService.createTask({
@@ -114,12 +123,14 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
     .option('--tags <tags>', 'Comma-separated tags')
+    .option('--pipeline <id>', 'Pipeline ID')
     .action(async (id: string, cmdOpts: {
       title?: string;
       description?: string;
       priority?: number;
       assignee?: string;
       tags?: string;
+      pipeline?: string;
     }) => {
       const opts = program.opts() as OutputOptions;
       const services = getServices();
@@ -129,6 +140,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
         priority: cmdOpts.priority,
         assignee: cmdOpts.assignee,
         tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
+        pipelineId: cmdOpts.pipeline,
       });
       if (!task) {
         console.error(`Task not found: ${id}`);

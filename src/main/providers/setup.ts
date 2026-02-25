@@ -17,6 +17,7 @@ import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IFeatureStore } from '../interfaces/feature-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
+import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IKanbanBoardStore } from '../interfaces/kanban-board-store';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -31,6 +32,7 @@ import { SqliteTaskContextStore } from '../stores/sqlite-task-context-store';
 import { SqliteFeatureStore } from '../stores/sqlite-feature-store';
 import { SqliteAgentDefinitionStore } from '../stores/sqlite-agent-definition-store';
 import { SqliteChatMessageStore } from '../stores/sqlite-chat-message-store';
+import { SqliteChatSessionStore } from '../stores/sqlite-chat-session-store';
 import { SqliteKanbanBoardStore } from '../stores/sqlite-kanban-board-store';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
@@ -92,6 +94,7 @@ export interface AppServices {
   timelineService: TimelineService;
   workflowReviewSupervisor: WorkflowReviewSupervisor;
   chatMessageStore: IChatMessageStore;
+  chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
   taskChatAgentService: TaskChatAgentService;
 }
@@ -117,6 +120,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const featureStore = new SqliteFeatureStore(db);
   const agentDefinitionStore = new SqliteAgentDefinitionStore(db);
   const chatMessageStore = new SqliteChatMessageStore(db);
+  const chatSessionStore = new SqliteChatSessionStore(db);
   const kanbanBoardStore = new SqliteKanbanBoardStore(db);
 
   // Phase 2 infrastructure — factory functions create project-scoped instances
@@ -180,7 +184,7 @@ export function createAppServices(db: Database.Database): AppServices {
   );
 
   // Chat agent service
-  const chatAgentService = new ChatAgentService(chatMessageStore, projectStore);
+  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore);
 
   // Task chat agent service
   const taskChatAgentService = new TaskChatAgentService(chatMessageStore, taskStore, projectStore, pipelineStore);
@@ -223,6 +227,7 @@ export function createAppServices(db: Database.Database): AppServices {
     timelineService,
     workflowReviewSupervisor,
     chatMessageStore,
+    chatSessionStore,
     chatAgentService,
     taskChatAgentService,
   };

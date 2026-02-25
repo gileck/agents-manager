@@ -5,7 +5,7 @@ import { generateId, now } from './utils';
 
 interface ChatMessageRow {
   id: string;
-  project_id: string;
+  session_id: string;
   role: string;
   content: string;
   created_at: number;
@@ -16,7 +16,7 @@ interface ChatMessageRow {
 function rowToMessage(row: ChatMessageRow): ChatMessage {
   return {
     id: row.id,
-    projectId: row.project_id,
+    sessionId: row.session_id,
     role: row.role as ChatMessage['role'],
     content: row.content,
     createdAt: row.created_at,
@@ -33,12 +33,12 @@ export class SqliteChatMessageStore implements IChatMessageStore {
     const timestamp = now();
 
     this.db.prepare(
-      'INSERT INTO chat_messages (id, project_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, input.projectId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null);
+      'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, input.sessionId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null);
 
     return {
       id,
-      projectId: input.projectId,
+      sessionId: input.sessionId,
       role: input.role,
       content: input.content,
       createdAt: timestamp,
@@ -47,34 +47,34 @@ export class SqliteChatMessageStore implements IChatMessageStore {
     };
   }
 
-  async getMessagesForProject(projectId: string): Promise<ChatMessage[]> {
+  async getMessagesForSession(sessionId: string): Promise<ChatMessage[]> {
     const rows = this.db.prepare(
-      'SELECT * FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC'
-    ).all(projectId) as ChatMessageRow[];
+      'SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC'
+    ).all(sessionId) as ChatMessageRow[];
     return rows.map(rowToMessage);
   }
 
-  async clearMessages(projectId: string): Promise<void> {
-    this.db.prepare('DELETE FROM chat_messages WHERE project_id = ?').run(projectId);
+  async clearMessages(sessionId: string): Promise<void> {
+    this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
   }
 
-  async replaceAllMessages(projectId: string, messages: ChatMessageCreateInput[]): Promise<ChatMessage[]> {
+  async replaceAllMessages(sessionId: string, messages: ChatMessageCreateInput[]): Promise<ChatMessage[]> {
     const result: ChatMessage[] = [];
 
     const txn = this.db.transaction(() => {
-      this.db.prepare('DELETE FROM chat_messages WHERE project_id = ?').run(projectId);
+      this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
 
       const insert = this.db.prepare(
-        'INSERT INTO chat_messages (id, project_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
       );
 
       for (const msg of messages) {
         const id = generateId();
         const timestamp = now();
-        insert.run(id, projectId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null);
+        insert.run(id, sessionId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null);
         result.push({
           id,
-          projectId,
+          sessionId,
           role: msg.role,
           content: msg.content,
           createdAt: timestamp,

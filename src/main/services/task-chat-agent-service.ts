@@ -60,7 +60,7 @@ export class TaskChatAgentService {
     const scopeKey = taskScopeKey(taskId);
 
     const userMessage = await this.chatMessageStore.addMessage({
-      projectId: scopeKey,
+      sessionId: scopeKey,
       role: 'user',
       content: message,
     });
@@ -78,7 +78,7 @@ export class TaskChatAgentService {
     const systemPrompt = this.buildSystemPrompt(task, pipeline?.name ?? task.pipelineId);
 
     // Load conversation history
-    const history = await this.chatMessageStore.getMessagesForProject(scopeKey);
+    const history = await this.chatMessageStore.getMessagesForSession(scopeKey);
 
     const conversationLines: string[] = [];
     for (const msg of history.slice(0, -1)) {
@@ -112,7 +112,7 @@ export class TaskChatAgentService {
   }
 
   async getMessages(taskId: string): Promise<ChatMessage[]> {
-    return this.chatMessageStore.getMessagesForProject(taskScopeKey(taskId));
+    return this.chatMessageStore.getMessagesForSession(taskScopeKey(taskId));
   }
 
   async clearMessages(taskId: string): Promise<void> {
@@ -285,7 +285,7 @@ export class TaskChatAgentService {
       if (resultText.trim()) {
         try {
           await this.chatMessageStore.addMessage({
-            projectId: scopeKey,
+            sessionId: scopeKey,
             role: 'assistant',
             content: resultText,
             costInputTokens,
