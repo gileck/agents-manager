@@ -16,61 +16,81 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       updatedAt: now(),
     };
 
-    const stmt = this.db.prepare(`
-      INSERT INTO project_chat_sessions (id, project_id, name, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO project_chat_sessions (id, project_id, name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+      `);
 
-    stmt.run(session.id, session.projectId, session.name, session.createdAt, session.updatedAt);
-    return session;
+      stmt.run(session.id, session.projectId, session.name, session.createdAt, session.updatedAt);
+      return session;
+    } catch (error) {
+      throw new Error(`Failed to create chat session: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async getSession(id: string): Promise<ChatSession | null> {
-    const stmt = this.db.prepare(`
-      SELECT id, project_id as projectId, name, created_at as createdAt, updated_at as updatedAt
-      FROM project_chat_sessions
-      WHERE id = ?
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT id, project_id as projectId, name, created_at as createdAt, updated_at as updatedAt
+        FROM project_chat_sessions
+        WHERE id = ?
+      `);
 
-    const row = stmt.get(id) as ChatSession | undefined;
-    return row || null;
+      const row = stmt.get(id) as ChatSession | undefined;
+      return row || null;
+    } catch (error) {
+      throw new Error(`Failed to get chat session: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async listSessionsForProject(projectId: string): Promise<ChatSession[]> {
-    const stmt = this.db.prepare(`
-      SELECT id, project_id as projectId, name, created_at as createdAt, updated_at as updatedAt
-      FROM project_chat_sessions
-      WHERE project_id = ?
-      ORDER BY created_at ASC
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT id, project_id as projectId, name, created_at as createdAt, updated_at as updatedAt
+        FROM project_chat_sessions
+        WHERE project_id = ?
+        ORDER BY created_at ASC
+      `);
 
-    const rows = stmt.all(projectId) as ChatSession[];
-    return rows;
+      const rows = stmt.all(projectId) as ChatSession[];
+      return rows;
+    } catch (error) {
+      throw new Error(`Failed to list chat sessions: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async updateSession(id: string, input: ChatSessionUpdateInput): Promise<ChatSession | null> {
-    const stmt = this.db.prepare(`
-      UPDATE project_chat_sessions
-      SET name = ?, updated_at = ?
-      WHERE id = ?
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        UPDATE project_chat_sessions
+        SET name = ?, updated_at = ?
+        WHERE id = ?
+      `);
 
-    const result = stmt.run(input.name, now(), id);
+      const result = stmt.run(input.name, now(), id);
 
-    if (result.changes === 0) {
-      return null;
+      if (result.changes === 0) {
+        return null;
+      }
+
+      return this.getSession(id);
+    } catch (error) {
+      throw new Error(`Failed to update chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
-
-    return this.getSession(id);
   }
 
   async deleteSession(id: string): Promise<boolean> {
-    const stmt = this.db.prepare(`
-      DELETE FROM project_chat_sessions
-      WHERE id = ?
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        DELETE FROM project_chat_sessions
+        WHERE id = ?
+      `);
 
-    const result = stmt.run(id);
-    return result.changes > 0;
+      const result = stmt.run(id);
+      return result.changes > 0;
+    } catch (error) {
+      throw new Error(`Failed to delete chat session: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }

@@ -139,6 +139,13 @@ export class ChatAgentService {
         agent.status = 'failed';
         agent.lastActivity = Date.now();
       }
+      // Clean up failed agent after a delay
+      setTimeout(() => {
+        const agent = this.runningAgents.get(sessionId);
+        if (agent && agent.status === 'failed') {
+          this.runningAgents.delete(sessionId);
+        }
+      }, 5000); // 5 second delay
     });
 
     return { userMessage, sessionId };
@@ -373,6 +380,14 @@ export class ChatAgentService {
       }
     } finally {
       this.runningControllers.delete(sessionId);
+
+      // Clean up completed agent after a delay to allow UI to show completion status
+      setTimeout(() => {
+        const agent = this.runningAgents.get(sessionId);
+        if (agent && agent.status !== 'running') {
+          this.runningAgents.delete(sessionId);
+        }
+      }, 5000); // 5 second delay
 
       // Persist assistant response with cost data
       if (resultText.trim()) {
