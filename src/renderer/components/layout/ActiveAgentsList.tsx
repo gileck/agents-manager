@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { RefreshCw, Check, X, CircleDot } from 'lucide-react';
 import { cn } from '@template/renderer/lib/utils';
 import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
+import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import type { AgentRunStatus } from '../../../shared/types';
 
 function StatusIndicator({ status }: { status: AgentRunStatus }) {
@@ -83,6 +84,11 @@ export function ActiveAgentsList() {
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] opacity-70">{run.mode}</span>
                 {run.status === 'running' && <ElapsedTime startedAt={run.startedAt} />}
+                {run.status !== 'running' && run.completedAt && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatRelativeTimestamp(run.completedAt)}
+                  </span>
+                )}
               </div>
             </div>
           </NavLink>

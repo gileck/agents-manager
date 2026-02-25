@@ -82,5 +82,23 @@ export function useActiveAgentRuns() {
     entries.push({ run, taskTitle: taskTitles.get(run.taskId) || 'Loading...' });
   }
 
+  // Sort entries: running agents first, then by completedAt (most recent first)
+  entries.sort((a, b) => {
+    // Running agents always come first
+    if (a.run.status === 'running' && b.run.status !== 'running') return -1;
+    if (a.run.status !== 'running' && b.run.status === 'running') return 1;
+
+    // Both running or both not running
+    if (a.run.status === 'running' && b.run.status === 'running') {
+      // For running agents, sort by startedAt (most recent first)
+      return b.run.startedAt - a.run.startedAt;
+    }
+
+    // For non-running agents, sort by completedAt if available
+    const aCompleted = a.run.completedAt || 0;
+    const bCompleted = b.run.completedAt || 0;
+    return bCompleted - aCompleted;
+  });
+
   return { entries, refresh };
 }
