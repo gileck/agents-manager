@@ -102,6 +102,18 @@ export class PrReviewerAgent extends BaseClaudeAgent {
         `You are a code reviewer. Review the changes in this branch for the following task: ${task.title}.${desc}`,
         '',
       );
+
+      // Include subtasks for single-phase reviews
+      if (task.subtasks && task.subtasks.length > 0) {
+        lines.push(
+          '## Task Subtasks - ALL must be implemented:',
+        );
+        for (const st of task.subtasks) {
+          lines.push(`- ${st.name}`);
+        }
+        lines.push('');
+      }
+
       if (hasPriorReview) {
         lines.push(
           'This is a RE-REVIEW. Previous review feedback and fixes are in the Task Context above.',
@@ -115,13 +127,36 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       '## Steps',
       `1. Run \`git diff ${defaultBranch}..HEAD\` to see all changes made in this branch.`,
       '2. Review the diff using the criteria below.',
-      '3. Make every comment actionable — say what to change, not just what is wrong.',
-      '',
+    );
+
+    // Add explicit subtask verification step
+    if ((multiPhase && activePhase) || (task.subtasks && task.subtasks.length > 0)) {
+      lines.push(
+        '3. Verify each subtask is implemented by finding corresponding code changes in the diff.',
+        '4. Make every comment actionable — say what to change, not just what is wrong.',
+      );
+    } else {
+      lines.push('3. Make every comment actionable — say what to change, not just what is wrong.');
+    }
+
+    lines.push('',
       '## Review Criteria',
       '**Must-check (block if violated):**',
-      multiPhase && activePhase
-        ? `- Completeness — are all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables above implemented?`
-        : '- Correctness — does the code do what the task requires?',
+    );
+
+    // Make subtask verification mandatory for all tasks with subtasks
+    if (multiPhase && activePhase) {
+      lines.push(`- Completeness — are all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables above implemented?`);
+    } else if (task.subtasks && task.subtasks.length > 0) {
+      lines.push(
+        '- Subtask Completeness — verify EACH subtask listed above has been implemented in the diff',
+        '- If any subtask is missing, you MUST request changes and list the specific missing subtasks',
+      );
+    } else {
+      lines.push('- Correctness — does the code do what the task requires?');
+    }
+
+    lines.push(
       '- Security — no hardcoded secrets, no SQL injection, no path traversal, no XSS',
       '- Data integrity — no silent data loss, no unhandled nulls in critical paths',
       '',
@@ -134,10 +169,22 @@ export class PrReviewerAgent extends BaseClaudeAgent {
       '- Style nits, naming preferences, minor formatting',
       '',
       '## Approval Threshold',
-      multiPhase && activePhase
-        ? `Approve if all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables are present, no must-check violations, and no significant should-check issues.`
-        : 'Approve if there are no must-check violations and no significant should-check issues.',
     );
+
+    if (multiPhase && activePhase) {
+      lines.push(`Approve if all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables are present, no must-check violations, and no significant should-check issues.`);
+    } else if (task.subtasks && task.subtasks.length > 0) {
+      lines.push(
+        'Approve ONLY if:',
+        '1. ALL subtasks listed above have been implemented (verify each one in the diff)',
+        '2. There are no must-check violations',
+        '3. There are no significant should-check issues',
+        '',
+        'If ANY subtask is missing from the implementation, you MUST request changes.',
+      );
+    } else {
+      lines.push('Approve if there are no must-check violations and no significant should-check issues.');
+    }
 
     return lines.join('\n');
   }

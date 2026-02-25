@@ -79,6 +79,43 @@ describe('PrReviewerAgent', () => {
       const prompt = agent.buildPrompt(createContext());
       expect(prompt).toContain('git diff main..HEAD');
     });
+
+    it('includes subtask list for single-phase reviews', () => {
+      const ctx = createContext();
+      ctx.task.subtasks = [
+        { name: 'Implement API endpoint', status: 'pending' },
+        { name: 'Add unit tests', status: 'pending' },
+      ];
+      const prompt = agent.buildPrompt(ctx);
+      expect(prompt).toContain('Task Subtasks - ALL must be implemented:');
+      expect(prompt).toContain('- Implement API endpoint');
+      expect(prompt).toContain('- Add unit tests');
+    });
+
+    it('adds subtask verification to review criteria when subtasks exist', () => {
+      const ctx = createContext();
+      ctx.task.subtasks = [{ name: 'Test subtask', status: 'pending' }];
+      const prompt = agent.buildPrompt(ctx);
+      expect(prompt).toContain('Subtask Completeness — verify EACH subtask listed above has been implemented');
+      expect(prompt).toContain('If any subtask is missing, you MUST request changes');
+    });
+
+    it('includes subtask verification in approval threshold', () => {
+      const ctx = createContext();
+      ctx.task.subtasks = [{ name: 'Test subtask', status: 'pending' }];
+      const prompt = agent.buildPrompt(ctx);
+      expect(prompt).toContain('ALL subtasks listed above have been implemented');
+      expect(prompt).toContain('If ANY subtask is missing from the implementation, you MUST request changes');
+    });
+
+    it('does not add subtask sections when no subtasks exist', () => {
+      const ctx = createContext();
+      ctx.task.subtasks = [];
+      const prompt = agent.buildPrompt(ctx);
+      expect(prompt).not.toContain('Task Subtasks');
+      expect(prompt).not.toContain('Subtask Completeness');
+      expect(prompt).toContain('Correctness — does the code do what the task requires?');
+    });
   });
 
   describe('inferOutcome', () => {
