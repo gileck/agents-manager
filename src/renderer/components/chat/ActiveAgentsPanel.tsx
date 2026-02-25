@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { ChevronRight, Loader2, AlertCircle, CheckCircle2, X, Clock } from 'lucide-react';
-import { cn } from '@template/renderer/lib/utils';
+import React from 'react';
+import { Loader2, AlertCircle, CheckCircle2, X, Clock } from 'lucide-react';
 import { RunningAgent } from '../../../shared/types';
 import { Button } from '../ui/button';
 
@@ -15,8 +14,6 @@ export function ActiveAgentsPanel({
   onNavigateToSession,
   onStopAgent,
 }: ActiveAgentsPanelProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
   // Group agents by project
   const agentsByProject = agents.reduce((acc, agent) => {
     if (!acc[agent.projectId]) {
@@ -70,129 +67,73 @@ export function ActiveAgentsPanel({
   }
 
   return (
-    <div
-      className={cn(
-        'border-l border-border bg-card transition-all duration-300',
-        isCollapsed ? 'w-12' : 'w-80'
-      )}
-    >
-      <div className="p-3 border-b border-border">
-        <div className="flex items-center justify-between">
-          <h3 className={cn(
-            'text-sm font-semibold flex items-center gap-2',
-            isCollapsed && 'hidden'
-          )}>
-            Active Agents
-            <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-              {agents.length}
-            </span>
-          </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-          >
-            <ChevronRight
-              className={cn(
-                'h-4 w-4 transition-transform',
-                isCollapsed && 'rotate-180'
-              )}
-            />
-          </Button>
-        </div>
-      </div>
+    <div className="p-4">
+      <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+        Active Agents
+        <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+          {agents.length}
+        </span>
+      </h3>
 
-      {!isCollapsed && (
-        <div className="overflow-y-auto max-h-[calc(100vh-8rem)]">
-          {Object.entries(agentsByProject).map(([projectId, { projectName, agents: projectAgents }]) => (
-            <div key={projectId} className="border-b border-border last:border-0">
-              <div className="px-3 py-2 bg-muted/30">
-                <p className="text-xs font-medium text-muted-foreground">{projectName}</p>
-              </div>
+      <div className="space-y-1">
+        {Object.entries(agentsByProject).map(([projectId, { projectName, agents: projectAgents }]) => (
+          <div key={projectId}>
+            <div className="py-1">
+              <p className="text-xs font-medium text-muted-foreground">{projectName}</p>
+            </div>
 
-              {projectAgents.map((agent) => (
-                <div
-                  key={agent.sessionId}
-                  className="px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors group"
-                  onClick={() => onNavigateToSession(agent.sessionId)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        {getStatusIcon(agent.status)}
-                        <span className="text-sm font-medium truncate">
-                          {agent.sessionName}
-                        </span>
-                      </div>
-
-                      {agent.messagePreview && (
-                        <p className="text-xs text-muted-foreground truncate mb-1">
-                          {agent.messagePreview}
-                        </p>
-                      )}
-
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {agent.status === 'running'
-                            ? getElapsedTime(agent.startedAt)
-                            : getRelativeTime(agent.lastActivity)
-                          }
-                        </span>
-                      </div>
+            {projectAgents.map((agent) => (
+              <div
+                key={agent.sessionId}
+                className="px-2 py-1.5 rounded-md hover:bg-muted/50 cursor-pointer transition-colors group"
+                onClick={() => onNavigateToSession(agent.sessionId)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      {getStatusIcon(agent.status)}
+                      <span className="text-sm font-medium truncate">
+                        {agent.sessionName}
+                      </span>
                     </div>
 
-                    {agent.status === 'running' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onStopAgent(agent.sessionId);
-                        }}
-                        title="Stop agent"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
+                    {agent.messagePreview && (
+                      <p className="text-xs text-muted-foreground truncate mb-0.5">
+                        {agent.messagePreview}
+                      </p>
                     )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
 
-      {isCollapsed && (
-        <div className="flex flex-col items-center gap-2 py-3">
-          {agents.filter(a => a.status === 'running').length > 0 && (
-            <div className="relative">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              <span className="absolute -top-1 -right-1 text-xs bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center">
-                {agents.filter(a => a.status === 'running').length}
-              </span>
-            </div>
-          )}
-          {agents.filter(a => a.status === 'completed').length > 0 && (
-            <div className="relative">
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-              <span className="absolute -top-1 -right-1 text-xs bg-green-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
-                {agents.filter(a => a.status === 'completed').length}
-              </span>
-            </div>
-          )}
-          {agents.filter(a => a.status === 'failed').length > 0 && (
-            <div className="relative">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              <span className="absolute -top-1 -right-1 text-xs bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center">
-                {agents.filter(a => a.status === 'failed').length}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {agent.status === 'running'
+                          ? getElapsedTime(agent.startedAt)
+                          : getRelativeTime(agent.lastActivity)
+                        }
+                      </span>
+                    </div>
+                  </div>
+
+                  {agent.status === 'running' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStopAgent(agent.sessionId);
+                      }}
+                      title="Stop agent"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

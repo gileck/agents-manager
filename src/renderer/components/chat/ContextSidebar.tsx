@@ -45,7 +45,7 @@ export function ContextSidebar({ messages, run, tokenUsage }: ContextSidebarProp
   };
 
   return (
-    <div className="w-64 border-l border-border bg-background p-4 space-y-4 overflow-y-auto">
+    <div className="p-4 space-y-4 border-b border-border">
       <h3 className="text-sm font-semibold text-foreground">Token Usage</h3>
 
       <div className="space-y-3">

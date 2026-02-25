@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Trash2, FileText, MessageSquare } from 'lucide-react';
+import { Trash2, FileText, MessageSquare, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useChat } from '../hooks/useChat';
 import { useChatSessions } from '../hooks/useChatSessions';
@@ -31,6 +31,7 @@ export function ChatPage() {
   const {
     messages,
     isStreaming,
+    isQueued,
     loading,
     error,
     sendMessage,
@@ -40,18 +41,6 @@ export function ChatPage() {
     tokenUsage,
   } = useChat(currentSessionId);
   const [showSidebar, setShowSidebar] = useState(false);
-
-  if (!currentProjectId) {
-    return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        <div className="text-center">
-          <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p className="text-lg font-medium">Select a project to start chatting</p>
-          <p className="text-sm mt-1">Choose a project from the sidebar to begin</p>
-        </div>
-      </div>
-    );
-  }
 
   const handleNavigateToSession = useCallback((sessionId: string) => {
     const agent = agents.find(a => a.sessionId === sessionId);
@@ -64,6 +53,18 @@ export function ChatPage() {
       switchSession(sessionId);
     }
   }, [agents, currentProjectId, navigate, switchSession]);
+
+  if (!currentProjectId) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        <div className="text-center">
+          <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-lg font-medium">Select a project to start chatting</p>
+          <p className="text-sm mt-1">Choose a project from the sidebar to begin</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -79,18 +80,14 @@ export function ChatPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {messages.length > 0 && (
-            <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Toggle token usage sidebar"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 16V8m4 8v-5m4 5V5m4 11v-3" />
-              </svg>
-              Tokens
-            </button>
-          )}
+          <button
+            onClick={() => setShowSidebar(!showSidebar)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            title="Toggle sidebar"
+          >
+            {showSidebar ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+            Sidebar
+          </button>
           <button
             onClick={summarizeChat}
             disabled={loading || isStreaming || messages.length === 0}
@@ -141,6 +138,7 @@ export function ChatPage() {
             <AgentChat
               messages={messages}
               isRunning={isStreaming}
+              isQueued={isQueued}
               onSend={sendMessage}
               onStop={stopChat}
               emptyState={
@@ -153,14 +151,22 @@ export function ChatPage() {
             />
           )}
         </div>
-        {showSidebar && messages.length > 0 && (
-          <ContextSidebar messages={messages} tokenUsage={tokenUsage} />
+        {showSidebar && (
+          <div className="w-72 border-l border-border bg-card flex flex-col overflow-y-auto">
+            {/* Token Usage section */}
+            {messages.length > 0 && (
+              <ContextSidebar messages={messages} tokenUsage={tokenUsage} />
+            )}
+            {/* Active Agents section */}
+            {agents.length > 0 && (
+              <ActiveAgentsPanel
+                agents={agents}
+                onNavigateToSession={handleNavigateToSession}
+                onStopAgent={stopAgent}
+              />
+            )}
+          </div>
         )}
-        <ActiveAgentsPanel
-          agents={agents}
-          onNavigateToSession={handleNavigateToSession}
-          onStopAgent={stopAgent}
-        />
       </div>
     </div>
   );

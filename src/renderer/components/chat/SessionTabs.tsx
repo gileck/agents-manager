@@ -1,11 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, X, MoreVertical, Loader2, Check } from 'lucide-react';
 import { cn } from '@template/renderer/lib/utils';
 import { ChatSession, RunningAgent } from '../../../shared/types';
-import { Button } from '../ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 
 interface SessionTabsProps {
   sessions: ChatSession[];
@@ -26,11 +24,10 @@ export function SessionTabs({
   onSessionRename,
   onSessionDelete,
 }: SessionTabsProps) {
-  const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
-  const [newSessionName, setNewSessionName] = useState('');
   const [renameSessionId, setRenameSessionId] = useState<string | null>(null);
   const [renameSessionName, setRenameSessionName] = useState('');
   const [contextMenuSession, setContextMenuSession] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   // Close context menu when clicking outside
@@ -45,17 +42,8 @@ export function SessionTabs({
   }, []);
 
   const handleNewSession = () => {
-    const defaultName = `Session ${sessions.length + 1}`;
-    setNewSessionName(defaultName);
-    setNewSessionDialogOpen(true);
-  };
-
-  const handleCreateSession = () => {
-    if (newSessionName.trim()) {
-      onSessionCreate(newSessionName.trim());
-      setNewSessionDialogOpen(false);
-      setNewSessionName('');
-    }
+    const name = `Session ${sessions.length + 1}`;
+    onSessionCreate(name);
   };
 
   const handleStartRename = (sessionId: string, currentName: string) => {
@@ -178,6 +166,12 @@ export function SessionTabs({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (contextMenuSession === session.id) {
+                    setContextMenuSession(null);
+                    return;
+                  }
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  setMenuPosition({ top: rect.bottom + 4, left: rect.left });
                   setContextMenuSession(session.id);
                 }}
                 className={cn(
@@ -188,30 +182,6 @@ export function SessionTabs({
               >
                 <MoreVertical className="h-3 w-3" />
               </button>
-
-              {/* Context menu */}
-              {contextMenuSession === session.id && (
-                <div
-                  ref={contextMenuRef}
-                  className="absolute top-full left-0 mt-1 bg-card border border-border rounded-md shadow-lg z-50"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    onClick={() => handleStartRename(session.id, session.name)}
-                    className="block w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors"
-                  >
-                    Rename
-                  </button>
-                  {sessions.length > 1 && (
-                    <button
-                      onClick={() => handleDelete(session.id)}
-                      className="block w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-muted transition-colors"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
           );
         })}
@@ -226,46 +196,31 @@ export function SessionTabs({
         </button>
       </div>
 
-      {/* New session dialog */}
-      <Dialog open={newSessionDialogOpen} onOpenChange={setNewSessionDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Session</DialogTitle>
-            <DialogDescription>
-              Create a new chat session for this project.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); handleCreateSession(); }}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="session-name">Session Name</Label>
-                <Input
-                  id="session-name"
-                  value={newSessionName}
-                  onChange={(e) => setNewSessionName(e.target.value)}
-                  placeholder="Enter session name"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setNewSessionDialogOpen(false);
-                  setNewSessionName('');
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!newSessionName.trim()}>
-                Create Session
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Context menu portal */}
+      {contextMenuSession && createPortal(
+        <div
+          ref={contextMenuRef}
+          className="fixed bg-card border border-border rounded-md shadow-lg z-50 py-1"
+          style={{ top: menuPosition.top, left: menuPosition.left }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => handleStartRename(contextMenuSession, sessions.find(s => s.id === contextMenuSession)?.name || '')}
+            className="block w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors"
+          >
+            Rename
+          </button>
+          {sessions.length > 1 && (
+            <button
+              onClick={() => handleDelete(contextMenuSession)}
+              className="block w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-muted transition-colors"
+            >
+              Delete
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

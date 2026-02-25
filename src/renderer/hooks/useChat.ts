@@ -21,17 +21,25 @@ export function useChat(sessionId: string | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
   const streamingRef = useRef(false);
+  const doSendRef = useRef<(message: string) => Promise<void>>(null);
 
   // Load messages on mount or session change
   useEffect(() => {
+    // Clear all state when session changes to avoid cross-session leaks
+    setDbMessages([]);
+    setStreamingMessages([]);
+    setIsStreaming(false);
+    setQueuedMessage(null);
+    streamingRef.current = false;
+    setError(null);
+
     if (!sessionId) {
-      setDbMessages([]);
       return;
     }
 
     setLoading(true);
-    setError(null);
     window.api.chat.messages(sessionId)
       .then(setDbMessages)
       .catch((err: Error) => setError(err.message))
@@ -78,7 +86,7 @@ export function useChat(sessionId: string | null) {
     return () => { unsubscribe(); };
   }, [sessionId]);
 
-  const sendMessage = useCallback(async (message: string) => {
+  const doSend = useCallback(async (message: string) => {
     if (!sessionId || !message.trim()) return;
 
     setError(null);
@@ -96,6 +104,30 @@ export function useChat(sessionId: string | null) {
       streamingRef.current = false;
     }
   }, [sessionId]);
+
+  // Keep doSendRef in sync
+  doSendRef.current = doSend;
+
+  // Auto-send queued message when streaming completes
+  useEffect(() => {
+    if (!isStreaming && queuedMessage) {
+      const msg = queuedMessage;
+      setQueuedMessage(null);
+      doSendRef.current?.(msg);
+    }
+  }, [isStreaming, queuedMessage]);
+
+  const sendMessage = useCallback(async (message: string) => {
+    if (!sessionId || !message.trim()) return;
+
+    // Queue the message if an agent is already running
+    if (isStreaming) {
+      setQueuedMessage(message);
+      return;
+    }
+
+    doSend(message);
+  }, [sessionId, isStreaming, doSend]);
 
   const stopChat = useCallback(() => {
     if (!sessionId) return;
@@ -162,6 +194,7 @@ export function useChat(sessionId: string | null) {
   return {
     messages,
     isStreaming,
+    isQueued: queuedMessage !== null,
     loading,
     error,
     sendMessage,
