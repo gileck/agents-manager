@@ -61,13 +61,22 @@ export interface AppServices {
   taskPhaseStore: ITaskPhaseStore;
   pendingPromptStore: IPendingPromptStore;
   agentFramework: IAgentFramework;
-  notificationRouter: INotificationRouter;
+  notificationRouter: MultiChannelNotificationRouter;
   agentService: IAgentService;
   workflowService: IWorkflowService;
   taskContextStore: ITaskContextStore;
   featureStore: IFeatureStore;
   agentDefinitionStore: IAgentDefinitionStore;
+  kanbanBoardStore: IKanbanBoardStore;
   createWorktreeManager: (path: string) => IWorktreeManager;
+  createGitOps: (cwd: string) => IGitOps;
+  agentSupervisor: AgentSupervisor;
+  timelineService: TimelineService;
+  workflowReviewSupervisor: WorkflowReviewSupervisor;
+  chatMessageStore: IChatMessageStore;
+  chatSessionStore: IChatSessionStore;
+  chatAgentService: ChatAgentService;
+  agentLibRegistry: AgentLibRegistry;
 }
 ```
 
@@ -112,7 +121,7 @@ The `src/main/interfaces/` directory contains 21 interface files defining every 
 | `IGitOps` | `git-ops.ts` | `createBranch`, `checkout`, `fetch`, `push`, `pull`, `diff`, `commit`, `rebase`, `rebaseAbort`, `getCurrentBranch`, `clean`, `status` |
 | `IScmPlatform` | `scm-platform.ts` | `createPR`, `mergePR`, `getPRStatus` |
 | `INotificationRouter` | `notification-router.ts` | `send` |
-| `IWorkflowService` | `workflow-service.ts` | `createTask`, `updateTask`, `deleteTask`, `resetTask`, `transitionTask`, `startAgent`, `stopAgent`, `respondToPrompt`, `mergePR`, `getDashboardStats` |
+| `IWorkflowService` | `workflow-service.ts` | `createTask`, `updateTask`, `deleteTask`, `resetTask`, `transitionTask`, `forceTransitionTask`, `getPipelineDiagnostics`, `retryHook`, `advancePhase`, `startAgent`, `resumeAgent`, `stopAgent`, `respondToPrompt`, `mergePR`, `getDashboardStats` |
 | `ITaskContextStore` | `task-context-store.ts` | `addEntry`, `getEntriesForTask` |
 | `IFeatureStore` | `feature-store.ts` | `getFeature`, `listFeatures`, `createFeature`, `updateFeature`, `deleteFeature` |
 | `IAgentDefinitionStore` | `agent-definition-store.ts` | `getDefinition`, `listDefinitions`, `getDefinitionByAgentType`, `getDefinitionByMode` |
@@ -157,6 +166,7 @@ engine.registerHook('hook_name', async (task, transition, context) => {
 | `create_prompt` | `src/main/handlers/prompt-handler.ts` | Create pending prompt for human input |
 | `merge_pr` | `src/main/handlers/scm-handler.ts` | Merge PR via GitHub CLI |
 | `push_and_create_pr` | `src/main/handlers/scm-handler.ts` | Rebase, push, create PR |
+| `advance_phase` | `src/main/handlers/phase-handler.ts` | Advance to next implementation phase |
 
 ## Entry Points
 

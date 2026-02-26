@@ -344,4 +344,16 @@ export class SqliteTaskStore implements ITaskStore {
     `).all(taskId) as TaskRow[];
     return rows.map(rowToTask);
   }
+
+  async getStatusCounts(): Promise<{ status: string; count: number }[]> {
+    const rows = this.db.prepare(
+      'SELECT status, COUNT(*) as count FROM tasks GROUP BY status',
+    ).all() as { status: string; count: number }[];
+    return rows;
+  }
+
+  async getTotalCount(): Promise<number> {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM tasks').get() as { count: number };
+    return row.count;
+  }
 }

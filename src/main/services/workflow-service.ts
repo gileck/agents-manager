@@ -51,8 +51,8 @@ export class WorkflowService implements IWorkflowService {
     private agentService: IAgentService,
     private createScmPlatform: (repoPath: string) => IScmPlatform,
     private createWorktreeManager: (path: string) => IWorktreeManager,
-    private createGitOps?: (cwd: string) => IGitOps,
-    private taskContextStore?: ITaskContextStore,
+    private createGitOps: (cwd: string) => IGitOps,
+    private taskContextStore: ITaskContextStore,
   ) {}
 
   async createTask(input: TaskCreateInput): Promise<Task> {
@@ -90,21 +90,15 @@ export class WorkflowService implements IWorkflowService {
       let newStatus = existingTask.status;
       const statusExists = newPipeline.statuses.some((s) => s.name === existingTask.status);
       if (!statusExists) {
-        // Try to find a status with the same name
-        const sameNameStatus = newPipeline.statuses.find((s) => s.name === existingTask.status);
-        if (sameNameStatus) {
-          newStatus = sameNameStatus.name;
-        } else {
-          // Fall back to first status of the new pipeline
-          newStatus = newPipeline.statuses[0]?.name || 'open';
-          await this.taskEventLog.log({
-            taskId: id,
-            category: 'system',
-            severity: 'warning',
-            message: `Status "${existingTask.status}" not found in new pipeline, resetting to "${newStatus}"`,
-            data: { oldStatus: existingTask.status, newStatus, oldPipeline: existingTask.pipelineId, newPipeline: input.pipelineId },
-          });
-        }
+        // Fall back to first status of the new pipeline
+        newStatus = newPipeline.statuses[0]?.name || 'open';
+        await this.taskEventLog.log({
+          taskId: id,
+          category: 'system',
+          severity: 'warning',
+          message: `Status "${existingTask.status}" not found in new pipeline, resetting to "${newStatus}"`,
+          data: { oldStatus: existingTask.status, newStatus, oldPipeline: existingTask.pipelineId, newPipeline: input.pipelineId },
+        });
       }
 
       // Update the status in the input if it's being changed
@@ -263,6 +257,33 @@ export class WorkflowService implements IWorkflowService {
     return run;
   }
 
+  async resumeAgent(
+    taskId: string,
+    message: string,
+    callbacks: {
+      onOutput?: (chunk: string) => void;
+      onMessage?: (msg: AgentChatMessage) => void;
+      onStatusChange?: (status: string) => void;
+    },
+  ): Promise<AgentRun | null> {
+    // Queue the message first — the running agent will pick it up,
+    // or a newly started agent will receive it on its first turn.
+    this.agentService.queueMessage(taskId, message);
+
+    // If an agent is already running for this task, don't start another
+    const activeRuns = await this.agentRunStore.getActiveRuns();
+    const running = activeRuns.find((r) => r.taskId === taskId && r.status === 'running');
+    if (running) return null;
+
+    // Derive mode and agentType from the last run
+    const runs = await this.agentRunStore.getRunsForTask(taskId);
+    const lastRun = runs[0];
+    const mode: AgentMode = lastRun?.mode || 'implement';
+    const agentType = lastRun?.agentType || 'claude-code';
+
+    return this.startAgent(taskId, mode, agentType, callbacks.onOutput, callbacks.onMessage, callbacks.onStatusChange);
+  }
+
   async stopAgent(runId: string): Promise<void> {
     await this.agentService.stop(runId);
     await this.activityLog.log({
@@ -294,17 +315,15 @@ export class WorkflowService implements IWorkflowService {
     });
 
     // Store Q&A as task context entry so the resumed agent sees it
-    if (this.taskContextStore) {
-      const questions = (prompt.payload as Record<string, unknown>)?.questions;
-      const summary = this.formatQASummary(questions, response);
-      await this.taskContextStore.addEntry({
-        taskId: prompt.taskId,
-        source: 'user',
-        entryType: 'user_input',
-        summary,
-        data: { questions, answers: response, promptId },
-      });
-    }
+    const questions = (prompt.payload as Record<string, unknown>)?.questions;
+    const summary = this.formatQASummary(questions, response);
+    await this.taskContextStore.addEntry({
+      taskId: prompt.taskId,
+      source: 'user',
+      entryType: 'user_input',
+      summary,
+      data: { questions, answers: response, promptId },
+    });
 
     // Try to resume via the outcome stored on the prompt
     if (prompt.resumeOutcome) {
@@ -336,20 +355,25 @@ export class WorkflowService implements IWorkflowService {
     return prompt;
   }
 
-  async getDashboardStats(): Promise<DashboardStats> {
-    const projects = await this.projectStore.listProjects();
-    const tasks = await this.taskStore.listTasks({});
-    const activeRuns = await this.agentRunStore.getActiveRuns();
-    const recentActivity = await this.activityLog.getEntries({ since: Date.now() - 86400000 });
+  async getDashboardStats(now?: number): Promise<DashboardStats> {
+    const currentTime = now ?? Date.now();
+
+    const [projects, totalTasks, statusCounts, activeRuns, recentActivity] = await Promise.all([
+      this.projectStore.listProjects(),
+      this.taskStore.getTotalCount(),
+      this.taskStore.getStatusCounts(),
+      this.agentRunStore.getActiveRuns(),
+      this.activityLog.getEntries({ since: currentTime - 86400000 }),
+    ]);
 
     const tasksByStatus: Record<string, number> = {};
-    for (const t of tasks) {
-      tasksByStatus[t.status] = (tasksByStatus[t.status] || 0) + 1;
+    for (const { status, count } of statusCounts) {
+      tasksByStatus[status] = count;
     }
 
     return {
       projectCount: projects.length,
-      totalTasks: tasks.length,
+      totalTasks,
       tasksByStatus,
       activeAgentRuns: activeRuns.length,
       recentActivityCount: recentActivity.length,
@@ -387,19 +411,20 @@ export class WorkflowService implements IWorkflowService {
 
     const currentStatusDef = pipeline.statuses.find((s) => s.name === task.status);
 
-    // Get all transitions grouped by trigger with guard pre-checks for manual ones
-    const allTransitions = await this.pipelineEngine.getAllTransitions(task);
+    // Run independent queries in parallel
+    const [allTransitions, recentEvents, agentRuns] = await Promise.all([
+      this.pipelineEngine.getAllTransitions(task),
+      this.taskEventLog.getEvents({
+        taskId,
+        since: Date.now() - 86400000, // last 24 hours
+      }),
+      this.agentRunStore.getRunsForTask(taskId),
+    ]);
 
     // Pre-check guards for manual transitions
     for (const t of allTransitions.manual) {
       t.guardStatus = await this.pipelineEngine.checkGuards(task, t.to, 'manual') ?? undefined;
     }
-
-    // Get recent hook failures from task events
-    const recentEvents = await this.taskEventLog.getEvents({
-      taskId,
-      since: Date.now() - 86400000, // last 24 hours
-    });
 
     const hookFailures: HookFailureRecord[] = recentEvents
       .filter((e) => e.category === 'system' && (e.severity === 'error' || e.severity === 'warning')
@@ -420,7 +445,6 @@ export class WorkflowService implements IWorkflowService {
       });
 
     // Agent state
-    const agentRuns = await this.agentRunStore.getRunsForTask(taskId);
     const latestRun = agentRuns[0] ?? null;
     const failedRuns = agentRuns.filter((r) => r.status === 'failed' || r.status === 'cancelled');
     const hasRunningAgent = agentRuns.some((r) => r.status === 'running');
@@ -547,6 +571,13 @@ export class WorkflowService implements IWorkflowService {
           data: { reason: 'manual_advance_phase' },
         });
       }
+      await this.taskEventLog.log({
+        taskId,
+        category: 'system',
+        severity: 'warning',
+        message: `No advance_phase transition found in pipeline "${task.pipelineId}" from status "${task.status}"`,
+        data: { pipelineId: task.pipelineId, currentStatus: task.status },
+      });
       return { success: false, error: 'No advance_phase transition found in pipeline' };
     }
 
@@ -559,6 +590,13 @@ export class WorkflowService implements IWorkflowService {
     );
 
     if (!matchingTransition) {
+      await this.taskEventLog.log({
+        taskId,
+        category: 'system',
+        severity: 'warning',
+        message: `No system transition from "${task.status}" with advance_phase hook in pipeline "${task.pipelineId}"`,
+        data: { pipelineId: task.pipelineId, currentStatus: task.status },
+      });
       return { success: false, error: `No system transition from "${task.status}" with advance_phase hook` };
     }
 
@@ -580,18 +618,28 @@ export class WorkflowService implements IWorkflowService {
     return result;
   }
 
-  async mergePR(taskId: string): Promise<void> {
+  async mergePR(taskId: string): Promise<TransitionResult> {
     const artifacts = await this.taskArtifactStore.getArtifactsForTask(taskId, 'pr');
-    if (artifacts.length === 0) throw new Error(`No PR artifact found for task: ${taskId}`);
+    if (artifacts.length === 0) {
+      return { success: false, error: `No PR artifact found for task: ${taskId}` };
+    }
 
     const mergeTask = await this.taskStore.getTask(taskId);
-    if (!mergeTask) throw new Error(`Task not found: ${taskId}`);
+    if (!mergeTask) {
+      return { success: false, error: `Task not found: ${taskId}` };
+    }
     const project = await this.projectStore.getProject(mergeTask.projectId);
-    if (!project?.path) throw new Error(`Project ${mergeTask.projectId} has no path configured`);
+    if (!project?.path) {
+      return { success: false, error: `Project ${mergeTask.projectId} has no path configured` };
+    }
     const scmPlatform = this.createScmPlatform(project.path);
 
     const prUrl = artifacts[artifacts.length - 1].data.url as string;
-    await scmPlatform.mergePR(prUrl);
+    try {
+      await scmPlatform.mergePR(prUrl);
+    } catch (err) {
+      return { success: false, error: `Failed to merge PR: ${err instanceof Error ? err.message : String(err)}` };
+    }
 
     await this.activityLog.log({
       action: 'transition',
@@ -611,6 +659,8 @@ export class WorkflowService implements IWorkflowService {
         await this.pipelineEngine.executeTransition(task, doneTransition.to, { trigger: 'manual' });
       }
     }
+
+    return { success: true };
   }
 
   private formatQASummary(questions: unknown, answers: Record<string, unknown>): string {
@@ -660,7 +710,7 @@ export class WorkflowService implements IWorkflowService {
       await wm.delete(task.id);
 
       // Clean up the remote branch (best-effort)
-      if (branch && this.createGitOps) {
+      if (branch) {
         try {
           const gitOps = this.createGitOps(project.path);
           await gitOps.deleteRemoteBranch(branch);

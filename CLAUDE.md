@@ -229,3 +229,19 @@ Events, activity log, transition history, and debug timeline
 **Docs:** [event-system.md](docs/event-system.md)
 
 ---
+
+## Notifications
+
+Notification architecture, channels, Telegram bot, and configuration
+
+**Summary:** The notification subsystem uses a composite router pattern (MultiChannelNotificationRouter) dispatching to Desktop and Telegram channels. TelegramBotService provides bidirectional task management via Telegram commands.
+
+**Key Points:**
+- MultiChannelNotificationRouter dispatches to all registered INotificationRouter channels via Promise.allSettled
+- Two active channels: DesktopNotificationRouter (native OS) and TelegramNotificationRouter (Telegram chat)
+- TelegramBotService provides bidirectional task management via /tasks, /task, /create, /help commands
+- StubNotificationRouter collects notifications in-memory for testing
+
+**Docs:** [notifications.md](docs/notifications.md)
+
+---

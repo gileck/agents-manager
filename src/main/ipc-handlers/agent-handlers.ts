@@ -45,23 +45,10 @@ export function registerAgentHandlers(services: AppServices): void {
 
   registerIpcHandler(IPC_CHANNELS.AGENT_SEND_MESSAGE, async (_, taskId: string, message: string) => {
     validateId(taskId);
-    // Always queue the message — the running agent will pick it up,
-    // or a newly started agent will receive it on its first turn.
-    services.agentService.queueMessage(taskId, message);
-
-    const activeRuns = await services.agentRunStore.getActiveRuns();
-    const running = activeRuns.find((r) => r.taskId === taskId && r.status === 'running');
-    if (!running) {
-      const runs = await services.agentRunStore.getRunsForTask(taskId);
-      const lastRun = runs[0];
-      const mode = lastRun?.mode || 'implement';
-      const agentType = lastRun?.agentType || 'claude-code';
-      await services.workflowService.startAgent(
-        taskId, mode, agentType,
-        (chunk) => sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, chunk),
-        (msg) => sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, msg),
-        (status) => sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, status),
-      );
-    }
+    return services.workflowService.resumeAgent(taskId, message, {
+      onOutput: (chunk) => sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, chunk),
+      onMessage: (msg) => sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, msg),
+      onStatusChange: (status) => sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, status),
+    });
   });
 }

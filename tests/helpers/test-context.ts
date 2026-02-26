@@ -168,7 +168,7 @@ export function createTestContext(): TestContext {
     taskArtifactStore, agentService,
     () => scmPlatform,
     () => worktreeManager,
-    undefined, // createGitOps
+    () => gitOps,
     taskContextStore,
   );
 

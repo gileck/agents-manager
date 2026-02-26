@@ -23,8 +23,9 @@ export interface IWorkflowService {
   retryHook(taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string): Promise<HookRetryResult>;
   advancePhase(taskId: string): Promise<TransitionResult>;
   startAgent(taskId: string, mode: AgentMode, agentType?: string, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun>;
+  resumeAgent(taskId: string, message: string, callbacks: { onOutput?: (chunk: string) => void; onMessage?: (msg: AgentChatMessage) => void; onStatusChange?: (status: string) => void }): Promise<AgentRun | null>;
   stopAgent(runId: string): Promise<void>;
   respondToPrompt(promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null>;
-  mergePR(taskId: string): Promise<void>;
-  getDashboardStats(): Promise<DashboardStats>;
+  mergePR(taskId: string): Promise<TransitionResult>;
+  getDashboardStats(now?: number): Promise<DashboardStats>;
 }

@@ -11,4 +11,6 @@ export interface ITaskStore {
   removeDependency(taskId: string, dependsOnTaskId: string): Promise<void>;
   getDependencies(taskId: string): Promise<Task[]>;
   getDependents(taskId: string): Promise<Task[]>;
+  getStatusCounts(): Promise<{ status: string; count: number }[]>;
+  getTotalCount(): Promise<number>;
 }
