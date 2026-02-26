@@ -797,6 +797,33 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_chat_sessions_scope ON project_chat_sessions(scope_type, scope_id)
       `,
     },
+    {
+      name: '072_drop_chat_sessions_project_fk',
+      sql: `
+        -- Recreate project_chat_sessions without FOREIGN KEY on project_id
+        -- so task-scoped sessions (project_id = '') can be created without
+        -- requiring a matching row in the projects table.
+        CREATE TABLE project_chat_sessions_new (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          scope_type TEXT NOT NULL DEFAULT 'project',
+          scope_id TEXT NOT NULL DEFAULT ''
+        );
+
+        INSERT INTO project_chat_sessions_new
+          SELECT id, project_id, name, created_at, updated_at, scope_type, scope_id
+          FROM project_chat_sessions;
+
+        DROP TABLE project_chat_sessions;
+        ALTER TABLE project_chat_sessions_new RENAME TO project_chat_sessions;
+
+        CREATE INDEX idx_chat_sessions_project ON project_chat_sessions(project_id);
+        CREATE INDEX idx_chat_sessions_scope ON project_chat_sessions(scope_type, scope_id)
+      `,
+    },
   ];
 }
 
