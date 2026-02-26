@@ -743,6 +743,23 @@ export function getMigrations(): Migration[] {
       name: '068_seed_cursor_codex_agent_definitions',
       sql: getSeedNewEngineAgentDefinitionsSql(),
     },
+    {
+      name: '069_create_users',
+      sql: `
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          username TEXT NOT NULL UNIQUE,
+          role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+        -- Seed default admin user
+        INSERT OR IGNORE INTO users (id, username, role, created_at, updated_at)
+        VALUES ('user-admin', 'admin', 'admin', strftime('%s', 'now') * 1000, strftime('%s', 'now') * 1000)
+      `,
+    },
   ];
 }
 

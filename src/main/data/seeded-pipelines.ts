@@ -85,8 +85,9 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { name: 'plan_review', label: 'Plan Review', category: 'human_review', position: 4 },
     { name: 'implementing', label: 'Implementing', category: 'agent_running', position: 5 },
     { name: 'pr_review', label: 'PR Review', category: 'human_review', position: 6 },
-    { name: 'needs_info', label: 'Needs Info', category: 'waiting_for_input', position: 7 },
-    { name: 'done', label: 'Done', isFinal: true, category: 'terminal', position: 8 },
+    { name: 'ready_to_merge', label: 'Ready to Merge', category: 'human_review', position: 7 },
+    { name: 'needs_info', label: 'Needs Info', category: 'waiting_for_input', position: 8 },
+    { name: 'done', label: 'Done', isFinal: true, category: 'terminal', position: 9 },
   ],
   transitions: [
     // From open: 3 options — tech design (skippable), plan (skippable), implement (required)
@@ -108,7 +109,9 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'pr_review', to: 'implementing', trigger: 'manual', label: 'Request Changes',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
-    { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
+    { from: 'pr_review', to: 'ready_to_merge', trigger: 'manual', label: 'Approve' },
+    { from: 'ready_to_merge', to: 'done', trigger: 'manual', label: 'Merge',
+      guards: [{ name: 'is_admin' }],
       hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
     { from: 'pr_review', to: 'pr_review', trigger: 'manual', label: 'Re-run PR Review',
       guards: [{ name: 'no_running_agent' }],
@@ -168,8 +171,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // PR review agent outcomes
-    { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
-      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
+    { from: 'pr_review', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'approved' },
     { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
@@ -204,7 +206,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'design_review', trigger: 'manual', label: 'Back to Design Review' },
     { from: 'design_review', to: 'open', trigger: 'manual', label: 'Cancel Design Review' },
     // Manual recovery if merge_pr safety net catches a conflict
-    { from: 'done', to: 'pr_review', trigger: 'manual', label: 'Merge Failed - Retry' },
+    { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],
 };
 
@@ -221,8 +223,9 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
     { name: 'design_review', label: 'Design Review', category: 'human_review', position: 4 },
     { name: 'implementing', label: 'Implementing', color: '#3b82f6', category: 'agent_running', position: 5 },
     { name: 'pr_review', label: 'PR Review', color: '#06b6d4', category: 'human_review', position: 6 },
-    { name: 'needs_info', label: 'Needs Info', color: '#6b7280', category: 'waiting_for_input', position: 7 },
-    { name: 'done', label: 'Done', color: '#22c55e', isFinal: true, category: 'terminal', position: 8 },
+    { name: 'ready_to_merge', label: 'Ready to Merge', color: '#10b981', category: 'human_review', position: 7 },
+    { name: 'needs_info', label: 'Needs Info', color: '#6b7280', category: 'waiting_for_input', position: 8 },
+    { name: 'done', label: 'Done', color: '#22c55e', isFinal: true, category: 'terminal', position: 9 },
   ],
   transitions: [
     // Manual transitions
@@ -251,7 +254,9 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
     { from: 'pr_review', to: 'implementing', trigger: 'manual', label: 'Request Changes',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
-    { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve & Merge',
+    { from: 'pr_review', to: 'ready_to_merge', trigger: 'manual', label: 'Approve' },
+    { from: 'ready_to_merge', to: 'done', trigger: 'manual', label: 'Merge',
+      guards: [{ name: 'is_admin' }],
       hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
     { from: 'pr_review', to: 'pr_review', trigger: 'manual', label: 'Re-run PR Review',
       guards: [{ name: 'no_running_agent' }],
@@ -300,8 +305,7 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'implement', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
     // PR review agent outcomes
-    { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
-      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
+    { from: 'pr_review', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'approved' },
     { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'request_changes', agentType: 'claude-code' }, policy: 'fire_and_forget' }] },
@@ -336,7 +340,7 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'design_review', trigger: 'manual', label: 'Back to Design Review' },
     { from: 'design_review', to: 'reported', trigger: 'manual', label: 'Cancel Design Review' },
     // Manual recovery if merge_pr safety net catches a conflict
-    { from: 'done', to: 'pr_review', trigger: 'manual', label: 'Merge Failed - Retry' },
+    { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],
 };
 
