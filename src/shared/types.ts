@@ -71,6 +71,17 @@ export interface LogEntry {
 // Phase 1: Domain Types
 // ============================================
 
+// User types
+export type UserRole = 'admin' | 'user';
+
+export interface User {
+  id: string;
+  username: string;
+  role: UserRole;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // Pipeline types
 export type StatusCategory = 'ready' | 'agent_running' | 'human_review' | 'waiting_for_input' | 'terminal';
 
