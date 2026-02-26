@@ -3,25 +3,22 @@ import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
 import { getSetting, setSetting } from '@template/main/services/settings-service';
 import type { AppSettings } from '../../shared/types';
 
+/** Read all current settings from the store into an AppSettings object. */
+function readCurrentSettings(): AppSettings {
+  return {
+    theme: getSetting('theme', 'system') as 'light' | 'dark' | 'system',
+    notificationsEnabled: getSetting('notifications_enabled', 'true') === 'true',
+    currentProjectId: getSetting('current_project_id', '') || null,
+    defaultPipelineId: getSetting('default_pipeline_id', '') || null,
+    bugPipelineId: getSetting('bug_pipeline_id', '') || null,
+    themeConfig: getSetting('theme_config', '') || null,
+    chatDefaultAgentLib: getSetting('chat_default_agent_lib', '') || null,
+  };
+}
+
 export function registerSettingsHandlers(): void {
   registerIpcHandler(IPC_CHANNELS.SETTINGS_GET, async (): Promise<AppSettings> => {
-    const theme = getSetting('theme', 'system') as 'light' | 'dark' | 'system';
-    const notificationsEnabled = getSetting('notifications_enabled', 'true') === 'true';
-    const currentProjectId = getSetting('current_project_id', '') || null;
-    const defaultPipelineId = getSetting('default_pipeline_id', '') || null;
-    const bugPipelineId = getSetting('bug_pipeline_id', '') || null;
-    const themeConfig = getSetting('theme_config', '') || null;
-    const chatDefaultAgentLib = getSetting('chat_default_agent_lib', '') || null;
-
-    return {
-      theme,
-      notificationsEnabled,
-      currentProjectId,
-      defaultPipelineId,
-      bugPipelineId,
-      themeConfig,
-      chatDefaultAgentLib,
-    };
+    return readCurrentSettings();
   });
 
   registerIpcHandler(IPC_CHANNELS.SETTINGS_UPDATE, async (_, updates: Partial<AppSettings>): Promise<AppSettings> => {
@@ -47,15 +44,6 @@ export function registerSettingsHandlers(): void {
       setSetting('chat_default_agent_lib', updates.chatDefaultAgentLib ?? '');
     }
 
-    // Return updated settings
-    return {
-      theme: getSetting('theme', 'system') as 'light' | 'dark' | 'system',
-      notificationsEnabled: getSetting('notifications_enabled', 'true') === 'true',
-      currentProjectId: getSetting('current_project_id', '') || null,
-      defaultPipelineId: getSetting('default_pipeline_id', '') || null,
-      bugPipelineId: getSetting('bug_pipeline_id', '') || null,
-      themeConfig: getSetting('theme_config', '') || null,
-      chatDefaultAgentLib: getSetting('chat_default_agent_lib', '') || null,
-    };
+    return readCurrentSettings();
   });
 }

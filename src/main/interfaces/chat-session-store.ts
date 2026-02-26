@@ -1,27 +1,7 @@
-import type { ChatScopeType } from '../../shared/types';
+import type { ChatScopeType, ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput } from '../../shared/types';
 
-export interface ChatSession {
-  id: string;
-  projectId: string;
-  scopeType: ChatScopeType;
-  scopeId: string;
-  name: string;
-  agentLib: string | null;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface ChatSessionCreateInput {
-  scopeType: ChatScopeType;
-  scopeId: string;
-  name: string;
-  agentLib?: string;
-}
-
-export interface ChatSessionUpdateInput {
-  name?: string;
-  agentLib?: string | null;
-}
+// Re-export types from shared/types so existing consumers of this module are unaffected.
+export type { ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput };
 
 export interface IChatSessionStore {
   createSession(input: ChatSessionCreateInput): Promise<ChatSession>;

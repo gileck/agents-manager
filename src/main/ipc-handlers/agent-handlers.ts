@@ -45,12 +45,13 @@ export function registerAgentHandlers(services: AppServices): void {
 
   registerIpcHandler(IPC_CHANNELS.AGENT_SEND_MESSAGE, async (_, taskId: string, message: string) => {
     validateId(taskId);
+    // Always queue the message — the running agent will pick it up,
+    // or a newly started agent will receive it on its first turn.
+    services.agentService.queueMessage(taskId, message);
+
     const activeRuns = await services.agentRunStore.getActiveRuns();
     const running = activeRuns.find((r) => r.taskId === taskId && r.status === 'running');
-    if (running) {
-      services.agentService.queueMessage(taskId, message);
-    } else {
-      services.agentService.queueMessage(taskId, message);
+    if (!running) {
       const runs = await services.agentRunStore.getRunsForTask(taskId);
       const lastRun = runs[0];
       const mode = lastRun?.mode || 'implement';

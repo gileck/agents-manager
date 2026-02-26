@@ -26,6 +26,7 @@ export function registerKanbanHandlers(services: AppServices): void {
 
   registerIpcHandler(IPC_CHANNELS.KANBAN_BOARD_UPDATE, async (_, id: string, input: unknown) => {
     validateId(id);
+    validateInput(input, []);
     return services.kanbanBoardStore.updateBoard(id, input as KanbanBoardUpdateInput);
   });
 

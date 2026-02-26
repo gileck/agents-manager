@@ -184,6 +184,12 @@ export interface ProjectUpdateInput {
 }
 
 // Feature types
+
+/**
+ * Computed feature status derived from the aggregate progress of its tasks.
+ * Not persisted in the database — calculated on the fly and used only in
+ * {@link FeatureWithProgress} for display purposes.
+ */
 export type FeatureStatus = 'open' | 'in_progress' | 'done';
 
 export interface Feature {
