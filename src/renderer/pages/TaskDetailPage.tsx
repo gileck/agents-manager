@@ -723,6 +723,11 @@ export function TaskDetailPage() {
                 </button>
               )}
             </div>
+            {taskChat.error && (
+              <div style={{ padding: '8px 16px', fontSize: 13, color: '#f87171' }}>
+                Error: {taskChat.error}
+              </div>
+            )}
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <AgentChat
                 messages={taskChat.messages}

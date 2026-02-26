@@ -760,6 +760,29 @@ export function getMigrations(): Migration[] {
         VALUES ('user-admin', 'admin', 'admin', strftime('%s', 'now') * 1000, strftime('%s', 'now') * 1000)
       `,
     },
+    {
+      name: '070_drop_chat_messages_session_fk',
+      sql: `
+        -- Recreate chat_messages without the FOREIGN KEY on session_id
+        -- so task-scoped chats (session_id = 'task:<taskId>') can store messages
+        -- without requiring a row in project_chat_sessions.
+        CREATE TABLE chat_messages_new (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
+          content TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          cost_input_tokens INTEGER,
+          cost_output_tokens INTEGER
+        );
+
+        INSERT INTO chat_messages_new SELECT * FROM chat_messages;
+        DROP TABLE chat_messages;
+        ALTER TABLE chat_messages_new RENAME TO chat_messages;
+
+        CREATE INDEX idx_chat_messages_session ON chat_messages(session_id, created_at)
+      `,
+    },
   ];
 }
 

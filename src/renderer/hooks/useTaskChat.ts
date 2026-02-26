@@ -18,7 +18,11 @@ function convertDbMessages(dbMessages: ChatMessage[]): AgentChatMessage[] {
           result.push(...(parsed as AgentChatMessage[]));
           continue;
         }
-      } catch { /* legacy plain text */ }
+      } catch (err) {
+        if (!(err instanceof SyntaxError)) {
+          console.warn('[useTaskChat] Unexpected error parsing message content:', err);
+        }
+      }
       result.push({ type: 'assistant_text' as const, text: msg.content, timestamp: msg.createdAt });
     }
   }
@@ -64,10 +68,14 @@ export function useTaskChat(taskId: string | null) {
         if (!streamingRef.current) return;
         streamingRef.current = false;
         setIsStreaming(false);
-        setStreamingMessages([]);
-        // Reload messages from DB (now includes the persisted structured turn)
+        // Reload messages from DB (now includes the persisted structured turn).
+        // Keep streaming messages visible until reload succeeds so the user
+        // doesn't lose the response they just watched if the reload fails.
         window.api.taskChat.messages(taskId)
-          .then(setDbMessages)
+          .then((fresh) => {
+            setDbMessages(fresh);
+            setStreamingMessages([]);
+          })
           .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
         return;
       }
@@ -111,6 +119,9 @@ export function useTaskChat(taskId: string | null) {
     try {
       const { userMessage } = await window.api.taskChat.send(taskId, message);
       setDbMessages((prev) => [...prev, userMessage]);
+      // Mark as actively streaming so sentinel from the current agent is processed
+      // even if the agent completes before emitting any output chunks
+      streamingRef.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setIsStreaming(false);
