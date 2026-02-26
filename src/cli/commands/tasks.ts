@@ -86,8 +86,14 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
 
       let pipelineId = cmdOpts.pipeline;
       if (!pipelineId) {
-        // Try to get default from settings
-        const defaultPipelineId = getSetting('default_pipeline_id', '');
+        // Try to get default from settings (may fail in CLI context where
+        // the template DB singleton is not initialized)
+        let defaultPipelineId = '';
+        try {
+          defaultPipelineId = getSetting('default_pipeline_id', '');
+        } catch {
+          // Template DB singleton not available in CLI — fall through to pipeline list
+        }
 
         if (defaultPipelineId) {
           pipelineId = defaultPipelineId;

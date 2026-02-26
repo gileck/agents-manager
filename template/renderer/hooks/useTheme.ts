@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { AppSettings as _AppSettings } from '@shared/types';
 
 type Theme = 'light' | 'dark' | 'system';
 

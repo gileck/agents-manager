@@ -4,6 +4,12 @@ import * as path from 'path';
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
+// Register once at module level to prevent duplicate listener accumulation
+// when createWindow() is called multiple times (e.g. from activate or showWindow).
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
 export function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 900,
@@ -22,11 +28,6 @@ export function createWindow(): BrowserWindow {
     },
     // Remove standard window buttons for menu bar style (optional)
     // titleBarStyle: 'hidden',
-  });
-
-  // Set isQuitting flag when app is about to quit
-  app.on('before-quit', () => {
-    isQuitting = true;
   });
 
   const shouldOpenDevTools =

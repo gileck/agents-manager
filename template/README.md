@@ -11,7 +11,7 @@ Files in this directory are framework-level infrastructure designed to work for 
 ```
 template/
 ├── main/              # Main process infrastructure
-├── preload/           # Preload script utilities
+├── preload/           # Preload script infrastructure (see src/preload/ for implementation)
 ├── renderer/          # React UI infrastructure
 └── shared/            # Shared types and patterns
 ```
@@ -43,6 +43,9 @@ template/
 - Generic migration system
 - Transaction-wrapped migrations
 - generateId() helper
+- **Electron-only:** Uses `app.getPath('userData')` to resolve the DB path. Not compatible
+  with CLI or non-Electron contexts. The CLI bypasses this by passing a `db` instance
+  directly to `createAppServices()`.
 
 **`settings-service.ts`** - Key-value settings storage
 - getSetting(key, defaultValue)
@@ -71,10 +74,9 @@ template/
 
 ## Preload (`preload/`)
 
-**`bridge.ts`** - Context bridge utilities
-- createInvokeHandler() for IPC invoke wrappers
-- createEventListener() for main → renderer events
-- exposeBridge() for API exposure
+The preload directory is reserved for Electron preload script infrastructure.
+The actual preload script lives in `src/preload/index.ts` and uses `ipcRenderer.invoke`
+and `contextBridge.exposeInMainWorld` directly.
 
 ## Renderer (`renderer/`)
 
@@ -95,6 +97,9 @@ template/
 - Light/Dark/System theme support
 - Persists to settings
 - CSS variable updates
+- **Coupling note:** Hardcodes calls to `window.api.settings.get()` and
+  `window.api.settings.update()`. The app must expose these methods via the preload bridge
+  for theme persistence to work.
 
 **`useIpc.ts`** - IPC data fetching
 - Generic hook for IPC calls
@@ -105,7 +110,9 @@ template/
 
 **`utils.ts`** - Utility functions
 - cn() for className merging
-- Other helpers
+- **Note:** This file also contains app-specific helpers (cron parsing, ANSI stripping,
+  path truncation) that should ideally live in `src/renderer/lib/`. Only `cn()` and
+  generic formatting helpers belong in the template.
 
 ### `styles/`
 
@@ -125,6 +132,14 @@ template/
 - IpcResponse type
 
 ## Usage Patterns
+
+### UI Components
+
+Both `template/renderer/components/ui/` and `src/renderer/components/ui/` contain Shadcn UI
+components. **Always import from `src/renderer/components/ui/`** in application code. The
+`src/` set is the authoritative copy and includes app-specific variants (e.g. extra Badge
+colors, adjusted Card border radius, Toaster). The `template/` set is the base reference
+and should not be imported directly by pages or features.
 
 ### Importing from Template
 

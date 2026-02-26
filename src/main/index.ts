@@ -3,6 +3,7 @@ import { initializeApp } from '@template/main/core/app';
 import { createTray, buildStandardMenu } from '@template/main/core/tray';
 import { sendToRenderer } from '@template/main/core/window';
 import { initDatabase, closeDatabase, getDatabase } from '@template/main/services/database';
+import { flushLogs } from '@template/main/services/log-service';
 import { registerIpcHandlers } from './ipc-handlers';
 import { getMigrations } from './migrations';
 import { createAppServices, type AppServices } from './providers/setup';
@@ -63,6 +64,7 @@ initializeApp({
     if (services) {
       services.agentSupervisor.stop();
     }
+    flushLogs();
     closeDatabase();
   },
 });
