@@ -1,149 +1,47 @@
-# Architecture Review: Template Infrastructure
+# Architecture Review: Template Infrastructure (Post-Fix)
 
 **Date:** 2026-02-26
 **Component:** Framework / Template Infrastructure (`template/`)
-**Overall Score: 6.3 / 10**
+**Previous Score:** 6.3 / 10
+**Current Score:** 7.3 / 10
 
-## Files Reviewed
+## What Was Fixed
 
-- All files in `template/main/core/`, `template/main/services/`, `template/main/ipc/`
-- `template/preload/bridge.ts`
-- `template/renderer/hooks/`, `template/renderer/lib/`, `template/renderer/components/`
-- `template/shared/base-types.ts`, `template/shared/ipc-base.ts`
-- `template/README.md`, `docs/TEMPLATE.md`, `docs/development-guide.md`, `docs/architecture-overview.md`
-- Integration consumers: `src/main/index.ts`, `src/preload/index.ts`, `src/cli/db.ts`, `src/cli/commands/tasks.ts`
+1. **CLI getSetting() crash** (P1) — `src/cli/commands/tasks.ts:89-96` wrapped in try/catch with fallback to pipeline list
+2. **Log buffer flush on quit** (P1) — `flushLogs()` called before `closeDatabase()` in onBeforeQuit
+3. **Dead import in useTheme.ts** (P2) — removed unused `AppSettings` cross-boundary import
+4. **before-quit listener duplication** (P2) — moved to module level in `window.ts` to prevent accumulation
+5. **Dead bridge.ts** (P3) — deleted (never imported, preload uses ipcRenderer directly)
+6. **README documentation** — documents Electron-only DB, window.api coupling, dual UI component rule
 
----
+## Remaining Issues
 
-## 1. Summary of Findings
+1. **utils.ts scope creep** (P2) — 125-line cron parser still lives in template; should move to `src/`
+2. **Duplicate UI component sets** (P3) — `template/` and `src/` both have component sets with diverged variants
+3. **useTheme.ts implicit contract** (P4) — hardcodes `window.api.settings` with no interface enforcement
+4. **Stale mainWindow in app.ts** (P5) — assigned but never read, ESLint suppressed
+5. **flushLogs ordering invariant** (P6) — dependency on call order not documented in patterns.md
 
-The template provides well-documented Electron boilerplate that cleanly separates framework from application code at the macro level. However, six concrete violations exist at integration seams: one confirmed runtime bug in the CLI, two coupling violations (dead cross-boundary import and hardcoded `window.api`), dead preload utility code, utility function scope creep, and duplicate UI component sets.
+## Quality Ratings
 
----
+| Dimension | Previous | Current | Notes |
+|-----------|:--------:|:-------:|-------|
+| Modularity | 7 | 8 | Dead bridge.ts removed |
+| Low Coupling | 5 | 6 | Dead cross-boundary import gone; structural coupling documented |
+| High Cohesion | 6 | 6 | utils.ts still mixes generic + app-specific |
+| Clear and Constrained State | 6 | 8 | Before-quit listener deduplicated; flush ordering correct |
+| Deterministic Behavior | 7 | 8 | Log flush-before-close removes quit-time data loss |
+| Explicit Dependency Structure | 5 | 6 | README documents implicit deps |
+| Observability | 6 | 7 | Logs now durable through quit |
+| Robust Error Handling | 6 | 8 | CLI crash fixed; flushLogs has internal guard |
+| Simplicity of Structure | 7 | 8 | Dead file and import removed |
+| Performance Predictability | 8 | 8 | Unchanged |
 
-## 2. Doc Sufficiency Assessment
+| Category | Rating |
+|----------|--------|
+| **Logic** | 8/10 — All P1 bugs fixed, no active runtime issues |
+| **Bugs** | 8/10 — Zero active bugs; latent issues are low-severity |
+| **Docs** | 7/10 — README substantially improved; minor gaps remain |
+| **Code Quality** | 7/10 — Cleaner after dead code removal; utils.ts scope creep persists |
 
-**Well documented:**
-- `template/` vs `src/` boundary stated in every relevant doc
-- `@template/*` path alias convention explained
-- Every module has a summary description
-- 9-step feature addition tutorial
-- Configuration patterns (AppConfig, DatabaseConfig, TrayConfig)
-
-**Missing from documentation:**
-- `database.ts` is Electron-only (calls `app.getPath('userData')`) — incompatible with CLI
-- `preload/bridge.ts` is documented but never used
-- Duplicate `src/renderer/components/ui/` set has no documented resolution
-- No template versioning or upgrade path
-- `useTheme.ts` hardcodes `window.api.settings` contract (undocumented coupling)
-
-**Rating: Sufficient for intent; insufficient for known deviations.**
-
----
-
-## 3. Implementation vs Docs Gaps
-
-### Gap 1 — `database.ts` is Electron-only (docs claim generic)
-
-`app.getPath('userData')` from Electron API cannot be called in CLI context. CLI correctly avoids it by passing `db` directly to `createAppServices()`.
-
-### Gap 2 — `useTheme.ts` has dead import from app code
-
-Line 2: `import type { AppSettings as _AppSettings } from '@shared/types'` — unused, crosses the template/app boundary.
-
-### Gap 3 — `useTheme.ts` hardcodes `window.api.settings` contract
-
-Calls `window.api.settings.get()` and `window.api.settings.update()` directly. Not portable outside this specific app.
-
-### Gap 4 — `bridge.ts` is dead code
-
-Documented as core preload infrastructure. `src/preload/index.ts` bypasses it entirely, using raw `ipcRenderer.invoke` and `contextBridge.exposeInMainWorld`.
-
-### Gap 5 — `utils.ts` contains app-specific helpers
-
-222 lines including cron expression parsing (100+ lines), ANSI stripping, and path truncation. These are not generic Electron infrastructure.
-
-### Gap 6 — Duplicate UI component sets
-
-`template/renderer/components/ui/` has 10 components. `src/renderer/components/ui/` has 12 nearly-identical components with minor variants (badge adds `success`/`warning`, card changes border radius, toaster only in `src/`). App code imports from both with no documented rule.
-
----
-
-## 4. Bugs Found
-
-### Bug 1 (Active) — CLI `getSetting()` Calls Uninitialised Electron Singleton (High)
-
-**File:** `src/cli/commands/tasks.ts:90`
-
-`getSetting('default_pipeline_id', '')` calls `getDatabase()` which returns the Electron-only module singleton. CLI never calls `initDatabase()`. This throws `"Database not initialized"` when running `agents-manager tasks create` without `--pipeline`.
-
-The same call in `src/main/providers/setup.ts:201` is protected by try/catch. The CLI call is **unprotected**.
-
-**Fix:** Wrap in try/catch, or initialize the global singleton from `openDatabase()`.
-
-### Bug 2 (Latent) — `createWindow()` Registers `before-quit` on Every Call (Low)
-
-**File:** `template/main/core/window.ts:28`
-
-The listener is inside `createWindow()`. Multiple calls (from `activate` handler or `showWindow()`) accumulate duplicate listeners. Effect is idempotent but listeners are never removed.
-
-**Fix:** Move to module-level, outside `createWindow()`.
-
-### Bug 3 (Latent) — Log Buffer Not Flushed on Quit (Low)
-
-**File:** `template/main/services/log-service.ts`
-
-No `before-quit` hook to force-flush pending log entries. If the app quits while the 500ms timer is pending, buffered entries are lost.
-
-**Fix:** Call `flushLogs()` in `onBeforeQuit`.
-
----
-
-## 5. Quality Ratings
-
-| Dimension | Score | Notes |
-|-----------|:-----:|-------|
-| **Modularity** | 7 | Clear modules for core/services/ipc/preload/renderer. Weakened by `utils.ts` scope creep and dead `bridge.ts`. |
-| **Low Coupling** | 5 | `useTheme.ts` hardcodes `window.api`; `database.ts` imports Electron `app`; `settings-service.ts` binds to Electron-only singleton; dead cross-boundary import. |
-| **High Cohesion** | 6 | Each module has clear purpose except `utils.ts` (mixes generic utility, time formatting, ANSI stripping, cron parsing). |
-| **Clear and Constrained State** | 6 | Database/window/log singletons are controlled. Multiple-listener bug slightly degrades. |
-| **Deterministic Behavior** | 7 | Migrations idempotent. Window show/hide deterministic. Log flushing timer-based (non-deterministic at quit). |
-| **Explicit Dependency Structure** | 5 | Functions implicitly depend on Electron `app` singleton and uninitialised `db` singleton. `useTheme.ts` implicitly depends on `window.api`. |
-| **Observability** | 6 | Main-process errors logged. Window events logged. No structured logging or log levels. |
-| **Robust Error Handling** | 6 | Migration failures halt startup (correct). `useTheme.ts` has try/catch. CLI `getSetting()` is unprotected. |
-| **Simplicity of Structure** | 7 | Template is small and focused. Duplicate UI components and unused bridge add surface area. |
-| **Performance Predictability** | 8 | Buffered log writes, WAL mode, prepared statements. No N+1 patterns. Migrations run once at startup. |
-
-**Overall: 6.3 / 10**
-
----
-
-## 6. Action Items (Prioritized)
-
-### P1 — Fix Active Bugs
-
-1. **Protect `getSetting()` in `src/cli/commands/tasks.ts:90`** — wrap in try/catch or initialize template DB singleton from CLI
-2. **Flush log buffer on quit** — call `flushLogs()` in `onBeforeQuit`
-
-### P2 — Eliminate Coupling Violations
-
-3. **Remove dead import from `useTheme.ts`** — line 2
-4. **Move `before-quit` listener out of `createWindow()`** — register at module level
-
-### P3 — Resolve Dead Code
-
-5. **Either use or remove `bridge.ts`** — refactor preload to use it, or delete it and update docs
-
-### P4 — Resolve Duplicate UI Components
-
-6. **Establish single authoritative source** — document when to import from `template/` vs `src/` components, or consolidate into one location
-
-### P5 — Move Scope-Crept Utilities
-
-7. **Extract app-specific helpers from `template/renderer/lib/utils.ts`** — move `truncatePath`, `stripAnsi`, `formatCronSchedule`, `formatIntervalSchedule` to `src/renderer/lib/`
-
-### P6 — Documentation
-
-8. **Document Electron-only constraint of `database.ts`**
-9. **Document `useTheme.ts` coupling** to `window.api.settings`
-10. **Document which UI component set to use**
+**Overall: 7.3 / 10** (up from 6.3)
