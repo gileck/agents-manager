@@ -174,6 +174,20 @@ export class PipelineEngine implements IPipelineEngine {
       }
 
       if (guardFailures.length > 0) {
+        // Record the denied transition so every attempt is visible in the audit trail
+        this.db.prepare(`
+          INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          generateId(),
+          task.id,
+          task.status,
+          toStatus,
+          ctx.trigger,
+          ctx.actor ?? null,
+          JSON.stringify({ _denied: true, guardFailures }),
+          now(),
+        );
         return;
       }
 
@@ -195,7 +209,7 @@ export class PipelineEngine implements IPipelineEngine {
         severity: 'warning',
         message: `Transition ${task.status} → ${toStatus} blocked by guards: ${guardFailures.map(g => `${g.guard}: ${g.reason}`).join('; ')}`,
         data: { fromStatus: task.status, toStatus, trigger: ctx.trigger, guardFailures },
-      }).catch(() => {});
+      }).catch((err) => console.error('Audit log write failed:', err));
       return { success: false, guardFailures };
     }
 
@@ -257,6 +271,17 @@ export class PipelineEngine implements IPipelineEngine {
     return result;
   }
 
+  /**
+   * Force-transition a task to a target status, bypassing all guards.
+   *
+   * Unlike {@link executeTransition}, this method:
+   * - Skips guard evaluation entirely (the transition is always allowed).
+   * - Still runs hooks when a matching transition definition exists, but
+   *   treats required-hook failures as **non-fatal** — the status change is
+   *   NOT rolled back. This is intentional: force transitions are an
+   *   administrative override, so hook failures are logged but do not block
+   *   the operation.
+   */
   async executeForceTransition(task: Task, toStatus: string, context?: TransitionContext): Promise<TransitionResult> {
     const ctx: TransitionContext = context ?? { trigger: 'manual' };
 
@@ -471,7 +496,7 @@ export class PipelineEngine implements IPipelineEngine {
             severity: 'warning',
             message: `Hook "${hook.name}" not registered — skipping`,
             data: { hook: hook.name },
-          }).catch(() => {});
+          }).catch((err) => console.error('Audit log write failed:', err));
         }
         continue;
       }
@@ -503,7 +528,7 @@ export class PipelineEngine implements IPipelineEngine {
             severity,
             message: `Hook "${hook.name}" failed${forced ? ' during force transition' : ''} (${policy}): ${failure.error}`,
             data: { hook: hook.name, error: failure.error, policy, ...(forced ? { forced: true } : {}) },
-          }).catch(() => {});
+          }).catch((err) => console.error('Audit log write failed:', err));
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -516,7 +541,7 @@ export class PipelineEngine implements IPipelineEngine {
           severity,
           message: `Hook "${hook.name}" threw${forced ? ' during force transition' : ''} (${policy}): ${message}`,
           data: { hook: hook.name, error: message, policy, ...(forced ? { forced: true } : {}) },
-        }).catch(() => {});
+        }).catch((err) => console.error('Audit log write failed:', err));
       }
     }
 
@@ -563,7 +588,7 @@ export class PipelineEngine implements IPipelineEngine {
         severity: 'error',
         message: `CRITICAL: Rollback failed for transition ${originalStatus} → ${failedToStatus}: ${rollbackMsg}`,
         data: { rollbackError: rollbackMsg, failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
-      }).catch(() => {});
+      }).catch((err) => console.error('Audit log write failed:', err));
     }
   }
 }
