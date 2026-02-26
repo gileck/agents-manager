@@ -42,7 +42,7 @@ Agent types, execution lifecycle, prompts, validation, and context accumulation
 - File: src/main/agents/ — Agent, ImplementorPromptBuilder, PrReviewerPromptBuilder, ScriptedAgent
 - File: src/main/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib
 - Agent resolves AgentLib from registry via config.engine at execute() time
-- Prompt templates live in src/main/agents/prompts/
+- Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes
 
 **Docs:** [agent-system.md](docs/agent-system.md)
 

@@ -4,6 +4,9 @@ import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { AgentChatMessage } from '../../shared/types';
 import { now } from '../stores/utils';
 
+/** Grace period added on top of the per-run timeout to avoid racing with the SDK-level abort. */
+const GRACE_PERIOD_MS = 5 * 60 * 1000;
+
 export class AgentSupervisor {
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -12,7 +15,8 @@ export class AgentSupervisor {
     private agentService: IAgentService,
     private taskEventLog: ITaskEventLog,
     private pollIntervalMs = 30_000,
-    private defaultTimeoutMs = 15 * 60 * 1000,
+    /** Fallback timeout when the run has no per-run timeoutMs stored in the DB. */
+    private defaultTimeoutMs = 35 * 60 * 1000,
   ) {}
 
   start(): void {
@@ -57,9 +61,11 @@ export class AgentSupervisor {
         continue;
       }
 
-      // Timed-out run: running longer than the default timeout
+      // Timed-out run: use per-run timeoutMs (set by telemetry flush) with grace period,
+      // falling back to the default timeout when the run has no stored timeout.
       const elapsed = now() - run.startedAt;
-      if (elapsed > this.defaultTimeoutMs) {
+      const effectiveTimeout = (run.timeoutMs ?? this.defaultTimeoutMs) + GRACE_PERIOD_MS;
+      if (elapsed > effectiveTimeout) {
         try {
           await this.agentService.stop(run.id);
         } catch {

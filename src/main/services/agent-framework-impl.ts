@@ -17,12 +17,18 @@ export class AgentFrameworkImpl implements IAgentFramework {
     return agent;
   }
 
+  /**
+   * Returns a synchronous snapshot of registered agents. Uses an optimistic
+   * `available: true` default because the real async availability check lives
+   * in `getAvailableAgents()`. Callers needing accurate availability should
+   * use `getAvailableAgents()` instead.
+   */
   listAgents(): AgentInfo[] {
     return Array.from(this.agents.values()).map((a) => ({
       type: a.type,
       name: a.type,
       description: `Agent: ${a.type}`,
-      available: false,
+      available: true,
     }));
   }
 

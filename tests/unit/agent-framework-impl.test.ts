@@ -89,26 +89,26 @@ describe('AgentFrameworkImpl', () => {
             type: 'planner',
             name: 'planner',
             description: 'Agent: planner',
-            available: false,
+            available: true,
           }),
           expect.objectContaining({
             type: 'reviewer',
             name: 'reviewer',
             description: 'Agent: reviewer',
-            available: false,
+            available: true,
           }),
         ])
       );
     });
 
-    it('always sets available to false in listAgents', () => {
+    it('uses optimistic available: true default in listAgents', () => {
       const framework = new AgentFrameworkImpl();
-      // Even if the agent says it's available, listAgents returns available: false
-      framework.registerAgent(createMockAgent('planner', true));
+      // listAgents() returns optimistic available: true; the real check is in getAvailableAgents()
+      framework.registerAgent(createMockAgent('planner', false));
 
       const result = framework.listAgents();
 
-      expect(result[0].available).toBe(false);
+      expect(result[0].available).toBe(true);
     });
   });
 

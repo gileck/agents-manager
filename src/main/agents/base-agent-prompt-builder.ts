@@ -53,7 +53,8 @@ export abstract class BaseAgentPromptBuilder {
     }
 
     const isReadOnlyMode = context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'plan_resume'
-      || context.mode === 'investigate' || context.mode === 'investigate_resume';
+      || context.mode === 'investigate' || context.mode === 'investigate_resume'
+      || context.mode === 'review';
 
     return {
       prompt,

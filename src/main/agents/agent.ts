@@ -11,6 +11,7 @@ export class Agent implements IAgent {
     type: string,
     private promptBuilder: BaseAgentPromptBuilder,
     private libRegistry: AgentLibRegistry,
+    private defaultEngine: string = 'claude-code',
   ) {
     this.type = type;
   }
@@ -127,8 +128,8 @@ export class Agent implements IAgent {
   }
 
   async isAvailable(): Promise<boolean> {
-    // Let registry errors propagate — a missing lib is a bug, not an availability check
-    const lib = this.libRegistry.getLib('claude-code');
+    // Delegate to the configured default engine, not hardcoded 'claude-code'
+    const lib = this.libRegistry.getLib(this.defaultEngine);
     try {
       return await lib.isAvailable();
     } catch {

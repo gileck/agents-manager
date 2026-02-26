@@ -7,7 +7,7 @@ key_points:
   - "File: src/main/agents/ — Agent, ImplementorPromptBuilder, PrReviewerPromptBuilder, ScriptedAgent"
   - "File: src/main/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib"
   - "Agent resolves AgentLib from registry via config.engine at execute() time"
-  - "Prompt templates live in src/main/agents/prompts/"
+  - "Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes"
 ---
 # Agent System
 
@@ -288,35 +288,50 @@ Updates the agent run record with: status, outcome, payload, exit code, output, 
 
 ### Template Resolution vs Hardcoded Fallback
 
-```typescript
-// In agent-service.ts
-try {
-  const agentDef = await this.agentDefinitionStore.getDefinitionByMode(mode);
-  if (agentDef?.modes.find(m => m.mode === mode)?.promptTemplate) {
-    context.resolvedPrompt = this.resolvePromptTemplate(template, context);
-  }
-} catch {
-  // Fall through to hardcoded buildPrompt
-}
+Prompt resolution follows a three-step priority chain inside `BaseAgentPromptBuilder.buildExecutionConfig()`:
 
-// In base-agent-prompt-builder.ts
-let prompt = context.resolvedPrompt ?? this.buildPrompt(context);
+1. **DB-backed template** — If `context.modeConfig?.promptTemplate` is set (loaded from `agent_definitions`), render it through `PromptRenderer.render()`.
+2. **Resolved prompt** — If `context.resolvedPrompt` is populated (legacy path), use it directly.
+3. **Hardcoded fallback** — Call `this.buildPrompt(context)` on the prompt builder subclass.
+
+```typescript
+// In base-agent-prompt-builder.ts — buildExecutionConfig()
+if (context.modeConfig?.promptTemplate) {
+  prompt = new PromptRenderer().render(context.modeConfig.promptTemplate, context);
+} else {
+  prompt = context.resolvedPrompt ?? this.buildPrompt(context);
+}
 ```
 
-The system first tries to load a prompt template from `agent_definitions`. If the lookup fails (no definition or no template), it falls back to the hardcoded `buildPrompt()` method on the prompt builder class.
+After resolution, the builder appends skills (if any) and prepends task context entries (if any).
 
-### Template Variables
+### PromptRenderer
 
-`resolvePromptTemplate()` supports these placeholders:
+**File:** `src/main/services/prompt-renderer.ts`
 
-- `{taskTitle}` — task title
-- `{taskDescription}` — task description
-- `{taskId}` — task UUID
-- `{subtasksSection}` — auto-generated subtask guidance
-- `{planSection}` — existing task plan
-- `{planCommentsSection}` — admin feedback on plan
-- `{priorReviewSection}` — re-review notice if applicable
-- `{relatedTaskSection}` — related task info for bug reports
+`PromptRenderer` handles all DB-backed template rendering. It performs simple string replacement of placeholder variables, then auto-appends a summary suffix and any validation errors.
+
+**Template variables** (13 total):
+
+| Variable | Description |
+|----------|-------------|
+| `{taskTitle}` | Task title |
+| `{taskDescription}` | Task description (space-prefixed if present) |
+| `{taskId}` | Task UUID |
+| `{subtasksSection}` | Auto-generated subtask guidance (plan mode: asks for subtask output; implement mode: shows checklist) |
+| `{planSection}` | Existing task plan as markdown |
+| `{planCommentsSection}` | Admin feedback on the plan |
+| `{priorReviewSection}` | Re-review notice when prior review context exists |
+| `{relatedTaskSection}` | Related task info for bug reports (with CLI commands) |
+| `{technicalDesignSection}` | Existing technical design as markdown |
+| `{technicalDesignCommentsSection}` | Admin feedback on the design |
+| `{defaultBranch}` | Project default branch (defaults to `main`) |
+| `{skillsSection}` | Available skills list for Skill tool invocation |
+| `{skipSummary}` | Replaced with empty string; when present in the template, suppresses the auto-appended summary suffix |
+
+**Auto-appended behaviors:**
+- Unless the template contains `{skipSummary}`, PromptRenderer appends: "When you are done, end your response with a '## Summary' section..."
+- If `context.validationErrors` is set, validation error output is appended to the rendered prompt
 
 ### Task Context Prepending
 
@@ -461,3 +476,102 @@ The abort controller is also triggered by the timeout timer. On abort, the SDK l
 - **Agent definition lookup failure:** If `getDefinitionByMode()` throws (definition missing or corrupt), the error is caught silently and the agent falls back to its hardcoded `buildPrompt()`.
 - **AbortController keying:** The `runId` passed to `IAgentLib` is set to `context.task.id` (task ID) in `Agent.execute()`, not the `run.id` from the database. Concurrent runs on the same task are prevented by the `no_running_agent` guard.
 - **Engine fallback:** If the agent definition has no engine set, `AgentService` defaults to `claude-code`.
+- **CLI backend token counts:** The CLI backend (`cursor-agent`, `codex-cli`) always returns 0 for token counts because these engines do not expose usage telemetry.
+
+## AgentSupervisor
+
+**File:** `src/main/services/agent-supervisor.ts`
+
+The `AgentSupervisor` is a background watchdog that periodically polls for agent runs that are stale or orphaned.
+
+### Behavior
+
+- **Poll interval:** 30 seconds (configurable via constructor)
+- **Default timeout:** 35 minutes (fallback when a run has no stored `timeoutMs`)
+- **Per-run timeout:** Uses `run.timeoutMs` from the database (populated by the telemetry flush every 3 seconds) plus a 5-minute grace period. This ensures the supervisor does not kill agents before their SDK-level timeout fires.
+
+### Detection logic
+
+On each poll, the supervisor iterates all active runs from the database:
+
+1. **Ghost run detection:** If a run is marked `running` in the DB but is not tracked in `AgentService.getActiveRunIds()` (in-memory map), it is a ghost run. The supervisor marks it `failed` with outcome `interrupted` and logs a warning.
+2. **Timeout detection:** If a run has been active longer than its effective timeout (`run.timeoutMs + 5min grace`, or the default 35 minutes), the supervisor calls `agentService.stop()` to abort the agent, then marks the run `timed_out`.
+
+### Lifecycle
+
+- `start()` — begins the poll interval (idempotent; no-op if already running)
+- `stop()` — clears the poll interval
+
+## SandboxGuard
+
+**File:** `src/main/services/sandbox-guard.ts`
+
+`SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by both `ClaudeCodeLib` (task agents) and `ChatAgentService` (chat agents) as a `preToolUse` hook.
+
+### Configuration
+
+Constructor takes two path lists:
+- `allowedPaths` — directories where the agent can read and write
+- `readOnlyPaths` — directories where the agent can read but not write
+
+### Tool evaluation
+
+`evaluateToolCall(toolName, toolInput)` returns `{ allow: boolean; reason?: string }`:
+
+- **Write/Edit/MultiEdit/NotebookEdit** — path must be within `allowedPaths` and not match sensitive patterns
+- **Read/Glob/Grep** — path must be within `allowedPaths` or `readOnlyPaths`
+- **Bash** — extracts file paths from common commands (`cat`, `rm`, `cp`, `cd`, etc.) via regex and validates each against the path boundaries
+- **Other tools** — allowed by default
+
+### Sensitive path protection
+
+Blocks access to paths matching: `/.ssh`, `/.aws`, `/.gnupg`, `/.config`, `/etc`, `.env`
+
+### Fail-closed design
+
+Any error during guard evaluation results in the tool call being blocked (not allowed). This prevents path-resolution edge cases from bypassing the sandbox.
+
+## ChatAgentService
+
+**File:** `src/main/services/chat-agent-service.ts`
+
+`ChatAgentService` handles interactive chat sessions with AI agents, supporting both project-scoped and task-scoped conversations.
+
+### Two Execution Paths
+
+1. **Direct SDK** (`runViaDirectSdk`) — Used when the agent lib is `claude-code` (the default). Imports the Claude Agent SDK directly via dynamic ESM import and streams messages through the `query()` API. Provides rich streaming with `assistant`, `user` (tool results), and `result` message types. Applies a `SandboxGuard` as a `preToolUse` hook and hard-blocks write tools.
+
+2. **AgentLib abstraction** (`runViaAgentLib`) — Used for non-default engines (`cursor-agent`, `codex-cli`). Routes through the `IAgentLib` interface from `AgentLibRegistry`. Wires the abort signal to `lib.stop()` for stop support.
+
+### Agent Lib Resolution Order
+
+The agent lib for a chat session is resolved in priority order:
+1. `session.agentLib` — per-session override
+2. `project.config.defaultAgentLib` — project-level default
+3. Global setting `chat_default_agent_lib` — app-wide default
+4. Hardcoded fallback: `claude-code`
+
+If the resolved lib is not registered in the registry, falls back to `claude-code` with a warning.
+
+### History Injection
+
+Conversation history is loaded from `ChatMessageStore` and prepended to the prompt as a `## Conversation History` block. Assistant messages are extracted from their JSON storage format (structured `AgentChatMessage` arrays) back to plain text.
+
+### Scope Resolution
+
+`resolveScope()` determines the working directory and system prompt based on session scope:
+- **Project scope** — uses the project path and a generic read-only assistant system prompt
+- **Task scope** — resolves the task's project, builds a task-specific system prompt with task details, status, plan, and useful CLI commands
+
+### Summarize Flow
+
+`summarizeMessages()` compresses an entire conversation into a single system summary message:
+1. Stops any running agent for the session
+2. Builds a summarization prompt from all messages
+3. Runs a single-turn Claude query to generate the summary
+4. Replaces all messages with one system message containing the summary
+5. Accumulates historical token costs onto the summary message
+
+### Running Agent Tracking
+
+Active chat agents are tracked in a `runningAgents` map keyed by session ID. Each entry stores: session info, scope, project, status, start time, last activity, and a message preview. Completed/failed agents are cleaned up after a 5-second delay. Stale entries (older than 1 hour) are cleaned up on `getRunningAgents()` calls.

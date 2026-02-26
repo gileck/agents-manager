@@ -33,6 +33,7 @@ function makeRun(overrides: Partial<AgentRun> = {}): AgentRun {
     timeoutMs: null,
     maxTurns: null,
     messageCount: null,
+    messages: null,
     ...overrides,
   };
 }
@@ -141,11 +142,12 @@ describe('AgentSupervisor', () => {
   });
 
   describe('timeout detection', () => {
-    it('marks a run as timed_out when elapsed exceeds defaultTimeoutMs', async () => {
+    it('marks a run as timed_out when elapsed exceeds defaultTimeoutMs + grace period', async () => {
       const longRun = makeRun({ id: 'timeout-1', taskId: 'task-2', startedAt: 1000 });
       agentRunStore.getActiveRuns.mockResolvedValue([longRun]);
       agentService.getActiveRunIds.mockReturnValue(['timeout-1']); // active in memory
-      mockedNow.mockReturnValue(7000); // elapsed = 7000 - 1000 = 6000 > 5000
+      // defaultTimeoutMs=5000 + 5min grace=300000 → effective=305000; elapsed=306000 > 305000
+      mockedNow.mockReturnValue(307000);
 
       supervisor.start();
       await vi.advanceTimersByTimeAsync(1000);
@@ -163,11 +165,11 @@ describe('AgentSupervisor', () => {
       }));
     });
 
-    it('does not mark a run as timed_out if elapsed is within timeout', async () => {
+    it('does not mark a run as timed_out if elapsed is within timeout + grace', async () => {
       const recentRun = makeRun({ id: 'ok-1', startedAt: 1000 });
       agentRunStore.getActiveRuns.mockResolvedValue([recentRun]);
       agentService.getActiveRunIds.mockReturnValue(['ok-1']);
-      mockedNow.mockReturnValue(3000); // elapsed = 2000 < 5000
+      mockedNow.mockReturnValue(3000); // elapsed = 2000 < 305000 (5000 + 300000)
 
       supervisor.start();
       await vi.advanceTimersByTimeAsync(1000);
@@ -181,7 +183,8 @@ describe('AgentSupervisor', () => {
       agentRunStore.getActiveRuns.mockResolvedValue([longRun]);
       agentService.getActiveRunIds.mockReturnValue(['timeout-err']);
       agentService.stop.mockRejectedValue(new Error('agent already done'));
-      mockedNow.mockReturnValue(10000);
+      // Must exceed defaultTimeoutMs(5000) + grace(300000) = 305000
+      mockedNow.mockReturnValue(310000);
 
       supervisor.start();
       await vi.advanceTimersByTimeAsync(1000);
@@ -190,6 +193,38 @@ describe('AgentSupervisor', () => {
       expect(agentRunStore.updateRun).toHaveBeenCalledWith('timeout-err', expect.objectContaining({
         status: 'timed_out',
       }));
+    });
+
+    it('uses per-run timeoutMs when set in the run record', async () => {
+      // run.timeoutMs = 2000, grace = 300000. Effective = 302000
+      const longRun = makeRun({ id: 'per-run-1', taskId: 'task-3', startedAt: 1000, timeoutMs: 2000 });
+      agentRunStore.getActiveRuns.mockResolvedValue([longRun]);
+      agentService.getActiveRunIds.mockReturnValue(['per-run-1']);
+      // elapsed = 303001 > 302000
+      mockedNow.mockReturnValue(303002);
+
+      supervisor.start();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(agentService.stop).toHaveBeenCalledWith('per-run-1');
+      expect(agentRunStore.updateRun).toHaveBeenCalledWith('per-run-1', expect.objectContaining({
+        status: 'timed_out',
+      }));
+    });
+
+    it('does not time out when elapsed is within per-run timeoutMs + grace', async () => {
+      // run.timeoutMs = 2000, grace = 300000. Effective = 302000
+      const run = makeRun({ id: 'per-run-ok', startedAt: 1000, timeoutMs: 2000 });
+      agentRunStore.getActiveRuns.mockResolvedValue([run]);
+      agentService.getActiveRunIds.mockReturnValue(['per-run-ok']);
+      // elapsed = 4000 < 302000
+      mockedNow.mockReturnValue(5000);
+
+      supervisor.start();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(agentRunStore.updateRun).not.toHaveBeenCalled();
+      expect(agentService.stop).not.toHaveBeenCalled();
     });
   });
 

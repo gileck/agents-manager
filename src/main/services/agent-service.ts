@@ -610,7 +610,7 @@ export class AgentService implements IAgentService {
 
         context.validationErrors = validation.output;
         try {
-          result = await agent.execute(context, config, wrappedOnOutput, onLog);
+          result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt, wrappedOnMessage);
         } catch (err) {
           const retryPartialInput = 'accumulatedInputTokens' in agent ? (agent as { accumulatedInputTokens?: number }).accumulatedInputTokens : undefined;
           const retryPartialOutput = 'accumulatedOutputTokens' in agent ? (agent as { accumulatedOutputTokens?: number }).accumulatedOutputTokens : undefined;
