@@ -14,7 +14,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '../components/ui/select';
 import { useTask } from '../hooks/useTasks';
-import { usePipeline } from '../hooks/usePipelines';
+import { usePipeline, usePipelines } from '../hooks/usePipelines';
 import { useFeatures } from '../hooks/useFeatures';
 import { usePipelineDiagnostics } from '../hooks/usePipelineDiagnostics';
 import { useHookRetry } from '../hooks/useHookRetry';
@@ -46,6 +46,7 @@ export function TaskDetailPage() {
   const { pipeline } = usePipeline(task?.pipelineId);
   const statusMeta = usePipelineStatusMeta(task, pipeline);
   const { features } = useFeatures(task ? { projectId: task.projectId } : undefined);
+  const { pipelines } = usePipelines();
 
   const { data: transitions, refetch: refetchTransitions } = useIpc<Transition[]>(
     () => id ? window.api.tasks.transitions(id) : Promise.resolve([]),
@@ -140,6 +141,7 @@ export function TaskDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [resetPipelineId, setResetPipelineId] = useState<string | undefined>(undefined);
   const [duplicating, setDuplicating] = useState(false);
   const [stoppingAgent, setStoppingAgent] = useState(false);
 
@@ -275,8 +277,10 @@ export function TaskDetailPage() {
     if (!id) return;
     setResetting(true);
     try {
-      await window.api.tasks.reset(id);
+      const newPipelineId = resetPipelineId !== task?.pipelineId ? resetPipelineId : undefined;
+      await window.api.tasks.reset(id, newPipelineId);
       setResetOpen(false);
+      setResetPipelineId(undefined);
       await refetch();
       await refetchTransitions();
       await refetchAgentRuns();
@@ -409,7 +413,7 @@ export function TaskDetailPage() {
             {duplicating ? 'Duplicating...' : 'Duplicate'}
           </Button>
           <Button variant="outline" size="sm" onClick={openEdit}>Edit</Button>
-          <Button variant="outline" size="sm" onClick={() => setResetOpen(true)} disabled={hasRunningAgent}>Reset</Button>
+          <Button variant="outline" size="sm" onClick={() => { setResetPipelineId(task.pipelineId); setResetOpen(true); }} disabled={hasRunningAgent}>Reset</Button>
           <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>Delete</Button>
         </div>
       </div>
@@ -758,7 +762,7 @@ export function TaskDetailPage() {
       </Dialog>
 
       {/* Reset Confirmation Dialog */}
-      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+      <Dialog open={resetOpen} onOpenChange={(open) => { setResetOpen(open); if (!open) setResetPipelineId(undefined); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reset Task</DialogTitle>
@@ -767,6 +771,24 @@ export function TaskDetailPage() {
             <p className="text-sm text-muted-foreground">
               This will clear all agent-generated data for &quot;{task.title}&quot; and reset the status to the pipeline&apos;s initial state.
             </p>
+            {pipelines.length > 1 && (
+              <div className="space-y-2">
+                <Label>Pipeline</Label>
+                <Select
+                  value={resetPipelineId ?? task.pipelineId}
+                  onValueChange={(v) => setResetPipelineId(v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pipelines.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="text-sm space-y-1">
               <p className="font-medium">Cleared:</p>
               <p className="text-muted-foreground">Plan, subtasks, PR link, branch, agent runs, events, timeline, artifacts, worktree</p>

@@ -184,19 +184,38 @@ export class WorkflowService implements IWorkflowService {
     return result;
   }
 
-  async resetTask(id: string): Promise<Task | null> {
+  async resetTask(id: string, pipelineId?: string): Promise<Task | null> {
     const task = await this.taskStore.getTask(id);
-    if (task) {
-      await this.cleanupWorktree(task);
+    if (!task) return null;
+
+    // Check no agent is running before resetting
+    const agentRuns = await this.agentRunStore.getRunsForTask(id);
+    const hasRunningAgent = agentRuns.some((r) => r.status === 'running');
+    if (hasRunningAgent) {
+      throw new Error('Cannot reset task while agent is running');
     }
 
-    const result = await this.taskStore.resetTask(id);
+    // Validate the new pipeline if provided
+    if (pipelineId && pipelineId !== task.pipelineId) {
+      const newPipeline = await this.pipelineStore.getPipeline(pipelineId);
+      if (!newPipeline) {
+        throw new Error(`Pipeline not found: ${pipelineId}`);
+      }
+    }
+
+    await this.cleanupWorktree(task);
+
+    const result = await this.taskStore.resetTask(id, pipelineId);
     if (result) {
+      const pipelineChanged = pipelineId && pipelineId !== task.pipelineId;
       await this.activityLog.log({
         action: 'reset',
         entityType: 'task',
         entityId: id,
-        summary: `Reset task: ${result.title}`,
+        summary: pipelineChanged
+          ? `Reset task with new pipeline: ${result.title}`
+          : `Reset task: ${result.title}`,
+        ...(pipelineChanged ? { data: { oldPipeline: task.pipelineId, newPipeline: pipelineId } } : {}),
       });
     }
     return result;

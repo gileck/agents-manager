@@ -277,13 +277,16 @@ export class SqliteTaskStore implements ITaskStore {
     return txn();
   }
 
-  async resetTask(id: string): Promise<Task | null> {
+  async resetTask(id: string, pipelineId?: string): Promise<Task | null> {
     const existing = await this.getTask(id);
     if (!existing) return null;
 
+    // Use new pipeline if provided, otherwise keep existing
+    const effectivePipelineId = pipelineId ?? existing.pipelineId;
+
     // Determine first status from pipeline
     let firstStatus = 'open';
-    const pipeline = await this.pipelineStore.getPipeline(existing.pipelineId);
+    const pipeline = await this.pipelineStore.getPipeline(effectivePipelineId);
     if (pipeline && pipeline.statuses.length > 0) {
       firstStatus = pipeline.statuses[0].name;
     }
@@ -298,13 +301,13 @@ export class SqliteTaskStore implements ITaskStore {
       this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
       this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);
 
-      // Reset task record fields
+      // Reset task record fields (including pipeline_id if changed)
       this.db.prepare(`
         UPDATE tasks
-        SET status = ?, plan = NULL, technical_design = NULL, subtasks = '[]', phases = NULL, plan_comments = '[]', technical_design_comments = '[]',
+        SET status = ?, pipeline_id = ?, plan = NULL, technical_design = NULL, subtasks = '[]', phases = NULL, plan_comments = '[]', technical_design_comments = '[]',
             pr_link = NULL, branch_name = NULL, updated_at = ?
         WHERE id = ?
-      `).run(firstStatus, now(), id);
+      `).run(firstStatus, effectivePipelineId, now(), id);
     });
     txn();
 

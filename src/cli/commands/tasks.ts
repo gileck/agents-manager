@@ -169,6 +169,27 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
       }
     });
 
+  tasks
+    .command('reset <id>')
+    .description('Reset a task to its initial state')
+    .option('--pipeline <id>', 'Switch to a different pipeline during reset')
+    .action(async (id: string, cmdOpts: { pipeline?: string }) => {
+      const opts = program.opts() as OutputOptions;
+      const services = getServices();
+      try {
+        const result = await services.workflowService.resetTask(id, cmdOpts.pipeline);
+        if (!result) {
+          console.error(`Task not found: ${id}`);
+          process.exitCode = 1;
+          return;
+        }
+        output(result, opts);
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : 'Failed to reset task');
+        process.exitCode = 1;
+      }
+    });
+
   // Transition commands
   tasks
     .command('transition <id> <status>')

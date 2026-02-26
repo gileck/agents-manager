@@ -16,7 +16,7 @@ export interface IWorkflowService {
   createTask(input: TaskCreateInput): Promise<Task>;
   updateTask(id: string, input: TaskUpdateInput): Promise<Task | null>;
   deleteTask(id: string): Promise<boolean>;
-  resetTask(id: string): Promise<Task | null>;
+  resetTask(id: string, pipelineId?: string): Promise<Task | null>;
   transitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult>;
   forceTransitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult>;
   getPipelineDiagnostics(taskId: string): Promise<PipelineDiagnostics | null>;
