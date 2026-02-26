@@ -48,52 +48,58 @@ export function ActiveAgentsList() {
 
   if (entries.length === 0) return null;
 
-  const activeCount = entries.filter((e) => e.run.status === 'running').length;
-
   return (
-    <div className="border-t border-border">
-      <div className="flex items-center justify-between px-4 py-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          Active Agents ({activeCount})
-        </span>
+    <ActiveAgentsEntries entries={entries} refresh={refresh} />
+  );
+}
+
+export function ActiveAgentsEntries({
+  entries,
+  refresh,
+}: {
+  entries: ReturnType<typeof useActiveAgentRuns>['entries'];
+  refresh: () => void;
+}) {
+  return (
+    <div className="max-h-48 overflow-y-auto px-2">
+      {entries.map(({ run, taskTitle }) => (
+        <NavLink
+          key={run.id}
+          to={`/agents/${run.id}`}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors mb-0.5',
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )
+          }
+        >
+          <StatusIndicator status={run.status} />
+          <div className="flex-1 min-w-0">
+            <div className="truncate">{taskTitle}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] opacity-70">{run.mode}</span>
+              {run.status === 'running' && <ElapsedTime startedAt={run.startedAt} />}
+              {run.status !== 'running' && run.completedAt && (
+                <span className="text-[10px] text-muted-foreground">
+                  {formatRelativeTimestamp(run.completedAt)}
+                </span>
+              )}
+            </div>
+          </div>
+        </NavLink>
+      ))}
+      {entries.length > 0 && (
         <button
           onClick={refresh}
-          className="text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1 w-full rounded-md px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors mt-0.5"
           title="Clear completed"
         >
-          <RefreshCw className="h-3 w-3" />
+          <RefreshCw className="h-2.5 w-2.5" />
+          Clear completed
         </button>
-      </div>
-      <div className="max-h-48 overflow-y-auto px-2 pb-2">
-        {entries.map(({ run, taskTitle }) => (
-          <NavLink
-            key={run.id}
-            to={`/agents/${run.id}`}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors mb-0.5',
-                isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )
-            }
-          >
-            <StatusIndicator status={run.status} />
-            <div className="flex-1 min-w-0">
-              <div className="truncate">{taskTitle}</div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] opacity-70">{run.mode}</span>
-                {run.status === 'running' && <ElapsedTime startedAt={run.startedAt} />}
-                {run.status !== 'running' && run.completedAt && (
-                  <span className="text-[10px] text-muted-foreground">
-                    {formatRelativeTimestamp(run.completedAt)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </NavLink>
-        ))}
-      </div>
+      )}
     </div>
   );
 }
