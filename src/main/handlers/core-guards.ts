@@ -65,4 +65,25 @@ export function registerCoreGuards(engine: IPipelineEngine, _db: Database.Databa
     }
     return { allowed: false, reason: 'No pending implementation phases' };
   });
+
+  engine.registerGuard('is_admin', (_task: Task, _transition: Transition, context: TransitionContext, dbRef: unknown): GuardResult => {
+    if (!context.actor) {
+      return { allowed: false, reason: 'No actor provided - admin role required' };
+    }
+
+    const sqliteDb = dbRef as Database.Database;
+
+    // Query the user directly since guards must be synchronous
+    const userRow = sqliteDb.prepare('SELECT role FROM users WHERE username = ?').get(context.actor) as { role: string } | undefined;
+
+    if (!userRow) {
+      return { allowed: false, reason: 'User not found' };
+    }
+
+    if (userRow.role !== 'admin') {
+      return { allowed: false, reason: 'Only administrators can perform this action' };
+    }
+
+    return { allowed: true };
+  });
 }
