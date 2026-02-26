@@ -8,10 +8,20 @@ import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { TaskUpdateInput, TelegramBotLogEntry } from '../../shared/types';
 import { getSetting } from '@template/main/services/settings-service';
 
+/** Maximum allowed length for free-text input from Telegram users */
+const MAX_INPUT_LENGTH = 2000;
+
+/** Time-to-live for pending actions (5 minutes) */
+const PENDING_ACTION_TTL_MS = 5 * 60 * 1000;
+
+/** Interval for cleaning up expired pending actions (60 seconds) */
+const PENDING_ACTION_CLEANUP_INTERVAL_MS = 60 * 1000;
+
 interface PendingAction {
   type: 'create_title' | 'edit_field';
   taskId?: string;
   field?: string;
+  createdAt: number;
 }
 
 interface BotDeps {
@@ -26,6 +36,7 @@ export class TelegramBotService implements ITelegramBotService {
   private bot: TelegramBot | null = null;
   private running = false;
   private pendingActions = new Map<number, PendingAction>();
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private deps: BotDeps;
   private projectId = '';
   private chatId = '';
@@ -48,7 +59,13 @@ export class TelegramBotService implements ITelegramBotService {
     this.bot = new TelegramBot(botToken, { polling: true });
     this.running = true;
 
+    this.bot.on('polling_error', (err: Error) => {
+      this.logError(err);
+      this.log('in', `[polling_error] ${err.message}`);
+    });
+
     this.registerHandlers();
+    this.startPendingActionsCleanup();
 
     await this.send(chatId, `Bot started for project *${esc(project.name)}*`, {
       parse_mode: 'MarkdownV2',
@@ -56,6 +73,8 @@ export class TelegramBotService implements ITelegramBotService {
   }
 
   async stop(): Promise<void> {
+    this.stopPendingActionsCleanup();
+    this.pendingActions.clear();
     if (this.bot) {
       await this.bot.stopPolling();
       this.bot = null;
@@ -65,6 +84,24 @@ export class TelegramBotService implements ITelegramBotService {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  private startPendingActionsCleanup(): void {
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [chatId, action] of this.pendingActions) {
+        if (now - action.createdAt > PENDING_ACTION_TTL_MS) {
+          this.pendingActions.delete(chatId);
+        }
+      }
+    }, PENDING_ACTION_CLEANUP_INTERVAL_MS);
+  }
+
+  private stopPendingActionsCleanup(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 
   private registerHandlers(): void {
@@ -85,7 +122,7 @@ export class TelegramBotService implements ITelegramBotService {
     bot.onText(/\/create$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.log('in', msg.text ?? '/create');
-      this.pendingActions.set(msg.chat.id, { type: 'create_title' });
+      this.pendingActions.set(msg.chat.id, { type: 'create_title', createdAt: Date.now() });
       this.send(msg.chat.id, 'Enter the task title:').catch(this.logError);
     });
 
@@ -105,15 +142,31 @@ export class TelegramBotService implements ITelegramBotService {
       if (!this.isAllowed(msg)) return;
       if (msg.text?.startsWith('/')) return;
 
-      this.log('in', msg.text ?? '');
+      const text = msg.text ?? '';
+      this.log('in', text);
+
+      // Validate input length
+      if (text.length > MAX_INPUT_LENGTH) {
+        this.send(msg.chat.id, `Input too long \\(max ${MAX_INPUT_LENGTH} characters\\)\\.`).catch(this.logError);
+        return;
+      }
+
       const pending = this.pendingActions.get(msg.chat.id);
       if (!pending) return;
+
+      // Check TTL before consuming
+      if (Date.now() - pending.createdAt > PENDING_ACTION_TTL_MS) {
+        this.pendingActions.delete(msg.chat.id);
+        this.send(msg.chat.id, 'Action expired\\. Please start again\\.').catch(this.logError);
+        return;
+      }
+
       this.pendingActions.delete(msg.chat.id);
 
       if (pending.type === 'create_title') {
-        this.handleCreateTask(msg.chat.id, msg.text ?? '').catch(this.logError);
+        this.handleCreateTask(msg.chat.id, text).catch(this.logError);
       } else if (pending.type === 'edit_field' && pending.taskId && pending.field) {
-        this.handleEditFieldValue(msg.chat.id, pending.taskId, pending.field, msg.text ?? '').catch(this.logError);
+        this.handleEditFieldValue(msg.chat.id, pending.taskId, pending.field, text).catch(this.logError);
       }
     });
 
@@ -129,36 +182,37 @@ export class TelegramBotService implements ITelegramBotService {
   }
 
   private async handleCallback(chatId: number, data: string): Promise<void> {
-    // Short prefixes to stay within Telegram's 64-byte callback_data limit
-    if (data.startsWith('v:')) {
+    // Short prefixes with | separator to stay within Telegram's 64-byte callback_data limit.
+    // Using | because ULIDs cannot contain it, preventing ambiguous parsing.
+    if (data.startsWith('v|')) {
       await this.handleTaskDetail(chatId, data.slice(2));
-    } else if (data.startsWith('ts:')) {
+    } else if (data.startsWith('ts|')) {
       await this.handleShowTransitions(chatId, data.slice(3));
-    } else if (data.startsWith('t:')) {
-      const sep = data.indexOf(':', 2);
+    } else if (data.startsWith('t|')) {
+      const sep = data.indexOf('|', 2);
       await this.handleTransition(chatId, data.slice(2, sep), data.slice(sep + 1));
-    } else if (data.startsWith('e:')) {
+    } else if (data.startsWith('e|')) {
       await this.handleShowEditFields(chatId, data.slice(2));
-    } else if (data.startsWith('ef:')) {
-      const sep = data.indexOf(':', 3);
+    } else if (data.startsWith('ef|')) {
+      const sep = data.indexOf('|', 3);
       const taskId = data.slice(3, sep);
       const field = data.slice(sep + 1);
-      this.pendingActions.set(chatId, { type: 'edit_field', taskId, field });
+      this.pendingActions.set(chatId, { type: 'edit_field', taskId, field, createdAt: Date.now() });
       await this.send(chatId, `Enter new value for *${esc(field)}*:`, {
         parse_mode: 'MarkdownV2',
       });
-    } else if (data.startsWith('d:')) {
+    } else if (data.startsWith('d|')) {
       const taskId = data.slice(2);
       await this.send(chatId, `Delete task \`${taskId}\`?`, {
         parse_mode: 'MarkdownV2',
         reply_markup: {
           inline_keyboard: [[
-            { text: 'Confirm Delete', callback_data: `cd:${taskId}` },
-            { text: 'Cancel', callback_data: `v:${taskId}` },
+            { text: 'Confirm Delete', callback_data: `cd|${taskId}` },
+            { text: 'Cancel', callback_data: `v|${taskId}` },
           ]],
         },
       });
-    } else if (data.startsWith('cd:')) {
+    } else if (data.startsWith('cd|')) {
       await this.handleDelete(chatId, data.slice(3));
     }
   }
@@ -176,7 +230,7 @@ export class TelegramBotService implements ITelegramBotService {
 
     const buttons = tasks.map((t) => ([{
       text: `[${t.status}] ${t.title}`,
-      callback_data: `v:${t.id}`,
+      callback_data: `v|${t.id}`,
     }]));
 
     await this.send(chatId, `*Tasks* \\(${tasks.length}\\):`, {
@@ -205,9 +259,9 @@ export class TelegramBotService implements ITelegramBotService {
       parse_mode: 'MarkdownV2',
       reply_markup: {
         inline_keyboard: [[
-          { text: 'Transition', callback_data: `ts:${task.id}` },
-          { text: 'Edit', callback_data: `e:${task.id}` },
-          { text: 'Delete', callback_data: `d:${task.id}` },
+          { text: 'Transition', callback_data: `ts|${task.id}` },
+          { text: 'Edit', callback_data: `e|${task.id}` },
+          { text: 'Delete', callback_data: `d|${task.id}` },
         ]],
       },
     });
@@ -225,7 +279,7 @@ export class TelegramBotService implements ITelegramBotService {
 
     const buttons = transitions.map((tr) => ([{
       text: tr.label ?? `${tr.from} → ${tr.to}`,
-      callback_data: `t:${taskId}:${tr.to}`,
+      callback_data: `t|${taskId}|${tr.to}`,
     }]));
 
     await this.send(chatId, 'Select transition:', {
@@ -247,7 +301,7 @@ export class TelegramBotService implements ITelegramBotService {
     const fields = ['title', 'description', 'priority', 'assignee'];
     const buttons = fields.map((f) => ([{
       text: f,
-      callback_data: `ef:${taskId}:${f}`,
+      callback_data: `ef|${taskId}|${f}`,
     }]));
 
     await this.send(chatId, 'Select field to edit:', {

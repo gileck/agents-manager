@@ -961,13 +961,22 @@ export class AgentService implements IAgentService {
 
       // Send native notification
       try {
-        this.notificationRouter?.send({
+        await this.notificationRouter?.send({
           taskId,
           title: `Agent ${finalStatus}`,
           body: `${agentType} agent ${finalStatus} for task: ${task.title}`,
           channel: run.id,
         });
-      } catch { /* notification failure is non-fatal */ }
+      } catch (notifErr) {
+        const notifMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+        this.taskEventLog.log({
+          taskId,
+          category: 'system',
+          severity: 'warning',
+          message: `Notification send failed: ${notifMsg}`,
+          data: { agentRunId: run.id, error: notifMsg },
+        }).catch(() => {});
+      }
 
       // Check message queue for follow-up messages
       const pendingQueue = this.messageQueues.get(taskId);

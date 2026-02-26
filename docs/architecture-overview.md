@@ -189,22 +189,24 @@ function getServices(): AppServices {
 
 ### NotificationRouter
 
-The desktop notification router depends on Electron APIs not available in the CLI. Selection uses a dynamic `require()` with try/catch:
+The notification subsystem uses a composite router pattern. `MultiChannelNotificationRouter` wraps multiple `INotificationRouter` implementations and dispatches notifications to all channels in parallel via `Promise.allSettled`.
+
+At startup, the composition root creates a `MultiChannelNotificationRouter` and registers a `DesktopNotificationRouter` (or `StubNotificationRouter` if Electron APIs are unavailable). When a Telegram bot is started for a project, a `TelegramNotificationRouter` is dynamically added to the composite router.
 
 ```typescript
-let notificationRouter: INotificationRouter;
-try {
-  const { DesktopNotificationRouter } = require('../services/desktop-notification-router');
-  notificationRouter = new DesktopNotificationRouter();
-} catch {
-  notificationRouter = new StubNotificationRouter();
-}
+// Composite router dispatches to all registered channels
+const multiRouter = new MultiChannelNotificationRouter();
+multiRouter.addRouter(desktopOrStubRouter);
+// Later, when Telegram bot starts:
+multiRouter.addRouter(telegramRouter);
 ```
 
 | Implementation | File | Behavior |
 |---------------|------|----------|
-| `DesktopNotificationRouter` | `src/main/services/desktop-notification-router.ts` | macOS native notifications, opens task on click |
-| `StubNotificationRouter` | `src/main/services/stub-notification-router.ts` | Collects notifications in-memory (no-op) |
+| `MultiChannelNotificationRouter` | `src/main/services/multi-channel-notification-router.ts` | Composite router dispatching to all registered channels via `Promise.allSettled` |
+| `DesktopNotificationRouter` | `src/main/services/desktop-notification-router.ts` | macOS native notifications, navigates to task on click |
+| `TelegramNotificationRouter` | `src/main/services/telegram-notification-router.ts` | Sends MarkdownV2-formatted messages to a Telegram chat |
+| `StubNotificationRouter` | `src/main/services/stub-notification-router.ts` | Collects notifications in-memory for testing |
 
 ### Git Operations
 
