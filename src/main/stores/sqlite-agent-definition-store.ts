@@ -39,112 +39,147 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
   constructor(private db: Database.Database) {}
 
   async getDefinition(id: string): Promise<AgentDefinition | null> {
-    const row = this.db.prepare('SELECT * FROM agent_definitions WHERE id = ?').get(id) as AgentDefinitionRow | undefined;
-    return row ? rowToDefinition(row) : null;
+    try {
+      const row = this.db.prepare('SELECT * FROM agent_definitions WHERE id = ?').get(id) as AgentDefinitionRow | undefined;
+      return row ? rowToDefinition(row) : null;
+    } catch (err) {
+      console.error('SqliteAgentDefinitionStore.getDefinition failed:', err);
+      throw err;
+    }
   }
 
   async listDefinitions(): Promise<AgentDefinition[]> {
-    const rows = this.db.prepare('SELECT * FROM agent_definitions ORDER BY is_built_in DESC, created_at DESC').all() as AgentDefinitionRow[];
-    return rows.map(rowToDefinition);
+    try {
+      const rows = this.db.prepare('SELECT * FROM agent_definitions ORDER BY is_built_in DESC, created_at DESC').all() as AgentDefinitionRow[];
+      return rows.map(rowToDefinition);
+    } catch (err) {
+      console.error('SqliteAgentDefinitionStore.listDefinitions failed:', err);
+      throw err;
+    }
   }
 
   async getDefinitionByAgentType(agentType: string): Promise<AgentDefinition | null> {
-    const id = 'agent-def-' + agentType;
-    return this.getDefinition(id);
+    try {
+      const id = 'agent-def-' + agentType;
+      return this.getDefinition(id);
+    } catch (err) {
+      console.error('SqliteAgentDefinitionStore.getDefinitionByAgentType failed:', err);
+      throw err;
+    }
   }
 
   async getDefinitionByMode(mode: string): Promise<AgentDefinition | null> {
-    const row = this.db.prepare(`
-      SELECT ad.* FROM agent_definitions ad
-      WHERE EXISTS (
-        SELECT 1 FROM json_each(ad.modes) je
-        WHERE json_extract(je.value, '$.mode') = ?
-      )
-      LIMIT 1
-    `).get(mode) as AgentDefinitionRow | undefined;
-    return row ? rowToDefinition(row) : null;
+    try {
+      const row = this.db.prepare(`
+        SELECT ad.* FROM agent_definitions ad
+        WHERE EXISTS (
+          SELECT 1 FROM json_each(ad.modes) je
+          WHERE json_extract(je.value, '$.mode') = ?
+        )
+        LIMIT 1
+      `).get(mode) as AgentDefinitionRow | undefined;
+      return row ? rowToDefinition(row) : null;
+    } catch (err) {
+      console.error('SqliteAgentDefinitionStore.getDefinitionByMode failed:', err);
+      throw err;
+    }
   }
 
   async createDefinition(input: AgentDefinitionCreateInput): Promise<AgentDefinition> {
-    const id = generateId();
-    const timestamp = now();
+    try {
+      const id = generateId();
+      const timestamp = now();
 
-    this.db.prepare(`
-      INSERT INTO agent_definitions (id, name, description, engine, model, modes, system_prompt, timeout, skills, is_built_in, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-    `).run(
-      id,
-      input.name,
-      input.description ?? null,
-      input.engine,
-      input.model ?? null,
-      JSON.stringify(input.modes ?? []),
-      input.systemPrompt ?? null,
-      input.timeout ?? null,
-      JSON.stringify(input.skills ?? []),
-      timestamp,
-      timestamp,
-    );
+      this.db.prepare(`
+        INSERT INTO agent_definitions (id, name, description, engine, model, modes, system_prompt, timeout, skills, is_built_in, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      `).run(
+        id,
+        input.name,
+        input.description ?? null,
+        input.engine,
+        input.model ?? null,
+        JSON.stringify(input.modes ?? []),
+        input.systemPrompt ?? null,
+        input.timeout ?? null,
+        JSON.stringify(input.skills ?? []),
+        timestamp,
+        timestamp,
+      );
 
-    return (await this.getDefinition(id))!;
+      return (await this.getDefinition(id))!;
+    } catch (err) {
+      console.error('SqliteAgentDefinitionStore.createDefinition failed:', err);
+      throw err;
+    }
   }
 
   async updateDefinition(id: string, input: AgentDefinitionUpdateInput): Promise<AgentDefinition | null> {
-    const existing = await this.getDefinition(id);
-    if (!existing) return null;
+    try {
+      const existing = await this.getDefinition(id);
+      if (!existing) return null;
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
+      const updates: string[] = [];
+      const values: unknown[] = [];
 
-    if (input.name !== undefined) {
-      updates.push('name = ?');
-      values.push(input.name);
-    }
-    if (input.description !== undefined) {
-      updates.push('description = ?');
-      values.push(input.description);
-    }
-    if (input.engine !== undefined) {
-      updates.push('engine = ?');
-      values.push(input.engine);
-    }
-    if (input.model !== undefined) {
-      updates.push('model = ?');
-      values.push(input.model);
-    }
-    if (input.modes !== undefined) {
-      updates.push('modes = ?');
-      values.push(JSON.stringify(input.modes));
-    }
-    if (input.systemPrompt !== undefined) {
-      updates.push('system_prompt = ?');
-      values.push(input.systemPrompt);
-    }
-    if (input.timeout !== undefined) {
-      updates.push('timeout = ?');
-      values.push(input.timeout);
-    }
-    if (input.skills !== undefined) {
-      updates.push('skills = ?');
-      values.push(JSON.stringify(input.skills));
-    }
+      if (input.name !== undefined) {
+        updates.push('name = ?');
+        values.push(input.name);
+      }
+      if (input.description !== undefined) {
+        updates.push('description = ?');
+        values.push(input.description);
+      }
+      if (input.engine !== undefined) {
+        updates.push('engine = ?');
+        values.push(input.engine);
+      }
+      if (input.model !== undefined) {
+        updates.push('model = ?');
+        values.push(input.model);
+      }
+      if (input.modes !== undefined) {
+        updates.push('modes = ?');
+        values.push(JSON.stringify(input.modes));
+      }
+      if (input.systemPrompt !== undefined) {
+        updates.push('system_prompt = ?');
+        values.push(input.systemPrompt);
+      }
+      if (input.timeout !== undefined) {
+        updates.push('timeout = ?');
+        values.push(input.timeout);
+      }
+      if (input.skills !== undefined) {
+        updates.push('skills = ?');
+        values.push(JSON.stringify(input.skills));
+      }
 
-    if (updates.length === 0) return existing;
+      if (updates.length === 0) return existing;
 
-    updates.push('updated_at = ?');
-    values.push(now());
-    values.push(id);
+      updates.push('updated_at = ?');
+      values.push(now());
+      values.push(id);
 
-    this.db.prepare(`UPDATE agent_definitions SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    return (await this.getDefinition(id))!;
+      this.db.prepare(`UPDATE agent_definitions SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      return (await this.getDefinition(id))!;
+    } catch (err) {
+      console.error('SqliteAgentDefinitionStore.updateDefinition failed:', err);
+      throw err;
+    }
   }
 
   async deleteDefinition(id: string): Promise<boolean> {
-    const existing = await this.getDefinition(id);
-    if (!existing) return false;
-    if (existing.isBuiltIn) throw new Error('Cannot delete built-in agent definition');
+    try {
+      const existing = await this.getDefinition(id);
+      if (!existing) return false;
+      if (existing.isBuiltIn) throw new Error('Cannot delete built-in agent definition');
 
-    const result = this.db.prepare('DELETE FROM agent_definitions WHERE id = ?').run(id);
-    return result.changes > 0;
+      const result = this.db.prepare('DELETE FROM agent_definitions WHERE id = ?').run(id);
+      return result.changes > 0;
+    } catch (err) {
+      console.error('SqliteAgentDefinitionStore.deleteDefinition failed:', err);
+      throw err;
+    }
   }
 }

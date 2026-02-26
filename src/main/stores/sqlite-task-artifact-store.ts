@@ -25,39 +25,54 @@ export class SqliteTaskArtifactStore implements ITaskArtifactStore {
   constructor(private db: Database.Database) {}
 
   async createArtifact(input: TaskArtifactCreateInput): Promise<TaskArtifact> {
-    const id = generateId();
-    const timestamp = now();
+    try {
+      const id = generateId();
+      const timestamp = now();
 
-    this.db.prepare(`
-      INSERT INTO task_artifacts (id, task_id, type, data, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, input.taskId, input.type, JSON.stringify(input.data ?? {}), timestamp);
+      this.db.prepare(`
+        INSERT INTO task_artifacts (id, task_id, type, data, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, input.taskId, input.type, JSON.stringify(input.data ?? {}), timestamp);
 
-    return {
-      id,
-      taskId: input.taskId,
-      type: input.type,
-      data: input.data ?? {},
-      createdAt: timestamp,
-    };
+      return {
+        id,
+        taskId: input.taskId,
+        type: input.type,
+        data: input.data ?? {},
+        createdAt: timestamp,
+      };
+    } catch (err) {
+      console.error('SqliteTaskArtifactStore.createArtifact failed:', err);
+      throw err;
+    }
   }
 
   async getArtifactsForTask(taskId: string, type?: ArtifactType): Promise<TaskArtifact[]> {
-    const conditions: string[] = ['task_id = ?'];
-    const values: unknown[] = [taskId];
+    try {
+      const conditions: string[] = ['task_id = ?'];
+      const values: unknown[] = [taskId];
 
-    if (type) {
-      conditions.push('type = ?');
-      values.push(type);
+      if (type) {
+        conditions.push('type = ?');
+        values.push(type);
+      }
+
+      const where = `WHERE ${conditions.join(' AND ')}`;
+      const rows = this.db.prepare(`SELECT * FROM task_artifacts ${where} ORDER BY created_at ASC`).all(...values) as TaskArtifactRow[];
+      return rows.map(rowToArtifact);
+    } catch (err) {
+      console.error('SqliteTaskArtifactStore.getArtifactsForTask failed:', err);
+      throw err;
     }
-
-    const where = `WHERE ${conditions.join(' AND ')}`;
-    const rows = this.db.prepare(`SELECT * FROM task_artifacts ${where} ORDER BY created_at ASC`).all(...values) as TaskArtifactRow[];
-    return rows.map(rowToArtifact);
   }
 
   async deleteArtifactsForTask(taskId: string): Promise<number> {
-    const result = this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(taskId);
-    return result.changes;
+    try {
+      const result = this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(taskId);
+      return result.changes;
+    } catch (err) {
+      console.error('SqliteTaskArtifactStore.deleteArtifactsForTask failed:', err);
+      throw err;
+    }
   }
 }

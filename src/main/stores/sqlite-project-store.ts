@@ -29,64 +29,89 @@ export class SqliteProjectStore implements IProjectStore {
   constructor(private db: Database.Database) {}
 
   async getProject(id: string): Promise<Project | null> {
-    const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow | undefined;
-    return row ? rowToProject(row) : null;
+    try {
+      const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow | undefined;
+      return row ? rowToProject(row) : null;
+    } catch (err) {
+      console.error('SqliteProjectStore.getProject failed:', err);
+      throw err;
+    }
   }
 
   async listProjects(): Promise<Project[]> {
-    const rows = this.db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all() as ProjectRow[];
-    return rows.map(rowToProject);
+    try {
+      const rows = this.db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all() as ProjectRow[];
+      return rows.map(rowToProject);
+    } catch (err) {
+      console.error('SqliteProjectStore.listProjects failed:', err);
+      throw err;
+    }
   }
 
   async createProject(input: ProjectCreateInput): Promise<Project> {
-    const id = generateId();
-    const timestamp = now();
-    const config = JSON.stringify(input.config ?? {});
+    try {
+      const id = generateId();
+      const timestamp = now();
+      const config = JSON.stringify(input.config ?? {});
 
-    this.db.prepare(`
-      INSERT INTO projects (id, name, description, path, config, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, input.name, input.description ?? null, input.path ?? null, config, timestamp, timestamp);
+      this.db.prepare(`
+        INSERT INTO projects (id, name, description, path, config, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, input.name, input.description ?? null, input.path ?? null, config, timestamp, timestamp);
 
-    return (await this.getProject(id))!;
+      return (await this.getProject(id))!;
+    } catch (err) {
+      console.error('SqliteProjectStore.createProject failed:', err);
+      throw err;
+    }
   }
 
   async updateProject(id: string, input: ProjectUpdateInput): Promise<Project | null> {
-    const existing = await this.getProject(id);
-    if (!existing) return null;
+    try {
+      const existing = await this.getProject(id);
+      if (!existing) return null;
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
+      const updates: string[] = [];
+      const values: unknown[] = [];
 
-    if (input.name !== undefined) {
-      updates.push('name = ?');
-      values.push(input.name);
+      if (input.name !== undefined) {
+        updates.push('name = ?');
+        values.push(input.name);
+      }
+      if (input.description !== undefined) {
+        updates.push('description = ?');
+        values.push(input.description);
+      }
+      if (input.path !== undefined) {
+        updates.push('path = ?');
+        values.push(input.path);
+      }
+      if (input.config !== undefined) {
+        updates.push('config = ?');
+        values.push(JSON.stringify(input.config));
+      }
+
+      if (updates.length === 0) return existing;
+
+      updates.push('updated_at = ?');
+      values.push(now());
+      values.push(id);
+
+      this.db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      return (await this.getProject(id))!;
+    } catch (err) {
+      console.error('SqliteProjectStore.updateProject failed:', err);
+      throw err;
     }
-    if (input.description !== undefined) {
-      updates.push('description = ?');
-      values.push(input.description);
-    }
-    if (input.path !== undefined) {
-      updates.push('path = ?');
-      values.push(input.path);
-    }
-    if (input.config !== undefined) {
-      updates.push('config = ?');
-      values.push(JSON.stringify(input.config));
-    }
-
-    if (updates.length === 0) return existing;
-
-    updates.push('updated_at = ?');
-    values.push(now());
-    values.push(id);
-
-    this.db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    return (await this.getProject(id))!;
   }
 
   async deleteProject(id: string): Promise<boolean> {
-    const result = this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
-    return result.changes > 0;
+    try {
+      const result = this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+      return result.changes > 0;
+    } catch (err) {
+      console.error('SqliteProjectStore.deleteProject failed:', err);
+      throw err;
+    }
   }
 }

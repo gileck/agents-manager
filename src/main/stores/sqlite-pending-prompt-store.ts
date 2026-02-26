@@ -35,43 +35,68 @@ export class SqlitePendingPromptStore implements IPendingPromptStore {
   constructor(private db: Database.Database) {}
 
   async createPrompt(input: PendingPromptCreateInput): Promise<PendingPrompt> {
-    const id = generateId();
-    const timestamp = now();
+    try {
+      const id = generateId();
+      const timestamp = now();
 
-    this.db.prepare(`
-      INSERT INTO pending_prompts (id, task_id, agent_run_id, prompt_type, payload, resume_outcome, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).run(id, input.taskId, input.agentRunId, input.promptType, JSON.stringify(input.payload ?? {}), input.resumeOutcome ?? null, timestamp);
+      this.db.prepare(`
+        INSERT INTO pending_prompts (id, task_id, agent_run_id, prompt_type, payload, resume_outcome, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+      `).run(id, input.taskId, input.agentRunId, input.promptType, JSON.stringify(input.payload ?? {}), input.resumeOutcome ?? null, timestamp);
 
-    return (await this.getPrompt(id))!;
+      return (await this.getPrompt(id))!;
+    } catch (err) {
+      console.error('SqlitePendingPromptStore.createPrompt failed:', err);
+      throw err;
+    }
   }
 
   async answerPrompt(id: string, response: Record<string, unknown>): Promise<PendingPrompt | null> {
-    const timestamp = now();
-    const result = this.db.prepare(`
-      UPDATE pending_prompts SET response = ?, status = 'answered', answered_at = ?
-      WHERE id = ? AND status = 'pending'
-    `).run(JSON.stringify(response), timestamp, id);
+    try {
+      const timestamp = now();
+      const result = this.db.prepare(`
+        UPDATE pending_prompts SET response = ?, status = 'answered', answered_at = ?
+        WHERE id = ? AND status = 'pending'
+      `).run(JSON.stringify(response), timestamp, id);
 
-    if (result.changes === 0) return null;
-    return (await this.getPrompt(id))!;
+      if (result.changes === 0) return null;
+      return (await this.getPrompt(id))!;
+    } catch (err) {
+      console.error('SqlitePendingPromptStore.answerPrompt failed:', err);
+      throw err;
+    }
   }
 
   async getPrompt(id: string): Promise<PendingPrompt | null> {
-    const row = this.db.prepare('SELECT * FROM pending_prompts WHERE id = ?').get(id) as PendingPromptRow | undefined;
-    return row ? rowToPrompt(row) : null;
+    try {
+      const row = this.db.prepare('SELECT * FROM pending_prompts WHERE id = ?').get(id) as PendingPromptRow | undefined;
+      return row ? rowToPrompt(row) : null;
+    } catch (err) {
+      console.error('SqlitePendingPromptStore.getPrompt failed:', err);
+      throw err;
+    }
   }
 
   async getPendingForTask(taskId: string): Promise<PendingPrompt[]> {
-    const rows = this.db.prepare("SELECT * FROM pending_prompts WHERE task_id = ? AND status = 'pending' ORDER BY created_at ASC").all(taskId) as PendingPromptRow[];
-    return rows.map(rowToPrompt);
+    try {
+      const rows = this.db.prepare("SELECT * FROM pending_prompts WHERE task_id = ? AND status = 'pending' ORDER BY created_at ASC").all(taskId) as PendingPromptRow[];
+      return rows.map(rowToPrompt);
+    } catch (err) {
+      console.error('SqlitePendingPromptStore.getPendingForTask failed:', err);
+      throw err;
+    }
   }
 
   async expirePromptsForRun(agentRunId: string): Promise<number> {
-    const result = this.db.prepare(`
-      UPDATE pending_prompts SET status = 'expired'
-      WHERE agent_run_id = ? AND status = 'pending'
-    `).run(agentRunId);
-    return result.changes;
+    try {
+      const result = this.db.prepare(`
+        UPDATE pending_prompts SET status = 'expired'
+        WHERE agent_run_id = ? AND status = 'pending'
+      `).run(agentRunId);
+      return result.changes;
+    } catch (err) {
+      console.error('SqlitePendingPromptStore.expirePromptsForRun failed:', err);
+      throw err;
+    }
   }
 }

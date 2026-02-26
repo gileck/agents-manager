@@ -29,61 +29,71 @@ export class SqliteTaskEventLog implements ITaskEventLog {
   constructor(private db: Database.Database) {}
 
   async log(input: TaskEventCreateInput): Promise<TaskEvent> {
-    const id = generateId();
-    const timestamp = now();
+    try {
+      const id = generateId();
+      const timestamp = now();
 
-    this.db.prepare(`
-      INSERT INTO task_events (id, task_id, category, severity, message, data, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      input.taskId,
-      input.category,
-      input.severity ?? 'info',
-      input.message,
-      JSON.stringify(input.data ?? {}),
-      timestamp,
-    );
+      this.db.prepare(`
+        INSERT INTO task_events (id, task_id, category, severity, message, data, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        input.taskId,
+        input.category,
+        input.severity ?? 'info',
+        input.message,
+        JSON.stringify(input.data ?? {}),
+        timestamp,
+      );
 
-    return {
-      id,
-      taskId: input.taskId,
-      category: input.category,
-      severity: input.severity ?? 'info',
-      message: input.message,
-      data: input.data ?? {},
-      createdAt: timestamp,
-    };
+      return {
+        id,
+        taskId: input.taskId,
+        category: input.category,
+        severity: input.severity ?? 'info',
+        message: input.message,
+        data: input.data ?? {},
+        createdAt: timestamp,
+      };
+    } catch (err) {
+      console.error('SqliteTaskEventLog.log failed:', err);
+      throw err;
+    }
   }
 
   async getEvents(filter?: TaskEventFilter): Promise<TaskEvent[]> {
-    const conditions: string[] = [];
-    const values: unknown[] = [];
+    try {
+      const conditions: string[] = [];
+      const values: unknown[] = [];
 
-    if (filter?.taskId) {
-      conditions.push('task_id = ?');
-      values.push(filter.taskId);
-    }
-    if (filter?.category) {
-      conditions.push('category = ?');
-      values.push(filter.category);
-    }
-    if (filter?.severity) {
-      conditions.push('severity = ?');
-      values.push(filter.severity);
-    }
-    if (filter?.since !== undefined) {
-      conditions.push('created_at >= ?');
-      values.push(filter.since);
-    }
-    if (filter?.until !== undefined) {
-      conditions.push('created_at <= ?');
-      values.push(filter.until);
-    }
+      if (filter?.taskId) {
+        conditions.push('task_id = ?');
+        values.push(filter.taskId);
+      }
+      if (filter?.category) {
+        conditions.push('category = ?');
+        values.push(filter.category);
+      }
+      if (filter?.severity) {
+        conditions.push('severity = ?');
+        values.push(filter.severity);
+      }
+      if (filter?.since !== undefined) {
+        conditions.push('created_at >= ?');
+        values.push(filter.since);
+      }
+      if (filter?.until !== undefined) {
+        conditions.push('created_at <= ?');
+        values.push(filter.until);
+      }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const limit = filter?.limit ?? 5000;
-    const rows = this.db.prepare(`SELECT * FROM task_events ${where} ORDER BY created_at ASC LIMIT ?`).all(...values, limit) as TaskEventRow[];
-    return rows.map(rowToEvent);
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      const limit = filter?.limit ?? 5000;
+      const rows = this.db.prepare(`SELECT * FROM task_events ${where} ORDER BY created_at ASC LIMIT ?`).all(...values, limit) as TaskEventRow[];
+      return rows.map(rowToEvent);
+    } catch (err) {
+      console.error('SqliteTaskEventLog.getEvents failed:', err);
+      throw err;
+    }
   }
 }

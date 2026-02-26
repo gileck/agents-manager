@@ -272,7 +272,7 @@ describe('SqliteChatSessionStore', () => {
 
   describe('error handling', () => {
     it('should throw wrapped errors on database failures', async () => {
-      db.exec('DROP TABLE project_chat_sessions');
+      db.exec('DROP TABLE chat_sessions');
 
       await expect(store.createSession({
         scopeType: 'project',

@@ -31,30 +31,40 @@ export class SqliteTaskContextStore implements ITaskContextStore {
   constructor(private db: Database.Database) {}
 
   async addEntry(input: TaskContextEntryCreateInput): Promise<TaskContextEntry> {
-    const id = generateId();
-    const timestamp = now();
+    try {
+      const id = generateId();
+      const timestamp = now();
 
-    this.db.prepare(`
-      INSERT INTO task_context_entries (id, task_id, agent_run_id, source, entry_type, summary, data, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, input.taskId, input.agentRunId ?? null, input.source, input.entryType, input.summary, JSON.stringify(input.data ?? {}), timestamp);
+      this.db.prepare(`
+        INSERT INTO task_context_entries (id, task_id, agent_run_id, source, entry_type, summary, data, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, input.taskId, input.agentRunId ?? null, input.source, input.entryType, input.summary, JSON.stringify(input.data ?? {}), timestamp);
 
-    return {
-      id,
-      taskId: input.taskId,
-      agentRunId: input.agentRunId ?? null,
-      source: input.source,
-      entryType: input.entryType,
-      summary: input.summary,
-      data: input.data ?? {},
-      createdAt: timestamp,
-    };
+      return {
+        id,
+        taskId: input.taskId,
+        agentRunId: input.agentRunId ?? null,
+        source: input.source,
+        entryType: input.entryType,
+        summary: input.summary,
+        data: input.data ?? {},
+        createdAt: timestamp,
+      };
+    } catch (err) {
+      console.error('SqliteTaskContextStore.addEntry failed:', err);
+      throw err;
+    }
   }
 
   async getEntriesForTask(taskId: string): Promise<TaskContextEntry[]> {
-    const rows = this.db.prepare(
-      'SELECT * FROM task_context_entries WHERE task_id = ? ORDER BY created_at ASC'
-    ).all(taskId) as TaskContextEntryRow[];
-    return rows.map(rowToEntry);
+    try {
+      const rows = this.db.prepare(
+        'SELECT * FROM task_context_entries WHERE task_id = ? ORDER BY created_at ASC'
+      ).all(taskId) as TaskContextEntryRow[];
+      return rows.map(rowToEntry);
+    } catch (err) {
+      console.error('SqliteTaskContextStore.getEntriesForTask failed:', err);
+      throw err;
+    }
   }
 }

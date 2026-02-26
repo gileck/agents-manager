@@ -53,105 +53,135 @@ export class SqliteAgentRunStore implements IAgentRunStore {
   constructor(private db: Database.Database) {}
 
   async createRun(input: AgentRunCreateInput): Promise<AgentRun> {
-    const id = generateId();
-    const timestamp = now();
+    try {
+      const id = generateId();
+      const timestamp = now();
 
-    this.db.prepare(`
-      INSERT INTO agent_runs (id, task_id, agent_type, mode, status, started_at)
-      VALUES (?, ?, ?, ?, 'running', ?)
-    `).run(id, input.taskId, input.agentType, input.mode, timestamp);
+      this.db.prepare(`
+        INSERT INTO agent_runs (id, task_id, agent_type, mode, status, started_at)
+        VALUES (?, ?, ?, ?, 'running', ?)
+      `).run(id, input.taskId, input.agentType, input.mode, timestamp);
 
-    return (await this.getRun(id))!;
+      return (await this.getRun(id))!;
+    } catch (err) {
+      console.error('SqliteAgentRunStore.createRun failed:', err);
+      throw err;
+    }
   }
 
   async updateRun(id: string, input: AgentRunUpdateInput): Promise<AgentRun | null> {
-    const existing = await this.getRun(id);
-    if (!existing) return null;
+    try {
+      const existing = await this.getRun(id);
+      if (!existing) return null;
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
+      const updates: string[] = [];
+      const values: unknown[] = [];
 
-    if (input.status !== undefined) {
-      updates.push('status = ?');
-      values.push(input.status);
-    }
-    if (input.output !== undefined) {
-      updates.push('output = ?');
-      values.push(input.output);
-    }
-    if (input.outcome !== undefined) {
-      updates.push('outcome = ?');
-      values.push(input.outcome);
-    }
-    if (input.payload !== undefined) {
-      updates.push('payload = ?');
-      values.push(JSON.stringify(input.payload));
-    }
-    if (input.exitCode !== undefined) {
-      updates.push('exit_code = ?');
-      values.push(input.exitCode);
-    }
-    if (input.completedAt !== undefined) {
-      updates.push('completed_at = ?');
-      values.push(input.completedAt);
-    }
-    if (input.costInputTokens !== undefined) {
-      updates.push('cost_input_tokens = ?');
-      values.push(input.costInputTokens);
-    }
-    if (input.costOutputTokens !== undefined) {
-      updates.push('cost_output_tokens = ?');
-      values.push(input.costOutputTokens);
-    }
-    if (input.prompt !== undefined) {
-      updates.push('prompt = ?');
-      values.push(input.prompt);
-    }
-    if (input.error !== undefined) {
-      updates.push('error = ?');
-      values.push(input.error);
-    }
-    if (input.timeoutMs !== undefined) {
-      updates.push('timeout_ms = ?');
-      values.push(input.timeoutMs);
-    }
-    if (input.maxTurns !== undefined) {
-      updates.push('max_turns = ?');
-      values.push(input.maxTurns);
-    }
-    if (input.messageCount !== undefined) {
-      updates.push('message_count = ?');
-      values.push(input.messageCount);
-    }
-    if (input.messages !== undefined) {
-      updates.push('messages = ?');
-      values.push(JSON.stringify(input.messages));
-    }
+      if (input.status !== undefined) {
+        updates.push('status = ?');
+        values.push(input.status);
+      }
+      if (input.output !== undefined) {
+        updates.push('output = ?');
+        values.push(input.output);
+      }
+      if (input.outcome !== undefined) {
+        updates.push('outcome = ?');
+        values.push(input.outcome);
+      }
+      if (input.payload !== undefined) {
+        updates.push('payload = ?');
+        values.push(JSON.stringify(input.payload));
+      }
+      if (input.exitCode !== undefined) {
+        updates.push('exit_code = ?');
+        values.push(input.exitCode);
+      }
+      if (input.completedAt !== undefined) {
+        updates.push('completed_at = ?');
+        values.push(input.completedAt);
+      }
+      if (input.costInputTokens !== undefined) {
+        updates.push('cost_input_tokens = ?');
+        values.push(input.costInputTokens);
+      }
+      if (input.costOutputTokens !== undefined) {
+        updates.push('cost_output_tokens = ?');
+        values.push(input.costOutputTokens);
+      }
+      if (input.prompt !== undefined) {
+        updates.push('prompt = ?');
+        values.push(input.prompt);
+      }
+      if (input.error !== undefined) {
+        updates.push('error = ?');
+        values.push(input.error);
+      }
+      if (input.timeoutMs !== undefined) {
+        updates.push('timeout_ms = ?');
+        values.push(input.timeoutMs);
+      }
+      if (input.maxTurns !== undefined) {
+        updates.push('max_turns = ?');
+        values.push(input.maxTurns);
+      }
+      if (input.messageCount !== undefined) {
+        updates.push('message_count = ?');
+        values.push(input.messageCount);
+      }
+      if (input.messages !== undefined) {
+        updates.push('messages = ?');
+        values.push(JSON.stringify(input.messages));
+      }
 
-    if (updates.length === 0) return existing;
+      if (updates.length === 0) return existing;
 
-    values.push(id);
-    this.db.prepare(`UPDATE agent_runs SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    return (await this.getRun(id))!;
+      values.push(id);
+      this.db.prepare(`UPDATE agent_runs SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      return (await this.getRun(id))!;
+    } catch (err) {
+      console.error('SqliteAgentRunStore.updateRun failed:', err);
+      throw err;
+    }
   }
 
   async getRun(id: string): Promise<AgentRun | null> {
-    const row = this.db.prepare('SELECT * FROM agent_runs WHERE id = ?').get(id) as AgentRunRow | undefined;
-    return row ? rowToRun(row) : null;
+    try {
+      const row = this.db.prepare('SELECT * FROM agent_runs WHERE id = ?').get(id) as AgentRunRow | undefined;
+      return row ? rowToRun(row) : null;
+    } catch (err) {
+      console.error('SqliteAgentRunStore.getRun failed:', err);
+      throw err;
+    }
   }
 
   async getRunsForTask(taskId: string): Promise<AgentRun[]> {
-    const rows = this.db.prepare('SELECT * FROM agent_runs WHERE task_id = ? ORDER BY started_at DESC').all(taskId) as AgentRunRow[];
-    return rows.map(rowToRun);
+    try {
+      const rows = this.db.prepare('SELECT * FROM agent_runs WHERE task_id = ? ORDER BY started_at DESC').all(taskId) as AgentRunRow[];
+      return rows.map(rowToRun);
+    } catch (err) {
+      console.error('SqliteAgentRunStore.getRunsForTask failed:', err);
+      throw err;
+    }
   }
 
   async getActiveRuns(): Promise<AgentRun[]> {
-    const rows = this.db.prepare("SELECT * FROM agent_runs WHERE status = 'running'").all() as AgentRunRow[];
-    return rows.map(rowToRun);
+    try {
+      const rows = this.db.prepare("SELECT * FROM agent_runs WHERE status = 'running'").all() as AgentRunRow[];
+      return rows.map(rowToRun);
+    } catch (err) {
+      console.error('SqliteAgentRunStore.getActiveRuns failed:', err);
+      throw err;
+    }
   }
 
   async getAllRuns(limit: number = 1000): Promise<AgentRun[]> {
-    const rows = this.db.prepare('SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT ?').all(limit) as AgentRunRow[];
-    return rows.map(rowToRun);
+    try {
+      const rows = this.db.prepare('SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT ?').all(limit) as AgentRunRow[];
+      return rows.map(rowToRun);
+    } catch (err) {
+      console.error('SqliteAgentRunStore.getAllRuns failed:', err);
+      throw err;
+    }
   }
 }

@@ -22,13 +22,14 @@ export class SqliteChatSessionStore implements IChatSessionStore {
 
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO project_chat_sessions (id, project_id, scope_type, scope_id, name, agent_lib, created_at, updated_at)
+        INSERT INTO chat_sessions (id, project_id, scope_type, scope_id, name, agent_lib, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(session.id, session.projectId, session.scopeType, session.scopeId, session.name, session.agentLib, session.createdAt, session.updatedAt);
       return session;
     } catch (error) {
+      console.error('SqliteChatSessionStore.createSession failed:', error);
       throw new Error(`Failed to create chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -37,13 +38,14 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     try {
       const stmt = this.db.prepare(`
         SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, created_at as createdAt, updated_at as updatedAt
-        FROM project_chat_sessions
+        FROM chat_sessions
         WHERE id = ?
       `);
 
       const row = stmt.get(id) as ChatSession | undefined;
       return row || null;
     } catch (error) {
+      console.error('SqliteChatSessionStore.getSession failed:', error);
       throw new Error(`Failed to get chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -52,7 +54,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     try {
       const stmt = this.db.prepare(`
         SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, created_at as createdAt, updated_at as updatedAt
-        FROM project_chat_sessions
+        FROM chat_sessions
         WHERE scope_type = ? AND scope_id = ?
         ORDER BY created_at ASC
       `);
@@ -60,6 +62,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       const rows = stmt.all(scopeType, scopeId) as ChatSession[];
       return rows;
     } catch (error) {
+      console.error('SqliteChatSessionStore.listSessionsForScope failed:', error);
       throw new Error(`Failed to list chat sessions: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -87,7 +90,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       params.push(id);
 
       const stmt = this.db.prepare(`
-        UPDATE project_chat_sessions
+        UPDATE chat_sessions
         SET ${setClauses.join(', ')}
         WHERE id = ?
       `);
@@ -100,6 +103,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
 
       return this.getSession(id);
     } catch (error) {
+      console.error('SqliteChatSessionStore.updateSession failed:', error);
       throw new Error(`Failed to update chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -107,13 +111,14 @@ export class SqliteChatSessionStore implements IChatSessionStore {
   async deleteSession(id: string): Promise<boolean> {
     try {
       const stmt = this.db.prepare(`
-        DELETE FROM project_chat_sessions
+        DELETE FROM chat_sessions
         WHERE id = ?
       `);
 
       const result = stmt.run(id);
       return result.changes > 0;
     } catch (error) {
+      console.error('SqliteChatSessionStore.deleteSession failed:', error);
       throw new Error(`Failed to delete chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }

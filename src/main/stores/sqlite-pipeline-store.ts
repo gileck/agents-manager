@@ -63,87 +63,117 @@ export class SqlitePipelineStore implements IPipelineStore {
   constructor(private db: Database.Database) {}
 
   async getPipeline(id: string): Promise<Pipeline | null> {
-    const row = this.db.prepare('SELECT * FROM pipelines WHERE id = ?').get(id) as PipelineRow | undefined;
-    return row ? rowToPipeline(row) : null;
+    try {
+      const row = this.db.prepare('SELECT * FROM pipelines WHERE id = ?').get(id) as PipelineRow | undefined;
+      return row ? rowToPipeline(row) : null;
+    } catch (err) {
+      console.error('SqlitePipelineStore.getPipeline failed:', err);
+      throw err;
+    }
   }
 
   async listPipelines(): Promise<Pipeline[]> {
-    const rows = this.db.prepare('SELECT * FROM pipelines ORDER BY created_at ASC').all() as PipelineRow[];
-    return rows.map(rowToPipeline);
+    try {
+      const rows = this.db.prepare('SELECT * FROM pipelines ORDER BY created_at ASC').all() as PipelineRow[];
+      return rows.map(rowToPipeline);
+    } catch (err) {
+      console.error('SqlitePipelineStore.listPipelines failed:', err);
+      throw err;
+    }
   }
 
   async createPipeline(input: PipelineCreateInput): Promise<Pipeline> {
-    validatePipelineInput(input);
-    const id = generateId();
-    const timestamp = now();
+    try {
+      validatePipelineInput(input);
+      const id = generateId();
+      const timestamp = now();
 
-    this.db.prepare(`
-      INSERT INTO pipelines (id, name, description, statuses, transitions, task_type, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      input.name,
-      input.description ?? null,
-      JSON.stringify(input.statuses),
-      JSON.stringify(input.transitions),
-      input.taskType,
-      timestamp,
-      timestamp,
-    );
+      this.db.prepare(`
+        INSERT INTO pipelines (id, name, description, statuses, transitions, task_type, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        input.name,
+        input.description ?? null,
+        JSON.stringify(input.statuses),
+        JSON.stringify(input.transitions),
+        input.taskType,
+        timestamp,
+        timestamp,
+      );
 
-    return (await this.getPipeline(id))!;
+      return (await this.getPipeline(id))!;
+    } catch (err) {
+      console.error('SqlitePipelineStore.createPipeline failed:', err);
+      throw err;
+    }
   }
 
   async updatePipeline(id: string, input: PipelineUpdateInput): Promise<Pipeline | null> {
-    const existing = await this.getPipeline(id);
-    if (!existing) return null;
+    try {
+      const existing = await this.getPipeline(id);
+      if (!existing) return null;
 
-    validatePipelineInput({
-      statuses: input.statuses ?? existing.statuses,
-      transitions: input.transitions ?? existing.transitions,
-    });
+      validatePipelineInput({
+        statuses: input.statuses ?? existing.statuses,
+        transitions: input.transitions ?? existing.transitions,
+      });
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
+      const updates: string[] = [];
+      const values: unknown[] = [];
 
-    if (input.name !== undefined) {
-      updates.push('name = ?');
-      values.push(input.name);
+      if (input.name !== undefined) {
+        updates.push('name = ?');
+        values.push(input.name);
+      }
+      if (input.description !== undefined) {
+        updates.push('description = ?');
+        values.push(input.description);
+      }
+      if (input.statuses !== undefined) {
+        updates.push('statuses = ?');
+        values.push(JSON.stringify(input.statuses));
+      }
+      if (input.transitions !== undefined) {
+        updates.push('transitions = ?');
+        values.push(JSON.stringify(input.transitions));
+      }
+      if (input.taskType !== undefined) {
+        updates.push('task_type = ?');
+        values.push(input.taskType);
+      }
+
+      if (updates.length === 0) return existing;
+
+      updates.push('updated_at = ?');
+      values.push(now());
+      values.push(id);
+
+      this.db.prepare(`UPDATE pipelines SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      return (await this.getPipeline(id))!;
+    } catch (err) {
+      console.error('SqlitePipelineStore.updatePipeline failed:', err);
+      throw err;
     }
-    if (input.description !== undefined) {
-      updates.push('description = ?');
-      values.push(input.description);
-    }
-    if (input.statuses !== undefined) {
-      updates.push('statuses = ?');
-      values.push(JSON.stringify(input.statuses));
-    }
-    if (input.transitions !== undefined) {
-      updates.push('transitions = ?');
-      values.push(JSON.stringify(input.transitions));
-    }
-    if (input.taskType !== undefined) {
-      updates.push('task_type = ?');
-      values.push(input.taskType);
-    }
-
-    if (updates.length === 0) return existing;
-
-    updates.push('updated_at = ?');
-    values.push(now());
-    values.push(id);
-
-    this.db.prepare(`UPDATE pipelines SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    return (await this.getPipeline(id))!;
   }
 
   async deletePipeline(id: string): Promise<boolean> {
-    const result = this.db.prepare('DELETE FROM pipelines WHERE id = ?').run(id);
-    return result.changes > 0;
+    try {
+      const result = this.db.prepare('DELETE FROM pipelines WHERE id = ?').run(id);
+      return result.changes > 0;
+    } catch (err) {
+      console.error('SqlitePipelineStore.deletePipeline failed:', err);
+      throw err;
+    }
   }
 
   async getPipelineForTaskType(taskType: string): Promise<Pipeline | null> {
-    const row = this.db.prepare('SELECT * FROM pipelines WHERE task_type = ?').get(taskType) as PipelineRow | undefined;
-    return row ? rowToPipeline(row) : null;
+    try {
+      const row = this.db.prepare('SELECT * FROM pipelines WHERE task_type = ?').get(taskType) as PipelineRow | undefined;
+      return row ? rowToPipeline(row) : null;
+    } catch (err) {
+      console.error('SqlitePipelineStore.getPipelineForTaskType failed:', err);
+      throw err;
+    }
   }
 }

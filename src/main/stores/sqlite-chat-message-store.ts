@@ -29,69 +29,94 @@ export class SqliteChatMessageStore implements IChatMessageStore {
   constructor(private db: Database.Database) {}
 
   async addMessage(input: ChatMessageCreateInput): Promise<ChatMessage> {
-    const id = generateId();
-    const timestamp = now();
+    try {
+      const id = generateId();
+      const timestamp = now();
 
-    this.db.prepare(
-      'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, input.sessionId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null);
+      this.db.prepare(
+        'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(id, input.sessionId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null);
 
-    return {
-      id,
-      sessionId: input.sessionId,
-      role: input.role,
-      content: input.content,
-      createdAt: timestamp,
-      costInputTokens: input.costInputTokens ?? null,
-      costOutputTokens: input.costOutputTokens ?? null,
-    };
+      return {
+        id,
+        sessionId: input.sessionId,
+        role: input.role,
+        content: input.content,
+        createdAt: timestamp,
+        costInputTokens: input.costInputTokens ?? null,
+        costOutputTokens: input.costOutputTokens ?? null,
+      };
+    } catch (err) {
+      console.error('SqliteChatMessageStore.addMessage failed:', err);
+      throw err;
+    }
   }
 
-  async getMessagesForSession(sessionId: string): Promise<ChatMessage[]> {
-    const rows = this.db.prepare(
-      'SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC'
-    ).all(sessionId) as ChatMessageRow[];
-    return rows.map(rowToMessage);
+  async getMessagesForSession(sessionId: string, limit: number = 5000): Promise<ChatMessage[]> {
+    try {
+      const rows = this.db.prepare(
+        'SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ?'
+      ).all(sessionId, limit) as ChatMessageRow[];
+      return rows.map(rowToMessage);
+    } catch (err) {
+      console.error('SqliteChatMessageStore.getMessagesForSession failed:', err);
+      throw err;
+    }
   }
 
   async clearMessages(sessionId: string): Promise<void> {
-    this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
+    try {
+      this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
+    } catch (err) {
+      console.error('SqliteChatMessageStore.clearMessages failed:', err);
+      throw err;
+    }
   }
 
   async replaceAllMessages(sessionId: string, messages: ChatMessageCreateInput[]): Promise<ChatMessage[]> {
-    const result: ChatMessage[] = [];
+    try {
+      const result: ChatMessage[] = [];
 
-    const txn = this.db.transaction(() => {
-      this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
+      const txn = this.db.transaction(() => {
+        this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
 
-      const insert = this.db.prepare(
-        'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      );
+        const insert = this.db.prepare(
+          'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
 
-      for (const msg of messages) {
-        const id = generateId();
-        const timestamp = now();
-        insert.run(id, sessionId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null);
-        result.push({
-          id,
-          sessionId,
-          role: msg.role,
-          content: msg.content,
-          createdAt: timestamp,
-          costInputTokens: msg.costInputTokens ?? null,
-          costOutputTokens: msg.costOutputTokens ?? null,
-        });
-      }
-    });
+        for (const msg of messages) {
+          const id = generateId();
+          const timestamp = now();
+          insert.run(id, sessionId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null);
+          result.push({
+            id,
+            sessionId,
+            role: msg.role,
+            content: msg.content,
+            createdAt: timestamp,
+            costInputTokens: msg.costInputTokens ?? null,
+            costOutputTokens: msg.costOutputTokens ?? null,
+          });
+        }
+      });
 
-    txn();
-    return result;
+      txn();
+      return result;
+    } catch (err) {
+      console.error('SqliteChatMessageStore.replaceAllMessages failed:', err);
+      throw err;
+    }
   }
 
   async getCostSummary(): Promise<{ inputTokens: number; outputTokens: number }> {
-    const row = this.db.prepare(
-      'SELECT COALESCE(SUM(cost_input_tokens), 0) AS input_tokens, COALESCE(SUM(cost_output_tokens), 0) AS output_tokens FROM chat_messages'
-    ).get() as { input_tokens: number; output_tokens: number };
-    return { inputTokens: row.input_tokens, outputTokens: row.output_tokens };
+    try {
+      const row = this.db.prepare(
+        'SELECT COALESCE(SUM(cost_input_tokens), 0) AS input_tokens, COALESCE(SUM(cost_output_tokens), 0) AS output_tokens FROM chat_messages'
+      ).get() as { input_tokens: number; output_tokens: number };
+      return { inputTokens: row.input_tokens, outputTokens: row.output_tokens };
+    } catch (err) {
+      console.error('SqliteChatMessageStore.getCostSummary failed:', err);
+      throw err;
+    }
   }
 }

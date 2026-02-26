@@ -29,59 +29,84 @@ export class SqliteTaskPhaseStore implements ITaskPhaseStore {
   constructor(private db: Database.Database) {}
 
   async createPhase(input: TaskPhaseCreateInput): Promise<TaskPhase> {
-    const id = generateId();
+    try {
+      const id = generateId();
 
-    this.db.prepare(`
-      INSERT INTO task_phases (id, task_id, phase, status)
-      VALUES (?, ?, ?, 'pending')
-    `).run(id, input.taskId, input.phase);
+      this.db.prepare(`
+        INSERT INTO task_phases (id, task_id, phase, status)
+        VALUES (?, ?, ?, 'pending')
+      `).run(id, input.taskId, input.phase);
 
-    return (await this.getPhase(id))!;
+      return (await this.getPhase(id))!;
+    } catch (err) {
+      console.error('SqliteTaskPhaseStore.createPhase failed:', err);
+      throw err;
+    }
   }
 
   async updatePhase(id: string, input: TaskPhaseUpdateInput): Promise<TaskPhase | null> {
-    const existing = await this.getPhase(id);
-    if (!existing) return null;
+    try {
+      const existing = await this.getPhase(id);
+      if (!existing) return null;
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
+      const updates: string[] = [];
+      const values: unknown[] = [];
 
-    if (input.status !== undefined) {
-      updates.push('status = ?');
-      values.push(input.status);
-    }
-    if (input.agentRunId !== undefined) {
-      updates.push('agent_run_id = ?');
-      values.push(input.agentRunId);
-    }
-    if (input.startedAt !== undefined) {
-      updates.push('started_at = ?');
-      values.push(input.startedAt);
-    }
-    if (input.completedAt !== undefined) {
-      updates.push('completed_at = ?');
-      values.push(input.completedAt);
-    }
+      if (input.status !== undefined) {
+        updates.push('status = ?');
+        values.push(input.status);
+      }
+      if (input.agentRunId !== undefined) {
+        updates.push('agent_run_id = ?');
+        values.push(input.agentRunId);
+      }
+      if (input.startedAt !== undefined) {
+        updates.push('started_at = ?');
+        values.push(input.startedAt);
+      }
+      if (input.completedAt !== undefined) {
+        updates.push('completed_at = ?');
+        values.push(input.completedAt);
+      }
 
-    if (updates.length === 0) return existing;
+      if (updates.length === 0) return existing;
 
-    values.push(id);
-    this.db.prepare(`UPDATE task_phases SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    return (await this.getPhase(id))!;
+      values.push(id);
+      this.db.prepare(`UPDATE task_phases SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      return (await this.getPhase(id))!;
+    } catch (err) {
+      console.error('SqliteTaskPhaseStore.updatePhase failed:', err);
+      throw err;
+    }
   }
 
   async getPhasesForTask(taskId: string): Promise<TaskPhase[]> {
-    const rows = this.db.prepare('SELECT * FROM task_phases WHERE task_id = ? ORDER BY started_at ASC').all(taskId) as TaskPhaseRow[];
-    return rows.map(rowToPhase);
+    try {
+      const rows = this.db.prepare('SELECT * FROM task_phases WHERE task_id = ? ORDER BY started_at ASC').all(taskId) as TaskPhaseRow[];
+      return rows.map(rowToPhase);
+    } catch (err) {
+      console.error('SqliteTaskPhaseStore.getPhasesForTask failed:', err);
+      throw err;
+    }
   }
 
   async getActivePhase(taskId: string): Promise<TaskPhase | null> {
-    const row = this.db.prepare("SELECT * FROM task_phases WHERE task_id = ? AND status = 'active' LIMIT 1").get(taskId) as TaskPhaseRow | undefined;
-    return row ? rowToPhase(row) : null;
+    try {
+      const row = this.db.prepare("SELECT * FROM task_phases WHERE task_id = ? AND status = 'active' LIMIT 1").get(taskId) as TaskPhaseRow | undefined;
+      return row ? rowToPhase(row) : null;
+    } catch (err) {
+      console.error('SqliteTaskPhaseStore.getActivePhase failed:', err);
+      throw err;
+    }
   }
 
   private async getPhase(id: string): Promise<TaskPhase | null> {
-    const row = this.db.prepare('SELECT * FROM task_phases WHERE id = ?').get(id) as TaskPhaseRow | undefined;
-    return row ? rowToPhase(row) : null;
+    try {
+      const row = this.db.prepare('SELECT * FROM task_phases WHERE id = ?').get(id) as TaskPhaseRow | undefined;
+      return row ? rowToPhase(row) : null;
+    } catch (err) {
+      console.error('SqliteTaskPhaseStore.getPhase failed:', err);
+      throw err;
+    }
   }
 }

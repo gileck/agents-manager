@@ -832,6 +832,19 @@ export function getMigrations(): Migration[] {
         INSERT OR IGNORE INTO settings (key, value) VALUES ('chat_default_agent_lib', 'claude-code')
       `,
     },
+    {
+      name: '074_drop_legacy_items_logs_tables',
+      sql: `
+        DROP TABLE IF EXISTS items;
+        DROP TABLE IF EXISTS logs
+      `,
+    },
+    {
+      name: '075_rename_project_chat_sessions_to_chat_sessions',
+      sql: `
+        ALTER TABLE project_chat_sessions RENAME TO chat_sessions
+      `,
+    },
   ];
 }
 
