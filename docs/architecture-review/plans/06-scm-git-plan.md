@@ -1,85 +1,79 @@
-# Implementation Plan: SCM/Git Integration Fixes
+# Plan 06: SCM/Git (8.5 → 9+)
 
-**Review:** `docs/architecture-review/06-scm-git-integration.md`
-**Current Score:** 7.4 / 10
-**Target Score:** ~9 / 10
-**Priority Order:** logic > docs > bugs > tests > code quality
+## Gap Analysis
 
----
+- **`scm-handler.ts` has zero test coverage** — Complex branching logic (rebase-fail, no-changes, PR-reuse) untested
+- **`cleanup()` silent catch** — `local-worktree-manager.ts:145` bare `catch {}` hides worktree cleanup failures
+- **Detached HEAD crash risk** — `parseWorktreeList()` doesn't guard against entries with no branch
+- **CLI missing `initShellEnv()`** — PATH resolution not initialized, causing spawn failures
+- **Multi-phase PR format undocumented** — `[Phase N/M]` title pattern not in docs
+- **`isPRMergeable` logs to console.log instead of taskEventLog** — Progress polling goes to stdout, not the structured task event log
 
-## Phase 1: Bug Fixes (parallel)
+## Changes
 
-### P1-A: Fix `delete()` to tolerate "not found" errors
-**File:** `src/main/services/local-worktree-manager.ts` (line 116-118)
-**Complexity:** Small
+### 1. Create `tests/unit/scm-handler.test.ts`
 
-Wrap in try/catch suppressing "is not a working tree" / "does not exist" errors, matching `lock()`/`unlock()` pattern.
+**File:** `tests/unit/scm-handler.test.ts` (new)
 
-### P1-B: Make `shell-env.ts` async with eager init
-**Files:** `src/main/services/shell-env.ts`, `src/main/index.ts`
-**Complexity:** Medium
+7+ test cases covering:
+- Rebase failure triggers `rebaseAbort`
+- No changes → push NOT called
+- PR already exists → `createPR` NOT called
+- Multi-phase PR title format
+- `merge_pr` with no artifact
+- `merge_pr` with not-mergeable PR
+- `merge_pr` worktree-delete failure handling
 
-Add `initShellEnv()` async function using `execFile` (not `execSync`). Call in `onReady` before `createAppServices`. Existing sync `getUserShellPath()` becomes a fast cache hit.
+### 2. Fix `cleanup()` silent catch
 
-### P2-A: Narrow `cleanup()` scope
-**Files:** `src/main/interfaces/worktree-manager.ts`, `src/main/services/local-worktree-manager.ts`, stub
-**Complexity:** Medium
+**File:** `src/main/services/local-worktree-manager.ts`
 
-Add optional `activeTaskIds?: string[]` parameter. Skip worktrees whose taskId is in the active set. Backward compatible.
+Replace bare `catch {}` at line ~145 with:
+```ts
+catch (err) { console.warn('Worktree cleanup failed:', err); }
+```
 
-### P2-C: Add asdf to `shell-env.ts`
-**File:** `src/main/services/shell-env.ts`
-**Complexity:** Small
+### 3. Handle detached HEAD in `parseWorktreeList()`
 
-Add asdf scanning block (`~/.asdf/installs/nodejs/*/bin`) following nvm pattern.
+**File:** `src/main/services/local-worktree-manager.ts`
 
-### P2-D: Add progress logging to `isPRMergeable`
-**File:** `src/main/services/github-scm-platform.ts`
-**Complexity:** Small
+Guard `worktrees.push(...)` with `if (taskId && branch)` so detached-HEAD worktree entries are excluded from the result.
 
-Add `console.log` during polling retries with attempt count.
+### 4. Add `initShellEnv()` to CLI
 
----
+**File:** `src/cli/index.ts`
 
-## Phase 2: Tests (depends on Phase 1)
+Add fire-and-forget call at top before `program.parseAsync()`:
+```ts
+void initShellEnv();
+```
 
-### P1-C: Write unit tests for real git layer
-**Files:** New `tests/unit/local-worktree-manager.test.ts`, `local-git-ops.test.ts`, `github-scm-platform.test.ts`
-**Complexity:** Large
+### 5. Document multi-phase PR enrichment
 
-Mock `execFile` to test argument assembly, output parsing, error handling. Test cases:
-- Worktree: create, get, list, lock/unlock idempotency, delete idempotency, cleanup with activeTaskIds
-- GitOps: commit, push, log parsing, diff, rebase
-- SCM: extractPRNumber, createPR, mergePR, isPRMergeable (mock timers), getPRStatus
-
----
-
-## Phase 3: Documentation (depends on Phase 1)
-
-### P2-B: Update multi-phase branch naming
-**File:** `docs/git-scm-integration.md`
-**Complexity:** Small
-
-Document: `task/{taskId}/implement/phase-{n}` for multi-phase tasks.
-
-### P3-A: Fix "slug" → "mode" in frontmatter
-**File:** `docs/git-scm-integration.md` | Run `yarn build:claude` after.
-
-### P3-B: Document `node_modules` symlink
 **File:** `docs/git-scm-integration.md`
 
-### P3-C: Document `isPRMergeable` polling strategy
-**File:** `docs/git-scm-integration.md`
+Add section documenting:
+- `[Phase N/M]` title format for multi-phase PRs
+- Subtask checklist body format
 
----
+### 6. Route `isPRMergeable` progress to taskEventLog
 
-## Score Impact Estimate
+**Files:** `src/main/services/github-scm-platform.ts`, `src/main/interfaces/scm-platform.ts`
 
-| Dimension | Current | After | Delta |
-|-----------|:-------:|:-----:|:-----:|
-| Clear and Constrained State | 6 | 8 | +2 |
-| Deterministic Behavior | 6 | 7.5 | +1.5 |
-| Robust Error Handling | 6 | 8.5 | +2.5 |
-| Performance Predictability | 5 | 7 | +2 |
+The `isPRMergeable` polling loop currently logs progress via `console.log`. Inject `taskEventLog` (or an `onProgress` callback) so polling attempts are recorded in the structured task event log. This improves observability — operators can see merge-wait progress in the task timeline rather than only in stdout.
 
-**Estimated new overall: ~8.7-9.0 / 10**
+If injecting `taskEventLog` into the SCM platform is too coupling-heavy, accept an `onProgress?: (msg: string) => void` callback on the method signature and wire it from `scm-handler.ts`.
+
+## Files to Modify
+
+| File | Action |
+|------|--------|
+| `tests/unit/scm-handler.test.ts` | Create |
+| `src/main/services/local-worktree-manager.ts` | Edit (2 changes) |
+| `src/cli/index.ts` | Edit (add initShellEnv) |
+| `docs/git-scm-integration.md` | Edit (add docs) |
+| `src/main/services/github-scm-platform.ts` | Edit (add onProgress callback) |
+
+## Complexity
+
+Medium (~3 hours)

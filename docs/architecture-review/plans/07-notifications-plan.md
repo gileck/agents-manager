@@ -1,133 +1,85 @@
-# Implementation Plan: Notifications Architecture Fixes
+# Plan 07: Notifications (7.4 → 9+)
 
-**Review:** `docs/architecture-review/07-notifications.md`
-**Current Score:** 5.9 / 10
-**Target Score:** ~9 / 10
-**Priority Order:** logic > docs > bugs > tests > code quality
+## Gap Analysis
 
----
+- **`notificationRouter` is optional in AgentService** — Can silently skip notifications; should be required
+- **Telegram config validation duplicated** — Both IPC handler and CLI command validate independently
+- **`TelegramBotService` allows double-start** — No guard against calling `start()` twice
+- **`handleCallback` crashes on malformed data** — Missing guard for `sep === -1` with `t|` and `ef|` prefixes
+- **`activeBots` Map is function-scoped** — Re-created per handler registration in `telegram-handlers.ts`
+- **`MultiChannelNotificationRouter` error context is sparse** — No task ID or router identity in error logs
+- **No unit tests for notification routing**
 
-## Dependency Graph
+## Changes
 
+### 1. Make `notificationRouter` required in AgentService
+
+**File:** `src/main/services/agent-service.ts`
+
+- Remove `?` from `notificationRouter` constructor parameter
+- Change `?.send()` calls to `.send()`
+- Update test constructors to pass `new StubNotificationRouter()`
+
+### 2. Extract telegram config validation
+
+**File:** `src/main/services/telegram-config-validator.ts` (new)
+
+Create `validateTelegramConfig(token: string, chatId: string)` that throws descriptive errors.
+
+Update both `src/main/ipc-handlers/telegram-handlers.ts` and `src/cli/commands/telegram.ts` to use it.
+
+### 3. Add double-start guard in `TelegramBotService.start()`
+
+**File:** `src/main/services/telegram-bot-service.ts`
+
+Add at top of `start()`:
+```ts
+if (this.running) throw new Error('TelegramBotService is already running');
 ```
-Item 1 (polling_error) ── standalone
-Item 2 (callback separator) ── standalone
-Item 3+5 (await send + log) ── combined, standalone
-Item 4 (pendingActions TTL) ── standalone
-Item 6 (validate config) ── standalone
-Item 7 (input length validation) ── standalone
-Item 8 (remove dead code) ── standalone
-Item 10 (write docs) ── depends on Items 1-8
-Item 11 (update architecture-overview) ── depends on Item 8
+
+### 4. Guard `handleCallback` against `sep === -1`
+
+**File:** `src/main/services/telegram-bot-service.ts`
+
+Add early return for malformed callback data:
+```ts
+if (sep === -1) return;
 ```
+For both `t|` and `ef|` prefix handlers.
 
----
+### 5. Lift `activeBots` to module scope
 
-## Item 1 (P1): Add `polling_error` handler to TelegramBot
+**File:** `src/main/ipc-handlers/telegram-handlers.ts`
 
-**File:** `src/main/services/telegram-bot-service.ts`
-**Complexity:** Small
+Move the `activeBots` Map and `before-quit` listener to module-level scope with a double-registration guard.
 
-After line 48 (`new TelegramBot(botToken, { polling: true })`), register:
-```typescript
-this.bot.on('polling_error', (err: Error) => {
-  this.logError(err);
-  this.log('in', `[polling_error] ${err.message}`);
-});
-```
+### 6. Add structured error context to `MultiChannelNotificationRouter`
 
----
+**File:** `src/main/services/multi-channel-notification-router.ts`
 
-## Item 2 (P1): Fix callback data parsing separator
+Include notification `taskId` and router identity/name in error log messages.
 
-**File:** `src/main/services/telegram-bot-service.ts`
-**Complexity:** Small
+### 7. Write notification tests
 
-Replace `:` with `|` as separator in all callback_data strings and all parsing sites in `handleCallback()`. ULIDs cannot contain `|`.
+**File:** `tests/unit/multi-channel-notification-router.test.ts` (new)
 
----
+Test cases:
+- Fan-out: notification dispatched to all registered channels
+- Failure isolation: one channel failure doesn't affect others
+- Add/remove lifecycle: channels can be added and removed
 
-## Item 3+5 (P1+P2): Await `notificationRouter.send()` and log failures
+## Files to Modify
 
-**File:** `src/main/services/agent-service.ts` (lines 962-970)
-**Complexity:** Small
+| File | Action |
+|------|--------|
+| `src/main/services/agent-service.ts` | Edit (make notificationRouter required) |
+| `src/main/services/telegram-config-validator.ts` | Create |
+| `src/main/services/telegram-bot-service.ts` | Edit (double-start guard, callback guard) |
+| `src/main/ipc-handlers/telegram-handlers.ts` | Edit (lift activeBots, use validator) |
+| `src/cli/commands/telegram.ts` | Edit (use validator) |
+| `src/main/services/multi-channel-notification-router.ts` | Edit (structured errors) |
+| `tests/unit/multi-channel-notification-router.test.ts` | Create |
 
-Add `await` to the `send()` call, catch errors and log to `taskEventLog` with severity `warning`.
+## Complexity
 
----
-
-## Item 4 (P2): Add TTL expiry for `pendingActions`
-
-**File:** `src/main/services/telegram-bot-service.ts`
-**Complexity:** Medium
-
-1. Add `createdAt: number` to `PendingAction` interface
-2. Add 5-minute TTL constant and cleanup interval (60s)
-3. Set `createdAt` when adding entries
-4. Start cleanup interval in `start()`, clear in `stop()`
-5. Check TTL when consuming pending actions
-
----
-
-## Item 6 (P2): Validate Telegram config before starting bot
-
-**Files:** `src/main/ipc-handlers.ts`, `src/main/services/telegram-bot-service.ts`
-**Complexity:** Small
-
-Validate `botToken` matches `/^\d+:[A-Za-z0-9_-]+$/` and `chatId` matches `/^-?\d+$/` in the IPC handler before starting the bot.
-
----
-
-## Item 7 (P2): Add input length validation in bot handlers
-
-**File:** `src/main/services/telegram-bot-service.ts`
-**Complexity:** Small
-
-Add `MAX_INPUT_LENGTH = 2000` constant. Validate in message handler before processing free-text input.
-
----
-
-## Item 8 (P3 -- Quick Win): Remove `ElectronNotificationRouter` dead code
-
-**Delete:** `src/main/services/electron-notification-router.ts`
-**Complexity:** Small
-
-Never imported or instantiated. Near-duplicate of `DesktopNotificationRouter`.
-
----
-
-## Item 11 (P3 -- Quick Win): Update `docs/architecture-overview.md`
-
-**File:** `docs/architecture-overview.md`
-**Complexity:** Small
-
-Replace the NotificationRouter subsection with accurate content describing `MultiChannelNotificationRouter`, `DesktopNotificationRouter`, `TelegramNotificationRouter`, and `StubNotificationRouter`.
-
----
-
-## Item 10 (P3 -- Quick Win): Write `docs/notifications.md`
-
-**File:** New `docs/notifications.md`
-**Complexity:** Medium
-
-Document: architecture (composite router pattern), notification sources (pipeline hooks + agent completion), Telegram bot commands and lifecycle, configuration, and testing with `StubNotificationRouter`.
-
----
-
-## Implementation Order
-
-| Step | Item | Priority | Complexity |
-|------|------|----------|------------|
-| 1 | Item 1: polling_error handler | P1 | Small |
-| 2 | Item 2: Callback separator | P1 | Small |
-| 3 | Items 3+5: Await send + event logging | P1+P2 | Small |
-| 4 | Item 4: pendingActions TTL | P2 | Medium |
-| 5 | Item 6: Validate Telegram config | P2 | Small |
-| 6 | Item 7: Input length validation | P2 | Small |
-| 7 | Item 8: Remove dead code | P3 | Small |
-| 8 | Item 11: Update architecture docs | P3 | Small |
-| 9 | Item 10: Write notifications doc | P3 | Medium |
-
-**Estimated total effort:** ~3-4 hours
-
-**Items excluded:** Item 9 (extract command handlers -- larger refactor), Item 12 (tests -- follow-up).
+Medium (~4 hours)

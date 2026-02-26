@@ -1,109 +1,76 @@
-# Implementation Plan: Agent System Architecture Fixes
+# Plan 04: Agent System (8.5 → 9+)
 
-**Review:** `docs/architecture-review/04-agent-system.md`
-**Current Score:** 7.6 / 10
-**Target Score:** ~9 / 10
-**Priority Order:** logic > docs > bugs > tests > code quality
+## Gap Analysis
 
----
+- **`runAgentInBackground` is ~400 lines** — Mixes subtask sync, output buffering, and post-run extraction in one method
+- **`ChatAgentService` has duplicate SDK loops** — `runViaDirectSdk()` and `summarizeMessages()` share identical SDK interaction patterns
+- **Hand-rolled SDK type definitions** — Lines 13-33 of `chat-agent-service.ts` duplicate SDK types
+- **`isReadOnlyMode` guard lacks documentation** — Non-obvious why `technical_design*` modes are excluded
+- **Validation retry token attribution assumption** — `latestRunId` assumed to map to correct retry run; no verification
 
-## Phase A: Critical Logic Fixes (P1) -- Do First
+## Changes
 
-### Item 1: Fix `Agent.isAvailable()` -- delegate to configured engine
+### 1. Extract `SubtaskSyncInterceptor`
 
-**File:** `src/main/agents/agent.ts` (lines 129-137)
-**Complexity:** Small
+**Files:** `src/main/services/subtask-sync-interceptor.ts` (new), `src/main/services/agent-service.ts`
 
-Add `defaultEngine` parameter to constructor (defaults to `'claude-code'`). Use `this.libRegistry.getLib(this.defaultEngine)` in `isAvailable()` instead of hardcoded `'claude-code'`. Update registration in `src/main/providers/setup.ts`.
+New class taking `taskStore` + `task` in constructor. Moves:
+- `wrappedOnMessage` logic
+- `mapSdkStatus` helper
+- `persistSubtaskChanges` method
 
-### Item 2: Raise supervisor timeout above implement mode timeout
+~100 lines extracted from `runAgentInBackground`.
 
-**File:** `src/main/services/agent-supervisor.ts` (line 15 and lines 60-62)
-**Complexity:** Small
+### 2. Extract `AgentOutputFlusher`
 
-Use per-run `run.timeoutMs` from DB (already populated by 3s flush). Compute: `effectiveTimeout = (run.timeoutMs ?? defaultTimeoutMs) + 5min grace`. Raise `defaultTimeoutMs` from 15min to 35min as fallback.
+**Files:** `src/main/services/agent-output-flusher.ts` (new), `src/main/services/agent-service.ts`
 
-### Item 3: Forward all callbacks in validation retry
+New class owning:
+- `outputBuffer`, `messagesBuffer`, `flushInterval`
+- Methods: `start()`, `stop()`, `getBufferedOutput()`, `getBufferedMessages()`
 
-**File:** `src/main/services/agent-service.ts` (line 613)
-**Complexity:** Small (one line)
+~50 lines extracted.
 
-Change line 613 to include `onPromptBuilt` and `wrappedOnMessage` callbacks (already in scope).
+### 3. Extract `PostRunExtractor`
 
-### Item 4: Add `'review'` to read-only mode guard
+**Files:** `src/main/services/post-run-extractor.ts` (new), `src/main/services/agent-service.ts`
 
-**File:** `src/main/agents/base-agent-prompt-builder.ts` (line 55)
-**Complexity:** Small (one line)
+New module handling:
+- Plan extraction
+- Tech design extraction
+- Context entry saving
 
-Add `|| context.mode === 'review'` to the `isReadOnlyMode` condition.
+~130 lines extracted from `runAgentInBackground`.
 
----
+### 4. Consolidate `ChatAgentService` SDK loops
 
-## Phase B: Logic Fix (P2 code change)
+**File:** `src/main/services/chat-agent-service.ts`
 
-### Item 10: Fix `AgentFrameworkImpl.listAgents()` hardcoded `available: false`
+- Extract private `runSdkQuery()` helper used by both `runViaDirectSdk()` and `summarizeMessages()`
+- Remove hand-rolled SDK type definitions (lines 13-33), import from SDK package directly
 
-**File:** `src/main/services/agent-framework-impl.ts` (line 22)
-**Complexity:** Small
+### 5. Add `isReadOnlyMode` JSDoc
 
-Change `available: false` to `available: true` (optimistic default). The async `getAvailableAgents()` does the real check. Add JSDoc explaining the optimistic default.
+**File:** `src/main/services/agent-service.ts`
 
----
+Add explicit JSDoc explaining why `technical_design*` modes are excluded from the read-only guard.
 
-## Phase C: Documentation (P2)
+### 6. Add validation retry run-ID guard
 
-### Item 5: Update prompt template resolution path
-**File:** `docs/agent-system.md` | **Complexity:** Small
+**File:** `src/main/services/agent-service.ts`
 
-Replace stale `context.resolvedPrompt` code sample with actual flow: `modeConfig?.promptTemplate` → `PromptRenderer.render()` → fallback `resolvedPrompt` → `buildPrompt()`.
+In the validation retry path, verify that `latestRunId` actually corresponds to a run for the current task before reusing it. Add an explicit check (e.g., `agentRunStore.get(latestRunId)` and compare `taskId`) with a descriptive error if mismatched. This prevents silent misattribution of retry tokens to the wrong run.
 
-### Item 6: Document `PromptRenderer` with all template variables
-**File:** `docs/agent-system.md` | **Complexity:** Small
+## Files to Modify
 
-Document all 13 template variables (`{taskTitle}`, `{taskDescription}`, `{subtasksSection}`, etc.), auto-appended summary behavior, and validation error handling.
+| File | Action |
+|------|--------|
+| `src/main/services/agent-service.ts` | Edit (extract 3 modules, add JSDoc) |
+| `src/main/services/subtask-sync-interceptor.ts` | Create |
+| `src/main/services/agent-output-flusher.ts` | Create |
+| `src/main/services/post-run-extractor.ts` | Create |
+| `src/main/services/chat-agent-service.ts` | Edit (consolidate SDK loops) |
 
-### Item 7: Remove `src/main/agents/prompts/` reference
-**File:** `docs/agent-system.md` frontmatter | **Complexity:** Small
+## Complexity
 
-Replace with: "Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes". Run `yarn build:claude` after.
-
-### Item 8: Document `ChatAgentService`
-**File:** `docs/agent-system.md` | **Complexity:** Medium
-
-Document: two execution paths (Direct SDK vs AgentLib), agent lib resolution order, history injection, scope resolution, summarize flow, running agent tracking.
-
-### Item 9: Document `AgentSupervisor` and `SandboxGuard`
-**File:** `docs/agent-system.md` | **Complexity:** Medium
-
-Document supervisor (poll interval, ghost run detection, timeout detection) and sandbox guard (allowed paths, tool evaluation, sensitive paths, fail-closed).
-
-### Item 14: Note CLI backend token-count limitation
-**File:** `docs/agent-system.md` | **Complexity:** Small
-
-Add bullet noting CLI backend always returns 0 for token counts.
-
----
-
-## Phase D: Quick-Win Tests (P3)
-
-### Item 13: Add unit tests for `ImplementorPromptBuilder`
-
-**File:** New `tests/unit/implementor-prompt-builder.test.ts`
-**Complexity:** Medium
-
-Test all 13 modes, `getMaxTurns()`, `getTimeout()`, `getOutputFormat()`, `inferOutcome()`, phase-aware display, validation errors.
-
----
-
-## Implementation Order
-
-| Step | Items | Effort |
-|------|-------|--------|
-| 1 | Items 1-4 (P1 logic fixes, parallel) | ~1-2 hours |
-| 2 | Item 10 (listAgents fix) | ~15 min |
-| 3 | Items 5-9, 14 (documentation) | ~3-4 hours |
-| 4 | Item 13 (tests) | ~2-3 hours |
-
-**Total: ~7-10 hours**
-
-**Deferred:** Item 11 (route ChatAgentService through ClaudeCodeLib -- large refactor), Item 12 (extract SubtaskSyncService).
+Large (~6 hours)

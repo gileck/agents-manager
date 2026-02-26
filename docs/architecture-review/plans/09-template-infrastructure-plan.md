@@ -1,90 +1,90 @@
-# Implementation Plan: Template Infrastructure Fixes
+# Plan 09: Template Infra (7.3 → 9+)
 
-**Review:** `docs/architecture-review/09-template-infrastructure.md`
-**Current Score:** 6.3 / 10
-**Target Score:** ~8.0 / 10
-**Constraint:** CLAUDE.md says "Never modify files in `template/`". Each item notes whether a template modification is justified.
+## Gap Analysis
 
----
+- **Dead cron exports in `src/renderer/lib/utils.ts`** — `_formatHour`, `formatTime`, `formatCronSchedule`, `formatIntervalSchedule` have zero import sites
+- **`src/` components import directly from `@template/`** — 18+ import sites bypass the app-layer indirection
+- **`useTheme` imported directly from template** — 3 components use `@template/renderer/hooks/useTheme`
+- **Cron parser in template violates "Zero App Logic"** — 139 lines of app-specific code in template
+- **Dead `mainWindow` variable in template** — Unused + ESLint suppression in `template/main/core/app.ts`
+- **No shutdown ordering documentation** — `flushLogs` ordering not documented
+- **Duplicate UI component sets** — `template/` and `src/` both have component sets with diverged variants (P3)
 
-## Item 1 (P1): Protect CLI `getSetting()` -- ACTIVE BUG
+**Note:** CLAUDE.md says "Never modify files in `template/`". Items 6-7 require template modification but are architecturally justified: the template's own README states "Zero App Logic" and these are corrective fixes removing violations.
 
-**File:** `src/cli/commands/tasks.ts` (line 90)
-**Complexity:** Small | **Template mod:** No
+## Changes
 
-Wrap `getSetting('default_pipeline_id', '')` in try/catch (template DB singleton not initialized in CLI context). Fall back to first pipeline from `pipelineStore.listPipelines()`. Pattern already established in `src/main/providers/setup.ts:199-205`.
+### 1. Remove dead cron exports from `src/renderer/lib/utils.ts`
 
----
+**File:** `src/renderer/lib/utils.ts`
 
-## Item 2 (P1): Flush log buffer on quit
+Delete `_formatHour`, `formatTime`, `formatCronSchedule`, `formatIntervalSchedule` functions (zero import sites — confirm with grep first).
 
-**File:** `src/main/index.ts`
-**Complexity:** Small | **Template mod:** No
+### 2. Add re-export barrel in `src/renderer/lib/utils.ts`
 
-Add `flushLogs()` call at top of `onBeforeQuit` callback, before `closeDatabase()`. The `flushLogs` function is already exported from `@template/main/services/log-service`.
+**File:** `src/renderer/lib/utils.ts`
 
----
+Add:
+```ts
+export { cn, formatDuration, stripAnsi } from '@template/renderer/lib/utils';
+```
 
-## Item 3 (P2): Remove dead import from `useTheme.ts`
+### 3. Redirect 18 `@template/renderer/lib/utils` imports
 
-**File:** `template/renderer/hooks/useTheme.ts` (line 2)
-**Complexity:** Small | **Template mod:** YES (justified -- dead cross-boundary import)
+**Files:** ~18 component files in `src/renderer/`
 
-Delete line 2: `import type { AppSettings as _AppSettings } from '@shared/types'`. Zero behavioral change.
+Change all `src/` component imports from `@template/renderer/lib/utils` to use relative path `../../lib/utils` (or equivalent).
 
----
+### 4. Create `src/renderer/hooks/useTheme.ts` wrapper
 
-## Item 4 (P2): Move `before-quit` listener out of `createWindow()`
+**File:** `src/renderer/hooks/useTheme.ts` (new)
 
-**File:** `template/main/core/window.ts` (lines 27-30)
-**Complexity:** Small | **Template mod:** YES (justified -- listener leak bug)
+Re-export with typed `window.api` interface. Redirect 3 import sites (`App.tsx`, `SettingsPage.tsx`, `TopMenu.tsx`).
 
-Move `app.on('before-quit', ...)` from inside `createWindow()` to module level. Prevents duplicate listener accumulation on multiple calls.
+### 5. Add flushLogs ordering comment
 
----
+**Files:** `src/main/index.ts`, `docs/patterns.md`
 
-## Item 5 (P3): Remove dead `bridge.ts`
+- Add comment at `src/main/index.ts:72` explaining shutdown ordering
+- Add "Shutdown Ordering" section in `docs/patterns.md`
 
-**Files:** Delete `template/preload/bridge.ts`, update `template/README.md`
-**Complexity:** Small | **Template mod:** YES (justified -- dead code, never imported)
+### 6. Strip cron parser from `template/renderer/lib/utils.ts`
 
-The actual preload (`src/preload/index.ts`) uses raw `ipcRenderer.invoke` directly.
+**File:** `template/renderer/lib/utils.ts`
 
----
+Remove ~139 lines of app-specific cron parsing code. This is a justified template modification — the template's own README says "Zero App Logic" and the cron parser is identified as a violation.
 
-## Items 6-10 (P4-P6): Documentation Quick Wins
+### 7. Remove stale `mainWindow` from `template/main/core/app.ts`
 
-All template README updates:
-- **Item 6:** Document UI component import rule (use `src/` components, not `template/`)
-- **Item 7:** Extract app-specific helpers from `template/renderer/lib/utils.ts` to `src/`
-- **Item 8:** Document Electron-only constraint of `database.ts`
-- **Item 9:** Document `useTheme.ts` coupling to `window.api.settings`
-- **Item 10:** Document which UI component set to use
+**File:** `template/main/core/app.ts`
 
----
+Remove the dead `mainWindow` variable and its ESLint suppression comment. Justified template modification.
 
-## Execution Order
+### 8. Audit and document duplicate UI component sets
 
-| Step | Item | Template Mod? |
-|------|------|---------------|
-| 1 | Item 1: CLI getSetting protection | No |
-| 2 | Item 2: Flush logs on quit | No |
-| 3 | Item 3: Remove dead import | Yes (1 line) |
-| 4 | Item 4: Move before-quit listener | Yes (move code) |
-| 5 | Item 5: Remove dead bridge.ts | Yes (delete file) |
-| 6 | Items 6-10: Documentation | Yes (docs only) |
-| 7 | Item 7: Extract app helpers | Yes (remove + repoint) |
+**Files:** `src/renderer/components/`, `template/renderer/components/`, `docs/patterns.md`
 
----
+`template/` and `src/` both contain UI component sets (buttons, inputs, dialogs, etc.) that have diverged. Audit which `src/` components shadow or duplicate `template/` components:
+- Identify `src/` components that are identical to their `template/` counterparts → delete `src/` copy and redirect imports to `@template/`
+- Identify `src/` components that intentionally extend or override `template/` → add JSDoc noting the relationship
+- Document the component layering convention in `docs/patterns.md` (which components live in template vs src, when to override)
 
-## Expected Score Impact
+## Files to Modify
 
-| Dimension | Before | After | Delta |
-|-----------|:------:|:-----:|:-----:|
-| Low Coupling | 5 | 7 | +2 |
-| High Cohesion | 6 | 7 | +1 |
-| Clear State | 6 | 7 | +1 |
-| Deterministic | 7 | 8 | +1 |
-| Error Handling | 6 | 7 | +1 |
+| File | Action |
+|------|--------|
+| `src/renderer/lib/utils.ts` | Edit (remove dead exports, add barrel) |
+| ~18 component files in `src/renderer/` | Edit (redirect imports) |
+| `src/renderer/hooks/useTheme.ts` | Create |
+| `src/renderer/pages/App.tsx` | Edit (redirect useTheme import) |
+| `src/renderer/pages/SettingsPage.tsx` | Edit (redirect useTheme import) |
+| `src/renderer/components/TopMenu.tsx` | Edit (redirect useTheme import) |
+| `src/main/index.ts` | Edit (add comment) |
+| `docs/patterns.md` | Edit (add section) |
+| `template/renderer/lib/utils.ts` | Edit (remove cron parser) |
+| `template/main/core/app.ts` | Edit (remove dead variable) |
+| `src/renderer/components/*` | Audit (deduplicate or document overrides) |
 
-**Projected: ~7.5-8.0 / 10** (reaching 9.0 requires larger refactors like making `useTheme.ts` injectable)
+## Complexity
+
+Medium (~3 hours, mostly import redirects)
