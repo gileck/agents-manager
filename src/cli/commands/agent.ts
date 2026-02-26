@@ -41,11 +41,14 @@ export function registerAgentCommands(program: Command, getServices: () => AppSe
     .description('List agent runs')
     .option('--task <taskId>', 'Filter by task ID')
     .option('--active', 'Show only active runs')
-    .action(async (cmdOpts: { task?: string; active?: boolean }) => {
+    .option('--all', 'Show all runs (including completed)')
+    .action(async (cmdOpts: { task?: string; active?: boolean; all?: boolean }) => {
       const opts = program.opts() as OutputOptions;
       const services = getServices();
       let runs;
-      if (cmdOpts.active) {
+      if (cmdOpts.all) {
+        runs = await services.agentRunStore.getAllRuns();
+      } else if (cmdOpts.active) {
         runs = await services.agentRunStore.getActiveRuns();
       } else if (cmdOpts.task) {
         runs = await services.agentRunStore.getRunsForTask(cmdOpts.task);

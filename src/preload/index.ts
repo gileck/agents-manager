@@ -408,8 +408,8 @@ const api = {
 
   // Chat session operations
   chatSession: {
-    create: (scopeType: 'project' | 'task', scopeId: string, name: string): Promise<ChatSession> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_CREATE, { scopeType, scopeId, name }),
+    create: (scopeType: 'project' | 'task', scopeId: string, name: string, agentLib?: string): Promise<ChatSession> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_CREATE, { scopeType, scopeId, name, agentLib }),
     list: (scopeType: 'project' | 'task', scopeId: string): Promise<ChatSession[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST, scopeType, scopeId),
     update: (sessionId: string, input: { name?: string; agentLib?: string | null }): Promise<ChatSession | null> =>

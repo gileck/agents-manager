@@ -50,7 +50,7 @@ Path resolution:
 
 The database is lazy-opened on first command execution (not at program startup). WAL mode and foreign keys are enabled. Migrations run automatically.
 
-The database is closed on process exit via `process.on('exit')`.
+The database is closed after the command completes via `.finally()` on the `parseAsync()` promise chain.
 
 ## Command Groups
 
@@ -75,6 +75,7 @@ npx agents-manager tasks delete <id>                         # Delete task
 npx agents-manager tasks transition|move <id> <status> [--actor]  # Transition task
 npx agents-manager tasks transitions <id>                    # Show valid transitions
 npx agents-manager tasks start <id> [--actor]                # Transition to first non-initial status
+npx agents-manager tasks reset <id> [--pipeline <id>]        # Reset task to initial state
 ```
 
 #### Subtask Subcommand
@@ -87,14 +88,18 @@ npx agents-manager tasks subtask remove <taskId> --name <n>  # Remove subtask
 npx agents-manager tasks subtask set <taskId> --subtasks <json>  # Replace all subtasks
 ```
 
+**Note:** Subtask commands bypass WorkflowService and call `taskStore.updateTask()` directly. This is intentional — subtask updates are lightweight field edits that do not require pipeline transition logic.
+
 ### `agent` — Agent Run Management
 
 ```bash
 npx agents-manager agent start <taskId> [--mode] [--type]    # Start agent (default mode: plan, default type: scripted)
 npx agents-manager agent stop <runId>                        # Stop running agent
-npx agents-manager agent runs [--task] [--active]            # List agent runs
+npx agents-manager agent runs [--task] [--active] [--all]    # List agent runs
 npx agents-manager agent get|show <runId>                    # Get agent run details
 ```
+
+The `runs` subcommand defaults to showing active runs only. Use `--task <id>` to filter by task, `--active` to explicitly list active runs, or `--all` to show all runs including completed ones.
 
 ### `pipelines` — Pipeline Viewing
 
@@ -125,6 +130,17 @@ npx agents-manager events list --task <taskId> [--category]  # List task events
 ```
 
 Categories: `status_change`, `field_update`, `dependency_change`, `comment`, `system`, `agent`, `agent_debug`, `git`, `github`, `worktree`
+
+### `telegram` — Telegram Bot Integration
+
+```bash
+npx agents-manager telegram start                            # Start the Telegram bot (long-running)
+npx agents-manager telegram status                           # Show Telegram configuration status
+```
+
+The `start` command is long-running — it starts a Telegram bot that listens for commands and forwards notifications. Press Ctrl+C to stop. Requires `telegram.botToken` and `telegram.chatId` in the project config file (`<projectPath>/.agents-manager/config.json`).
+
+The `status` command checks whether the Telegram configuration is present and displays the current state.
 
 ### `status` — Dashboard
 
@@ -175,5 +191,6 @@ This works because:
 
 - **Default agent type in CLI is `scripted`** — unlike the Electron UI which defaults to `claude-code`. This is intentional for testing.
 - **CLI is usable while Electron is running** — WAL mode allows concurrent read/write access from both processes.
-- **Database is closed on process exit** — via `process.on('exit', () => db.close())` to prevent corruption.
+- **Database is closed via `.finally()`** — on the `parseAsync()` promise chain to ensure cleanup even if a command throws.
 - **`tasks list` requires a project** — uses `requireProject()` which throws with a helpful message listing available projects if no project context can be resolved.
+- **Subtask commands bypass WorkflowService** — they call `taskStore.updateTask()` directly because subtask edits are lightweight field updates that do not need pipeline transition logic.
