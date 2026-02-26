@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { cn } from '@template/renderer/lib/utils';
+import { cn } from '../../lib/utils';
 import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Palette, GitBranch, Settings, Bug, SlidersHorizontal, MessageSquare, DollarSign, Trello, RefreshCw } from 'lucide-react';
 import { ActiveAgentsEntries } from './ActiveAgentsList';
 import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';

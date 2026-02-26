@@ -114,3 +114,27 @@ function killProcessTree(pid: number) {
 ```
 
 **Key:** Use negative PID (`-pid`) on Unix/macOS to send signals to the entire process group, not just the parent.
+
+## Shutdown Ordering
+
+The `onBeforeQuit` handler in `src/main/index.ts` must execute cleanup steps in a specific order:
+
+1. **Stop supervisors** (`agentSupervisor.stop()`) -- prevents new work from being scheduled
+2. **Flush logs** (`flushLogs()`) -- writes any buffered log entries to the database
+3. **Close database** (`closeDatabase()`) -- shuts down the SQLite connection
+
+Calling `closeDatabase()` before `flushLogs()` would silently discard pending log writes. Always flush I/O before closing the resources they depend on.
+
+## Component Layering Convention
+
+UI components live in two layers:
+
+- **`template/renderer/components/ui/`** -- Base components provided by the framework (buttons, inputs, dialogs, etc.). These are generic and app-agnostic. **Do not modify** these directly.
+- **`src/renderer/components/ui/`** -- App-layer overrides that extend the template components (e.g., adding a `style` prop to `Dialog` or `Tabs`). When a `src/` component shadows a `template/` component, it takes precedence in app imports.
+
+**When to override:** Only create a `src/` copy when you need to add props or behavior that the template component does not support. Components that are identical to their template counterparts should import directly from `@template/` and should not have a `src/` copy.
+
+**Current overrides (intentional):**
+- `dialog.tsx` -- adds `style` prop to `DialogContent`
+- `tabs.tsx` -- adds `style` prop to `Tabs`, `TabsList`, and `TabsContent`
+- `toaster.tsx` -- app-specific toast component (no template equivalent)

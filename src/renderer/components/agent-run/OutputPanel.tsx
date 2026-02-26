@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { OutputToolbar, type OutputMode } from './OutputToolbar';
 import { RenderedOutputPanel } from './RenderedOutputPanel';
-import { stripAnsi } from '@template/renderer/lib/utils';
+import { stripAnsi } from '../../lib/utils';
 import type { AgentChatMessage } from '../../../shared/types';
 
 interface OutputPanelProps {

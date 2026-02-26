@@ -1,3 +1,6 @@
+/**
+ * App-specific toast component. No template equivalent exists.
+ */
 import React from 'react';
 import { Toaster as SonnerToaster } from 'sonner';
 

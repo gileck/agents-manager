@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '@template/renderer/lib/utils';
+import { cn } from '../../lib/utils';
 
 interface SwitchProps {
   checked: boolean;

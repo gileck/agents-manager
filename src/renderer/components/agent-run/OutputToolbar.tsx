@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { cn, formatDuration } from '@template/renderer/lib/utils';
+import { cn, formatDuration } from '../../lib/utils';
 import {
   ArrowDownToLine,
   Copy,

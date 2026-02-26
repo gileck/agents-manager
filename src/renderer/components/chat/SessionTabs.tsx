@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, X, MoreVertical, Loader2, Check } from 'lucide-react';
-import { cn } from '@template/renderer/lib/utils';
+import { cn } from '../../lib/utils';
 import { ChatSession, RunningAgent } from '../../../shared/types';
 import { Input } from '../ui/input';
 

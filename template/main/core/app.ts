@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app } from 'electron';
 import { createWindow, getWindow, showWindow } from './window';
 
 export interface AppConfig {
@@ -9,8 +9,6 @@ export interface AppConfig {
   singleInstance?: boolean;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-let mainWindow: BrowserWindow | null = null;
 let updateInterval: NodeJS.Timeout | null = null;
 
 export function initializeApp(config: AppConfig = {}): void {
@@ -58,7 +56,7 @@ export function initializeApp(config: AppConfig = {}): void {
     }
 
     // Create the window
-    mainWindow = createWindow();
+    createWindow();
 
     // Show window if requested or in debug mode
     const shouldShow = showWindowOnStart ||
@@ -76,7 +74,7 @@ export function initializeApp(config: AppConfig = {}): void {
     if (window) {
       showWindow();
     } else {
-      mainWindow = createWindow();
+      createWindow();
       showWindow();
     }
   });

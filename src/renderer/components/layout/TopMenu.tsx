@@ -1,7 +1,7 @@
 import React from 'react';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useProjects } from '../../hooks/useProjects';
-import { useTheme } from '@template/renderer/hooks/useTheme';
+import { useTheme } from '../../hooks/useTheme';
 import {
   Select,
   SelectTrigger,

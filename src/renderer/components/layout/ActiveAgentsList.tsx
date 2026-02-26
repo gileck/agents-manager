@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { RefreshCw, Check, X, CircleDot } from 'lucide-react';
-import { cn } from '@template/renderer/lib/utils';
+import { cn } from '../../lib/utils';
 import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
 import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import type { AgentRunStatus } from '../../../shared/types';

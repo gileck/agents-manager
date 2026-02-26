@@ -20,7 +20,7 @@ import { TelegramPage } from './pages/TelegramPage';
 import { CostPage } from './pages/CostPage';
 import { SourceControlPage } from './pages/SourceControlPage';
 import { KanbanBoardPage } from './pages/KanbanBoardPage';
-import { useTheme } from '@template/renderer/hooks/useTheme';
+import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useRouteRestore } from './hooks/useRouteRestore';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';

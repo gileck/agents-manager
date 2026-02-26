@@ -1,5 +1,9 @@
+/**
+ * App-layer override of template/renderer/components/ui/dialog.tsx.
+ * Adds `style` prop to DialogContent for Electron-specific sizing needs.
+ */
 import * as React from 'react';
-import { cn } from '@template/renderer/lib/utils';
+import { cn } from '../../lib/utils';
 import { X } from 'lucide-react';
 
 interface DialogContextValue {

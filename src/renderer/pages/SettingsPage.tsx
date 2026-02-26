@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@temp
 import { Label } from '@template/renderer/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@template/renderer/components/ui/select';
 import { Switch } from '@template/renderer/components/ui/switch';
-import { useTheme } from '@template/renderer/hooks/useTheme';
+import { useTheme } from '../hooks/useTheme';
 import type { AppSettings } from '../../shared/types';
 
 export function SettingsPage() {

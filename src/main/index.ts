@@ -69,6 +69,9 @@ initializeApp({
     if (services) {
       services.agentSupervisor.stop();
     }
+    // Shutdown ordering: flush buffered log writes BEFORE closing the
+    // database connection, otherwise pending inserts silently fail.
+    // See docs/patterns.md "Shutdown Ordering" for details.
     flushLogs();
     closeDatabase();
   },

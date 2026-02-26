@@ -1,6 +1,6 @@
 import React, { useState, ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { cn } from '@template/renderer/lib/utils';
+import { cn } from '../../lib/utils';
 
 interface SidebarSectionProps {
   title: string;

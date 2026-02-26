@@ -1,5 +1,9 @@
+/**
+ * App-layer override of template/renderer/components/ui/tabs.tsx.
+ * Adds `style` prop to Tabs, TabsList, and TabsContent for Electron-specific layout.
+ */
 import * as React from 'react';
-import { cn } from '@template/renderer/lib/utils';
+import { cn } from '../../lib/utils';
 
 interface TabsContextValue {
   value: string;

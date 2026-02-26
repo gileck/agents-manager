@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Plus, MoreVertical } from 'lucide-react';
-import { cn } from '@template/renderer/lib/utils';
+import { cn } from '../../lib/utils';
 import { useChatSessions } from '../../hooks/useChatSessions';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { formatRelativeTimestamp } from '../tasks/task-helpers';
