@@ -294,6 +294,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
           `3. Make focused changes — only modify what is necessary for this task.`,
           `4. After making all changes, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass. Fix any errors before committing.`,
           `5. Stage and commit with a descriptive message (git add the relevant files, then git commit).`,
+          `6. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\` to make sure nothing broke.`,
         ];
         // Phase-aware subtask display
         const activePhase = getActivePhase(task.phases);
@@ -502,6 +503,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
           `3. Do not make unrelated changes — only fix what the reviewer asked for.`,
           `4. Run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass.`,
           `5. Stage and commit with a descriptive message that references which reviewer feedback was addressed.`,
+          `6. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\` to make sure nothing broke.`,
         );
         prompt = rcLines.join('\n');
         break;
@@ -577,6 +579,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
           '3. Follow existing patterns — match the style of surrounding code. Make focused changes only.',
           '4. Run `yarn checks` (or the project\'s equivalent) to ensure TypeScript and lint pass before committing.',
           '5. Stage and commit with a descriptive message.',
+          '6. **Rebase onto origin/main before finishing:** run `git fetch origin && git rebase origin/main`. If there are merge conflicts, resolve them (preserve the intent of both sides), `git add` the resolved files, and `git rebase --continue`. After the rebase, re-run `yarn checks` to make sure nothing broke.',
         );
         prompt = irLines.join('\n');
         break;

@@ -202,9 +202,11 @@ export class AgentService implements IAgentService {
         data: { taskId },
       });
 
-      // Fetch and rebase onto origin/main so the branch only contains agent
-      // changes and never inherits unpushed local commits from other tasks.
-      // Skip rebase for resolve_conflicts — the agent handles rebase itself.
+      // Fetch and best-effort rebase onto origin/main so the agent starts from
+      // the latest main. If the rebase fails (e.g. prior commits conflict), the
+      // agent's own rebase step (in the prompt) will handle conflict resolution.
+      // Skip for resolve_conflicts — the agent handles the entire rebase itself,
+      // and the pre-agent rebase would predictably fail (that's why we're here).
       await gitOps.fetch('origin');
       if (mode === 'resolve_conflicts') {
         await this.taskEventLog.log({
@@ -214,26 +216,26 @@ export class AgentService implements IAgentService {
           message: 'Skipping pre-agent rebase for resolve_conflicts mode (agent will rebase)',
           data: { taskId },
         });
-      } else try {
-        await gitOps.rebase('origin/main');
-        await this.taskEventLog.log({
-          taskId,
-          category: 'worktree',
-          severity: 'info',
-          message: 'Worktree rebased onto origin/main',
-          data: { taskId },
-        });
-      } catch (rebaseErr) {
-        // Abort the broken rebase so the worktree is left in a usable state
-        try { await gitOps.rebaseAbort(); } catch { /* may not be in rebase state */ }
-        const errorMsg = rebaseErr instanceof Error ? rebaseErr.message : String(rebaseErr);
-        await this.taskEventLog.log({
-          taskId,
-          category: 'worktree',
-          severity: 'warning',
-          message: `Rebase failed and aborted: ${errorMsg}`,
-          data: { taskId, error: errorMsg },
-        });
+      } else {
+        try {
+          await gitOps.rebase('origin/main');
+          await this.taskEventLog.log({
+            taskId,
+            category: 'worktree',
+            severity: 'info',
+            message: 'Worktree rebased onto origin/main',
+            data: { taskId },
+          });
+        } catch (rebaseErr) {
+          try { await gitOps.rebaseAbort(); } catch { /* may not be in rebase state */ }
+          await this.taskEventLog.log({
+            taskId,
+            category: 'worktree',
+            severity: 'warning',
+            message: `Pre-agent rebase failed (agent will handle conflicts): ${rebaseErr instanceof Error ? rebaseErr.message : String(rebaseErr)}`,
+            data: { taskId },
+          });
+        }
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);

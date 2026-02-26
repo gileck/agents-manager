@@ -114,10 +114,20 @@ export class PipelineEngine implements IPipelineEngine {
       return { success: false, error: `Pipeline not found: ${task.pipelineId}` };
     }
 
-    // Find matching transition — enforce trigger type match
+    // Find matching transition — enforce trigger type match and agentOutcome
     const fromMatch = (t: Transition) => t.from === task.status || t.from === '*';
+    const outcomeMatch = (t: Transition) => {
+      // When the context carries an agent outcome, only match transitions with a matching
+      // agentOutcome. This prevents .find() from returning the wrong self-loop transition
+      // (e.g. the 'failed' transition instead of 'conflicts_detected') when multiple
+      // transitions share the same from/to/trigger combination.
+      if (ctx.trigger === 'agent' && ctx.data?.outcome) {
+        return t.agentOutcome === ctx.data.outcome;
+      }
+      return true;
+    };
     const transition = pipeline.transitions.find(
-      (t) => fromMatch(t) && t.to === toStatus && t.trigger === ctx.trigger,
+      (t) => fromMatch(t) && t.to === toStatus && t.trigger === ctx.trigger && outcomeMatch(t),
     );
     if (!transition) {
       return {
