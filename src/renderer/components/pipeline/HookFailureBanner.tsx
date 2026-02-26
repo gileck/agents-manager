@@ -7,6 +7,7 @@ interface HookFailureBannerProps {
   retrying: string | null;
   onRetry: (hookName: string, transitionFrom: string, transitionTo: string) => void;
   onDismiss: (failureId: string) => void;
+  onReportBug?: (failure: HookFailureRecord) => void;
 }
 
 const POLICY_COLORS: Record<string, { bg: string; border: string; text: string; badgeBg: string }> = {
@@ -38,7 +39,7 @@ function groupFailures(failures: HookFailureRecord[]): GroupedFailure[] {
   return Array.from(map.values());
 }
 
-export function HookFailureBanner({ failures, retrying, onRetry, onDismiss }: HookFailureBannerProps) {
+export function HookFailureBanner({ failures, retrying, onRetry, onDismiss, onReportBug }: HookFailureBannerProps) {
   if (failures.length === 0) return null;
 
   const groups = groupFailures(failures);
@@ -105,6 +106,16 @@ export function HookFailureBanner({ failures, retrying, onRetry, onDismiss }: Ho
                   style={{ borderColor: colors.border, color: colors.text }}
                 >
                   {retrying === latest.hookName ? 'Retrying...' : 'Retry'}
+                </Button>
+              )}
+              {onReportBug && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onReportBug(latest)}
+                  style={{ borderColor: colors.border, color: colors.text }}
+                >
+                  Report Bug
                 </Button>
               )}
               <button

@@ -10,12 +10,19 @@ import {
 } from '../ui/dialog';
 import { X } from 'lucide-react';
 
+export interface BugReportInitialValues {
+  title?: string;
+  description?: string;
+  autoLoadDebugLogs?: boolean;
+}
+
 interface BugReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialValues?: BugReportInitialValues;
 }
 
-export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
+export function BugReportDialog({ open, onOpenChange, initialValues }: BugReportDialogProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
@@ -30,16 +37,61 @@ export function BugReportDialog({ open, onOpenChange }: BugReportDialogProps) {
   const currentTaskId = taskIdMatch?.[1] ?? null;
   const currentRoute = location.pathname;
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens, pre-fill from initialValues if provided
   useEffect(() => {
     if (open) {
-      setTitle('');
-      setDescription('');
+      setTitle(initialValues?.title ?? '');
+      setDescription(initialValues?.description ?? '');
       setDebugLogs('');
       setError(null);
       setLoadingLogs(null);
     }
-  }, [open]);
+  }, [open, initialValues]);
+
+  // Auto-load debug logs when opened with autoLoadDebugLogs
+  useEffect(() => {
+    if (!open || !initialValues?.autoLoadDebugLogs || !currentTaskId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingLogs('timeline');
+        try {
+          const timeline = await window.api.tasks.debugTimeline(currentTaskId);
+          if (cancelled) return;
+          const formatted = timeline.slice(0, 50).map((entry) => {
+            const time = new Date(entry.timestamp).toISOString();
+            return `[${time}] [${entry.source}/${entry.severity}] ${entry.title}`;
+          }).join('\n');
+          setDebugLogs((prev) => prev ? `${prev}\n\n--- Timeline (task ${currentTaskId}) ---\n${formatted}` : `--- Timeline (task ${currentTaskId}) ---\n${formatted}`);
+        } catch (err) {
+          console.warn('[BugReportDialog] Auto-load timeline failed:', err);
+          if (!cancelled) {
+            setDebugLogs((prev) => prev ? `${prev}\n\n--- Timeline: failed to auto-load ---` : '--- Timeline: failed to auto-load (use buttons to retry) ---');
+          }
+        }
+
+        if (cancelled) return;
+        setLoadingLogs('events');
+        try {
+          const events = await window.api.events.list({ taskId: currentTaskId });
+          if (cancelled) return;
+          const formatted = events.slice(0, 50).map((event) => {
+            const time = new Date(event.createdAt).toISOString();
+            return `[${time}] [${event.category}/${event.severity}] ${event.message}`;
+          }).join('\n');
+          setDebugLogs((prev) => prev ? `${prev}\n\n--- Events (task ${currentTaskId}) ---\n${formatted}` : `--- Events (task ${currentTaskId}) ---\n${formatted}`);
+        } catch (err) {
+          console.warn('[BugReportDialog] Auto-load events failed:', err);
+          if (!cancelled) {
+            setDebugLogs((prev) => prev ? `${prev}\n\n--- Events: failed to auto-load ---` : '--- Events: failed to auto-load (use buttons to retry) ---');
+          }
+        }
+      } finally {
+        if (!cancelled) setLoadingLogs(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, initialValues?.autoLoadDebugLogs, currentTaskId]);
 
   const handleLoadTimeline = async () => {
     if (!currentTaskId || loadingLogs) return;

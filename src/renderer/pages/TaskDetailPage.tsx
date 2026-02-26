@@ -38,6 +38,9 @@ import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboa
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
 import type { QuestionResponse } from '../components/prompts/QuestionForm';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { BugReportDialog } from '../components/bugs/BugReportDialog';
+import type { BugReportInitialValues } from '../components/bugs/BugReportDialog';
+import type { HookFailureRecord } from '../../shared/types';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -151,6 +154,10 @@ export function TaskDetailPage() {
 
   // Hook failure alerts from transitions
   const [hookFailureAlerts, setHookFailureAlerts] = useState<HookFailure[]>([]);
+
+  // Bug report dialog state
+  const [bugReportOpen, setBugReportOpen] = useState(false);
+  const [bugReportInitialValues, setBugReportInitialValues] = useState<BugReportInitialValues | undefined>(undefined);
 
   // Diagnostics hooks lifted from PipelineControlPanel
   const { diagnostics, refetch: refetchDiagnostics, error: diagnosticsError } = usePipelineDiagnostics(id!, task?.status ?? '');
@@ -333,6 +340,69 @@ export function TaskDetailPage() {
     setDismissedFailureIds((prev) => new Set([...prev, failureId]));
   }, []);
 
+  const handleReportBugFromFailure = useCallback((failure: HookFailureRecord) => {
+    try {
+      const timestamp = isFinite(failure.timestamp)
+        ? new Date(failure.timestamp).toISOString()
+        : String(failure.timestamp);
+      const lines = [
+        `- **Hook:** \`${failure.hookName}\``,
+        `- **Error:** ${failure.error}`,
+        `- **Policy:** ${failure.policy}`,
+        `- **Transition:** ${failure.transitionFrom} → ${failure.transitionTo}`,
+        `- **Timestamp:** ${timestamp}`,
+      ];
+      if (task) {
+        lines.push(`- **Task:** ${task.title}`);
+        lines.push(`- **Status:** ${task.status}`);
+        if (task.branchName) lines.push(`- **Branch:** \`${task.branchName}\``);
+        if (task.prLink) lines.push(`- **PR:** ${task.prLink}`);
+      }
+      setBugReportInitialValues({
+        title: `Hook failed: ${failure.hookName} - ${failure.error}`,
+        description: lines.join('\n'),
+        autoLoadDebugLogs: true,
+      });
+    } catch (err) {
+      console.error('[TaskDetailPage] Failed to build bug report from failure:', err);
+      setBugReportInitialValues({
+        title: 'Hook failure (details could not be loaded)',
+        description: `Raw error: ${String(failure?.error ?? 'unknown')}`,
+        autoLoadDebugLogs: true,
+      });
+    }
+    setBugReportOpen(true);
+  }, [task]);
+
+  const handleReportBugFromHookAlert = useCallback((failure: HookFailure) => {
+    try {
+      const lines = [
+        `- **Hook:** \`${failure.hook}\``,
+        `- **Error:** ${failure.error}`,
+        `- **Policy:** ${failure.policy}`,
+      ];
+      if (task) {
+        lines.push(`- **Task:** ${task.title}`);
+        lines.push(`- **Status:** ${task.status}`);
+        if (task.branchName) lines.push(`- **Branch:** \`${task.branchName}\``);
+        if (task.prLink) lines.push(`- **PR:** ${task.prLink}`);
+      }
+      setBugReportInitialValues({
+        title: `Hook failed: ${failure.hook} - ${failure.error}`,
+        description: lines.join('\n'),
+        autoLoadDebugLogs: true,
+      });
+    } catch (err) {
+      console.error('[TaskDetailPage] Failed to build bug report from hook alert:', err);
+      setBugReportInitialValues({
+        title: 'Hook failure (details could not be loaded)',
+        description: `Raw error: ${String(failure?.error ?? 'unknown')}`,
+        autoLoadDebugLogs: true,
+      });
+    }
+    setBugReportOpen(true);
+  }, [task]);
+
   if (loading && !task) {
     return (
       <div className="p-8">
@@ -509,10 +579,20 @@ export function TaskDetailPage() {
                     <span style={{ fontWeight: 600, color: '#d97706' }}>Hook &quot;{f.hook}&quot; failed ({f.policy})</span>
                     <p style={{ fontSize: 12, marginTop: 2, color: '#d97706' }}>{f.error}</p>
                   </div>
-                  <button
-                    style={{ color: 'var(--muted-foreground)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
-                    onClick={() => setHookFailureAlerts((prev) => prev.filter((_, idx) => idx !== i))}
-                  >&times;</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleReportBugFromHookAlert(f)}
+                      style={{ borderColor: '#78350f', color: '#d97706' }}
+                    >
+                      Report Bug
+                    </Button>
+                    <button
+                      style={{ color: 'var(--muted-foreground)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
+                      onClick={() => setHookFailureAlerts((prev) => prev.filter((_, idx) => idx !== i))}
+                    >&times;</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -524,6 +604,7 @@ export function TaskDetailPage() {
                 retrying={retrying}
                 onRetry={handleRetryHook}
                 onDismiss={handleDismissFailure}
+                onReportBug={handleReportBugFromFailure}
               />
             </div>
           )}
@@ -806,6 +887,13 @@ export function TaskDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bug Report Dialog */}
+      <BugReportDialog
+        open={bugReportOpen}
+        onOpenChange={setBugReportOpen}
+        initialValues={bugReportInitialValues}
+      />
     </div>
   );
 }
