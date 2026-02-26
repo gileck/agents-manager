@@ -4,15 +4,25 @@ import type { ChatMessage, AgentChatMessage } from '../../shared/types';
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
 function convertDbMessages(dbMessages: ChatMessage[]): AgentChatMessage[] {
-  return dbMessages.map((msg) => {
+  const result: AgentChatMessage[] = [];
+  for (const msg of dbMessages) {
     if (msg.role === 'user') {
-      return { type: 'user' as const, text: msg.content, timestamp: msg.createdAt };
+      result.push({ type: 'user' as const, text: msg.content, timestamp: msg.createdAt });
+    } else if (msg.role === 'system') {
+      result.push({ type: 'status' as const, status: 'completed' as const, message: msg.content, timestamp: msg.createdAt });
+    } else if (msg.role === 'assistant') {
+      // Try to parse JSON array of structured messages; fall back to legacy plain text
+      try {
+        const parsed = JSON.parse(msg.content);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.type) {
+          result.push(...(parsed as AgentChatMessage[]));
+          continue;
+        }
+      } catch { /* legacy plain text */ }
+      result.push({ type: 'assistant_text' as const, text: msg.content, timestamp: msg.createdAt });
     }
-    if (msg.role === 'system') {
-      return { type: 'status' as const, status: 'completed' as const, message: msg.content, timestamp: msg.createdAt };
-    }
-    return { type: 'assistant_text' as const, text: msg.content, timestamp: msg.createdAt };
-  });
+  }
+  return result;
 }
 
 export function useChat(sessionId: string | null) {

@@ -31,6 +31,24 @@ type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkOtherMessage
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
+/** Extract plain text from a DB content field (handles both JSON array and legacy plain text). */
+function extractTextFromContent(content: string): string {
+  if (content.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((m: { type: string }) => m.type === 'assistant_text')
+          .map((m: { text: string }) => m.text)
+          .join('');
+      }
+    } catch (err) {
+      console.warn('[extractTextFromContent] Content looks like JSON but failed to parse:', err);
+    }
+  }
+  return content;
+}
+
 const WRITE_TOOL_NAMES = new Set([
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
 ]);
@@ -83,7 +101,8 @@ export class TaskChatAgentService {
     const conversationLines: string[] = [];
     for (const msg of history.slice(0, -1)) {
       const roleLabel = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'System';
-      conversationLines.push(`[${roleLabel}]: ${msg.content}`);
+      const text = msg.role === 'assistant' ? extractTextFromContent(msg.content) : msg.content;
+      conversationLines.push(`[${roleLabel}]: ${text}`);
     }
 
     let prompt = '';
@@ -176,12 +195,16 @@ export class TaskChatAgentService {
 
     const sandboxGuard = new SandboxGuard([], [projectPath]);
 
-    let resultText = '';
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
+    const turnMessages: AgentChatMessage[] = [];
 
     const emitMessage = (msg: AgentChatMessage) => {
       try { onMessage?.(msg); } catch (err) { console.warn('[TaskChatAgentService] emitMessage failed:', err); }
+      // Collect all messages except usage (stored in row-level cost fields)
+      if (msg.type !== 'usage') {
+        turnMessages.push(msg);
+      }
     };
 
     try {
@@ -211,7 +234,6 @@ export class TaskChatAgentService {
           const assistantMsg = message as SdkAssistantMessage;
           for (const block of assistantMsg.message.content) {
             if (block.type === 'text') {
-              resultText += block.text;
               onOutput(block.text);
               emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
             } else if (block.type === 'tool_use') {
@@ -268,7 +290,6 @@ export class TaskChatAgentService {
           if (otherMsg.message?.content) {
             for (const block of otherMsg.message.content) {
               if (block.type === 'text') {
-                resultText += block.text;
                 onOutput(block.text);
                 emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
               }
@@ -282,17 +303,18 @@ export class TaskChatAgentService {
         this.runningControllers.delete(taskId);
       }
 
-      if (resultText.trim()) {
+      if (turnMessages.length > 0) {
         try {
           await this.chatMessageStore.addMessage({
             sessionId: scopeKey,
             role: 'assistant',
-            content: resultText,
+            content: JSON.stringify(turnMessages),
             costInputTokens,
             costOutputTokens,
           });
         } catch (persistErr) {
           console.error('[TaskChatAgentService] Failed to persist assistant response:', persistErr);
+          try { onOutput('\n[Warning: Failed to save this response. It may not appear after refresh.]\n'); } catch { /* best effort */ }
         }
       }
 

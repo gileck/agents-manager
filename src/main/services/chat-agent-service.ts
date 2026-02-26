@@ -30,6 +30,24 @@ type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkOtherMessage
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
+/** Extract plain text from a DB content field (handles both JSON array and legacy plain text). */
+function extractTextFromContent(content: string): string {
+  if (content.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((m: { type: string }) => m.type === 'assistant_text')
+          .map((m: { text: string }) => m.text)
+          .join('');
+      }
+    } catch (err) {
+      console.warn('[extractTextFromContent] Content looks like JSON but failed to parse:', err);
+    }
+  }
+  return content;
+}
+
 const WRITE_TOOL_NAMES = new Set([
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
 ]);
@@ -118,7 +136,8 @@ export class ChatAgentService {
     // All messages except the latest user message (which becomes the prompt)
     for (const msg of history.slice(0, -1)) {
       const roleLabel = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'System';
-      conversationLines.push(`[${roleLabel}]: ${msg.content}`);
+      const text = msg.role === 'assistant' ? extractTextFromContent(msg.content) : msg.content;
+      conversationLines.push(`[${roleLabel}]: ${text}`);
     }
 
     let prompt = '';
@@ -132,6 +151,7 @@ export class ChatAgentService {
     this.runningControllers.set(sessionId, abortController);
 
     this.runAgent(sessionId, projectPath, prompt, abortController, onOutput, onMessage).catch((err) => {
+      this.runningControllers.delete(sessionId);
       onOutput(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
       onOutput(CHAT_COMPLETE_SENTINEL);
       const agent = this.runningAgents.get(sessionId);
@@ -190,7 +210,8 @@ export class ChatAgentService {
     // Build a summarization prompt
     const conversationText = messages.map((m) => {
       const roleLabel = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
-      return `[${roleLabel}]: ${m.content}`;
+      const text = m.role === 'assistant' ? extractTextFromContent(m.content) : m.content;
+      return `[${roleLabel}]: ${text}`;
     }).join('\n\n');
 
     const summaryPrompt = `Summarize the following conversation concisely. Capture key topics discussed, decisions made, and important context. Output only the summary text, nothing else.\n\n${conversationText}`;
@@ -268,20 +289,26 @@ export class ChatAgentService {
     // Set up sandbox: read-only access to project path, block write tools
     const sandboxGuard = new SandboxGuard([], [projectPath]);
 
-    let resultText = '';
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
+    const turnMessages: AgentChatMessage[] = [];
 
     // Safe wrapper: IPC delivery failure should not abort the agent stream
     const emitMessage = (msg: AgentChatMessage) => {
       try {
         onMessage?.(msg);
-        // Update last activity
-        const agent = this.runningAgents.get(sessionId);
-        if (agent) {
-          agent.lastActivity = Date.now();
-        }
-      } catch { /* IPC delivery failure is non-fatal */ }
+      } catch (err) {
+        console.warn('[ChatAgentService] IPC message delivery failed:', err);
+      }
+      // Update last activity (outside try so IPC failure does not skip it)
+      const agent = this.runningAgents.get(sessionId);
+      if (agent) {
+        agent.lastActivity = Date.now();
+      }
+      // Collect all messages except usage (stored in row-level cost fields)
+      if (msg.type !== 'usage') {
+        turnMessages.push(msg);
+      }
     };
 
     try {
@@ -312,7 +339,6 @@ export class ChatAgentService {
           const assistantMsg = message as SdkAssistantMessage;
           for (const block of assistantMsg.message.content) {
             if (block.type === 'text') {
-              resultText += block.text;
               onOutput(block.text);
               emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
             } else if (block.type === 'tool_use') {
@@ -369,7 +395,6 @@ export class ChatAgentService {
           if (otherMsg.message?.content) {
             for (const block of otherMsg.message.content) {
               if (block.type === 'text') {
-                resultText += block.text;
                 onOutput(block.text);
                 emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
               }
@@ -395,15 +420,20 @@ export class ChatAgentService {
         }
       }, 5000); // 5 second delay
 
-      // Persist assistant response with cost data
-      if (resultText.trim()) {
-        await this.chatMessageStore.addMessage({
-          sessionId,
-          role: 'assistant',
-          content: resultText,
-          costInputTokens,
-          costOutputTokens,
-        });
+      // Persist assistant response with cost data (full structured messages as JSON)
+      if (turnMessages.length > 0) {
+        try {
+          await this.chatMessageStore.addMessage({
+            sessionId,
+            role: 'assistant',
+            content: JSON.stringify(turnMessages),
+            costInputTokens,
+            costOutputTokens,
+          });
+        } catch (persistErr) {
+          console.error('[ChatAgentService] Failed to persist assistant response:', persistErr);
+          try { onOutput('\n[Warning: Failed to save this response. It may not appear after refresh.]\n'); } catch { /* best effort */ }
+        }
       }
 
       onOutput(CHAT_COMPLETE_SENTINEL);
