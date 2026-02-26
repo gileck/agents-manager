@@ -1165,7 +1165,24 @@ export class AgentService implements IAgentService {
     if (!task) return;
 
     const transitions = await this.pipelineEngine.getValidTransitions(task, 'agent');
-    const match = transitions.find((t) => t.agentOutcome === outcome);
+    const candidates = transitions.filter((t) => t.agentOutcome === outcome);
+    if (candidates.length > 1) {
+      const resumeTo = data?.resumeToStatus as string | undefined;
+      if (!resumeTo) {
+        this.taskEventLog.log({
+          taskId,
+          category: 'system',
+          severity: 'warning',
+          message: `Multiple transitions match outcome "${outcome}" from "${task.status}" but no resumeToStatus provided — using first match (${candidates[0].to})`,
+          data: { outcome, candidates: candidates.map(c => c.to) },
+        }).catch(() => {});
+      }
+    }
+    const resumeTo = data?.resumeToStatus as string | undefined;
+    const match = (resumeTo
+      ? candidates.find((t) => t.to === resumeTo)
+      : undefined)
+      ?? candidates[0];
     if (match) {
       this.taskEventLog.log({
         taskId,

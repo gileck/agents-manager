@@ -17,6 +17,7 @@ import type {
   GuardCheckResult,
   HookRetryResult,
   TransitionWithGuards,
+  TransitionHook,
 } from '../../shared/types';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ITaskStore } from '../interfaces/task-store';
@@ -176,27 +177,7 @@ export class PipelineEngine implements IPipelineEngine {
         return;
       }
 
-      // Update task status via raw SQL
-      const timestamp = now();
-      this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').run(toStatus, timestamp, task.id);
-
-      // Build the updated task from what we know
-      updatedTask = { ...freshTask, status: toStatus, updatedAt: timestamp };
-
-      // Insert transition history
-      this.db.prepare(`
-        INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        generateId(),
-        task.id,
-        task.status,
-        toStatus,
-        ctx.trigger,
-        ctx.actor ?? null,
-        JSON.stringify(guardResults),
-        timestamp,
-      );
+      updatedTask = this.applyStatusUpdate(freshTask, task.id, task.status, toStatus, ctx, guardResults);
     });
 
     try {
@@ -223,72 +204,12 @@ export class PipelineEngine implements IPipelineEngine {
     }
 
     // Run hooks after transaction
-    const hookFailures: HookFailure[] = [];
-    if (transition.hooks) {
-      for (const hook of transition.hooks) {
-        const hookFn = this.hooks.get(hook.name);
-        const policy: HookExecutionPolicy = hook.policy ?? 'best_effort';
+    const hookFailures = await this.executeHooks(transition.hooks, updatedTask, transition, ctx, task.id);
 
-        if (!hookFn) {
-          const failure: HookFailure = { hook: hook.name, error: `Hook "${hook.name}" not registered`, policy };
-          hookFailures.push(failure);
-          this.taskEventLog.log({
-            taskId: task.id,
-            category: 'system',
-            severity: 'warning',
-            message: `Hook "${hook.name}" not registered — skipping`,
-            data: { hook: hook.name },
-          }).catch(() => {});
-          continue;
-        }
-
-        if (policy === 'fire_and_forget') {
-          hookFn(updatedTask, transition, ctx, hook.params).catch((err) => {
-            const message = err instanceof Error ? err.message : String(err);
-            this.taskEventLog.log({
-              taskId: task.id,
-              category: 'system',
-              severity: 'error',
-              message: `Hook "${hook.name}" failed (fire_and_forget): ${message}`,
-              data: { hook: hook.name, error: message },
-            });
-          });
-          continue;
-        }
-
-        // required or best_effort: await the hook
-        try {
-          const result = await hookFn(updatedTask, transition, ctx, hook.params);
-          if (result && !result.success) {
-            const failure: HookFailure = { hook: hook.name, error: result.error ?? 'Hook returned failure', policy };
-            hookFailures.push(failure);
-            this.taskEventLog.log({
-              taskId: task.id,
-              category: 'system',
-              severity: policy === 'required' ? 'error' : 'warning',
-              message: `Hook "${hook.name}" failed: ${failure.error}`,
-              data: { hook: hook.name, error: failure.error, policy },
-            }).catch(() => {});
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          const failure: HookFailure = { hook: hook.name, error: message, policy };
-          hookFailures.push(failure);
-          this.taskEventLog.log({
-            taskId: task.id,
-            category: 'system',
-            severity: policy === 'required' ? 'error' : 'warning',
-            message: `Hook "${hook.name}" threw: ${message}`,
-            data: { hook: hook.name, error: message, policy },
-          }).catch(() => {});
-        }
-      }
-    }
-
-    // If any required hook failed, roll back the status change
+    // If any required hook failed, roll back the status change transactionally
     const requiredFailures = hookFailures.filter(f => f.policy === 'required');
     if (requiredFailures.length > 0) {
-      await this.taskStore.updateTask(task.id, { status: task.status });
+      this.rollbackStatusChange(task.id, task.status, toStatus, ctx, requiredFailures);
       await this.taskEventLog.log({
         taskId: task.id,
         category: 'system',
@@ -363,26 +284,13 @@ export class PipelineEngine implements IPipelineEngine {
       if (!freshRow) {
         throw new Error(`Task not found: ${task.id}`);
       }
+      if (freshRow.status !== task.status) {
+        throw new Error(`Task status changed: expected "${task.status}", got "${freshRow.status}"`);
+      }
       const freshTask = rowToTask(freshRow);
 
       // Skip guards — this is a force transition
-      const timestamp = now();
-      this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').run(toStatus, timestamp, task.id);
-      updatedTask = { ...freshTask, status: toStatus, updatedAt: timestamp };
-
-      this.db.prepare(`
-        INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        generateId(),
-        task.id,
-        task.status,
-        toStatus,
-        ctx.trigger,
-        ctx.actor ?? null,
-        JSON.stringify({ _forced: true }),
-        timestamp,
-      );
+      updatedTask = this.applyStatusUpdate(freshTask, task.id, task.status, toStatus, ctx, { _forced: true });
     });
 
     try {
@@ -397,62 +305,9 @@ export class PipelineEngine implements IPipelineEngine {
     }
 
     // Still run hooks if a transition was found
-    const hookFailures: HookFailure[] = [];
-    if (transition?.hooks) {
-      for (const hook of transition.hooks) {
-        const hookFn = this.hooks.get(hook.name);
-        const policy: HookExecutionPolicy = hook.policy ?? 'best_effort';
-
-        if (!hookFn) {
-          await this.taskEventLog.log({
-            taskId: task.id,
-            category: 'system',
-            severity: 'warning',
-            message: `Hook "${hook.name}" not registered (skipped during force transition)`,
-            data: { hook: hook.name, forced: true },
-          });
-          continue;
-        }
-
-        if (policy === 'fire_and_forget') {
-          hookFn(updatedTask, transition, ctx, hook.params).catch((err) => {
-            const message = err instanceof Error ? err.message : String(err);
-            this.taskEventLog.log({
-              taskId: task.id,
-              category: 'system',
-              severity: 'error',
-              message: `Hook "${hook.name}" failed (fire_and_forget, forced): ${message}`,
-              data: { hook: hook.name, error: message },
-            });
-          });
-          continue;
-        }
-
-        try {
-          const result = await hookFn(updatedTask, transition, ctx, hook.params);
-          if (result && !result.success) {
-            hookFailures.push({ hook: hook.name, error: result.error ?? 'Hook returned failure', policy });
-            await this.taskEventLog.log({
-              taskId: task.id,
-              category: 'system',
-              severity: 'error',
-              message: `Hook "${hook.name}" failed during force transition (${policy}): ${result.error ?? 'Hook returned failure'}`,
-              data: { hook: hook.name, error: result.error, policy, forced: true },
-            });
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          hookFailures.push({ hook: hook.name, error: message, policy });
-          await this.taskEventLog.log({
-            taskId: task.id,
-            category: 'system',
-            severity: 'error',
-            message: `Hook "${hook.name}" threw during force transition (${policy}): ${message}`,
-            data: { hook: hook.name, error: message, policy, forced: true },
-          });
-        }
-      }
-    }
+    const hookFailures = transition
+      ? await this.executeHooks(transition.hooks, updatedTask, transition, ctx, task.id, true)
+      : [];
 
     await this.taskEventLog.log({
       taskId: task.id,
@@ -471,13 +326,14 @@ export class PipelineEngine implements IPipelineEngine {
     return { success: true, task: updatedTask, ...(hookFailures.length > 0 ? { hookFailures } : {}) };
   }
 
-  async checkGuards(task: Task, toStatus: string, trigger: TransitionTrigger): Promise<GuardCheckResult | null> {
+  async checkGuards(task: Task, toStatus: string, trigger: TransitionTrigger, outcome?: string): Promise<GuardCheckResult | null> {
     const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
     if (!pipeline) return null;
 
     const fromMatch = (t: Transition) => t.from === task.status || t.from === '*';
     const transition = pipeline.transitions.find(
-      (t) => fromMatch(t) && t.to === toStatus && t.trigger === trigger,
+      (t) => fromMatch(t) && t.to === toStatus && t.trigger === trigger
+        && (!outcome || t.agentOutcome === outcome),
     );
     if (!transition) return null;
 
@@ -541,6 +397,173 @@ export class PipelineEngine implements IPipelineEngine {
         data: { hookName, error: message },
       });
       return { success: false, hookName, error: message };
+    }
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────
+
+  /**
+   * Apply status update and insert transition history within an active transaction.
+   * Must be called inside a db.transaction() callback.
+   */
+  private applyStatusUpdate(
+    freshTask: Task,
+    taskId: string,
+    fromStatus: string,
+    toStatus: string,
+    ctx: TransitionContext,
+    guardResults: Record<string, unknown>,
+  ): Task {
+    const timestamp = now();
+    this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').run(toStatus, timestamp, taskId);
+
+    this.db.prepare(`
+      INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      generateId(),
+      taskId,
+      fromStatus,
+      toStatus,
+      ctx.trigger,
+      ctx.actor ?? null,
+      JSON.stringify(guardResults),
+      timestamp,
+    );
+
+    return { ...freshTask, status: toStatus, updatedAt: timestamp };
+  }
+
+  /**
+   * Execute hooks for a transition. Returns array of hook failures.
+   * Handles all three policies: fire_and_forget, required, and best_effort.
+   */
+  private async executeHooks(
+    hookDefs: TransitionHook[] | undefined,
+    updatedTask: Task,
+    transition: Transition,
+    ctx: TransitionContext,
+    taskId: string,
+    forced?: boolean,
+  ): Promise<HookFailure[]> {
+    const hookFailures: HookFailure[] = [];
+    if (!hookDefs) return hookFailures;
+
+    for (const hook of hookDefs) {
+      const hookFn = this.hooks.get(hook.name);
+      const policy: HookExecutionPolicy = hook.policy ?? 'best_effort';
+
+      if (!hookFn) {
+        if (forced) {
+          await this.taskEventLog.log({
+            taskId,
+            category: 'system',
+            severity: 'warning',
+            message: `Hook "${hook.name}" not registered (skipped during force transition)`,
+            data: { hook: hook.name, forced: true },
+          });
+        } else {
+          const failure: HookFailure = { hook: hook.name, error: `Hook "${hook.name}" not registered`, policy };
+          hookFailures.push(failure);
+          this.taskEventLog.log({
+            taskId,
+            category: 'system',
+            severity: 'warning',
+            message: `Hook "${hook.name}" not registered — skipping`,
+            data: { hook: hook.name },
+          }).catch(() => {});
+        }
+        continue;
+      }
+
+      if (policy === 'fire_and_forget') {
+        hookFn(updatedTask, transition, ctx, hook.params).catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          this.taskEventLog.log({
+            taskId,
+            category: 'system',
+            severity: 'error',
+            message: `Hook "${hook.name}" failed (fire_and_forget${forced ? ', forced' : ''}): ${message}`,
+            data: { hook: hook.name, error: message, ...(forced ? { forced: true } : {}) },
+          });
+        });
+        continue;
+      }
+
+      // required or best_effort: await the hook
+      try {
+        const result = await hookFn(updatedTask, transition, ctx, hook.params);
+        if (result && !result.success) {
+          const failure: HookFailure = { hook: hook.name, error: result.error ?? 'Hook returned failure', policy };
+          hookFailures.push(failure);
+          const severity = policy === 'required' ? 'error' as const : forced ? 'error' as const : 'warning' as const;
+          this.taskEventLog.log({
+            taskId,
+            category: 'system',
+            severity,
+            message: `Hook "${hook.name}" failed${forced ? ' during force transition' : ''} (${policy}): ${failure.error}`,
+            data: { hook: hook.name, error: failure.error, policy, ...(forced ? { forced: true } : {}) },
+          }).catch(() => {});
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const failure: HookFailure = { hook: hook.name, error: message, policy };
+        hookFailures.push(failure);
+        const severity = policy === 'required' ? 'error' as const : forced ? 'error' as const : 'warning' as const;
+        this.taskEventLog.log({
+          taskId,
+          category: 'system',
+          severity,
+          message: `Hook "${hook.name}" threw${forced ? ' during force transition' : ''} (${policy}): ${message}`,
+          data: { hook: hook.name, error: message, policy, ...(forced ? { forced: true } : {}) },
+        }).catch(() => {});
+      }
+    }
+
+    return hookFailures;
+  }
+
+  /**
+   * Roll back a status change transactionally after a required hook failure.
+   * Inserts a compensating transition_history record with _rollback: true.
+   */
+  private rollbackStatusChange(
+    taskId: string,
+    originalStatus: string,
+    failedToStatus: string,
+    ctx: TransitionContext,
+    requiredFailures: HookFailure[],
+  ): void {
+    try {
+      const rollbackTxn = this.db.transaction(() => {
+        const rollbackTimestamp = now();
+        this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?')
+          .run(originalStatus, rollbackTimestamp, taskId);
+        this.db.prepare(`
+          INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          generateId(),
+          taskId,
+          failedToStatus,
+          originalStatus,
+          ctx.trigger,
+          ctx.actor ?? null,
+          JSON.stringify({ _rollback: true, failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) }),
+          rollbackTimestamp,
+        );
+      });
+      rollbackTxn();
+    } catch (rollbackErr) {
+      const rollbackMsg = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
+      // Critical: rollback itself failed — log but continue returning the failure
+      this.taskEventLog.log({
+        taskId,
+        category: 'system',
+        severity: 'error',
+        message: `CRITICAL: Rollback failed for transition ${originalStatus} → ${failedToStatus}: ${rollbackMsg}`,
+        data: { rollbackError: rollbackMsg, failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
+      }).catch(() => {});
     }
   }
 }
