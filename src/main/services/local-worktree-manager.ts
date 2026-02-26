@@ -114,20 +114,36 @@ export class LocalWorktreeManager implements IWorktreeManager {
   }
 
   async delete(taskId: string): Promise<void> {
-    await this.git(['worktree', 'remove', this.worktreePath(taskId), '--force']);
+    try {
+      await this.git(['worktree', 'remove', this.worktreePath(taskId), '--force']);
+    } catch (err) {
+      // Tolerate "not found" errors — the worktree may have already been removed.
+      // Matches the idempotency pattern used by lock() and unlock().
+      if (err instanceof Error && (
+        err.message.includes('is not a working tree') ||
+        err.message.includes('does not exist')
+      )) {
+        return;
+      }
+      throw err;
+    }
   }
 
-  async cleanup(): Promise<void> {
+  async cleanup(activeTaskIds?: string[]): Promise<void> {
     await this.git(['worktree', 'prune']);
+
+    const activeSet = activeTaskIds ? new Set(activeTaskIds) : null;
 
     const worktrees = await this.parseWorktreeList();
     for (const wt of worktrees) {
-      if (wt.path.includes(`/${WORKTREE_DIR}/`) && !wt.locked) {
-        try {
-          await this.git(['worktree', 'remove', wt.path, '--force']);
-        } catch {
-          // Best-effort cleanup
-        }
+      if (!wt.path.includes(`/${WORKTREE_DIR}/`)) continue;
+      if (wt.locked) continue;
+      // Skip worktrees belonging to active tasks
+      if (activeSet && activeSet.has(wt.taskId)) continue;
+      try {
+        await this.git(['worktree', 'remove', wt.path, '--force']);
+      } catch {
+        // Best-effort cleanup
       }
     }
   }

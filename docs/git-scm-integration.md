@@ -1,12 +1,12 @@
 ---
 title: Git & SCM Integration
 description: Worktrees, git operations, PR lifecycle, and branch strategy
-summary: LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<slug> convention.
+summary: LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<mode> convention.
 priority: 3
 key_points:
   - "Interface: IWorktreeManager in src/main/interfaces/worktree-manager.ts"
   - "Implementation: LocalWorktreeManager in src/main/services/local-worktree-manager.ts"
-  - "Branch naming: task/<taskId>/<slug>"
+  - "Branch naming: task/<taskId>/<mode>"
 ---
 # Git & SCM Integration
 
@@ -25,7 +25,7 @@ interface IWorktreeManager {
   lock(taskId: string): Promise<void>;
   unlock(taskId: string): Promise<void>;
   delete(taskId: string): Promise<void>;
-  cleanup(): Promise<void>;
+  cleanup(activeTaskIds?: string[]): Promise<void>;
 }
 
 interface Worktree {
@@ -53,27 +53,37 @@ project-root/
 
 `LocalWorktreeManager` atomically ensures `.agent-worktrees/` is listed in `.gitignore` using `O_CREAT | O_RDWR` flags to avoid TOCTOU race conditions. This prevents accidental commits of agent worktrees.
 
+### node_modules Symlink
+
+When creating a worktree, `LocalWorktreeManager` symlinks `node_modules` from the main project into the worktree directory. This ensures native modules (e.g. better-sqlite3) resolve correctly inside the worktree without requiring a separate `yarn install`. The symlink uses `junction` mode and is non-fatal if it fails.
+
 ### Worktree Lifecycle
 
 1. **Create** — `worktreeManager.create(branch, taskId)`
    - Fetches `origin` first (to base on `origin/main`, not local main)
    - Runs `git worktree add -b {branch} {path} origin/main`
    - If the branch already exists, retries without `-b` flag
+   - Symlinks `node_modules` from the main project (see above)
    - Returns a `Worktree` object
 
 2. **Lock** — `worktreeManager.lock(taskId)`
    - Called at the start of agent execution to prevent concurrent access
+   - Idempotent: tolerates "already locked" errors
 
 3. **Unlock** — `worktreeManager.unlock(taskId)`
    - Called after agent execution completes
+   - Idempotent: tolerates "not locked" errors
 
 4. **Delete** — `worktreeManager.delete(taskId)`
    - Runs `git worktree remove --force {path}`
    - Called on final status transitions, task reset, and task delete
+   - Idempotent: tolerates "not a working tree" and "does not exist" errors
 
-5. **Cleanup** — `worktreeManager.cleanup()`
+5. **Cleanup** — `worktreeManager.cleanup(activeTaskIds?)`
    - Prunes orphaned worktrees via `git worktree prune`
-   - Removes unlocked worktrees
+   - Removes unlocked worktrees that are not in the `activeTaskIds` set
+   - When `activeTaskIds` is provided, worktrees belonging to those tasks are preserved even if unlocked
+   - When omitted, all unlocked worktrees are removed (backward-compatible)
 
 ### Worktree Parsing
 
@@ -191,6 +201,18 @@ gh pr view {number} --json state
 
 Returns `'merged' | 'closed' | 'open'`.
 
+### isPRMergeable Polling
+
+`isPRMergeable(prUrl)` polls GitHub to determine if a PR can be merged:
+
+- **Mechanism:** Queries `gh pr view {number} --json mergeable`
+- **Retry strategy:** Up to 10 attempts with 10-second delays (total: up to ~100 seconds)
+- **Progress logging:** Each attempt logs the PR number, attempt count, and current mergeable state
+- **States:** `MERGEABLE` returns true, `CONFLICTING` returns false immediately, `UNKNOWN` triggers a retry
+- **Fallback:** If still `UNKNOWN` after all 10 attempts, returns `false` (not mergeable)
+
+This polling is necessary because GitHub computes merge status asynchronously after branch pushes.
+
 ## PR Lifecycle
 
 ### Happy Path
@@ -217,6 +239,8 @@ If the reviewer reports `changes_requested`:
 
 ## Branch Naming
 
+### Single-phase tasks
+
 ```
 task/{taskId}/{mode}
 ```
@@ -225,24 +249,43 @@ Example: `task/abc-123-def/implement`
 
 The branch is created when the first agent runs for a task. Subsequent agents for the same task reuse the same worktree (and branch).
 
+### Multi-phase tasks
+
+For tasks with multiple implementation phases, the branch naming includes a phase index:
+
+```
+task/{taskId}/implement/phase-{n}
+```
+
+Example: `task/abc-123-def/implement/phase-1`, `task/abc-123-def/implement/phase-2`
+
+Each phase gets its own branch (and worktree). The phase index is 1-based.
+
 ## Shell Environment Resolution
 
 **File:** `src/main/services/shell-env.ts`
 
 Electron GUI apps on macOS launch with a minimal PATH that doesn't include tools from nvm, fnm, Homebrew, etc.
 
-`getUserShellPath()` resolves the user's real PATH:
+### Eager Initialization
+
+`initShellEnv()` is called during app startup (in `onReady`, before `createAppServices`). It asynchronously resolves the user's shell PATH using `execFile` (non-blocking) and populates the module-level cache. This prevents the synchronous fallback from blocking the event loop on first git operation.
+
+### PATH Resolution
+
+`getUserShellPath()` resolves the user's real PATH. If `initShellEnv()` was called at startup, this is an instant cache hit. Otherwise it falls back to synchronous exec:
 
 1. **Try login shell** — `$SHELL -l -c "echo $PATH"` (with 5s timeout)
 2. **Try zsh** — `/bin/zsh -li -c "echo $PATH"`
 3. **Try bash** — `/bin/bash -l -c "echo $PATH"`
 4. **Fallback: scan directories** — Checks actual filesystem for:
+   - Homebrew: `/opt/homebrew/bin`, `/usr/local/bin`
    - nvm: `~/.nvm/versions/node/*/bin`
    - fnm: `~/.local/share/fnm/node-versions/*/installation/bin`
-   - volta: `~/.volta/bin`
    - asdf: `~/.asdf/installs/nodejs/*/bin`
-   - Homebrew: `/opt/homebrew/bin`, `/usr/local/bin`
    - Bun: `~/.bun/bin`
+   - Volta: `~/.volta/bin`
+   - Cargo: `~/.cargo/bin`
 
 Result is cached for the app's lifetime. `getShellEnv()` returns `process.env` with PATH and HOME set.
 
@@ -252,5 +295,7 @@ Result is cached for the app's lifetime. `getShellEnv()` returns `process.env` w
 - **No-changes** skips PR creation entirely. If `git diff origin/main` is empty, the `push_and_create_pr` hook logs a warning and returns without pushing or creating a PR.
 - **Force-push** is used after rebase because rebase rewrites history. `--force-with-lease` is used for safety.
 - **`.agent-worktrees/`** is auto-added to `.gitignore` on first worktree creation, using atomic file operations.
+- **`node_modules` symlink** is created inside each worktree pointing to the main project's `node_modules`. This avoids reinstalling dependencies and ensures native modules work.
 - **Concurrent CLI + Electron** can both access worktrees. The lock mechanism prevents two agents from using the same worktree simultaneously.
-- **Shell environment** is resolved once and cached. If the user installs new tools after app launch, a restart is needed.
+- **Shell environment** is eagerly initialized at app startup via `initShellEnv()`. The CLI uses synchronous fallback. If the user installs new tools after app launch, a restart is needed.
+- **Idempotent operations** — `lock()`, `unlock()`, and `delete()` all tolerate already-in-desired-state errors, making them safe to call multiple times.

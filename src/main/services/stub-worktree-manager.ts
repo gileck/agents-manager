@@ -37,7 +37,21 @@ export class StubWorktreeManager implements IWorktreeManager {
     this.worktrees.delete(taskId);
   }
 
-  async cleanup(): Promise<void> {
-    this.worktrees.clear();
+  async cleanup(activeTaskIds?: string[]): Promise<void> {
+    if (activeTaskIds) {
+      const activeSet = new Set(activeTaskIds);
+      for (const [taskId, wt] of this.worktrees) {
+        if (!wt.locked && !activeSet.has(taskId)) {
+          this.worktrees.delete(taskId);
+        }
+      }
+    } else {
+      // Remove all unlocked worktrees (original behavior)
+      for (const [taskId, wt] of this.worktrees) {
+        if (!wt.locked) {
+          this.worktrees.delete(taskId);
+        }
+      }
+    }
   }
 }

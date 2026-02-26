@@ -7,5 +7,5 @@ export interface IWorktreeManager {
   lock(taskId: string): Promise<void>;
   unlock(taskId: string): Promise<void>;
   delete(taskId: string): Promise<void>;
-  cleanup(): Promise<void>;
+  cleanup(activeTaskIds?: string[]): Promise<void>;
 }

@@ -8,6 +8,7 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { getMigrations } from './migrations';
 import { createAppServices, type AppServices } from './providers/setup';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
+import { initShellEnv } from './services/shell-env';
 
 // Keep a global reference to prevent garbage collection
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -22,6 +23,10 @@ initializeApp({
   singleInstance: true,
   onReady: async () => {
     try {
+      // Eagerly resolve the user's shell PATH (async, non-blocking).
+      // Populates the cache so subsequent getUserShellPath() calls are instant.
+      await initShellEnv();
+
       // Initialize database with migrations
       initDatabase({
         filename: 'agents-manager.db',

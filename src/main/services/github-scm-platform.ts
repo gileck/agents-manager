@@ -57,14 +57,16 @@ export class GitHubScmPlatform implements IScmPlatform {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const output = await this.gh(['pr', 'view', String(prNumber), '--json', 'mergeable']);
       const data = JSON.parse(output);
-      if (data.mergeable !== 'UNKNOWN') {
-        return data.mergeable === 'MERGEABLE';
+      const state = data.mergeable as string;
+      console.log(`isPRMergeable: PR #${prNumber} attempt ${attempt}/${maxAttempts} — state: ${state}`);
+      if (state !== 'UNKNOWN') {
+        return state === 'MERGEABLE';
       }
       if (attempt < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
-    // Still UNKNOWN after all retries — treat as not mergeable
+    console.log(`isPRMergeable: PR #${prNumber} still UNKNOWN after ${maxAttempts} attempts — treating as not mergeable`);
     return false;
   }
 
