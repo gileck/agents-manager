@@ -75,6 +75,7 @@ export function registerIpcHandlers(services: AppServices): void {
     const defaultPipelineId = getSetting('default_pipeline_id', '') || null;
     const bugPipelineId = getSetting('bug_pipeline_id', '') || null;
     const themeConfig = getSetting('theme_config', '') || null;
+    const chatDefaultAgentLib = getSetting('chat_default_agent_lib', '') || null;
 
     return {
       theme,
@@ -83,6 +84,7 @@ export function registerIpcHandlers(services: AppServices): void {
       defaultPipelineId,
       bugPipelineId,
       themeConfig,
+      chatDefaultAgentLib,
     };
   });
 
@@ -105,6 +107,9 @@ export function registerIpcHandlers(services: AppServices): void {
     if (updates.themeConfig !== undefined) {
       setSetting('theme_config', updates.themeConfig ?? '');
     }
+    if (updates.chatDefaultAgentLib !== undefined) {
+      setSetting('chat_default_agent_lib', updates.chatDefaultAgentLib ?? '');
+    }
 
     // Return updated settings
     return {
@@ -114,6 +119,7 @@ export function registerIpcHandlers(services: AppServices): void {
       defaultPipelineId: getSetting('default_pipeline_id', '') || null,
       bugPipelineId: getSetting('bug_pipeline_id', '') || null,
       themeConfig: getSetting('theme_config', '') || null,
+      chatDefaultAgentLib: getSetting('chat_default_agent_lib', '') || null,
     };
   });
 
@@ -474,6 +480,10 @@ export function registerIpcHandlers(services: AppServices): void {
     return services.agentLibRegistry.getAllModels();
   });
 
+  registerIpcHandler(IPC_CHANNELS.AGENT_LIB_LIST, async () => {
+    return services.agentLibRegistry.getAvailableLibs();
+  });
+
   // ============================================
   // Agent Definition Operations
   // ============================================
@@ -793,26 +803,39 @@ export function registerIpcHandlers(services: AppServices): void {
     return services.chatSessionStore.listSessionsForScope(scopeType as 'project' | 'task', scopeId);
   });
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name: string }) => {
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name?: string; agentLib?: string | null }) => {
     validateId(sessionId);
     if (!input || typeof input !== 'object') {
       throw new Error('Invalid input: expected object');
     }
-    if (!input.name || typeof input.name !== 'string') {
-      throw new Error('Session name is required and must be a string');
-    }
-    if (input.name.length > 100) {
-      throw new Error('Session name must be 100 characters or less');
-    }
-    if (input.name.trim().length === 0) {
-      throw new Error('Session name cannot be empty');
+    if (input.name !== undefined) {
+      if (typeof input.name !== 'string') {
+        throw new Error('Session name must be a string');
+      }
+      if (input.name.length > 100) {
+        throw new Error('Session name must be 100 characters or less');
+      }
+      if (input.name.trim().length === 0) {
+        throw new Error('Session name cannot be empty');
+      }
     }
     // Verify session exists
     const session = await services.chatSessionStore.getSession(sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
-    return services.chatSessionStore.updateSession(sessionId, { name: input.name.trim() });
+    const updateInput: { name?: string; agentLib?: string | null } = {};
+    if (input.name !== undefined) updateInput.name = input.name.trim();
+    if (input.agentLib !== undefined) {
+      if (input.agentLib !== null) {
+        const validLibs = services.agentLibRegistry.listNames();
+        if (!validLibs.includes(input.agentLib)) {
+          throw new Error(`Unknown agent lib: ${input.agentLib}. Available: ${validLibs.join(', ')}`);
+        }
+      }
+      updateInput.agentLib = input.agentLib;
+    }
+    return services.chatSessionStore.updateSession(sessionId, updateInput);
   });
 
   registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_DELETE, async (_, sessionId: string) => {

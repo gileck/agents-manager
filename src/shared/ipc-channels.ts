@@ -159,5 +159,6 @@ export const IPC_CHANNELS = {
   KANBAN_BOARD_DELETE: 'kanban-board:delete',
 
   // Agent Lib operations
+  AGENT_LIB_LIST: 'agent-lib:list',
   AGENT_LIB_LIST_MODELS: 'agent-lib:list-models',
 } as const;

@@ -132,6 +132,7 @@ const IPC_CHANNELS = {
   CHAT_SESSION_UPDATE: 'chat:session:update',
   CHAT_SESSION_DELETE: 'chat:session:delete',
   CHAT_AGENTS_LIST: 'chat:agents:list',
+  AGENT_LIB_LIST: 'agent-lib:list',
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
   GIT_COMMIT_DETAIL: 'git:commit-detail',
@@ -282,6 +283,8 @@ const api = {
 
   // Agent lib operations
   agentLibs: {
+    list: (): Promise<{ name: string; available: boolean }[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_LIB_LIST),
     listModels: (): Promise<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_LIB_LIST_MODELS),
   },
@@ -409,8 +412,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_CREATE, { scopeType, scopeId, name }),
     list: (scopeType: 'project' | 'task', scopeId: string): Promise<ChatSession[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST, scopeType, scopeId),
-    update: (sessionId: string, name: string): Promise<ChatSession | null> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, { name }),
+    update: (sessionId: string, input: { name?: string; agentLib?: string | null }): Promise<ChatSession | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
     listAgents: (): Promise<RunningAgent[]> =>

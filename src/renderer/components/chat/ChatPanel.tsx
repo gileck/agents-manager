@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { Trash2, FileText, MessageSquare, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { Trash2, FileText, MessageSquare, PanelRightClose, PanelRightOpen, Cpu } from 'lucide-react';
 import { useChat } from '../../hooks/useChat';
 import { useChatSessions, ChatScope } from '../../hooks/useChatSessions';
 import { useActiveAgents } from '../../hooks/useActiveAgents';
@@ -16,8 +16,10 @@ export function ChatPanel({ scope }: ChatPanelProps) {
   const {
     sessions,
     currentSessionId,
+    currentSession,
     createSession,
     renameSession,
+    updateSession,
     deleteSession,
     switchSession,
     loading: sessionsLoading,
@@ -42,6 +44,12 @@ export function ChatPanel({ scope }: ChatPanelProps) {
   } = useChat(currentSessionId);
 
   const [showSidebar, setShowSidebar] = useState(false);
+  const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
+
+  // Load available agent libs once
+  useEffect(() => {
+    window.api.agentLibs.list().then(setAgentLibs).catch(() => {});
+  }, []);
 
   // Filter agents to current scope only
   const scopeAgents = useMemo(
@@ -53,6 +61,13 @@ export function ChatPanel({ scope }: ChatPanelProps) {
     switchSession(sessionId);
   }, [switchSession]);
 
+  const handleAgentLibChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!currentSessionId) return;
+    await updateSession(currentSessionId, { agentLib: e.target.value });
+  }, [currentSessionId, updateSession]);
+
+  const selectedAgentLib = currentSession?.agentLib || 'claude-code';
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -62,6 +77,25 @@ export function ChatPanel({ scope }: ChatPanelProps) {
           <h1 className="text-lg font-semibold">Chat</h1>
         </div>
         <div className="flex items-center gap-2">
+          {/* Agent lib selector */}
+          {agentLibs.length > 0 && currentSessionId && (
+            <div className="flex items-center gap-1.5">
+              <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+              <select
+                value={selectedAgentLib}
+                onChange={handleAgentLibChange}
+                disabled={isStreaming}
+                className="text-xs font-medium rounded-md bg-muted text-muted-foreground border-0 px-2 py-1.5 cursor-pointer hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+                title="Select agent engine"
+              >
+                {agentLibs.map(lib => (
+                  <option key={lib.name} value={lib.name} disabled={!lib.available}>
+                    {lib.name}{!lib.available ? ' (unavailable)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button
             onClick={() => setShowSidebar(!showSidebar)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"

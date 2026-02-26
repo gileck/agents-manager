@@ -6,6 +6,7 @@ export interface ChatSession {
   scopeType: ChatScopeType;
   scopeId: string;
   name: string;
+  agentLib: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -14,10 +15,12 @@ export interface ChatSessionCreateInput {
   scopeType: ChatScopeType;
   scopeId: string;
   name: string;
+  agentLib?: string;
 }
 
 export interface ChatSessionUpdateInput {
-  name: string;
+  name?: string;
+  agentLib?: string | null;
 }
 
 export interface IChatSessionStore {

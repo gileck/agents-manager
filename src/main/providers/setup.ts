@@ -195,7 +195,11 @@ export function createAppServices(db: Database.Database): AppServices {
   );
 
   // Chat agent service (unified: handles both project and task scopes)
-  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore);
+  const getDefaultAgentLib = () => {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('chat_default_agent_lib') as { value: string } | undefined;
+    return row?.value || 'claude-code';
+  };
+  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib);
 
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });

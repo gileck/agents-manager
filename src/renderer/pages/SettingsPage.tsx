@@ -10,10 +10,12 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [version, setVersion] = useState('');
+  const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
 
   useEffect(() => {
     window.api.settings.get().then(setSettings);
     window.api.app.getVersion().then(setVersion);
+    window.api.agentLibs.list().then(setAgentLibs).catch(() => {});
   }, []);
 
   const handleThemeChange = async (newTheme: 'light' | 'dark' | 'system') => {
@@ -24,6 +26,11 @@ export function SettingsPage() {
 
   const handleNotificationsToggle = async (enabled: boolean) => {
     const updated = await window.api.settings.update({ notificationsEnabled: enabled });
+    setSettings(updated);
+  };
+
+  const handleChatDefaultAgentLibChange = async (value: string) => {
+    const updated = await window.api.settings.update({ chatDefaultAgentLib: value });
     setSettings(updated);
   };
 
@@ -78,6 +85,36 @@ export function SettingsPage() {
                   checked={settings.notificationsEnabled}
                   onCheckedChange={handleNotificationsToggle}
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Chat Agent</CardTitle>
+              <CardDescription>Configure the default agent engine for chat sessions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="chatDefaultAgentLib">Default Engine</Label>
+                <Select
+                  value={settings.chatDefaultAgentLib || 'claude-code'}
+                  onValueChange={handleChatDefaultAgentLibChange}
+                >
+                  <SelectTrigger id="chatDefaultAgentLib" className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agentLibs.map(lib => (
+                      <SelectItem key={lib.name} value={lib.name}>
+                        {lib.name}{!lib.available ? ' (unavailable)' : ''}
+                      </SelectItem>
+                    ))}
+                    {agentLibs.length === 0 && (
+                      <SelectItem value="claude-code">claude-code</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>

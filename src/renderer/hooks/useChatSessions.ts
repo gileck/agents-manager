@@ -79,7 +79,7 @@ export function useChatSessions(scope: ChatScope | null) {
 
   const renameSession = useCallback(async (sessionId: string, newName: string) => {
     try {
-      const updatedSession = await window.api.chatSession.update(sessionId, newName);
+      const updatedSession = await window.api.chatSession.update(sessionId, { name: newName });
       if (updatedSession) {
         setSessions((prev) =>
           prev.map((s) => (s.id === sessionId ? updatedSession : s))
@@ -123,6 +123,21 @@ export function useChatSessions(scope: ChatScope | null) {
     [sessions, currentSessionId]
   );
 
+  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string }) => {
+    try {
+      const updatedSession = await window.api.chatSession.update(sessionId, input);
+      if (updatedSession) {
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? updatedSession : s))
+        );
+      }
+      return updatedSession;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }, []);
+
   const switchSession = useCallback((sessionId: string) => {
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
@@ -140,6 +155,7 @@ export function useChatSessions(scope: ChatScope | null) {
     error,
     createSession,
     renameSession,
+    updateSession,
     deleteSession,
     switchSession,
   };

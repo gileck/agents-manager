@@ -4,6 +4,8 @@ import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ChatMessage, AgentChatMessage } from '../../shared/types';
+import type { AgentLibRegistry } from './agent-lib-registry';
+import type { AgentLibCallbacks } from '../interfaces/agent-lib';
 import { SandboxGuard } from './sandbox-guard';
 
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
@@ -81,6 +83,8 @@ export interface RunningAgent {
   messagePreview?: string;
 }
 
+const DEFAULT_AGENT_LIB = 'claude-code';
+
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   private runningAgents = new Map<string, RunningAgent>();
@@ -91,6 +95,8 @@ export class ChatAgentService {
     private projectStore: IProjectStore,
     private taskStore: ITaskStore,
     private pipelineStore: IPipelineStore,
+    private agentLibRegistry: AgentLibRegistry,
+    private getDefaultAgentLib: () => string = () => DEFAULT_AGENT_LIB,
   ) {}
 
   async send(
@@ -119,7 +125,10 @@ export class ChatAgentService {
     });
 
     // Resolve project path and system prompt based on scope
-    const { projectPath, systemPrompt, projectId, projectName } = await this.resolveScope(session);
+    const { projectPath, systemPrompt, projectId, projectName, projectDefaultAgentLib } = await this.resolveScope(session);
+
+    // Resolve which agent lib to use: session > project config > global setting > hardcoded fallback
+    const agentLibName = session.agentLib || projectDefaultAgentLib || this.getDefaultAgentLib() || DEFAULT_AGENT_LIB;
 
     // Track running agent
     this.runningAgents.set(sessionId, {
@@ -157,7 +166,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, onOutput, onMessage).catch((err) => {
+    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, onOutput, onMessage).catch((err) => {
       this.runningControllers.delete(sessionId);
       onOutput(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
       onOutput(CHAT_COMPLETE_SENTINEL);
@@ -288,6 +297,7 @@ export class ChatAgentService {
     systemPrompt: string;
     projectId: string;
     projectName: string;
+    projectDefaultAgentLib?: string;
   }> {
     if (session.scopeType === 'task') {
       const task = await this.taskStore.getTask(session.scopeId);
@@ -301,6 +311,7 @@ export class ChatAgentService {
         systemPrompt,
         projectId: task.projectId,
         projectName: project.name,
+        projectDefaultAgentLib: project.config?.defaultAgentLib as string | undefined,
       };
     }
 
@@ -316,6 +327,7 @@ export class ChatAgentService {
       systemPrompt: PROJECT_SYSTEM_PROMPT,
       projectId: session.scopeId,
       projectName: project.name,
+      projectDefaultAgentLib: project.config?.defaultAgentLib as string | undefined,
     };
   }
 
@@ -367,10 +379,12 @@ export class ChatAgentService {
     systemPrompt: string,
     prompt: string,
     abortController: AbortController,
+    agentLibName: string,
     onOutput: (chunk: string) => void,
     onMessage?: (msg: AgentChatMessage) => void,
   ): Promise<void> {
-    const query = await this.loadQuery();
+    // Determine whether to use the AgentLib abstraction or the direct SDK
+    const useAgentLib = agentLibName !== DEFAULT_AGENT_LIB;
 
     // Set up sandbox: read-only access to project path, block write tools
     const sandboxGuard = new SandboxGuard([], [projectPath]);
@@ -398,95 +412,15 @@ export class ChatAgentService {
     };
 
     try {
-      for await (const message of query({
-        prompt: `${systemPrompt}\n\n${prompt}`,
-        options: {
-          cwd: projectPath,
-          abortController,
-          permissionMode: 'bypassPermissions',
-          allowDangerouslySkipPermissions: true,
-          maxTurns: 50,
-          hooks: {
-            preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
-              // Hard-block write tools
-              if (WRITE_TOOL_NAMES.has(toolName)) {
-                return { decision: 'block', reason: 'Chat agent has read-only access. File modifications are not allowed.' };
-              }
-              const result = sandboxGuard.evaluateToolCall(toolName, toolInput);
-              if (!result.allow) {
-                return { decision: 'block', reason: result.reason };
-              }
-              return undefined;
-            },
-          },
-        },
-      }) as AsyncIterable<SdkStreamMessage>) {
-        if (message.type === 'assistant') {
-          const assistantMsg = message as SdkAssistantMessage;
-          for (const block of assistantMsg.message.content) {
-            if (block.type === 'text') {
-              onOutput(block.text);
-              emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
-            } else if (block.type === 'tool_use') {
-              const toolBlock = block as SdkToolUseBlock & { id?: string };
-              const toolSummary = `\n> Tool: ${block.name}\n`;
-              onOutput(toolSummary);
-              emitMessage({
-                type: 'tool_use',
-                toolName: block.name,
-                toolId: toolBlock.id,
-                input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? {}, null, 2),
-                timestamp: Date.now(),
-              });
-            }
-          }
-        } else if (message.type === 'result') {
-          const resultMsg = message as SdkResultMessage;
-          if (resultMsg.errors?.length) {
-            const errorText = `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
-            onOutput(errorText);
-            emitMessage({ type: 'assistant_text', text: errorText, timestamp: Date.now() });
-          }
-          costInputTokens = resultMsg.usage?.input_tokens;
-          costOutputTokens = resultMsg.usage?.output_tokens;
-          if (costInputTokens != null && costOutputTokens != null) {
-            emitMessage({
-              type: 'usage',
-              inputTokens: costInputTokens,
-              outputTokens: costOutputTokens,
-              timestamp: Date.now(),
-            });
-          }
-        } else if (message.type === 'user') {
-          // SDK emits tool results as SDKUserMessage with tool_result content blocks
-          const userMsg = message as unknown as { message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown }> } };
-          if (!userMsg.message?.content) {
-            console.warn('[ChatAgentService] user message with unexpected structure:', JSON.stringify(message).slice(0, 200));
-          } else {
-            for (const block of userMsg.message.content) {
-              if (block.type === 'tool_result' && block.tool_use_id) {
-                const resultContent = typeof block.content === 'string' ? block.content
-                  : (Array.isArray(block.content) ? block.content.map((b: { text?: string }) => b.text || '').join('') : '(no output)');
-                emitMessage({
-                  type: 'tool_result',
-                  toolId: block.tool_use_id,
-                  result: resultContent,
-                  timestamp: Date.now(),
-                });
-              }
-            }
-          }
-        } else {
-          const otherMsg = message as SdkOtherMessage;
-          if (otherMsg.message?.content) {
-            for (const block of otherMsg.message.content) {
-              if (block.type === 'text') {
-                onOutput(block.text);
-                emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
-              }
-            }
-          }
-        }
+      if (useAgentLib) {
+        // Use AgentLib abstraction for non-claude-code engines
+        await this.runViaAgentLib(sessionId, agentLibName, projectPath, systemPrompt, prompt, onOutput, emitMessage);
+      } else {
+        // Use direct SDK for claude-code (preserves existing rich streaming behavior)
+        await this.runViaDirectSdk(sessionId, projectPath, systemPrompt, prompt, abortController, sandboxGuard, onOutput, emitMessage, (input, output) => {
+          costInputTokens = input;
+          costOutputTokens = output;
+        });
       }
 
       // Mark as completed successfully
@@ -523,6 +457,158 @@ export class ChatAgentService {
       }
 
       onOutput(CHAT_COMPLETE_SENTINEL);
+    }
+  }
+
+  private async runViaAgentLib(
+    sessionId: string,
+    agentLibName: string,
+    projectPath: string,
+    systemPrompt: string,
+    prompt: string,
+    onOutput: (chunk: string) => void,
+    emitMessage: (msg: AgentChatMessage) => void,
+  ): Promise<void> {
+    const lib = this.agentLibRegistry.getLib(agentLibName);
+
+    const callbacks: AgentLibCallbacks = {
+      onOutput: (chunk: string) => {
+        onOutput(chunk);
+        emitMessage({ type: 'assistant_text', text: chunk, timestamp: Date.now() });
+      },
+      onMessage: (msg: AgentChatMessage) => {
+        emitMessage(msg);
+      },
+    };
+
+    const result = await lib.execute(sessionId, {
+      prompt: `${systemPrompt}\n\n${prompt}`,
+      cwd: projectPath,
+      maxTurns: 50,
+      timeoutMs: 300000,
+      allowedPaths: [],
+      readOnlyPaths: [projectPath],
+      readOnly: true,
+    }, callbacks);
+
+    if (result.costInputTokens != null && result.costOutputTokens != null) {
+      emitMessage({
+        type: 'usage',
+        inputTokens: result.costInputTokens,
+        outputTokens: result.costOutputTokens,
+        timestamp: Date.now(),
+      });
+    }
+
+    if (result.error) {
+      onOutput(`\n[Agent error: ${result.error}]\n`);
+      emitMessage({ type: 'assistant_text', text: `\n[Agent error: ${result.error}]\n`, timestamp: Date.now() });
+    }
+  }
+
+  private async runViaDirectSdk(
+    sessionId: string,
+    projectPath: string,
+    systemPrompt: string,
+    prompt: string,
+    abortController: AbortController,
+    sandboxGuard: SandboxGuard,
+    onOutput: (chunk: string) => void,
+    emitMessage: (msg: AgentChatMessage) => void,
+    onCost: (input: number | undefined, output: number | undefined) => void,
+  ): Promise<void> {
+    const query = await this.loadQuery();
+
+    for await (const message of query({
+      prompt: `${systemPrompt}\n\n${prompt}`,
+      options: {
+        cwd: projectPath,
+        abortController,
+        permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
+        maxTurns: 50,
+        hooks: {
+          preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
+            // Hard-block write tools
+            if (WRITE_TOOL_NAMES.has(toolName)) {
+              return { decision: 'block', reason: 'Chat agent has read-only access. File modifications are not allowed.' };
+            }
+            const result = sandboxGuard.evaluateToolCall(toolName, toolInput);
+            if (!result.allow) {
+              return { decision: 'block', reason: result.reason };
+            }
+            return undefined;
+          },
+        },
+      },
+    }) as AsyncIterable<SdkStreamMessage>) {
+      if (message.type === 'assistant') {
+        const assistantMsg = message as SdkAssistantMessage;
+        for (const block of assistantMsg.message.content) {
+          if (block.type === 'text') {
+            onOutput(block.text);
+            emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
+          } else if (block.type === 'tool_use') {
+            const toolBlock = block as SdkToolUseBlock & { id?: string };
+            const toolSummary = `\n> Tool: ${block.name}\n`;
+            onOutput(toolSummary);
+            emitMessage({
+              type: 'tool_use',
+              toolName: block.name,
+              toolId: toolBlock.id,
+              input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? {}, null, 2),
+              timestamp: Date.now(),
+            });
+          }
+        }
+      } else if (message.type === 'result') {
+        const resultMsg = message as SdkResultMessage;
+        if (resultMsg.errors?.length) {
+          const errorText = `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
+          onOutput(errorText);
+          emitMessage({ type: 'assistant_text', text: errorText, timestamp: Date.now() });
+        }
+        const costIn = resultMsg.usage?.input_tokens;
+        const costOut = resultMsg.usage?.output_tokens;
+        onCost(costIn, costOut);
+        if (costIn != null && costOut != null) {
+          emitMessage({
+            type: 'usage',
+            inputTokens: costIn,
+            outputTokens: costOut,
+            timestamp: Date.now(),
+          });
+        }
+      } else if (message.type === 'user') {
+        // SDK emits tool results as SDKUserMessage with tool_result content blocks
+        const userMsg = message as unknown as { message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown }> } };
+        if (!userMsg.message?.content) {
+          console.warn('[ChatAgentService] user message with unexpected structure:', JSON.stringify(message).slice(0, 200));
+        } else {
+          for (const block of userMsg.message.content) {
+            if (block.type === 'tool_result' && block.tool_use_id) {
+              const resultContent = typeof block.content === 'string' ? block.content
+                : (Array.isArray(block.content) ? block.content.map((b: { text?: string }) => b.text || '').join('') : '(no output)');
+              emitMessage({
+                type: 'tool_result',
+                toolId: block.tool_use_id,
+                result: resultContent,
+                timestamp: Date.now(),
+              });
+            }
+          }
+        }
+      } else {
+        const otherMsg = message as SdkOtherMessage;
+        if (otherMsg.message?.content) {
+          for (const block of otherMsg.message.content) {
+            if (block.type === 'text') {
+              onOutput(block.text);
+              emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
+            }
+          }
+        }
+      }
     }
   }
 

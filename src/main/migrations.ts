@@ -824,6 +824,14 @@ export function getMigrations(): Migration[] {
         CREATE INDEX idx_chat_sessions_scope ON project_chat_sessions(scope_type, scope_id)
       `,
     },
+    {
+      name: '073_add_agent_lib_to_chat_sessions',
+      sql: `
+        ALTER TABLE project_chat_sessions ADD COLUMN agent_lib TEXT;
+
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('chat_default_agent_lib', 'claude-code')
+      `,
+    },
   ];
 }
 
