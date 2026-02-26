@@ -128,7 +128,14 @@ export class ChatAgentService {
     const { projectPath, systemPrompt, projectId, projectName, projectDefaultAgentLib } = await this.resolveScope(session);
 
     // Resolve which agent lib to use: session > project config > global setting > hardcoded fallback
-    const agentLibName = session.agentLib || projectDefaultAgentLib || this.getDefaultAgentLib() || DEFAULT_AGENT_LIB;
+    let agentLibName = session.agentLib || projectDefaultAgentLib || this.getDefaultAgentLib() || DEFAULT_AGENT_LIB;
+
+    // Validate the resolved agent lib exists; fall back with a warning if not
+    const availableLibs = this.agentLibRegistry.listNames();
+    if (!availableLibs.includes(agentLibName)) {
+      onOutput(`\n[Warning: Agent engine "${agentLibName}" is not available. Falling back to "${DEFAULT_AGENT_LIB}".]\n`);
+      agentLibName = DEFAULT_AGENT_LIB;
+    }
 
     // Track running agent
     this.runningAgents.set(sessionId, {
@@ -414,7 +421,12 @@ export class ChatAgentService {
     try {
       if (useAgentLib) {
         // Use AgentLib abstraction for non-claude-code engines
-        await this.runViaAgentLib(sessionId, agentLibName, projectPath, systemPrompt, prompt, onOutput, emitMessage);
+        // Wire abort signal to AgentLib.stop() so the Stop button works
+        const lib = this.agentLibRegistry.getLib(agentLibName);
+        abortController.signal.addEventListener('abort', () => {
+          lib.stop(sessionId).catch(err => console.warn('[ChatAgentService] Failed to stop agent lib:', err));
+        });
+        await this.runViaAgentLib(lib, sessionId, projectPath, systemPrompt, prompt, onOutput, emitMessage);
       } else {
         // Use direct SDK for claude-code (preserves existing rich streaming behavior)
         await this.runViaDirectSdk(sessionId, projectPath, systemPrompt, prompt, abortController, sandboxGuard, onOutput, emitMessage, (input, output) => {
@@ -461,15 +473,14 @@ export class ChatAgentService {
   }
 
   private async runViaAgentLib(
+    lib: import('../interfaces/agent-lib').IAgentLib,
     sessionId: string,
-    agentLibName: string,
     projectPath: string,
     systemPrompt: string,
     prompt: string,
     onOutput: (chunk: string) => void,
     emitMessage: (msg: AgentChatMessage) => void,
   ): Promise<void> {
-    const lib = this.agentLibRegistry.getLib(agentLibName);
 
     const callbacks: AgentLibCallbacks = {
       onOutput: (chunk: string) => {

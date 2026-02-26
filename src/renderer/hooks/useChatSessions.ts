@@ -123,7 +123,7 @@ export function useChatSessions(scope: ChatScope | null) {
     [sessions, currentSessionId]
   );
 
-  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string }) => {
+  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string | null }) => {
     try {
       const updatedSession = await window.api.chatSession.update(sessionId, input);
       if (updatedSession) {

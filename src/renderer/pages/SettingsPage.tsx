@@ -15,7 +15,9 @@ export function SettingsPage() {
   useEffect(() => {
     window.api.settings.get().then(setSettings);
     window.api.app.getVersion().then(setVersion);
-    window.api.agentLibs.list().then(setAgentLibs).catch(() => {});
+    window.api.agentLibs.list().then(setAgentLibs).catch((err) => {
+      console.error('[SettingsPage] Failed to load agent libs:', err);
+    });
   }, []);
 
   const handleThemeChange = async (newTheme: 'light' | 'dark' | 'system') => {
@@ -30,8 +32,12 @@ export function SettingsPage() {
   };
 
   const handleChatDefaultAgentLibChange = async (value: string) => {
-    const updated = await window.api.settings.update({ chatDefaultAgentLib: value });
-    setSettings(updated);
+    try {
+      const updated = await window.api.settings.update({ chatDefaultAgentLib: value });
+      setSettings(updated);
+    } catch (err) {
+      console.error('[SettingsPage] Failed to update chat default agent lib:', err);
+    }
   };
 
   if (!settings) {

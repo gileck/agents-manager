@@ -48,7 +48,9 @@ export function ChatPanel({ scope }: ChatPanelProps) {
 
   // Load available agent libs once
   useEffect(() => {
-    window.api.agentLibs.list().then(setAgentLibs).catch(() => {});
+    window.api.agentLibs.list().then(setAgentLibs).catch((err) => {
+      console.error('[ChatPanel] Failed to load agent libs:', err);
+    });
   }, []);
 
   // Filter agents to current scope only
@@ -63,7 +65,11 @@ export function ChatPanel({ scope }: ChatPanelProps) {
 
   const handleAgentLibChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (!currentSessionId) return;
-    await updateSession(currentSessionId, { agentLib: e.target.value });
+    try {
+      await updateSession(currentSessionId, { agentLib: e.target.value || null });
+    } catch (err) {
+      console.error('[ChatPanel] Failed to update agent lib:', err);
+    }
   }, [currentSessionId, updateSession]);
 
   const selectedAgentLib = currentSession?.agentLib || 'claude-code';

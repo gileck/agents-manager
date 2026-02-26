@@ -763,7 +763,7 @@ export function registerIpcHandlers(services: AppServices): void {
   // Chat Session Operations
   // ============================================
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_CREATE, async (_, input: { scopeType: string; scopeId: string; name: string }) => {
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_CREATE, async (_, input: { scopeType: string; scopeId: string; name: string; agentLib?: string }) => {
     if (!input || typeof input !== 'object') {
       throw new Error('Invalid input: expected object');
     }
@@ -788,10 +788,18 @@ export function registerIpcHandlers(services: AppServices): void {
       const task = await services.taskStore.getTask(input.scopeId);
       if (!task) throw new Error('Task not found');
     }
+    // Validate agentLib if provided
+    if (input.agentLib) {
+      const validLibs = services.agentLibRegistry.listNames();
+      if (!validLibs.includes(input.agentLib)) {
+        throw new Error(`Unknown agent lib: ${input.agentLib}. Available: ${validLibs.join(', ')}`);
+      }
+    }
     return services.chatSessionStore.createSession({
       scopeType: input.scopeType as 'project' | 'task',
       scopeId: input.scopeId,
       name: input.name.trim(),
+      agentLib: input.agentLib,
     });
   });
 

@@ -70,6 +70,7 @@ import { registerPromptHandler } from '../handlers/prompt-handler';
 import { registerScmHandler } from '../handlers/scm-handler';
 import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
+import { getSetting } from '@template/main/services/settings-service';
 
 export interface AppServices {
   db: Database.Database;
@@ -196,8 +197,12 @@ export function createAppServices(db: Database.Database): AppServices {
 
   // Chat agent service (unified: handles both project and task scopes)
   const getDefaultAgentLib = () => {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('chat_default_agent_lib') as { value: string } | undefined;
-    return row?.value || 'claude-code';
+    try {
+      return getSetting('chat_default_agent_lib', 'claude-code');
+    } catch (err) {
+      console.error('[setup] Failed to read chat_default_agent_lib setting:', err);
+      return 'claude-code';
+    }
   };
   const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib);
 
