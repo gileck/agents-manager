@@ -173,13 +173,17 @@ describe('Admin Merge Guard', () => {
         actor: 'regular-user'
       });
 
-      // Since the transition failed, there should be no history entry
+      // Guard failure should be recorded in transition history with _denied flag
       const history = ctx.db.prepare(`
         SELECT * FROM transition_history
         WHERE task_id = ? AND from_status = ? AND to_status = ?
-      `).get(task.id, 'ready_to_merge', 'done');
+      `).get(task.id, 'ready_to_merge', 'done') as { guard_results: string } | undefined;
 
-      expect(history).toBeUndefined();
+      expect(history).toBeDefined();
+      const guardResults = JSON.parse(history!.guard_results);
+      expect(guardResults._denied).toBe(true);
+      expect(guardResults.guardFailures).toHaveLength(1);
+      expect(guardResults.guardFailures[0].guard).toBe('is_admin');
     });
   });
 

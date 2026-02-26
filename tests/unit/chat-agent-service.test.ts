@@ -3,6 +3,9 @@ import { ChatAgentService, type RunningAgent } from '../../src/main/services/cha
 import type { IChatMessageStore } from '../../src/main/interfaces/chat-message-store';
 import type { IChatSessionStore } from '../../src/main/interfaces/chat-session-store';
 import type { IProjectStore } from '../../src/main/interfaces/project-store';
+import type { ITaskStore } from '../../src/main/interfaces/task-store';
+import type { IPipelineStore } from '../../src/main/interfaces/pipeline-store';
+import type { AgentLibRegistry } from '../../src/main/services/agent-lib-registry';
 import type { ChatSession } from '../../src/main/interfaces/chat-session-store';
 import type { Project } from '../../src/shared/types';
 
@@ -35,11 +38,17 @@ describe('ChatAgentService', () => {
   let mockMessageStore: IChatMessageStore;
   let mockSessionStore: IChatSessionStore;
   let mockProjectStore: IProjectStore;
+  let mockTaskStore: ITaskStore;
+  let mockPipelineStore: IPipelineStore;
+  let mockAgentLibRegistry: AgentLibRegistry;
 
   const mockSession: ChatSession = {
     id: 'session-1',
     projectId: 'project-1',
+    scopeType: 'project',
+    scopeId: 'project-1',
     name: 'Test Session',
+    agentLib: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -77,7 +86,23 @@ describe('ChatAgentService', () => {
       getProject: vi.fn().mockResolvedValue(mockProject),
     } as unknown as IProjectStore;
 
-    service = new ChatAgentService(mockMessageStore, mockSessionStore, mockProjectStore);
+    mockTaskStore = {
+      getTask: vi.fn(),
+    } as unknown as ITaskStore;
+
+    mockPipelineStore = {
+      getPipeline: vi.fn(),
+    } as unknown as IPipelineStore;
+
+    mockAgentLibRegistry = {
+      listNames: vi.fn().mockReturnValue(['claude-code']),
+      getLib: vi.fn(),
+    } as unknown as AgentLibRegistry;
+
+    service = new ChatAgentService(
+      mockMessageStore, mockSessionStore, mockProjectStore,
+      mockTaskStore, mockPipelineStore, mockAgentLibRegistry,
+    );
   });
 
   afterEach(() => {
@@ -120,7 +145,10 @@ describe('ChatAgentService', () => {
       const mockSession2: ChatSession = {
         id: 'session-2',
         projectId: 'project-1',
+        scopeType: 'project',
+        scopeId: 'project-1',
         name: 'Session 2',
+        agentLib: null,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -193,15 +221,15 @@ describe('ChatAgentService', () => {
       expect(agents).toHaveLength(1);
       expect(agents[0].status).toBe('running');
 
-      // Let the agent complete
-      await vi.runAllTimersAsync();
+      // Let the agent complete (flush microtasks without advancing timers)
+      await vi.advanceTimersByTimeAsync(0);
 
       // Check agents immediately - should still be there as completed
       agents = await service.getRunningAgents();
       expect(agents).toHaveLength(1);
 
       // Advance time by 5 seconds (cleanup delay)
-      vi.advanceTimersByTime(5000);
+      await vi.advanceTimersByTimeAsync(5000);
 
       // Now it should be cleaned up
       agents = await service.getRunningAgents();

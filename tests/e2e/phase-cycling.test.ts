@@ -34,6 +34,9 @@ describe('Phase Cycling E2E', () => {
       return { success: true };
     });
 
+    // NOTE: merge_pr hook is already registered by registerScmHandler in test-context.
+    // Using the real handler ensures worktree deletion and PR merge via stubs.
+
     const project = await ctx.projectStore.createProject(createProjectInput());
     projectId = project.id;
   });
@@ -100,12 +103,21 @@ describe('Phase Cycling E2E', () => {
     });
     expect(prResult.success).toBe(true);
 
-    // Transition pr_review -> done via manual trigger (Approve & Merge)
-    // This triggers merge_pr (required) + advance_phase (best_effort)
+    // Transition pr_review -> ready_to_merge via manual trigger (Approve)
     task = (await ctx.taskStore.getTask(taskId))!;
     expect(task.status).toBe('pr_review');
+    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', {
+      trigger: 'manual',
+    });
+    expect(approveResult.success).toBe(true);
+
+    // Transition ready_to_merge -> done via manual trigger (Merge)
+    // This triggers merge_pr (required) + advance_phase (best_effort)
+    task = (await ctx.taskStore.getTask(taskId))!;
+    expect(task.status).toBe('ready_to_merge');
     const doneResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
       trigger: 'manual',
+      actor: 'admin',
     });
     expect(doneResult.success).toBe(true);
 
@@ -182,11 +194,19 @@ describe('Phase Cycling E2E', () => {
     });
     expect(prResult.success).toBe(true);
 
-    // Approve & merge
+    // Approve: pr_review -> ready_to_merge
     current = (await ctx.taskStore.getTask(task.id))!;
     expect(current.status).toBe('pr_review');
+    const approveResult = await ctx.pipelineEngine.executeTransition(current, 'ready_to_merge', {
+      trigger: 'manual',
+    });
+    expect(approveResult.success).toBe(true);
+
+    // Merge: ready_to_merge -> done
+    current = (await ctx.taskStore.getTask(task.id))!;
     const doneResult = await ctx.pipelineEngine.executeTransition(current, 'done', {
       trigger: 'manual',
+      actor: 'admin',
     });
     expect(doneResult.success).toBe(true);
 
@@ -230,8 +250,17 @@ describe('Phase Cycling E2E', () => {
     current = (await ctx.taskStore.getTask(task.id))!;
     expect(current.status).toBe('pr_review');
 
+    // Approve: pr_review -> ready_to_merge
+    const approveResult = await ctx.pipelineEngine.executeTransition(current, 'ready_to_merge', {
+      trigger: 'manual',
+    });
+    expect(approveResult.success).toBe(true);
+
+    // Merge: ready_to_merge -> done
+    current = (await ctx.taskStore.getTask(task.id))!;
     const doneResult = await ctx.pipelineEngine.executeTransition(current, 'done', {
       trigger: 'manual',
+      actor: 'admin',
     });
     expect(doneResult.success).toBe(true);
 
@@ -331,10 +360,18 @@ describe('Phase Cycling E2E', () => {
     });
     expect(prResult.success).toBe(true);
 
-    // Approve & Merge (merge_pr hook will delete worktree, advance_phase will cycle)
+    // Approve: pr_review -> ready_to_merge
+    task = (await ctx.taskStore.getTask(task.id))!;
+    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', {
+      trigger: 'manual',
+    });
+    expect(approveResult.success).toBe(true);
+
+    // Merge: ready_to_merge -> done (merge_pr hook will delete worktree, advance_phase will cycle)
     task = (await ctx.taskStore.getTask(task.id))!;
     const doneResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
       trigger: 'manual',
+      actor: 'admin',
     });
     expect(doneResult.success).toBe(true);
 
@@ -434,8 +471,13 @@ describe('Phase Cycling E2E', () => {
     task = (await ctx.taskStore.getTask(task.id))!;
     expect(task.status).toBe('pr_review');
 
-    // Get task to done via manual approve
-    const doneResult = await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
+    // Approve: pr_review -> ready_to_merge
+    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
+    expect(approveResult.success).toBe(true);
+
+    // Merge: ready_to_merge -> done
+    task = (await ctx.taskStore.getTask(task.id))!;
+    const doneResult = await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
     expect(doneResult.success).toBe(true);
 
     // advance_phase should have kicked in, cycling the task back to implementing
@@ -463,7 +505,9 @@ describe('Phase Cycling E2E', () => {
       data: { outcome: 'pr_ready', branch: 'branch-p1' },
     });
     task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
+    await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
+    task = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
 
     // Get transition history
     const history = ctx.getTransitionHistory(task.id);
@@ -471,9 +515,10 @@ describe('Phase Cycling E2E', () => {
     // Should have at least these transitions:
     // 1. open -> implementing (manual)
     // 2. implementing -> pr_review (agent)
-    // 3. pr_review -> done (manual)
-    // 4. done -> implementing (system, from advance_phase)
-    expect(history.length).toBeGreaterThanOrEqual(4);
+    // 3. pr_review -> ready_to_merge (manual)
+    // 4. ready_to_merge -> done (manual)
+    // 5. done -> implementing (system, from advance_phase)
+    expect(history.length).toBeGreaterThanOrEqual(5);
 
     // Verify the system transition was recorded
     const systemTransitions = history.filter(h => h.trigger === 'system');
@@ -499,7 +544,9 @@ describe('Phase Cycling E2E', () => {
       data: { outcome: 'pr_ready', branch: 'branch-p1' },
     });
     task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
+    await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
+    task = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
 
     // After cycling, check that phase 1 has the PR link stored
     task = (await ctx.taskStore.getTask(task.id))!;
@@ -524,12 +571,21 @@ describe('Phase Cycling E2E', () => {
     });
 
     // Approve via agent outcome (simulates PR reviewer agent approving)
+    // Agent 'approved' outcome goes pr_review -> ready_to_merge
     task = (await ctx.taskStore.getTask(task.id))!;
-    const agentApprovalResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
+    const agentApprovalResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', {
       trigger: 'agent',
       data: { outcome: 'approved' },
     });
     expect(agentApprovalResult.success).toBe(true);
+
+    // Then merge: ready_to_merge -> done (manual with admin)
+    task = (await ctx.taskStore.getTask(task.id))!;
+    const mergeResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
+      trigger: 'manual',
+      actor: 'admin',
+    });
+    expect(mergeResult.success).toBe(true);
 
     // advance_phase should have cycled the task back
     task = (await ctx.taskStore.getTask(task.id))!;
