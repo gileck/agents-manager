@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { Trash2, FileText, MessageSquare, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useChat } from '../hooks/useChat';
@@ -9,6 +9,7 @@ import { ContextSidebar } from '../components/chat/ContextSidebar';
 import { SessionTabs } from '../components/chat/SessionTabs';
 import { ActiveAgentsPanel } from '../components/chat/ActiveAgentsPanel';
 import { useNavigate } from 'react-router-dom';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 export function ChatPage() {
   const { currentProjectId, currentProject } = useCurrentProject();
@@ -40,7 +41,7 @@ export function ChatPage() {
     summarizeChat,
     tokenUsage,
   } = useChat(currentSessionId);
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [showSidebar, setShowSidebar] = useLocalStorage('chat.showSidebar', true);
 
   const handleNavigateToSession = useCallback((sessionId: string) => {
     const agent = agents.find(a => a.sessionId === sessionId);
