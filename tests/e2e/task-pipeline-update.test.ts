@@ -34,7 +34,7 @@ describe('Task Pipeline Update', () => {
 
     pipeline2 = await ctx.pipelineStore.createPipeline({
       name: 'Pipeline Two',
-      taskType: 'bug',
+      taskType: 'test-bug',
       statuses: [
         { name: 'new', label: 'New' },
         { name: 'in_progress', label: 'In Progress' }, // Same name as pipeline1
@@ -98,8 +98,7 @@ describe('Task Pipeline Update', () => {
     const task = await ctx.workflowService.createTask(createTaskInput(projectId, pipeline1.id));
 
     // Create a running agent
-    await ctx.agentRunStore.createRun(task.id, 'test-agent', 'implement');
-    await ctx.agentRunStore.updateRun('run-1', { status: 'running' });
+    await ctx.agentRunStore.createRun({ taskId: task.id, agentType: 'test-agent', mode: 'implement' });
 
     // Try to update pipeline
     await expect(

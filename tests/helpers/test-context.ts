@@ -39,7 +39,6 @@ import { registerCoreGuards } from '../../src/main/handlers/core-guards';
 import { registerScmHandler } from '../../src/main/handlers/scm-handler';
 import { registerPromptHandler } from '../../src/main/handlers/prompt-handler';
 import { registerNotificationHandler } from '../../src/main/handlers/notification-handler';
-import { registerAgentHandler } from '../../src/main/handlers/agent-handler';
 import { registerPhaseHandler } from '../../src/main/handlers/phase-handler';
 import { ScriptedAgent, happyPlan } from '../../src/main/agents/scripted-agent';
 import { getMigrations } from '../../src/main/migrations';
@@ -186,7 +185,10 @@ export function createTestContext(): TestContext {
   });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerNotificationHandler(pipelineEngine, { notificationRouter });
-  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
+  // NOTE: registerAgentHandler is intentionally NOT called here.
+  // The start_agent hook fires background agents during transitions,
+  // which causes race conditions with test-controlled agents.
+  // Tests that need start_agent behavior register their own stub (e.g. phase-cycling).
   registerPhaseHandler(pipelineEngine, { taskStore, taskEventLog, pipelineEngine });
 
   const transitionTo = async (taskId: string, toStatus: string): Promise<Task> => {
