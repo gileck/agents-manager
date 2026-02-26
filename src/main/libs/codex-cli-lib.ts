@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
-import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 
 interface RunState {
@@ -14,6 +14,19 @@ export class CodexCliLib implements IAgentLib {
   readonly name = 'codex-cli';
 
   private runningStates = new Map<string, RunState>();
+
+  getDefaultModel(): string { return 'gpt-5.3-codex'; }
+
+  getSupportedModels(): AgentLibModelOption[] {
+    return [
+      { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
+      { value: 'gpt-5.3-codex-spark', label: 'GPT-5.3 Codex Spark' },
+      { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex' },
+      { value: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max' },
+      { value: 'gpt-5.1-codex', label: 'GPT-5.1 Codex' },
+      { value: 'gpt-5-codex', label: 'GPT-5 Codex' },
+    ];
+  }
 
   async isAvailable(): Promise<boolean> {
     try {

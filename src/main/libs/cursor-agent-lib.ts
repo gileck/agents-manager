@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
-import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 
 interface RunState {
@@ -14,6 +14,20 @@ export class CursorAgentLib implements IAgentLib {
   readonly name = 'cursor-agent';
 
   private runningStates = new Map<string, RunState>();
+
+  getDefaultModel(): string { return 'claude-4.6-opus'; }
+
+  getSupportedModels(): AgentLibModelOption[] {
+    return [
+      { value: 'claude-4.6-sonnet', label: 'Claude 4.6 Sonnet' },
+      { value: 'claude-4.6-opus', label: 'Claude 4.6 Opus' },
+      { value: 'claude-4.5-sonnet', label: 'Claude 4.5 Sonnet' },
+      { value: 'gpt-5.2', label: 'GPT-5.2' },
+      { value: 'gpt-5', label: 'GPT-5' },
+      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+      { value: 'composer-1.5', label: 'Composer 1.5' },
+    ];
+  }
 
   async isAvailable(): Promise<boolean> {
     try {

@@ -18,24 +18,6 @@ interface AgentDefinitionDialogProps {
 
 const EMPTY_MODE: AgentModeConfig = { mode: '', promptTemplate: '' };
 
-const MODELS_BY_ENGINE: Record<string, { value: string; label: string }[]> = {
-  'claude-code': [
-    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
-  ],
-  'cursor-agent': [
-    { value: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'cursor-small', label: 'Cursor Small' },
-  ],
-  'codex-cli': [
-    { value: 'o3', label: 'o3' },
-    { value: 'o4-mini', label: 'o4-mini' },
-    { value: 'codex-mini', label: 'Codex Mini' },
-  ],
-};
-
 export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }: AgentDefinitionDialogProps) {
   const isEdit = !!definition;
 
@@ -50,6 +32,11 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
   const [skillInput, setSkillInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agentLibData, setAgentLibData] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
+
+  useEffect(() => {
+    window.api.agentLibs.listModels().then(setAgentLibData).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -156,14 +143,18 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
 
           <div className="space-y-2">
             <Label>Engine</Label>
-            <Select value={engine} onValueChange={setEngine}>
+            <Select value={engine} onValueChange={(v) => {
+              setEngine(v);
+              // Reset model to empty (default) when switching engine
+              setModel('');
+            }}>
               <SelectTrigger>
                 <SelectValue placeholder="Select engine" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="claude-code">claude-code</SelectItem>
-                <SelectItem value="cursor-agent">cursor-agent</SelectItem>
-                <SelectItem value="codex-cli">codex-cli</SelectItem>
+                {Object.keys(agentLibData).map((name) => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -176,7 +167,7 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Default (project setting)</SelectItem>
-                {(MODELS_BY_ENGINE[engine] ?? []).map((m) => (
+                {(agentLibData[engine]?.models ?? []).map((m) => (
                   <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                 ))}
               </SelectContent>

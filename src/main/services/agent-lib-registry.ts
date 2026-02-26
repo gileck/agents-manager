@@ -1,4 +1,4 @@
-import type { IAgentLib } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibModelOption } from '../interfaces/agent-lib';
 
 export class AgentLibRegistry {
   private libs = new Map<string, IAgentLib>();
@@ -17,6 +17,18 @@ export class AgentLibRegistry {
 
   listNames(): string[] {
     return Array.from(this.libs.keys());
+  }
+
+  getModelsForLib(name: string): AgentLibModelOption[] {
+    return this.getLib(name).getSupportedModels();
+  }
+
+  getAllModels(): Record<string, { models: AgentLibModelOption[]; defaultModel: string }> {
+    const result: Record<string, { models: AgentLibModelOption[]; defaultModel: string }> = {};
+    for (const [name, lib] of this.libs) {
+      result[name] = { models: lib.getSupportedModels(), defaultModel: lib.getDefaultModel() };
+    }
+    return result;
   }
 
   async getAvailableLibs(): Promise<{ name: string; available: boolean }[]> {

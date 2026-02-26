@@ -467,6 +467,14 @@ export function registerIpcHandlers(services: AppServices): void {
   });
 
   // ============================================
+  // Agent Lib Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_LIB_LIST_MODELS, async () => {
+    return services.agentLibRegistry.getAllModels();
+  });
+
+  // ============================================
   // Agent Definition Operations
   // ============================================
 

@@ -1,5 +1,5 @@
 import type { AgentChatMessage } from '../../shared/types';
-import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { SandboxGuard } from '../services/sandbox-guard';
 
 // Use Function constructor to preserve dynamic import() at runtime.
@@ -43,6 +43,16 @@ export class ClaudeCodeLib implements IAgentLib {
   readonly name = 'claude-code';
 
   private runningStates = new Map<string, RunState>();
+
+  getDefaultModel(): string { return 'claude-opus-4-6'; }
+
+  getSupportedModels(): AgentLibModelOption[] {
+    return [
+      { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+      { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+    ];
+  }
 
   async isAvailable(): Promise<boolean> {
     try {

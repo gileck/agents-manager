@@ -10,13 +10,6 @@ import { Switch } from '@template/renderer/components/ui/switch';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import type { Project } from '../../shared/types';
 
-const MODEL_OPTIONS = [
-  { label: 'Default', value: '__default__' },
-  { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
-  { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
-  { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5-20251001' },
-];
-
 const inputWidth = { width: '224px' };
 let nextCmdId = 0;
 
@@ -28,6 +21,8 @@ export function ProjectConfigPage() {
     [id]
   );
 
+  const [defaultAgentLib, setDefaultAgentLib] = useState('__default__');
+  const [agentLibData, setAgentLibData] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
   const [model, setModel] = useState('__default__');
   const [agentTimeout, setAgentTimeout] = useState('');
   const [maxConcurrentAgents, setMaxConcurrentAgents] = useState('');
@@ -44,12 +39,18 @@ export function ProjectConfigPage() {
   const initialized = useRef(false);
   const projectConfigRef = useRef<Record<string, unknown>>({});
 
+  // Fetch supported models for all engines
+  useEffect(() => {
+    window.api.agentLibs.listModels().then(setAgentLibData).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!project) return;
     const c = project.config ?? {};
     projectConfigRef.current = c;
     initialized.current = false; // prevent auto-save during setState batch
-    setModel((c.model as string) || '__default__');
+    setDefaultAgentLib((c.defaultAgentLib as string) || '__default__');
+    setModel((c.defaultAgentLibModel as string) || '__default__');
     setAgentTimeout(c.agentTimeout != null ? String(c.agentTimeout) : '');
     setMaxConcurrentAgents(c.maxConcurrentAgents != null ? String(c.maxConcurrentAgents) : '');
     setDefaultBranch((c.defaultBranch as string) ?? '');
@@ -70,7 +71,7 @@ export function ProjectConfigPage() {
 
   const saveConfig = useCallback(async (
     fields: {
-      model: string; agentTimeout: string; maxConcurrentAgents: string;
+      defaultAgentLib: string; model: string; agentTimeout: string; maxConcurrentAgents: string;
       defaultBranch: string; pullMainAfterMerge: boolean;
       validationCommands: Array<{ id: number; cmd: string }>;
       maxValidationRetries: string; telegramEnabled: boolean;
@@ -79,7 +80,8 @@ export function ProjectConfigPage() {
   ) => {
     if (!id) return;
     const managed: Record<string, unknown> = {
-      model: fields.model === '__default__' ? undefined : fields.model,
+      defaultAgentLib: fields.defaultAgentLib === '__default__' ? undefined : fields.defaultAgentLib,
+      defaultAgentLibModel: fields.model === '__default__' ? undefined : fields.model,
       agentTimeout: fields.agentTimeout ? Number(fields.agentTimeout) : undefined,
       maxConcurrentAgents: fields.maxConcurrentAgents ? Number(fields.maxConcurrentAgents) : undefined,
       defaultBranch: fields.defaultBranch || undefined,
@@ -117,13 +119,13 @@ export function ProjectConfigPage() {
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       saveConfig({
-        model, agentTimeout, maxConcurrentAgents, defaultBranch,
+        defaultAgentLib, model, agentTimeout, maxConcurrentAgents, defaultBranch,
         pullMainAfterMerge, validationCommands, maxValidationRetries,
         telegramEnabled, telegramBotToken, telegramChatId,
       });
     }, 500);
     return () => clearTimeout(timerRef.current);
-  }, [model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
+  }, [defaultAgentLib, model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
       validationCommands, maxValidationRetries, telegramEnabled, telegramBotToken, telegramChatId, saveConfig]);
 
   const addValidationCommand = () =>
@@ -170,6 +172,26 @@ export function ProjectConfigPage() {
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
+                <Label htmlFor="defaultAgentLib">Agent Lib</Label>
+                <div style={inputWidth}>
+                <Select value={defaultAgentLib} onValueChange={(v) => {
+                  setDefaultAgentLib(v);
+                  // Reset model to default when switching engine
+                  setModel('__default__');
+                }}>
+                  <SelectTrigger id="defaultAgentLib">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">Default (claude-code)</SelectItem>
+                    {Object.keys(agentLibData).map((name) => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
                 <Label htmlFor="model">Model</Label>
                 <div style={inputWidth}>
                 <Select value={model} onValueChange={setModel}>
@@ -177,7 +199,8 @@ export function ProjectConfigPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MODEL_OPTIONS.map((opt) => (
+                    <SelectItem value="__default__">Default</SelectItem>
+                    {(agentLibData[defaultAgentLib === '__default__' ? 'claude-code' : defaultAgentLib]?.models ?? []).map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>

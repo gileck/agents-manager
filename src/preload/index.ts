@@ -141,6 +141,7 @@ const IPC_CHANNELS = {
   KANBAN_BOARD_CREATE: 'kanban-board:create',
   KANBAN_BOARD_UPDATE: 'kanban-board:update',
   KANBAN_BOARD_DELETE: 'kanban-board:delete',
+  AGENT_LIB_LIST_MODELS: 'agent-lib:list-models',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -277,6 +278,12 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_DEF_UPDATE, id, input),
     delete: (id: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_DEF_DELETE, id),
+  },
+
+  // Agent lib operations
+  agentLibs: {
+    listModels: (): Promise<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_LIB_LIST_MODELS),
   },
 
   // Pipeline operations

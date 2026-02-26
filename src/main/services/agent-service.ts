@@ -294,7 +294,8 @@ export class AgentService implements IAgentService {
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
 
     // Look up agent definition by convention-based ID and pass modeConfig to context
-    let agentDefEngine = 'claude-code';
+    const projectDefaultEngine = context.project.config?.defaultAgentLib as string | undefined;
+    let agentDefEngine = projectDefaultEngine || 'claude-code';
     let agentDefModel: string | undefined;
     try {
       const defId = `agent-def-${agentType}`;
@@ -307,7 +308,9 @@ export class AgentService implements IAgentService {
         if (agentDef.skills.length > 0) {
           context.skills = agentDef.skills;
         }
-        agentDefEngine = agentDef.engine || 'claude-code';
+        if (agentDef.engine) {
+          agentDefEngine = agentDef.engine;
+        }
         agentDefModel = agentDef.model ?? undefined;
       }
     } catch {
@@ -315,7 +318,7 @@ export class AgentService implements IAgentService {
     }
 
     const config: AgentConfig = {
-      model: agentDefModel || (context.project.config?.model as string | undefined),
+      model: agentDefModel || (context.project.config?.defaultAgentLibModel as string | undefined),
       engine: agentDefEngine,
     };
 

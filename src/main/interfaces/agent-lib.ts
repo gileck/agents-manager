@@ -39,8 +39,15 @@ export interface AgentLibTelemetry {
   maxTurns?: number;
 }
 
+export interface AgentLibModelOption {
+  value: string;
+  label: string;
+}
+
 export interface IAgentLib {
   readonly name: string;
+  getDefaultModel(): string;
+  getSupportedModels(): AgentLibModelOption[];
   execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult>;
   stop(runId: string): Promise<void>;
   isAvailable(): Promise<boolean>;

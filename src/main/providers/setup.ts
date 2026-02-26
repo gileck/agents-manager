@@ -19,6 +19,7 @@ import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IKanbanBoardStore } from '../interfaces/kanban-board-store';
+import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
 import { SqliteTaskStore } from '../stores/sqlite-task-store';
@@ -100,6 +101,7 @@ export interface AppServices {
   chatMessageStore: IChatMessageStore;
   chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
+  agentLibRegistry: AgentLibRegistryType;
 }
 
 export function createAppServices(db: Database.Database): AppServices {
@@ -235,5 +237,6 @@ export function createAppServices(db: Database.Database): AppServices {
     chatMessageStore,
     chatSessionStore,
     chatAgentService,
+    agentLibRegistry,
   };
 }

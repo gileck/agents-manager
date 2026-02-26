@@ -28,20 +28,11 @@ export function ProjectDetailPage() {
   const [editForm, setEditForm] = useState<ProjectUpdateInput>({});
   const [saving, setSaving] = useState(false);
 
-  const [editModel, setEditModel] = useState('');
   const [editPullMain, setEditPullMain] = useState(false);
-
-  const MODEL_OPTIONS = [
-    { label: 'Default', value: '' },
-    { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
-    { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
-    { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5-20251001' },
-  ];
 
   const openEdit = () => {
     if (project) {
       setEditForm({ name: project.name, description: project.description ?? '', path: project.path ?? '' });
-      setEditModel((project.config?.model as string) ?? '');
       setEditPullMain(!!project.config?.pullMainAfterMerge);
       setEditOpen(true);
     }
@@ -53,7 +44,7 @@ export function ProjectDetailPage() {
     try {
       const update: ProjectUpdateInput = {
         ...editForm,
-        config: { ...(project?.config ?? {}), model: editModel || undefined, pullMainAfterMerge: editPullMain },
+        config: { ...(project?.config ?? {}), pullMainAfterMerge: editPullMain },
       };
       await window.api.projects.update(id, update);
       setEditOpen(false);
@@ -164,19 +155,6 @@ export function ProjectDetailPage() {
                 value={editForm.path ?? ''}
                 onChange={(e) => setEditForm({ ...editForm, path: e.target.value })}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-model">Model</Label>
-              <select
-                id="edit-model"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={editModel}
-                onChange={(e) => setEditModel(e.target.value)}
-              >
-                {MODEL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
             </div>
             <div className="flex items-center gap-2">
               <input
