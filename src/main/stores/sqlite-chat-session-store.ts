@@ -11,7 +11,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
   async createSession(input: ChatSessionCreateInput): Promise<ChatSession> {
     const session: ChatSession = {
       id: generateId(),
-      projectId: input.scopeType === 'project' ? input.scopeId : '',
+      projectId: input.projectId,
       scopeType: input.scopeType,
       scopeId: input.scopeId,
       name: input.name,

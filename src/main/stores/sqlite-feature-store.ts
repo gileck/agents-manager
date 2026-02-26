@@ -84,9 +84,12 @@ export class SqliteFeatureStore implements IFeatureStore {
   }
 
   async deleteFeature(id: string): Promise<boolean> {
-    // Unlink tasks from this feature
-    this.db.prepare('UPDATE tasks SET feature_id = NULL WHERE feature_id = ?').run(id);
-    const result = this.db.prepare('DELETE FROM features WHERE id = ?').run(id);
-    return result.changes > 0;
+    const txn = this.db.transaction(() => {
+      // Unlink tasks from this feature
+      this.db.prepare('UPDATE tasks SET feature_id = NULL WHERE feature_id = ?').run(id);
+      const result = this.db.prepare('DELETE FROM features WHERE id = ?').run(id);
+      return result.changes > 0;
+    });
+    return txn();
   }
 }

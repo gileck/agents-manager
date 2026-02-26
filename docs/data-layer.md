@@ -31,7 +31,7 @@ WAL mode allows the CLI and Electron app to access the database concurrently wit
 
 ## Table Inventory
 
-**File:** `src/main/migrations.ts` — 40+ sequential migrations
+**File:** `src/main/migrations.ts` — 73 sequential migrations
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
@@ -50,8 +50,12 @@ WAL mode allows the CLI and Electron app to access the database concurrently wit
 | `features` | Feature/epic grouping | id, projectId (FK), title, description |
 | `agent_definitions` | Agent configurations | id, name, engine, model, modes (JSON), systemPrompt, timeout, isBuiltIn |
 | `settings` | Key-value settings | key (PK), value |
-| `items` | Template items | id, name, description |
-| `logs` | Legacy log records | id, runId, timestamp, level, message |
+| `users` | User profiles | id, name, email, role |
+| `kanban_boards` | Kanban board configurations | id, projectId (FK), name, columns (JSON) |
+| `project_chat_sessions` | Chat sessions (project or task scoped) | id, projectId, scopeType, scopeId, name, agentLib |
+| `chat_messages` | Chat messages per session | id, sessionId (FK), role, content, tokens, cost |
+| `items` | Legacy template items (unused) | id, name, description |
+| `logs` | Legacy log records (unused) | id, runId, timestamp, level, message |
 
 ## Store Pattern
 
@@ -83,6 +87,10 @@ Each table has a corresponding store class following a consistent pattern:
 | `sqlite-task-context-store.ts` | `ITaskContextStore` | task_context_entries |
 | `sqlite-feature-store.ts` | `IFeatureStore` | features |
 | `sqlite-agent-definition-store.ts` | `IAgentDefinitionStore` | agent_definitions |
+| `sqlite-kanban-board-store.ts` | `IKanbanBoardStore` | kanban_boards |
+| `sqlite-user-store.ts` | `IUserStore` | users |
+| `sqlite-chat-session-store.ts` | `IChatSessionStore` | project_chat_sessions |
+| `sqlite-chat-message-store.ts` | `IChatMessageStore` | chat_messages |
 
 ### Selective Updates
 

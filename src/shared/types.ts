@@ -360,6 +360,8 @@ export interface TaskEventFilter {
   severity?: TaskEventSeverity;
   since?: number;
   until?: number;
+  /** Maximum number of rows to return. Defaults to 5000. */
+  limit?: number;
 }
 
 // Activity log types
@@ -393,6 +395,8 @@ export interface ActivityFilter {
   projectId?: string;
   since?: number;
   until?: number;
+  /** Maximum number of rows to return. Defaults to 5000. */
+  limit?: number;
 }
 
 // Pipeline engine types
@@ -882,6 +886,8 @@ export interface ChatSessionCreateInput {
   scopeId: string;
   name: string;
   agentLib?: string;
+  /** The project this session belongs to. For project-scoped sessions this equals scopeId; for task-scoped sessions it is the task's projectId. */
+  projectId: string;
 }
 
 export interface ChatSessionUpdateInput {

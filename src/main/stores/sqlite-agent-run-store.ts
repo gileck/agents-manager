@@ -150,8 +150,8 @@ export class SqliteAgentRunStore implements IAgentRunStore {
     return rows.map(rowToRun);
   }
 
-  async getAllRuns(): Promise<AgentRun[]> {
-    const rows = this.db.prepare('SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT 1000').all() as AgentRunRow[];
+  async getAllRuns(limit: number = 1000): Promise<AgentRun[]> {
+    const rows = this.db.prepare('SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT ?').all(limit) as AgentRunRow[];
     return rows.map(rowToRun);
   }
 }

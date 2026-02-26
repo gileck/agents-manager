@@ -84,10 +84,11 @@ Memory leak prevention, error handling, window behavior, and process management 
 
 State machine, transitions, guards, hooks, and seeded pipelines
 
-**Summary:** PipelineEngine drives task state transitions. Transitions have triggers (manual/agent/system), guards (blocking checks), and hooks (async side-effects). Two seeded pipelines: AGENT_PIPELINE and SIMPLE_PIPELINE.
+**Summary:** PipelineEngine drives task state transitions. Transitions have triggers (manual/agent/system), guards (blocking checks), and hooks (async side-effects with three execution policies). Five seeded pipelines: AGENT_PIPELINE, BUG_AGENT_PIPELINE, SIMPLE_PIPELINE, FEATURE_PIPELINE, and BUG_PIPELINE.
 
 **Key Points:**
 - Guards are synchronous and block transitions; hooks are async side-effects after success
+- Hook execution policies: required (rollback on failure), best_effort (log only), fire_and_forget (not awaited)
 - Use AGENT_PIPELINE.id for agent workflow tests, SIMPLE_PIPELINE.id for basic flows
 - File: src/main/services/pipeline-engine.ts
 
@@ -173,12 +174,12 @@ SQLite schema, stores, and migrations
 
 Worktrees, git operations, PR lifecycle, and branch strategy
 
-**Summary:** LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<slug> convention.
+**Summary:** LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<mode> convention.
 
 **Key Points:**
 - Interface: IWorktreeManager in src/main/interfaces/worktree-manager.ts
 - Implementation: LocalWorktreeManager in src/main/services/local-worktree-manager.ts
-- Branch naming: task/<taskId>/<slug>
+- Branch naming: task/<taskId>/<mode>
 
 **Docs:** [git-scm-integration.md](docs/git-scm-integration.md)
 

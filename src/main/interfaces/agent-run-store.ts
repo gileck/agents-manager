@@ -6,5 +6,9 @@ export interface IAgentRunStore {
   getRun(id: string): Promise<AgentRun | null>;
   getRunsForTask(taskId: string): Promise<AgentRun[]>;
   getActiveRuns(): Promise<AgentRun[]>;
-  getAllRuns(): Promise<AgentRun[]>;
+  /**
+   * Returns the most recent agent runs, ordered by startedAt descending.
+   * @param limit - Maximum number of rows to return. Defaults to 1000.
+   */
+  getAllRuns(limit?: number): Promise<AgentRun[]>;
 }

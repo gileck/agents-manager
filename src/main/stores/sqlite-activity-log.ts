@@ -90,7 +90,8 @@ export class SqliteActivityLog implements IActivityLog {
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const rows = this.db.prepare(`SELECT * FROM activity_log ${where} ORDER BY created_at ASC`).all(...values) as ActivityRow[];
+    const limit = filter?.limit ?? 5000;
+    const rows = this.db.prepare(`SELECT * FROM activity_log ${where} ORDER BY created_at ASC LIMIT ?`).all(...values, limit) as ActivityRow[];
     return rows.map(rowToEntry);
   }
 }

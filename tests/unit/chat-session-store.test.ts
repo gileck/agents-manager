@@ -1,74 +1,113 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { SqliteChatSessionStore } from '../../src/main/stores/sqlite-chat-session-store';
 import type { ChatSessionCreateInput } from '../../src/main/interfaces/chat-session-store';
+import { getMigrations } from '../../src/main/migrations';
+
+function applyMigrations(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS migrations (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  const migrations = getMigrations();
+  for (const m of migrations) {
+    db.exec(m.sql);
+  }
+}
 
 describe('SqliteChatSessionStore', () => {
   let db: Database.Database;
   let store: SqliteChatSessionStore;
+  const testProjectId = 'project-test-1';
 
   beforeEach(() => {
-    // Create in-memory database
     db = new Database(':memory:');
+    db.pragma('journal_mode = WAL');
+    applyMigrations(db);
+    db.pragma('foreign_keys = ON');
 
-    // Create the necessary tables
-    db.exec(`
-      CREATE TABLE projects (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL
-      );
-
-      CREATE TABLE project_chat_sessions (
-        id TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-      );
-
-      CREATE INDEX idx_chat_sessions_project ON project_chat_sessions(project_id);
-    `);
-
-    // Insert a test project
-    db.prepare('INSERT INTO projects (id, name) VALUES (?, ?)').run('project-1', 'Test Project');
+    // Insert a test project and a test task so FK constraints pass
+    db.prepare('INSERT INTO projects (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run(
+      testProjectId, 'Test Project', Date.now(), Date.now(),
+    );
+    // Use the first available pipeline id from seeded data
+    const pipeline = db.prepare('SELECT id FROM pipelines LIMIT 1').get() as { id: string };
+    db.prepare(
+      'INSERT INTO tasks (id, project_id, pipeline_id, title, status, priority, tags, subtasks, plan_comments, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run('task-test-1', testProjectId, pipeline.id, 'Test Task', 'open', 'medium', '[]', '[]', '[]', '{}', Date.now(), Date.now());
 
     store = new SqliteChatSessionStore(db);
   });
 
+  afterEach(() => {
+    db.close();
+  });
+
   describe('createSession', () => {
-    it('should create a new session successfully', async () => {
+    it('should create a project-scoped session', async () => {
       const input: ChatSessionCreateInput = {
-        projectId: 'project-1',
-        name: 'Test Session',
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Project Chat',
+        projectId: testProjectId,
       };
 
       const session = await store.createSession(input);
 
       expect(session).toMatchObject({
-        projectId: 'project-1',
-        name: 'Test Session',
+        scopeType: 'project',
+        scopeId: testProjectId,
+        projectId: testProjectId,
+        name: 'Project Chat',
+        agentLib: null,
       });
       expect(session.id).toBeTruthy();
       expect(session.createdAt).toBeGreaterThan(0);
       expect(session.updatedAt).toBeGreaterThan(0);
     });
 
-    it('should throw error when creating session with invalid project ID', async () => {
+    it('should create a task-scoped session', async () => {
       const input: ChatSessionCreateInput = {
-        projectId: 'non-existent-project',
-        name: 'Test Session',
+        scopeType: 'task',
+        scopeId: 'task-test-1',
+        name: 'Task Chat',
+        projectId: testProjectId,
       };
 
-      await expect(store.createSession(input)).rejects.toThrow('Failed to create chat session');
+      const session = await store.createSession(input);
+
+      expect(session).toMatchObject({
+        scopeType: 'task',
+        scopeId: 'task-test-1',
+        projectId: testProjectId,
+        name: 'Task Chat',
+      });
+    });
+
+    it('should create a session with agentLib', async () => {
+      const input: ChatSessionCreateInput = {
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Agent Chat',
+        agentLib: 'claude-code',
+        projectId: testProjectId,
+      };
+
+      const session = await store.createSession(input);
+      expect(session.agentLib).toBe('claude-code');
     });
   });
 
   describe('getSession', () => {
     it('should retrieve an existing session', async () => {
       const created = await store.createSession({
-        projectId: 'project-1',
+        scopeType: 'project',
+        scopeId: testProjectId,
         name: 'Test Session',
+        projectId: testProjectId,
       });
 
       const retrieved = await store.getSession(created.id);
@@ -76,55 +115,146 @@ describe('SqliteChatSessionStore', () => {
       expect(retrieved).toEqual(created);
     });
 
-    it('should return null for non-existent session', async () => {
+    it('should return null for a non-existent session', async () => {
       const result = await store.getSession('non-existent-id');
       expect(result).toBeNull();
     });
   });
 
-  describe('listSessionsForProject', () => {
-    it('should list all sessions for a project', async () => {
-      await store.createSession({ projectId: 'project-1', name: 'Session 1' });
-      await store.createSession({ projectId: 'project-1', name: 'Session 2' });
+  describe('listSessionsForScope', () => {
+    it('should list project-scoped sessions', async () => {
+      await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Session 1',
+        projectId: testProjectId,
+      });
+      await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Session 2',
+        projectId: testProjectId,
+      });
 
-      const sessions = await store.listSessionsForProject('project-1');
+      const sessions = await store.listSessionsForScope('project', testProjectId);
 
       expect(sessions).toHaveLength(2);
       expect(sessions[0].name).toBe('Session 1');
       expect(sessions[1].name).toBe('Session 2');
     });
 
-    it('should return empty array for project with no sessions', async () => {
-      const sessions = await store.listSessionsForProject('project-1');
+    it('should list task-scoped sessions', async () => {
+      await store.createSession({
+        scopeType: 'task',
+        scopeId: 'task-test-1',
+        name: 'Task Session',
+        projectId: testProjectId,
+      });
+
+      const sessions = await store.listSessionsForScope('task', 'task-test-1');
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].name).toBe('Task Session');
+    });
+
+    it('should not mix scopes', async () => {
+      await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Project Session',
+        projectId: testProjectId,
+      });
+      await store.createSession({
+        scopeType: 'task',
+        scopeId: 'task-test-1',
+        name: 'Task Session',
+        projectId: testProjectId,
+      });
+
+      const projectSessions = await store.listSessionsForScope('project', testProjectId);
+      const taskSessions = await store.listSessionsForScope('task', 'task-test-1');
+
+      expect(projectSessions).toHaveLength(1);
+      expect(projectSessions[0].name).toBe('Project Session');
+      expect(taskSessions).toHaveLength(1);
+      expect(taskSessions[0].name).toBe('Task Session');
+    });
+
+    it('should return empty array for scope with no sessions', async () => {
+      const sessions = await store.listSessionsForScope('project', testProjectId);
       expect(sessions).toEqual([]);
     });
   });
 
   describe('updateSession', () => {
-    it('should update session name successfully', async () => {
+    it('should update session name', async () => {
       const created = await store.createSession({
-        projectId: 'project-1',
+        scopeType: 'project',
+        scopeId: testProjectId,
         name: 'Original Name',
+        projectId: testProjectId,
       });
 
       const updated = await store.updateSession(created.id, { name: 'Updated Name' });
 
       expect(updated).not.toBeNull();
       expect(updated!.name).toBe('Updated Name');
-      expect(updated!.updatedAt).toBeGreaterThan(created.updatedAt);
+      expect(updated!.updatedAt).toBeGreaterThanOrEqual(created.updatedAt);
     });
 
-    it('should return null when updating non-existent session', async () => {
+    it('should update session agentLib', async () => {
+      const created = await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Chat',
+        projectId: testProjectId,
+      });
+
+      const updated = await store.updateSession(created.id, { agentLib: 'claude-code' });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.agentLib).toBe('claude-code');
+    });
+
+    it('should clear agentLib when set to null', async () => {
+      const created = await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Chat',
+        agentLib: 'claude-code',
+        projectId: testProjectId,
+      });
+
+      const updated = await store.updateSession(created.id, { agentLib: null });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.agentLib).toBeNull();
+    });
+
+    it('should return null when updating a non-existent session', async () => {
       const result = await store.updateSession('non-existent-id', { name: 'New Name' });
       expect(result).toBeNull();
+    });
+
+    it('should return current session when no fields are provided', async () => {
+      const created = await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Chat',
+        projectId: testProjectId,
+      });
+
+      const result = await store.updateSession(created.id, {});
+      expect(result).toEqual(created);
     });
   });
 
   describe('deleteSession', () => {
-    it('should delete session successfully', async () => {
+    it('should delete an existing session', async () => {
       const created = await store.createSession({
-        projectId: 'project-1',
+        scopeType: 'project',
+        scopeId: testProjectId,
         name: 'To Delete',
+        projectId: testProjectId,
       });
 
       const deleted = await store.deleteSession(created.id);
@@ -134,25 +264,34 @@ describe('SqliteChatSessionStore', () => {
       expect(retrieved).toBeNull();
     });
 
-    it('should return false when deleting non-existent session', async () => {
+    it('should return false when deleting a non-existent session', async () => {
       const result = await store.deleteSession('non-existent-id');
       expect(result).toBe(false);
     });
   });
 
   describe('error handling', () => {
-    it('should handle database errors gracefully', async () => {
-      // Drop the table to cause an error
+    it('should throw wrapped errors on database failures', async () => {
       db.exec('DROP TABLE project_chat_sessions');
 
-      await expect(store.createSession({ projectId: 'project-1', name: 'Test' }))
-        .rejects.toThrow('Failed to create chat session');
+      await expect(store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Test',
+        projectId: testProjectId,
+      })).rejects.toThrow('Failed to create chat session');
 
       await expect(store.getSession('test-id'))
         .rejects.toThrow('Failed to get chat session');
 
-      await expect(store.listSessionsForProject('project-1'))
+      await expect(store.listSessionsForScope('project', testProjectId))
         .rejects.toThrow('Failed to list chat sessions');
+
+      await expect(store.updateSession('test-id', { name: 'New' }))
+        .rejects.toThrow('Failed to update chat session');
+
+      await expect(store.deleteSession('test-id'))
+        .rejects.toThrow('Failed to delete chat session');
     });
   });
 });

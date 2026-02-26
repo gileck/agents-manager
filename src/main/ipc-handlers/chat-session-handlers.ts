@@ -69,13 +69,16 @@ export function registerChatSessionHandlers(services: AppServices): void {
     if (input.name.trim().length === 0) {
       throw new Error('Session name cannot be empty');
     }
-    // Verify the scope target exists
+    // Verify the scope target exists and derive projectId
+    let projectId: string;
     if (input.scopeType === 'project') {
       const project = await services.projectStore.getProject(input.scopeId);
       if (!project) throw new Error('Project not found');
+      projectId = project.id;
     } else {
       const task = await services.taskStore.getTask(input.scopeId);
       if (!task) throw new Error('Task not found');
+      projectId = task.projectId;
     }
     // Validate agentLib if provided
     if (input.agentLib) {
@@ -89,6 +92,7 @@ export function registerChatSessionHandlers(services: AppServices): void {
       scopeId: input.scopeId,
       name: input.name.trim(),
       agentLib: input.agentLib,
+      projectId,
     });
   });
 

@@ -82,7 +82,8 @@ export class SqliteTaskEventLog implements ITaskEventLog {
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const rows = this.db.prepare(`SELECT * FROM task_events ${where} ORDER BY created_at ASC`).all(...values) as TaskEventRow[];
+    const limit = filter?.limit ?? 5000;
+    const rows = this.db.prepare(`SELECT * FROM task_events ${where} ORDER BY created_at ASC LIMIT ?`).all(...values, limit) as TaskEventRow[];
     return rows.map(rowToEvent);
   }
 }
