@@ -566,7 +566,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="plan">
+        <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <PlanReviewCard
             title="Plan"
             content={task.plan}
@@ -596,7 +596,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="design">
+        <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <PlanReviewCard
             title="Technical Design"
             content={task.technicalDesign}
