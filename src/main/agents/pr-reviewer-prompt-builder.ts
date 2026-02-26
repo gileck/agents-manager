@@ -1,6 +1,7 @@
 import type { AgentContext, AgentRunResult } from '../../shared/types';
+import type { AgentLibResult } from '../interfaces/agent-lib';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
-import { BaseClaudeAgent } from './base-claude-agent';
+import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 
 interface ReviewStructuredOutput {
   verdict: 'approved' | 'changes_requested';
@@ -8,7 +9,7 @@ interface ReviewStructuredOutput {
   comments: string[];
 }
 
-export class PrReviewerAgent extends BaseClaudeAgent {
+export class PrReviewerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'pr-reviewer';
 
   protected getMaxTurns(_context: AgentContext): number {
@@ -194,24 +195,24 @@ export class PrReviewerAgent extends BaseClaudeAgent {
     return 'approved';
   }
 
-  buildResult(exitCode: number, output: string, outcome: string, error?: string, costInputTokens?: number, costOutputTokens?: number, structuredOutput?: Record<string, unknown>, prompt?: string): AgentRunResult {
-    const so = structuredOutput as ReviewStructuredOutput | undefined;
+  buildResult(_context: AgentContext, libResult: AgentLibResult, outcome: string, prompt: string): AgentRunResult {
+    const so = libResult.structuredOutput as ReviewStructuredOutput | undefined;
     const effectiveOutcome = so?.verdict ?? outcome;
 
     const result: AgentRunResult = {
-      exitCode,
-      output,
+      exitCode: libResult.exitCode,
+      output: libResult.output,
       outcome: effectiveOutcome,
-      error,
-      costInputTokens,
-      costOutputTokens,
-      structuredOutput,
+      error: libResult.error,
+      costInputTokens: libResult.costInputTokens,
+      costOutputTokens: libResult.costOutputTokens,
+      structuredOutput: libResult.structuredOutput,
       prompt,
     };
 
     if (effectiveOutcome === 'changes_requested') {
       result.payload = {
-        summary: so?.summary ?? output.slice(-500),
+        summary: so?.summary ?? libResult.output.slice(-500),
         comments: so?.comments ?? [],
       };
     }

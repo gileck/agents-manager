@@ -22,6 +22,7 @@ import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import type { TaskReviewReportBuilder } from './task-review-report-builder';
+import type { IAgent } from '../interfaces/agent';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
@@ -36,6 +37,7 @@ export class AgentService implements IAgentService {
   private backgroundPromises = new Map<string, Promise<void>>();
   private messageQueues = new Map<string, string[]>();
   private activeCallbacks = new Map<string, { onOutput?: (chunk: string) => void; onMessage?: (msg: AgentChatMessage) => void; onStatusChange?: (status: string) => void }>();
+  private runningAgents = new Map<string, IAgent>();
 
   constructor(
     private agentFramework: IAgentFramework,
@@ -290,6 +292,8 @@ export class AgentService implements IAgentService {
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
 
     // Look up agent definition by convention-based ID and pass modeConfig to context
+    let agentDefEngine = 'claude-code';
+    let agentDefModel: string | undefined;
     try {
       const defId = `agent-def-${agentType}`;
       const agentDef = await this.agentDefinitionStore.getDefinition(defId);
@@ -301,20 +305,25 @@ export class AgentService implements IAgentService {
         if (agentDef.skills.length > 0) {
           context.skills = agentDef.skills;
         }
+        agentDefEngine = agentDef.engine || 'claude-code';
+        agentDefModel = agentDef.model ?? undefined;
       }
     } catch {
       // Fall through to hardcoded buildPrompt if lookup fails
     }
 
     const config: AgentConfig = {
-      model: context.project.config?.model as string | undefined,
+      model: agentDefModel || (context.project.config?.model as string | undefined),
+      engine: agentDefEngine,
     };
 
     // 7. Store active callbacks for this task
     this.activeCallbacks.set(taskId, { onOutput, onMessage, onStatusChange });
 
-    // 8. Fire-and-forget agent execution in background
+    // 8. Resolve agent from framework — Agent resolves its lib internally via config.engine
     const agent = this.agentFramework.getAgent(agentType);
+    this.runningAgents.set(taskId, agent);
+
     const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, worktreeManager, agentType, onOutput, onMessage, onStatusChange);
     this.backgroundPromises.set(run.id, promise);
 
@@ -510,9 +519,9 @@ export class AgentService implements IAgentService {
         clearInterval(flushInterval);
         const errorMsg = err instanceof Error ? err.message : String(err);
         const completedAt = now();
-        // Recover partial cost data from agent if available
-        const partialInputTokens = 'lastCostInputTokens' in agent ? (agent as { lastCostInputTokens?: number }).lastCostInputTokens : undefined;
-        const partialOutputTokens = 'lastCostOutputTokens' in agent ? (agent as { lastCostOutputTokens?: number }).lastCostOutputTokens : undefined;
+        // Recover partial cost data from agent telemetry if available
+        const partialInputTokens = 'accumulatedInputTokens' in agent ? (agent as { accumulatedInputTokens?: number }).accumulatedInputTokens : undefined;
+        const partialOutputTokens = 'accumulatedOutputTokens' in agent ? (agent as { accumulatedOutputTokens?: number }).accumulatedOutputTokens : undefined;
         const partialMessageCount = 'lastMessageCount' in agent ? (agent as { lastMessageCount?: number }).lastMessageCount : undefined;
         await this.agentRunStore.updateRun(run.id, {
           status: 'failed',
@@ -598,8 +607,8 @@ export class AgentService implements IAgentService {
         try {
           result = await agent.execute(context, config, wrappedOnOutput, onLog);
         } catch (err) {
-          const retryPartialInput = 'lastCostInputTokens' in agent ? (agent as { lastCostInputTokens?: number }).lastCostInputTokens : undefined;
-          const retryPartialOutput = 'lastCostOutputTokens' in agent ? (agent as { lastCostOutputTokens?: number }).lastCostOutputTokens : undefined;
+          const retryPartialInput = 'accumulatedInputTokens' in agent ? (agent as { accumulatedInputTokens?: number }).accumulatedInputTokens : undefined;
+          const retryPartialOutput = 'accumulatedOutputTokens' in agent ? (agent as { accumulatedOutputTokens?: number }).accumulatedOutputTokens : undefined;
           result = { exitCode: 1, output: err instanceof Error ? err.message : String(err), outcome: 'failed', costInputTokens: retryPartialInput, costOutputTokens: retryPartialOutput };
         }
         accumulatedInputTokens += result.costInputTokens ?? 0;
@@ -995,8 +1004,9 @@ export class AgentService implements IAgentService {
         onMessage?.({ type: 'status', status: 'failed', message: `Internal error: ${errMsg}`, timestamp: Date.now() });
       } catch { /* notification failure is non-fatal in the fatal handler */ }
     } finally {
-      // Delete the promise reference first to prevent leaks even if cleanup throws
+      // Delete the promise/agent references first to prevent leaks even if cleanup throws
       this.backgroundPromises.delete(run.id);
+      this.runningAgents.delete(taskId);
       clearInterval(flushInterval);
       this.taskEventLog.log({
         taskId,
@@ -1026,8 +1036,10 @@ export class AgentService implements IAgentService {
     const run = await this.agentRunStore.getRun(runId);
     if (!run) throw new Error(`Agent run not found: ${runId}`);
 
-    const agent = this.agentFramework.getAgent(run.agentType);
+    // Use the tracked running agent instance, falling back to framework
+    const agent = this.runningAgents.get(run.taskId) ?? this.agentFramework.getAgent(run.agentType);
     await agent.stop(run.taskId);
+    this.runningAgents.delete(run.taskId);
 
     // Clear any queued messages to prevent stale messages from being sent on future runs
     this.messageQueues.delete(run.taskId);

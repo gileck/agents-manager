@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
-import { BaseClaudeAgent } from './base-claude-agent';
+import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 
 /** Shared schema fields that let any agent ask interactive questions. */
 function getInteractiveFields(): Record<string, object> {
@@ -64,7 +64,7 @@ function getInteractiveInstructions(mode: string): string {
   return base.join('\n');
 }
 
-export class ClaudeCodeAgent extends BaseClaudeAgent {
+export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'claude-code';
 
   protected getMaxTurns(context: AgentContext): number {

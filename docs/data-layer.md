@@ -186,8 +186,8 @@ See [pipeline-engine.md](./pipeline-engine.md) for full pipeline definitions.
 ### Agent Definitions (migration 028)
 
 Seeds 2 built-in agent definitions:
-- `agent-def-claude-code` — ClaudeCodeAgent configuration
-- `agent-def-pr-reviewer` — PrReviewerAgent configuration
+- `agent-def-claude-code` — Implementor agent configuration
+- `agent-def-pr-reviewer` — PR reviewer agent configuration
 
 Each has `is_built_in = 1` (prevents deletion).
 

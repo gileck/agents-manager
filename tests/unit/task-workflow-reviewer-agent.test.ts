@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { TaskWorkflowReviewerAgent } from '../../src/main/agents/task-workflow-reviewer-agent';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { TaskWorkflowReviewerPromptBuilder } from '../../src/main/agents/task-workflow-reviewer-prompt-builder';
 import type { AgentContext, AgentConfig } from '../../src/shared/types';
 
 function createContext(): AgentContext {
@@ -33,16 +33,16 @@ function createContext(): AgentContext {
   };
 }
 
-describe('TaskWorkflowReviewerAgent', () => {
-  let agent: TaskWorkflowReviewerAgent;
+describe('TaskWorkflowReviewerPromptBuilder', () => {
+  let promptBuilder: TaskWorkflowReviewerPromptBuilder;
 
   beforeEach(() => {
-    agent = new TaskWorkflowReviewerAgent();
+    promptBuilder = new TaskWorkflowReviewerPromptBuilder();
   });
 
   describe('type', () => {
     it('has correct type string', () => {
-      expect(agent.type).toBe('task-workflow-reviewer');
+      expect(promptBuilder.type).toBe('task-workflow-reviewer');
     });
   });
 
@@ -50,7 +50,7 @@ describe('TaskWorkflowReviewerAgent', () => {
     it('returns 50', () => {
       // Access protected method via cast
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = (agent as any).getMaxTurns(createContext());
+      const result = (promptBuilder as any).getMaxTurns(createContext());
       expect(result).toBe(50);
     });
   });
@@ -59,21 +59,21 @@ describe('TaskWorkflowReviewerAgent', () => {
     it('returns config.timeout when provided', () => {
       const config: AgentConfig = { timeout: 120000 };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = (agent as any).getTimeout(createContext(), config);
+      const result = (promptBuilder as any).getTimeout(createContext(), config);
       expect(result).toBe(120000);
     });
 
     it('returns default 5 minutes when config.timeout is not set', () => {
       const config: AgentConfig = {};
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = (agent as any).getTimeout(createContext(), config);
+      const result = (promptBuilder as any).getTimeout(createContext(), config);
       expect(result).toBe(5 * 60 * 1000);
     });
 
     it('returns default 5 minutes when config.timeout is 0 (falsy)', () => {
       const config: AgentConfig = { timeout: 0 };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = (agent as any).getTimeout(createContext(), config);
+      const result = (promptBuilder as any).getTimeout(createContext(), config);
       expect(result).toBe(5 * 60 * 1000);
     });
   });
@@ -81,7 +81,7 @@ describe('TaskWorkflowReviewerAgent', () => {
   describe('getOutputFormat', () => {
     it('returns a valid JSON schema object', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const format = (agent as any).getOutputFormat(createContext()) as {
+      const format = (promptBuilder as any).getOutputFormat(createContext()) as {
         type: string;
         schema: {
           type: string;
@@ -97,7 +97,7 @@ describe('TaskWorkflowReviewerAgent', () => {
 
     it('contains expected required properties', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const format = (agent as any).getOutputFormat(createContext()) as {
+      const format = (promptBuilder as any).getOutputFormat(createContext()) as {
         type: string;
         schema: {
           type: string;
@@ -120,7 +120,7 @@ describe('TaskWorkflowReviewerAgent', () => {
 
     it('overallVerdict has correct enum values', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const format = (agent as any).getOutputFormat(createContext()) as {
+      const format = (promptBuilder as any).getOutputFormat(createContext()) as {
         schema: {
           properties: {
             overallVerdict: { enum: string[] };
@@ -137,7 +137,7 @@ describe('TaskWorkflowReviewerAgent', () => {
 
     it('findings is an array type', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const format = (agent as any).getOutputFormat(createContext()) as {
+      const format = (promptBuilder as any).getOutputFormat(createContext()) as {
         schema: {
           properties: {
             findings: { type: string };
@@ -151,7 +151,7 @@ describe('TaskWorkflowReviewerAgent', () => {
 
   describe('buildPrompt', () => {
     it('contains expected markers for navigation', () => {
-      const prompt = agent.buildPrompt(createContext());
+      const prompt = promptBuilder.buildPrompt(createContext());
 
       expect(prompt).toContain('[[ SUMMARY:START/END ]]');
       expect(prompt).toContain('[[ AGENT_RUN:START');
@@ -160,7 +160,7 @@ describe('TaskWorkflowReviewerAgent', () => {
     });
 
     it('contains workflow steps', () => {
-      const prompt = agent.buildPrompt(createContext());
+      const prompt = promptBuilder.buildPrompt(createContext());
 
       expect(prompt).toContain('## Workflow');
       expect(prompt).toContain('Read the SUMMARY section');
@@ -169,7 +169,7 @@ describe('TaskWorkflowReviewerAgent', () => {
     });
 
     it('contains review criteria sections', () => {
-      const prompt = agent.buildPrompt(createContext());
+      const prompt = promptBuilder.buildPrompt(createContext());
 
       expect(prompt).toContain('## Review criteria');
       expect(prompt).toContain('Efficiency');
@@ -180,7 +180,7 @@ describe('TaskWorkflowReviewerAgent', () => {
     });
 
     it('mentions the report file', () => {
-      const prompt = agent.buildPrompt(createContext());
+      const prompt = promptBuilder.buildPrompt(createContext());
 
       expect(prompt).toContain('.task-review-report.txt');
     });
@@ -188,24 +188,25 @@ describe('TaskWorkflowReviewerAgent', () => {
 
   describe('inferOutcome', () => {
     it('returns review_complete for exitCode 0', () => {
-      const result = agent.inferOutcome('review', 0, 'output');
+      const result = promptBuilder.inferOutcome('review', 0, 'output');
       expect(result).toBe('review_complete');
     });
 
     it('returns failed for non-zero exitCode', () => {
-      const result = agent.inferOutcome('review', 1, 'error output');
+      const result = promptBuilder.inferOutcome('review', 1, 'error output');
       expect(result).toBe('failed');
     });
 
     it('returns failed for exitCode 2', () => {
-      const result = agent.inferOutcome('review', 2, '');
+      const result = promptBuilder.inferOutcome('review', 2, '');
       expect(result).toBe('failed');
     });
   });
 
-  describe('buildResult (inherited from BaseClaudeAgent)', () => {
+  describe('buildResult (inherited from BaseAgentPromptBuilder)', () => {
     it('returns a properly structured result', () => {
-      const result = agent.buildResult(0, 'output text', 'review_complete');
+      const libResult = { exitCode: 0, output: 'output text' };
+      const result = promptBuilder.buildResult(createContext(), libResult, 'review_complete', 'the prompt');
 
       expect(result.exitCode).toBe(0);
       expect(result.output).toBe('output text');
@@ -214,7 +215,8 @@ describe('TaskWorkflowReviewerAgent', () => {
     });
 
     it('includes error when provided', () => {
-      const result = agent.buildResult(1, '', 'failed', 'Something went wrong');
+      const libResult = { exitCode: 1, output: '', error: 'Something went wrong' };
+      const result = promptBuilder.buildResult(createContext(), libResult, 'failed', 'the prompt');
 
       expect(result.exitCode).toBe(1);
       expect(result.error).toBe('Something went wrong');
@@ -222,7 +224,8 @@ describe('TaskWorkflowReviewerAgent', () => {
 
     it('includes cost and structured output when provided', () => {
       const so = { overallVerdict: 'good', executionSummary: 'All good' };
-      const result = agent.buildResult(0, 'text', 'review_complete', undefined, 200, 100, so, 'the prompt');
+      const libResult = { exitCode: 0, output: 'text', costInputTokens: 200, costOutputTokens: 100, structuredOutput: so };
+      const result = promptBuilder.buildResult(createContext(), libResult, 'review_complete', 'the prompt');
 
       expect(result.costInputTokens).toBe(200);
       expect(result.costOutputTokens).toBe(100);

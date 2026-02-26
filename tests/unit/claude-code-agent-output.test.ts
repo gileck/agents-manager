@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ClaudeCodeAgent } from '../../src/main/agents/claude-code-agent';
+import { ImplementorPromptBuilder } from '../../src/main/agents/implementor-prompt-builder';
+import { ClaudeCodeLib } from '../../src/main/libs/claude-code-lib';
+import { Agent } from '../../src/main/agents/agent';
+import { AgentLibRegistry } from '../../src/main/services/agent-lib-registry';
 import type { AgentContext } from '../../src/shared/types';
 
 function createContext(taskId: string = 'test-task'): AgentContext {
@@ -7,6 +10,7 @@ function createContext(taskId: string = 'test-task'): AgentContext {
     task: { id: taskId, title: 'Test task', projectId: 'proj-1', pipelineId: 'pipe-1', status: 'planning', priority: 0, tags: [], metadata: {}, createdAt: Date.now(), updatedAt: Date.now() },
     mode: 'plan',
     workdir: '/tmp/test',
+    project: { id: 'proj-1', name: 'Test', path: '/tmp/test', description: null, config: {}, createdAt: Date.now(), updatedAt: Date.now() },
   };
 }
 
@@ -19,17 +23,21 @@ async function* mockQueryGenerator(messages: SdkStreamMessage[]) {
   }
 }
 
-describe('ClaudeCodeAgent onOutput streaming', () => {
-  let agent: ClaudeCodeAgent;
+describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', () => {
+  let agent: Agent;
+  let lib: ClaudeCodeLib;
   let mockQuery: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    agent = new ClaudeCodeAgent();
+    lib = new ClaudeCodeLib();
+    const registry = new AgentLibRegistry();
+    registry.register(lib);
+    agent = new Agent('claude-code', new ImplementorPromptBuilder(), registry);
     mockQuery = vi.fn();
 
-    // Mock the private loadQuery method to return our mock
+    // Mock the private loadQuery method on the lib to return our mock
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.spyOn(agent as any, 'loadQuery').mockResolvedValue(mockQuery);
+    vi.spyOn(lib as any, 'loadQuery').mockResolvedValue(mockQuery);
   });
 
   it('should call onOutput for each assistant text block', async () => {

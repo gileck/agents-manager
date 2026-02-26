@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PrReviewerAgent } from '../../src/main/agents/pr-reviewer-agent';
+import { PrReviewerPromptBuilder } from '../../src/main/agents/pr-reviewer-prompt-builder';
+import { ClaudeCodeLib } from '../../src/main/libs/claude-code-lib';
+import { Agent } from '../../src/main/agents/agent';
+import { AgentLibRegistry } from '../../src/main/services/agent-lib-registry';
 import type { AgentContext } from '../../src/shared/types';
 
 function createContext(taskId: string = 'test-task'): AgentContext {
@@ -19,21 +22,17 @@ async function* mockQueryGenerator(messages: SdkStreamMessage[]) {
   }
 }
 
-describe('PrReviewerAgent', () => {
-  let agent: PrReviewerAgent;
-  let mockQuery: ReturnType<typeof vi.fn>;
+describe('PrReviewerPromptBuilder', () => {
+  let promptBuilder: PrReviewerPromptBuilder;
 
   beforeEach(() => {
-    agent = new PrReviewerAgent();
-    mockQuery = vi.fn();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.spyOn(agent as any, 'loadQuery').mockResolvedValue(mockQuery);
+    promptBuilder = new PrReviewerPromptBuilder();
   });
 
   describe('getOutputFormat', () => {
     it('returns correct schema shape with enum-restricted verdict', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const format = (agent as any).getOutputFormat(createContext()) as { type: string; schema: Record<string, unknown> } | undefined;
+      const format = (promptBuilder as any).getOutputFormat(createContext()) as { type: string; schema: Record<string, unknown> } | undefined;
       expect(format).toBeDefined();
       expect(format.type).toBe('json_schema');
       expect(format.schema.type).toBe('object');
@@ -45,7 +44,7 @@ describe('PrReviewerAgent', () => {
 
   describe('buildPrompt', () => {
     it('contains tiered review criteria and no REVIEW_VERDICT text', () => {
-      const prompt = agent.buildPrompt(createContext());
+      const prompt = promptBuilder.buildPrompt(createContext());
       expect(prompt).toContain('Must-check');
       expect(prompt).toContain('Should-check');
       expect(prompt).toContain('Nice-to-have');
@@ -58,25 +57,25 @@ describe('PrReviewerAgent', () => {
       ctx.taskContext = [
         { source: 'agent', entryType: 'review_feedback', summary: 'needs changes', createdAt: Date.now() },
       ];
-      const prompt = agent.buildPrompt(ctx);
+      const prompt = promptBuilder.buildPrompt(ctx);
       expect(prompt).toContain('RE-REVIEW');
       expect(prompt).toContain('Verify ALL previously requested changes');
     });
 
     it('does not include re-review notice without prior review', () => {
-      const prompt = agent.buildPrompt(createContext());
+      const prompt = promptBuilder.buildPrompt(createContext());
       expect(prompt).not.toContain('RE-REVIEW');
     });
 
     it('uses project defaultBranch', () => {
       const ctx = createContext();
       ctx.project = { id: 'proj-1', name: 'Test', path: '/tmp', description: null, createdAt: Date.now(), updatedAt: Date.now(), config: { defaultBranch: 'develop' } };
-      const prompt = agent.buildPrompt(ctx);
+      const prompt = promptBuilder.buildPrompt(ctx);
       expect(prompt).toContain('git diff origin/develop..HEAD');
     });
 
     it('defaults to main when no defaultBranch configured', () => {
-      const prompt = agent.buildPrompt(createContext());
+      const prompt = promptBuilder.buildPrompt(createContext());
       expect(prompt).toContain('git diff origin/main..HEAD');
     });
 
@@ -86,7 +85,7 @@ describe('PrReviewerAgent', () => {
         { name: 'Implement API endpoint', status: 'pending' },
         { name: 'Add unit tests', status: 'pending' },
       ];
-      const prompt = agent.buildPrompt(ctx);
+      const prompt = promptBuilder.buildPrompt(ctx);
       expect(prompt).toContain('Task Subtasks - ALL must be implemented:');
       expect(prompt).toContain('- Implement API endpoint');
       expect(prompt).toContain('- Add unit tests');
@@ -95,7 +94,7 @@ describe('PrReviewerAgent', () => {
     it('adds subtask verification to review criteria when subtasks exist', () => {
       const ctx = createContext();
       ctx.task.subtasks = [{ name: 'Test subtask', status: 'pending' }];
-      const prompt = agent.buildPrompt(ctx);
+      const prompt = promptBuilder.buildPrompt(ctx);
       expect(prompt).toContain('Subtask Completeness — verify EACH subtask listed above has been implemented');
       expect(prompt).toContain('If any subtask is missing, you MUST request changes');
     });
@@ -103,7 +102,7 @@ describe('PrReviewerAgent', () => {
     it('includes subtask verification in approval threshold', () => {
       const ctx = createContext();
       ctx.task.subtasks = [{ name: 'Test subtask', status: 'pending' }];
-      const prompt = agent.buildPrompt(ctx);
+      const prompt = promptBuilder.buildPrompt(ctx);
       expect(prompt).toContain('ALL subtasks listed above have been implemented');
       expect(prompt).toContain('If ANY subtask is missing from the implementation, you MUST request changes');
     });
@@ -111,7 +110,7 @@ describe('PrReviewerAgent', () => {
     it('does not add subtask sections when no subtasks exist', () => {
       const ctx = createContext();
       ctx.task.subtasks = [];
-      const prompt = agent.buildPrompt(ctx);
+      const prompt = promptBuilder.buildPrompt(ctx);
       expect(prompt).not.toContain('Task Subtasks');
       expect(prompt).not.toContain('Subtask Completeness');
       expect(prompt).toContain('Correctness — does the code do what the task requires?');
@@ -120,18 +119,19 @@ describe('PrReviewerAgent', () => {
 
   describe('inferOutcome', () => {
     it('returns failed for non-zero exit code', () => {
-      expect(agent.inferOutcome('review', 1, '')).toBe('failed');
+      expect(promptBuilder.inferOutcome('review', 1, '')).toBe('failed');
     });
 
     it('returns approved as default for zero exit code', () => {
-      expect(agent.inferOutcome('review', 0, 'some output')).toBe('approved');
+      expect(promptBuilder.inferOutcome('review', 0, 'some output')).toBe('approved');
     });
   });
 
   describe('buildResult', () => {
     it('uses structuredOutput.verdict as authoritative outcome', () => {
       const so = { verdict: 'changes_requested', summary: 'Issues found', comments: ['Fix imports'] };
-      const result = agent.buildResult(0, 'output text', 'approved', undefined, 100, 50, so);
+      const libResult = { exitCode: 0, output: 'output text', costInputTokens: 100, costOutputTokens: 50, structuredOutput: so };
+      const result = promptBuilder.buildResult(createContext(), libResult, 'approved', 'the prompt');
       expect(result.outcome).toBe('changes_requested');
       expect(result.payload).toBeDefined();
       expect(result.payload!.summary).toBe('Issues found');
@@ -140,20 +140,23 @@ describe('PrReviewerAgent', () => {
 
     it('attaches payload only for changes_requested', () => {
       const so = { verdict: 'approved', summary: 'Looks good', comments: [] };
-      const result = agent.buildResult(0, 'output text', 'approved', undefined, 100, 50, so);
+      const libResult = { exitCode: 0, output: 'output text', costInputTokens: 100, costOutputTokens: 50, structuredOutput: so };
+      const result = promptBuilder.buildResult(createContext(), libResult, 'approved', 'the prompt');
       expect(result.outcome).toBe('approved');
       expect(result.payload).toBeUndefined();
     });
 
     it('falls back gracefully when structured output is absent', () => {
-      const result = agent.buildResult(0, 'some output text', 'approved');
+      const libResult = { exitCode: 0, output: 'some output text' };
+      const result = promptBuilder.buildResult(createContext(), libResult, 'approved', 'the prompt');
       expect(result.outcome).toBe('approved');
       expect(result.payload).toBeUndefined();
     });
 
     it('falls back to output slice when structured output partial (no summary)', () => {
       const so = { verdict: 'changes_requested' } as Partial<{ verdict: string; summary: string; comments: string[] }>;
-      const result = agent.buildResult(0, 'a'.repeat(600), 'approved', undefined, 10, 5, so);
+      const libResult = { exitCode: 0, output: 'a'.repeat(600), costInputTokens: 10, costOutputTokens: 5, structuredOutput: so };
+      const result = promptBuilder.buildResult(createContext(), libResult, 'approved', 'the prompt');
       expect(result.outcome).toBe('changes_requested');
       expect(result.payload).toBeDefined();
       expect(result.payload!.summary).toBe('a'.repeat(500));
@@ -162,7 +165,8 @@ describe('PrReviewerAgent', () => {
 
     it('preserves structuredOutput, prompt, and cost fields', () => {
       const so = { verdict: 'approved', summary: 'ok', comments: [] };
-      const result = agent.buildResult(0, 'text', 'approved', undefined, 200, 100, so, 'the prompt');
+      const libResult = { exitCode: 0, output: 'text', costInputTokens: 200, costOutputTokens: 100, structuredOutput: so };
+      const result = promptBuilder.buildResult(createContext(), libResult, 'approved', 'the prompt');
       expect(result.structuredOutput).toBe(so);
       expect(result.prompt).toBe('the prompt');
       expect(result.costInputTokens).toBe(200);
@@ -170,7 +174,23 @@ describe('PrReviewerAgent', () => {
     });
   });
 
-  describe('execute() integration', () => {
+  describe('execute() integration via Agent', () => {
+    let composedAgent: Agent;
+    let lib: ClaudeCodeLib;
+    let mockQuery: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+      lib = new ClaudeCodeLib();
+      const registry = new AgentLibRegistry();
+      registry.register(lib);
+      composedAgent = new Agent('pr-reviewer', new PrReviewerPromptBuilder(), registry);
+      mockQuery = vi.fn();
+
+      // Mock the private loadQuery method on the lib to return our mock
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      vi.spyOn(lib as any, 'loadQuery').mockResolvedValue(mockQuery);
+    });
+
     it('handles approved path with structured output', async () => {
       const messages = [
         {
@@ -186,7 +206,7 @@ describe('PrReviewerAgent', () => {
       ];
       mockQuery.mockReturnValue(mockQueryGenerator(messages));
 
-      const result = await agent.execute(createContext(), {});
+      const result = await composedAgent.execute(createContext(), {});
       expect(result.exitCode).toBe(0);
       expect(result.outcome).toBe('approved');
       expect(result.payload).toBeUndefined();
@@ -212,7 +232,7 @@ describe('PrReviewerAgent', () => {
       ];
       mockQuery.mockReturnValue(mockQueryGenerator(messages));
 
-      const result = await agent.execute(createContext(), {});
+      const result = await composedAgent.execute(createContext(), {});
       expect(result.exitCode).toBe(0);
       expect(result.outcome).toBe('changes_requested');
       expect(result.payload).toBeDefined();
@@ -231,7 +251,7 @@ describe('PrReviewerAgent', () => {
       ];
       mockQuery.mockReturnValue(mockQueryGenerator(messages));
 
-      const result = await agent.execute(createContext(), {});
+      const result = await composedAgent.execute(createContext(), {});
       expect(result.exitCode).toBe(1);
       expect(result.outcome).toBe('failed');
       expect(result.error).toBe('SDK error');

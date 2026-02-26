@@ -46,7 +46,9 @@ tests/
 ├── cli/
 │   └── cli-integration.test.ts  # CLI commands, output formatting
 └── unit/
-    └── claude-code-agent-output.test.ts  # Agent output parsing
+    ├── claude-code-agent-output.test.ts  # Agent + ClaudeCodeLib output streaming
+    ├── pr-reviewer-agent.test.ts         # PrReviewerPromptBuilder prompt, schema, and integration
+    └── task-workflow-reviewer-agent.test.ts  # TaskWorkflowReviewerPromptBuilder prompt and schema
 ```
 
 ## TestContext (`tests/helpers/test-context.ts`)

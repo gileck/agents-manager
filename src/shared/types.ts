@@ -620,6 +620,7 @@ export interface AgentConfig {
   timeout?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  engine?: string;
 }
 
 export interface AgentRunResult {

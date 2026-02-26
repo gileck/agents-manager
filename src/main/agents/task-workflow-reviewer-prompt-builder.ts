@@ -1,7 +1,7 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
-import { BaseClaudeAgent } from './base-claude-agent';
+import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 
-export class TaskWorkflowReviewerAgent extends BaseClaudeAgent {
+export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'task-workflow-reviewer';
 
   protected getMaxTurns(_context: AgentContext): number {

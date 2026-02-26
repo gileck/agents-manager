@@ -36,11 +36,12 @@ Package manager, commands, deployment, dev tips, app behavior, assets, and key f
 
 Agent types, execution lifecycle, prompts, validation, and context accumulation
 
-**Summary:** ClaudeCodeAgent handles plan/implement/review phases; PrReviewerAgent handles code review. All agents extend BaseClaudeAgent. ScriptedAgent is the test mock with pre-written scripts.
+**Summary:** Agent architecture: Agent class combines a PromptBuilder (domain logic) with an AgentLib (engine logic) resolved from AgentLibRegistry. ImplementorPromptBuilder handles plan/implement/review; PrReviewerPromptBuilder handles code review. ScriptedAgent is the test mock.
 
 **Key Points:**
-- File: src/main/agents/ — ClaudeCodeAgent, PrReviewerAgent, ScriptedAgent
-- BaseClaudeAgent.execute() accumulates context across turns
+- File: src/main/agents/ — Agent, ImplementorPromptBuilder, PrReviewerPromptBuilder, ScriptedAgent
+- File: src/main/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib
+- Agent resolves AgentLib from registry via config.engine at execute() time
 - Prompt templates live in src/main/agents/prompts/
 
 **Docs:** [agent-system.md](docs/agent-system.md)

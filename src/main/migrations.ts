@@ -739,6 +739,10 @@ export function getMigrations(): Migration[] {
         CREATE INDEX idx_chat_messages_session ON chat_messages(session_id, created_at)
       `,
     },
+    {
+      name: '068_seed_cursor_codex_agent_definitions',
+      sql: getSeedNewEngineAgentDefinitionsSql(),
+    },
   ];
 }
 
@@ -1646,5 +1650,15 @@ function getUpdateAgentPromptTemplatesSql(): string {
     `UPDATE agent_definitions SET modes = '${escSql(claudeCodeModes)}', updated_at = ${ts} WHERE id = 'agent-def-claude-code'`,
     `UPDATE agent_definitions SET modes = '${escSql(implementorModes)}', updated_at = ${ts} WHERE id = 'agent-def-implementor'`,
     `UPDATE agent_definitions SET modes = '${escSql(reviewerModes)}', updated_at = ${ts} WHERE id = 'agent-def-pr-reviewer'`,
+  ].join(';\n');
+}
+
+function getSeedNewEngineAgentDefinitionsSql(): string {
+  const ts = Date.now();
+  const emptyModes = escSql(JSON.stringify([]));
+  const emptySkills = escSql(JSON.stringify([]));
+  return [
+    `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, model, system_prompt, modes, timeout, skills, created_at, updated_at) VALUES ('agent-def-cursor-agent', 'Cursor Agent', 'Agent powered by Cursor CLI', 'cursor-agent', NULL, NULL, '${emptyModes}', NULL, '${emptySkills}', ${ts}, ${ts})`,
+    `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, model, system_prompt, modes, timeout, skills, created_at, updated_at) VALUES ('agent-def-codex-cli', 'Codex CLI Agent', 'Agent powered by OpenAI Codex CLI', 'codex-cli', NULL, NULL, '${emptyModes}', NULL, '${emptySkills}', ${ts}, ${ts})`,
   ].join(';\n');
 }

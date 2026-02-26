@@ -42,9 +42,14 @@ import { LocalGitOps } from '../services/local-git-ops';
 import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
 import { MultiChannelNotificationRouter } from '../services/multi-channel-notification-router';
-import { ClaudeCodeAgent } from '../agents/claude-code-agent';
-import { PrReviewerAgent } from '../agents/pr-reviewer-agent';
-import { TaskWorkflowReviewerAgent } from '../agents/task-workflow-reviewer-agent';
+import { Agent } from '../agents/agent';
+import { ImplementorPromptBuilder } from '../agents/implementor-prompt-builder';
+import { PrReviewerPromptBuilder } from '../agents/pr-reviewer-prompt-builder';
+import { TaskWorkflowReviewerPromptBuilder } from '../agents/task-workflow-reviewer-prompt-builder';
+import { ClaudeCodeLib } from '../libs/claude-code-lib';
+import { CursorAgentLib } from '../libs/cursor-agent-lib';
+import { CodexCliLib } from '../libs/codex-cli-lib';
+import { AgentLibRegistry } from '../services/agent-lib-registry';
 import { AgentSupervisor } from '../services/agent-supervisor';
 import { TaskReviewReportBuilder } from '../services/task-review-report-builder';
 import { WorkflowReviewSupervisor } from '../services/workflow-review-supervisor';
@@ -145,11 +150,17 @@ export function createAppServices(db: Database.Database): AppServices {
     new ContextSource(db),
   ]);
 
-  // Agent framework + adapters
+  // Agent lib registry — engines that execute prompts
+  const agentLibRegistry = new AgentLibRegistry();
+  agentLibRegistry.register(new ClaudeCodeLib());
+  agentLibRegistry.register(new CursorAgentLib());
+  agentLibRegistry.register(new CodexCliLib());
+
+  // Agent framework — each Agent combines a prompt builder with the lib registry
   const agentFramework = new AgentFrameworkImpl();
-  agentFramework.registerAgent(new ClaudeCodeAgent());
-  agentFramework.registerAgent(new PrReviewerAgent());
-  agentFramework.registerAgent(new TaskWorkflowReviewerAgent());
+  agentFramework.registerAgent(new Agent('claude-code', new ImplementorPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('pr-reviewer', new PrReviewerPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('task-workflow-reviewer', new TaskWorkflowReviewerPromptBuilder(), agentLibRegistry));
 
   // Report builder for workflow reviewer agent
   const taskReviewReportBuilder = new TaskReviewReportBuilder(

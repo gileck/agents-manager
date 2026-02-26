@@ -24,6 +24,16 @@ const MODELS_BY_ENGINE: Record<string, { value: string; label: string }[]> = {
     { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
     { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
   ],
+  'cursor-agent': [
+    { value: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'cursor-small', label: 'Cursor Small' },
+  ],
+  'codex-cli': [
+    { value: 'o3', label: 'o3' },
+    { value: 'o4-mini', label: 'o4-mini' },
+    { value: 'codex-mini', label: 'Codex Mini' },
+  ],
 };
 
 export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }: AgentDefinitionDialogProps) {
@@ -152,6 +162,8 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="claude-code">claude-code</SelectItem>
+                <SelectItem value="cursor-agent">cursor-agent</SelectItem>
+                <SelectItem value="codex-cli">codex-cli</SelectItem>
               </SelectContent>
             </Select>
           </div>
