@@ -185,6 +185,30 @@ gh pr create --title {title} --body {body} --head {head} --base {base}
 
 Returns `PRInfo` with `{ url, number }`.
 
+### Multi-Phase PR Enrichment
+
+For tasks with multiple implementation phases (`task.phases.length > 1`), the `push_and_create_pr` hook enriches the PR title and body:
+
+**Title format:**
+```
+[Phase N/M] {task title}
+```
+
+Example: `[Phase 1/3] Add user authentication`
+
+**Body format:**
+```markdown
+## {phase name}
+
+Phase N of M for task {taskId}
+
+### Subtasks
+- [ ] Subtask 1
+- [ ] Subtask 2
+```
+
+Each phase creates its own PR on a separate branch (`task/{taskId}/implement/phase-{n}`). If a PR already exists for the same branch, a force-push updates it instead of creating a duplicate. If the existing PR is on a different branch (i.e. from a prior phase), a new PR is created for the current phase.
+
 ### PR Merge
 
 ```
@@ -207,7 +231,7 @@ Returns `'merged' | 'closed' | 'open'`.
 
 - **Mechanism:** Queries `gh pr view {number} --json mergeable`
 - **Retry strategy:** Up to 10 attempts with 10-second delays (total: up to ~100 seconds)
-- **Progress logging:** Each attempt logs the PR number, attempt count, and current mergeable state
+- **Progress logging:** Each attempt logs the PR number, attempt count, and current mergeable state via an optional `onProgress` callback. When called from `scm-handler.ts`, progress is routed to the structured task event log (not stdout)
 - **States:** `MERGEABLE` returns true, `CONFLICTING` returns false immediately, `UNKNOWN` triggers a retry
 - **Fallback:** If still `UNKNOWN` after all 10 attempts, returns `false` (not mergeable)
 

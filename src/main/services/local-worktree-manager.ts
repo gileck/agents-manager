@@ -142,8 +142,8 @@ export class LocalWorktreeManager implements IWorktreeManager {
       if (activeSet && activeSet.has(wt.taskId)) continue;
       try {
         await this.git(['worktree', 'remove', wt.path, '--force']);
-      } catch {
-        // Best-effort cleanup
+      } catch (err) {
+        console.warn('Worktree cleanup failed:', err);
       }
     }
   }
@@ -181,7 +181,7 @@ export class LocalWorktreeManager implements IWorktreeManager {
         ? segments[wtDirIdx + 1]
         : '';
 
-      if (taskId) {
+      if (taskId && branch) {
         worktrees.push({ path, branch, taskId, locked });
       }
     }

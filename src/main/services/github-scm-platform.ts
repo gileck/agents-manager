@@ -49,16 +49,24 @@ export class GitHubScmPlatform implements IScmPlatform {
     await this.gh(['pr', 'merge', String(prNumber), '--squash', '--delete-branch']);
   }
 
-  async isPRMergeable(prUrl: string): Promise<boolean> {
+  async isPRMergeable(prUrl: string, onProgress?: (message: string) => void): Promise<boolean> {
     const prNumber = this.extractPRNumber(prUrl);
     const maxAttempts = 10;
     const delayMs = 10_000; // 10s between attempts
+
+    const log = (msg: string) => {
+      if (onProgress) {
+        onProgress(msg);
+      } else {
+        console.log(msg);
+      }
+    };
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const output = await this.gh(['pr', 'view', String(prNumber), '--json', 'mergeable']);
       const data = JSON.parse(output);
       const state = data.mergeable as string;
-      console.log(`isPRMergeable: PR #${prNumber} attempt ${attempt}/${maxAttempts} — state: ${state}`);
+      log(`isPRMergeable: PR #${prNumber} attempt ${attempt}/${maxAttempts} — state: ${state}`);
       if (state !== 'UNKNOWN') {
         return state === 'MERGEABLE';
       }
@@ -66,7 +74,7 @@ export class GitHubScmPlatform implements IScmPlatform {
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
-    console.log(`isPRMergeable: PR #${prNumber} still UNKNOWN after ${maxAttempts} attempts — treating as not mergeable`);
+    log(`isPRMergeable: PR #${prNumber} still UNKNOWN after ${maxAttempts} attempts — treating as not mergeable`);
     return false;
   }
 

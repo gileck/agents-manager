@@ -43,7 +43,9 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     // Pre-merge mergeability check BEFORE worktree deletion so the worktree
     // is preserved for recovery if the PR can't be merged.
     try {
-      const mergeable = await scmPlatform.isPRMergeable(prUrl);
+      const mergeable = await scmPlatform.isPRMergeable(prUrl, (message) => {
+        void ghLog(message, 'info', { url: prUrl });
+      });
       if (!mergeable) {
         const msg = 'PR is not mergeable (likely has conflicts with base branch)';
         await ghLog(msg, 'error', { url: prUrl });
