@@ -1,6 +1,8 @@
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IProjectStore } from '../interfaces/project-store';
+import type { ITaskStore } from '../interfaces/task-store';
+import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ChatMessage, AgentChatMessage } from '../../shared/types';
 import { SandboxGuard } from './sandbox-guard';
 
@@ -52,7 +54,7 @@ const WRITE_TOOL_NAMES = new Set([
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
 ]);
 
-const SYSTEM_PROMPT = `You are a project assistant with read-only access to the codebase and full access to the \`npx agents-manager\` CLI for task management.
+const PROJECT_SYSTEM_PROMPT = `You are a project assistant with read-only access to the codebase and full access to the \`npx agents-manager\` CLI for task management.
 
 ## Capabilities
 - Read and explore project files (Read, Glob, Grep, LS tools)
@@ -69,6 +71,8 @@ const SYSTEM_PROMPT = `You are a project assistant with read-only access to the 
 export interface RunningAgent {
   sessionId: string;
   sessionName: string;
+  scopeType: 'project' | 'task';
+  scopeId: string;
   projectId: string;
   projectName: string;
   status: 'running' | 'completed' | 'failed';
@@ -85,6 +89,8 @@ export class ChatAgentService {
     private chatMessageStore: IChatMessageStore,
     private chatSessionStore: IChatSessionStore,
     private projectStore: IProjectStore,
+    private taskStore: ITaskStore,
+    private pipelineStore: IPipelineStore,
   ) {}
 
   async send(
@@ -93,7 +99,7 @@ export class ChatAgentService {
     onOutput: (chunk: string) => void,
     onMessage?: (msg: AgentChatMessage) => void,
   ): Promise<{ userMessage: ChatMessage; sessionId: string }> {
-    // Get session to find project
+    // Get session to find scope
     const session = await this.chatSessionStore.getSession(sessionId);
     if (!session) {
       throw new Error('Session not found');
@@ -112,16 +118,17 @@ export class ChatAgentService {
       content: message,
     });
 
-    // Load project for path info
-    const project = await this.projectStore.getProject(session.projectId);
-    const projectPath = project?.path || process.cwd();
+    // Resolve project path and system prompt based on scope
+    const { projectPath, systemPrompt, projectId, projectName } = await this.resolveScope(session);
 
     // Track running agent
     this.runningAgents.set(sessionId, {
       sessionId,
       sessionName: session.name,
-      projectId: session.projectId,
-      projectName: project?.name || 'Unknown Project',
+      scopeType: session.scopeType,
+      scopeId: session.scopeId,
+      projectId,
+      projectName,
       status: 'running',
       startedAt: Date.now(),
       lastActivity: Date.now(),
@@ -150,7 +157,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    this.runAgent(sessionId, projectPath, prompt, abortController, onOutput, onMessage).catch((err) => {
+    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, onOutput, onMessage).catch((err) => {
       this.runningControllers.delete(sessionId);
       onOutput(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
       onOutput(CHAT_COMPLETE_SENTINEL);
@@ -165,7 +172,7 @@ export class ChatAgentService {
         if (agent && agent.status === 'failed') {
           this.runningAgents.delete(sessionId);
         }
-      }, 5000); // 5 second delay
+      }, 5000);
     });
 
     return { userMessage, sessionId };
@@ -276,9 +283,88 @@ export class ChatAgentService {
     return Array.from(this.runningAgents.values());
   }
 
+  private async resolveScope(session: { scopeType: string; scopeId: string }): Promise<{
+    projectPath: string;
+    systemPrompt: string;
+    projectId: string;
+    projectName: string;
+  }> {
+    if (session.scopeType === 'task') {
+      const task = await this.taskStore.getTask(session.scopeId);
+      if (!task) throw new Error(`Task not found: ${session.scopeId}`);
+      const project = await this.projectStore.getProject(task.projectId);
+      if (!project?.path) throw new Error(`Project not found or has no path for task: ${session.scopeId}`);
+      const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+      const systemPrompt = this.buildTaskSystemPrompt(task, pipeline?.name ?? task.pipelineId);
+      return {
+        projectPath: project.path,
+        systemPrompt,
+        projectId: task.projectId,
+        projectName: project.name,
+      };
+    }
+
+    if (session.scopeType !== 'project') {
+      throw new Error(`Unknown scope type: ${session.scopeType}`);
+    }
+
+    // Project scope
+    const project = await this.projectStore.getProject(session.scopeId);
+    if (!project?.path) throw new Error(`Project not found or has no path: ${session.scopeId}`);
+    return {
+      projectPath: project.path,
+      systemPrompt: PROJECT_SYSTEM_PROMPT,
+      projectId: session.scopeId,
+      projectName: project.name,
+    };
+  }
+
+  private buildTaskSystemPrompt(
+    task: { id: string; title: string; status: string; description?: string | null; priority?: number; assignee?: string | null; plan?: string | null; technicalDesign?: string | null },
+    pipelineName: string,
+  ): string {
+    const lines: string[] = [
+      `You are a task assistant for task #${task.id}: "${task.title}".`,
+      `Current status: ${task.status} | Pipeline: ${pipelineName}`,
+      '',
+      '## Task Details',
+    ];
+
+    if (task.description) lines.push(`- Description: ${task.description}`);
+    if (task.priority !== undefined) lines.push(`- Priority: P${task.priority}`);
+    if (task.assignee) lines.push(`- Assignee: ${task.assignee}`);
+    if (task.plan) lines.push(`\n### Plan\n${task.plan}`);
+    if (task.technicalDesign) lines.push(`\n### Technical Design\n${task.technicalDesign}`);
+
+    lines.push('');
+    lines.push('## Capabilities');
+    lines.push('- Read and explore project files (Read, Glob, Grep, LS tools)');
+    lines.push('- Run `npx agents-manager` CLI commands to manage THIS task (via Bash tool)');
+    lines.push('- Answer questions about the task, code, and project');
+    lines.push('');
+    lines.push('## Rules');
+    lines.push('- You MUST NOT modify any files. Do not use Write, Edit, MultiEdit, or NotebookEdit tools.');
+    lines.push(`- Focus on task #${task.id}. Use \`npx agents-manager tasks get ${task.id}\` to refresh task state.`);
+    lines.push('- Be concise and helpful. Format responses with markdown when useful.');
+    lines.push('- When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.');
+    lines.push('');
+    lines.push('## Useful commands');
+    lines.push(`- npx agents-manager tasks get ${task.id}`);
+    lines.push(`- npx agents-manager tasks update ${task.id} --title/--description/--priority/--assignee`);
+    lines.push(`- npx agents-manager tasks transition ${task.id} <status>`);
+    lines.push(`- npx agents-manager tasks transitions ${task.id}`);
+    lines.push(`- npx agents-manager tasks subtask list/add/update/remove ${task.id}`);
+    lines.push(`- npx agents-manager deps list/add/remove ${task.id}`);
+    lines.push(`- npx agents-manager events list --task ${task.id}`);
+    lines.push(`- npx agents-manager prompts list --task ${task.id}`);
+
+    return lines.join('\n');
+  }
+
   private async runAgent(
     sessionId: string,
     projectPath: string,
+    systemPrompt: string,
     prompt: string,
     abortController: AbortController,
     onOutput: (chunk: string) => void,
@@ -313,7 +399,7 @@ export class ChatAgentService {
 
     try {
       for await (const message of query({
-        prompt: `${SYSTEM_PROMPT}\n\n${prompt}`,
+        prompt: `${systemPrompt}\n\n${prompt}`,
         options: {
           cwd: projectPath,
           abortController,
@@ -432,7 +518,7 @@ export class ChatAgentService {
           });
         } catch (persistErr) {
           console.error('[ChatAgentService] Failed to persist assistant response:', persistErr);
-          try { onOutput('\n[Warning: Failed to save this response. It may not appear after refresh.]\n'); } catch { /* best effort */ }
+          try { onOutput('\n[Warning: Failed to save this response. It may not appear after refresh.]\n'); } catch (deliveryErr) { console.warn('[ChatAgentService] persist-warning delivery failed:', deliveryErr); }
         }
       }
 

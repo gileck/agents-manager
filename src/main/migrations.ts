@@ -783,6 +783,20 @@ export function getMigrations(): Migration[] {
         CREATE INDEX idx_chat_messages_session ON chat_messages(session_id, created_at)
       `,
     },
+    {
+      name: '071_unify_chat_sessions_scope',
+      sql: `
+        -- Add scope columns to project_chat_sessions
+        ALTER TABLE project_chat_sessions ADD COLUMN scope_type TEXT NOT NULL DEFAULT 'project';
+        ALTER TABLE project_chat_sessions ADD COLUMN scope_id TEXT NOT NULL DEFAULT '';
+
+        -- Backfill existing rows: scope_type='project', scope_id=project_id
+        UPDATE project_chat_sessions SET scope_id = project_id WHERE scope_type = 'project';
+
+        -- Index for scope-based lookups
+        CREATE INDEX IF NOT EXISTS idx_chat_sessions_scope ON project_chat_sessions(scope_type, scope_id)
+      `,
+    },
   ];
 }
 

@@ -31,8 +31,7 @@ import type {
   PlanComment,
 } from '../../shared/types';
 import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
-import { useTaskChat } from '../hooks/useTaskChat';
-import { AgentChat } from '../components/chat/AgentChat';
+import { ChatPanel } from '../components/chat/ChatPanel';
 
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
@@ -85,9 +84,6 @@ export function TaskDetailPage() {
     () => id ? window.api.tasks.contextEntries(id) : Promise.resolve([]),
     [id]
   );
-
-  // Task chat
-  const taskChat = useTaskChat(id ?? null);
 
   // Derived agent state
   const isAgentPipeline = pipeline?.statuses.some((s) => s.category === 'agent_running') ?? false;
@@ -712,37 +708,7 @@ export function TaskDetailPage() {
         </TabsContent>
 
         <TabsContent value="chat" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 16px 0', flexShrink: 0 }}>
-              {taskChat.messages.length > 0 && (
-                <button
-                  onClick={taskChat.clearChat}
-                  style={{ fontSize: 12, color: 'var(--muted-foreground)', cursor: 'pointer', background: 'none', border: 'none', padding: '2px 6px' }}
-                >
-                  Clear chat
-                </button>
-              )}
-            </div>
-            {taskChat.error && (
-              <div style={{ padding: '8px 16px', fontSize: 13, color: '#f87171' }}>
-                Error: {taskChat.error}
-              </div>
-            )}
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <AgentChat
-                messages={taskChat.messages}
-                isRunning={taskChat.isStreaming}
-                onSend={taskChat.sendMessage}
-                onStop={taskChat.stopChat}
-                emptyState={
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--muted-foreground)' }}>
-                    <span style={{ fontSize: 14 }}>Ask questions about this task</span>
-                    <span style={{ fontSize: 12 }}>The assistant can read files and manage this task via the CLI</span>
-                  </div>
-                }
-              />
-            </div>
-          </div>
+          <ChatPanel scope={{ type: 'task', id: id! }} />
         </TabsContent>
 
         <TabsContent value="review" style={{ padding: '20px 24px', overflowY: 'auto' }}>

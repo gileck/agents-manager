@@ -1,4 +1,5 @@
 import type { IChatSessionStore, ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput } from '../interfaces/chat-session-store';
+import type { ChatScopeType } from '../../shared/types';
 import type Database from 'better-sqlite3';
 import { generateId, now } from './utils';
 
@@ -10,7 +11,9 @@ export class SqliteChatSessionStore implements IChatSessionStore {
   async createSession(input: ChatSessionCreateInput): Promise<ChatSession> {
     const session: ChatSession = {
       id: generateId(),
-      projectId: input.projectId,
+      projectId: input.scopeType === 'project' ? input.scopeId : '',
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
       name: input.name,
       createdAt: now(),
       updatedAt: now(),
@@ -18,11 +21,11 @@ export class SqliteChatSessionStore implements IChatSessionStore {
 
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO project_chat_sessions (id, project_id, name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO project_chat_sessions (id, project_id, scope_type, scope_id, name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run(session.id, session.projectId, session.name, session.createdAt, session.updatedAt);
+      stmt.run(session.id, session.projectId, session.scopeType, session.scopeId, session.name, session.createdAt, session.updatedAt);
       return session;
     } catch (error) {
       throw new Error(`Failed to create chat session: ${error instanceof Error ? error.message : String(error)}`);
@@ -32,7 +35,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
   async getSession(id: string): Promise<ChatSession | null> {
     try {
       const stmt = this.db.prepare(`
-        SELECT id, project_id as projectId, name, created_at as createdAt, updated_at as updatedAt
+        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, created_at as createdAt, updated_at as updatedAt
         FROM project_chat_sessions
         WHERE id = ?
       `);
@@ -44,16 +47,16 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     }
   }
 
-  async listSessionsForProject(projectId: string): Promise<ChatSession[]> {
+  async listSessionsForScope(scopeType: ChatScopeType, scopeId: string): Promise<ChatSession[]> {
     try {
       const stmt = this.db.prepare(`
-        SELECT id, project_id as projectId, name, created_at as createdAt, updated_at as updatedAt
+        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, created_at as createdAt, updated_at as updatedAt
         FROM project_chat_sessions
-        WHERE project_id = ?
+        WHERE scope_type = ? AND scope_id = ?
         ORDER BY created_at ASC
       `);
 
-      const rows = stmt.all(projectId) as ChatSession[];
+      const rows = stmt.all(scopeType, scopeId) as ChatSession[];
       return rows;
     } catch (error) {
       throw new Error(`Failed to list chat sessions: ${error instanceof Error ? error.message : String(error)}`);

@@ -1,17 +1,30 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatSession } from '../../shared/types';
 
-const storageKey = (projectId: string) => `chat.currentSessionId.${projectId}`;
+export interface ChatScope {
+  type: 'project' | 'task';
+  id: string;
+}
 
-export function useChatSessions(projectId: string | null) {
+const storageKey = (scope: ChatScope) => `chat.currentSessionId.${scope.type}:${scope.id}`;
+
+export function useChatSessions(scope: ChatScope | null) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load sessions when project changes
+  // Keep a ref so callbacks always see the latest scope without re-creating
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+
+  // Stable scope key for dependency tracking
+  const scopeKey = scope ? `${scope.type}:${scope.id}` : null;
+
+  // Load sessions when scope changes
   useEffect(() => {
-    if (!projectId) {
+    const currentScope = scopeRef.current;
+    if (!currentScope) {
       setSessions([]);
       setCurrentSessionId(null);
       return;
@@ -21,46 +34,47 @@ export function useChatSessions(projectId: string | null) {
     setError(null);
 
     window.api.chatSession
-      .list(projectId)
+      .list(currentScope.type, currentScope.id)
       .then((loadedSessions) => {
         setSessions(loadedSessions);
 
         // If no sessions exist, create a default one
         if (loadedSessions.length === 0) {
-          return window.api.chatSession.create(projectId, 'General').then((newSession) => {
+          return window.api.chatSession.create(currentScope.type, currentScope.id, 'General').then((newSession) => {
             setSessions([newSession]);
             setCurrentSessionId(newSession.id);
-            localStorage.setItem(storageKey(projectId), newSession.id);
+            localStorage.setItem(storageKey(currentScope), newSession.id);
           });
         } else {
           // Restore persisted session if it still exists, otherwise fall back to first
-          const stored = localStorage.getItem(storageKey(projectId));
+          const stored = localStorage.getItem(storageKey(currentScope));
           const restoredSession = stored && loadedSessions.find(s => s.id === stored);
           const nextId = restoredSession ? stored : loadedSessions[0].id;
           setCurrentSessionId(nextId);
-          localStorage.setItem(storageKey(projectId), nextId);
+          localStorage.setItem(storageKey(currentScope), nextId);
         }
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [projectId]);
+  }, [scopeKey]);
 
   const createSession = useCallback(
     async (name: string) => {
-      if (!projectId) return;
+      const currentScope = scopeRef.current;
+      if (!currentScope) return;
 
       try {
-        const newSession = await window.api.chatSession.create(projectId, name);
+        const newSession = await window.api.chatSession.create(currentScope.type, currentScope.id, name);
         setSessions((prev) => [...prev, newSession]);
         setCurrentSessionId(newSession.id);
-        localStorage.setItem(storageKey(projectId), newSession.id);
+        localStorage.setItem(storageKey(currentScope), newSession.id);
         return newSession;
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
         throw err;
       }
     },
-    [projectId]
+    [scopeKey]
   );
 
   const renameSession = useCallback(async (sessionId: string, newName: string) => {
@@ -94,8 +108,9 @@ export function useChatSessions(projectId: string | null) {
           if (sessionId === currentSessionId) {
             const remainingSessions = sessions.filter((s) => s.id !== sessionId);
             if (remainingSessions.length > 0) {
+              const currentScope = scopeRef.current;
               setCurrentSessionId(remainingSessions[0].id);
-              if (projectId) localStorage.setItem(storageKey(projectId), remainingSessions[0].id);
+              if (currentScope) localStorage.setItem(storageKey(currentScope), remainingSessions[0].id);
             }
           }
         }
@@ -111,10 +126,11 @@ export function useChatSessions(projectId: string | null) {
   const switchSession = useCallback((sessionId: string) => {
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
+      const currentScope = scopeRef.current;
       setCurrentSessionId(sessionId);
-      if (projectId) localStorage.setItem(storageKey(projectId), sessionId);
+      if (currentScope) localStorage.setItem(storageKey(currentScope), sessionId);
     }
-  }, [sessions, projectId]);
+  }, [sessions]);
 
   return {
     sessions,

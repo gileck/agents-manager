@@ -742,44 +742,17 @@ export function registerIpcHandlers(services: AppServices): void {
   });
 
   // ============================================
-  // Task Chat Operations
-  // ============================================
-
-  registerIpcHandler(IPC_CHANNELS.TASK_CHAT_SEND, async (_, taskId: string, message: string) => {
-    validateId(taskId);
-    if (!message || typeof message !== 'string') throw new Error('Message is required');
-    return services.taskChatAgentService.send(
-      taskId,
-      message,
-      (chunk) => sendToRenderer(IPC_CHANNELS.TASK_CHAT_OUTPUT, taskId, chunk),
-      (msg) => sendToRenderer(IPC_CHANNELS.TASK_CHAT_MESSAGE, taskId, msg),
-    );
-  });
-
-  registerIpcHandler(IPC_CHANNELS.TASK_CHAT_STOP, async (_, taskId: string) => {
-    validateId(taskId);
-    services.taskChatAgentService.stop(taskId);
-  });
-
-  registerIpcHandler(IPC_CHANNELS.TASK_CHAT_MESSAGES, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.taskChatAgentService.getMessages(taskId);
-  });
-
-  registerIpcHandler(IPC_CHANNELS.TASK_CHAT_CLEAR, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.taskChatAgentService.clearMessages(taskId);
-  });
-
-  // ============================================
   // Chat Session Operations
   // ============================================
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_CREATE, async (_, input: { projectId: string; name: string }) => {
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_CREATE, async (_, input: { scopeType: string; scopeId: string; name: string }) => {
     if (!input || typeof input !== 'object') {
       throw new Error('Invalid input: expected object');
     }
-    validateId(input.projectId);
+    if (!input.scopeType || (input.scopeType !== 'project' && input.scopeType !== 'task')) {
+      throw new Error('scopeType must be "project" or "task"');
+    }
+    validateId(input.scopeId);
     if (!input.name || typeof input.name !== 'string') {
       throw new Error('Session name is required and must be a string');
     }
@@ -789,20 +762,27 @@ export function registerIpcHandlers(services: AppServices): void {
     if (input.name.trim().length === 0) {
       throw new Error('Session name cannot be empty');
     }
-    // Verify project exists
-    const project = await services.projectStore.getProject(input.projectId);
-    if (!project) {
-      throw new Error('Project not found');
+    // Verify the scope target exists
+    if (input.scopeType === 'project') {
+      const project = await services.projectStore.getProject(input.scopeId);
+      if (!project) throw new Error('Project not found');
+    } else {
+      const task = await services.taskStore.getTask(input.scopeId);
+      if (!task) throw new Error('Task not found');
     }
     return services.chatSessionStore.createSession({
-      projectId: input.projectId,
+      scopeType: input.scopeType as 'project' | 'task',
+      scopeId: input.scopeId,
       name: input.name.trim(),
     });
   });
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_LIST, async (_, projectId: string) => {
-    validateId(projectId);
-    return services.chatSessionStore.listSessionsForProject(projectId);
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_LIST, async (_, scopeType: string, scopeId: string) => {
+    if (!scopeType || (scopeType !== 'project' && scopeType !== 'task')) {
+      throw new Error('scopeType must be "project" or "task"');
+    }
+    validateId(scopeId);
+    return services.chatSessionStore.listSessionsForScope(scopeType as 'project' | 'task', scopeId);
   });
 
   registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name: string }) => {

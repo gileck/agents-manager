@@ -855,17 +855,23 @@ export interface ChatMessageCreateInput {
   costOutputTokens?: number;
 }
 
+// Chat scope type
+export type ChatScopeType = 'project' | 'task';
+
 // Chat Session types
 export interface ChatSession {
   id: string;
   projectId: string;
+  scopeType: ChatScopeType;
+  scopeId: string;
   name: string;
   createdAt: number;
   updatedAt: number;
 }
 
 export interface ChatSessionCreateInput {
-  projectId: string;
+  scopeType: ChatScopeType;
+  scopeId: string;
   name: string;
 }
 
@@ -876,6 +882,8 @@ export interface ChatSessionUpdateInput {
 export interface RunningAgent {
   sessionId: string;
   sessionName: string;
+  scopeType: ChatScopeType;
+  scopeId: string;
   projectId: string;
   projectName: string;
   status: 'running' | 'completed' | 'failed';
