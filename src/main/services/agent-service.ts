@@ -151,16 +151,17 @@ export class AgentService implements IAgentService {
 
     const projectPath = project.path;
     if (!projectPath) { this.spawningTasks.delete(taskId); throw new Error(`Project ${project.id} has no path configured`); }
+
+    let run: AgentRun | undefined;
+    try {
     const worktreeManager = this.createWorktreeManager(projectPath);
 
     // 2. Create agent run record
-    const run = await this.agentRunStore.createRun({ taskId, agentType, mode });
+    run = await this.agentRunStore.createRun({ taskId, agentType, mode });
     // Register immediately so the supervisor doesn't flag this as a ghost during setup.
     // The setup steps (worktree creation, git fetch/rebase) can take seconds to minutes,
     // creating a window where the DB says 'running' but backgroundPromises has no entry yet.
     this.initializingRunIds.add(run.id);
-
-    try {
     // 3. Manage phase
     let phase = await this.taskPhaseStore.getActivePhase(taskId);
     if (!phase) {
@@ -360,7 +361,7 @@ export class AgentService implements IAgentService {
     } catch (err) {
       // Setup failed before the agent could start — remove from initializing set
       // so the supervisor can detect the orphaned DB record as a ghost.
-      this.initializingRunIds.delete(run.id);
+      if (run) { this.initializingRunIds.delete(run.id); }
       // Release spawn lock if execute() fails before reaching runAgentInBackground()
       this.spawningTasks.delete(taskId);
       throw err;
