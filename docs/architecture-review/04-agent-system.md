@@ -1,35 +1,47 @@
 # Architecture Review: Agent System
 
-**Date:** 2026-02-27 (Round 2 re-review)
+**Date:** 2026-02-27 (Round 3 re-review)
 **Component:** Agent System (AI Execution Layer)
-**Previous Score: 8.5 / 10**
-**Updated Score: 9.0 / 10**
+**Previous Score: 9.0 / 10**
+**Updated Score: 9.3 / 10**
 
-## Round 2 Changes Implemented
+## Round 3 Changes Implemented
 
-1. **`AgentService` god-class decomposition** -- Three responsibilities extracted from `runAgentInBackground` (~280 lines removed):
-   - `SubtaskSyncInterceptor` (124 lines) -- Owns `wrappedOnMessage` logic, `mapSdkStatus` helper, and `persistSubtaskChanges`. Clean constructor-injected class with single `handleMessage(msg)` entry point. Properly encapsulates the `sdkTaskIdToSubtaskName` map and `currentSubtasks` state.
-   - `AgentOutputFlusher` (115 lines) -- Owns `outputBuffer`, `messagesBuffer`, `flushInterval`, periodic DB flush, and live cost/progress data extraction from the running agent. `start()`/`stop()` lifecycle, configurable constants (`MAX_OUTPUT_BUFFER`, `MAX_MESSAGES_BUFFER`, `FLUSH_INTERVAL_MS`), and error counting.
-   - `PostRunExtractor` (240 lines) -- Owns plan extraction, technical design extraction, context entry saving, and raw-output parsing fallbacks. Each responsibility is a clean public method (`extractPlan`, `extractTechnicalDesign`, `saveContextEntry`).
-   - `AgentService` reduced from ~1230 lines to 949 lines. `runAgentInBackground` now orchestrates the extracted classes rather than implementing all details inline.
+1. **`ValidationRunner` extraction** (132 lines) -- Extracted from `AgentService.runAgentInBackground` into `src/main/services/validation-runner.ts`:
+   - Validation retry while-loop with cost accumulation across retries
+   - Run-ID ownership guard (prevents misattribution if run references become stale)
+   - Final validation check after retries exhausted
+   - `runValidation()` shell command executor (moved from AgentService private method)
+   - `getValidationCommands()` static method -- pure function for mode-based command filtering
+   - Fixed misleading `passed` log: now tracks `validationPassed` boolean explicitly instead of using `attempts < maxRetries` as proxy (review finding)
 
-2. **`ChatAgentService` SDK loop consolidation** -- New private `runSdkQuery()` helper (lines 609-654) encapsulates the SDK `query()` import, async iteration, and message-type dispatch. Both `runViaDirectSdk()` and `summarizeMessages()` now delegate to it via a `SdkQueryCallbacks` interface, eliminating the duplicated streaming loop.
+2. **`OutcomeResolver` extraction** (185 lines) -- Extracted from `AgentService.runAgentInBackground` into `src/main/services/outcome-resolver.ts`:
+   - `resolveAndTransition()` -- handles the entire post-execution outcome flow
+   - `verifyBranchDiff()` -- git diff check, no_changes guard
+   - `detectConflicts()` -- rebase check, conflicts_detected outcome
+   - `tryOutcomeTransition()` -- pipeline transition dispatch with multi-candidate resolution (moved from AgentService private method)
+   - Branch artifact creation and phase completion
+   - Worktree unlock with safe error swallowing
 
-3. **`isReadOnlyMode` JSDoc added** -- `base-agent-prompt-builder.ts` lines 55-64 now contain an explicit JSDoc block explaining why `technical_design*` modes are excluded from the read-only guard (agent may need to create design artifacts or scaffolding files in the worktree).
+3. **`AgentService` further reduced** -- From 949 lines to 673 lines (~29% reduction). `runAgentInBackground` now delegates validation to `ValidationRunner.runWithRetries()` and outcome resolution to `OutcomeResolver.resolveAndTransition()`. Two private methods deleted: `runValidation()` and `tryOutcomeTransition()`. Six unused imports removed (`IPipelineEngine`, `ITaskArtifactStore`, `TransitionContext`, `exec`, `promisify`, `getShellEnv`).
 
-4. **Validation retry run-ID guard** -- `agent-service.ts` lines 493-505 now verify that the run being retried (`run.id`) still belongs to the current task before proceeding. If mismatched, the retry is aborted with a descriptive error log. This closes the previously noted token misattribution risk.
+## Round 3 Remaining Issues
 
-5. **Hand-rolled SDK types retained (intentional)** -- `chat-agent-service.ts` lines 21-41 still define local mirrors of SDK stream types. The JSDoc at line 13 explains this is intentional: it avoids a hard compile-time dependency on the ESM-only `@anthropic-ai/claude-agent-sdk` package that is dynamically imported at runtime. This is a defensible trade-off, not a debt item.
+1. **`AgentOutputFlusher` uses `agent as unknown as { ... }` casts** (Low) -- Lines 84-89 access agent telemetry fields via unsafe type casts. A small `AgentTelemetry` interface on `IAgent` would make this type-safe, but the current approach works correctly.
 
-## Round 2 Remaining Issues
+2. **`SubtaskSyncInterceptor.handleMessage` silently swallows parse errors** (Info) -- `JSON.parse(msg.input)` failures are caught and logged but the calling code has no way to distinguish a handled tool_use from a malformed one. Acceptable for fire-and-forget sync, but a metrics counter would improve observability.
 
-1. **`AgentService` still 949 lines** (Low) -- The extraction reduced it by ~280 lines, but it still mixes worktree management, environment preparation, validation loop, outcome transition, notification, and queue processing in `runAgentInBackground`. Further extraction (e.g., a `WorktreeEnvironmentPreparer` or `ValidationLoop` class) could bring it under 600 lines. Currently manageable but worth tracking.
+3. **`ChatAgentService` cleanup timeouts are hard-coded** (Info) -- 5-second `setTimeout` for agent cleanup (lines 202, 456) and 1-hour staleness threshold (line 296) are magic numbers. Named constants would improve readability.
 
-2. **`AgentOutputFlusher` uses `agent as unknown as { ... }` casts** (Low) -- Lines 84-89 access agent telemetry fields via unsafe type casts. A small `AgentTelemetry` interface on `IAgent` would make this type-safe, but the current approach works correctly.
+4. **`AgentService.execute()` still ~210 lines** (Info) -- Worktree preparation, environment setup, and context building could be extracted into a dedicated class, but the current structure is readable and each section is well-commented. Not urgent.
 
-3. **`SubtaskSyncInterceptor.handleMessage` silently swallows parse errors** (Info) -- `JSON.parse(msg.input)` failures are caught and logged but the calling code has no way to distinguish a handled tool_use from a malformed one. Acceptable for fire-and-forget sync, but a metrics counter would improve observability.
+## What Was Fixed (Round 2)
 
-4. **`ChatAgentService` cleanup timeouts are hard-coded** (Info) -- 5-second `setTimeout` for agent cleanup (lines 202, 456) and 1-hour staleness threshold (line 296) are magic numbers. Named constants would improve readability.
+1. **`AgentService` god-class decomposition** -- Three extractions: `SubtaskSyncInterceptor` (124 lines), `AgentOutputFlusher` (115 lines), `PostRunExtractor` (240 lines). AgentService reduced from ~1230 to 949 lines.
+2. **`ChatAgentService` SDK loop consolidation** -- `runSdkQuery()` helper eliminated duplicated streaming loop.
+3. **`isReadOnlyMode` JSDoc added** -- Explains why `technical_design*` modes are excluded.
+4. **Validation retry run-ID guard** -- Prevents token misattribution on stale run references.
+5. **Hand-rolled SDK types retained (intentional)** -- JSDoc explains the ESM dynamic-import trade-off.
 
 ## What Was Fixed (Round 1)
 
@@ -43,24 +55,24 @@
 
 ## Quality Ratings
 
-| Dimension | Round 1 | Round 2 | Notes |
-|-----------|:-------:|:-------:|-------|
-| Modularity | 8 | 9 | Three clean extractions with single-responsibility classes |
-| Low Coupling | 7.5 | 8 | Extracted classes depend only on store interfaces |
-| High Cohesion | 6 | 8 | AgentService delegates instead of implementing; each extracted class owns one concern |
-| Clear and Constrained State | 8.5 | 9 | Flusher owns buffer lifecycle; Interceptor owns subtask state |
-| Deterministic Behavior | 8.5 | 9 | Validation retry guard prevents misattribution |
-| Explicit Dependency Structure | 9 | 9 | Constructor injection maintained in all new classes |
-| Observability | 9 | 9 | Flusher error counting, interceptor logging, postrun logging |
-| Robust Error Handling | 8.5 | 9 | Retry guard, flusher error throttling, interceptor catch-and-log |
-| Simplicity of Structure | 6.5 | 8 | SDK loop consolidated; god-class partially decomposed |
-| Performance Predictability | 9 | 9 | No change -- already well-controlled |
+| Dimension | Round 1 | Round 2 | Round 3 | Notes |
+|-----------|:-------:|:-------:|:-------:|-------|
+| Modularity | 8 | 9 | 9.5 | Five clean extractions total; AgentService is now a thin orchestrator |
+| Low Coupling | 7.5 | 8 | 9 | ValidationRunner and OutcomeResolver depend only on store/engine interfaces; AgentService dropped 3 direct dependencies |
+| High Cohesion | 6 | 8 | 9 | Each extracted class owns exactly one concern; runAgentInBackground is now orchestration-only |
+| Clear and Constrained State | 8.5 | 9 | 9.5 | ValidationRunner tracks validationPassed explicitly; OutcomeResolver owns effectiveOutcome lifecycle |
+| Deterministic Behavior | 8.5 | 9 | 9 | No change -- retry guard from Round 2 still applies |
+| Explicit Dependency Structure | 9 | 9 | 9.5 | Constructor injection in all new classes; OutcomeResolver receives worktreeManager per-call (correct scoping) |
+| Observability | 9 | 9 | 9 | No change -- logging carried over faithfully |
+| Robust Error Handling | 8.5 | 9 | 9 | No change -- error handling preserved in extraction |
+| Simplicity of Structure | 6.5 | 8 | 9 | AgentService 673 lines; runAgentInBackground ~250 lines; clear delegation pattern |
+| Performance Predictability | 9 | 9 | 9 | No change -- already well-controlled |
 
 | Category | Score |
 |----------|:-----:|
-| **Logic** | 9/10 -- All extraction is behavior-preserving; new retry guard adds correctness |
-| **Bugs** | 9.5/10 -- Retry misattribution risk closed; no known correctness bugs remain |
-| **Docs** | 9/10 -- isReadOnlyMode JSDoc, SDK type rationale, PostRunExtractor class docs |
-| **Code Quality** | 8.5/10 -- Cohesion significantly improved; AgentService still large but well-structured |
+| **Logic** | 9.5/10 -- All extractions behavior-preserving; validation passed-flag fix improves correctness |
+| **Bugs** | 9.5/10 -- No known correctness bugs; misleading log fixed in Round 3 |
+| **Docs** | 9/10 -- No change from Round 2 |
+| **Code Quality** | 9.5/10 -- AgentService now a clean orchestrator; all concerns separated into focused modules |
 
-**Overall: 9.0 / 10** (up from 8.5)
+**Overall: 9.3 / 10** (up from 9.0)
