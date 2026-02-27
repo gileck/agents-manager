@@ -227,7 +227,7 @@ export function createAppServices(db: Database.Database): AppServices {
 
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore });
-  registerNotificationHandler(pipelineEngine, { notificationRouter });
+  registerNotificationHandler(pipelineEngine, { notificationRouter, taskStore });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerScmHandler(pipelineEngine, {
     projectStore, taskStore, taskArtifactStore, taskEventLog,

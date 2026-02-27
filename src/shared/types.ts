@@ -749,11 +749,16 @@ export interface PRInfo {
 
 export type PRStatus = 'open' | 'closed' | 'merged';
 
+export type NotificationAction =
+  | { label: string; callbackData: string; url?: never }
+  | { label: string; url: string; callbackData?: never };
+
 export interface Notification {
   taskId: string;
   title: string;
   body: string;
   channel: string;
+  actions?: NotificationAction[];
 }
 
 export interface TelegramBotLogEntry {
