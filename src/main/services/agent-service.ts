@@ -30,6 +30,9 @@ import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
 import { getShellEnv } from './shell-env';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
+import { SubtaskSyncInterceptor } from './subtask-sync-interceptor';
+import { AgentOutputFlusher } from './agent-output-flusher';
+import { PostRunExtractor } from './post-run-extractor';
 
 const execAsync = promisify(exec);
 
@@ -38,6 +41,7 @@ export class AgentService implements IAgentService {
   private messageQueues = new Map<string, string[]>();
   private activeCallbacks = new Map<string, { onOutput?: (chunk: string) => void; onMessage?: (msg: AgentChatMessage) => void; onStatusChange?: (status: string) => void }>();
   private runningAgents = new Map<string, IAgent>();
+  private readonly postRunExtractor: PostRunExtractor;
 
   constructor(
     private agentFramework: IAgentFramework,
@@ -55,7 +59,9 @@ export class AgentService implements IAgentService {
     private agentDefinitionStore: IAgentDefinitionStore,
     private taskReviewReportBuilder: TaskReviewReportBuilder | undefined,
     private notificationRouter: INotificationRouter,
-  ) {}
+  ) {
+    this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog);
+  }
 
   async recoverOrphanedRuns(): Promise<AgentRun[]> {
     const activeRuns = await this.agentRunStore.getActiveRuns();
@@ -361,167 +367,52 @@ export class AgentService implements IAgentService {
       }).catch(() => {}); // fire-and-forget
     };
 
-    // Buffer output and periodically flush to DB so it survives page refreshes.
-    // Cap the buffer to prevent unbounded memory growth.
-    const MAX_OUTPUT_BUFFER = 5 * 1024 * 1024; // 5 MB
-    let outputBuffer = '';
+    // --- Output flusher: buffers output/messages and flushes to DB periodically ---
+    const flusher = new AgentOutputFlusher(this.agentRunStore, run.id, agent, (msg) => onLog(msg));
+    flusher.start();
+
     const wrappedOnOutput = onOutput
       ? (chunk: string) => {
-          if (outputBuffer.length < MAX_OUTPUT_BUFFER) {
-            outputBuffer += chunk;
-            if (outputBuffer.length > MAX_OUTPUT_BUFFER) {
-              outputBuffer = outputBuffer.slice(0, MAX_OUTPUT_BUFFER) + '\n[output truncated]';
-            }
-          }
+          flusher.appendOutput(chunk);
           onOutput(chunk);
         }
       : undefined;
-
-    // Buffer messages and periodically flush to DB
-    const MAX_MESSAGES_BUFFER = 10_000;
-    const messagesBuffer: import('../../shared/types').AgentChatMessage[] = [];
-
-    let metadataFlushed = false;
-    let flushErrorCount = 0;
-    const flushInterval = setInterval(() => {
-      const flushData: import('../../shared/types').AgentRunUpdateInput = {};
-      if (outputBuffer) {
-        flushData.output = outputBuffer;
-      }
-      if (messagesBuffer.length > 0) {
-        flushData.messages = [...messagesBuffer];
-      }
-      // Flush live cost and progress data from agent
-      const agentAny = agent as { accumulatedInputTokens?: number; accumulatedOutputTokens?: number; lastMessageCount?: number; lastTimeout?: number; lastMaxTurns?: number };
-      if (agentAny.accumulatedInputTokens != null && agentAny.accumulatedInputTokens > 0) flushData.costInputTokens = agentAny.accumulatedInputTokens;
-      if (agentAny.accumulatedOutputTokens != null && agentAny.accumulatedOutputTokens > 0) flushData.costOutputTokens = agentAny.accumulatedOutputTokens;
-      if (agentAny.lastMessageCount != null && agentAny.lastMessageCount > 0) flushData.messageCount = agentAny.lastMessageCount;
-      // Flush timeout/maxTurns once
-      if (!metadataFlushed) {
-        if (agentAny.lastTimeout != null) flushData.timeoutMs = agentAny.lastTimeout;
-        if (agentAny.lastMaxTurns != null) flushData.maxTurns = agentAny.lastMaxTurns;
-        if (agentAny.lastTimeout != null || agentAny.lastMaxTurns != null) metadataFlushed = true;
-      }
-      if (Object.keys(flushData).length > 0) {
-        this.agentRunStore.updateRun(run.id, flushData).catch((err) => {
-          flushErrorCount++;
-          if (flushErrorCount === 1 || flushErrorCount % 10 === 0) {
-            onLog(`Flush to DB failed (count=${flushErrorCount}): ${err instanceof Error ? err.message : String(err)}`);
-          }
-        });
-      }
-    }, 3000);
 
     const onPromptBuilt = (prompt: string) => {
       this.agentRunStore.updateRun(run.id, { prompt }).catch(() => {});
     };
 
-    // Wrap onMessage to intercept TodoWrite/Task tool_use events for subtask sync
-    // Phase-aware: use active phase's subtasks when multi-phase
+    // --- Subtask sync interceptor: intercepts tool_use events to sync subtask status ---
     const activePhaseForSync = getActivePhase(task.phases);
     const activePhaseIdxForSync = getActivePhaseIndex(task.phases);
     const effectiveSubtasks = (isMultiPhase(task) && activePhaseForSync) ? activePhaseForSync.subtasks : task.subtasks;
     const hasSubtaskTracking = (context.mode === 'implement' || context.mode === 'implement_resume' || context.mode === 'request_changes') && effectiveSubtasks && effectiveSubtasks.length > 0;
-    const currentSubtasks = hasSubtaskTracking ? [...effectiveSubtasks] : [];
-    const sdkTaskIdToSubtaskName = new Map<string, string>();
 
-    // Helper to persist subtask changes — writes to phase subtasks when multi-phase
-    const persistSubtaskChanges = () => {
-      if (isMultiPhase(task) && activePhaseIdxForSync >= 0 && task.phases) {
-        if (activePhaseIdxForSync >= task.phases.length) {
-          onLog(`persistSubtaskChanges: phase index ${activePhaseIdxForSync} out of bounds (${task.phases.length} phases)`);
-          return this.taskStore.updateTask(taskId, { subtasks: [...currentSubtasks] });
-        }
-        const updatedPhases = [...task.phases];
-        updatedPhases[activePhaseIdxForSync] = {
-          ...updatedPhases[activePhaseIdxForSync],
-          subtasks: [...currentSubtasks],
-        };
-        return this.taskStore.updateTask(taskId, { phases: updatedPhases });
-      }
-      return this.taskStore.updateTask(taskId, { subtasks: [...currentSubtasks] });
-    };
+    const subtaskInterceptor = hasSubtaskTracking
+      ? new SubtaskSyncInterceptor(
+          this.taskStore,
+          taskId,
+          task.phases,
+          activePhaseIdxForSync,
+          isMultiPhase(task),
+          effectiveSubtasks,
+          (msg) => onLog(msg),
+        )
+      : null;
 
-    const mapSdkStatus = (sdkStatus: string): import('../../shared/types').SubtaskStatus | null => {
-      switch (sdkStatus) {
-        case 'pending': return 'open';
-        case 'in_progress': return 'in_progress';
-        case 'completed': return 'done';
-        default: return null;
-      }
-    };
-
-    // Wrap onMessage to buffer messages for DB persistence
-    const bufferingOnMessage = (msg: AgentChatMessage) => {
-      if (messagesBuffer.length < MAX_MESSAGES_BUFFER) {
-        messagesBuffer.push(msg);
-      }
+    // Compose the onMessage pipeline: subtask sync -> buffer -> forward to caller
+    const wrappedOnMessage = (msg: AgentChatMessage) => {
+      subtaskInterceptor?.handleMessage(msg);
+      flusher.appendMessage(msg);
       onMessage?.(msg);
     };
-
-    const wrappedOnMessage = hasSubtaskTracking
-      ? (msg: AgentChatMessage) => {
-          if (msg.type === 'tool_use') {
-            try {
-              if (msg.toolName === 'TodoWrite') {
-                const parsed = JSON.parse(msg.input);
-                const todos: Array<{ content?: string; subject?: string; status?: string }> = parsed.todos ?? parsed;
-                if (Array.isArray(todos)) {
-                  let changed = false;
-                  for (const todo of todos) {
-                    const todoName = (todo.content ?? todo.subject ?? '').trim().toLowerCase();
-                    const mappedStatus = mapSdkStatus(todo.status ?? '');
-                    if (!todoName || !mappedStatus) continue;
-                    const idx = currentSubtasks.findIndex(s => s.name.trim().toLowerCase() === todoName);
-                    if (idx !== -1 && currentSubtasks[idx].status !== mappedStatus) {
-                      currentSubtasks[idx] = { ...currentSubtasks[idx], status: mappedStatus };
-                      changed = true;
-                    }
-                  }
-                  if (changed) {
-                    persistSubtaskChanges().catch((err) => {
-                      onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
-                    });
-                  }
-                }
-              } else if (msg.toolName === 'TaskCreate') {
-                const parsed = JSON.parse(msg.input);
-                const subject = (parsed.subject ?? parsed.description ?? '').trim().toLowerCase();
-                const match = currentSubtasks.find(s => s.name.trim().toLowerCase() === subject);
-                if (match && msg.toolId) {
-                  sdkTaskIdToSubtaskName.set(msg.toolId, match.name);
-                }
-              } else if (msg.toolName === 'TaskUpdate') {
-                const parsed = JSON.parse(msg.input);
-                const sdkTaskId = parsed.taskId ?? parsed.id ?? '';
-                const subtaskName = sdkTaskIdToSubtaskName.get(sdkTaskId);
-                if (subtaskName) {
-                  const mappedStatus = mapSdkStatus(parsed.status ?? '');
-                  if (mappedStatus) {
-                    const idx = currentSubtasks.findIndex(s => s.name === subtaskName);
-                    if (idx !== -1 && currentSubtasks[idx].status !== mappedStatus) {
-                      currentSubtasks[idx] = { ...currentSubtasks[idx], status: mappedStatus };
-                      persistSubtaskChanges().catch((err) => {
-                        onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
-                      });
-                    }
-                  }
-                }
-              }
-            } catch (err) {
-              onLog(`Subtask sync error: ${err instanceof Error ? err.message : String(err)}`);
-            }
-          }
-          bufferingOnMessage(msg);
-        }
-      : bufferingOnMessage;
 
     let result: import('../../shared/types').AgentRunResult | undefined;
     try {
       try {
         result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt, wrappedOnMessage);
       } catch (err) {
-        clearInterval(flushInterval);
+        flusher.stop();
         const errorMsg = err instanceof Error ? err.message : String(err);
         const completedAt = now();
         // Recover partial cost data from agent telemetry if available
@@ -599,6 +490,20 @@ export class AgentService implements IAgentService {
         const validation = await this.runValidation(validationCommands, worktree.path);
         if (validation.passed) break;
 
+        // Guard: verify the run we are about to retry still belongs to this task.
+        // Prevents silent misattribution if run references become stale.
+        const currentRun = await this.agentRunStore.getRun(run.id);
+        if (!currentRun || currentRun.taskId !== taskId) {
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'error',
+            message: `Validation retry aborted: run ${run.id} does not belong to task ${taskId} (found taskId=${currentRun?.taskId ?? 'null'})`,
+            data: { runId: run.id, expectedTaskId: taskId, actualTaskId: currentRun?.taskId },
+          });
+          break;
+        }
+
         validationAttempts++;
         await this.taskEventLog.log({
           taskId,
@@ -650,7 +555,7 @@ export class AgentService implements IAgentService {
       }
 
       // Stop periodic flushing and do a final flush with the complete result
-      clearInterval(flushInterval);
+      flusher.stop();
 
       // Update run
       const completedAt = now();
@@ -668,7 +573,7 @@ export class AgentService implements IAgentService {
         prompt: result.prompt,
         error: result.error,
         messageCount: finalMessageCount,
-        messages: [...messagesBuffer],
+        messages: flusher.getBufferedMessages(),
       });
       this.taskEventLog.log({
         taskId,
@@ -692,134 +597,13 @@ export class AgentService implements IAgentService {
         }
       }
 
-      // Extract plan, subtasks, and context from plan/plan_revision/investigate output
-      if (result.exitCode === 0 && (context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'plan_resume' || context.mode === 'investigate' || context.mode === 'investigate_resume')) {
-        const so = result.structuredOutput as { plan?: string; planSummary?: string; investigationSummary?: string; subtasks?: string[]; phases?: Array<{ name: string; subtasks: string[] }> } | undefined;
-        if (so?.plan) {
-          this.taskEventLog.log({
-            taskId,
-            category: 'agent_debug',
-            severity: 'debug',
-            message: `Extracting plan from structured output: hasPlan=${!!so.plan}, hasSubtasks=${!!so.subtasks}, subtaskCount=${so.subtasks?.length ?? 0}, hasPhases=${!!so.phases}, phaseCount=${so.phases?.length ?? 0}`,
-          }).catch(() => {});
-          const updates: import('../../shared/types').TaskUpdateInput = { plan: so.plan };
-          // Check for multi-phase output
-          if (so.phases && so.phases.length > 1) {
-            const phases: import('../../shared/types').ImplementationPhase[] = so.phases.map((p, idx) => ({
-              id: `phase-${idx + 1}`,
-              name: p.name,
-              status: idx === 0 ? 'in_progress' as const : 'pending' as const,
-              subtasks: p.subtasks.map(name => ({ name, status: 'open' as const })),
-            }));
-            updates.phases = phases;
-            updates.subtasks = []; // subtasks live inside phases
-            this.taskEventLog.log({
-              taskId,
-              category: 'agent_debug',
-              severity: 'info',
-              message: `Multi-phase plan created with ${phases.length} phases`,
-              data: { phaseNames: phases.map(p => p.name) },
-            }).catch(() => {});
-          } else if (so.subtasks && so.subtasks.length > 0) {
-            updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
-          }
-          await this.taskStore.updateTask(taskId, updates);
-        } else {
-          // Fallback: parse raw output if structured output unavailable
-          this.taskEventLog.log({
-            taskId,
-            category: 'agent_debug',
-            severity: 'debug',
-            message: 'Structured output unavailable, falling back to raw output parsing',
-          }).catch(() => {});
-          await this.taskStore.updateTask(taskId, { plan: this.extractPlan(result.output) });
-          try {
-            const subtasks = this.extractSubtasks(result.output);
-            if (subtasks.length > 0) {
-              await this.taskStore.updateTask(taskId, { subtasks });
-            }
-          } catch {
-            // Non-fatal
-          }
-        }
-      }
-
-      // Extract technical design from technical_design/technical_design_revision output
-      if (result.exitCode === 0 && (context.mode === 'technical_design' || context.mode === 'technical_design_revision' || context.mode === 'technical_design_resume')) {
-        const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string } | undefined;
-        if (so?.technicalDesign) {
-          this.taskEventLog.log({
-            taskId,
-            category: 'agent_debug',
-            severity: 'debug',
-            message: `Extracting technical design from structured output: hasDesign=${!!so.technicalDesign}`,
-          }).catch(() => {});
-          await this.taskStore.updateTask(taskId, { technicalDesign: so.technicalDesign });
-        } else {
-          // Fallback: store raw output as technical design (only if non-empty to avoid overwriting valid design on bad runs)
-          const fallback = this.extractPlan(result.output);
-          if (fallback) {
-            await this.taskStore.updateTask(taskId, { technicalDesign: fallback });
-          }
-        }
-      }
-
-      // Save context entry for successful runs
-      if (result.exitCode === 0) {
-        try {
-          // Use structured output summary when available, fall back to parsing
-          const so = result.structuredOutput as { summary?: string; planSummary?: string; investigationSummary?: string; designSummary?: string } | undefined;
-          const structuredSummary = so?.investigationSummary ?? so?.designSummary ?? so?.planSummary ?? so?.summary;
-          const summary = structuredSummary || this.extractContextSummary(result.output);
-          const entryType = this.getContextEntryType(agentType, context.mode, result.outcome);
-          this.taskEventLog.log({
-            taskId,
-            category: 'agent_debug',
-            severity: 'debug',
-            message: `Saving context entry: type=${entryType}, source=${agentType === 'pr-reviewer' ? 'reviewer' : 'agent'}, summaryLength=${summary.length}`,
-          }).catch(() => {});
-          const entryData: Record<string, unknown> = {};
-          if (agentType === 'pr-reviewer') {
-            entryData.verdict = result.outcome;
-            if (result.payload?.comments) {
-              entryData.comments = result.payload.comments;
-            }
-          }
-          if (agentType === 'task-workflow-reviewer') {
-            interface WorkflowReviewerOutput {
-              overallVerdict?: string;
-              findings?: unknown;
-              codeImprovements?: unknown;
-              processImprovements?: unknown;
-              tokenCostAnalysis?: unknown;
-              executionSummary?: unknown;
-            }
-            const so = result.structuredOutput as WorkflowReviewerOutput | undefined;
-            entryData.verdict = so?.overallVerdict;
-            entryData.findings = so?.findings;
-            entryData.codeImprovements = so?.codeImprovements;
-            entryData.processImprovements = so?.processImprovements;
-            entryData.tokenCostAnalysis = so?.tokenCostAnalysis;
-            entryData.executionSummary = so?.executionSummary;
-          }
-          const entrySource = agentType === 'pr-reviewer' ? 'reviewer'
-            : agentType === 'task-workflow-reviewer' ? 'workflow-reviewer'
-            : 'agent';
-          await this.taskContextStore.addEntry({
-            taskId, agentRunId: run.id,
-            source: entrySource,
-            entryType, summary, data: entryData,
-          });
-        } catch (err) {
-          // Non-fatal — don't block pipeline on context entry failure
-          await this.taskEventLog.log({
-            taskId,
-            category: 'agent',
-            severity: 'warning',
-            message: `Failed to save context entry: ${err instanceof Error ? err.message : String(err)}`,
-          });
-        }
-      }
+      // --- Post-run extraction (plan, technical design, context entry) ---
+      const postRunLog = (message: string) => {
+        this.taskEventLog.log({ taskId, category: 'agent_debug', severity: 'debug', message }).catch(() => {});
+      };
+      await this.postRunExtractor.extractPlan(taskId, result, context.mode, postRunLog);
+      await this.postRunExtractor.extractTechnicalDesign(taskId, result, context.mode, postRunLog);
+      await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.mode, result, postRunLog);
 
       // Handle outcome — all outcomes go through the generic transition path.
       // Side-effects (prompt creation, PR creation) are handled by hooks on the transition.
@@ -1021,7 +805,7 @@ export class AgentService implements IAgentService {
       // Delete the promise/agent references first to prevent leaks even if cleanup throws
       this.backgroundPromises.delete(run.id);
       this.runningAgents.delete(taskId);
-      clearInterval(flushInterval);
+      flusher.stop();
       this.taskEventLog.log({
         taskId,
         category: 'agent_debug',
@@ -1095,71 +879,6 @@ export class AgentService implements IAgentService {
     return results.length === 0
       ? { passed: true, output: '' }
       : { passed: false, output: results.join('\n\n') };
-  }
-
-  private extractPlan(output: string): string {
-    // The raw output contains interleaved plan text, tool calls, and tool results.
-    // Strip tool call lines ("> Tool: ...", "> Input: ...") and
-    // bracketed system messages ("[tool_result] ...", "[system] ...", etc.)
-    return output
-      .split('\n')
-      .filter(line => {
-        if (line.startsWith('> Tool: ') || line.startsWith('> Input: ')) return false;
-        if (/^\[[\w_]+\] /.test(line)) return false;
-        return true;
-      })
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  }
-
-  private extractContextSummary(output: string): string {
-    const trimmed = output.trimEnd();
-    const match = trimmed.match(/## Summary\s*\n([\s\S]+)$/i);
-    if (match) return match[1].trim().slice(0, 2000);
-    return trimmed.slice(-500).trim();
-  }
-
-  private getContextEntryType(agentType: string, mode: AgentMode, outcome?: string): string {
-    if (agentType === 'task-workflow-reviewer') return 'workflow_review';
-    if (agentType === 'pr-reviewer') return outcome === 'approved' ? 'review_approved' : 'review_feedback';
-    switch (mode) {
-      case 'plan': return 'plan_summary';
-      case 'plan_revision': return 'plan_revision_summary';
-      case 'plan_resume': return 'plan_summary';
-      case 'investigate': return 'investigation_summary';
-      case 'investigate_resume': return 'investigation_summary';
-      case 'implement': return 'implementation_summary';
-      case 'implement_resume': return 'implementation_summary';
-      case 'request_changes': return 'fix_summary';
-      case 'resolve_conflicts': return 'conflict_resolution_summary';
-      case 'technical_design': return 'technical_design_summary';
-      case 'technical_design_revision': return 'technical_design_revision_summary';
-      case 'technical_design_resume': return 'technical_design_summary';
-      default: return 'agent_output';
-    }
-  }
-
-  private extractSubtasks(output: string): import('../../shared/types').Subtask[] {
-    const match = output.match(/## Subtasks\s*\n[\s\S]*?```(?:json)?\s*\n([\s\S]*?)```/i);
-    if (!match) return [];
-    try {
-      const parsed = JSON.parse(match[1].trim());
-      if (Array.isArray(parsed)) {
-        const results: import('../../shared/types').Subtask[] = [];
-        for (const item of parsed) {
-          if (typeof item === 'string') {
-            results.push({ name: item, status: 'open' });
-          } else if (typeof item === 'object' && item !== null && 'name' in item) {
-            results.push({ name: String((item as { name: unknown }).name), status: 'open' });
-          }
-        }
-        return results;
-      }
-    } catch {
-      // Invalid JSON
-    }
-    return [];
   }
 
   private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {

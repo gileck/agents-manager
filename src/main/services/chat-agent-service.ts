@@ -10,6 +10,14 @@ import { SandboxGuard } from './sandbox-guard';
 
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
+/**
+ * Lightweight mirrors of the SDK stream message types used for the
+ * dynamically-imported `query()` iterable. Kept here rather than
+ * importing from the SDK to avoid a hard compile-time dependency on
+ * the ESM-only `@anthropic-ai/claude-agent-sdk` package.
+ *
+ * See: SDKAssistantMessage, SDKResultMessage, SDKMessage in sdk.d.ts
+ */
 interface SdkTextBlock { type: 'text'; text: string }
 interface SdkToolUseBlock { type: 'tool_use'; name: string; input?: unknown }
 type SdkContentBlock = SdkTextBlock | SdkToolUseBlock;
@@ -31,6 +39,14 @@ interface SdkOtherMessage {
   result?: string;
 }
 type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkOtherMessage;
+
+/** Callbacks from runSdkQuery for each message type. */
+interface SdkQueryCallbacks {
+  onText?: (text: string) => void;
+  onToolUse?: (block: SdkToolUseBlock & { id?: string }) => void;
+  onResult?: (msg: SdkResultMessage) => void;
+  onUserToolResult?: (toolUseId: string, content: string) => void;
+}
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
@@ -243,26 +259,13 @@ export class ChatAgentService {
     let summaryCostInput: number | undefined;
     let summaryCostOutput: number | undefined;
     try {
-      const query = await this.loadQuery();
-      for await (const message of query({
-        prompt: summaryPrompt,
-        options: {
-          maxTurns: 1,
+      await this.runSdkQuery(summaryPrompt, { maxTurns: 1 }, {
+        onText: (text) => { summaryText += text; },
+        onResult: (msg) => {
+          summaryCostInput = msg.usage?.input_tokens;
+          summaryCostOutput = msg.usage?.output_tokens;
         },
-      }) as AsyncIterable<SdkStreamMessage>) {
-        if (message.type === 'assistant') {
-          const assistantMsg = message as SdkAssistantMessage;
-          for (const block of assistantMsg.message.content) {
-            if (block.type === 'text') {
-              summaryText += block.text;
-            }
-          }
-        } else if (message.type === 'result') {
-          const resultMsg = message as SdkResultMessage;
-          summaryCostInput = resultMsg.usage?.input_tokens;
-          summaryCostOutput = resultMsg.usage?.output_tokens;
-        }
-      }
+      });
     } catch (err) {
       summaryText = `[Summary generation failed: ${err instanceof Error ? err.message : String(err)}]\n\nOriginal conversation had ${messages.length} messages.`;
     }
@@ -528,11 +531,9 @@ export class ChatAgentService {
     emitMessage: (msg: AgentChatMessage) => void,
     onCost: (input: number | undefined, output: number | undefined) => void,
   ): Promise<void> {
-    const query = await this.loadQuery();
-
-    for await (const message of query({
-      prompt: `${systemPrompt}\n\n${prompt}`,
-      options: {
+    await this.runSdkQuery(
+      `${systemPrompt}\n\n${prompt}`,
+      {
         cwd: projectPath,
         abortController,
         permissionMode: 'bypassPermissions',
@@ -552,44 +553,78 @@ export class ChatAgentService {
           },
         },
       },
-    }) as AsyncIterable<SdkStreamMessage>) {
+      {
+        onText: (text) => {
+          onOutput(text);
+          emitMessage({ type: 'assistant_text', text, timestamp: Date.now() });
+        },
+        onToolUse: (block) => {
+          const toolSummary = `\n> Tool: ${block.name}\n`;
+          onOutput(toolSummary);
+          emitMessage({
+            type: 'tool_use',
+            toolName: block.name,
+            toolId: block.id,
+            input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? {}, null, 2),
+            timestamp: Date.now(),
+          });
+        },
+        onResult: (resultMsg) => {
+          if (resultMsg.errors?.length) {
+            const errorText = `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
+            onOutput(errorText);
+            emitMessage({ type: 'assistant_text', text: errorText, timestamp: Date.now() });
+          }
+          const costIn = resultMsg.usage?.input_tokens;
+          const costOut = resultMsg.usage?.output_tokens;
+          onCost(costIn, costOut);
+          if (costIn != null && costOut != null) {
+            emitMessage({
+              type: 'usage',
+              inputTokens: costIn,
+              outputTokens: costOut,
+              timestamp: Date.now(),
+            });
+          }
+        },
+        onUserToolResult: (toolUseId, content) => {
+          emitMessage({
+            type: 'tool_result',
+            toolId: toolUseId,
+            result: content,
+            timestamp: Date.now(),
+          });
+        },
+      },
+    );
+  }
+
+  /**
+   * Shared helper that loads the SDK `query()` function, iterates over
+   * the resulting async stream, and dispatches events to the provided
+   * callbacks. Used by both `runViaDirectSdk` (chat) and
+   * `summarizeMessages` (one-shot summarization) to avoid duplicating
+   * the SDK message loop.
+   */
+  private async runSdkQuery(
+    prompt: string,
+    options: Record<string, unknown>,
+    callbacks: SdkQueryCallbacks,
+  ): Promise<void> {
+    const query = await this.loadQuery();
+
+    for await (const message of query({ prompt, options }) as AsyncIterable<SdkStreamMessage>) {
       if (message.type === 'assistant') {
         const assistantMsg = message as SdkAssistantMessage;
         for (const block of assistantMsg.message.content) {
           if (block.type === 'text') {
-            onOutput(block.text);
-            emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
+            callbacks.onText?.(block.text);
           } else if (block.type === 'tool_use') {
-            const toolBlock = block as SdkToolUseBlock & { id?: string };
-            const toolSummary = `\n> Tool: ${block.name}\n`;
-            onOutput(toolSummary);
-            emitMessage({
-              type: 'tool_use',
-              toolName: block.name,
-              toolId: toolBlock.id,
-              input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? {}, null, 2),
-              timestamp: Date.now(),
-            });
+            callbacks.onToolUse?.(block as SdkToolUseBlock & { id?: string });
           }
         }
       } else if (message.type === 'result') {
-        const resultMsg = message as SdkResultMessage;
-        if (resultMsg.errors?.length) {
-          const errorText = `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
-          onOutput(errorText);
-          emitMessage({ type: 'assistant_text', text: errorText, timestamp: Date.now() });
-        }
-        const costIn = resultMsg.usage?.input_tokens;
-        const costOut = resultMsg.usage?.output_tokens;
-        onCost(costIn, costOut);
-        if (costIn != null && costOut != null) {
-          emitMessage({
-            type: 'usage',
-            inputTokens: costIn,
-            outputTokens: costOut,
-            timestamp: Date.now(),
-          });
-        }
+        callbacks.onResult?.(message as SdkResultMessage);
       } else if (message.type === 'user') {
         // SDK emits tool results as SDKUserMessage with tool_result content blocks
         const userMsg = message as unknown as { message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown }> } };
@@ -600,22 +635,17 @@ export class ChatAgentService {
             if (block.type === 'tool_result' && block.tool_use_id) {
               const resultContent = typeof block.content === 'string' ? block.content
                 : (Array.isArray(block.content) ? block.content.map((b: { text?: string }) => b.text || '').join('') : '(no output)');
-              emitMessage({
-                type: 'tool_result',
-                toolId: block.tool_use_id,
-                result: resultContent,
-                timestamp: Date.now(),
-              });
+              callbacks.onUserToolResult?.(block.tool_use_id, resultContent);
             }
           }
         }
       } else {
+        // Handle other message types that may contain text content
         const otherMsg = message as SdkOtherMessage;
         if (otherMsg.message?.content) {
           for (const block of otherMsg.message.content) {
             if (block.type === 'text') {
-              onOutput(block.text);
-              emitMessage({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
+              callbacks.onText?.(block.text);
             }
           }
         }
