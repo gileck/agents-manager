@@ -207,6 +207,7 @@ export class OutcomeResolver {
           message: `Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? result.guardFailures?.map((g) => g.reason).join(', ')}`,
           data: { outcome, toStatus: match.to, error: result.error, guardFailures: result.guardFailures },
         });
+        throw new Error(`Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? result.guardFailures?.map((g) => g.reason).join(', ')}`);
       }
     } else {
       this.taskEventLog.log({

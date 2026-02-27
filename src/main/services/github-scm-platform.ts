@@ -64,7 +64,12 @@ export class GitHubScmPlatform implements IScmPlatform {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const output = await this.gh(['pr', 'view', String(prNumber), '--json', 'mergeable']);
-      const data = JSON.parse(output);
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(output);
+      } catch {
+        throw new Error(`isPRMergeable: Failed to parse gh output for PR #${prNumber}: ${output.slice(0, 200)}`);
+      }
       const state = data.mergeable as string;
       log(`isPRMergeable: PR #${prNumber} attempt ${attempt}/${maxAttempts} — state: ${state}`);
       if (state !== 'UNKNOWN') {
@@ -81,7 +86,12 @@ export class GitHubScmPlatform implements IScmPlatform {
   async getPRStatus(prUrl: string): Promise<PRStatus> {
     const prNumber = this.extractPRNumber(prUrl);
     const output = await this.gh(['pr', 'view', String(prNumber), '--json', 'state']);
-    const data = JSON.parse(output);
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(output);
+    } catch {
+      throw new Error(`getPRStatus: Failed to parse gh output for PR #${prNumber}: ${output.slice(0, 200)}`);
+    }
     const state = (data.state as string).toUpperCase();
 
     if (state === 'MERGED') return 'merged';

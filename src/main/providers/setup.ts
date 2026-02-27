@@ -226,7 +226,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib);
 
   // Register hooks (must be after workflowService is created)
-  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog });
+  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore });
   registerNotificationHandler(pipelineEngine, { notificationRouter });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerScmHandler(pipelineEngine, {

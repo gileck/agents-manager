@@ -93,8 +93,15 @@ export class AgentService implements IAgentService {
               await wm.unlock(run.taskId);
             }
           }
-        } catch {
-          // Worktree may not exist — safe to ignore
+        } catch (err) {
+          const unlockMsg = err instanceof Error ? err.message : String(err);
+          await this.taskEventLog.log({
+            taskId: run.taskId,
+            category: 'worktree',
+            severity: 'warning',
+            message: `recoverOrphanedRuns: worktree unlock failed: ${unlockMsg}`,
+            data: { error: unlockMsg },
+          });
         }
 
         // Expire pending prompts
@@ -573,7 +580,16 @@ export class AgentService implements IAgentService {
         try {
           const callbacks = this.activeCallbacks.get(taskId);
           await this.execute(taskId, context.mode, agentType, callbacks?.onOutput, callbacks?.onMessage, callbacks?.onStatusChange);
-        } catch { /* queue processing failure is non-fatal */ }
+        } catch (queueErr) {
+          const queueMsg = queueErr instanceof Error ? queueErr.message : String(queueErr);
+          this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'warning',
+            message: `Queue follow-up message processing failed: ${queueMsg}`,
+            data: { agentRunId: run.id },
+          }).catch(() => {});
+        }
       }
     } catch (outerErr) {
       // FATAL: catch any unhandled error in post-agent processing to prevent silent hangs

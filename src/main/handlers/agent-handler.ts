@@ -8,6 +8,7 @@ import { sendToRenderer } from '@template/main/core/window';
 export interface AgentHandlerDeps {
   workflowService: IWorkflowService;
   taskEventLog: ITaskEventLog;
+  agentRunStore?: import('../interfaces/agent-run-store').IAgentRunStore;
 }
 
 export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandlerDeps): void {
@@ -38,6 +39,23 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
         });
       } catch { /* db may be closed during shutdown */ }
     });
+    if (deps.agentRunStore) {
+      setTimeout(async () => {
+        try {
+          const allRuns = await deps.agentRunStore!.getRunsForTask(task.id);
+          const activeRuns = allRuns.filter(r => r.status === 'running');
+          if (activeRuns.length === 0) {
+            await deps.taskEventLog.log({
+              taskId: task.id,
+              category: 'system',
+              severity: 'error',
+              message: `Agent failed to start within 5s for task ${task.id} (mode=${mode})`,
+              data: { mode, agentType },
+            });
+          }
+        } catch { /* best-effort verification */ }
+      }, 5000);
+    }
     return { success: true };
   });
 }

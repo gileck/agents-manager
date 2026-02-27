@@ -497,8 +497,15 @@ export class WorkflowService implements IWorkflowService {
           // Remote branch may not exist — safe to ignore
         }
       }
-    } catch {
-      // Best-effort cleanup — don't block the operation
+    } catch (err) {
+      const cleanupMsg = err instanceof Error ? err.message : String(err);
+      this.taskEventLog.log({
+        taskId: task.id,
+        category: 'worktree',
+        severity: 'warning',
+        message: `cleanupWorktree failed: ${cleanupMsg}`,
+        data: { error: cleanupMsg },
+      }).catch(() => {});
     }
   }
 }

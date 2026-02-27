@@ -34,7 +34,9 @@ export function registerGitHandlers(services: AppServices): void {
     if (!gitOps) return null;
     try {
       return await gitOps.diff('origin/main');
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      services.taskEventLog.log({ taskId, category: 'git', severity: 'warning', message: `GIT_DIFF failed: ${msg}` }).catch(() => {});
       return null;
     }
   });
@@ -45,7 +47,9 @@ export function registerGitHandlers(services: AppServices): void {
     if (!gitOps) return null;
     try {
       return await gitOps.diffStat('origin/main');
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      services.taskEventLog.log({ taskId, category: 'git', severity: 'warning', message: `GIT_STAT failed: ${msg}` }).catch(() => {});
       return null;
     }
   });
@@ -56,7 +60,9 @@ export function registerGitHandlers(services: AppServices): void {
     if (!gitOps) return null;
     try {
       return await gitOps.diff('HEAD');
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      services.taskEventLog.log({ taskId, category: 'git', severity: 'warning', message: `GIT_WORKING_DIFF failed: ${msg}` }).catch(() => {});
       return null;
     }
   });
@@ -67,7 +73,9 @@ export function registerGitHandlers(services: AppServices): void {
     if (!gitOps) return null;
     try {
       return await gitOps.status();
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      services.taskEventLog.log({ taskId, category: 'git', severity: 'warning', message: `GIT_STATUS failed: ${msg}` }).catch(() => {});
       return null;
     }
   });
@@ -100,7 +108,9 @@ export function registerGitHandlers(services: AppServices): void {
     if (!gitOps) return null;
     try {
       return await gitOps.log();
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      services.taskEventLog.log({ taskId, category: 'git', severity: 'warning', message: `GIT_LOG failed: ${msg}` }).catch(() => {});
       return null;
     }
   });
@@ -111,7 +121,9 @@ export function registerGitHandlers(services: AppServices): void {
     if (!gitOps) return null;
     try {
       return await gitOps.showCommit(hash);
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      services.taskEventLog.log({ taskId, category: 'git', severity: 'warning', message: `GIT_SHOW failed: ${msg}` }).catch(() => {});
       return null;
     }
   });
