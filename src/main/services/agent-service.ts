@@ -53,8 +53,8 @@ export class AgentService implements IAgentService {
     private createGitOps: (cwd: string) => IGitOps,
     private taskContextStore: ITaskContextStore,
     private agentDefinitionStore: IAgentDefinitionStore,
-    private taskReviewReportBuilder?: TaskReviewReportBuilder,
-    private notificationRouter?: INotificationRouter,
+    private taskReviewReportBuilder: TaskReviewReportBuilder | undefined,
+    private notificationRouter: INotificationRouter,
   ) {}
 
   async recoverOrphanedRuns(): Promise<AgentRun[]> {
@@ -961,7 +961,7 @@ export class AgentService implements IAgentService {
 
       // Send native notification
       try {
-        await this.notificationRouter?.send({
+        await this.notificationRouter.send({
           taskId,
           title: `Agent ${finalStatus}`,
           body: `${agentType} agent ${finalStatus} for task: ${task.title}`,

@@ -51,6 +51,8 @@ export class TelegramBotService implements ITelegramBotService {
   }
 
   async start(projectId: string, botToken: string, chatId: string): Promise<void> {
+    if (this.running) throw new Error('TelegramBotService is already running');
+
     const project = await this.deps.projectStore.getProject(projectId);
     if (!project) throw new Error(`Project not found: ${projectId}`);
 
@@ -190,11 +192,13 @@ export class TelegramBotService implements ITelegramBotService {
       await this.handleShowTransitions(chatId, data.slice(3));
     } else if (data.startsWith('t|')) {
       const sep = data.indexOf('|', 2);
+      if (sep === -1) return;
       await this.handleTransition(chatId, data.slice(2, sep), data.slice(sep + 1));
     } else if (data.startsWith('e|')) {
       await this.handleShowEditFields(chatId, data.slice(2));
     } else if (data.startsWith('ef|')) {
       const sep = data.indexOf('|', 3);
+      if (sep === -1) return;
       const taskId = data.slice(3, sep);
       const field = data.slice(sep + 1);
       this.pendingActions.set(chatId, { type: 'edit_field', taskId, field, createdAt: Date.now() });

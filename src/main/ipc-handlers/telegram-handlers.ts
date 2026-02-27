@@ -7,20 +7,28 @@ import type { TelegramBotLogEntry } from '../../shared/types';
 import { TelegramBotService } from '../services/telegram-bot-service';
 import { TelegramNotificationRouter } from '../services/telegram-notification-router';
 import type { INotificationRouter } from '../interfaces/notification-router';
+import { validateTelegramConfig } from '../services/telegram-config-validator';
+
+/** Module-scoped active bots map shared across handler registrations */
+const activeBots = new Map<string, { botService: TelegramBotService; notificationRouter: INotificationRouter }>();
+
+/** Guard against double-registration of the before-quit listener */
+let quitListenerRegistered = false;
 
 export function registerTelegramHandlers(services: AppServices): void {
-  const activeBots = new Map<string, { botService: TelegramBotService; notificationRouter: INotificationRouter }>();
-
-  app.on('before-quit', async () => {
-    for (const [, entry] of activeBots) {
-      try {
-        await entry.botService.stop();
-      } catch {
-        // ignore shutdown errors
+  if (!quitListenerRegistered) {
+    quitListenerRegistered = true;
+    app.on('before-quit', async () => {
+      for (const [, entry] of activeBots) {
+        try {
+          await entry.botService.stop();
+        } catch {
+          // ignore shutdown errors
+        }
       }
-    }
-    activeBots.clear();
-  });
+      activeBots.clear();
+    });
+  }
 
   registerIpcHandler(IPC_CHANNELS.TELEGRAM_BOT_START, async (_, projectId: string) => {
     validateId(projectId);
@@ -30,17 +38,10 @@ export function registerTelegramHandlers(services: AppServices): void {
     const project = await services.projectStore.getProject(projectId);
     if (!project) throw new Error('Project not found');
     const tg = (project.config?.telegram as Record<string, unknown>) ?? {};
-    const botToken = tg.botToken as string | undefined;
-    const chatId = tg.chatId as string | undefined;
-    if (!botToken || !chatId) {
-      throw new Error('Telegram bot token and chat ID are required. Configure them in project settings.');
-    }
-    if (!/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
-      throw new Error('Invalid Telegram bot token format. Expected format: <number>:<alphanumeric-string>.');
-    }
-    if (!/^-?\d+$/.test(chatId)) {
-      throw new Error('Invalid Telegram chat ID format. Expected a numeric value (optionally prefixed with -).');
-    }
+    const { botToken, chatId } = validateTelegramConfig(
+      tg.botToken as string | undefined,
+      tg.chatId as string | undefined,
+    );
 
     const botService = new TelegramBotService({
       taskStore: services.taskStore,

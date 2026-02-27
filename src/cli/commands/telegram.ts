@@ -4,6 +4,7 @@ import { requireProject } from '../context';
 import { getResolvedConfig } from '../../main/services/config-service';
 import { TelegramBotService } from '../../main/services/telegram-bot-service';
 import { TelegramNotificationRouter } from '../../main/services/telegram-notification-router';
+import { validateTelegramConfig } from '../../main/services/telegram-config-validator';
 
 export function registerTelegramCommands(program: Command, getServices: () => AppServices): void {
   const telegram = program.command('telegram').description('Telegram bot integration');
@@ -17,13 +18,12 @@ export function registerTelegramCommands(program: Command, getServices: () => Ap
       const project = await requireProject(services, opts.project);
 
       const config = getResolvedConfig(project.path ?? undefined);
-      const botToken = config.telegram?.botToken;
-      const chatId = config.telegram?.chatId;
-      if (!botToken || !chatId) {
-        console.error(
-          'Telegram is not configured. Set telegram.botToken and telegram.chatId in your project config:\n' +
-          `  <projectPath>/.agents-manager/config.json`,
-        );
+      let botToken: string;
+      let chatId: string;
+      try {
+        ({ botToken, chatId } = validateTelegramConfig(config.telegram?.botToken, config.telegram?.chatId));
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
         process.exitCode = 1;
         return;
       }

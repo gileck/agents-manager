@@ -159,6 +159,7 @@ export function createTestContext(): TestContext {
     taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
     () => gitOps,
     taskContextStore, agentDefinitionStore,
+    undefined, notificationRouter,
   );
 
   // Workflow service

@@ -19,9 +19,14 @@ export class MultiChannelNotificationRouter implements INotificationRouter {
     const results = await Promise.allSettled(
       this.routers.map((r) => r.send(notification)),
     );
-    for (const r of results) {
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
       if (r.status === 'rejected') {
-        console.error('[notification-router]', r.reason);
+        const routerName = this.routers[i]?.constructor?.name ?? `router[${i}]`;
+        console.error(
+          `[notification-router] ${routerName} failed for task ${notification.taskId}:`,
+          r.reason,
+        );
       }
     }
   }
