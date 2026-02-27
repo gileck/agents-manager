@@ -102,17 +102,17 @@ export function registerTaskHandlers(services: AppServices): void {
 
   registerIpcHandler(IPC_CHANNELS.TASK_HOOK_RETRY, async (_, taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string) => {
     validateId(taskId);
-    return services.workflowService.retryHook(taskId, hookName, transitionFrom, transitionTo);
+    return services.pipelineInspectionService.retryHook(taskId, hookName, transitionFrom, transitionTo);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_PIPELINE_DIAGNOSTICS, async (_, taskId: string) => {
     validateId(taskId);
-    return services.workflowService.getPipelineDiagnostics(taskId);
+    return services.pipelineInspectionService.getPipelineDiagnostics(taskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_ADVANCE_PHASE, async (_, taskId: string) => {
     validateId(taskId);
-    return services.workflowService.advancePhase(taskId);
+    return services.pipelineInspectionService.advancePhase(taskId);
   });
 
   // ============================================

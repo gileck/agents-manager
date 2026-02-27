@@ -16,6 +16,7 @@ export type { IGitOps } from './git-ops';
 export type { IScmPlatform } from './scm-platform';
 export type { INotificationRouter } from './notification-router';
 export type { IWorkflowService } from './workflow-service';
+export type { IPipelineInspectionService } from './pipeline-inspection-service';
 export type { ITaskContextStore } from './task-context-store';
 export type { IFeatureStore } from './feature-store';
 export type { ITelegramBotService } from './telegram-bot-service';

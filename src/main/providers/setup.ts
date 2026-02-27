@@ -12,6 +12,7 @@ import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentFramework } from '../interfaces/agent-framework';
 import type { IAgentService } from '../interfaces/agent-service';
 import type { IWorkflowService } from '../interfaces/workflow-service';
+import type { IPipelineInspectionService } from '../interfaces/pipeline-inspection-service';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IFeatureStore } from '../interfaces/feature-store';
@@ -39,6 +40,7 @@ import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
 import { WorkflowService } from '../services/workflow-service';
+import { PipelineInspectionService } from '../services/pipeline-inspection-service';
 import { LocalGitOps } from '../services/local-git-ops';
 import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
@@ -90,6 +92,7 @@ export interface AppServices {
   notificationRouter: MultiChannelNotificationRouter;
   agentService: IAgentService;
   workflowService: IWorkflowService;
+  pipelineInspectionService: IPipelineInspectionService;
   taskContextStore: ITaskContextStore;
   featureStore: IFeatureStore;
   agentDefinitionStore: IAgentDefinitionStore;
@@ -186,6 +189,12 @@ export function createAppServices(db: Database.Database): AppServices {
     createGitOps, taskContextStore,
   );
 
+  // Pipeline inspection service (diagnostics, hook retry, phase advance)
+  const pipelineInspectionService = new PipelineInspectionService(
+    taskStore, pipelineEngine, pipelineStore,
+    taskEventLog, activityLog, agentRunStore,
+  );
+
   // Supervisor for detecting ghost/timed-out agent runs
   const agentSupervisor = new AgentSupervisor(agentRunStore, agentService, taskEventLog);
 
@@ -234,6 +243,7 @@ export function createAppServices(db: Database.Database): AppServices {
     notificationRouter,
     agentService,
     workflowService,
+    pipelineInspectionService,
     taskContextStore,
     featureStore,
     agentDefinitionStore,
