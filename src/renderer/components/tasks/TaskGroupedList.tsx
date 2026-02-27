@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Badge } from '../ui/badge';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { TaskRow } from './TaskRow';
-import { groupTasks } from './task-helpers';
+import { groupTasks, sortGroupEntries } from './task-helpers';
 import type { GroupBy } from './task-helpers';
 import type { Task, Pipeline, Feature } from '../../../shared/types';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 interface TaskGroupedListProps {
   tasks: Task[];
@@ -36,20 +37,22 @@ export function TaskGroupedList({
   onStatusChange,
 }: TaskGroupedListProps) {
   const groups = useMemo(
-    () => groupTasks(tasks, groupBy, pipelineMap, featureMap),
+    () => sortGroupEntries(groupTasks(tasks, groupBy, pipelineMap, featureMap), groupBy, pipelineMap),
     [tasks, groupBy, pipelineMap, featureMap],
   );
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsedArray, setCollapsedArray] = useLocalStorage<string[]>('taskList.collapsedGroups', []);
 
-  const toggleGroup = (key: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+  const collapsed = useMemo(() => new Set(collapsedArray), [collapsedArray]);
+
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedArray((prev) => {
+      const set = new Set(prev);
+      if (set.has(key)) set.delete(key);
+      else set.add(key);
+      return Array.from(set);
     });
-  };
+  }, [setCollapsedArray]);
 
   const getFeatureName = (task: Task) =>
     task.featureId ? featureMap?.get(task.featureId)?.title : undefined;

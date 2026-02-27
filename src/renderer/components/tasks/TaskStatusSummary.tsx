@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { PipelineBadge } from '../pipeline/PipelineBadge';
+import { buildStatusPositionMap } from './task-helpers';
 import type { Task, Pipeline } from '../../../shared/types';
 
 interface TaskStatusSummaryProps {
@@ -13,8 +14,17 @@ export function TaskStatusSummary({ tasks, pipelineMap }: TaskStatusSummaryProps
     for (const task of tasks) {
       counts.set(task.status, (counts.get(task.status) ?? 0) + 1);
     }
-    return counts;
-  }, [tasks]);
+    // Sort by pipeline position
+    const posMap = buildStatusPositionMap(pipelineMap);
+    const sorted = new Map(
+      Array.from(counts.entries()).sort(([a], [b]) => {
+        const posA = posMap.get(a) ?? Infinity;
+        const posB = posMap.get(b) ?? Infinity;
+        return posA - posB;
+      }),
+    );
+    return sorted;
+  }, [tasks, pipelineMap]);
 
   if (tasks.length === 0) return null;
 
