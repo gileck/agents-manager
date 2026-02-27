@@ -22,6 +22,7 @@ interface ReviewFinding {
 interface SuggestedTask {
   title: string;
   description: string;
+  priority?: number;
 }
 
 interface ReviewData {
@@ -205,7 +206,17 @@ export function WorkflowReviewTab({
                 <div className="space-y-2">
                   {reviewData.suggestedTasks.map((task, i) => (
                     <div key={i} className="rounded-md border px-4 py-3">
-                      <p className="text-sm font-medium">{task.title}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-medium">{task.title}</p>
+                        {task.priority !== undefined && (
+                          <span className="text-xs px-1.5 py-0.5 rounded" style={{
+                            backgroundColor: ['#dc2626', '#f59e0b', '#3b82f6', '#6b7280'][task.priority] ?? '#6b7280',
+                            color: 'white',
+                          }}>
+                            P{task.priority}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
                     </div>
                   ))}
