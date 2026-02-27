@@ -85,7 +85,7 @@ describe('GitHubScmPlatform', () => {
 
   describe('isPRMergeable()', () => {
     it('returns true when mergeable is MERGEABLE', async () => {
-      execFileHandler = () => JSON.stringify({ mergeable: 'MERGEABLE' });
+      execFileHandler = () => JSON.stringify({ mergeable: 'MERGEABLE', state: 'OPEN' });
 
       const result = await platform.isPRMergeable('https://github.com/owner/repo/pull/1');
 
@@ -93,7 +93,7 @@ describe('GitHubScmPlatform', () => {
     });
 
     it('returns false when mergeable is CONFLICTING', async () => {
-      execFileHandler = () => JSON.stringify({ mergeable: 'CONFLICTING' });
+      execFileHandler = () => JSON.stringify({ mergeable: 'CONFLICTING', state: 'OPEN' });
 
       const result = await platform.isPRMergeable('https://github.com/owner/repo/pull/1');
 
@@ -104,8 +104,8 @@ describe('GitHubScmPlatform', () => {
       let attempt = 0;
       execFileHandler = () => {
         attempt++;
-        if (attempt < 3) return JSON.stringify({ mergeable: 'UNKNOWN' });
-        return JSON.stringify({ mergeable: 'MERGEABLE' });
+        if (attempt < 3) return JSON.stringify({ mergeable: 'UNKNOWN', state: 'OPEN' });
+        return JSON.stringify({ mergeable: 'MERGEABLE', state: 'OPEN' });
       };
 
       vi.useFakeTimers();
@@ -125,7 +125,7 @@ describe('GitHubScmPlatform', () => {
     });
 
     it('returns false after all retries exhausted', async () => {
-      execFileHandler = () => JSON.stringify({ mergeable: 'UNKNOWN' });
+      execFileHandler = () => JSON.stringify({ mergeable: 'UNKNOWN', state: 'OPEN' });
 
       vi.useFakeTimers();
 
@@ -145,7 +145,7 @@ describe('GitHubScmPlatform', () => {
 
     it('logs progress during polling', async () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      execFileHandler = () => JSON.stringify({ mergeable: 'MERGEABLE' });
+      execFileHandler = () => JSON.stringify({ mergeable: 'MERGEABLE', state: 'OPEN' });
 
       await platform.isPRMergeable('https://github.com/owner/repo/pull/7');
 
@@ -154,6 +154,46 @@ describe('GitHubScmPlatform', () => {
       );
 
       consoleSpy.mockRestore();
+    });
+
+    it('returns true immediately when PR is already merged', async () => {
+      const ghCalls: string[][] = [];
+      execFileHandler = (_cmd, args) => {
+        ghCalls.push(args);
+        return JSON.stringify({ mergeable: 'UNKNOWN', state: 'MERGED' });
+      };
+
+      const result = await platform.isPRMergeable('https://github.com/owner/repo/pull/22');
+
+      expect(result).toBe(true);
+      // Should short-circuit on first attempt — no retries
+      expect(ghCalls).toHaveLength(1);
+    });
+
+    it('returns false immediately when PR is closed', async () => {
+      const ghCalls: string[][] = [];
+      execFileHandler = (_cmd, args) => {
+        ghCalls.push(args);
+        return JSON.stringify({ mergeable: 'UNKNOWN', state: 'CLOSED' });
+      };
+
+      const result = await platform.isPRMergeable('https://github.com/owner/repo/pull/22');
+
+      expect(result).toBe(false);
+      // Should short-circuit on first attempt — no retries
+      expect(ghCalls).toHaveLength(1);
+    });
+
+    it('fetches both mergeable and state fields', async () => {
+      const ghCalls: string[][] = [];
+      execFileHandler = (_cmd, args) => {
+        ghCalls.push(args);
+        return JSON.stringify({ mergeable: 'MERGEABLE', state: 'OPEN' });
+      };
+
+      await platform.isPRMergeable('https://github.com/owner/repo/pull/1');
+
+      expect(ghCalls[0]).toContain('mergeable,state');
     });
   });
 
