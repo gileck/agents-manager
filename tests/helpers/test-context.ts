@@ -35,6 +35,8 @@ import { StubWorktreeManager } from '../../src/main/services/stub-worktree-manag
 import { StubGitOps } from '../../src/main/services/stub-git-ops';
 import { StubScmPlatform } from '../../src/main/services/stub-scm-platform';
 import { StubNotificationRouter } from '../../src/main/services/stub-notification-router';
+import { ValidationRunner } from '../../src/main/services/validation-runner';
+import { OutcomeResolver } from '../../src/main/services/outcome-resolver';
 import { registerCoreGuards } from '../../src/main/handlers/core-guards';
 import { registerScmHandler } from '../../src/main/handlers/scm-handler';
 import { registerPromptHandler } from '../../src/main/handlers/prompt-handler';
@@ -151,15 +153,23 @@ export function createTestContext(): TestContext {
   agentFramework.registerAgent(scriptedAgent);
   agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'claude-code'));
 
+  // Validation runner + outcome resolver for agent post-processing
+  const validationRunner = new ValidationRunner(agentRunStore, taskEventLog);
+  const outcomeResolver = new OutcomeResolver(
+    () => gitOps, pipelineEngine, taskStore,
+    taskPhaseStore, taskArtifactStore, taskEventLog,
+  );
+
   // Agent service (pass factory functions that return the shared stubs)
   const agentService = new AgentService(
     agentFramework, agentRunStore,
     () => worktreeManager,
-    taskStore, projectStore, pipelineEngine,
-    taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
+    taskStore, projectStore,
+    taskEventLog, taskPhaseStore, pendingPromptStore,
     () => gitOps,
     taskContextStore, agentDefinitionStore,
     undefined, notificationRouter,
+    validationRunner, outcomeResolver,
   );
 
   // Workflow service

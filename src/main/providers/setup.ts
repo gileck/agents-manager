@@ -55,6 +55,8 @@ import { CodexCliLib } from '../libs/codex-cli-lib';
 import { AgentLibRegistry } from '../services/agent-lib-registry';
 import { AgentSupervisor } from '../services/agent-supervisor';
 import { TaskReviewReportBuilder } from '../services/task-review-report-builder';
+import { ValidationRunner } from '../services/validation-runner';
+import { OutcomeResolver } from '../services/outcome-resolver';
 import { WorkflowReviewSupervisor } from '../services/workflow-review-supervisor';
 import { TimelineService } from '../services/timeline/timeline-service';
 import { EventSource } from '../services/timeline/sources/event-source';
@@ -172,13 +174,21 @@ export function createAppServices(db: Database.Database): AppServices {
     taskArtifactStore, taskStore, timelineService,
   );
 
+  // Validation runner + outcome resolver for agent post-processing
+  const validationRunner = new ValidationRunner(agentRunStore, taskEventLog);
+  const outcomeResolver = new OutcomeResolver(
+    createGitOps, pipelineEngine, taskStore,
+    taskPhaseStore, taskArtifactStore, taskEventLog,
+  );
+
   // Agent service
   const agentService = new AgentService(
     agentFramework, agentRunStore, createWorktreeManager,
-    taskStore, projectStore, pipelineEngine,
-    taskEventLog, taskArtifactStore, taskPhaseStore, pendingPromptStore,
+    taskStore, projectStore,
+    taskEventLog, taskPhaseStore, pendingPromptStore,
     createGitOps, taskContextStore, agentDefinitionStore,
     taskReviewReportBuilder, notificationRouter,
+    validationRunner, outcomeResolver,
   );
 
   // Workflow service

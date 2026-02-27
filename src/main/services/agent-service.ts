@@ -3,7 +3,6 @@ import type {
   AgentMode,
   AgentContext,
   AgentConfig,
-  TransitionContext,
   AgentChatMessage,
 } from '../../shared/types';
 import type { IAgentFramework } from '../interfaces/agent-framework';
@@ -11,30 +10,24 @@ import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IProjectStore } from '../interfaces/project-store';
-import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
-import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import type { IAgentService } from '../interfaces/agent-service';
-import type { IGitOps } from '../interfaces/git-ops';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import type { TaskReviewReportBuilder } from './task-review-report-builder';
 import type { IAgent } from '../interfaces/agent';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { ValidationRunner } from './validation-runner';
+import type { OutcomeResolver } from './outcome-resolver';
 import * as path from 'path';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
-import { getShellEnv } from './shell-env';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 import { SubtaskSyncInterceptor } from './subtask-sync-interceptor';
 import { AgentOutputFlusher } from './agent-output-flusher';
 import { PostRunExtractor } from './post-run-extractor';
-
-const execAsync = promisify(exec);
 
 export class AgentService implements IAgentService {
   private backgroundPromises = new Map<string, Promise<void>>();
@@ -49,16 +42,16 @@ export class AgentService implements IAgentService {
     private createWorktreeManager: (projectPath: string) => IWorktreeManager,
     private taskStore: ITaskStore,
     private projectStore: IProjectStore,
-    private pipelineEngine: IPipelineEngine,
     private taskEventLog: ITaskEventLog,
-    private taskArtifactStore: ITaskArtifactStore,
     private taskPhaseStore: ITaskPhaseStore,
     private pendingPromptStore: IPendingPromptStore,
-    private createGitOps: (cwd: string) => IGitOps,
+    private createGitOps: (cwd: string) => import('../interfaces/git-ops').IGitOps,
     private taskContextStore: ITaskContextStore,
     private agentDefinitionStore: IAgentDefinitionStore,
     private taskReviewReportBuilder: TaskReviewReportBuilder | undefined,
     private notificationRouter: INotificationRouter,
+    private validationRunner: ValidationRunner,
+    private outcomeResolver: OutcomeResolver,
   ) {
     this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog);
   }
@@ -452,7 +445,7 @@ export class AgentService implements IAgentService {
         }
 
         // Attempt failure transition (pipeline may retry via hooks)
-        await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
+        await this.outcomeResolver.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
         return;
       }
 
@@ -464,94 +457,17 @@ export class AgentService implements IAgentService {
         data: { exitCode: result.exitCode, outcome: result.outcome, outputLength: result.output?.length ?? 0, ...(result.error ? { error: result.error } : {}) },
       }).catch(() => {});
 
-      // Post-agent validation loop (skip for plan/plan_revision/investigate/technical_design modes — no code changes to validate)
-      const validationCommands = context.mode !== 'plan' && context.mode !== 'plan_revision' && context.mode !== 'plan_resume'
-        && context.mode !== 'investigate' && context.mode !== 'investigate_resume'
-        && context.mode !== 'technical_design' && context.mode !== 'technical_design_revision' && context.mode !== 'technical_design_resume'
-        ? (context.project.config?.validationCommands as string[] | undefined) ?? []
-        : [];
+      // Post-agent validation loop
+      const validationCommands = ValidationRunner.getValidationCommands(context.mode, context.project.config);
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
-      let validationAttempts = 0;
-
-      // Track accumulated costs across validation retries
-      let accumulatedInputTokens = result.costInputTokens ?? 0;
-      let accumulatedOutputTokens = result.costOutputTokens ?? 0;
 
       if (validationCommands.length > 0) {
-        this.taskEventLog.log({
-          taskId,
-          category: 'agent_debug',
-          severity: 'debug',
-          message: `Starting post-agent validation: ${validationCommands.length} commands, maxRetries=${maxValidationRetries}`,
-        }).catch(() => {});
-      }
-
-      while (result.exitCode === 0 && validationCommands.length > 0 && validationAttempts < maxValidationRetries) {
-        const validation = await this.runValidation(validationCommands, worktree.path);
-        if (validation.passed) break;
-
-        // Guard: verify the run we are about to retry still belongs to this task.
-        // Prevents silent misattribution if run references become stale.
-        const currentRun = await this.agentRunStore.getRun(run.id);
-        if (!currentRun || currentRun.taskId !== taskId) {
-          await this.taskEventLog.log({
-            taskId,
-            category: 'agent',
-            severity: 'error',
-            message: `Validation retry aborted: run ${run.id} does not belong to task ${taskId} (found taskId=${currentRun?.taskId ?? 'null'})`,
-            data: { runId: run.id, expectedTaskId: taskId, actualTaskId: currentRun?.taskId },
-          });
-          break;
-        }
-
-        validationAttempts++;
-        await this.taskEventLog.log({
-          taskId,
-          category: 'agent',
-          severity: 'warning',
-          message: `Validation failed (attempt ${validationAttempts}/${maxValidationRetries}), re-running agent`,
-          data: { output: validation.output.slice(0, 2000) },
+        result = await this.validationRunner.runWithRetries({
+          agent, context, config, run, taskId,
+          validationCommands, maxRetries: maxValidationRetries,
+          initialResult: result,
+          wrappedOnOutput, onLog, onPromptBuilt, wrappedOnMessage,
         });
-
-        context.validationErrors = validation.output;
-        try {
-          result = await agent.execute(context, config, wrappedOnOutput, onLog, onPromptBuilt, wrappedOnMessage);
-        } catch (err) {
-          const retryPartialInput = 'accumulatedInputTokens' in agent ? (agent as { accumulatedInputTokens?: number }).accumulatedInputTokens : undefined;
-          const retryPartialOutput = 'accumulatedOutputTokens' in agent ? (agent as { accumulatedOutputTokens?: number }).accumulatedOutputTokens : undefined;
-          result = { exitCode: 1, output: err instanceof Error ? err.message : String(err), outcome: 'failed', costInputTokens: retryPartialInput, costOutputTokens: retryPartialOutput };
-        }
-        accumulatedInputTokens += result.costInputTokens ?? 0;
-        accumulatedOutputTokens += result.costOutputTokens ?? 0;
-      }
-
-      // Patch result with accumulated costs if retries occurred
-      if (validationAttempts > 0) {
-        result.costInputTokens = accumulatedInputTokens;
-        result.costOutputTokens = accumulatedOutputTokens;
-      }
-
-      // Final validation check after retries exhausted
-      if (validationAttempts === maxValidationRetries && validationCommands.length > 0 && result.exitCode === 0) {
-        const finalCheck = await this.runValidation(validationCommands, worktree.path);
-        if (!finalCheck.passed) {
-          await this.taskEventLog.log({
-            taskId,
-            category: 'agent',
-            severity: 'warning',
-            message: `Validation still failing after ${maxValidationRetries} retries`,
-            data: { output: finalCheck.output.slice(0, 2000) },
-          });
-        }
-      }
-
-      if (validationCommands.length > 0) {
-        this.taskEventLog.log({
-          taskId,
-          category: 'agent_debug',
-          severity: 'debug',
-          message: `Validation complete: attempts=${validationAttempts}, passed=${validationAttempts < maxValidationRetries}`,
-        }).catch(() => {});
       }
 
       // Stop periodic flushing and do a final flush with the complete result
@@ -605,121 +521,10 @@ export class AgentService implements IAgentService {
       await this.postRunExtractor.extractTechnicalDesign(taskId, result, context.mode, postRunLog);
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.mode, result, postRunLog);
 
-      // Handle outcome — all outcomes go through the generic transition path.
-      // Side-effects (prompt creation, PR creation) are handled by hooks on the transition.
-      if (result.exitCode === 0) {
-        // Always create branch artifact for successful runs
-        await this.taskArtifactStore.createArtifact({
-          taskId,
-          type: 'branch',
-          data: { branch: worktree.branch },
-        });
-        await this.taskPhaseStore.updatePhase(phase.id, { status: 'completed', completedAt });
-
-        // Guard: verify branch has actual changes before transitioning to pr_ready
-        let effectiveOutcome: string | undefined = result.outcome;
-        if (effectiveOutcome === 'pr_ready') {
-          this.taskEventLog.log({
-            taskId,
-            category: 'agent_debug',
-            severity: 'debug',
-            message: `Verifying branch diff for pr_ready: branch=${worktree.branch}`,
-          }).catch(() => {});
-          try {
-            const gitOps = this.createGitOps(worktree.path);
-            const diffContent = await gitOps.diff('origin/main', worktree.branch);
-            this.taskEventLog.log({
-              taskId,
-              category: 'agent_debug',
-              severity: 'debug',
-              message: `Branch diff result: hasChanges=${diffContent.trim().length > 0}, diffLength=${diffContent.length}`,
-            }).catch(() => {});
-            if (diffContent.trim().length === 0) {
-              await this.taskEventLog.log({
-                taskId,
-                category: 'agent',
-                severity: 'warning',
-                message: 'Agent reported pr_ready but no changes detected on branch — using no_changes outcome',
-                data: { branch: worktree.branch },
-              });
-              effectiveOutcome = 'no_changes';
-            }
-          } catch (err) {
-            await this.taskEventLog.log({
-              taskId,
-              category: 'agent',
-              severity: 'warning',
-              message: `Failed to verify branch diff: ${err instanceof Error ? err.message : String(err)}`,
-              data: { branch: worktree.branch },
-            });
-          }
-        }
-
-        // Early conflict detection: rebase check before transition
-        // Skip for resolve_conflicts mode — the agent itself handles the rebase
-        if (effectiveOutcome === 'pr_ready' && context.mode !== 'resolve_conflicts') {
-          try {
-            const gitOps = this.createGitOps(worktree.path);
-            await gitOps.fetch('origin');
-            await gitOps.rebase('origin/main');
-            await this.taskEventLog.log({
-              taskId,
-              category: 'git',
-              severity: 'info',
-              message: 'Pre-transition rebase onto origin/main succeeded',
-            });
-          } catch {
-            try {
-              const gitOps = this.createGitOps(worktree.path);
-              await gitOps.rebaseAbort();
-            } catch { /* may not be in rebase state */ }
-            await this.taskEventLog.log({
-              taskId,
-              category: 'git',
-              severity: 'warning',
-              message: 'Merge conflicts with origin/main detected — switching to conflicts_detected outcome',
-              data: { branch: worktree.branch },
-            });
-            effectiveOutcome = 'conflicts_detected';
-          }
-        }
-
-        if (effectiveOutcome) {
-          this.taskEventLog.log({
-            taskId,
-            category: 'agent_debug',
-            severity: 'debug',
-            message: `Attempting outcome transition: outcome=${effectiveOutcome}`,
-          }).catch(() => {});
-          await this.tryOutcomeTransition(taskId, effectiveOutcome, {
-            agentRunId: run.id,
-            payload: result.payload,
-            branch: worktree.branch,
-          });
-        }
-      } else {
-        await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
-      }
-
-      // Cleanup — unlock before retry transition so the new agent can acquire the lock.
-      // The worktree may already be deleted by hooks (e.g. advance_phase, merge_pr).
-      try {
-        await worktreeManager.unlock(taskId);
-        await this.taskEventLog.log({
-          taskId,
-          category: 'worktree',
-          severity: 'debug',
-          message: 'Worktree unlocked',
-          data: { taskId },
-        });
-      } catch {
-        // Worktree may have been deleted by a transition hook — safe to ignore
-      }
-
-      // For failed runs, attempt failure transition (pipeline may retry via hooks)
-      if (result.exitCode !== 0) {
-        await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
-      }
+      // Handle outcome — resolve outcome and execute transitions
+      await this.outcomeResolver.resolveAndTransition({
+        taskId, result, run, worktree, worktreeManager, phase, context,
+      });
 
       // Log completion event
       await this.taskEventLog.log({
@@ -862,87 +667,6 @@ export class AgentService implements IAgentService {
       }
     } catch {
       // Worktree may not exist — safe to ignore
-    }
-  }
-
-  private async runValidation(commands: string[], cwd: string): Promise<{ passed: boolean; output: string }> {
-    const results: string[] = [];
-    for (const cmd of commands) {
-      try {
-        await execAsync(cmd, { cwd, env: getShellEnv(), timeout: 60_000, maxBuffer: 10 * 1024 * 1024 });
-      } catch (err: unknown) {
-        const e = err as { code?: number | string; stdout?: string; stderr?: string };
-        const exitCode = e.code ?? '?';
-        results.push(`$ ${cmd} (exit ${exitCode})\n${e.stdout ?? ''}${e.stderr ?? ''}`);
-      }
-    }
-    return results.length === 0
-      ? { passed: true, output: '' }
-      : { passed: false, output: results.join('\n\n') };
-  }
-
-  private async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {
-    this.taskEventLog.log({
-      taskId,
-      category: 'agent_debug',
-      severity: 'debug',
-      message: `tryOutcomeTransition: taskId=${taskId}, outcome=${outcome}`,
-    }).catch(() => {});
-
-    const task = await this.taskStore.getTask(taskId);
-    if (!task) return;
-
-    const transitions = await this.pipelineEngine.getValidTransitions(task, 'agent');
-    const candidates = transitions.filter((t) => t.agentOutcome === outcome);
-    if (candidates.length > 1) {
-      const resumeTo = data?.resumeToStatus as string | undefined;
-      if (!resumeTo) {
-        this.taskEventLog.log({
-          taskId,
-          category: 'system',
-          severity: 'warning',
-          message: `Multiple transitions match outcome "${outcome}" from "${task.status}" but no resumeToStatus provided — using first match (${candidates[0].to})`,
-          data: { outcome, candidates: candidates.map(c => c.to) },
-        }).catch(() => {});
-      }
-    }
-    const resumeTo = data?.resumeToStatus as string | undefined;
-    const match = (resumeTo
-      ? candidates.find((t) => t.to === resumeTo)
-      : undefined)
-      ?? candidates[0];
-    if (match) {
-      this.taskEventLog.log({
-        taskId,
-        category: 'agent_debug',
-        severity: 'debug',
-        message: `Found matching transition: ${task.status} → ${match.to}`,
-      }).catch(() => {});
-      const ctx: TransitionContext = { trigger: 'agent', data: { outcome, ...data } };
-      const result = await this.pipelineEngine.executeTransition(task, match.to, ctx);
-      if (result.success) {
-        this.taskEventLog.log({
-          taskId,
-          category: 'agent_debug',
-          severity: 'debug',
-          message: `Outcome transition succeeded: ${task.status} → ${match.to}`,
-        }).catch(() => {});
-      } else {
-        await this.taskEventLog.log({
-          taskId,
-          category: 'system',
-          severity: 'warning',
-          message: `Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? result.guardFailures?.map((g) => g.reason).join(', ')}`,
-          data: { outcome, toStatus: match.to, error: result.error, guardFailures: result.guardFailures },
-        });
-      }
-    } else {
-      this.taskEventLog.log({
-        taskId,
-        category: 'agent_debug',
-        severity: 'debug',
-        message: `No matching transition found for outcome=${outcome} from status=${task.status}`,
-      }).catch(() => {});
     }
   }
 
