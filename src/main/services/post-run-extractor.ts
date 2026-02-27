@@ -141,7 +141,7 @@ export class PostRunExtractor {
         interface WorkflowReviewerOutput {
           overallVerdict?: string;
           findings?: unknown;
-          codeImprovements?: unknown;
+          promptImprovements?: unknown;
           processImprovements?: unknown;
           tokenCostAnalysis?: unknown;
           executionSummary?: unknown;
@@ -149,7 +149,7 @@ export class PostRunExtractor {
         const wso = result.structuredOutput as WorkflowReviewerOutput | undefined;
         entryData.verdict = wso?.overallVerdict;
         entryData.findings = wso?.findings;
-        entryData.codeImprovements = wso?.codeImprovements;
+        entryData.promptImprovements = wso?.promptImprovements;
         entryData.processImprovements = wso?.processImprovements;
         entryData.tokenCostAnalysis = wso?.tokenCostAnalysis;
         entryData.executionSummary = wso?.executionSummary;

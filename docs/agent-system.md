@@ -151,7 +151,7 @@ Resume variants (`plan_resume`, `implement_resume`, `investigate_resume`, `techn
 - Max turns: 50
 - Default timeout: 5 minutes
 - Reviews task execution workflow quality and efficiency
-- Structured output includes `overallVerdict`, `executionSummary`, `findings`, `codeImprovements`, `processImprovements`, `tokenCostAnalysis`
+- Structured output includes `overallVerdict`, `executionSummary`, `findings`, `promptImprovements`, `processImprovements`, `tokenCostAnalysis`
 
 ### ScriptedAgent
 

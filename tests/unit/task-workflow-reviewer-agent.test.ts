@@ -111,7 +111,7 @@ describe('TaskWorkflowReviewerPromptBuilder', () => {
           'overallVerdict',
           'executionSummary',
           'findings',
-          'codeImprovements',
+          'promptImprovements',
           'processImprovements',
           'tokenCostAnalysis',
         ])
@@ -162,10 +162,10 @@ describe('TaskWorkflowReviewerPromptBuilder', () => {
     it('contains workflow steps', () => {
       const prompt = promptBuilder.buildPrompt(createContext());
 
-      expect(prompt).toContain('## Workflow');
+      expect(prompt).toContain('## Investigation workflow');
       expect(prompt).toContain('Read the SUMMARY section');
       expect(prompt).toContain('Grep for "AGENT_RUN:START"');
-      expect(prompt).toContain('Produce your structured review');
+      expect(prompt).toContain('root-cause findings');
     });
 
     it('contains review criteria sections', () => {
@@ -173,7 +173,7 @@ describe('TaskWorkflowReviewerPromptBuilder', () => {
 
       expect(prompt).toContain('## Review criteria');
       expect(prompt).toContain('Efficiency');
-      expect(prompt).toContain('Quality');
+      expect(prompt).toContain('Infrastructure');
       expect(prompt).toContain('Process');
       expect(prompt).toContain('Error handling');
       expect(prompt).toContain('Cost');

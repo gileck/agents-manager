@@ -23,7 +23,7 @@ interface ReviewData {
   verdict?: string;
   executionSummary?: string;
   findings?: ReviewFinding[];
-  codeImprovements?: string[];
+  promptImprovements?: string[];
   processImprovements?: string[];
   tokenCostAnalysis?: string;
 }
@@ -42,7 +42,7 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 const CATEGORY_COLORS: Record<string, string> = {
   efficiency: '#8b5cf6',
-  quality: '#3b82f6',
+  infrastructure: '#3b82f6',
   process: '#06b6d4',
   error_handling: '#f97316',
   cost: '#10b981',
@@ -166,12 +166,12 @@ export function WorkflowReviewTab({
               </div>
             )}
 
-            {/* Code improvements */}
-            {reviewData.codeImprovements && reviewData.codeImprovements.length > 0 && (
+            {/* Prompt improvements */}
+            {reviewData.promptImprovements && reviewData.promptImprovements.length > 0 && (
               <div>
-                <h4 className="text-sm font-semibold mb-2">Code Improvements</h4>
+                <h4 className="text-sm font-semibold mb-2">Prompt Improvements</h4>
                 <ul className="list-disc pl-5 space-y-1">
-                  {reviewData.codeImprovements.map((item, i) => (
+                  {reviewData.promptImprovements.map((item, i) => (
                     <li key={i} className="text-sm text-muted-foreground">{item}</li>
                   ))}
                 </ul>
