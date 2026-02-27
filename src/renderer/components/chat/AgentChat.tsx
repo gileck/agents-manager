@@ -1,5 +1,5 @@
 import React from 'react';
-import type { AgentChatMessage, AgentRun } from '../../../shared/types';
+import type { AgentChatMessage, AgentRun, ChatImage } from '../../../shared/types';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput } from './ChatInput';
 import { ContextSidebar } from './ContextSidebar';
@@ -8,7 +8,7 @@ interface AgentChatProps {
   messages: AgentChatMessage[];
   isRunning: boolean;
   isQueued?: boolean;
-  onSend: (message: string) => void;
+  onSend: (message: string, images?: ChatImage[]) => void;
   onStop?: () => void;
   showSidebar?: boolean;
   run?: AgentRun | null;

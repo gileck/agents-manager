@@ -75,6 +75,28 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
           <div key={i} className="flex justify-end py-2">
             <div className="bg-primary text-primary-foreground rounded-lg px-4 py-2 max-w-[80%]">
               <p className="text-sm">{msg.text}</p>
+              {msg.images && msg.images.length > 0 && (
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {msg.images.map((img, j) => (
+                    <img
+                      key={j}
+                      src={`file://${img.path}`}
+                      alt={img.name || 'Attached image'}
+                      className="rounded border border-primary-foreground/20 object-cover cursor-pointer"
+                      style={{ maxHeight: 192, maxWidth: 256 }}
+                      onClick={() => window.open(`file://${img.path}`, '_blank')}
+                      onError={(e) => {
+                        const el = e.target as HTMLImageElement;
+                        el.style.display = 'none';
+                        const placeholder = document.createElement('span');
+                        placeholder.className = 'text-xs opacity-60';
+                        placeholder.textContent = `Image unavailable: ${img.name || 'file removed'}`;
+                        el.parentElement?.appendChild(placeholder);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         );

@@ -19,6 +19,7 @@ import type {
   GitCommitDetail,
   Worktree,
   ChatMessage,
+  ChatImage,
   AgentChatMessage,
   ChatSession,
   RunningAgent,
@@ -392,8 +393,8 @@ const api = {
 
   // Chat operations
   chat: {
-    send: (sessionId: string, message: string): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, sessionId, message),
+    send: (sessionId: string, message: string, images?: ChatImage[]): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, sessionId, message, images),
     stop: (sessionId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, sessionId),
     messages: (sessionId: string): Promise<ChatMessage[]> =>

@@ -3,10 +3,13 @@ import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
-import type { ChatMessage, AgentChatMessage } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks } from '../interfaces/agent-lib';
 import { SandboxGuard } from './sandbox-guard';
+import * as fs from 'fs';
+import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
@@ -50,7 +53,25 @@ interface SdkQueryCallbacks {
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
-/** Extract plain text from a DB content field (handles both JSON array and legacy plain text). */
+/** Parse a user message content field that may be a JSON envelope with images. */
+function parseUserContent(content: string): { text: string; images?: ChatImageRef[] } {
+  if (content.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object' && typeof parsed.text === 'string') {
+        const images = Array.isArray(parsed.images) && parsed.images.length > 0
+          ? (parsed.images as ChatImageRef[])
+          : undefined;
+        return { text: parsed.text, images };
+      }
+    } catch (err) {
+      console.warn('[parseUserContent] Content starts with { but failed JSON parse:', err);
+    }
+  }
+  return { text: content };
+}
+
+/** Extract plain text from a DB content field (handles both JSON array, JSON envelope, and legacy plain text). */
 function extractTextFromContent(content: string): string {
   if (content.startsWith('[')) {
     try {
@@ -65,7 +86,51 @@ function extractTextFromContent(content: string): string {
       console.warn('[extractTextFromContent] Content looks like JSON but failed to parse:', err);
     }
   }
-  return content;
+  return parseUserContent(content).text;
+}
+
+const MEDIA_TYPE_TO_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
+
+function getImageStorageDir(): string {
+  try {
+    const { app } = require('electron');
+    return path.join(app.getPath('userData'), 'chat-images');
+  } catch (err) {
+    const home = process.env.HOME;
+    if (!home) {
+      throw new Error(`Cannot determine image storage directory: Electron unavailable and HOME not set. ${err instanceof Error ? err.message : String(err)}`);
+    }
+    console.warn(`[ChatAgentService] Electron app.getPath unavailable, falling back to ${home}/.agents-manager/chat-images`);
+    return path.join(home, '.agents-manager', 'chat-images');
+  }
+}
+
+/** Save images to disk and return refs with file paths. */
+async function saveImagesToDisk(sessionId: string, images: ChatImage[]): Promise<ChatImageRef[]> {
+  const safeSessionId = path.basename(sessionId);
+  const baseDir = path.join(getImageStorageDir(), safeSessionId);
+  await fs.promises.mkdir(baseDir, { recursive: true });
+
+  return Promise.all(images.map(async (img) => {
+    const ext = MEDIA_TYPE_TO_EXT[img.mediaType] || 'png';
+    const filename = `${randomUUID()}.${ext}`;
+    const filePath = path.join(baseDir, filename);
+    const buffer = Buffer.from(img.base64, 'base64');
+    if (buffer.length === 0) {
+      throw new Error(`Image "${img.name || 'unnamed'}" decoded to empty data`);
+    }
+    await fs.promises.writeFile(filePath, buffer);
+    return {
+      path: filePath,
+      mediaType: img.mediaType,
+      name: img.name || filename,
+    };
+  }));
 }
 
 const WRITE_TOOL_NAMES = new Set([
@@ -120,6 +185,7 @@ export class ChatAgentService {
     message: string,
     onOutput: (chunk: string) => void,
     onMessage?: (msg: AgentChatMessage) => void,
+    images?: ChatImage[],
   ): Promise<{ userMessage: ChatMessage; sessionId: string }> {
     // Get session to find scope
     const session = await this.chatSessionStore.getSession(sessionId);
@@ -133,11 +199,20 @@ export class ChatAgentService {
       throw new Error('An agent is already running for this session');
     }
 
-    // Persist user message
+    // Save images to disk and build refs
+    let imageRefs: ChatImageRef[] | undefined;
+    if (images && images.length > 0) {
+      imageRefs = await saveImagesToDisk(sessionId, images);
+    }
+
+    // Persist user message — store as JSON envelope if images are present
+    const userContent = imageRefs
+      ? JSON.stringify({ text: message, images: imageRefs })
+      : message;
     const userMessage = await this.chatMessageStore.addMessage({
       sessionId,
       role: 'user',
-      content: message,
+      content: userContent,
     });
 
     // Resolve project path and system prompt based on scope
@@ -175,21 +250,39 @@ export class ChatAgentService {
     // All messages except the latest user message (which becomes the prompt)
     for (const msg of history.slice(0, -1)) {
       const roleLabel = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'System';
-      const text = msg.role === 'assistant' ? extractTextFromContent(msg.content) : msg.content;
-      conversationLines.push(`[${roleLabel}]: ${text}`);
+      let line: string;
+      if (msg.role === 'user') {
+        const parsed = parseUserContent(msg.content);
+        line = `[${roleLabel}]: ${parsed.text}`;
+        if (parsed.images) {
+          for (const img of parsed.images) {
+            line += `\n  (Image: ${img.path})`;
+          }
+        }
+      } else {
+        const text = msg.role === 'assistant' ? extractTextFromContent(msg.content) : msg.content;
+        line = `[${roleLabel}]: ${text}`;
+      }
+      conversationLines.push(line);
     }
 
     let prompt = '';
     if (conversationLines.length > 0) {
       prompt += '## Conversation History\n\n' + conversationLines.join('\n\n') + '\n\n---\n\n';
     }
-    prompt += `[User]: ${message}\n\nRespond to the latest user message.`;
+    const userPart = message.trim()
+      ? `[User]: ${message}`
+      : (images?.length ? '[User]: (see attached images)' : '[User]: ');
+    prompt += `${userPart}\n\nRespond to the latest user message.`;
 
     // Run agent in background
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, onOutput, onMessage).catch((err) => {
+    // Pass current images (with base64 data) to runAgent for multimodal SDK prompt
+    const currentImages = images;
+
+    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, onOutput, onMessage, currentImages).catch((err) => {
       this.runningControllers.delete(sessionId);
       onOutput(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
       onOutput(CHAT_COMPLETE_SENTINEL);
@@ -249,7 +342,8 @@ export class ChatAgentService {
     // Build a summarization prompt
     const conversationText = messages.map((m) => {
       const roleLabel = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
-      const text = m.role === 'assistant' ? extractTextFromContent(m.content) : m.content;
+      const text = m.role === 'user' ? parseUserContent(m.content).text
+        : m.role === 'assistant' ? extractTextFromContent(m.content) : m.content;
       return `[${roleLabel}]: ${text}`;
     }).join('\n\n');
 
@@ -392,6 +486,7 @@ export class ChatAgentService {
     agentLibName: string,
     onOutput: (chunk: string) => void,
     onMessage?: (msg: AgentChatMessage) => void,
+    images?: ChatImage[],
   ): Promise<void> {
     // Determine whether to use the AgentLib abstraction or the direct SDK
     const useAgentLib = agentLibName !== DEFAULT_AGENT_LIB;
@@ -424,6 +519,11 @@ export class ChatAgentService {
     try {
       if (useAgentLib) {
         // Use AgentLib abstraction for non-claude-code engines
+        if (images && images.length > 0) {
+          const warning = '\n[Warning: Image attachments are only supported with Claude Code engine. Images will be ignored.]\n';
+          onOutput(warning);
+          emitMessage({ type: 'assistant_text', text: warning, timestamp: Date.now() });
+        }
         // Wire abort signal to AgentLib.stop() so the Stop button works
         const lib = this.agentLibRegistry.getLib(agentLibName);
         abortController.signal.addEventListener('abort', () => {
@@ -435,7 +535,7 @@ export class ChatAgentService {
         await this.runViaDirectSdk(sessionId, projectPath, systemPrompt, prompt, abortController, sandboxGuard, onOutput, emitMessage, (input, output) => {
           costInputTokens = input;
           costOutputTokens = output;
-        });
+        }, images);
       }
 
       // Mark as completed successfully
@@ -530,9 +630,36 @@ export class ChatAgentService {
     onOutput: (chunk: string) => void,
     emitMessage: (msg: AgentChatMessage) => void,
     onCost: (input: number | undefined, output: number | undefined) => void,
+    images?: ChatImage[],
   ): Promise<void> {
+    // Build prompt: if images are present, use multimodal content blocks
+    const fullPromptText = `${systemPrompt}\n\n${prompt}`;
+    let sdkPrompt: string | AsyncIterable<{ message: { role: string; content: unknown[] } }>;
+
+    if (images && images.length > 0) {
+      const contentBlocks: unknown[] = [
+        { type: 'text', text: fullPromptText },
+      ];
+      for (const img of images) {
+        contentBlocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: img.mediaType,
+            data: img.base64,
+          },
+        });
+      }
+      // Wrap in an async iterable that yields a single user message
+      sdkPrompt = (async function* () {
+        yield { message: { role: 'user', content: contentBlocks } };
+      })();
+    } else {
+      sdkPrompt = fullPromptText;
+    }
+
     await this.runSdkQuery(
-      `${systemPrompt}\n\n${prompt}`,
+      sdkPrompt,
       {
         cwd: projectPath,
         abortController,
@@ -607,7 +734,7 @@ export class ChatAgentService {
    * the SDK message loop.
    */
   private async runSdkQuery(
-    prompt: string,
+    prompt: string | AsyncIterable<unknown>,
     options: Record<string, unknown>,
     callbacks: SdkQueryCallbacks,
   ): Promise<void> {
@@ -653,8 +780,8 @@ export class ChatAgentService {
     }
   }
 
-  private async loadQuery(): Promise<(opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
+  private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<unknown>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
     const mod = await importESM('@anthropic-ai/claude-agent-sdk');
-    return mod.query as (opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>;
+    return mod.query as (opts: { prompt: string | AsyncIterable<unknown>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>;
   }
 }

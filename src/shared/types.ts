@@ -612,6 +612,7 @@ export interface AgentChatMessageToolResult {
 export interface AgentChatMessageUser {
   type: 'user';
   text: string;
+  images?: ChatImageRef[];
   timestamp: number;
 }
 
@@ -840,6 +841,24 @@ export interface DashboardStats {
   tasksByStatus: Record<string, number>;
   activeAgentRuns: number;
   recentActivityCount: number;
+}
+
+// ============================================
+// Chat Image Types
+// ============================================
+
+export type ChatImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+
+export interface ChatImage {
+  mediaType: ChatImageMediaType;
+  base64: string;
+  name?: string;
+}
+
+export interface ChatImageRef {
+  path: string;
+  mediaType: ChatImageMediaType;
+  name?: string;
 }
 
 // ============================================

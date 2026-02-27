@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { ChatMessage, AgentChatMessage } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef } from '../../shared/types';
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
@@ -7,7 +7,23 @@ function convertDbMessages(dbMessages: ChatMessage[]): AgentChatMessage[] {
   const result: AgentChatMessage[] = [];
   for (const msg of dbMessages) {
     if (msg.role === 'user') {
-      result.push({ type: 'user' as const, text: msg.content, timestamp: msg.createdAt });
+      // Parse JSON envelope for messages with images
+      let text = msg.content;
+      let images: ChatImageRef[] | undefined;
+      if (msg.content.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(msg.content);
+          if (parsed && typeof parsed === 'object' && typeof parsed.text === 'string') {
+            text = parsed.text;
+            if (Array.isArray(parsed.images) && parsed.images.length > 0) {
+              images = parsed.images as ChatImageRef[];
+            }
+          }
+        } catch (err) {
+          console.warn('[useChat] User message starts with { but failed JSON parse:', err);
+        }
+      }
+      result.push({ type: 'user' as const, text, images, timestamp: msg.createdAt });
     } else if (msg.role === 'system') {
       result.push({ type: 'status' as const, status: 'completed' as const, message: msg.content, timestamp: msg.createdAt });
     } else if (msg.role === 'assistant') {
@@ -25,15 +41,20 @@ function convertDbMessages(dbMessages: ChatMessage[]): AgentChatMessage[] {
   return result;
 }
 
+interface QueuedMessage {
+  text: string;
+  images?: ChatImage[];
+}
+
 export function useChat(sessionId: string | null) {
   const [dbMessages, setDbMessages] = useState<ChatMessage[]>([]);
   const [streamingMessages, setStreamingMessages] = useState<AgentChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
+  const [queuedMessage, setQueuedMessage] = useState<QueuedMessage | null>(null);
   const streamingRef = useRef(false);
-  const doSendRef = useRef<(message: string) => Promise<void>>(null);
+  const doSendRef = useRef<(message: string, images?: ChatImage[]) => Promise<void>>(null);
 
   // Load messages on mount or session change
   useEffect(() => {
@@ -96,8 +117,8 @@ export function useChat(sessionId: string | null) {
     return () => { unsubscribe(); };
   }, [sessionId]);
 
-  const doSend = useCallback(async (message: string) => {
-    if (!sessionId || !message.trim()) return;
+  const doSend = useCallback(async (message: string, images?: ChatImage[]) => {
+    if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
 
     setError(null);
     setStreamingMessages([]);
@@ -105,7 +126,7 @@ export function useChat(sessionId: string | null) {
     setIsStreaming(true);
 
     try {
-      const { userMessage } = await window.api.chat.send(sessionId, message);
+      const { userMessage } = await window.api.chat.send(sessionId, message, images);
       // Optimistically add user message
       setDbMessages((prev) => [...prev, userMessage]);
     } catch (err) {
@@ -121,22 +142,22 @@ export function useChat(sessionId: string | null) {
   // Auto-send queued message when streaming completes
   useEffect(() => {
     if (!isStreaming && queuedMessage) {
-      const msg = queuedMessage;
+      const { text, images } = queuedMessage;
       setQueuedMessage(null);
-      doSendRef.current?.(msg);
+      doSendRef.current?.(text, images);
     }
   }, [isStreaming, queuedMessage]);
 
-  const sendMessage = useCallback(async (message: string) => {
-    if (!sessionId || !message.trim()) return;
+  const sendMessage = useCallback(async (message: string, images?: ChatImage[]) => {
+    if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
 
     // Queue the message if an agent is already running
     if (isStreaming) {
-      setQueuedMessage(message);
+      setQueuedMessage({ text: message, images });
       return;
     }
 
-    doSend(message);
+    doSend(message, images);
   }, [sessionId, isStreaming, doSend]);
 
   const stopChat = useCallback(() => {

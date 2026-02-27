@@ -2,16 +2,38 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry';
 import { sendToRenderer } from '@template/main/core/window';
 import type { AppServices } from '../providers/setup';
+import type { ChatImage } from '../../shared/types';
+
+const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const MAX_IMAGES_PER_MESSAGE = 5;
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // ~10MB base64
+
+function validateImages(images: unknown): ChatImage[] | undefined {
+  if (images === undefined || images === null) return undefined;
+  if (!Array.isArray(images)) throw new Error('images must be an array');
+  if (images.length > MAX_IMAGES_PER_MESSAGE) throw new Error(`Maximum ${MAX_IMAGES_PER_MESSAGE} images per message`);
+  for (const img of images) {
+    if (!img || typeof img !== 'object') throw new Error('Each image must be an object');
+    if (!VALID_IMAGE_TYPES.has(img.mediaType)) throw new Error(`Invalid image type: ${img.mediaType}. Allowed: png, jpeg, gif, webp`);
+    if (typeof img.base64 !== 'string' || img.base64.length === 0) throw new Error('Image base64 data is required');
+    if (img.base64.length > MAX_IMAGE_SIZE_BYTES) throw new Error('Image too large (max ~10MB)');
+  }
+  return images as ChatImage[];
+}
 
 export function registerChatSessionHandlers(services: AppServices): void {
   // ============================================
   // Chat Operations
   // ============================================
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SEND, async (_, sessionId: string, message: string) => {
+  registerIpcHandler(IPC_CHANNELS.CHAT_SEND, async (_, sessionId: string, message: string, images?: unknown) => {
     validateId(sessionId);
-    if (!message || typeof message !== 'string') {
-      throw new Error('Message is required and must be a string');
+    if (typeof message !== 'string') {
+      throw new Error('Message must be a string');
+    }
+    const validatedImages = validateImages(images);
+    if (!message.trim() && !validatedImages?.length) {
+      throw new Error('Message text or images are required');
     }
     if (message.length > 10000) {
       throw new Error('Message is too long (max 10000 characters)');
@@ -21,6 +43,7 @@ export function registerChatSessionHandlers(services: AppServices): void {
       message,
       (chunk) => sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, chunk),
       (msg) => sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, msg),
+      validatedImages,
     );
   });
 
