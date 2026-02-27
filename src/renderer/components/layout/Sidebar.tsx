@@ -1,10 +1,9 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../../lib/utils';
-import { LayoutDashboard, FolderOpen, CheckSquare, Layers, Workflow, Bot, Palette, GitBranch, Settings, Bug, SlidersHorizontal, MessageSquare, DollarSign, Trello, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CheckSquare, Layers, GitBranch, Settings, Bug, MessageSquare, DollarSign, Trello, RefreshCw } from 'lucide-react';
 import { ActiveAgentsEntries } from './ActiveAgentsList';
 import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
-import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { SidebarSection } from './SidebarSection';
 import { SidebarSessions } from './SidebarSessions';
 
@@ -17,10 +16,6 @@ const navItems = [
   { to: '/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/cost', icon: DollarSign, label: 'Cost' },
   { to: '/source-control', icon: GitBranch, label: 'Source Control' },
-  { to: '/pipelines', icon: Workflow, label: 'Pipelines' },
-  { to: '/agents', icon: Bot, label: 'Agents' },
-  { to: '/theme', icon: Palette, label: 'Theme' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 interface SidebarProps {
@@ -28,7 +23,6 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onReportBug }: SidebarProps) {
-  const { currentProjectId } = useCurrentProject();
   const { entries, refresh } = useActiveAgentRuns();
   const activeCount = entries.filter((e) => e.run.status === 'running').length;
 
@@ -74,22 +68,6 @@ export function Sidebar({ onReportBug }: SidebarProps) {
                 {item.label}
               </NavLink>
             ))}
-            {currentProjectId && (
-              <NavLink
-                to={`/projects/${currentProjectId}/config`}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium mb-0.5 transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )
-                }
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                Configuration
-              </NavLink>
-            )}
           </nav>
         </SidebarSection>
 
@@ -112,6 +90,20 @@ export function Sidebar({ onReportBug }: SidebarProps) {
 
       {/* Footer */}
       <div className="p-4 border-t border-border">
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors mb-0.5',
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )
+          }
+        >
+          <Settings className="h-4 w-4" />
+          Settings
+        </NavLink>
         <button
           onClick={onReportBug}
           className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

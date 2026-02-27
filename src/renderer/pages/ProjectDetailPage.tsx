@@ -95,7 +95,7 @@ export function ProjectDetailPage() {
           )}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate(`/projects/${id}/config`)}>Configuration</Button>
+          <Button variant="outline" onClick={() => navigate('/settings/project')}>Configuration</Button>
           <Button variant="outline" onClick={openEdit}>Edit</Button>
           <Button variant="destructive" onClick={handleDelete}>Delete</Button>
         </div>

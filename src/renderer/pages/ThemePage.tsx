@@ -8,7 +8,7 @@ import { ColorPicker } from '../components/ColorPicker';
 import { useThemeConfig } from '../hooks/useThemeConfig';
 import { THEME_PRESETS, COLOR_GROUPS, COLOR_LABELS } from '../theme-presets';
 import type { ThemeColors } from '../../shared/types';
-import { Check, RotateCcw, Palette } from 'lucide-react';
+import { Check, RotateCcw } from 'lucide-react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 const RADIUS_OPTIONS = ['0rem', '0.25rem', '0.5rem', '0.75rem', '1rem'];
@@ -29,24 +29,13 @@ export function ThemePage() {
   return (
     <div className="h-full overflow-auto">
       <div className="max-w-6xl mx-auto p-6 space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Palette className="h-6 w-6" />
-              Theme
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Customize the appearance of the application. Changes apply immediately.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{themeConfig.name}</Badge>
-            <Button variant="outline" size="sm" onClick={resetTheme}>
-              <RotateCcw className="h-4 w-4 mr-1" />
-              Reset to Default
-            </Button>
-          </div>
+        {/* Header actions */}
+        <div className="flex items-center justify-end gap-2">
+          <Badge variant="outline">{themeConfig.name}</Badge>
+          <Button variant="outline" size="sm" onClick={resetTheme}>
+            <RotateCcw className="h-4 w-4 mr-1" />
+            Reset to Default
+          </Button>
         </div>
 
         {/* Preset Themes */}

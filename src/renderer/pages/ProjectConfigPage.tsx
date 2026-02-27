@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@template/renderer/components/ui/card';
 import { Label } from '@template/renderer/components/ui/label';
@@ -8,13 +8,14 @@ import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@template/renderer/components/ui/select';
 import { Switch } from '@template/renderer/components/ui/switch';
 import { useIpc } from '@template/renderer/hooks/useIpc';
+import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import type { Project } from '../../shared/types';
 
 const inputWidth = { width: '224px' };
 let nextCmdId = 0;
 
 export function ProjectConfigPage() {
-  const { id } = useParams<{ id: string }>();
+  const { currentProjectId: id } = useCurrentProject();
   const navigate = useNavigate();
   const { data: project, loading, error } = useIpc<Project | null>(
     () => window.api.projects.get(id!),
@@ -153,14 +154,7 @@ export function ProjectConfigPage() {
 
   return (
     <div className="p-8">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(`/projects/${id}`)}>
-        &larr; Back to project
-      </Button>
-
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Configuration</h1>
-        <p className="text-muted-foreground mt-1">{project.name}</p>
-      </div>
+      <p className="text-muted-foreground mb-6">{project.name}</p>
 
       <div className="max-w-2xl space-y-6">
         {/* Agent Settings */}

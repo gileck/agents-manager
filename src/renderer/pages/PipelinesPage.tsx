@@ -44,8 +44,6 @@ export function PipelinesPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6">Pipelines</h1>
-
       {pipelines.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">

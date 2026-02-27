@@ -84,7 +84,7 @@ export function TelegramPage() {
 
   return (
     <div className="p-8">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(`/projects/${id}/config`)}>
+      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate('/settings/project')}>
         &larr; Back to config
       </Button>
 

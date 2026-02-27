@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Layout } from './components/layout/Layout';
 import { DashboardPage } from './pages/DashboardPage';
@@ -13,6 +13,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ThemePage } from './pages/ThemePage';
 import { AgentDefinitionsPage } from './pages/AgentDefinitionsPage';
 import { PipelinesPage } from './pages/PipelinesPage';
+import { SettingsLayout } from './pages/SettingsLayout';
 import { FeatureListPage } from './pages/FeatureListPage';
 import { FeatureDetailPage } from './pages/FeatureDetailPage';
 import { ChatPage } from './pages/ChatPage';
@@ -102,21 +103,25 @@ function AppRoutes() {
         <Route index element={<DashboardPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id" element={<ProjectDetailPage />} />
-        <Route path="projects/:id/config" element={<ProjectConfigPage />} />
+        <Route path="projects/:id/config" element={<Navigate to="/settings/project" replace />} />
         <Route path="projects/:id/telegram" element={<TelegramPage />} />
         <Route path="tasks" element={<TaskListPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
         <Route path="kanban" element={<KanbanBoardPage />} />
-        <Route path="agents" element={<AgentDefinitionsPage />} />
         <Route path="agents/:runId" element={<AgentRunPage />} />
         <Route path="features" element={<FeatureListPage />} />
         <Route path="features/:id" element={<FeatureDetailPage />} />
-        <Route path="pipelines" element={<PipelinesPage />} />
-        <Route path="theme" element={<ThemePage />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="cost" element={<CostPage />} />
         <Route path="source-control" element={<SourceControlPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="general" replace />} />
+          <Route path="general" element={<SettingsPage />} />
+          <Route path="theme" element={<ThemePage />} />
+          <Route path="pipelines" element={<PipelinesPage />} />
+          <Route path="agents" element={<AgentDefinitionsPage />} />
+          <Route path="project" element={<ProjectConfigPage />} />
+        </Route>
       </Route>
     </Routes>
   );
