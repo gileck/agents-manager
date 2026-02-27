@@ -365,6 +365,9 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
           `   - \`${invAmCli} tasks get ${task.id} --json\` — full task details`,
           `   - \`${invAmCli} events list --task ${task.id} --json\` — task event log`,
           `3. Investigate the codebase to find the root cause.`,
+          `   - For targeted file lookups (when you know approximately what you are looking for — function names, file patterns, error strings), use Read, Grep, and Glob directly.`,
+          `   - Only spawn Task/Explore sub-agents when you need broad codebase discovery across unknown directories or when the search space is genuinely large.`,
+          `   - Do not run the same searches both directly and via a sub-agent.`,
           `4. Attempt to reproduce the issue — run relevant commands or tests to confirm the bug.`,
           `5. Write a detailed investigation report with your findings.`,
           `6. Check existing test coverage for the affected code and note any gaps.`,
@@ -601,9 +604,10 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
           '## Instructions',
           '1. Review the user\'s answers to your questions in the Task Context above.',
           '2. Use their decisions to guide your investigation.',
-          '3. Write a detailed investigation report with your findings.',
-          '4. Suggest a concrete fix plan, including any tests that should be added or updated.',
-          '5. Break the fix into subtasks.',
+          '3. For targeted file lookups (when you know approximately what you are looking for — function names, file patterns, error strings), use Read, Grep, and Glob directly. Only spawn Task/Explore sub-agents when you need broad codebase discovery across unknown directories or when the search space is genuinely large. Do not run the same searches both directly and via a sub-agent.',
+          '4. Write a detailed investigation report with your findings.',
+          '5. Suggest a concrete fix plan, including any tests that should be added or updated.',
+          '6. Break the fix into subtasks.',
         );
         prompt = ivrLines.join('\n');
         break;
