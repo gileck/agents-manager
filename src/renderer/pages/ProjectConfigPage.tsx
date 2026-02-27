@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { reportError } from '../lib/error-handler';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@template/renderer/components/ui/card';
 import { Label } from '@template/renderer/components/ui/label';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@template/renderer/components/ui/select';
 import { Switch } from '@template/renderer/components/ui/switch';
+import { InlineError } from '../components/InlineError';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import type { Project } from '../../shared/types';
@@ -108,8 +110,8 @@ export function ProjectConfigPage() {
     try {
       await window.api.projects.update(id, { config });
       projectConfigRef.current = config;
-    } catch {
-      toast.error('Failed to save configuration');
+    } catch (err) {
+      reportError(err, 'Configuration save');
     }
   }, [id]);
 
@@ -147,7 +149,7 @@ export function ProjectConfigPage() {
   if (error || !project) {
     return (
       <div className="p-8">
-        <p className="text-destructive">{error || 'Project not found'}</p>
+        <InlineError message={error || 'Project not found'} context="Project config" />
       </div>
     );
   }
@@ -369,7 +371,7 @@ export function ProjectConfigPage() {
                           await window.api.telegram.test(telegramBotToken, telegramChatId);
                           toast.success('Test message sent successfully');
                         } catch (err) {
-                          toast.error(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
+                          reportError(err, 'Telegram test');
                         } finally {
                           setTelegramTesting(false);
                         }

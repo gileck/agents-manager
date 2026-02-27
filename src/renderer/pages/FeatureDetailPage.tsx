@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
+import { InlineError } from '../components/InlineError';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
@@ -168,7 +169,7 @@ export function FeatureDetailPage() {
     return <div className="p-8"><p className="text-muted-foreground">Loading feature...</p></div>;
   }
   if (error || !feature || !featureWithProgress) {
-    return <div className="p-8"><p className="text-destructive">{error || 'Feature not found'}</p></div>;
+    return <div className="p-8"><InlineError message={error || 'Feature not found'} context="Feature detail" /></div>;
   }
 
   const statusStyle = STATUS_COLORS[featureWithProgress.status];

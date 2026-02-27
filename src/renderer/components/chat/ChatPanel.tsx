@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Trash2, FileText, MessageSquare, PanelRightClose, PanelRightOpen, Cpu } from 'lucide-react';
+import { InlineError } from '../InlineError';
 import { useChat } from '../../hooks/useChat';
 import { useChatSessions, ChatScope } from '../../hooks/useChatSessions';
 import { useActiveAgents } from '../../hooks/useActiveAgents';
@@ -145,8 +146,8 @@ export function ChatPanel({ scope }: ChatPanelProps) {
       )}
 
       {error && (
-        <div className="text-center text-destructive text-sm py-2 px-6">
-          Error: {error}
+        <div className="py-2 px-6">
+          <InlineError message={error} context="Chat" />
         </div>
       )}
 

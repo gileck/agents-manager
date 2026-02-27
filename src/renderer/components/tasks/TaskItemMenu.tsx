@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '../ui/button';
+import { InlineError } from '../InlineError';
 import { MoreVertical, Check, Loader2, Copy, Trash2 } from 'lucide-react';
 import type { Task, Pipeline, PipelineStatus, Transition } from '../../../shared/types';
 
@@ -157,8 +158,8 @@ export function TaskItemMenu({ task, pipeline, onStatusChange, onDuplicate, onDe
 
           {/* Error */}
           {loadError && (
-            <div className="px-3 py-3 text-xs text-destructive">
-              {loadError}
+            <div className="px-3 py-3">
+              <InlineError message={loadError} context="Task menu" />
             </div>
           )}
 

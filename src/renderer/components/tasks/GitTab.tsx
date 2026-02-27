@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
+import { InlineError } from '../InlineError';
 import { Badge } from '../ui/badge';
 import type { GitLogEntry } from '../../../shared/types';
 
@@ -158,7 +159,7 @@ export function GitTab({ taskId }: GitTabProps) {
     return (
       <Card className="mt-4">
         <CardContent className="py-4">
-          <p className="text-sm text-destructive">{error}</p>
+          <InlineError message={error} context="Git" />
           <Button variant="outline" size="sm" className="mt-2" onClick={refresh}>
             Retry
           </Button>

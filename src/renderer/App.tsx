@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { reportError } from './lib/error-handler';
 import { Layout } from './components/layout/Layout';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -58,16 +59,24 @@ function AppRoutes() {
           const runs = await window.api.agents.runs(taskId);
           const failedRun = runs?.find((r: { status: string }) => r.status === status);
           const errorMsg = failedRun?.error || `Agent ${status.replace('_', ' ')}`;
-          toast.error(errorMsg, {
-            duration: 15000,
-            action: failedRun ? {
-              label: 'View Run',
-              onClick: () => navigate(`/agents/${failedRun.id}`),
-            } : undefined,
-          });
+          if (failedRun) {
+            toast.error(errorMsg, {
+              duration: 15000,
+              action: {
+                label: 'View Run',
+                onClick: () => navigate(`/agents/${failedRun.id}`),
+              },
+              cancel: {
+                label: 'Copy Error',
+                onClick: () => navigator.clipboard.writeText(errorMsg),
+              },
+            });
+          } else {
+            reportError(errorMsg, 'Agent');
+          }
         } catch (err) {
           console.error('Failed to fetch agent run details for failure toast:', err);
-          toast.error(`Agent ${status.replace('_', ' ')}`, { duration: 15000 });
+          reportError(`Agent ${status.replace('_', ' ')}`, 'Agent');
         }
       }
     });
@@ -86,8 +95,8 @@ function AppRoutes() {
               try {
                 await window.api.agents.start(run.taskId, run.mode, run.agentType);
                 toast.success('Agent restarted');
-              } catch {
-                toast.error('Failed to restart agent');
+              } catch (err) {
+                reportError(err, 'Agent restart');
               }
             },
           },

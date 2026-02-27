@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import { InlineError } from '../components/InlineError';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -167,7 +168,7 @@ export function AgentRunPage() {
   if (!loading && (error || !run)) {
     return (
       <div className="p-8">
-        <p className="text-destructive">{error || 'Agent run not found'}</p>
+        <InlineError message={error || 'Agent run not found'} context="Agent run" />
       </div>
     );
   }

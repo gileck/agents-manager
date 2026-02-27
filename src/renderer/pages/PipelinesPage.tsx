@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { InlineError } from '../components/InlineError';
 import { usePipelines } from '../hooks/usePipelines';
 import type { Pipeline, AppSettings } from '../../shared/types';
 
@@ -37,7 +38,7 @@ export function PipelinesPage() {
   if (error) {
     return (
       <div className="p-8">
-        <p className="text-destructive">Error: {error}</p>
+        <InlineError message={error} context="Pipelines" />
       </div>
     );
   }

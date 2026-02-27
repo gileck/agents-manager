@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { InlineError } from '../components/InlineError';
 import { useDashboard } from '../hooks/useDashboard';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import type { ActivityEntry } from '../../shared/types';
@@ -24,7 +25,7 @@ export function DashboardPage() {
   if (error) {
     return (
       <div className="p-8">
-        <p className="text-destructive">Error: {error}</p>
+        <InlineError message={error} context="Dashboard" />
       </div>
     );
   }

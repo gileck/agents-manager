@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+import { InlineError } from '../components/InlineError';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
@@ -393,7 +394,7 @@ export function TaskDetailPage() {
   if (error || !task) {
     return (
       <div className="p-8">
-        <p className="text-destructive">{error || 'Task not found'}</p>
+        <InlineError message={error || 'Task not found'} context="Task detail" />
       </div>
     );
   }

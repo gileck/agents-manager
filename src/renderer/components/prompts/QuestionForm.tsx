@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
+import { InlineError } from '../InlineError';
 import { Badge } from '../ui/badge';
 import type { PendingPrompt } from '../../../shared/types';
 
@@ -134,7 +135,7 @@ export function QuestionForm({ prompt, onSubmit, submitting, error }: QuestionFo
         </div>
       ))}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <InlineError message={error} context="Question form" />}
 
       <Button onClick={handleSubmit} disabled={submitting || !isComplete}>
         {submitting ? 'Submitting...' : 'Submit Answers'}
@@ -252,7 +253,7 @@ function FallbackPrompt({
         placeholder="Type your response..."
         rows={3}
       />
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <InlineError message={error} context="Question form" />}
       <Button
         onClick={() => onSubmit([{ questionId: 'fallback', answer }])}
         disabled={submitting || !answer.trim()}

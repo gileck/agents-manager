@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { DragStartEvent, DragEndEvent, DragCancelEvent } from '@dnd-kit/core';
 import type { Task, KanbanColumn, TransitionResult } from '../../shared/types';
 import { toast } from 'sonner';
+import { reportError } from '../lib/error-handler';
 
 interface UseKanbanDragDropProps {
   tasks: Task[];
@@ -65,7 +66,6 @@ export function useKanbanDragDrop({ tasks, columns, onTaskMove }: UseKanbanDragD
     const fromStatus = task.status;
     const rollback = () => {
       // Rollback will be handled by refetching tasks
-      toast.error('Failed to move task. Rolling back...');
     };
 
     setPendingTransition({
@@ -94,7 +94,7 @@ export function useKanbanDragDrop({ tasks, columns, onTaskMove }: UseKanbanDragD
         } else if (result.error) {
           errorMessage = `Failed to move task: ${result.error}`;
         }
-        toast.error(errorMessage);
+        reportError(errorMessage, 'Task move');
       } else {
         // Success
         toast.success(`Task moved to ${targetColumn.title}`);
@@ -102,7 +102,7 @@ export function useKanbanDragDrop({ tasks, columns, onTaskMove }: UseKanbanDragD
     } catch (error) {
       // Unexpected error
       rollback();
-      toast.error('An unexpected error occurred while moving the task');
+      reportError(error, 'Task move');
       console.error('Task transition error:', error);
     } finally {
       setPendingTransition(null);

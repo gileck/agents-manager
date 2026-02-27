@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { reportError } from '../lib/error-handler';
 import { Card, CardContent, CardHeader, CardTitle } from '@template/renderer/components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -56,7 +57,7 @@ export function TelegramPage() {
       setRunning(true);
       toast.success('Telegram bot started');
     } catch (err) {
-      toast.error(`Failed to start bot: ${err instanceof Error ? err.message : String(err)}`);
+      reportError(err, 'Start bot');
     } finally {
       setLoading(false);
     }
@@ -71,7 +72,7 @@ export function TelegramPage() {
       setLogs([]);
       toast.success('Telegram bot stopped');
     } catch (err) {
-      toast.error(`Failed to stop bot: ${err instanceof Error ? err.message : String(err)}`);
+      reportError(err, 'Stop bot');
     } finally {
       setLoading(false);
     }

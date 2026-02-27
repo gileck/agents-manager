@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
+import { InlineError } from '../InlineError';
 import type { PipelineStatus, GuardCheckResult } from '../../../shared/types';
 
 interface ForceTransitionDialogProps {
@@ -133,11 +134,8 @@ export function ForceTransitionDialog({
 
         {/* Force error */}
         {forceError && (
-          <div
-            className="mb-4 rounded-md px-3 py-2 text-xs"
-            style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
-          >
-            {forceError}
+          <div className="mb-4">
+            <InlineError message={forceError} context="Force transition" />
           </div>
         )}
 

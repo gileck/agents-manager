@@ -12,6 +12,9 @@ function normalizeError(error: unknown): NormalizedError {
   if (typeof error === 'string') {
     return { message: error };
   }
+  if (error !== null && typeof error === 'object' && 'message' in error) {
+    return { message: String((error as { message: unknown }).message) };
+  }
   return { message: String(error) };
 }
 

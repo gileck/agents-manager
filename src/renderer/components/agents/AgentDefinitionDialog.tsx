@@ -7,6 +7,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { Badge } from '../ui/badge';
+import { InlineError } from '../InlineError';
 import { Plus, X } from 'lucide-react';
 
 interface AgentDefinitionDialogProps {
@@ -255,7 +256,7 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
           </div>
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <InlineError message={error} context="Agent definition" />}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

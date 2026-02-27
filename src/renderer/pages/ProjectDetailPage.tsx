@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
+import { InlineError } from '../components/InlineError';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -76,7 +77,7 @@ export function ProjectDetailPage() {
   if (error || !project) {
     return (
       <div className="p-8">
-        <p className="text-destructive">{error || 'Project not found'}</p>
+        <InlineError message={error || 'Project not found'} context="Project detail" />
       </div>
     );
   }

@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
+import { InlineError } from '../components/InlineError';
 import { useProjects } from '../hooks/useProjects';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import type { ProjectCreateInput } from '../../shared/types';
@@ -50,7 +51,7 @@ export function ProjectsPage() {
   if (error) {
     return (
       <div className="p-8">
-        <p className="text-destructive">Error: {error}</p>
+        <InlineError message={error} context="Projects" />
       </div>
     );
   }

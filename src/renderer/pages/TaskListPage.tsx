@@ -5,8 +5,10 @@ import { Button } from '../components/ui/button';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '../components/ui/select';
+import { InlineError } from '../components/InlineError';
 import { useTasks } from '../hooks/useTasks';
 import { usePipelines } from '../hooks/usePipelines';
+import { reportError } from '../lib/error-handler';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { TaskFilterBar, EMPTY_FILTERS } from '../components/tasks/TaskFilterBar';
 import { TaskSortControls } from '../components/tasks/TaskSortControls';
@@ -187,14 +189,12 @@ export function TaskListPage() {
         await refetch();
       } else if (result.guardFailures && result.guardFailures.length > 0) {
         const reasons = result.guardFailures.map((g) => g.reason).join('; ');
-        toast.error('Transition blocked', { description: reasons });
+        reportError(`Transition blocked: ${reasons}`, 'Transition');
       } else {
-        toast.error('Transition failed', { description: result.error ?? 'Unknown error' });
+        reportError(result.error ?? 'Unknown error', 'Transition');
       }
     } catch (err) {
-      toast.error('Transition failed', {
-        description: err instanceof Error ? err.message : String(err),
-      });
+      reportError(err, 'Transition');
     }
   };
 
@@ -205,7 +205,7 @@ export function TaskListPage() {
     return <div className="p-8"><p className="text-muted-foreground">Loading tasks...</p></div>;
   }
   if (error) {
-    return <div className="p-8"><p className="text-destructive">Error: {error}</p></div>;
+    return <div className="p-8"><InlineError message={error} context="Tasks" /></div>;
   }
   if (!currentProjectId) {
     return (

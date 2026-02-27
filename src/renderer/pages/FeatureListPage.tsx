@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
+import { InlineError } from '../components/InlineError';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
@@ -67,7 +68,7 @@ export function FeatureListPage() {
     return <div className="p-8"><p className="text-muted-foreground">Loading features...</p></div>;
   }
   if (error) {
-    return <div className="p-8"><p className="text-destructive">Error: {error}</p></div>;
+    return <div className="p-8"><InlineError message={error} context="Features" /></div>;
   }
   if (!currentProjectId) {
     return (

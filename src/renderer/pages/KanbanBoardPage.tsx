@@ -18,6 +18,7 @@ import { useKanbanKeyboardShortcuts } from '../hooks/useKanbanKeyboardShortcuts'
 import { useKanbanMultiSelect } from '../hooks/useKanbanMultiSelect';
 import { applyKanbanFilters, sortKanbanTasks, extractFilterOptions, hasActiveFilters, createEmptyFilters } from '../utils/kanban-filters';
 import { toast } from 'sonner';
+import { reportError } from '../lib/error-handler';
 import type { Task, KanbanColumn as KanbanColumnType, KanbanBoardCreateInput, KanbanBoardUpdateInput, KanbanFilters as KanbanFiltersType, TransitionResult } from '../../shared/types';
 
 export function KanbanBoardPage() {
@@ -66,8 +67,7 @@ export function KanbanBoardPage() {
       await refetchBoard();
       toast.success('Board settings updated');
     } catch (error) {
-      toast.error('Failed to update board settings');
-      console.error(error);
+      reportError(error, 'Board settings update');
     }
   }, [board, refetchBoard]);
 
@@ -119,8 +119,7 @@ export function KanbanBoardPage() {
           await window.api.kanbanBoards.create(input);
           await refetchBoard();
         } catch (error) {
-          toast.error('Failed to create kanban board');
-          console.error(error);
+          reportError(error, 'Kanban board creation');
         }
       }
     }
@@ -231,8 +230,7 @@ export function KanbanBoardPage() {
       await refetchTasks();
       toast.success(`Deleted ${count} ${count === 1 ? 'task' : 'tasks'}`);
     } catch (error) {
-      toast.error('Failed to delete tasks');
-      console.error(error);
+      reportError(error, 'Task deletion');
     }
   }, [multiSelectState.selectedTaskIds, multiSelectActions, refetchTasks]);
 

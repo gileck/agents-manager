@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { reportError } from '../../lib/error-handler';
+import { InlineError } from '../InlineError';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -103,8 +105,8 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
         return `[${time}] [${entry.source}/${entry.severity}] ${entry.title}`;
       }).join('\n');
       setDebugLogs((prev) => prev ? `${prev}\n\n--- Timeline (task ${currentTaskId}) ---\n${formatted}` : `--- Timeline (task ${currentTaskId}) ---\n${formatted}`);
-    } catch {
-      toast.error('Failed to load timeline');
+    } catch (err) {
+      reportError(err, 'Load timeline');
     } finally {
       setLoadingLogs(null);
     }
@@ -120,8 +122,8 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
         return `[${time}] [${entry.source}/${entry.entryType}] ${entry.summary}`;
       }).join('\n');
       setDebugLogs((prev) => prev ? `${prev}\n\n--- Context Entries (task ${currentTaskId}) ---\n${formatted}` : `--- Context Entries (task ${currentTaskId}) ---\n${formatted}`);
-    } catch {
-      toast.error('Failed to load context entries');
+    } catch (err) {
+      reportError(err, 'Load context entries');
     } finally {
       setLoadingLogs(null);
     }
@@ -137,8 +139,8 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
         return `[${time}] [${event.category}/${event.severity}] ${event.message}`;
       }).join('\n');
       setDebugLogs((prev) => prev ? `${prev}\n\n--- Events (task ${currentTaskId}) ---\n${formatted}` : `--- Events (task ${currentTaskId}) ---\n${formatted}`);
-    } catch {
-      toast.error('Failed to load events');
+    } catch (err) {
+      reportError(err, 'Load events');
     } finally {
       setLoadingLogs(null);
     }
@@ -285,7 +287,7 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
             )}
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <InlineError message={error} context="Bug report" />}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

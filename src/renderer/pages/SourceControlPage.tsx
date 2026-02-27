@@ -4,6 +4,7 @@ import { Badge } from '../components/ui/badge';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '../components/ui/select';
+import { InlineError } from '../components/InlineError';
 import { useProjects } from '../hooks/useProjects';
 import { useGitLog, useGitBranch } from '../hooks/useGitLog';
 import { formatRelativeTime } from '../lib/utils';
@@ -218,7 +219,7 @@ export function SourceControlPage() {
       {error && (
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-destructive text-sm">{error}</p>
+            <InlineError message={error} context="Source control" />
           </CardContent>
         </Card>
       )}

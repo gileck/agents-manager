@@ -5,6 +5,7 @@ import { AgentDefinitionCard } from '../components/agents/AgentDefinitionCard';
 import { AgentDefinitionDialog } from '../components/agents/AgentDefinitionDialog';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+import { InlineError } from '../components/InlineError';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 
 export function AgentDefinitionsPage() {
@@ -50,7 +51,7 @@ export function AgentDefinitionsPage() {
   }
 
   if (error) {
-    return <div className="p-8"><p className="text-destructive">Error: {error}</p></div>;
+    return <div className="p-8"><InlineError message={error} context="Agent definitions" /></div>;
   }
 
   return (
