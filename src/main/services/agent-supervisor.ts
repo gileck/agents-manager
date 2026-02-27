@@ -41,6 +41,9 @@ export class AgentSupervisor {
       // Ghost run: in DB as running but not tracked in memory
       if (!activeRunIds.has(run.id)) {
         const completedAt = now();
+        const elapsedMs = completedAt - run.startedAt;
+        const elapsedSec = Math.round(elapsedMs / 1000);
+
         const statusMsg: AgentChatMessage = { type: 'status', status: 'failed', message: 'Detected as ghost run by supervisor', timestamp: completedAt };
         const updatedMessages = [...(run.messages ?? []), statusMsg];
         await this.agentRunStore.updateRun(run.id, {
@@ -55,8 +58,16 @@ export class AgentSupervisor {
           taskId: run.taskId,
           category: 'agent',
           severity: 'warning',
-          message: `Ghost run detected and marked failed: ${run.id}`,
-          data: { agentRunId: run.id, agentType: run.agentType, mode: run.mode },
+          message: `Ghost run detected and marked failed: ${run.id} (${run.agentType}/${run.mode}, running for ${elapsedSec}s, ${activeRunIds.size} active in memory)`,
+          data: {
+            agentRunId: run.id,
+            agentType: run.agentType,
+            mode: run.mode,
+            elapsedMs,
+            startedAt: run.startedAt,
+            activeInMemoryCount: activeRunIds.size,
+            activeInMemoryIds: Array.from(activeRunIds),
+          },
         });
         continue;
       }

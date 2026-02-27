@@ -126,6 +126,32 @@ describe('AgentSupervisor', () => {
       }));
     });
 
+    it('includes elapsed time and memory diagnostics in ghost run log', async () => {
+      const ghostRun = makeRun({ id: 'ghost-diag', taskId: 'task-1', startedAt: 1000, agentType: 'claude-code' });
+      agentRunStore.getActiveRuns.mockResolvedValue([ghostRun]);
+      agentService.getActiveRunIds.mockReturnValue(['other-run']); // one other run active in memory
+      mockedNow.mockReturnValue(61000); // 60s elapsed
+
+      supervisor.start();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(taskEventLog.log).toHaveBeenCalledWith(expect.objectContaining({
+        taskId: 'task-1',
+        category: 'agent',
+        severity: 'warning',
+        message: expect.stringContaining('running for 60s'),
+        data: expect.objectContaining({
+          agentRunId: 'ghost-diag',
+          agentType: 'claude-code',
+          mode: 'implement',
+          elapsedMs: 60000,
+          startedAt: 1000,
+          activeInMemoryCount: 1,
+          activeInMemoryIds: ['other-run'],
+        }),
+      }));
+    });
+
     it('appends ghost run message to existing output', async () => {
       const ghostRun = makeRun({ id: 'ghost-2', output: 'partial work' });
       agentRunStore.getActiveRuns.mockResolvedValue([ghostRun]);

@@ -34,6 +34,9 @@ export class AgentService implements IAgentService {
   private messageQueues = new Map<string, string[]>();
   private activeCallbacks = new Map<string, { onOutput?: (chunk: string) => void; onMessage?: (msg: AgentChatMessage) => void; onStatusChange?: (status: string) => void }>();
   private runningAgents = new Map<string, IAgent>();
+  /** Run IDs that have a DB record but are still in the setup phase (before backgroundPromises registration).
+   *  Prevents the supervisor from falsely flagging them as ghost runs during slow setup (worktree, git ops, etc.). */
+  private initializingRunIds = new Set<string>();
   private readonly postRunExtractor: PostRunExtractor;
 
   constructor(
@@ -145,7 +148,12 @@ export class AgentService implements IAgentService {
 
     // 2. Create agent run record
     const run = await this.agentRunStore.createRun({ taskId, agentType, mode });
+    // Register immediately so the supervisor doesn't flag this as a ghost during setup.
+    // The setup steps (worktree creation, git fetch/rebase) can take seconds to minutes,
+    // creating a window where the DB says 'running' but backgroundPromises has no entry yet.
+    this.initializingRunIds.add(run.id);
 
+    try {
     // 3. Manage phase
     let phase = await this.taskPhaseStore.getActivePhase(taskId);
     if (!phase) {
@@ -337,9 +345,17 @@ export class AgentService implements IAgentService {
 
     const promise = this.runAgentInBackground(agent, context, config, run, task, phase, worktree, worktreeManager, agentType, onOutput, onMessage, onStatusChange);
     this.backgroundPromises.set(run.id, promise);
+    // Setup complete — now tracked by backgroundPromises, no longer needs initializing guard
+    this.initializingRunIds.delete(run.id);
 
     // 9. Return run immediately (status: 'running')
     return run;
+    } catch (err) {
+      // Setup failed before the agent could start — remove from initializing set
+      // so the supervisor can detect the orphaned DB record as a ghost.
+      this.initializingRunIds.delete(run.id);
+      throw err;
+    }
   }
 
   private async runAgentInBackground(
@@ -641,7 +657,7 @@ export class AgentService implements IAgentService {
   }
 
   getActiveRunIds(): string[] {
-    return Array.from(this.backgroundPromises.keys());
+    return [...this.backgroundPromises.keys(), ...this.initializingRunIds];
   }
 
   async waitForCompletion(runId: string): Promise<void> {
