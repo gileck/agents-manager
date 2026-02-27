@@ -15,12 +15,17 @@ export interface ModelPricing {
  * overlap is possible.
  */
 export const MODEL_PRICING_TABLE: Array<{ pattern: string; pricing: ModelPricing }> = [
+  // Versioned entries (more-specific, evaluated first)
+  { pattern: 'claude-3-5-sonnet', pricing: { inputPerMTok: 3,    outputPerMTok: 15 } },
+  { pattern: 'claude-3-5-haiku',  pricing: { inputPerMTok: 0.80, outputPerMTok: 4 } },
+  { pattern: 'claude-3-haiku',    pricing: { inputPerMTok: 0.25, outputPerMTok: 1.25 } },
+  // Generic family patterns (fallback)
   { pattern: 'opus',   pricing: { inputPerMTok: 15,   outputPerMTok: 75 } },
   { pattern: 'sonnet', pricing: { inputPerMTok: 3,    outputPerMTok: 15 } },
   { pattern: 'haiku',  pricing: { inputPerMTok: 0.25, outputPerMTok: 1.25 } },
 ];
 
-const DEFAULT_PRICING: ModelPricing = MODEL_PRICING_TABLE[1].pricing; // sonnet
+const DEFAULT_PRICING: ModelPricing = MODEL_PRICING_TABLE.find(e => e.pattern === 'sonnet')!.pricing;
 
 /**
  * Look up pricing for a model identifier using substring matching.

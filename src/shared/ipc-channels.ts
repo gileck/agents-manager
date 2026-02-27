@@ -15,7 +15,7 @@ export const IPC_CHANNELS = {
   // App
   APP_GET_VERSION: 'app:get-version',
 
-  // Navigation (main -> renderer)
+  /** PUSH-ONLY: main->renderer, do not invoke() */
   NAVIGATE: 'navigate',
 
   // Project operations
@@ -54,12 +54,16 @@ export const IPC_CHANNELS = {
   AGENT_STOP: 'agent:stop',
   AGENT_RUNS: 'agent:runs',
   AGENT_GET: 'agent:get',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
   AGENT_OUTPUT: 'agent:output',
   AGENT_ACTIVE_TASK_IDS: 'agent:active-task-ids',
   AGENT_ACTIVE_RUNS: 'agent:active-runs',
   AGENT_ALL_RUNS: 'agent:all-runs',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
   AGENT_INTERRUPTED_RUNS: 'agent:interrupted-runs',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
   AGENT_MESSAGE: 'agent:message',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
   AGENT_STATUS: 'agent:status',
   AGENT_SEND_MESSAGE: 'agent:send-message',
 
@@ -121,6 +125,7 @@ export const IPC_CHANNELS = {
   TELEGRAM_BOT_START: 'telegram:bot-start',
   TELEGRAM_BOT_STOP: 'telegram:bot-stop',
   TELEGRAM_BOT_STATUS: 'telegram:bot-status',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
   TELEGRAM_BOT_LOG: 'telegram:bot-log',
 
   // Shell
@@ -134,7 +139,9 @@ export const IPC_CHANNELS = {
   CHAT_MESSAGES: 'chat:messages',
   CHAT_CLEAR: 'chat:clear',
   CHAT_SUMMARIZE: 'chat:summarize',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
   CHAT_OUTPUT: 'chat:output',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
   CHAT_MESSAGE: 'chat:message',
   CHAT_COSTS: 'chat:costs',
 
