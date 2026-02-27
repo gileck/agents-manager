@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Pipeline, DebugTimelineEntry } from '../../../shared/types';
+import type { Pipeline, DebugTimelineEntry, AgentRun } from '../../../shared/types';
 
 /** Compute the happy (default forward) path through a pipeline */
 function computeHappyPath(pipeline: Pipeline): string[] {
@@ -64,6 +64,38 @@ function computeAgenticStatuses(pipeline: Pipeline): Set<string> {
     if (t.trigger === 'agent') agentic.add(t.from);
   }
   return agentic;
+}
+
+/**
+ * Scan pipeline transitions for start_agent hooks and build a map of
+ * statusName → agent modes that run in that status.
+ */
+function computeStatusToModes(pipeline: Pipeline): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const t of pipeline.transitions) {
+    if (!t.hooks) continue;
+    for (const hook of t.hooks) {
+      if (hook.name === 'start_agent' && hook.params?.mode) {
+        const modes = map.get(t.to) ?? [];
+        const mode = hook.params.mode as string;
+        if (!modes.includes(mode)) modes.push(mode);
+        map.set(t.to, modes);
+      }
+    }
+  }
+  return map;
+}
+
+/** Find the latest agent run matching any of the modes for a given status */
+function findLatestRunForStatus(
+  statusName: string,
+  statusToModes: Map<string, string[]>,
+  agentRuns: AgentRun[],
+): AgentRun | null {
+  const modes = statusToModes.get(statusName);
+  if (!modes || modes.length === 0) return null;
+  // agentRuns are already sorted newest-first
+  return agentRuns.find((r) => modes.includes(r.mode)) ?? null;
 }
 
 /** Get ring box-shadow for agentic nodes */
@@ -332,12 +364,16 @@ function CycleCapsule({
   count,
   state,
   agentState,
+  onClick,
+  clickable,
 }: {
   implLabel: string;
   prLabel: string;
   count: number;
   state: 'done' | 'active' | 'future';
   agentState: 'idle' | 'running' | 'failed';
+  onClick?: () => void;
+  clickable?: boolean;
 }) {
   const borderColor = state === 'active' ? '#3b82f6' : state === 'done' ? '#16a34a' : '#374151';
   const nodeColor   = state === 'done' ? '#22c55e' : state === 'active' ? '#3b82f6' : '#374151';
@@ -369,7 +405,14 @@ function CycleCapsule({
         </span>
       </div>
       {/* Single label line */}
-      <span style={{ fontSize: 10, fontWeight: 500, color: labelColor, whiteSpace: 'nowrap' }}>
+      <span
+        style={{
+          fontSize: 10, fontWeight: 500, color: labelColor, whiteSpace: 'nowrap',
+          ...(clickable ? { cursor: 'pointer', borderBottom: '1px dotted currentColor' } : {}),
+        }}
+        title={clickable ? 'View agent run' : undefined}
+        onClick={clickable ? onClick : undefined}
+      >
         {implLabel} / {prLabel}
       </span>
     </div>
@@ -382,14 +425,19 @@ export function PipelineProgress({
   currentStatus,
   transitionEntries,
   agentState = 'idle',
+  agentRuns,
+  onNavigateToRun,
 }: {
   pipeline: Pipeline;
   currentStatus: string;
   transitionEntries: DebugTimelineEntry[];
   agentState?: 'idle' | 'running' | 'failed';
+  agentRuns?: AgentRun[] | null;
+  onNavigateToRun?: (runId: string) => void;
 }) {
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
   const agenticStatuses = computeAgenticStatuses(pipeline);
+  const statusToModes = computeStatusToModes(pipeline);
   const { displayPath, currentIndex, skippedStatuses } = computeDisplayPath(pipeline, currentStatus, transitionEntries);
 
   // Collapse repeated pairs into cycle capsules
@@ -414,6 +462,13 @@ export function PipelineProgress({
                 : nodeIdx - 1 < adjustedCurrentIndex
             );
 
+            // Find matching run for either status in the cycle pair
+            const cycleRun = agentRuns?.length
+              ? (findLatestRunForStatus(node.implStatus, statusToModes, agentRuns)
+                ?? findLatestRunForStatus(node.prStatus, statusToModes, agentRuns))
+              : null;
+            const cycleClickable = !!cycleRun && !!onNavigateToRun;
+
             return (
               <React.Fragment key={`cycle-${nodeIdx}`}>
                 {!isFirst && <Connector completed={connectorDone} />}
@@ -423,6 +478,8 @@ export function PipelineProgress({
                   count={node.count}
                   state={state}
                   agentState={agentState}
+                  clickable={cycleClickable}
+                  onClick={cycleClickable ? () => onNavigateToRun!(cycleRun!.id) : undefined}
                 />
               </React.Fragment>
             );
@@ -444,6 +501,12 @@ export function PipelineProgress({
             : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#3b82f6')
             : '#374151';
 
+          // Clickable if agentic and has a matching agent run
+          const matchedRun = isAgentic && agentRuns?.length
+            ? findLatestRunForStatus(statusName, statusToModes, agentRuns)
+            : null;
+          const nodeClickable = !!matchedRun && !!onNavigateToRun;
+
           // Connector: check if previous node was skipped or is a cycle
           const prevSkipped = prevNode?.kind === 'single' && skippedStatuses.has(prevNode.statusName);
           const connectorSkipped = isSkipped || prevSkipped;
@@ -454,7 +517,15 @@ export function PipelineProgress({
               {!isFirst && (
                 <Connector completed={connectorDone} dashed={connectorSkipped} />
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 64, opacity: isSkipped ? 0.5 : 1 }}>
+              <div
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 64,
+                  opacity: isSkipped ? 0.5 : 1,
+                  ...(nodeClickable ? { cursor: 'pointer' } : {}),
+                }}
+                title={nodeClickable ? 'View agent run' : undefined}
+                onClick={nodeClickable ? () => onNavigateToRun!(matchedRun!.id) : undefined}
+              >
                 <div
                   style={{
                     position: 'relative',
@@ -509,6 +580,7 @@ export function PipelineProgress({
                       : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#2563eb')
                       : '#6b7280',
                     textDecoration: isSkipped ? 'line-through' : undefined,
+                    ...(nodeClickable ? { borderBottom: '1px dotted currentColor' } : {}),
                   }}
                 >
                   {label}

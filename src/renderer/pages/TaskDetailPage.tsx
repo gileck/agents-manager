@@ -522,6 +522,8 @@ export function TaskDetailPage() {
             currentStatus={task.status}
             transitionEntries={(debugTimeline ?? []).filter((e) => e.source === 'transition')}
             agentState={hasRunningAgent ? 'running' : isStuck ? 'failed' : 'idle'}
+            agentRuns={agentRuns}
+            onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
           />
         </div>
       )}

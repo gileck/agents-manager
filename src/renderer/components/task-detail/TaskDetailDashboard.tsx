@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -57,21 +57,105 @@ export function TaskDetailDashboard({
   const navigate = useNavigate();
   const { features } = useFeatures(task ? { projectId: task.projectId } : undefined);
 
+  // Inline description editing
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [savingDescription, setSavingDescription] = useState(false);
+
+  const handleStartEditDescription = useCallback(() => {
+    setDescriptionDraft(task.description ?? '');
+    setEditingDescription(true);
+  }, [task.description]);
+
+  const handleCancelEditDescription = useCallback(() => {
+    setEditingDescription(false);
+    setDescriptionDraft('');
+  }, []);
+
+  const handleSaveDescription = useCallback(async () => {
+    setSavingDescription(true);
+    try {
+      await window.api.tasks.update(taskId, { description: descriptionDraft });
+      setEditingDescription(false);
+      await onRefetch();
+    } catch (err) {
+      console.error('Failed to save description:', err);
+    } finally {
+      setSavingDescription(false);
+    }
+  }, [taskId, descriptionDraft, onRefetch]);
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
       {/* LEFT COLUMN */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
         {/* Description */}
-        {task.description && (
-          <Card>
-            <CardHeader className="py-3">
+        <Card>
+          <CardHeader className="py-3">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <CardTitle className="text-sm">Description</CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4">
+              {!editingDescription && (
+                <button
+                  onClick={handleStartEditDescription}
+                  title="Edit description"
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+                    color: 'var(--muted-foreground)', fontSize: 14, lineHeight: 1,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="pb-4">
+            {editingDescription ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <textarea
+                  value={descriptionDraft}
+                  onChange={(e) => setDescriptionDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      handleSaveDescription();
+                    } else if (e.key === 'Escape') {
+                      handleCancelEditDescription();
+                    }
+                  }}
+                  autoFocus
+                  rows={6}
+                  style={{
+                    width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 13,
+                    padding: 8, borderRadius: 6, border: '1px solid var(--border)',
+                    backgroundColor: 'var(--background)', color: 'var(--foreground)',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                  <Button variant="outline" size="sm" onClick={handleCancelEditDescription} disabled={savingDescription}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSaveDescription} disabled={savingDescription}>
+                    {savingDescription ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            ) : task.description ? (
               <PlanMarkdown content={task.description} />
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              <button
+                onClick={handleStartEditDescription}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--muted-foreground)', fontSize: 13, padding: 0,
+                }}
+              >
+                + Add description
+              </button>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Extra metadata */}
         {(task.featureId || task.prLink || task.branchName || task.tags.length > 0 || task.assignee) && (
