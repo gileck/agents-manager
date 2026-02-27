@@ -221,6 +221,44 @@ export function computeDependencyLayers(
   return layers;
 }
 
+export function buildStatusPositionMap(pipelineMap: Map<string, Pipeline>): Map<string, number> {
+  const posMap = new Map<string, number>();
+  for (const pipeline of pipelineMap.values()) {
+    for (const status of pipeline.statuses) {
+      const pos = status.position ?? pipeline.statuses.indexOf(status);
+      const existing = posMap.get(status.name);
+      if (existing === undefined || pos < existing) {
+        posMap.set(status.name, pos);
+      }
+    }
+  }
+  return posMap;
+}
+
+export function sortGroupEntries<T>(
+  groups: Map<string, T>,
+  groupBy: GroupBy,
+  pipelineMap?: Map<string, Pipeline>,
+): Map<string, T> {
+  const entries = Array.from(groups.entries());
+
+  if (groupBy === 'status' && pipelineMap) {
+    const posMap = buildStatusPositionMap(pipelineMap);
+    entries.sort(([a], [b]) => {
+      const posA = posMap.get(a) ?? Infinity;
+      const posB = posMap.get(b) ?? Infinity;
+      return posA - posB;
+    });
+  } else if (groupBy === 'priority') {
+    // Priority keys are like "P0 - Critical", "P1 - High", etc. — sort by label (alphabetical works)
+    entries.sort(([a], [b]) => a.localeCompare(b));
+  } else if (groupBy !== 'none') {
+    entries.sort(([a], [b]) => a.localeCompare(b));
+  }
+
+  return new Map(entries);
+}
+
 export function formatRelativeTimestamp(timestamp: number): string {
   const now = Date.now();
   const diffMs = now - timestamp;
