@@ -270,19 +270,23 @@ export class ChatAgentService {
     if (conversationLines.length > 0) {
       prompt += '## Conversation History\n\n' + conversationLines.join('\n\n') + '\n\n---\n\n';
     }
-    const userPart = message.trim()
+    let userPart = message.trim()
       ? `[User]: ${message}`
-      : (images?.length ? '[User]: (see attached images)' : '[User]: ');
+      : '[User]: (see attached images)';
+    // Include image paths so the agent can Read them
+    if (imageRefs && imageRefs.length > 0) {
+      for (const img of imageRefs) {
+        userPart += `\n  (Image attached: ${img.path})`;
+      }
+      userPart += '\n\nIMPORTANT: The user attached image(s). Use the Read tool to view them at the paths above.';
+    }
     prompt += `${userPart}\n\nRespond to the latest user message.`;
 
     // Run agent in background
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    // Pass current images (with base64 data) to runAgent for multimodal SDK prompt
-    const currentImages = images;
-
-    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, onOutput, onMessage, currentImages).catch((err) => {
+    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, onOutput, onMessage).catch((err) => {
       this.runningControllers.delete(sessionId);
       onOutput(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
       onOutput(CHAT_COMPLETE_SENTINEL);
@@ -486,13 +490,13 @@ export class ChatAgentService {
     agentLibName: string,
     onOutput: (chunk: string) => void,
     onMessage?: (msg: AgentChatMessage) => void,
-    images?: ChatImage[],
   ): Promise<void> {
     // Determine whether to use the AgentLib abstraction or the direct SDK
     const useAgentLib = agentLibName !== DEFAULT_AGENT_LIB;
 
-    // Set up sandbox: read-only access to project path, block write tools
-    const sandboxGuard = new SandboxGuard([], [projectPath]);
+    // Set up sandbox: read-only access to project path + image storage dir, block write tools
+    const imageDir = getImageStorageDir();
+    const sandboxGuard = new SandboxGuard([], [projectPath, imageDir]);
 
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
@@ -519,11 +523,6 @@ export class ChatAgentService {
     try {
       if (useAgentLib) {
         // Use AgentLib abstraction for non-claude-code engines
-        if (images && images.length > 0) {
-          const warning = '\n[Warning: Image attachments are only supported with Claude Code engine. Images will be ignored.]\n';
-          onOutput(warning);
-          emitMessage({ type: 'assistant_text', text: warning, timestamp: Date.now() });
-        }
         // Wire abort signal to AgentLib.stop() so the Stop button works
         const lib = this.agentLibRegistry.getLib(agentLibName);
         abortController.signal.addEventListener('abort', () => {
@@ -535,7 +534,7 @@ export class ChatAgentService {
         await this.runViaDirectSdk(sessionId, projectPath, systemPrompt, prompt, abortController, sandboxGuard, onOutput, emitMessage, (input, output) => {
           costInputTokens = input;
           costOutputTokens = output;
-        }, images);
+        });
       }
 
       // Mark as completed successfully
@@ -630,36 +629,12 @@ export class ChatAgentService {
     onOutput: (chunk: string) => void,
     emitMessage: (msg: AgentChatMessage) => void,
     onCost: (input: number | undefined, output: number | undefined) => void,
-    images?: ChatImage[],
   ): Promise<void> {
-    // Build prompt: if images are present, use multimodal content blocks
+    // Always pass a string prompt — the agent can Read image files from their paths
     const fullPromptText = `${systemPrompt}\n\n${prompt}`;
-    let sdkPrompt: string | AsyncIterable<{ message: { role: string; content: unknown[] } }>;
-
-    if (images && images.length > 0) {
-      const contentBlocks: unknown[] = [
-        { type: 'text', text: fullPromptText },
-      ];
-      for (const img of images) {
-        contentBlocks.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: img.mediaType,
-            data: img.base64,
-          },
-        });
-      }
-      // Wrap in an async iterable that yields a single user message
-      sdkPrompt = (async function* () {
-        yield { message: { role: 'user', content: contentBlocks } };
-      })();
-    } else {
-      sdkPrompt = fullPromptText;
-    }
 
     await this.runSdkQuery(
-      sdkPrompt,
+      fullPromptText,
       {
         cwd: projectPath,
         abortController,
@@ -734,7 +709,7 @@ export class ChatAgentService {
    * the SDK message loop.
    */
   private async runSdkQuery(
-    prompt: string | AsyncIterable<unknown>,
+    prompt: string,
     options: Record<string, unknown>,
     callbacks: SdkQueryCallbacks,
   ): Promise<void> {
@@ -780,7 +755,7 @@ export class ChatAgentService {
     }
   }
 
-  private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<unknown>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
+  private async loadQuery(): Promise<(opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
     const mod = await importESM('@anthropic-ai/claude-agent-sdk');
     return mod.query as (opts: { prompt: string | AsyncIterable<unknown>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>;
   }
