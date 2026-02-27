@@ -18,6 +18,7 @@ describe('validateOutcomePayload', () => {
       'design_ready',
       'reproduced',
       'cannot_reproduce',
+      'review_complete',
     ];
 
     for (const outcome of signalOutcomes) {
@@ -257,6 +258,7 @@ describe('validateOutcomePayload', () => {
         'design_ready',
         'reproduced',
         'cannot_reproduce',
+        'review_complete',
       ];
       for (const outcome of expectedOutcomes) {
         expect(OUTCOME_SCHEMAS[outcome]).toBeDefined();
