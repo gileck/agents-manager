@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
 import { AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
-import { registerPhaseHandler } from '../../src/main/handlers/phase-handler';
 import type { ImplementationPhase, Task, HookResult } from '../../src/shared/types';
 
 describe('Phase Cycling E2E', () => {
@@ -17,12 +16,7 @@ describe('Phase Cycling E2E', () => {
     ctx = createTestContext();
     startAgentCalls = [];
 
-    // Register phase handler (advance_phase hook)
-    registerPhaseHandler(ctx.pipelineEngine, {
-      taskStore: ctx.taskStore,
-      taskEventLog: ctx.taskEventLog,
-      pipelineEngine: ctx.pipelineEngine,
-    });
+    // NOTE: registerPhaseHandler (advance_phase hook) is already registered by test-context.ts.
 
     // Register a stub start_agent hook so fire_and_forget hooks don't fail
     ctx.pipelineEngine.registerHook('start_agent', async (task, _transition, _context, params): Promise<HookResult> => {

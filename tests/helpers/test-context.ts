@@ -80,6 +80,7 @@ export interface TestContext {
   notificationRouter: StubNotificationRouter;
   agentService: AgentService;
   workflowService: WorkflowService;
+  outcomeResolver: OutcomeResolver;
   // Phase 3
   featureStore: IFeatureStore;
   agentDefinitionStore: IAgentDefinitionStore;
@@ -294,6 +295,7 @@ export function createTestContext(): TestContext {
     notificationRouter,
     agentService,
     workflowService,
+    outcomeResolver,
     featureStore,
     agentDefinitionStore,
     taskContextStore,

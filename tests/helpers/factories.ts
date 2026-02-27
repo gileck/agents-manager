@@ -1,4 +1,4 @@
-import type { ProjectCreateInput, TaskCreateInput, AgentRunCreateInput, AgentMode, FeatureCreateInput, AgentDefinitionCreateInput, TaskContextEntryCreateInput } from '../../src/shared/types';
+import type { ProjectCreateInput, TaskCreateInput, AgentRunCreateInput, AgentMode, FeatureCreateInput, AgentDefinitionCreateInput, TaskContextEntryCreateInput, PendingPromptCreateInput, TaskPhaseCreateInput } from '../../src/shared/types';
 
 let projectCounter = 0;
 let taskCounter = 0;
@@ -88,6 +88,30 @@ export function createTaskContextInput(
     source: 'agent',
     entryType: 'observation',
     summary: 'Test context entry',
+    ...overrides,
+  };
+}
+
+export function createPendingPromptInput(
+  taskId: string,
+  agentRunId: string,
+  overrides?: Partial<Omit<PendingPromptCreateInput, 'taskId' | 'agentRunId'>>,
+): PendingPromptCreateInput {
+  return {
+    taskId,
+    agentRunId,
+    promptType: 'needs_info',
+    ...overrides,
+  };
+}
+
+export function createPhaseInput(
+  taskId: string,
+  overrides?: Partial<Omit<TaskPhaseCreateInput, 'taskId'>>,
+): TaskPhaseCreateInput {
+  return {
+    taskId,
+    phase: 'Implementation Phase 1',
     ...overrides,
   };
 }
