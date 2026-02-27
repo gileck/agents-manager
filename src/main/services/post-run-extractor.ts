@@ -145,6 +145,7 @@ export class PostRunExtractor {
           processImprovements?: unknown;
           tokenCostAnalysis?: unknown;
           executionSummary?: unknown;
+          suggestedTasks?: Array<{ title: string; description: string }>;
         }
         const wso = result.structuredOutput as WorkflowReviewerOutput | undefined;
         entryData.verdict = wso?.overallVerdict;
@@ -153,6 +154,7 @@ export class PostRunExtractor {
         entryData.processImprovements = wso?.processImprovements;
         entryData.tokenCostAnalysis = wso?.tokenCostAnalysis;
         entryData.executionSummary = wso?.executionSummary;
+        entryData.suggestedTasks = wso?.suggestedTasks;
       }
       const entrySource = agentType === 'pr-reviewer' ? 'reviewer'
         : agentType === 'task-workflow-reviewer' ? 'workflow-reviewer'
@@ -169,6 +171,65 @@ export class PostRunExtractor {
         category: 'agent',
         severity: 'warning',
         message: `Failed to save context entry: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+
+  /**
+   * Create tasks suggested by the workflow reviewer.
+   * Each task is created in the agent pipeline under the same project as the reviewed task.
+   */
+  async createSuggestedTasks(
+    taskId: string,
+    agentType: string,
+    result: AgentRunResult,
+    onLog: OnLog,
+  ): Promise<void> {
+    if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) return;
+
+    const wso = result.structuredOutput as {
+      suggestedTasks?: Array<{ title: string; description: string }>;
+    } | undefined;
+
+    const tasks = wso?.suggestedTasks;
+    if (!tasks || tasks.length === 0) return;
+
+    try {
+      const reviewedTask = await this.taskStore.getTask(taskId);
+      if (!reviewedTask) return;
+
+      const AGENT_PIPELINE_ID = 'pipeline-agent';
+      let created = 0;
+
+      for (const suggested of tasks) {
+        if (!suggested.title) continue;
+        await this.taskStore.createTask({
+          projectId: reviewedTask.projectId,
+          pipelineId: AGENT_PIPELINE_ID,
+          title: suggested.title,
+          description: suggested.description,
+          tags: ['workflow-review'],
+        });
+        created++;
+      }
+
+      if (created > 0) {
+        onLog(`Created ${created} suggested task(s) from workflow review`);
+        await this.taskEventLog.log({
+          taskId,
+          category: 'agent',
+          severity: 'info',
+          message: `Workflow reviewer suggested ${created} task(s) — auto-created in agent pipeline`,
+          data: { createdCount: created, titles: tasks.map(t => t.title) },
+        });
+      }
+    } catch (err) {
+      // Non-fatal — don't block pipeline on task creation failure
+      await this.taskEventLog.log({
+        taskId,
+        category: 'agent',
+        severity: 'warning',
+        message: `Failed to create suggested tasks: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   }

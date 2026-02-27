@@ -19,6 +19,11 @@ interface ReviewFinding {
   detail: string;
 }
 
+interface SuggestedTask {
+  title: string;
+  description: string;
+}
+
 interface ReviewData {
   verdict?: string;
   executionSummary?: string;
@@ -26,6 +31,7 @@ interface ReviewData {
   promptImprovements?: string[];
   processImprovements?: string[];
   tokenCostAnalysis?: string;
+  suggestedTasks?: SuggestedTask[];
 }
 
 const VERDICT_COLORS: Record<string, { bg: string; text: string }> = {
@@ -187,6 +193,26 @@ export function WorkflowReviewTab({
                     <li key={i} className="text-sm text-muted-foreground">{item}</li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Suggested tasks */}
+            {reviewData.suggestedTasks && reviewData.suggestedTasks.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">
+                  Suggested Tasks ({reviewData.suggestedTasks.length})
+                </h4>
+                <div className="space-y-2">
+                  {reviewData.suggestedTasks.map((task, i) => (
+                    <div key={i} className="rounded-md border px-4 py-3">
+                      <p className="text-sm font-medium">{task.title}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  These tasks were auto-created in the agent pipeline.
+                </p>
               </div>
             )}
 

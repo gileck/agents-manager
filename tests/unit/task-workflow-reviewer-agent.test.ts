@@ -114,6 +114,7 @@ describe('TaskWorkflowReviewerPromptBuilder', () => {
           'promptImprovements',
           'processImprovements',
           'tokenCostAnalysis',
+          'suggestedTasks',
         ])
       );
     });

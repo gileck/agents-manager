@@ -543,6 +543,7 @@ export class AgentService implements IAgentService {
       await this.postRunExtractor.extractPlan(taskId, result, context.mode, postRunLog);
       await this.postRunExtractor.extractTechnicalDesign(taskId, result, context.mode, postRunLog);
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.mode, result, postRunLog);
+      await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog);
 
       // Handle outcome — resolve outcome and execute transitions
       await this.outcomeResolver.resolveAndTransition({

@@ -61,8 +61,20 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
             type: 'string',
             description: 'Token usage efficiency observations with root causes for waste',
           },
+          suggestedTasks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Actionable task title (imperative form, e.g. "Add guard to prevent duplicate agent spawns")' },
+                description: { type: 'string', description: 'Detailed description of what to fix and why, with enough context for an agent to implement it' },
+              },
+              required: ['title', 'description'],
+            },
+            description: 'Concrete tasks to fix WORKFLOW INFRASTRUCTURE issues (prompts, guards, hooks, transitions). NEVER suggest tasks to fix the specific task code — only tasks that improve the system for ALL future executions.',
+          },
         },
-        required: ['overallVerdict', 'executionSummary', 'findings', 'promptImprovements', 'processImprovements', 'tokenCostAnalysis'],
+        required: ['overallVerdict', 'executionSummary', 'findings', 'promptImprovements', 'processImprovements', 'tokenCostAnalysis', 'suggestedTasks'],
       },
     };
   }
@@ -129,6 +141,13 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '  hooks, transitions, or agent configuration to improve ALL future task executions.',
       '- promptImprovements: specific changes to agent prompt templates that would prevent issues.',
       '- processImprovements: changes to guards, hooks, transitions, timeouts, or orchestration logic.',
+      '- suggestedTasks: concrete tasks that will be auto-created to fix WORKFLOW issues.',
+      '  CRITICAL: These must ONLY be about improving the workflow infrastructure (prompts, guards,',
+      '  hooks, transitions, orchestration). NEVER suggest fixing the specific task code.',
+      '  Example of WRONG task: "Fix the sorting bug in sortGroupEntries"',
+      '  Example of RIGHT task: "Improve PR reviewer prompt to catch edge cases in sorting logic"',
+      '  Each task description should have enough context for an agent to implement the fix.',
+      '  Use empty array if no workflow improvements are needed.',
       '- If the workflow executed cleanly with no systemic issues, say so — do not invent findings.',
     ].join('\n');
   }
