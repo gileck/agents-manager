@@ -9,6 +9,7 @@ export interface ActiveAgentEntry {
 export function useActiveAgentRuns() {
   const [activeRuns, setActiveRuns] = useState<AgentRun[]>([]);
   const [completedRuns, setCompletedRuns] = useState<Map<string, AgentRun>>(new Map());
+  const [error, setError] = useState<string | null>(null);
   const completedRunsRef = useRef(completedRuns);
   completedRunsRef.current = completedRuns;
   const taskTitleCache = useRef<Map<string, string>>(new Map());
@@ -23,13 +24,14 @@ export function useActiveAgentRuns() {
         taskTitleCache.current.set(taskId, task.title);
         setTaskTitles(new Map(taskTitleCache.current));
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.debug('useActiveAgentRuns: fetchTaskTitle failed:', err);
     }
   }, []);
 
   const fetchData = useCallback(async () => {
     try {
+      setError(null);
       const runs = await window.api.agents.activeRuns();
       const currentIds = new Set(runs.map((r) => r.id));
 
@@ -41,8 +43,8 @@ export function useActiveAgentRuns() {
             if (finishedRun) {
               setCompletedRuns((prev) => new Map(prev).set(prevId, finishedRun));
             }
-          } catch {
-            // ignore
+          } catch (err) {
+            console.debug('useActiveAgentRuns: fetching finished run failed:', err);
           }
         }
       }
@@ -55,8 +57,8 @@ export function useActiveAgentRuns() {
       for (const taskId of taskIds) {
         fetchTaskTitle(taskId);
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(String(err));
     }
   }, [fetchTaskTitle]);
 
@@ -100,5 +102,5 @@ export function useActiveAgentRuns() {
     return bCompleted - aCompleted;
   });
 
-  return { entries, refresh };
+  return { entries, refresh, error };
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import itermIcon from '../assets/iterm-icon.png';
 import vscodeIcon from '../assets/vscode-icon.png';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -37,6 +37,7 @@ import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboa
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
 import type { QuestionResponse } from '../components/prompts/QuestionForm';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useTaskPolling } from '../hooks/useTaskPolling';
 import { BugReportDialog } from '../components/bugs/BugReportDialog';
 import type { BugReportInitialValues } from '../components/bugs/BugReportDialog';
 import type { HookFailureRecord } from '../../shared/types';
@@ -100,27 +101,9 @@ export function TaskDetailPage() {
   const awaitingPr = statusMeta.isHumanReview && !task?.prLink;
   const shouldPoll = hasRunningAgent || statusMeta.isWaitingForInput || isFinalizing || isStuck || awaitingPr;
 
-  useEffect(() => {
-    if (!shouldPoll) return;
-    const interval = setInterval(() => {
-      refetchAgentRuns();
-      refetch();
-      refetchTransitions();
-      refetchPrompts();
-      refetchDebug();
-      refetchContext();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [shouldPoll, refetchAgentRuns, refetch, refetchTransitions, refetchPrompts, refetchDebug, refetchContext]);
-
-  // Completion edge: full refresh when agent finishes
-  const prevHasRunning = useRef(hasRunningAgent);
-  useEffect(() => {
-    if (prevHasRunning.current && !hasRunningAgent) {
-      refetch(); refetchTransitions(); refetchAgentRuns(); refetchPrompts(); refetchDebug(); refetchContext();
-    }
-    prevHasRunning.current = hasRunningAgent;
-  }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
+  useTaskPolling(id, shouldPoll, hasRunningAgent, {
+    refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext,
+  });
 
   const initialTab = task?.status === 'plan_review' ? 'plan' : task?.status === 'design_review' ? 'design' : 'details';
   const [tab, setTab] = useLocalStorage(`taskDetail.tab.${id}`, initialTab);
