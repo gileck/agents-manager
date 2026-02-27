@@ -6,6 +6,13 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks } from '../interfaces/agent-lib';
+import type {
+  SDKMessage,
+  SDKAssistantMessage,
+  SDKResultMessage,
+  SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
+import type { MessageParam } from '@anthropic-ai/sdk/resources';
 import { SandboxGuard } from './sandbox-guard';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,41 +20,11 @@ import { randomUUID } from 'crypto';
 
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
-/**
- * Lightweight mirrors of the SDK stream message types used for the
- * dynamically-imported `query()` iterable. Kept here rather than
- * importing from the SDK to avoid a hard compile-time dependency on
- * the ESM-only `@anthropic-ai/claude-agent-sdk` package.
- *
- * See: SDKAssistantMessage, SDKResultMessage, SDKMessage in sdk.d.ts
- */
-interface SdkTextBlock { type: 'text'; text: string }
-interface SdkToolUseBlock { type: 'tool_use'; name: string; input?: unknown }
-type SdkContentBlock = SdkTextBlock | SdkToolUseBlock;
-
-interface SdkAssistantMessage {
-  type: 'assistant';
-  message: { content: SdkContentBlock[] };
-}
-interface SdkResultMessage {
-  type: 'result';
-  subtype: string;
-  errors?: string[];
-  usage?: { input_tokens: number; output_tokens: number };
-}
-interface SdkOtherMessage {
-  type: string;
-  message?: { content?: SdkContentBlock[] };
-  summary?: string;
-  result?: string;
-}
-type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkOtherMessage;
-
 /** Callbacks from runSdkQuery for each message type. */
 interface SdkQueryCallbacks {
   onText?: (text: string) => void;
-  onToolUse?: (block: SdkToolUseBlock & { id?: string }) => void;
-  onResult?: (msg: SdkResultMessage) => void;
+  onToolUse?: (block: { type: 'tool_use'; name: string; id?: string; input?: unknown }) => void;
+  onResult?: (msg: SDKResultMessage) => void;
   onUserToolResult?: (toolUseId: string, content: string) => void;
 }
 
@@ -286,7 +263,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, onOutput, onMessage).catch((err) => {
+    this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, onOutput, onMessage, images).catch((err) => {
       this.runningControllers.delete(sessionId);
       onOutput(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
       onOutput(CHAT_COMPLETE_SENTINEL);
@@ -490,6 +467,7 @@ export class ChatAgentService {
     agentLibName: string,
     onOutput: (chunk: string) => void,
     onMessage?: (msg: AgentChatMessage) => void,
+    images?: ChatImage[],
   ): Promise<void> {
     // Determine whether to use the AgentLib abstraction or the direct SDK
     const useAgentLib = agentLibName !== DEFAULT_AGENT_LIB;
@@ -523,6 +501,11 @@ export class ChatAgentService {
     try {
       if (useAgentLib) {
         // Use AgentLib abstraction for non-claude-code engines
+        if (images && images.length > 0) {
+          const warning = `\n[Note: Images are sent as file paths with the ${agentLibName} engine. The agent will use the Read tool to view them.]\n`;
+          onOutput(warning);
+          emitMessage({ type: 'assistant_text', text: warning, timestamp: Date.now() });
+        }
         // Wire abort signal to AgentLib.stop() so the Stop button works
         const lib = this.agentLibRegistry.getLib(agentLibName);
         abortController.signal.addEventListener('abort', () => {
@@ -534,7 +517,7 @@ export class ChatAgentService {
         await this.runViaDirectSdk(sessionId, projectPath, systemPrompt, prompt, abortController, sandboxGuard, onOutput, emitMessage, (input, output) => {
           costInputTokens = input;
           costOutputTokens = output;
-        });
+        }, images);
       }
 
       // Mark as completed successfully
@@ -629,12 +612,33 @@ export class ChatAgentService {
     onOutput: (chunk: string) => void,
     emitMessage: (msg: AgentChatMessage) => void,
     onCost: (input: number | undefined, output: number | undefined) => void,
+    images?: ChatImage[],
   ): Promise<void> {
-    // Always pass a string prompt — the agent can Read image files from their paths
     const fullPromptText = `${systemPrompt}\n\n${prompt}`;
 
+    // Build multimodal prompt when images are present, otherwise use string
+    let sdkPrompt: string | AsyncIterable<SDKUserMessage>;
+    if (images && images.length > 0) {
+      const contentBlocks = [
+        { type: 'text' as const, text: fullPromptText },
+        ...images.map((img) => ({
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
+        })),
+      ];
+      const userMessage: SDKUserMessage = {
+        type: 'user',
+        message: { role: 'user', content: contentBlocks } as MessageParam,
+        parent_tool_use_id: null,
+        session_id: sessionId,
+      };
+      sdkPrompt = (async function* () { yield userMessage; })();
+    } else {
+      sdkPrompt = fullPromptText;
+    }
+
     await this.runSdkQuery(
-      fullPromptText,
+      sdkPrompt,
       {
         cwd: projectPath,
         abortController,
@@ -672,7 +676,7 @@ export class ChatAgentService {
           });
         },
         onResult: (resultMsg) => {
-          if (resultMsg.errors?.length) {
+          if (resultMsg.subtype !== 'success') {
             const errorText = `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
             onOutput(errorText);
             emitMessage({ type: 'assistant_text', text: errorText, timestamp: Date.now() });
@@ -709,54 +713,53 @@ export class ChatAgentService {
    * the SDK message loop.
    */
   private async runSdkQuery(
-    prompt: string,
+    prompt: string | AsyncIterable<SDKUserMessage>,
     options: Record<string, unknown>,
     callbacks: SdkQueryCallbacks,
   ): Promise<void> {
     const query = await this.loadQuery();
 
-    for await (const message of query({ prompt, options }) as AsyncIterable<SdkStreamMessage>) {
+    for await (const message of query({ prompt, options })) {
       if (message.type === 'assistant') {
-        const assistantMsg = message as SdkAssistantMessage;
+        const assistantMsg = message as SDKAssistantMessage;
+        if (assistantMsg.error) {
+          callbacks.onText?.(`\n[Agent error: ${assistantMsg.error}]\n`);
+        }
         for (const block of assistantMsg.message.content) {
           if (block.type === 'text') {
-            callbacks.onText?.(block.text);
+            callbacks.onText?.((block as { text: string }).text);
           } else if (block.type === 'tool_use') {
-            callbacks.onToolUse?.(block as SdkToolUseBlock & { id?: string });
+            callbacks.onToolUse?.(block as { type: 'tool_use'; name: string; id?: string; input?: unknown });
           }
         }
       } else if (message.type === 'result') {
-        callbacks.onResult?.(message as SdkResultMessage);
+        callbacks.onResult?.(message as SDKResultMessage);
       } else if (message.type === 'user') {
         // SDK emits tool results as SDKUserMessage with tool_result content blocks
-        const userMsg = message as unknown as { message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown }> } };
-        if (!userMsg.message?.content) {
+        const userMsg = message as SDKUserMessage;
+        const content = userMsg.message?.content;
+        if (!content || typeof content === 'string') {
           console.warn('[ChatAgentService] user message with unexpected structure:', JSON.stringify(message).slice(0, 200));
         } else {
-          for (const block of userMsg.message.content) {
-            if (block.type === 'tool_result' && block.tool_use_id) {
-              const resultContent = typeof block.content === 'string' ? block.content
-                : (Array.isArray(block.content) ? block.content.map((b: { text?: string }) => b.text || '').join('') : '(no output)');
-              callbacks.onUserToolResult?.(block.tool_use_id, resultContent);
-            }
-          }
-        }
-      } else {
-        // Handle other message types that may contain text content
-        const otherMsg = message as SdkOtherMessage;
-        if (otherMsg.message?.content) {
-          for (const block of otherMsg.message.content) {
-            if (block.type === 'text') {
-              callbacks.onText?.(block.text);
+          for (const block of content) {
+            const b = block as { type: string; tool_use_id?: string; content?: unknown };
+            if (b.type === 'tool_result' && b.tool_use_id) {
+              const resultContent = typeof b.content === 'string' ? b.content
+                : (Array.isArray(b.content) ? b.content.map((c: { text?: string }) => c.text || '').join('') : '(no output)');
+              callbacks.onUserToolResult?.(b.tool_use_id, resultContent);
             }
           }
         }
       }
+      // Other message types (status, system, etc.) are intentionally skipped
     }
   }
 
-  private async loadQuery(): Promise<(opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
+  private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<SDKUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SDKMessage>> {
     const mod = await importESM('@anthropic-ai/claude-agent-sdk');
-    return mod.query as (opts: { prompt: string | AsyncIterable<unknown>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>;
+    if (typeof mod.query !== 'function') {
+      throw new Error('Claude Agent SDK loaded but "query" export is missing. Ensure @anthropic-ai/claude-agent-sdk is installed and up to date.');
+    }
+    return mod.query as (opts: { prompt: string | AsyncIterable<SDKUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SDKMessage>;
   }
 }
