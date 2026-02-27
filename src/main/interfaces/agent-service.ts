@@ -7,4 +7,5 @@ export interface IAgentService {
   stop(runId: string): Promise<void>;
   recoverOrphanedRuns(): Promise<AgentRun[]>;
   getActiveRunIds(): string[];
+  isSpawning(taskId: string): boolean;
 }

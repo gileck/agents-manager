@@ -37,6 +37,7 @@ export class AgentService implements IAgentService {
   /** Run IDs that have a DB record but are still in the setup phase (before backgroundPromises registration).
    *  Prevents the supervisor from falsely flagging them as ghost runs during slow setup (worktree, git ops, etc.). */
   private initializingRunIds = new Set<string>();
+  private spawningTasks = new Set<string>();
   private readonly postRunExtractor: PostRunExtractor;
 
   constructor(
@@ -135,15 +136,21 @@ export class AgentService implements IAgentService {
   }
 
   async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
+    // Pre-spawn guard: prevent duplicate agent launches for the same task
+    if (this.spawningTasks.has(taskId)) {
+      throw new Error(`Agent already spawning for task ${taskId} — duplicate launch prevented`);
+    }
+    this.spawningTasks.add(taskId);
+
     // 1. Fetch task + project
     const task = await this.taskStore.getTask(taskId);
-    if (!task) throw new Error(`Task not found: ${taskId}`);
+    if (!task) { this.spawningTasks.delete(taskId); throw new Error(`Task not found: ${taskId}`); }
 
     const project = await this.projectStore.getProject(task.projectId);
-    if (!project) throw new Error(`Project not found: ${task.projectId}`);
+    if (!project) { this.spawningTasks.delete(taskId); throw new Error(`Project not found: ${task.projectId}`); }
 
     const projectPath = project.path;
-    if (!projectPath) throw new Error(`Project ${project.id} has no path configured`);
+    if (!projectPath) { this.spawningTasks.delete(taskId); throw new Error(`Project ${project.id} has no path configured`); }
     const worktreeManager = this.createWorktreeManager(projectPath);
 
     // 2. Create agent run record
@@ -354,6 +361,8 @@ export class AgentService implements IAgentService {
       // Setup failed before the agent could start — remove from initializing set
       // so the supervisor can detect the orphaned DB record as a ghost.
       this.initializingRunIds.delete(run.id);
+      // Release spawn lock if execute() fails before reaching runAgentInBackground()
+      this.spawningTasks.delete(taskId);
       throw err;
     }
   }
@@ -595,6 +604,8 @@ export class AgentService implements IAgentService {
       const pendingQueue = this.messageQueues.get(taskId);
       if (pendingQueue && pendingQueue.length > 0) {
         try {
+          // Release spawn lock before recursive execute() so the follow-up can re-acquire it
+          this.spawningTasks.delete(taskId);
           const callbacks = this.activeCallbacks.get(taskId);
           await this.execute(taskId, context.mode, agentType, callbacks?.onOutput, callbacks?.onMessage, callbacks?.onStatusChange);
         } catch (queueErr) {
@@ -643,6 +654,7 @@ export class AgentService implements IAgentService {
       // Delete the promise/agent references first to prevent leaks even if cleanup throws
       this.backgroundPromises.delete(run.id);
       this.runningAgents.delete(taskId);
+      this.spawningTasks.delete(taskId);
       flusher.stop();
       this.taskEventLog.log({
         taskId,
@@ -655,6 +667,10 @@ export class AgentService implements IAgentService {
         this.activeCallbacks.delete(taskId);
       }
     }
+  }
+
+  isSpawning(taskId: string): boolean {
+    return this.spawningTasks.has(taskId);
   }
 
   getActiveRunIds(): string[] {
