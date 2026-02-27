@@ -26,9 +26,9 @@ describe('cost-utils', () => {
     });
 
     it('matches haiku model via substring', () => {
-      // Haiku pricing: $0.25 input / $1.25 output per million tokens
+      // Claude 3.5 Haiku pricing: $0.80 input / $4 output per million tokens
       const cost = calculateCost(1_000_000, 1_000_000, 'claude-3-5-haiku-20241022');
-      expect(cost).toBe(0.25 + 1.25);
+      expect(cost).toBe(0.80 + 4);
     });
 
     it('is case-insensitive for model matching', () => {
