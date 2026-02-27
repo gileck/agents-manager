@@ -205,6 +205,8 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'plan_review', trigger: 'manual', label: 'Back to Plan Review' },
     { from: 'implementing', to: 'design_review', trigger: 'manual', label: 'Back to Design Review' },
     { from: 'design_review', to: 'open', trigger: 'manual', label: 'Cancel Design Review' },
+    // Workflow review acknowledgment (no-op self-transition)
+    { from: 'done', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },
     // Manual recovery if merge_pr safety net catches a conflict
     { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],
@@ -339,6 +341,8 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'investigation_review', trigger: 'manual', label: 'Back to Investigation Review' },
     { from: 'implementing', to: 'design_review', trigger: 'manual', label: 'Back to Design Review' },
     { from: 'design_review', to: 'reported', trigger: 'manual', label: 'Cancel Design Review' },
+    // Workflow review acknowledgment (no-op self-transition)
+    { from: 'done', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },
     // Manual recovery if merge_pr safety net catches a conflict
     { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],
