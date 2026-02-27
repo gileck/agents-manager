@@ -11,6 +11,7 @@ import { ContextCard } from './ContextCard';
 import { PhasedSubtasksSection } from './PhasedSubtasksSection';
 import { SubtasksSection } from './SubtasksSection';
 import { DependenciesSection } from './DependenciesSection';
+import { PlanMarkdown } from './PlanMarkdown';
 import { QuestionForm } from '../prompts/QuestionForm';
 import type {
   Task, AgentRun, TaskArtifact, PendingPrompt, DebugTimelineEntry,
@@ -67,7 +68,7 @@ export function TaskDetailDashboard({
               <CardTitle className="text-sm">Description</CardTitle>
             </CardHeader>
             <CardContent className="pb-4">
-              <p className="text-sm whitespace-pre-wrap">{task.description}</p>
+              <PlanMarkdown content={task.description} />
             </CardContent>
           </Card>
         )}
