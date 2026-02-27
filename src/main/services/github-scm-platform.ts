@@ -63,17 +63,30 @@ export class GitHubScmPlatform implements IScmPlatform {
     };
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const output = await this.gh(['pr', 'view', String(prNumber), '--json', 'mergeable']);
+      const output = await this.gh(['pr', 'view', String(prNumber), '--json', 'mergeable,state']);
       let data: Record<string, unknown>;
       try {
         data = JSON.parse(output);
       } catch {
         throw new Error(`isPRMergeable: Failed to parse gh output for PR #${prNumber}: ${output.slice(0, 200)}`);
       }
-      const state = data.mergeable as string;
-      log(`isPRMergeable: PR #${prNumber} attempt ${attempt}/${maxAttempts} — state: ${state}`);
-      if (state !== 'UNKNOWN') {
-        return state === 'MERGEABLE';
+      const prState = data.state as string;
+      const mergeableState = data.mergeable as string;
+
+      // Short-circuit for terminal PR states: merged PRs are already done,
+      // closed PRs cannot be merged. GitHub returns mergeable=UNKNOWN for both.
+      if (prState === 'MERGED') {
+        log(`isPRMergeable: PR #${prNumber} is already merged — treating as mergeable`);
+        return true;
+      }
+      if (prState === 'CLOSED') {
+        log(`isPRMergeable: PR #${prNumber} is closed — treating as not mergeable`);
+        return false;
+      }
+
+      log(`isPRMergeable: PR #${prNumber} attempt ${attempt}/${maxAttempts} — state: ${mergeableState}`);
+      if (mergeableState !== 'UNKNOWN') {
+        return mergeableState === 'MERGEABLE';
       }
       if (attempt < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
