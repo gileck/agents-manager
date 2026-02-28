@@ -557,6 +557,13 @@ export class AgentService implements IAgentService {
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog);
 
+      // Release spawn guard before outcome transition — the agent setup is long
+      // complete at this point, and the transition may fire a follow-up agent
+      // (e.g. reviewer after implementor) via a fire_and_forget start_agent hook.
+      // If we hold the guard, the follow-up agent's execute() will see
+      // spawningTasks.has(taskId) === true and throw "duplicate launch prevented".
+      this.spawningTasks.delete(taskId);
+
       // Handle outcome — resolve outcome and execute transitions
       await this.outcomeResolver.resolveAndTransition({
         taskId, result, run, worktree, worktreeManager, phase, context,
@@ -608,7 +615,7 @@ export class AgentService implements IAgentService {
       const pendingQueue = this.messageQueues.get(taskId);
       if (pendingQueue && pendingQueue.length > 0) {
         try {
-          // Release spawn lock before recursive execute() so the follow-up can re-acquire it
+          // Defensive no-op: spawn lock already released before resolveAndTransition (line 565)
           this.spawningTasks.delete(taskId);
           const callbacks = this.activeCallbacks.get(taskId);
           await this.execute(taskId, context.mode, agentType, context.revisionReason, callbacks?.onOutput, callbacks?.onMessage, callbacks?.onStatusChange);
