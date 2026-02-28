@@ -56,9 +56,49 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
               taskId: task.id,
               category: 'system',
               severity: 'error',
-              message: `Agent failed to start within 5s for task ${task.id} (mode=${mode})`,
-              data: { mode, agentType },
+              message: `Agent failed to start within 5s for task ${task.id} (mode=${mode}) — retrying once`,
+              data: { mode, agentType, retried: true },
             });
+
+            // Retry startAgent once
+            try {
+              await deps.workflowService.startAgent(
+                task.id, mode, agentType,
+                revisionReason,
+                (chunk) => { trySendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, task.id, chunk); },
+                (msg) => { trySendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, task.id, msg); },
+                (status) => { trySendToRenderer(IPC_CHANNELS.AGENT_STATUS, task.id, status); },
+              );
+            } catch (retryErr) {
+              const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+              try {
+                await deps.taskEventLog.log({
+                  taskId: task.id,
+                  category: 'system',
+                  severity: 'error',
+                  message: `start_agent retry also failed for task ${task.id}: ${retryMsg}`,
+                  data: { error: retryMsg, mode, agentType, retried: true },
+                });
+              } catch { /* db may be closed */ }
+              return; // Don't schedule follow-up check if retry itself threw
+            }
+
+            // Follow-up verification 5s after retry
+            setTimeout(async () => {
+              try {
+                const retryRuns = await deps.agentRunStore!.getRunsForTask(task.id);
+                const retryActive = retryRuns.filter(r => r.status === 'running');
+                if (retryActive.length === 0) {
+                  await deps.taskEventLog.log({
+                    taskId: task.id,
+                    category: 'system',
+                    severity: 'error',
+                    message: `Agent still not running after retry for task ${task.id} (mode=${mode})`,
+                    data: { mode, agentType, retried: true, finalCheck: true },
+                  });
+                }
+              } catch { /* best-effort */ }
+            }, 5000);
           }
         } catch { /* best-effort verification */ }
       }, 5000);
