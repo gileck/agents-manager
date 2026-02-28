@@ -15,6 +15,36 @@ const activeBots = new Map<string, { botService: TelegramAgentBotService; notifi
 /** Guard against double-registration of the before-quit listener */
 let quitListenerRegistered = false;
 
+async function startBotForProject(
+  services: AppServices,
+  projectId: string,
+  botToken: string,
+  chatId: string,
+): Promise<void> {
+  const botService = new TelegramAgentBotService({
+    taskStore: services.taskStore,
+    projectStore: services.projectStore,
+    pipelineStore: services.pipelineStore,
+    pipelineEngine: services.pipelineEngine,
+    workflowService: services.workflowService,
+    chatMessageStore: services.chatMessageStore,
+    chatSessionStore: services.chatSessionStore,
+  });
+
+  botService.onLog = (entry: TelegramBotLogEntry) => {
+    sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_LOG, projectId, entry);
+  };
+
+  await botService.start(projectId, botToken, chatId);
+
+  const bot = botService.getBot()!;
+  const telegramRouter = new TelegramNotificationRouter(bot, chatId);
+  services.notificationRouter.addRouter(telegramRouter);
+
+  activeBots.set(projectId, { botService, notificationRouter: telegramRouter });
+  sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, 'running');
+}
+
 export function registerTelegramHandlers(services: AppServices): void {
   if (!quitListenerRegistered) {
     quitListenerRegistered = true;
@@ -43,27 +73,7 @@ export function registerTelegramHandlers(services: AppServices): void {
       tg.chatId as string | undefined,
     );
 
-    const botService = new TelegramAgentBotService({
-      taskStore: services.taskStore,
-      projectStore: services.projectStore,
-      pipelineStore: services.pipelineStore,
-      pipelineEngine: services.pipelineEngine,
-      workflowService: services.workflowService,
-      chatMessageStore: services.chatMessageStore,
-      chatSessionStore: services.chatSessionStore,
-    });
-
-    botService.onLog = (entry: TelegramBotLogEntry) => {
-      sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_LOG, projectId, entry);
-    };
-
-    await botService.start(projectId, botToken, chatId);
-
-    const bot = botService.getBot()!;
-    const telegramRouter = new TelegramNotificationRouter(bot, chatId);
-    services.notificationRouter.addRouter(telegramRouter);
-
-    activeBots.set(projectId, { botService, notificationRouter: telegramRouter });
+    await startBotForProject(services, projectId, botToken, chatId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TELEGRAM_BOT_STOP, async (_, projectId: string) => {
@@ -73,6 +83,7 @@ export function registerTelegramHandlers(services: AppServices): void {
     services.notificationRouter.removeRouter(entry.notificationRouter);
     await entry.botService.stop();
     activeBots.delete(projectId);
+    sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, 'stopped');
   });
 
   registerIpcHandler(IPC_CHANNELS.TELEGRAM_BOT_STATUS, async (_, projectId: string) => {
@@ -96,4 +107,31 @@ export function registerTelegramHandlers(services: AppServices): void {
       throw new Error((body as Record<string, unknown>).description as string ?? `Telegram API error: ${res.status}`);
     }
   });
+}
+
+/**
+ * Auto-start Telegram bots for all projects with enabled config.
+ * Best-effort: logs errors per project, does not throw.
+ * Note: sendToRenderer calls during startup may be lost if the renderer window
+ * hasn't loaded yet. The renderer's initial poll via botStatus() is the reliable
+ * source of truth at startup.
+ */
+export async function autoStartTelegramBots(services: AppServices): Promise<void> {
+  const projects = await services.projectStore.listProjects();
+  for (const project of projects) {
+    const tg = (project.config?.telegram as Record<string, unknown>) ?? {};
+    if (!tg.enabled || !tg.botToken || !tg.chatId) continue;
+    if (activeBots.has(project.id)) continue;
+
+    try {
+      const { botToken, chatId } = validateTelegramConfig(
+        tg.botToken as string | undefined,
+        tg.chatId as string | undefined,
+      );
+      await startBotForProject(services, project.id, botToken, chatId);
+    } catch (err) {
+      console.error(`Failed to auto-start Telegram bot for project ${project.id}:`, err);
+      sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, project.id, 'failed');
+    }
+  }
 }

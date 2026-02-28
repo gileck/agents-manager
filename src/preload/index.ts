@@ -117,6 +117,7 @@ const IPC_CHANNELS = {
   TELEGRAM_BOT_STOP: 'telegram:bot-stop',
   TELEGRAM_BOT_STATUS: 'telegram:bot-status',
   TELEGRAM_BOT_LOG: 'telegram:bot-log',
+  TELEGRAM_BOT_STATUS_CHANGED: 'telegram:bot-status-changed',
   OPEN_IN_CHROME: 'shell:open-in-chrome',
   OPEN_IN_ITERM: 'shell:open-in-iterm',
   OPEN_IN_VSCODE: 'shell:open-in-vscode',
@@ -472,6 +473,11 @@ const api = {
       const listener = (_: IpcRendererEvent, projectId: string, entry: TelegramBotLogEntry) => callback(projectId, entry);
       ipcRenderer.on(IPC_CHANNELS.TELEGRAM_BOT_LOG, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TELEGRAM_BOT_LOG, listener);
+    },
+    telegramBotStatusChanged: (callback: (projectId: string, status: string) => void) => {
+      const listener = (_: IpcRendererEvent, projectId: string, status: string) => callback(projectId, status);
+      ipcRenderer.on(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, listener);
     },
   },
 };

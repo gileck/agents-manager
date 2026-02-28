@@ -127,6 +127,8 @@ export const IPC_CHANNELS = {
   TELEGRAM_BOT_STATUS: 'telegram:bot-status',
   /** PUSH-ONLY: main->renderer, do not invoke() */
   TELEGRAM_BOT_LOG: 'telegram:bot-log',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  TELEGRAM_BOT_STATUS_CHANGED: 'telegram:bot-status-changed',
 
   // Shell
   OPEN_IN_CHROME: 'shell:open-in-chrome',

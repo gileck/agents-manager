@@ -5,6 +5,7 @@ import { sendToRenderer } from '@template/main/core/window';
 import { initDatabase, closeDatabase, getDatabase } from '@template/main/services/database';
 import { flushLogs } from '@template/main/services/log-service';
 import { registerIpcHandlers } from './ipc-handlers';
+import { autoStartTelegramBots } from './ipc-handlers/telegram-handlers';
 import { getMigrations } from './migrations';
 import { createAppServices, type AppServices } from './providers/setup';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
@@ -39,6 +40,11 @@ initializeApp({
 
       // Register IPC handlers
       registerIpcHandlers(services);
+
+      // Auto-start Telegram bots for projects with enabled config
+      autoStartTelegramBots(services).catch(err =>
+        console.error('Failed to auto-start Telegram bots:', err)
+      );
 
       // Start the agent supervisor to detect ghost/timed-out runs
       services.agentSupervisor.start();

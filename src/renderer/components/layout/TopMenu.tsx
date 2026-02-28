@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTheme } from '../../hooks/useTheme';
@@ -10,17 +11,48 @@ import {
   SelectItem,
 } from '@template/renderer/components/ui/select';
 import { Button } from '@template/renderer/components/ui/button';
-import { FolderOpen, Sun, Moon } from 'lucide-react';
+import { FolderOpen, Sun, Moon, Send } from 'lucide-react';
+
+type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
 
 export function TopMenu() {
   const { currentProject, currentProjectId, setCurrentProjectId } =
     useCurrentProject();
   const { projects } = useProjects();
   const { resolvedTheme, setTheme } = useTheme();
+  const navigate = useNavigate();
+  const [telegramStatus, setTelegramStatus] = useState<TelegramBotStatus>('unknown');
+
+  useEffect(() => {
+    if (!currentProjectId) {
+      setTelegramStatus('unknown');
+      return;
+    }
+    window.api.telegram.botStatus(currentProjectId).then(({ running }) => {
+      // Only update from poll if we don't already have a more specific status
+      // (e.g. 'failed' from an auto-start event that arrived before the poll)
+      setTelegramStatus(prev => prev === 'failed' ? prev : running ? 'running' : 'stopped');
+    }).catch(() => {
+      setTelegramStatus('unknown');
+    });
+
+    const unsub = window.api.on.telegramBotStatusChanged((projectId, status) => {
+      if (projectId === currentProjectId) {
+        setTelegramStatus(status as TelegramBotStatus);
+      }
+    });
+    return () => { unsub(); };
+  }, [currentProjectId]);
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
+
+  const dotColor = telegramStatus === 'running'
+    ? 'bg-green-500'
+    : telegramStatus === 'failed'
+      ? 'bg-red-500'
+      : 'bg-gray-400';
 
   return (
     <div className="h-12 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
@@ -46,19 +78,34 @@ export function TopMenu() {
         </Select>
       </div>
 
-      {/* Right: Theme Toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleTheme}
-        title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
-      >
-        {resolvedTheme === 'dark' ? (
-          <Sun className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <Moon className="h-4 w-4 text-muted-foreground" />
+      {/* Right: Telegram Status + Theme Toggle */}
+      <div className="flex items-center gap-1">
+        {currentProjectId && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(`/projects/${currentProjectId}/telegram`)}
+            title={`Telegram bot: ${telegramStatus}`}
+          >
+            <div className="relative">
+              <Send className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ${dotColor}`} />
+            </div>
+          </Button>
         )}
-      </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {resolvedTheme === 'dark' ? (
+            <Sun className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Moon className="h-4 w-4 text-muted-foreground" />
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
