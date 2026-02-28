@@ -191,7 +191,7 @@ export function TaskDetailPage() {
     setTransitioning(toStatus);
     setTransitionError(null);
     try {
-      const result = await window.api.tasks.transition(id, toStatus);
+      const result = await window.api.tasks.transition(id, toStatus, 'admin');
       if (result.success) {
         if (result.hookFailures && result.hookFailures.length > 0) {
           setHookFailureAlerts((prev) => [...prev, ...result.hookFailures!]);

@@ -106,7 +106,7 @@ export function KanbanTaskDialog({ task, onClose, onTaskMoved }: KanbanTaskDialo
     if (!task || transitioning) return;
     setTransitioning(toStatus);
     try {
-      const result = await window.api.tasks.transition(task.id, toStatus, 'manual');
+      const result = await window.api.tasks.transition(task.id, toStatus, 'admin');
       if (result.success) {
         const label = pipeline?.statuses.find(s => s.name === toStatus)?.label ?? toStatus;
         toast.success(`Task moved to ${label}`);

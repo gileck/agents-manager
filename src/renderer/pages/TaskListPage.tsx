@@ -183,7 +183,7 @@ export function TaskListPage() {
   // Status change
   const handleStatusChange = async (taskId: string, toStatus: string) => {
     try {
-      const result = await window.api.tasks.transition(taskId, toStatus);
+      const result = await window.api.tasks.transition(taskId, toStatus, 'admin');
       if (result.success) {
         toast.success(`Status changed to "${toStatus}"`);
         await refetch();

@@ -55,7 +55,7 @@ export function PipelineControlPanel({
     setForcing(true);
     setForceError(null);
     try {
-      const result = await window.api.tasks.forceTransition(taskId, toStatus);
+      const result = await window.api.tasks.forceTransition(taskId, toStatus, 'admin');
       if (result.success) {
         setForceDialogOpen(false);
         if (result.hookFailures?.length) {

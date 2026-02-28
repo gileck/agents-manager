@@ -54,7 +54,7 @@ export function KanbanBoardPage() {
 
   // Handle task move with transition
   const handleTaskMove = useCallback(async (taskId: string, newStatus: string): Promise<TransitionResult> => {
-    const result = await window.api.tasks.transition(taskId, newStatus, 'manual');
+    const result = await window.api.tasks.transition(taskId, newStatus, 'admin');
 
     // Refetch tasks to get updated state
     await refetchTasks();
