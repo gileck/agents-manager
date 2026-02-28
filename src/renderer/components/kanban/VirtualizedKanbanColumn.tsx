@@ -3,6 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { KanbanCard } from './KanbanCard';
 import { KanbanEmptyState } from './KanbanEmptyState';
 import { useVirtualizedKanban, useScrollPosition } from '../../hooks/useVirtualizedKanban';
+import { rgba } from '../../utils/kanban-colors';
 import type { Task, KanbanColumn as KanbanColumnType } from '../../../shared/types';
 import type { ColumnColorTheme } from '../../utils/kanban-colors';
 
@@ -25,7 +26,7 @@ export function VirtualizedKanbanColumn({
   tasks,
   onCardClick,
   selectedTaskIds = new Set(),
-  itemHeight = 120,
+  itemHeight = 80,
   threshold = 50,
   colorTheme,
 }: VirtualizedKanbanColumnProps) {
@@ -86,7 +87,7 @@ export function VirtualizedKanbanColumn({
       {/* Column Header */}
       <div
         className="px-4 py-3 rounded-t-xl"
-        style={colorTheme.headerStyle}
+        style={{ ...colorTheme.headerStyle, borderBottom: `2px solid ${rgba(colorTheme.accentColor, 0.15)}` }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -117,7 +118,7 @@ export function VirtualizedKanbanColumn({
           containerRef.current = node;
         }}
         className="flex-1 overflow-y-auto p-2"
-        style={{ position: 'relative' }}
+        style={{ position: 'relative', backgroundColor: rgba(colorTheme.accentColor, 0.02) }}
       >
         {tasks.length === 0 ? (
           <KanbanEmptyState variant="column" isOver={isOver} colorTheme={colorTheme} />
