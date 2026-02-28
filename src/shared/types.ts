@@ -630,13 +630,20 @@ export interface AgentChatMessageUsage {
   timestamp: number;
 }
 
+export interface AgentChatMessageThinking {
+  type: 'thinking';
+  text: string;
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
   | AgentChatMessageToolResult
   | AgentChatMessageUser
   | AgentChatMessageStatus
-  | AgentChatMessageUsage;
+  | AgentChatMessageUsage
+  | AgentChatMessageThinking;
 
 export interface AgentConfig {
   model?: string;

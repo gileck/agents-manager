@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
+import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
 
 interface ChatMessageListProps {
@@ -99,6 +100,10 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
               )}
             </div>
           </div>
+        );
+      } else if (msg.type === 'thinking') {
+        nodes.push(
+          <ThinkingBlock key={i} text={msg.text} />
         );
       } else if (msg.type === 'status') {
         nodes.push(

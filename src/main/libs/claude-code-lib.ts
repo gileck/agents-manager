@@ -8,8 +8,9 @@ import { SandboxGuard } from '../services/sandbox-guard';
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
 interface SdkTextBlock { type: 'text'; text: string }
+interface SdkThinkingBlock { type: 'thinking'; thinking: string }
 interface SdkToolUseBlock { type: 'tool_use'; name: string; input?: unknown }
-type SdkContentBlock = SdkTextBlock | SdkToolUseBlock;
+type SdkContentBlock = SdkTextBlock | SdkThinkingBlock | SdkToolUseBlock;
 
 interface SdkAssistantMessage {
   type: 'assistant';
@@ -160,6 +161,8 @@ export class ClaudeCodeLib implements IAgentLib {
             if (block.type === 'text') {
               emit(block.text + '\n');
               onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
+            } else if (block.type === 'thinking') {
+              onMessage?.({ type: 'thinking', text: block.thinking, timestamp: Date.now() });
             } else if (block.type === 'tool_use') {
               const input = JSON.stringify(block.input ?? {});
               emit(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);

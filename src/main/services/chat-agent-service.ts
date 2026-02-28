@@ -24,6 +24,7 @@ const importESM = new Function('specifier', 'return import(specifier)') as (spec
 /** Callbacks from runSdkQuery for each message type. */
 interface SdkQueryCallbacks {
   onText?: (text: string) => void;
+  onThinking?: (text: string) => void;
   onToolUse?: (block: { type: 'tool_use'; name: string; id?: string; input?: unknown }) => void;
   onResult?: (msg: SDKResultMessage) => void;
   onUserToolResult?: (toolUseId: string, content: string) => void;
@@ -651,6 +652,9 @@ export class ChatAgentService {
           emitEvent({ type: 'text', text });
           emitMessage({ type: 'assistant_text', text, timestamp: Date.now() });
         },
+        onThinking: (text) => {
+          emitMessage({ type: 'thinking', text, timestamp: Date.now() });
+        },
         onToolUse: (block) => {
           const toolSummary = `\n> Tool: ${block.name}\n`;
           emitEvent({ type: 'text', text: toolSummary });
@@ -715,6 +719,8 @@ export class ChatAgentService {
         for (const block of assistantMsg.message.content) {
           if (block.type === 'text') {
             callbacks.onText?.((block as { text: string }).text);
+          } else if (block.type === 'thinking') {
+            callbacks.onThinking?.((block as { thinking: string }).thinking);
           } else if (block.type === 'tool_use') {
             callbacks.onToolUse?.(block as { type: 'tool_use'; name: string; id?: string; input?: unknown });
           }

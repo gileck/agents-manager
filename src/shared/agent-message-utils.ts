@@ -20,6 +20,9 @@ export function messagesToRawText(messages: AgentChatMessage[]): string {
       case 'tool_result':
         result += `[tool] ${msg.result}\n`;
         break;
+      case 'thinking':
+        result += `[thinking] ${msg.text}\n`;
+        break;
       // Skip usage, status, user types — they don't appear in the raw text view
     }
   }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
 import { MarkdownContent } from '../chat/MarkdownContent';
+import { ThinkingBlock } from '../chat/ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
 import { TodoPanel, type TodoItem } from './TodoPanel';
 
@@ -135,6 +136,10 @@ export function RenderedOutputPanel({ messages, isRunning, startedAt, showTimest
               <p className="text-sm">{msg.text}</p>
             </div>
           </div>
+        );
+      } else if (msg.type === 'thinking') {
+        nodes.push(
+          <ThinkingBlock key={i} text={msg.text} timestamp={msg.timestamp} ts={ts} />
         );
       } else if (msg.type === 'status') {
         nodes.push(
