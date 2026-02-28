@@ -21,7 +21,18 @@ export class TelegramNotificationRouter implements INotificationRouter {
       };
     }
 
-    await this.bot.sendMessage(this.chatId, text, options);
+    try {
+      await this.bot.sendMessage(this.chatId, text, options);
+    } catch (err) {
+      console.error('[telegram-notification] MarkdownV2 send failed, retrying as plain text:', err);
+      // Retry as plain text with keyboard preserved
+      const plainText = `${notification.title}\n${notification.body}`;
+      const fallbackOptions: TelegramBot.SendMessageOptions = {};
+      if (options.reply_markup) {
+        fallbackOptions.reply_markup = options.reply_markup;
+      }
+      await this.bot.sendMessage(this.chatId, plainText, fallbackOptions);
+    }
   }
 
   private buildInlineKeyboard(actions: NotificationAction[]): TelegramBot.InlineKeyboardButton[][] {
