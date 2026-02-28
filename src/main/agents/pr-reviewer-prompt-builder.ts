@@ -126,18 +126,19 @@ export class PrReviewerPromptBuilder extends BaseAgentPromptBuilder {
 
     lines.push(
       '## Steps',
-      `1. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
-      '2. Review the diff using the criteria below.',
+      '1. Read CLAUDE.md or project conventions to understand project rules (package manager, restricted directories, code patterns).',
+      `2. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
+      '3. Review the diff using the criteria below.',
     );
 
     // Add explicit subtask verification step
     if ((multiPhase && activePhase) || (task.subtasks && task.subtasks.length > 0)) {
       lines.push(
-        '3. Verify each subtask is implemented by finding corresponding code changes in the diff.',
-        '4. Make every comment actionable — say what to change, not just what is wrong.',
+        '4. Verify each subtask is implemented by finding corresponding code changes in the diff.',
+        '5. **Make every comment actionable** — say what to change, not just what is wrong.',
       );
     } else {
-      lines.push('3. Make every comment actionable — say what to change, not just what is wrong.');
+      lines.push('4. **Make every comment actionable** — say what to change, not just what is wrong.');
     }
 
     lines.push('',
@@ -186,6 +187,14 @@ export class PrReviewerPromptBuilder extends BaseAgentPromptBuilder {
     } else {
       lines.push('Approve if there are no must-check violations and no significant should-check issues.');
     }
+
+    lines.push(
+      '',
+      '## Output Fields',
+      '- **verdict** — "approved" or "changes_requested"',
+      '- **summary** — concise summary of review findings',
+      '- **comments** — array of specific issues found. Each comment should be actionable (say what to change and where). Empty array if approved.',
+    );
 
     return lines.join('\n');
   }

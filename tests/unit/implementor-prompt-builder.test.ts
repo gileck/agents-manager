@@ -90,10 +90,11 @@ describe('ImplementorPromptBuilder', () => {
       expect(config.maxTurns).toBe(50);
     });
 
-    it('should return 100 for unknown modes', () => {
+    it('should throw for unknown modes', () => {
       const ctx = createContext({ mode: 'review' as AgentMode });
-      const config = builder.buildExecutionConfig(ctx, defaultConfig);
-      expect(config.maxTurns).toBe(100);
+      expect(() => builder.buildExecutionConfig(ctx, defaultConfig)).toThrow(
+        /No prompt definition registered for mode "review"/
+      );
     });
   });
 
@@ -159,10 +160,11 @@ describe('ImplementorPromptBuilder', () => {
       expect(schema.required).toContain('summary');
     });
 
-    it('should return undefined for unknown modes', () => {
+    it('should throw for unknown modes', () => {
       const ctx = createContext({ mode: 'review' as AgentMode });
-      const config = builder.buildExecutionConfig(ctx, defaultConfig);
-      expect(config.outputFormat).toBeUndefined();
+      expect(() => builder.buildExecutionConfig(ctx, defaultConfig)).toThrow(
+        /No prompt definition registered for mode "review"/
+      );
     });
   });
 
@@ -320,8 +322,10 @@ describe('ImplementorPromptBuilder', () => {
       expect(builder.inferOutcome('resolve_conflicts', 0, '')).toBe('pr_ready');
     });
 
-    it('should return completed for unknown mode', () => {
-      expect(builder.inferOutcome('unknown_mode', 0, '')).toBe('completed');
+    it('should throw for unknown mode', () => {
+      expect(() => builder.inferOutcome('unknown_mode', 0, '')).toThrow(
+        /No prompt definition registered for mode "unknown_mode"/
+      );
     });
   });
 
@@ -371,7 +375,7 @@ describe('ImplementorPromptBuilder', () => {
   });
 
   describe('readOnly flag', () => {
-    const readOnlyModes: AgentMode[] = ['plan', 'plan_revision', 'plan_resume', 'investigate', 'investigate_resume', 'review'];
+    const readOnlyModes: AgentMode[] = ['plan', 'plan_revision', 'plan_resume', 'investigate', 'investigate_resume'];
     const writeModes: AgentMode[] = ['implement', 'implement_resume', 'request_changes', 'resolve_conflicts'];
 
     for (const mode of readOnlyModes) {
@@ -391,14 +395,13 @@ describe('ImplementorPromptBuilder', () => {
     }
   });
 
-  describe('all 13 modes produce a prompt', () => {
+  describe('all 12 registered modes produce a prompt', () => {
     const allModes: AgentMode[] = [
       'plan', 'plan_revision', 'plan_resume',
       'implement', 'implement_resume',
       'request_changes', 'resolve_conflicts',
       'investigate', 'investigate_resume',
       'technical_design', 'technical_design_revision', 'technical_design_resume',
-      'review',
     ];
 
     for (const mode of allModes) {
