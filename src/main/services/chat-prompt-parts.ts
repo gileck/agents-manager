@@ -46,17 +46,53 @@ function rulesSection(): string {
   ].join('\n');
 }
 
-function cliReferenceSection(taskId: string): string {
+// NOTE: Keep in sync with the actual CLI commands defined in src/main/cli/.
+function cliReferenceSection(taskId?: string): string {
+  const t = taskId ?? '<taskId>';
   return [
-    '## Useful commands',
-    `- npx agents-manager tasks get ${taskId}`,
-    `- npx agents-manager tasks update ${taskId} --title/--description/--priority/--assignee`,
-    `- npx agents-manager tasks transition ${taskId} <status>`,
-    `- npx agents-manager tasks transitions ${taskId}`,
-    `- npx agents-manager tasks subtask list/add/update/remove ${taskId}`,
-    `- npx agents-manager deps list/add/remove ${taskId}`,
-    `- npx agents-manager events list --task ${taskId}`,
-    `- npx agents-manager prompts list --task ${taskId}`,
+    '## CLI Reference (npx agents-manager)',
+    '',
+    '### Task Management',
+    `- tasks list                          — List all tasks (--status, --assignee, --priority)`,
+    `- tasks get ${t}                  — Get full task details`,
+    `- tasks create --title "..." [opts]   — Create a task (--description, --priority, --assignee, --tags, --pipeline)`,
+    `- tasks update ${t} [opts]        — Update task fields (--title, --description, --priority, --assignee, --tags)`,
+    `- tasks delete ${t}               — Delete a task`,
+    `- tasks reset ${t}                — Reset task to initial state`,
+    '',
+    '### Task Transitions',
+    `- tasks transitions ${t}          — Show valid status transitions`,
+    `- tasks transition ${t} <status>  — Move task to a new status`,
+    `- tasks start ${t}                — Start a task (move to first active status)`,
+    '',
+    '### Subtasks',
+    `- tasks subtask list ${t}         — List subtasks`,
+    `- tasks subtask add ${t} --name "..." [--status open|in_progress|done]`,
+    `- tasks subtask update ${t} --name "..." --status <status>`,
+    `- tasks subtask remove ${t} --name "..."`,
+    '',
+    '### Dependencies',
+    `- deps list ${t}                  — List task dependencies (blockers)`,
+    `- deps add ${t} <depId>           — Add dependency (blocked by depId)`,
+    `- deps remove ${t} <depId>        — Remove a dependency`,
+    '',
+    '### Events & History',
+    `- events list --task ${t}         — View task event log`,
+    '',
+    '### Agent Runs',
+    `- agent runs [--task ${t}] [--active] — List agent runs`,
+    `- agent start ${t} --type <type>  — Start an agent on a task`,
+    `- agent get <runId>                   — Get agent run details`,
+    '',
+    '### Prompts (Interactive Feedback)',
+    `- prompts list --task ${t}        — List pending prompts`,
+    `- prompts respond <id> --response "..." — Respond to a prompt`,
+    '',
+    '### Pipelines & Projects',
+    '- pipelines list                      — List all pipelines',
+    '- pipelines get <id>                  — Get pipeline details',
+    '- projects list                       — List all projects',
+    '- status                              — Show system dashboard',
   ].join('\n');
 }
 
@@ -131,6 +167,8 @@ export function buildDesktopSystemPrompt(scope: SessionScope): string {
     '',
     rulesSection(),
     '- Be concise and helpful. Format responses with markdown when useful.',
+    '',
+    cliReferenceSection(),
   ].join('\n');
 }
 
@@ -163,5 +201,7 @@ export function buildTelegramSystemPrompt(scope: SessionScope): string {
     telegramFormattingRules(),
     '',
     telegramResponseStyle(),
+    '',
+    cliReferenceSection(),
   ].join('\n');
 }
