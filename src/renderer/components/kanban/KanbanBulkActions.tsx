@@ -1,6 +1,5 @@
 import React from 'react';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import { X, Trash2, Tag, User } from 'lucide-react';
 
 interface KanbanBulkActionsProps {
@@ -22,10 +21,16 @@ export function KanbanBulkActions({
 
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-      <div className="bg-card border rounded-lg shadow-lg p-3 flex items-center gap-3">
-        <Badge variant="secondary" className="font-medium">
+      <div
+        className="border rounded-xl shadow-2xl p-3 flex items-center gap-3"
+        style={{ backgroundColor: 'hsl(var(--card))', backdropFilter: 'blur(12px)' }}
+      >
+        <span
+          className="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full border"
+          style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.3)' }}
+        >
           {selectedCount} selected
-        </Badge>
+        </span>
 
         <div className="flex items-center gap-2">
           {onBulkTag && (

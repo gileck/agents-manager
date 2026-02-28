@@ -19,6 +19,7 @@ import { useKanbanMultiSelect } from '../hooks/useKanbanMultiSelect';
 import { applyKanbanFilters, sortKanbanTasks, extractFilterOptions, hasActiveFilters, createEmptyFilters } from '../utils/kanban-filters';
 import { toast } from 'sonner';
 import { reportError } from '../lib/error-handler';
+import { getColumnColor } from '../utils/kanban-colors';
 import type { Task, KanbanColumn as KanbanColumnType, KanbanBoardCreateInput, KanbanBoardUpdateInput, KanbanFilters as KanbanFiltersType, TransitionResult } from '../../shared/types';
 
 export function KanbanBoardPage() {
@@ -286,7 +287,10 @@ export function KanbanBoardPage() {
           </div>
           <div className="flex gap-2">
             <KanbanBoardConfigDialog board={board} onUpdate={handleBoardUpdate} />
-            <Button onClick={handleCreateTask}>
+            <Button
+              onClick={handleCreateTask}
+              style={{ background: 'linear-gradient(to right, #2563eb, #7c3aed)', color: '#fff', border: 'none', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}
+            >
               <Plus className="w-4 h-4 mr-2" />
               New Task
             </Button>
@@ -317,13 +321,14 @@ export function KanbanBoardPage() {
             <div className="flex gap-4 h-full">
               {board.columns
                 .sort((a, b) => a.order - b.order)
-                .map((column) => (
+                .map((column, index) => (
                   <VirtualizedKanbanColumn
                     key={column.id}
                     column={column}
                     tasks={tasksByColumn.get(column.id) || []}
                     onCardClick={handleCardClick}
                     selectedTaskIds={multiSelectState.selectedTaskIds}
+                    colorTheme={getColumnColor(index)}
                   />
                 ))}
             </div>

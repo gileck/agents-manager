@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '../ui/select';
 import { Search, X, Filter } from 'lucide-react';
+import { getTagColor } from '../../utils/kanban-colors';
 import type { KanbanFilters as KanbanFiltersType } from '../../../shared/types';
 
 interface KanbanFiltersProps {
@@ -66,10 +67,11 @@ export function KanbanFilters({
             className="pl-9"
           />
         </div>
-        <Select value={filters.assignee || 'all'} onValueChange={handleAssigneeChange}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Assignees" />
-          </SelectTrigger>
+        <div style={{ width: '180px' }}>
+          <Select value={filters.assignee || 'all'} onValueChange={handleAssigneeChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Assignees" />
+            </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Assignees</SelectItem>
             {availableAssignees.map((assignee) => (
@@ -78,7 +80,8 @@ export function KanbanFilters({
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>
+          </Select>
+        </div>
         {hasActiveFilters && onClearFilters && (
           <Button variant="outline" size="sm" onClick={onClearFilters}>
             <X className="w-4 h-4 mr-2" />
@@ -94,23 +97,31 @@ export function KanbanFilters({
           <span className="text-sm text-muted-foreground">Tags:</span>
           {availableTags.map((tag) => {
             const isSelected = filters.tags?.includes(tag);
-            return (
-              <Badge
+            const tagColor = getTagColor(tag);
+            return isSelected ? (
+              <span
                 key={tag}
-                variant={isSelected ? 'default' : 'outline'}
-                className="cursor-pointer"
+                className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border cursor-pointer transition-all"
+                style={tagColor.style}
                 onClick={() => handleTagToggle(tag)}
               >
                 {tag}
-                {isSelected && (
-                  <X
-                    className="w-3 h-3 ml-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveTag(tag);
-                    }}
-                  />
-                )}
+                <X
+                  className="w-3 h-3 ml-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveTag(tag);
+                  }}
+                />
+              </span>
+            ) : (
+              <Badge
+                key={tag}
+                variant="outline"
+                className="cursor-pointer hover:bg-accent transition-colors"
+                onClick={() => handleTagToggle(tag)}
+              >
+                {tag}
               </Badge>
             );
           })}
@@ -123,7 +134,7 @@ export function KanbanFilters({
           <span>Active filters:</span>
           {filters.search && (
             <Badge variant="secondary">
-              Search: "{filters.search}"
+              Search: &quot;{filters.search}&quot;
             </Badge>
           )}
           {filters.assignee && (

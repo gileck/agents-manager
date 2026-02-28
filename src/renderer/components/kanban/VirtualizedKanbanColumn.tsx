@@ -1,11 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { Card, CardHeader, CardContent } from '../ui/card';
-import { Badge } from '../ui/badge';
 import { KanbanCard } from './KanbanCard';
 import { KanbanEmptyState } from './KanbanEmptyState';
 import { useVirtualizedKanban, useScrollPosition } from '../../hooks/useVirtualizedKanban';
 import type { Task, KanbanColumn as KanbanColumnType } from '../../../shared/types';
+import type { ColumnColorTheme } from '../../utils/kanban-colors';
 
 interface VirtualizedKanbanColumnProps {
   column: KanbanColumnType;
@@ -14,6 +13,7 @@ interface VirtualizedKanbanColumnProps {
   selectedTaskIds?: Set<string>;
   itemHeight?: number;
   threshold?: number;
+  colorTheme: ColumnColorTheme;
 }
 
 /**
@@ -25,8 +25,9 @@ export function VirtualizedKanbanColumn({
   tasks,
   onCardClick,
   selectedTaskIds = new Set(),
-  itemHeight = 120, // Approximate height of a card including gap
-  threshold = 50, // Use virtualization when more than 50 cards
+  itemHeight = 120,
+  threshold = 50,
+  colorTheme,
 }: VirtualizedKanbanColumnProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(600);
@@ -70,36 +71,56 @@ export function VirtualizedKanbanColumn({
     ? tasks.slice(range.start, range.end)
     : tasks;
 
+  const columnStyle: React.CSSProperties = {
+    minWidth: '280px',
+    maxWidth: '320px',
+    ...(isOver ? colorTheme.dropZoneStyle : {}),
+  };
+
   return (
-    <Card
-      className={`flex flex-col h-full min-w-[280px] max-w-[320px] transition-colors ${
-        isOver ? 'ring-2 ring-primary ring-offset-2' : ''
-      }`}
+    <div
+      className={`flex flex-col h-full rounded-xl border transition-all duration-200`}
+      style={columnStyle}
       data-kanban-column={column.id}
     >
-      <CardHeader className="pb-3">
+      {/* Column Header */}
+      <div
+        className="px-4 py-3 rounded-t-xl"
+        style={colorTheme.headerStyle}
+      >
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-sm">{column.title}</h3>
-          <Badge variant="secondary" className="text-xs">
+          <div className="flex items-center gap-2">
+            <div
+              className="rounded-full"
+              style={{ width: '10px', height: '10px', backgroundColor: colorTheme.accentColor }}
+            />
+            <h3 className="font-semibold text-sm">{column.title}</h3>
+          </div>
+          <span
+            className="text-xs font-bold px-2 py-0.5 rounded-full"
+            style={colorTheme.badgeStyle}
+          >
             {tasks.length}
-          </Badge>
+          </span>
         </div>
         {column.wip && tasks.length > column.wip && (
-          <div className="text-xs text-destructive mt-1">
+          <div className="text-xs text-destructive mt-1 font-medium">
             WIP limit exceeded ({tasks.length}/{column.wip})
           </div>
         )}
-      </CardHeader>
-      <CardContent
+      </div>
+
+      {/* Column Content */}
+      <div
         ref={(node) => {
           setNodeRef(node);
           containerRef.current = node;
         }}
-        className="flex-1 overflow-y-auto pt-0"
+        className="flex-1 overflow-y-auto p-2"
         style={{ position: 'relative' }}
       >
         {tasks.length === 0 ? (
-          <KanbanEmptyState variant="column" isOver={isOver} />
+          <KanbanEmptyState variant="column" isOver={isOver} colorTheme={colorTheme} />
         ) : shouldVirtualize ? (
           // Virtualized rendering
           <div
@@ -122,6 +143,7 @@ export function VirtualizedKanbanColumn({
                   task={task}
                   onClick={(e) => onCardClick(task, e)}
                   isSelected={selectedTaskIds.has(task.id)}
+                  columnColor={colorTheme}
                 />
               ))}
             </div>
@@ -135,11 +157,12 @@ export function VirtualizedKanbanColumn({
                 task={task}
                 onClick={(e) => onCardClick(task, e)}
                 isSelected={selectedTaskIds.has(task.id)}
+                columnColor={colorTheme}
               />
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
