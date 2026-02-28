@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '../ui/button';
 import type { ChatImage } from '../../../shared/types';
 
@@ -15,6 +16,7 @@ interface ChatInputProps {
 export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [images, setImages] = useState<ChatImage[]>([]);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addImageFile = useCallback((file: File) => {
@@ -69,6 +71,12 @@ export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProp
 
   const removeImage = useCallback((index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
+    setPreviewIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return null;
+      if (prev > index) return prev - 1;
+      return prev;
+    });
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -87,6 +95,17 @@ export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProp
     }
   };
 
+  useEffect(() => {
+    if (previewIndex === null) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewIndex(null);
+      if (e.key === 'ArrowLeft') setPreviewIndex((prev) => prev === null ? null : (prev - 1 + images.length) % images.length);
+      if (e.key === 'ArrowRight') setPreviewIndex((prev) => prev === null ? null : (prev + 1) % images.length);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [previewIndex, images.length]);
+
   const canSend = value.trim().length > 0 || images.length > 0;
 
   return (
@@ -104,7 +123,8 @@ export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProp
                 src={`data:${img.mediaType};base64,${img.base64}`}
                 alt={img.name || 'Attached image'}
                 style={{ width: 64, height: 64 }}
-                className="rounded border border-border object-cover"
+                className="rounded border border-border object-cover cursor-pointer"
+                onClick={() => setPreviewIndex(i)}
               />
               <button
                 type="button"
@@ -117,6 +137,59 @@ export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProp
             </div>
           ))}
         </div>
+      )}
+      {previewIndex !== null && images[previewIndex] && createPortal(
+        <div
+          className="absolute inset-0 bg-black/80 flex items-center justify-center z-50"
+          onClick={() => setPreviewIndex(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Image preview"
+        >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={`data:${images[previewIndex].mediaType};base64,${images[previewIndex].base64}`}
+              alt={images[previewIndex].name || 'Preview'}
+              style={{ maxHeight: '80vh', maxWidth: '80vw' }}
+              className="rounded-lg"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewIndex(null)}
+              aria-label="Close preview"
+              className="absolute top-2 right-2 bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors"
+              style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+            >
+              ×
+            </button>
+            {images.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewIndex((prev) => prev === null ? null : (prev - 1 + images.length) % images.length)}
+                  aria-label="Previous image"
+                  className="bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+                >
+                  ‹
+                </button>
+                <span className="bg-black/60 text-white rounded-full px-3 flex items-center text-sm">
+                  {previewIndex + 1} / {images.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewIndex((prev) => prev === null ? null : (prev + 1) % images.length)}
+                  aria-label="Next image"
+                  className="bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+                >
+                  ›
+                </button>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.getElementById('root')!,
       )}
       <div className="flex items-end gap-2">
         <button
