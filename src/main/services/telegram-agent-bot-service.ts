@@ -26,6 +26,9 @@ const TELEGRAM_MAX_LENGTH = 4096;
 /** Typing indicator interval (Telegram requires re-sending every 5s) */
 const TYPING_INTERVAL_MS = 4000;
 
+/** Minimum interval between streamed tool messages to avoid Telegram flooding */
+const TOOL_STREAM_MIN_INTERVAL_MS = 2000;
+
 interface PendingAction {
   type: 'create_title' | 'edit_field';
   taskId?: string;
@@ -506,8 +509,15 @@ export class TelegramAgentBotService implements ITelegramBotService {
       const scope = await this.deps.chatAgentService.getSessionScope(session.id);
       const systemPrompt = buildTelegramSystemPrompt(scope);
 
-      // Accumulate assistant text from messages
+      // Read streamThinking config
+      const streamThinking = await this.isStreamThinkingEnabled();
+
+      // Two-phase response model: ack (before first tool call) + response (after)
+      let ackText = '';
+      let ackSent = false;
+      let ackPromise: Promise<void> | null = null;
       let responseText = '';
+      let lastToolMessageTime = 0;
 
       this.log('status', `Session: ${session.id.slice(0, 8)} — delegating to ChatAgentService`);
 
@@ -515,14 +525,37 @@ export class TelegramAgentBotService implements ITelegramBotService {
         systemPrompt,
         onEvent: (event) => {
           if (event.type === 'text') {
-            responseText += event.text;
+            // Forward raw text to renderer only — do NOT accumulate (assistant_text handles that)
             safeEmitOutput(event.text);
           } else if (event.type === 'message') {
             safeEmitMessage(event.message);
             if (event.message.type === 'assistant_text') {
-              responseText += event.message.text;
+              if (!ackSent) {
+                ackText += event.message.text;
+              } else {
+                responseText += event.message.text;
+              }
             } else if (event.message.type === 'tool_use') {
               this.log('status', `Agent tool: ${event.message.toolName}`);
+
+              // Send ack on first tool call
+              if (!ackSent && ackText.trim()) {
+                ackPromise = this.sendChunkedMessage(chatId, ackText.trim()).catch(this.logError);
+                ackSent = true;
+              }
+
+              // Stream tool usage messages when enabled
+              if (streamThinking) {
+                const now = Date.now();
+                if (now - lastToolMessageTime >= TOOL_STREAM_MIN_INTERVAL_MS) {
+                  lastToolMessageTime = now;
+                  const toolMsg = formatToolMessage(event.message.toolName, event.message.input);
+                  this.send(chatId, toolMsg, { parse_mode: 'Markdown' }).catch((err) => {
+                    this.logError(err);
+                    this.log('status', `Failed to send tool status: ${err instanceof Error ? err.message : String(err)}`);
+                  });
+                }
+              }
             }
           }
         },
@@ -532,18 +565,24 @@ export class TelegramAgentBotService implements ITelegramBotService {
 
       await completion;
 
-      this.log('status', `Agent finished (${responseText.length} chars response)`);
-
       // Stop typing indicator
       this.stopTypingIndicator(typingInterval);
       this.runningSessionIds.delete(session.id);
 
+      // Wait for ack to be delivered before sending final response
+      if (ackPromise) await ackPromise;
+
+      // Determine final text to send
+      const finalText = ackSent ? responseText : (ackText + responseText);
+
+      this.log('status', `Agent finished (${finalText.length} chars response, ack=${ackSent})`);
+
       // Send response
-      if (responseText.trim()) {
-        const chunks = this.splitIntoChunks(responseText.trim());
-        this.log('status', `Response sent to Telegram (${responseText.length} chars, ${chunks.length} chunk${chunks.length > 1 ? 's' : ''})`);
-        await this.sendChunkedMessage(chatId, responseText.trim());
-      } else {
+      if (finalText.trim()) {
+        const chunks = this.splitIntoChunks(finalText.trim());
+        this.log('status', `Response sent to Telegram (${finalText.length} chars, ${chunks.length} chunk${chunks.length > 1 ? 's' : ''})`);
+        await this.sendChunkedMessage(chatId, finalText.trim());
+      } else if (!ackSent) {
         await this.send(chatId, 'The agent did not produce a response\\.', { parse_mode: 'MarkdownV2' });
       }
 
@@ -558,6 +597,19 @@ export class TelegramAgentBotService implements ITelegramBotService {
       console.error('[telegram-agent-bot] Agent error:', err);
       await this.send(chatId, 'An error occurred while processing your request. Please try again.');
       safeEmitOutput('__CHAT_COMPLETE__');
+    }
+  }
+
+  private async isStreamThinkingEnabled(): Promise<boolean> {
+    try {
+      const project = await this.deps.projectStore.getProject(this.projectId);
+      if (!project?.config) return false;
+      const tg = project.config.telegram as Record<string, unknown> | undefined;
+      return !!tg?.streamThinking;
+    } catch (err) {
+      console.error('[telegram-agent-bot] Failed to read streamThinking config:', err);
+      this.log('status', 'Warning: Could not read streamThinking config — defaulting to off');
+      return false;
     }
   }
 
@@ -675,6 +727,55 @@ export class TelegramAgentBotService implements ITelegramBotService {
   private logError = (err: unknown): void => {
     console.error('[telegram-agent-bot]', err);
   };
+}
+
+function formatToolMessage(toolName: string, rawInput: string | undefined): string {
+  let inp: Record<string, unknown> = {};
+  if (rawInput) {
+    try {
+      inp = JSON.parse(rawInput);
+    } catch {
+      return `_Using ${toolName}_`;
+    }
+  }
+  switch (toolName) {
+    case 'Read': {
+      const file = inp.file_path ?? inp.path ?? '';
+      return `_Reading \`${sanitizeInlineCode(shortPath(String(file)))}\`_`;
+    }
+    case 'Grep': {
+      const pattern = inp.pattern ?? '';
+      return `_Searching for \`${sanitizeInlineCode(truncate(String(pattern), 40))}\`_`;
+    }
+    case 'Bash': {
+      const cmd = inp.command ?? '';
+      return `_Running \`${sanitizeInlineCode(truncate(String(cmd), 50))}\`_`;
+    }
+    case 'Glob':
+      return '_Searching for files_';
+    case 'LS':
+      return '_Listing directory_';
+    case 'Edit':
+    case 'MultiEdit':
+      return '_Editing file_';
+    case 'Write':
+      return '_Writing file_';
+    default:
+      return `_Using ${toolName}_`;
+  }
+}
+
+function sanitizeInlineCode(text: string): string {
+  return text.replace(/`/g, "'");
+}
+
+function shortPath(filePath: string): string {
+  const parts = filePath.split('/');
+  return parts.length > 2 ? `.../${parts.slice(-2).join('/')}` : filePath;
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '...' : text;
 }
 
 function esc(text: string): string {

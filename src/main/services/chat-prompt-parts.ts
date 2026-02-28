@@ -82,9 +82,25 @@ function telegramFormattingRules(): string {
   return [
     '## Formatting',
     '- Keep responses concise — Telegram messages are limited to 4096 characters.',
-    '- Use basic Markdown only (bold, italic, code, code blocks). Avoid complex formatting.',
+    '- Use Telegram-compatible Markdown only:',
+    '  - *bold* using single asterisks (NOT **double**)',
+    '  - _italic_ using single underscores',
+    '  - `inline code` using backticks',
+    '  - ```code blocks``` using triple backticks (no language specifier)',
+    '  - [link text](url) for hyperlinks',
+    '- DO NOT use: headers (#), tables, HTML tags, nested formatting, or strikethrough.',
     '- Prefer bullet points over long paragraphs.',
     '- If the answer is long, summarize first and offer to elaborate.',
+  ].join('\n');
+}
+
+function telegramResponseStyle(): string {
+  return [
+    '## Response Style',
+    '- ALWAYS start your response with a brief one-line acknowledgment before making any tool calls.',
+    '- Examples: "Got it, I\'ll check the task status." / "Sure, let me look at that file." / "On it — exploring the codebase now."',
+    '- Keep the acknowledgment on its own line, then proceed with tool calls and analysis.',
+    '- After completing your analysis, provide the final detailed response.',
   ].join('\n');
 }
 
@@ -131,6 +147,8 @@ export function buildTelegramSystemPrompt(scope: SessionScope): string {
       '',
       telegramFormattingRules(),
       '',
+      telegramResponseStyle(),
+      '',
       cliReferenceSection(scope.task.id),
     ].join('\n');
   }
@@ -143,5 +161,7 @@ export function buildTelegramSystemPrompt(scope: SessionScope): string {
     rulesSection(),
     '',
     telegramFormattingRules(),
+    '',
+    telegramResponseStyle(),
   ].join('\n');
 }

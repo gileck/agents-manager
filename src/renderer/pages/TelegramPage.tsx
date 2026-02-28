@@ -33,7 +33,7 @@ export function TelegramPage() {
 
   const { messages, isStreaming, tokenUsage } = useChat(sessionId);
 
-  // Check initial bot status
+  // Check initial bot status + subscribe to push updates
   useEffect(() => {
     if (!id) return;
     window.api.telegram.botStatus(id).then((status) => {
@@ -41,6 +41,12 @@ export function TelegramPage() {
     }).catch((err: unknown) => {
       console.error('[TelegramPage] Failed to check bot status:', err);
     });
+
+    const unsub = window.api.on.telegramBotStatusChanged((projectId, status) => {
+      if (projectId !== id) return;
+      setRunning(status === 'running');
+    });
+    return () => { unsub(); };
   }, [id]);
 
   // Poll for session ID when bot is running but session is unknown
@@ -75,6 +81,7 @@ export function TelegramPage() {
 
   // Subscribe to log events
   useEffect(() => {
+    if (!id) return;
     const unsubscribe = window.api.on.telegramBotLog((projectId, entry) => {
       if (projectId !== id) return;
       setLogs((prev) => {

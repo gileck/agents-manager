@@ -85,7 +85,6 @@ export function useChat(sessionId: string | null) {
       if (incomingProjectId !== sessionId) return;
 
       if (chunk === CHAT_COMPLETE_SENTINEL) {
-        if (!streamingRef.current) return; // discard stale sentinel from aborted agent
         streamingRef.current = false;
         setIsStreaming(false);
         setStreamingMessages([]);
