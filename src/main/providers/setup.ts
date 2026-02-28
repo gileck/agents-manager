@@ -45,6 +45,9 @@ import { LocalGitOps } from '../services/local-git-ops';
 import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
 import { MultiChannelNotificationRouter } from '../services/multi-channel-notification-router';
+import { TelegramNotificationRouter } from '../services/telegram-notification-router';
+import { getResolvedConfig } from '../services/config-service';
+import { validateTelegramConfig } from '../services/telegram-config-validator';
 import { Agent } from '../agents/agent';
 import { PlannerPromptBuilder } from '../agents/planner-prompt-builder';
 import { DesignerPromptBuilder } from '../agents/designer-prompt-builder';
@@ -146,6 +149,13 @@ export function createAppServices(db: Database.Database): AppServices {
     const { DesktopNotificationRouter } = require('../services/desktop-notification-router');
     notificationRouter.addRouter(new DesktopNotificationRouter());
   } catch { /* Not in Electron */ }
+  try {
+    const config = getResolvedConfig();
+    const { botToken, chatId } = validateTelegramConfig(config.telegram?.botToken, config.telegram?.chatId);
+    const TelegramBot = require('node-telegram-bot-api');
+    const bot = new TelegramBot(botToken); // no polling — send-only
+    notificationRouter.addRouter(new TelegramNotificationRouter(bot, chatId));
+  } catch { /* Telegram not configured */ }
 
   // Timeline service (created before AgentService because TaskReviewReportBuilder needs it)
   const timelineService = new TimelineService([
