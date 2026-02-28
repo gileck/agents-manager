@@ -1,4 +1,5 @@
 import type { AgentContext } from '../../shared/types';
+import { formatCommentsForPrompt } from '../agents/prompt-utils';
 
 export class PromptRenderer {
   render(template: string, context: AgentContext): string {
@@ -83,16 +84,7 @@ export class PromptRenderer {
   }
 
   private buildPlanCommentsSection(context: AgentContext): string {
-    const { task } = context;
-    if (task.planComments && task.planComments.length > 0) {
-      const lines = ['', '## Admin Feedback'];
-      for (const comment of task.planComments) {
-        const time = new Date(comment.createdAt).toLocaleString();
-        lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-      }
-      return lines.join('\n');
-    }
-    return '';
+    return formatCommentsForPrompt(context.task.planComments, 'Admin Feedback').join('\n');
   }
 
   private buildPriorReviewSection(context: AgentContext): string {
@@ -131,16 +123,7 @@ export class PromptRenderer {
   }
 
   private buildTechnicalDesignCommentsSection(context: AgentContext): string {
-    const { task } = context;
-    if (task.technicalDesignComments && task.technicalDesignComments.length > 0) {
-      const lines = ['', '## Admin Feedback on Design'];
-      for (const comment of task.technicalDesignComments) {
-        const time = new Date(comment.createdAt).toLocaleString();
-        lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-      }
-      return lines.join('\n');
-    }
-    return '';
+    return formatCommentsForPrompt(context.task.technicalDesignComments, 'Admin Feedback on Design').join('\n');
   }
 
   private buildDefaultBranch(context: AgentContext): string {

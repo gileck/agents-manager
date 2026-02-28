@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatCommentsForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
 
 export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'planner';
@@ -69,13 +69,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         prLines.push('', '## Current Plan', task.plan);
       }
-      if (task.planComments && task.planComments.length > 0) {
-        prLines.push('', '## Admin Feedback');
-        for (const comment of task.planComments) {
-          const time = new Date(comment.createdAt).toLocaleString();
-          prLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-        }
-      }
+      prLines.push(...formatCommentsForPrompt(task.planComments, 'Admin Feedback'));
       prLines.push(
         '',
         '## Revision Guidelines',
@@ -91,13 +85,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         ``,
         `Task: ${task.title}.${desc}`,
       ];
-      if (task.planComments && task.planComments.length > 0) {
-        prLines.push('', '## Admin Feedback');
-        for (const comment of task.planComments) {
-          const time = new Date(comment.createdAt).toLocaleString();
-          prLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-        }
-      }
+      prLines.push(...formatCommentsForPrompt(task.planComments, 'Admin Feedback'));
       prLines.push(
         '',
         '## Instructions',
@@ -127,13 +115,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         `Output phases in the "phases" array field. Each phase has a "name" and its own "subtasks" array.`,
         `When using phases, the "subtasks" field should be empty (subtasks live inside phases).`,
       ];
-      if (task.planComments && task.planComments.length > 0) {
-        planLines.push('', '## Admin Feedback');
-        for (const comment of task.planComments) {
-          const time = new Date(comment.createdAt).toLocaleString();
-          planLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-        }
-      }
+      planLines.push(...formatCommentsForPrompt(task.planComments, 'Admin Feedback'));
       prompt = planLines.join('\n');
     }
 

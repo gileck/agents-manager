@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatCommentsForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 
 export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
@@ -84,13 +84,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         rcLines.push('', '## Plan', task.plan);
       }
-      if (task.planComments && task.planComments.length > 0) {
-        rcLines.push('', '## Plan Comments');
-        for (const comment of task.planComments) {
-          const time = new Date(comment.createdAt).toLocaleString();
-          rcLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-        }
-      }
+      rcLines.push(...formatCommentsForPrompt(task.planComments, 'Plan Comments'));
       if (task.technicalDesign) {
         rcLines.push('', '## Technical Design', task.technicalDesign);
       }
@@ -228,13 +222,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         lines.push('', '## Plan', task.plan);
       }
-      if (task.planComments && task.planComments.length > 0) {
-        lines.push('', '## Plan Comments');
-        for (const comment of task.planComments) {
-          const time = new Date(comment.createdAt).toLocaleString();
-          lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-        }
-      }
+      lines.push(...formatCommentsForPrompt(task.planComments, 'Plan Comments'));
       if (task.technicalDesign) {
         lines.push('', '## Technical Design', task.technicalDesign);
       }

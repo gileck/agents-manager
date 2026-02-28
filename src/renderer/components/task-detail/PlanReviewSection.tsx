@@ -59,12 +59,17 @@ export function PlanReviewSection({
         {planComments && planComments.length > 0 && (
           <div className="space-y-2 mb-4">
             {planComments.map((comment, i) => (
-              <div key={i} className="rounded-md bg-muted px-3 py-2">
+              <div key={i} className={`rounded-md bg-muted px-3 py-2${comment.addressed ? ' opacity-50' : ''}`}>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-semibold">{comment.author}</span>
                   <span className="text-xs text-muted-foreground">
                     {new Date(comment.createdAt).toLocaleString()}
                   </span>
+                  {comment.addressed && (
+                    <span className="text-xs bg-muted-foreground/20 text-muted-foreground px-1.5 py-0.5 rounded">
+                      Addressed
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
               </div>

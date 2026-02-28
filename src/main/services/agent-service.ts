@@ -552,8 +552,8 @@ export class AgentService implements IAgentService {
       const postRunLog = (message: string) => {
         this.taskEventLog.log({ taskId, category: 'agent_debug', severity: 'debug', message }).catch(() => {});
       };
-      await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog);
-      await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog);
+      await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog, context.revisionReason);
+      await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog, context.revisionReason);
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog);
 

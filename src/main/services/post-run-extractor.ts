@@ -32,6 +32,7 @@ export class PostRunExtractor {
     result: AgentRunResult,
     agentType: string,
     onLog: OnLog,
+    revisionReason?: RevisionReason,
   ): Promise<void> {
     const isPlanMode = agentType === 'planner' || agentType === 'investigator';
     if (result.exitCode !== 0 || !isPlanMode) return;
@@ -76,6 +77,15 @@ export class PostRunExtractor {
         // Non-fatal
       }
     }
+
+    // After a successful revision, mark all existing plan comments as addressed
+    if (revisionReason === 'changes_requested') {
+      try {
+        await this.markCommentsAsAddressed(taskId, 'planComments', onLog);
+      } catch (err) {
+        onLog(`Warning: failed to mark planComments as addressed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 
   /**
@@ -86,6 +96,7 @@ export class PostRunExtractor {
     result: AgentRunResult,
     agentType: string,
     onLog: OnLog,
+    revisionReason?: RevisionReason,
   ): Promise<void> {
     const isTdMode = agentType === 'designer';
     if (result.exitCode !== 0 || !isTdMode) return;
@@ -99,6 +110,15 @@ export class PostRunExtractor {
       const fallback = this.parseRawPlan(result.output);
       if (fallback) {
         await this.taskStore.updateTask(taskId, { technicalDesign: fallback });
+      }
+    }
+
+    // After a successful revision, mark all existing design comments as addressed
+    if (revisionReason === 'changes_requested') {
+      try {
+        await this.markCommentsAsAddressed(taskId, 'technicalDesignComments', onLog);
+      } catch (err) {
+        onLog(`Warning: failed to mark technicalDesignComments as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   }
@@ -234,6 +254,27 @@ export class PostRunExtractor {
         message: `Failed to create suggested tasks: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
+  }
+
+  // ------- Comment addressing helper -------
+
+  private async markCommentsAsAddressed(
+    taskId: string,
+    field: 'planComments' | 'technicalDesignComments',
+    onLog: OnLog,
+  ): Promise<void> {
+    const task = await this.taskStore.getTask(taskId);
+    if (!task) return;
+
+    const comments = task[field];
+    if (!comments || comments.length === 0) return;
+
+    const unaddressed = comments.filter(c => !c.addressed);
+    if (unaddressed.length === 0) return;
+
+    const updated = comments.map(c => c.addressed ? c : { ...c, addressed: true });
+    await this.taskStore.updateTask(taskId, { [field]: updated });
+    onLog(`Marked ${unaddressed.length} ${field} as addressed`);
   }
 
   // ------- Raw output parsing helpers -------

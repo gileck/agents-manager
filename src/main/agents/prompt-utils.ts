@@ -1,3 +1,40 @@
+import type { PlanComment } from '../../shared/types';
+
+/**
+ * Format plan/design comments for inclusion in agent prompts.
+ * Splits comments into actionable (new) and already-addressed groups.
+ * Only new comments are shown as actionable feedback; addressed comments
+ * get a one-line summary note.
+ */
+export function formatCommentsForPrompt(
+  comments: PlanComment[],
+  sectionTitle: string,
+): string[] {
+  if (!comments || comments.length === 0) return [];
+
+  const newComments = comments.filter(c => !c.addressed);
+  const addressedCount = comments.length - newComments.length;
+
+  const lines: string[] = [];
+
+  if (newComments.length > 0) {
+    lines.push('', `## ${sectionTitle}`);
+    for (const comment of newComments) {
+      const time = new Date(comment.createdAt).toLocaleString();
+      lines.push(`- **${comment.author}** (${time}): ${comment.content}`);
+    }
+  }
+
+  if (addressedCount > 0) {
+    if (newComments.length === 0) {
+      lines.push('');
+    }
+    lines.push(`Note: ${addressedCount} previous feedback comment${addressedCount > 1 ? 's were' : ' was'} already addressed in the current plan.`);
+  }
+
+  return lines;
+}
+
 /** Shared schema fields that let any agent ask interactive questions. */
 export function getInteractiveFields(): Record<string, object> {
   return {

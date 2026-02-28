@@ -246,6 +246,7 @@ export interface PlanComment {
   author: string;
   content: string;
   createdAt: number;
+  addressed?: boolean;
 }
 
 // Task types

@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatCommentsForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
 
 export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'designer';
@@ -51,13 +51,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
       if (task.technicalDesign) {
         tdrLines.push('', '## Current Technical Design', task.technicalDesign);
       }
-      if (task.technicalDesignComments && task.technicalDesignComments.length > 0) {
-        tdrLines.push('', '## Admin Feedback on Design');
-        for (const comment of task.technicalDesignComments) {
-          const time = new Date(comment.createdAt).toLocaleString();
-          tdrLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-        }
-      }
+      tdrLines.push(...formatCommentsForPrompt(task.technicalDesignComments, 'Admin Feedback on Design'));
       tdrLines.push(
         '',
         '## Revision Guidelines',
@@ -108,13 +102,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         tdLines.push('', '## Plan', task.plan);
       }
-      if (task.planComments && task.planComments.length > 0) {
-        tdLines.push('', '## Plan Comments');
-        for (const comment of task.planComments) {
-          const time = new Date(comment.createdAt).toLocaleString();
-          tdLines.push(`- **${comment.author}** (${time}): ${comment.content}`);
-        }
-      }
+      tdLines.push(...formatCommentsForPrompt(task.planComments, 'Plan Comments'));
       tdLines.push(
         '',
         '## Instructions',
