@@ -67,7 +67,8 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
               type: 'object',
               properties: {
                 title: { type: 'string', description: 'Actionable task title (imperative form, e.g. "Add guard to prevent duplicate agent spawns")' },
-                description: { type: 'string', description: 'Markdown-formatted description covering: **Where** (source files and functions), **Problem** (what is wrong and why), **Consequences** (what happens if not fixed — wasted tokens, blocked tasks, etc.), **Fix** (what to change and expected improvement), **Complexity** (small/medium/large), **ROI** (impact vs effort). Must include enough context for an agent to implement without additional investigation.' },
+                description: { type: 'string', description: 'Markdown-formatted description covering: **Where** (source files and functions), **Problem** (what is wrong and why), **Consequences** (what happens if not fixed — wasted tokens, blocked tasks, etc.), **Fix** (what to change and expected improvement), **Complexity** (small/medium/large), **ROI** (impact vs effort). Must include enough context for an agent to implement without additional investigation. Do NOT put raw debug logs, traces, or verbose event data here — use the debugInfo field for that.' },
+                debugInfo: { type: 'string', description: 'Optional raw debug logs, traces, or verbose event data relevant to this task. Put raw logs here instead of in description to keep the description clean and concise.' },
                 priority: { type: 'number', enum: [0, 1, 2, 3], description: 'Priority: 0=P0 Critical, 1=P1 High, 2=P2 Medium, 3=P3 Low' },
               },
               required: ['title', 'description', 'priority'],
@@ -156,6 +157,8 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '    - **ROI**: impact vs effort assessment (e.g. "high impact, small fix" or "minor improvement, large refactor")',
       '  Set priority based on impact: 0=Critical (data loss, blocking), 1=High (significant waste),',
       '  2=Medium (minor inefficiency), 3=Low (nice-to-have improvement).',
+      '  IMPORTANT: If a task involves raw debug logs, traces, or verbose event data, put them in the',
+      '  debugInfo field — NOT in description. The description should be a clean, concise summary.',
       '  Use empty array if no workflow improvements are needed.',
       '- If the workflow executed cleanly with no systemic issues, say so — do not invent findings.',
     ].join('\n');

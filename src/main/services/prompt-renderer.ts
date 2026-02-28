@@ -15,6 +15,7 @@ export class PromptRenderer {
       '{technicalDesignCommentsSection}': this.buildTechnicalDesignCommentsSection(context),
       '{defaultBranch}': this.buildDefaultBranch(context),
       '{skillsSection}': this.buildSkillsSection(context),
+      '{debugInfoSection}': this.buildDebugInfoSection(context),
       '{skipSummary}': '',
     };
 
@@ -145,6 +146,13 @@ export class PromptRenderer {
 
   private buildDefaultBranch(context: AgentContext): string {
     return (context.project.config?.defaultBranch as string) || 'main';
+  }
+
+  private buildDebugInfoSection(context: AgentContext): string {
+    if (context.task.debugInfo) {
+      return `\n## Debug Logs\n\`\`\`\n${context.task.debugInfo}\n\`\`\``;
+    }
+    return '';
   }
 
   private buildSkillsSection(context: AgentContext): string {

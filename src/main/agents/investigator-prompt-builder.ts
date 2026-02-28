@@ -109,6 +109,11 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
       prompt = invLines.join('\n');
     }
 
+    // Include debug info (stored separately from description) for investigation
+    if (task.debugInfo) {
+      prompt += `\n\n## Debug Logs\n\`\`\`\n${task.debugInfo}\n\`\`\``;
+    }
+
     prompt += getInteractiveInstructions(this.type);
 
     if (context.validationErrors) {

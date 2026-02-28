@@ -45,6 +45,7 @@ interface TaskRow {
   phases: string | null;
   plan_comments: string;
   technical_design_comments: string;
+  debug_info: string | null;
   metadata: string;
   created_at: number;
   updated_at: number;
@@ -71,6 +72,7 @@ function rowToTask(row: TaskRow): Task {
     phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),
     technicalDesignComments: parseJson<PlanComment[]>(row.technical_design_comments, []),
+    debugInfo: row.debug_info ?? null,
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -68,6 +68,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .description('Create a new task')
     .requiredOption('--title <title>', 'Task title')
     .option('--description <desc>', 'Task description')
+    .option('--debug-info <text>', 'Debug info (raw logs, traces) stored separately from description')
     .option('--pipeline <id>', 'Pipeline ID')
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
@@ -75,6 +76,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .action(async (cmdOpts: {
       title: string;
       description?: string;
+      debugInfo?: string;
       pipeline?: string;
       priority?: number;
       assignee?: string;
@@ -114,6 +116,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
         pipelineId,
         title: cmdOpts.title,
         description: cmdOpts.description,
+        debugInfo: cmdOpts.debugInfo,
         priority: cmdOpts.priority,
         assignee: cmdOpts.assignee,
         tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
@@ -126,6 +129,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .description('Update a task')
     .option('--title <title>', 'Task title')
     .option('--description <desc>', 'Task description')
+    .option('--debug-info <text>', 'Debug info (raw logs, traces) stored separately from description')
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
     .option('--tags <tags>', 'Comma-separated tags')
@@ -133,6 +137,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .action(async (id: string, cmdOpts: {
       title?: string;
       description?: string;
+      debugInfo?: string;
       priority?: number;
       assignee?: string;
       tags?: string;
@@ -143,6 +148,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
       const task = await services.workflowService.updateTask(id, {
         title: cmdOpts.title,
         description: cmdOpts.description,
+        debugInfo: cmdOpts.debugInfo,
         priority: cmdOpts.priority,
         assignee: cmdOpts.assignee,
         tags: cmdOpts.tags?.split(',').map((t) => t.trim()),

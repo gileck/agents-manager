@@ -157,6 +157,20 @@ export function TaskDetailDashboard({
           </CardContent>
         </Card>
 
+        {/* Debug Info (collapsible) */}
+        {task.debugInfo && (
+          <Card>
+            <CardHeader className="py-3">
+              <details>
+                <summary className="cursor-pointer">
+                  <CardTitle className="text-sm inline">Debug Info</CardTitle>
+                </summary>
+                <pre className="mt-2 text-xs font-mono bg-muted p-3 rounded-md overflow-x-auto whitespace-pre-wrap">{task.debugInfo}</pre>
+              </details>
+            </CardHeader>
+          </Card>
+        )}
+
         {/* Extra metadata */}
         {(task.featureId || task.prLink || task.branchName || task.tags.length > 0 || task.assignee) && (
           <Card>

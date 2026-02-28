@@ -859,6 +859,10 @@ export function getMigrations(): Migration[] {
       name: '078_role_based_agent_types',
       sql: getRoleBasedAgentTypesSql(),
     },
+    {
+      name: '079_add_debug_info_to_tasks',
+      sql: `ALTER TABLE tasks ADD COLUMN debug_info TEXT`,
+    },
   ];
 }
 

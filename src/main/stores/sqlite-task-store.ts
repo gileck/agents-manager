@@ -24,6 +24,7 @@ interface TaskRow {
   phases: string | null;
   plan_comments: string;
   technical_design_comments: string;
+  debug_info: string | null;
   metadata: string;
   created_at: number;
   updated_at: number;
@@ -50,6 +51,7 @@ function rowToTask(row: TaskRow): Task {
     phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),
     technicalDesignComments: parseJson<PlanComment[]>(row.technical_design_comments, []),
+    debugInfo: row.debug_info ?? null,
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -149,8 +151,8 @@ export class SqliteTaskStore implements ITaskStore {
       }
 
       this.db.prepare(`
-        INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, subtasks, phases, plan_comments, technical_design_comments, debug_info, metadata, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         input.projectId,
@@ -171,6 +173,7 @@ export class SqliteTaskStore implements ITaskStore {
         input.phases ? JSON.stringify(input.phases) : null,
         '[]',
         '[]',
+        input.debugInfo ?? null,
         JSON.stringify(input.metadata ?? {}),
         timestamp,
         timestamp,
@@ -254,6 +257,10 @@ export class SqliteTaskStore implements ITaskStore {
       if (input.technicalDesignComments !== undefined) {
         updates.push('technical_design_comments = ?');
         values.push(JSON.stringify(input.technicalDesignComments));
+      }
+      if (input.debugInfo !== undefined) {
+        updates.push('debug_info = ?');
+        values.push(input.debugInfo);
       }
       if (input.metadata !== undefined) {
         updates.push('metadata = ?');

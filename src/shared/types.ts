@@ -269,6 +269,7 @@ export interface Task {
   phases: ImplementationPhase[] | null;
   planComments: PlanComment[];
   technicalDesignComments: PlanComment[];
+  debugInfo: string | null;
   metadata: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
@@ -289,6 +290,7 @@ export interface TaskCreateInput {
   branchName?: string;
   subtasks?: Subtask[];
   phases?: ImplementationPhase[] | null;
+  debugInfo?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -309,6 +311,7 @@ export interface TaskUpdateInput {
   phases?: ImplementationPhase[] | null;
   planComments?: PlanComment[];
   technicalDesignComments?: PlanComment[];
+  debugInfo?: string | null;
   metadata?: Record<string, unknown>;
   pipelineId?: string;
 }

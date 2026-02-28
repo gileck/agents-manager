@@ -169,7 +169,7 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
         pipelineId = pipelines[0].id;
       }
 
-      // Build rich description
+      // Build rich description (debug logs go into separate debugInfo field)
       const sections: string[] = [];
 
       if (description.trim()) {
@@ -181,15 +181,12 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
         sections.push(`- **Related Task:** \`${currentTaskId}\``);
       }
 
-      if (debugLogs.trim()) {
-        sections.push('', '## Debug Logs', '```', debugLogs.trim(), '```');
-      }
-
       const task = await window.api.tasks.create({
         projectId,
         pipelineId,
         title: `[Bug] ${title.trim()}`,
         description: sections.join('\n'),
+        debugInfo: debugLogs.trim() || undefined,
         tags: ['bug'],
         metadata: {
           ...(currentTaskId ? { relatedTaskId: currentTaskId } : {}),
