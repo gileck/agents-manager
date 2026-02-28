@@ -48,7 +48,7 @@ tests/
 └── unit/
     ├── claude-code-agent-output.test.ts  # Agent + ClaudeCodeLib output streaming
     ├── implementor-prompt-builder.test.ts  # ImplementorPromptBuilder prompt and schema
-    ├── pr-reviewer-agent.test.ts         # ReviewerPromptBuilder prompt, schema, and integration
+    ├── reviewer-prompt-builder.test.ts    # ReviewerPromptBuilder prompt, schema, and integration
     └── task-workflow-reviewer-agent.test.ts  # TaskWorkflowReviewerPromptBuilder prompt and schema
 ```
 
