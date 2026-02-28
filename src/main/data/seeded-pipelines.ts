@@ -209,6 +209,13 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'design_review', to: 'open', trigger: 'manual', label: 'Cancel Design Review' },
     // Workflow review acknowledgment (no-op self-transition)
     { from: 'done', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },
+    // Merge conflict recovery from ready_to_merge
+    { from: 'ready_to_merge', to: 'implementing', trigger: 'manual', label: 'Resolve Conflicts',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'conflicts_detected' }, policy: 'fire_and_forget' }] },
+    { from: 'ready_to_merge', to: 'implementing', trigger: 'system',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'conflicts_detected' }, policy: 'fire_and_forget' }] },
     // Manual recovery if merge_pr safety net catches a conflict
     { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],
@@ -347,6 +354,13 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
     { from: 'design_review', to: 'reported', trigger: 'manual', label: 'Cancel Design Review' },
     // Workflow review acknowledgment (no-op self-transition)
     { from: 'done', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },
+    // Merge conflict recovery from ready_to_merge
+    { from: 'ready_to_merge', to: 'implementing', trigger: 'manual', label: 'Resolve Conflicts',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'conflicts_detected' }, policy: 'fire_and_forget' }] },
+    { from: 'ready_to_merge', to: 'implementing', trigger: 'system',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'conflicts_detected' }, policy: 'fire_and_forget' }] },
     // Manual recovery if merge_pr safety net catches a conflict
     { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],

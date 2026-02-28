@@ -49,7 +49,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       if (!mergeable) {
         const msg = 'PR is not mergeable (likely has conflicts with base branch)';
         await ghLog(msg, 'error', { url: prUrl });
-        return { success: false, error: msg };
+        return { success: false, error: msg, followUpTransition: { to: 'implementing', trigger: 'system' as const } };
       }
     } catch (err) {
       // If the mergeability check itself fails, log and continue
@@ -73,9 +73,11 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       await scmPlatform.mergePR(prUrl);
       await ghLog('PR merged successfully', 'info', { url: prUrl });
     } catch (err) {
-      await ghLog(`Failed to merge PR: ${err instanceof Error ? err.message : String(err)}`, 'error', {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      await ghLog(`Failed to merge PR: ${errMsg}`, 'error', { error: errMsg });
+      if (/conflict|not mergeable/i.test(errMsg)) {
+        return { success: false, error: errMsg, followUpTransition: { to: 'implementing', trigger: 'system' as const } };
+      }
       throw err; // Let pipeline engine log the hook failure
     }
 

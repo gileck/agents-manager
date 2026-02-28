@@ -107,12 +107,14 @@ export type HookExecutionPolicy = 'required' | 'best_effort' | 'fire_and_forget'
 export interface HookResult {
   success: boolean;
   error?: string;
+  followUpTransition?: { to: string; trigger: TransitionTrigger };
 }
 
 export interface HookFailure {
   hook: string;
   error: string;
   policy: HookExecutionPolicy;
+  followUpTransition?: { to: string; trigger: TransitionTrigger };
 }
 
 export interface TransitionHook {

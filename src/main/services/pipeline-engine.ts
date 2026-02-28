@@ -231,6 +231,35 @@ export class PipelineEngine implements IPipelineEngine {
         message: `Transition ${task.status} → ${toStatus} rolled back: required hook(s) failed`,
         data: { failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
       });
+      // After rollback, check if the failed hook requested a follow-up transition
+      const followUp = requiredFailures.find(f => f.followUpTransition)?.followUpTransition;
+      if (followUp) {
+        const freshRow = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow | undefined;
+        if (!freshRow) {
+          console.error(`[pipeline-engine] Follow-up transition skipped: task ${task.id} not found after rollback`);
+        } else {
+          this.taskEventLog.log({
+            taskId: task.id,
+            category: 'system',
+            severity: 'info',
+            message: `Dispatching follow-up transition to "${followUp.to}" after rollback`,
+            data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger },
+          }).catch((err) => console.error('Audit log write failed:', err));
+
+          this.executeTransition(rowToTask(freshRow), followUp.to, { trigger: followUp.trigger, actor: ctx.actor })
+            .catch(err => {
+              const msg = err instanceof Error ? err.message : String(err);
+              this.taskEventLog.log({
+                taskId: task.id,
+                category: 'system',
+                severity: 'error',
+                message: `Follow-up transition to "${followUp.to}" failed: ${msg}`,
+                data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger, error: msg },
+              }).catch((logErr) => console.error('Audit log write failed:', logErr));
+            });
+        }
+      }
+
       return {
         success: false,
         error: requiredFailures.map(f => `${f.hook}: ${f.error}`).join('; '),
@@ -519,7 +548,7 @@ export class PipelineEngine implements IPipelineEngine {
       try {
         const result = await hookFn(updatedTask, transition, ctx, hook.params);
         if (result && !result.success) {
-          const failure: HookFailure = { hook: hook.name, error: result.error ?? 'Hook returned failure', policy };
+          const failure: HookFailure = { hook: hook.name, error: result.error ?? 'Hook returned failure', policy, followUpTransition: result.followUpTransition };
           hookFailures.push(failure);
           const severity = policy === 'required' ? 'error' as const : forced ? 'error' as const : 'warning' as const;
           this.taskEventLog.log({
