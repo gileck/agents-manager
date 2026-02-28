@@ -218,18 +218,21 @@ export class TelegramAgentBotService implements ITelegramBotService {
     bot.onText(/\/tasks$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.log('in', msg.text ?? '/tasks');
+      this.log('status', 'Handling /tasks command');
       this.handleTasks(msg.chat.id).catch(this.logError);
     });
 
     bot.onText(/\/task (\S+)/, (msg, match) => {
       if (!this.isAllowed(msg)) return;
       this.log('in', msg.text ?? `/task ${match![1]}`);
+      this.log('status', `Handling /task ${match![1].trim()} command`);
       this.handleTaskDetail(msg.chat.id, match![1].trim()).catch(this.logError);
     });
 
     bot.onText(/\/create$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.log('in', msg.text ?? '/create');
+      this.log('status', 'Handling /create command');
       this.pendingActions.set(msg.chat.id, { type: 'create_title', createdAt: Date.now() });
       this.send(msg.chat.id, 'Enter the task title:').catch(this.logError);
     });
@@ -237,18 +240,21 @@ export class TelegramAgentBotService implements ITelegramBotService {
     bot.onText(/\/clear$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.log('in', msg.text ?? '/clear');
+      this.log('status', 'Handling /clear command');
       this.handleClear(msg.chat.id).catch(this.logError);
     });
 
     bot.onText(/\/stop$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.log('in', msg.text ?? '/stop');
+      this.log('status', 'Handling /stop command');
       this.handleStop(msg.chat.id).catch(this.logError);
     });
 
     bot.onText(/\/help$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.log('in', msg.text ?? '/help');
+      this.log('status', 'Handling /help command');
       this.send(msg.chat.id, [
         '*Available commands:*',
         '/tasks \\- List project tasks',
@@ -270,6 +276,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
       if (String(chatId) !== this.chatId) return;
 
       this.log('in', `[callback] ${query.data}`);
+      this.log('status', `Handling callback: ${query.data}`);
       bot.answerCallbackQuery(query.id).catch(this.logError);
       this.handleCallback(chatId, query.data).catch(this.logError);
     });
@@ -545,9 +552,13 @@ export class TelegramAgentBotService implements ITelegramBotService {
   private async handleAgentMessage(chatId: number, text: string): Promise<void> {
     // Reject if agent already running for this chat
     if (this.runningControllers.has(chatId)) {
+      this.log('status', 'Rejected: agent already running');
       await this.send(chatId, 'Please wait — an agent query is already running\\. Use /stop to cancel it\\.', { parse_mode: 'MarkdownV2' });
       return;
     }
+
+    const truncated = text.length > 80 ? text.slice(0, 80) + '...' : text;
+    this.log('status', `Processing: ${truncated}`);
 
     const session = await this.getOrCreateSession(chatId);
 
@@ -567,6 +578,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
     try {
       // Load conversation history (bounded to prevent prompt overflow)
       const history = await this.deps.chatMessageStore.getMessagesForSession(session.id, MAX_HISTORY_MESSAGES);
+      this.log('status', `Session: ${session.id.slice(0, 8)} (${history.length} messages in history)`);
 
       // Build prompt with conversation history
       const conversationLines: string[] = [];
@@ -592,6 +604,8 @@ export class TelegramAgentBotService implements ITelegramBotService {
 
       // Manual timeout — abort if agent takes too long
       const timeout = setTimeout(() => abortController.abort(), AGENT_TIMEOUT_MS);
+
+      this.log('status', 'Agent started — running SDK query...');
 
       try {
         // Run SDK query
@@ -620,6 +634,9 @@ export class TelegramAgentBotService implements ITelegramBotService {
             onText: (chunk) => {
               responseText += chunk;
             },
+            onToolUse: (block) => {
+              this.log('status', `Agent tool: ${block.name}`);
+            },
             onResult: (resultMsg) => {
               if (resultMsg.subtype !== 'success') {
                 responseText += `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
@@ -631,12 +648,16 @@ export class TelegramAgentBotService implements ITelegramBotService {
         clearTimeout(timeout);
       }
 
+      this.log('status', `Agent finished (${responseText.length} chars response)`);
+
       // Stop typing indicator
       this.stopTypingIndicator(typingInterval);
       this.runningControllers.delete(chatId);
 
       // Send response
       if (responseText.trim()) {
+        const chunks = this.splitIntoChunks(responseText.trim());
+        this.log('status', `Response sent to Telegram (${responseText.length} chars, ${chunks.length} chunk${chunks.length > 1 ? 's' : ''})`);
         await this.sendChunkedMessage(chatId, responseText.trim());
       } else {
         await this.send(chatId, 'The agent did not produce a response\\.', { parse_mode: 'MarkdownV2' });
@@ -653,10 +674,12 @@ export class TelegramAgentBotService implements ITelegramBotService {
       this.runningControllers.delete(chatId);
 
       if ((err as Error).name === 'AbortError') {
-        // Already handled by /stop
+        this.log('status', 'Agent query aborted');
         return;
       }
 
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.log('status', `Agent error: ${errMsg}`);
       console.error('[telegram-agent-bot] Agent error:', err);
       await this.send(chatId, 'An error occurred while processing your request. Please try again.');
     }
@@ -802,7 +825,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
     return chunks;
   }
 
-  private log(direction: 'in' | 'out', message: string): void {
+  private log(direction: 'in' | 'out' | 'status', message: string): void {
     if (this.onLog) {
       this.onLog({ timestamp: Date.now(), direction, message });
     }

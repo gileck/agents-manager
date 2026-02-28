@@ -127,10 +127,12 @@ export function TelegramPage() {
                       <span className="text-muted-foreground shrink-0">{formatTime(entry.timestamp)}</span>
                       {entry.direction === 'in' ? (
                         <span className="text-blue-500 shrink-0">&rarr;</span>
+                      ) : entry.direction === 'status' ? (
+                        <span className="text-amber-500 shrink-0">&#9881;</span>
                       ) : (
                         <span className="text-green-500 shrink-0">&larr;</span>
                       )}
-                      <span className="break-all">{entry.message}</span>
+                      <span className={entry.direction === 'status' ? 'break-all text-amber-500' : 'break-all'}>{entry.message}</span>
                     </div>
                   ))}
                 </div>
