@@ -6,7 +6,7 @@ import { investigateConfig, INVESTIGATE_SUCCESS_OUTCOME, getInvestigateOutputSch
 function buildPrompt(context: AgentContext): string {
   const { task } = context;
   const desc = task.description ? ` ${task.description}` : '';
-  const amCli = `node ${context.project.path}/bootstrap-cli.js`;
+  const amCli = `npx agents-manager`;
 
   const lines = [
     `You are a bug investigator. Analyze the following bug report, find the root cause, and propose a concrete fix plan.`,
