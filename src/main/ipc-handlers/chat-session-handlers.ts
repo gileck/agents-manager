@@ -3,6 +3,9 @@ import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry'
 import { sendToRenderer } from '@template/main/core/window';
 import type { AppServices } from '../providers/setup';
 import type { ChatImage } from '../../shared/types';
+import { buildDesktopSystemPrompt } from '../services/chat-prompt-parts';
+
+const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MAX_IMAGES_PER_MESSAGE = 5;
@@ -38,13 +41,32 @@ export function registerChatSessionHandlers(services: AppServices): void {
     if (message.length > 10000) {
       throw new Error('Message is too long (max 10000 characters)');
     }
-    return services.chatAgentService.send(
+
+    const scope = await services.chatAgentService.getSessionScope(sessionId);
+    const systemPrompt = buildDesktopSystemPrompt(scope);
+
+    const { userMessage, completion } = await services.chatAgentService.send(
       sessionId,
       message,
-      (chunk) => sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, chunk),
-      (msg) => sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, msg),
-      validatedImages,
+      {
+        systemPrompt,
+        onEvent: (event) => {
+          if (event.type === 'text') {
+            sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, event.text);
+          } else if (event.type === 'message') {
+            sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, event.message);
+          }
+        },
+        images: validatedImages,
+      },
     );
+
+    // Sentinel is now an IPC-level concern
+    completion.catch(() => {}).finally(() => {
+      sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, CHAT_COMPLETE_SENTINEL);
+    });
+
+    return { userMessage, sessionId };
   });
 
   registerIpcHandler(IPC_CHANNELS.CHAT_STOP, async (_, sessionId: string) => {
@@ -124,7 +146,11 @@ export function registerChatSessionHandlers(services: AppServices): void {
       throw new Error('scopeType must be "project" or "task"');
     }
     validateId(scopeId);
-    return services.chatSessionStore.listSessionsForScope(scopeType as 'project' | 'task', scopeId);
+    return services.chatSessionStore.listSessionsForScope(
+      scopeType as 'project' | 'task',
+      scopeId,
+      { excludeSources: ['telegram'] },
+    );
   });
 
   registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name?: string; agentLib?: string | null }) => {

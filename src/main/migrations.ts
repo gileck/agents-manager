@@ -845,6 +845,12 @@ export function getMigrations(): Migration[] {
         ALTER TABLE project_chat_sessions RENAME TO chat_sessions
       `,
     },
+    {
+      name: '076_add_source_to_chat_sessions',
+      sql: `
+        ALTER TABLE chat_sessions ADD COLUMN source TEXT NOT NULL DEFAULT 'desktop'
+      `,
+    },
   ];
 }
 

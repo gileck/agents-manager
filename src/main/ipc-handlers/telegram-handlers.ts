@@ -27,8 +27,8 @@ async function startBotForProject(
     pipelineStore: services.pipelineStore,
     pipelineEngine: services.pipelineEngine,
     workflowService: services.workflowService,
-    chatMessageStore: services.chatMessageStore,
     chatSessionStore: services.chatSessionStore,
+    chatAgentService: services.chatAgentService,
   });
 
   botService.onLog = (entry: TelegramBotLogEntry) => {

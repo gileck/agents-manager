@@ -1,5 +1,5 @@
-import type { IChatSessionStore, ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput } from '../interfaces/chat-session-store';
-import type { ChatScopeType } from '../../shared/types';
+import type { IChatSessionStore, ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput, ListSessionsOptions } from '../interfaces/chat-session-store';
+import type { ChatScopeType, ChatSessionSource } from '../../shared/types';
 import type Database from 'better-sqlite3';
 import { generateId, now } from './utils';
 
@@ -9,6 +9,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
   constructor(private db: AppDatabase) {}
 
   async createSession(input: ChatSessionCreateInput): Promise<ChatSession> {
+    const source: ChatSessionSource = input.source ?? 'desktop';
     const session: ChatSession = {
       id: generateId(),
       projectId: input.projectId,
@@ -16,17 +17,18 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       scopeId: input.scopeId,
       name: input.name,
       agentLib: input.agentLib ?? null,
+      source,
       createdAt: now(),
       updatedAt: now(),
     };
 
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO chat_sessions (id, project_id, scope_type, scope_id, name, agent_lib, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO chat_sessions (id, project_id, scope_type, scope_id, name, agent_lib, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run(session.id, session.projectId, session.scopeType, session.scopeId, session.name, session.agentLib, session.createdAt, session.updatedAt);
+      stmt.run(session.id, session.projectId, session.scopeType, session.scopeId, session.name, session.agentLib, session.source, session.createdAt, session.updatedAt);
       return session;
     } catch (error) {
       console.error('SqliteChatSessionStore.createSession failed:', error);
@@ -37,7 +39,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
   async getSession(id: string): Promise<ChatSession | null> {
     try {
       const stmt = this.db.prepare(`
-        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, created_at as createdAt, updated_at as updatedAt
+        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, source, created_at as createdAt, updated_at as updatedAt
         FROM chat_sessions
         WHERE id = ?
       `);
@@ -50,16 +52,24 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     }
   }
 
-  async listSessionsForScope(scopeType: ChatScopeType, scopeId: string): Promise<ChatSession[]> {
+  async listSessionsForScope(scopeType: ChatScopeType, scopeId: string, options?: ListSessionsOptions): Promise<ChatSession[]> {
     try {
-      const stmt = this.db.prepare(`
-        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, created_at as createdAt, updated_at as updatedAt
+      const params: unknown[] = [scopeType, scopeId];
+      let sql = `
+        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, source, created_at as createdAt, updated_at as updatedAt
         FROM chat_sessions
-        WHERE scope_type = ? AND scope_id = ?
-        ORDER BY created_at ASC
-      `);
+        WHERE scope_type = ? AND scope_id = ?`;
 
-      const rows = stmt.all(scopeType, scopeId) as ChatSession[];
+      if (options?.excludeSources && options.excludeSources.length > 0) {
+        const placeholders = options.excludeSources.map(() => '?').join(', ');
+        sql += ` AND source NOT IN (${placeholders})`;
+        params.push(...options.excludeSources);
+      }
+
+      sql += ` ORDER BY created_at ASC`;
+
+      const stmt = this.db.prepare(sql);
+      const rows = stmt.all(...params) as ChatSession[];
       return rows;
     } catch (error) {
       console.error('SqliteChatSessionStore.listSessionsForScope failed:', error);

@@ -5,19 +5,11 @@ import type { IProjectStore } from '../interfaces/project-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
-import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { TaskUpdateInput, TelegramBotLogEntry, ChatSession } from '../../shared/types';
-import type {
-  SDKMessage,
-  SDKAssistantMessage,
-  SDKResultMessage,
-  SDKUserMessage,
-} from '@anthropic-ai/claude-agent-sdk';
-import { SandboxGuard } from './sandbox-guard';
+import type { ChatAgentService } from './chat-agent-service';
+import { buildTelegramSystemPrompt } from './chat-prompt-parts';
 import { getSetting } from '@template/main/services/settings-service';
-
-const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
 /** Maximum allowed length for free-text input from Telegram users */
 const MAX_INPUT_LENGTH = 2000;
@@ -34,39 +26,6 @@ const TELEGRAM_MAX_LENGTH = 4096;
 /** Typing indicator interval (Telegram requires re-sending every 5s) */
 const TYPING_INTERVAL_MS = 4000;
 
-/** Maximum agent turns per query */
-const MAX_AGENT_TURNS = 50;
-
-/** Maximum conversation history messages to include in prompt */
-const MAX_HISTORY_MESSAGES = 50;
-
-/** Agent timeout (5 minutes) */
-const AGENT_TIMEOUT_MS = 300_000;
-
-const WRITE_TOOL_NAMES = new Set([
-  'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
-]);
-
-const PROJECT_SYSTEM_PROMPT = `You are a project assistant with read-only access to the codebase and full access to the \`npx agents-manager\` CLI for task management.
-
-## Capabilities
-- Read and explore project files (Read, Glob, Grep, LS tools)
-- Run the \`npx agents-manager\` CLI to manage tasks, features, pipelines, and more (via Bash tool)
-- Answer questions about code, architecture, and project state
-
-## Rules
-- You MUST NOT modify any files. Do not use Write, Edit, MultiEdit, or NotebookEdit tools.
-- You CAN use Bash to run \`npx agents-manager\` CLI commands (e.g. \`npx agents-manager tasks list\`, \`npx agents-manager tasks create\`, \`npx agents-manager tasks update\`).
-- You CAN use Bash for read-only commands like \`ls\`, \`cat\`, \`git log\`, \`git diff\`, etc.
-- Be concise and helpful. Format responses with markdown when useful.
-- When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.
-
-## Telegram Context
-- You are responding via Telegram. Keep responses concise.
-- Use basic markdown formatting (bold, italic, code blocks). Avoid complex formatting.
-- For long code blocks, provide only the most relevant snippets.
-- Avoid very long responses; summarize when possible.`;
-
 interface PendingAction {
   type: 'create_title' | 'edit_field';
   taskId?: string;
@@ -80,45 +39,8 @@ interface BotDeps {
   pipelineStore: IPipelineStore;
   pipelineEngine: IPipelineEngine;
   workflowService: IWorkflowService;
-  chatMessageStore: IChatMessageStore;
   chatSessionStore: IChatSessionStore;
-}
-
-/** Callbacks from runSdkQuery for each message type. */
-interface SdkQueryCallbacks {
-  onText?: (text: string) => void;
-  onToolUse?: (block: { type: 'tool_use'; name: string; id?: string; input?: unknown }) => void;
-  onResult?: (msg: SDKResultMessage) => void;
-  onUserToolResult?: (toolUseId: string, content: string) => void;
-}
-
-/** Extract plain text from a DB content field (handles both JSON array and plain text). */
-function extractTextFromContent(content: string): string {
-  if (content.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(content);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter((m: { type: string }) => m.type === 'assistant_text')
-          .map((m: { text: string }) => m.text)
-          .join('');
-      }
-    } catch {
-      // Not valid JSON array — treat as plain text
-    }
-  }
-  // Try JSON envelope (user messages with images)
-  if (content.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed && typeof parsed === 'object' && typeof parsed.text === 'string') {
-        return parsed.text;
-      }
-    } catch {
-      // Not valid JSON — treat as plain text
-    }
-  }
-  return content;
+  chatAgentService: ChatAgentService;
 }
 
 export class TelegramAgentBotService implements ITelegramBotService {
@@ -129,11 +51,10 @@ export class TelegramAgentBotService implements ITelegramBotService {
   private deps: BotDeps;
   private projectId = '';
   private chatId = '';
-  private projectPath = '';
   public onLog?: (entry: TelegramBotLogEntry) => void;
 
-  // Agent concurrency: one running agent per chat
-  private runningControllers = new Map<number, AbortController>();
+  // Track which sessions have an active agent query
+  private runningSessionIds = new Set<string>();
 
   constructor(deps: BotDeps) {
     this.deps = deps;
@@ -152,7 +73,6 @@ export class TelegramAgentBotService implements ITelegramBotService {
 
     this.projectId = projectId;
     this.chatId = chatId;
-    this.projectPath = project.path;
     this.bot = new TelegramBot(botToken, { polling: true });
     this.running = true;
 
@@ -172,11 +92,11 @@ export class TelegramAgentBotService implements ITelegramBotService {
   async stop(): Promise<void> {
     this.stopPendingActionsCleanup();
     this.pendingActions.clear();
-    // Abort any running agents
-    for (const [, controller] of this.runningControllers) {
-      controller.abort();
+    // Stop any running agents via ChatAgentService
+    for (const sessionId of this.runningSessionIds) {
+      this.deps.chatAgentService.stop(sessionId);
     }
-    this.runningControllers.clear();
+    this.runningSessionIds.clear();
     if (this.bot) {
       await this.bot.stopPolling();
       this.bot = null;
@@ -517,28 +437,23 @@ export class TelegramAgentBotService implements ITelegramBotService {
   }
 
   // ---------------------------------------------------------------------------
-  // New commands: /clear, /stop
+  // /clear, /stop — delegate to ChatAgentService
   // ---------------------------------------------------------------------------
 
   private async handleClear(chatId: number): Promise<void> {
     const session = await this.findSession(chatId);
     if (session) {
-      await this.deps.chatMessageStore.clearMessages(session.id);
-      // Abort running agent if any
-      const controller = this.runningControllers.get(chatId);
-      if (controller) {
-        controller.abort();
-        this.runningControllers.delete(chatId);
-      }
+      await this.deps.chatAgentService.clearMessages(session.id);
+      this.runningSessionIds.delete(session.id);
     }
     await this.send(chatId, 'Conversation history cleared\\.', { parse_mode: 'MarkdownV2' });
   }
 
   private async handleStop(chatId: number): Promise<void> {
-    const controller = this.runningControllers.get(chatId);
-    if (controller) {
-      controller.abort();
-      this.runningControllers.delete(chatId);
+    const session = await this.findSession(chatId);
+    if (session && this.runningSessionIds.has(session.id)) {
+      this.deps.chatAgentService.stop(session.id);
+      this.runningSessionIds.delete(session.id);
       await this.send(chatId, 'Agent query stopped\\.', { parse_mode: 'MarkdownV2' });
     } else {
       await this.send(chatId, 'No agent query is currently running\\.', { parse_mode: 'MarkdownV2' });
@@ -546,12 +461,14 @@ export class TelegramAgentBotService implements ITelegramBotService {
   }
 
   // ---------------------------------------------------------------------------
-  // AI Agent message handling
+  // AI Agent message handling — delegates to ChatAgentService
   // ---------------------------------------------------------------------------
 
   private async handleAgentMessage(chatId: number, text: string): Promise<void> {
-    // Reject if agent already running for this chat
-    if (this.runningControllers.has(chatId)) {
+    const session = await this.getOrCreateSession(chatId);
+
+    // Reject if agent already running for this session
+    if (this.runningSessionIds.has(session.id)) {
       this.log('status', 'Rejected: agent already running');
       await this.send(chatId, 'Please wait — an agent query is already running\\. Use /stop to cancel it\\.', { parse_mode: 'MarkdownV2' });
       return;
@@ -560,99 +477,42 @@ export class TelegramAgentBotService implements ITelegramBotService {
     const truncated = text.length > 80 ? text.slice(0, 80) + '...' : text;
     this.log('status', `Processing: ${truncated}`);
 
-    const session = await this.getOrCreateSession(chatId);
-
-    // Persist user message
-    await this.deps.chatMessageStore.addMessage({
-      sessionId: session.id,
-      role: 'user',
-      content: text,
-    });
-
     // Start typing indicator
     const typingInterval = this.startTypingIndicator(chatId);
-
-    const abortController = new AbortController();
-    this.runningControllers.set(chatId, abortController);
+    this.runningSessionIds.add(session.id);
 
     try {
-      // Load conversation history (bounded to prevent prompt overflow)
-      const history = await this.deps.chatMessageStore.getMessagesForSession(session.id, MAX_HISTORY_MESSAGES);
-      this.log('status', `Session: ${session.id.slice(0, 8)} (${history.length} messages in history)`);
+      // Build Telegram-specific system prompt
+      const scope = await this.deps.chatAgentService.getSessionScope(session.id);
+      const systemPrompt = buildTelegramSystemPrompt(scope);
 
-      // Build prompt with conversation history
-      const conversationLines: string[] = [];
-      for (const msg of history.slice(0, -1)) {
-        const roleLabel = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'System';
-        const msgText = extractTextFromContent(msg.content);
-        conversationLines.push(`[${roleLabel}]: ${msgText}`);
-      }
-
-      let prompt = '';
-      if (conversationLines.length > 0) {
-        prompt += '## Conversation History\n\n' + conversationLines.join('\n\n') + '\n\n---\n\n';
-      }
-      prompt += `[User]: ${text}\n\nRespond to the latest user message.`;
-
-      const fullPrompt = `${PROJECT_SYSTEM_PROMPT}\n\n${prompt}`;
-
-      // Set up sandbox guard: no writes allowed, read-only access to project
-      const sandboxGuard = new SandboxGuard([], [this.projectPath]);
-
-      // Accumulate response text
+      // Accumulate assistant text from messages
       let responseText = '';
 
-      // Manual timeout — abort if agent takes too long
-      const timeout = setTimeout(() => abortController.abort(), AGENT_TIMEOUT_MS);
+      this.log('status', `Session: ${session.id.slice(0, 8)} — delegating to ChatAgentService`);
 
-      this.log('status', 'Agent started — running SDK query...');
+      const { completion } = await this.deps.chatAgentService.send(session.id, text, {
+        systemPrompt,
+        onEvent: (event) => {
+          if (event.type === 'text') {
+            responseText += event.text;
+          } else if (event.type === 'message' && event.message.type === 'assistant_text') {
+            responseText += event.message.text;
+          } else if (event.type === 'message' && event.message.type === 'tool_use') {
+            this.log('status', `Agent tool: ${event.message.toolName}`);
+          }
+        },
+      });
 
-      try {
-        // Run SDK query
-        await this.runSdkQuery(
-          fullPrompt,
-          {
-            cwd: this.projectPath,
-            abortController,
-            permissionMode: 'bypassPermissions',
-            allowDangerouslySkipPermissions: true,
-            maxTurns: MAX_AGENT_TURNS,
-            hooks: {
-              preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
-                if (WRITE_TOOL_NAMES.has(toolName)) {
-                  return { decision: 'block', reason: 'Chat agent has read-only access. File modifications are not allowed.' };
-                }
-                const result = sandboxGuard.evaluateToolCall(toolName, toolInput);
-                if (!result.allow) {
-                  return { decision: 'block', reason: result.reason };
-                }
-                return undefined;
-              },
-            },
-          },
-          {
-            onText: (chunk) => {
-              responseText += chunk;
-            },
-            onToolUse: (block) => {
-              this.log('status', `Agent tool: ${block.name}`);
-            },
-            onResult: (resultMsg) => {
-              if (resultMsg.subtype !== 'success') {
-                responseText += `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
-              }
-            },
-          },
-        );
-      } finally {
-        clearTimeout(timeout);
-      }
+      this.log('status', 'Agent started — running via ChatAgentService...');
+
+      await completion;
 
       this.log('status', `Agent finished (${responseText.length} chars response)`);
 
       // Stop typing indicator
       this.stopTypingIndicator(typingInterval);
-      this.runningControllers.delete(chatId);
+      this.runningSessionIds.delete(session.id);
 
       // Send response
       if (responseText.trim()) {
@@ -662,21 +522,9 @@ export class TelegramAgentBotService implements ITelegramBotService {
       } else {
         await this.send(chatId, 'The agent did not produce a response\\.', { parse_mode: 'MarkdownV2' });
       }
-
-      // Persist assistant response
-      await this.deps.chatMessageStore.addMessage({
-        sessionId: session.id,
-        role: 'assistant',
-        content: responseText || '(no response)',
-      });
     } catch (err) {
       this.stopTypingIndicator(typingInterval);
-      this.runningControllers.delete(chatId);
-
-      if ((err as Error).name === 'AbortError') {
-        this.log('status', 'Agent query aborted');
-        return;
-      }
+      this.runningSessionIds.delete(session.id);
 
       const errMsg = err instanceof Error ? err.message : String(err);
       this.log('status', `Agent error: ${errMsg}`);
@@ -697,66 +545,20 @@ export class TelegramAgentBotService implements ITelegramBotService {
       scopeType: 'project',
       scopeId: this.projectId,
       projectId: this.projectId,
-      name: `telegram-${chatId}`,
+      name: `Telegram Chat ${chatId}`,
+      source: 'telegram',
       agentLib: 'claude-code',
     });
   }
 
   private async findSession(chatId: number): Promise<ChatSession | null> {
     const sessions = await this.deps.chatSessionStore.listSessionsForScope('project', this.projectId);
-    const sessionName = `telegram-${chatId}`;
-    return sessions.find((s) => s.name === sessionName) ?? null;
-  }
-
-  // ---------------------------------------------------------------------------
-  // SDK query execution (follows ChatAgentService pattern)
-  // ---------------------------------------------------------------------------
-
-  private async runSdkQuery(
-    prompt: string,
-    options: Record<string, unknown>,
-    callbacks: SdkQueryCallbacks,
-  ): Promise<void> {
-    const query = await this.loadQuery();
-
-    for await (const message of query({ prompt, options })) {
-      if (message.type === 'assistant') {
-        const assistantMsg = message as SDKAssistantMessage;
-        if (assistantMsg.error) {
-          callbacks.onText?.(`\n[Agent error: ${assistantMsg.error}]\n`);
-        }
-        for (const block of assistantMsg.message.content) {
-          if (block.type === 'text') {
-            callbacks.onText?.((block as { text: string }).text);
-          } else if (block.type === 'tool_use') {
-            callbacks.onToolUse?.(block as { type: 'tool_use'; name: string; id?: string; input?: unknown });
-          }
-        }
-      } else if (message.type === 'result') {
-        callbacks.onResult?.(message as SDKResultMessage);
-      } else if (message.type === 'user') {
-        const userMsg = message as SDKUserMessage;
-        const content = userMsg.message?.content;
-        if (content && typeof content !== 'string') {
-          for (const block of content) {
-            const b = block as { type: string; tool_use_id?: string; content?: unknown };
-            if (b.type === 'tool_result' && b.tool_use_id) {
-              const resultContent = typeof b.content === 'string' ? b.content
-                : (Array.isArray(b.content) ? b.content.map((c: { text?: string }) => c.text || '').join('') : '(no output)');
-              callbacks.onUserToolResult?.(b.tool_use_id, resultContent);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<SDKUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SDKMessage>> {
-    const mod = await importESM('@anthropic-ai/claude-agent-sdk');
-    if (typeof mod.query !== 'function') {
-      throw new Error('Claude Agent SDK loaded but "query" export is missing. Ensure @anthropic-ai/claude-agent-sdk is installed and up to date.');
-    }
-    return mod.query as (opts: { prompt: string | AsyncIterable<SDKUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SDKMessage>;
+    // Match by source + name (new sessions), or by legacy telegram- prefix (backward compat)
+    const newName = `Telegram Chat ${chatId}`;
+    const legacyName = `telegram-${chatId}`;
+    return sessions.find((s) => s.source === 'telegram' && s.name === newName)
+      ?? sessions.find((s) => s.name === legacyName)
+      ?? null;
   }
 
   // ---------------------------------------------------------------------------

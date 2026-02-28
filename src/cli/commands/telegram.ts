@@ -34,8 +34,8 @@ export function registerTelegramCommands(program: Command, getServices: () => Ap
         pipelineStore: services.pipelineStore,
         pipelineEngine: services.pipelineEngine,
         workflowService: services.workflowService,
-        chatMessageStore: services.chatMessageStore,
         chatSessionStore: services.chatSessionStore,
+        chatAgentService: services.chatAgentService,
       });
 
       await botService.start(project.id, botToken, chatId);
