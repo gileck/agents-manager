@@ -356,7 +356,7 @@ export function KanbanBoardPage() {
       <KanbanDragOverlay activeTask={activeTask} />
 
       {/* Task Quick-View Dialog */}
-      <KanbanTaskDialog task={selectedTask} onClose={() => setSelectedTask(null)} />
+      <KanbanTaskDialog task={selectedTask} onClose={() => setSelectedTask(null)} onTaskMoved={refetchTasks} />
     </DndContext>
   );
 }
