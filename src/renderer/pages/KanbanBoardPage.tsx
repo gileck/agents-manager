@@ -13,13 +13,14 @@ import { KanbanFilters } from '../components/kanban/KanbanFilters';
 import { KanbanBoardConfigDialog } from '../components/kanban/KanbanBoardConfig';
 import { KanbanEmptyState } from '../components/kanban/KanbanEmptyState';
 import { KanbanBulkActions } from '../components/kanban/KanbanBulkActions';
+import { KanbanTaskDialog } from '../components/kanban/KanbanTaskDialog';
 import { useKanbanDragDrop } from '../hooks/useKanbanDragDrop';
 import { useKanbanKeyboardShortcuts } from '../hooks/useKanbanKeyboardShortcuts';
 import { useKanbanMultiSelect } from '../hooks/useKanbanMultiSelect';
 import { applyKanbanFilters, sortKanbanTasks, extractFilterOptions, hasActiveFilters, createEmptyFilters } from '../utils/kanban-filters';
 import { toast } from 'sonner';
 import { reportError } from '../lib/error-handler';
-import { getColumnColor } from '../utils/kanban-colors';
+import { getColumnColor, rgba } from '../utils/kanban-colors';
 import type { Task, KanbanColumn as KanbanColumnType, KanbanBoardCreateInput, KanbanBoardUpdateInput, KanbanFilters as KanbanFiltersType, TransitionResult } from '../../shared/types';
 
 export function KanbanBoardPage() {
@@ -31,6 +32,8 @@ export function KanbanBoardPage() {
 
   // Local filters state (initialized from board config)
   const [localFilters, setLocalFilters] = useState<KanbanFiltersType>(createEmptyFilters());
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
 
   // Setup drag and drop sensors
   const sensors = useSensors(
@@ -188,12 +191,12 @@ export function KanbanBoardPage() {
     } else if (multiSelectState.isSelecting) {
       // If multi-selecting, clicking without modifier clears and opens
       multiSelectActions.clearSelection();
-      navigate(`/tasks/${task.id}`);
+      setSelectedTask(task);
     } else {
-      // Normal click - open task
-      navigate(`/tasks/${task.id}`);
+      // Normal click - open quick-view dialog
+      setSelectedTask(task);
     }
-  }, [navigate, multiSelectState.isSelecting, multiSelectActions]);
+  }, [multiSelectState.isSelecting, multiSelectActions]);
 
   const handleCreateTask = useCallback(() => {
     navigate('/tasks?action=create');
@@ -201,8 +204,8 @@ export function KanbanBoardPage() {
 
   // Setup keyboard shortcuts (wrapper for keyboard navigation)
   const handleKeyboardCardClick = useCallback((task: Task) => {
-    navigate(`/tasks/${task.id}`);
-  }, [navigate]);
+    setSelectedTask(task);
+  }, []);
 
   useKanbanKeyboardShortcuts({
     columns: board?.columns || [],
@@ -277,7 +280,10 @@ export function KanbanBoardPage() {
     >
       <div className="h-full flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div
+          className="flex items-center justify-between p-4 border-b"
+          style={{ background: `linear-gradient(to right, ${rgba('#3b82f6', 0.04)}, ${rgba('#8b5cf6', 0.04)})` }}
+        >
           <div>
             <h1 className="text-2xl font-bold">{board.name}</h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -298,13 +304,15 @@ export function KanbanBoardPage() {
         </div>
 
         {/* Filters */}
-        <div className="p-4 border-b bg-muted/30">
+        <div className="p-4 border-b" style={{ backgroundColor: rgba('#6b7280', 0.05) }}>
           <KanbanFilters
             filters={localFilters}
             onFiltersChange={handleFiltersChange}
             availableTags={filterOptions.tags}
             availableAssignees={filterOptions.assignees}
             onClearFilters={handleClearFilters}
+            hideEmptyColumns={hideEmptyColumns}
+            onHideEmptyColumnsChange={setHideEmptyColumns}
           />
         </div>
 
@@ -321,14 +329,16 @@ export function KanbanBoardPage() {
             <div className="flex gap-4 h-full">
               {board.columns
                 .sort((a, b) => a.order - b.order)
-                .map((column, index) => (
+                .map((column, originalIndex) => ({ column, originalIndex, tasks: tasksByColumn.get(column.id) || [] }))
+                .filter(({ tasks: colTasks }) => !hideEmptyColumns || colTasks.length > 0)
+                .map(({ column, originalIndex, tasks: colTasks }) => (
                   <VirtualizedKanbanColumn
                     key={column.id}
                     column={column}
-                    tasks={tasksByColumn.get(column.id) || []}
+                    tasks={colTasks}
                     onCardClick={handleCardClick}
                     selectedTaskIds={multiSelectState.selectedTaskIds}
-                    colorTheme={getColumnColor(index)}
+                    colorTheme={getColumnColor(originalIndex)}
                   />
                 ))}
             </div>
@@ -344,6 +354,9 @@ export function KanbanBoardPage() {
       />
 
       <KanbanDragOverlay activeTask={activeTask} />
+
+      {/* Task Quick-View Dialog */}
+      <KanbanTaskDialog task={selectedTask} onClose={() => setSelectedTask(null)} />
     </DndContext>
   );
 }

@@ -9,6 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
 import { Search, X, Filter } from 'lucide-react';
 import { getTagColor } from '../../utils/kanban-colors';
 import type { KanbanFilters as KanbanFiltersType } from '../../../shared/types';
@@ -19,6 +21,8 @@ interface KanbanFiltersProps {
   availableTags?: string[];
   availableAssignees?: string[];
   onClearFilters?: () => void;
+  hideEmptyColumns?: boolean;
+  onHideEmptyColumnsChange?: (value: boolean) => void;
 }
 
 export function KanbanFilters({
@@ -27,6 +31,8 @@ export function KanbanFilters({
   availableTags = [],
   availableAssignees = [],
   onClearFilters,
+  hideEmptyColumns = false,
+  onHideEmptyColumnsChange,
 }: KanbanFiltersProps) {
   const hasActiveFilters =
     filters.search ||
@@ -87,6 +93,18 @@ export function KanbanFilters({
             <X className="w-4 h-4 mr-2" />
             Clear
           </Button>
+        )}
+        {onHideEmptyColumnsChange && (
+          <div className="flex items-center gap-1.5 ml-2">
+            <Switch
+              id="hide-empty"
+              checked={hideEmptyColumns}
+              onCheckedChange={onHideEmptyColumnsChange}
+            />
+            <Label htmlFor="hide-empty" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+              Hide empty
+            </Label>
+          </div>
         )}
       </div>
 
