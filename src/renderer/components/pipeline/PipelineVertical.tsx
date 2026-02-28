@@ -78,7 +78,9 @@ function computeDisplayPath(
   currentStatus: string,
   transitionEntries: DebugTimelineEntry[],
 ): { displayPath: string[]; currentIndex: number; skippedStatuses: Set<string> } {
-  const sortedTransitions = [...transitionEntries].sort((a, b) => a.timestamp - b.timestamp);
+  const sortedTransitions = [...transitionEntries]
+    .filter((e) => !(e.data?.guardResults as Record<string, unknown> | undefined)?._denied)
+    .sort((a, b) => a.timestamp - b.timestamp);
   const visitedStatuses: string[] = [];
   for (const entry of sortedTransitions) {
     const from = entry.data?.fromStatus as string | undefined;
