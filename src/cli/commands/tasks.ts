@@ -95,18 +95,7 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
           // Template DB singleton not available in CLI — fall through to pipeline list
         }
 
-        if (defaultPipelineId) {
-          pipelineId = defaultPipelineId;
-        } else {
-          // Fall back to first pipeline
-          const pipelines = await services.pipelineStore.listPipelines();
-          if (pipelines.length === 0) {
-            console.error('No pipelines available. Create one first.');
-            process.exitCode = 1;
-            return;
-          }
-          pipelineId = pipelines[0].id;
-        }
+        pipelineId = defaultPipelineId || 'pipeline-agent';
       }
 
       const task = await services.workflowService.createTask({
