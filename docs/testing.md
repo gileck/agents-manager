@@ -47,7 +47,8 @@ tests/
 │   └── cli-integration.test.ts  # CLI commands, output formatting
 └── unit/
     ├── claude-code-agent-output.test.ts  # Agent + ClaudeCodeLib output streaming
-    ├── pr-reviewer-agent.test.ts         # PrReviewerPromptBuilder prompt, schema, and integration
+    ├── implementor-prompt-builder.test.ts  # ImplementorPromptBuilder prompt and schema
+    ├── pr-reviewer-agent.test.ts         # ReviewerPromptBuilder prompt, schema, and integration
     └── task-workflow-reviewer-agent.test.ts  # TaskWorkflowReviewerPromptBuilder prompt and schema
 ```
 
@@ -173,7 +174,7 @@ ctx.scriptedAgent.setScript(async () => ({
 After calling `agentService.execute()`, always wait for completion:
 
 ```ts
-const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
 await ctx.agentService.waitForCompletion(run.id);
 ```
 
@@ -262,7 +263,7 @@ const task = await ctx.workflowService.createTask(createTaskInput(projectId, pip
 await ctx.workflowService.transitionTask(task.id, 'in_progress');
 
 // Starts agent with proper worktree setup
-const run = await ctx.workflowService.startAgent(task.id, 'plan', 'scripted');
+const run = await ctx.workflowService.startAgent(task.id, 'new', 'scripted');
 ```
 
 ### Direct store access for focused tests

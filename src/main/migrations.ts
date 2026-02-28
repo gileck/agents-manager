@@ -1924,5 +1924,11 @@ function getRoleBasedAgentTypesSql(): string {
     statements.push(`UPDATE pipelines SET statuses = '${statuses}', transitions = '${transitions}', updated_at = ${ts} WHERE id = '${escSql(p.id)}'`);
   }
 
+  // --- 9. Update custom (non-seeded) pipelines that reference old agentType values ---
+  // Replace 'claude-code' → 'implementor' and 'pr-reviewer' → 'reviewer' in transition JSON
+  const seededIds = SEEDED_PIPELINES.map(p => `'${escSql(p.id)}'`).join(',');
+  statements.push(`UPDATE pipelines SET transitions = REPLACE(transitions, '"claude-code"', '"implementor"'), updated_at = ${ts} WHERE id NOT IN (${seededIds}) AND transitions LIKE '%"claude-code"%'`);
+  statements.push(`UPDATE pipelines SET transitions = REPLACE(transitions, '"pr-reviewer"', '"reviewer"'), updated_at = ${ts} WHERE id NOT IN (${seededIds}) AND transitions LIKE '%"pr-reviewer"%'`);
+
   return statements.join(';\n');
 }

@@ -165,9 +165,9 @@ type HookFn = (
 
 ### `start_agent` (`src/main/handlers/agent-handler.ts`)
 
-- **Params:** `{ mode: AgentMode, agentType: string }` (both required)
+- **Params:** `{ mode: AgentMode, agentType: string, revisionReason?: RevisionReason }` (mode and agentType required)
 - **Policy:** Always registered as `fire_and_forget`
-- Calls `WorkflowService.startAgent(taskId, mode, agentType, onOutput)` in fire-and-forget mode
+- Calls `WorkflowService.startAgent(taskId, mode, agentType, revisionReason, onOutput)` in fire-and-forget mode
 - Streams agent output to renderer via IPC push events
 - Returns `{ success: true }` immediately before the agent actually starts
 - Errors logged to task event log (don't block transition)
@@ -276,19 +276,19 @@ The main agent-driven workflow with technical design, plan, implement, and revie
 
 | From | To | Guards | Hooks |
 |------|----|--------|-------|
-| `open` | `designing` | `no_running_agent` | `start_agent(mode: 'technical_design')` |
-| `open` | `planning` | `no_running_agent` | `start_agent(mode: 'plan')` |
-| `open` | `implementing` | `no_running_agent` | `start_agent(mode: 'implement')` |
-| `design_review` | `planning` | `no_running_agent` | `start_agent(mode: 'plan')` |
-| `design_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'implement')` |
-| `design_review` | `designing` | `no_running_agent` | `start_agent(mode: 'technical_design_revision')` |
-| `plan_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'implement')` |
-| `plan_review` | `planning` | `no_running_agent` | `start_agent(mode: 'plan_revision')` |
-| `pr_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'request_changes')` |
+| `open` | `designing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'designer')` |
+| `open` | `planning` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'planner')` |
+| `open` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `design_review` | `planning` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'planner')` |
+| `design_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `design_review` | `designing` | `no_running_agent` | `start_agent(mode: 'revision', agentType: 'designer', revisionReason: 'changes_requested')` |
+| `plan_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `plan_review` | `planning` | `no_running_agent` | `start_agent(mode: 'revision', agentType: 'planner', revisionReason: 'changes_requested')` |
+| `pr_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested')` |
 | `pr_review` | `ready_to_merge` | — | — |
-| `pr_review` | `pr_review` | `no_running_agent` | `start_agent(mode: 'review', agentType: 'pr-reviewer')` |
+| `pr_review` | `pr_review` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'reviewer')` |
 | `ready_to_merge` | `done` | `is_admin` | `merge_pr` (required), `advance_phase` (best_effort) |
-| `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'implement')` |
+| `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
 | `done` | `ready_to_merge` | — | — (merge retry) |
 
 **Recovery transitions (manual):**
@@ -312,23 +312,23 @@ The main agent-driven workflow with technical design, plan, implement, and revie
 | `planning` | `plan_complete` | `plan_review` | `notify` |
 | `planning` | `needs_info` | `needs_info` | `create_prompt(resumeOutcome: 'info_provided')` (required), `notify` |
 | `planning` | `failed` | `planning` | `start_agent` (retry, guarded by `max_retries(3)` + `no_running_agent`) |
-| `implementing` | `pr_ready` | `pr_review` | `push_and_create_pr` (required), `notify`, `start_agent(mode: 'review', agentType: 'pr-reviewer')` |
+| `implementing` | `pr_ready` | `pr_review` | `push_and_create_pr` (required), `notify`, `start_agent(mode: 'new', agentType: 'reviewer')` |
 | `implementing` | `needs_info` | `needs_info` | `create_prompt` (required), `notify` |
 | `implementing` | `failed` | `implementing` | `start_agent` (retry, guarded) |
 | `implementing` | `no_changes` | `open` | — |
-| `implementing` | `conflicts_detected` | `implementing` | `start_agent(mode: 'resolve_conflicts')` (guarded by `max_retries(3)` + `no_running_agent`) |
+| `implementing` | `conflicts_detected` | `implementing` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'conflicts_detected')` (guarded by `max_retries(3)` + `no_running_agent`) |
 | `pr_review` | `approved` | `ready_to_merge` | — |
-| `pr_review` | `changes_requested` | `implementing` | `start_agent(mode: 'request_changes')` |
-| `pr_review` | `failed` | `pr_review` | `start_agent(mode: 'review')` (retry, guarded) |
-| `pr_review` | `pr_ready` | `pr_review` | `push_and_create_pr` (required), `start_agent(mode: 'review')` (self-loop retry for PR push) |
+| `pr_review` | `changes_requested` | `implementing` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested')` |
+| `pr_review` | `failed` | `pr_review` | `start_agent(mode: 'new', agentType: 'reviewer')` (retry, guarded) |
+| `pr_review` | `pr_ready` | `pr_review` | `push_and_create_pr` (required), `start_agent(mode: 'new', agentType: 'reviewer')` (self-loop retry for PR push) |
 
 **Human-in-the-loop resume (agent-triggered `info_provided`):**
 
 | From | To | Hooks |
 |------|----|-------|
-| `needs_info` | `planning` | `start_agent(mode: 'plan_resume')` |
-| `needs_info` | `implementing` | `start_agent(mode: 'implement_resume')` |
-| `needs_info` | `designing` | `start_agent(mode: 'technical_design_resume')` |
+| `needs_info` | `planning` | `start_agent(mode: 'revision', agentType: 'planner', revisionReason: 'info_provided')` |
+| `needs_info` | `implementing` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'info_provided')` |
+| `needs_info` | `designing` | `start_agent(mode: 'revision', agentType: 'designer', revisionReason: 'info_provided')` |
 
 Note: All three `info_provided` transitions share the same outcome. Disambiguation uses `resumeToStatus` in `context.data` (set by `respondToPrompt`). If no `resumeToStatus` is provided, the first match is used (defaults to `planning`).
 
@@ -336,7 +336,7 @@ Note: All three `info_provided` transitions share the same outcome. Disambiguati
 
 | From | To | Guards | Hooks |
 |------|----|--------|-------|
-| `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'implement')` |
+| `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
 
 Phase cycling: when `advance_phase` detects remaining pending phases after merge, it fires this system transition to continue implementing the next phase.
 
@@ -353,18 +353,18 @@ The flow adds an investigation phase before design/implementation:
 
 | From | To | Guards | Hooks |
 |------|----|--------|-------|
-| `reported` | `investigating` | `no_running_agent` | `start_agent(mode: 'investigate')` |
-| `reported` | `implementing` | `no_running_agent` | `start_agent(mode: 'implement')` |
-| `investigation_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'implement')` |
-| `investigation_review` | `designing` | `no_running_agent` | `start_agent(mode: 'technical_design')` |
-| `investigation_review` | `investigating` | `no_running_agent` | `start_agent(mode: 'investigate')` |
-| `design_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'implement')` |
-| `design_review` | `designing` | `no_running_agent` | `start_agent(mode: 'technical_design_revision')` |
-| `pr_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'request_changes')` |
+| `reported` | `investigating` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'investigator')` |
+| `reported` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `investigation_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `investigation_review` | `designing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'designer')` |
+| `investigation_review` | `investigating` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'investigator')` |
+| `design_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `design_review` | `designing` | `no_running_agent` | `start_agent(mode: 'revision', agentType: 'designer', revisionReason: 'changes_requested')` |
+| `pr_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested')` |
 | `pr_review` | `ready_to_merge` | — | — |
-| `pr_review` | `pr_review` | `no_running_agent` | `start_agent(mode: 'review', agentType: 'pr-reviewer')` |
+| `pr_review` | `pr_review` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'reviewer')` |
 | `ready_to_merge` | `done` | `is_admin` | `merge_pr` (required), `advance_phase` (best_effort) |
-| `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'implement')` |
+| `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
 | `done` | `ready_to_merge` | — | — (merge retry) |
 
 **Recovery transitions (manual):**
@@ -382,7 +382,7 @@ The flow adds an investigation phase before design/implementation:
 - `investigating → investigation_review` on `investigation_complete`
 - `investigating → investigating` on `failed` (retry, guarded)
 - `investigating → needs_info` on `needs_info`
-- `needs_info → investigating` on `info_provided` (with `investigate_resume` mode)
+- `needs_info → investigating` on `info_provided` (with `start_agent(mode: 'revision', agentType: 'investigator', revisionReason: 'info_provided')`)
 - `implementing → reported` on `no_changes` (instead of `open`)
 
 ## Outcome-Driven Transitions

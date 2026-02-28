@@ -36,10 +36,10 @@ Package manager, commands, deployment, dev tips, app behavior, assets, and key f
 
 Agent types, execution lifecycle, prompts, validation, and context accumulation
 
-**Summary:** Agent architecture: Agent class combines a PromptBuilder (domain logic) with an AgentLib (engine logic) resolved from AgentLibRegistry. ImplementorPromptBuilder handles plan/implement/review; PrReviewerPromptBuilder handles code review. ScriptedAgent is the test mock.
+**Summary:** Agent architecture: Agent class combines a PromptBuilder (domain logic) with an AgentLib (engine logic) resolved from AgentLibRegistry. Role-based prompt builders: PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder. ScriptedAgent is the test mock.
 
 **Key Points:**
-- File: src/main/agents/ — Agent, ImplementorPromptBuilder, PrReviewerPromptBuilder, ScriptedAgent
+- File: src/main/agents/ — Agent, PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder, ScriptedAgent
 - File: src/main/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib
 - Agent resolves AgentLib from registry via config.engine at execute() time
 - Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes
@@ -174,12 +174,12 @@ SQLite schema, stores, and migrations
 
 Worktrees, git operations, PR lifecycle, and branch strategy
 
-**Summary:** LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<mode> convention.
+**Summary:** LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<agentType> convention.
 
 **Key Points:**
 - Interface: IWorktreeManager in src/main/interfaces/worktree-manager.ts
 - Implementation: LocalWorktreeManager in src/main/services/local-worktree-manager.ts
-- Branch naming: task/<taskId>/<mode>
+- Branch naming: task/<taskId>/<agentType>
 
 **Docs:** [git-scm-integration.md](docs/git-scm-integration.md)
 
@@ -189,12 +189,14 @@ Worktrees, git operations, PR lifecycle, and branch strategy
 
 IPC channels, renderer pages, hooks, and streaming
 
-**Summary:** 57+ IPC channels defined in src/shared/ipc-channels.ts. Renderer pages in src/renderer/pages/. Custom hooks in src/renderer/hooks/ use window.api (the preload bridge) to call IPC handlers.
+**Summary:** 107 IPC channels defined in src/shared/ipc-channels.ts. Handlers are split into domain files under src/main/ipc-handlers/. Renderer pages in src/renderer/pages/. Custom hooks in src/renderer/hooks/ use window.api (the preload bridge) to call IPC handlers.
 
 **Key Points:**
 - IPC channels: src/shared/ipc-channels.ts
+- IPC handlers: src/main/ipc-handlers/ (domain-scoped files)
 - Renderer calls window.api.<method>() — never direct DB access
 - Streaming uses onMessage callback pattern for live agent output
+- Preload bridge duplicates channel constants (sandboxed — cannot import shared module)
 
 **Docs:** [ipc-and-renderer.md](docs/ipc-and-renderer.md)
 

@@ -123,7 +123,7 @@ ALTER TABLE activity_log ADD COLUMN project_id TEXT;
 6. Drop temp tables
 7. Recreate indexes
 
-This pattern is used when adding new enum values (e.g., adding `request_changes`, `plan_revision`, `investigate` to agent_runs.mode CHECK constraint).
+This pattern is used when adding new enum values (e.g., widening the agent_runs.mode CHECK constraint to accept `'new'` and `'revision'`).
 
 ### Key Indexes
 
@@ -191,11 +191,15 @@ Uses `INSERT OR IGNORE` to seed 5 pipelines:
 
 See [pipeline-engine.md](./pipeline-engine.md) for full pipeline definitions.
 
-### Agent Definitions (migration 028)
+### Agent Definitions (migration 028+077+078)
 
-Seeds 2 built-in agent definitions:
-- `agent-def-claude-code` — Implementor agent configuration
-- `agent-def-pr-reviewer` — PR reviewer agent configuration
+Seeds built-in agent definitions:
+- `agent-def-planner` — Planner agent configuration
+- `agent-def-designer` — Designer agent configuration
+- `agent-def-implementor` — Implementor agent configuration
+- `agent-def-investigator` — Investigator agent configuration
+- `agent-def-reviewer` — PR reviewer agent configuration
+- `agent-def-task-workflow-reviewer` — Task workflow reviewer configuration
 
 Each has `is_built_in = 1` (prevents deletion).
 

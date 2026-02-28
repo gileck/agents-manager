@@ -74,11 +74,13 @@ Force-transitions a task to any status, bypassing all pipeline guards.
 - Activity: `action='transition', summary="Force-transitioned task from {from} to {to}"` with `data.forced: true`
 - **Does NOT call `cleanupWorktree`** on final states (unlike `transitionTask`). This is intentional — force transitions are escape hatches and should not trigger side effects.
 
-### `startAgent(taskId: string, mode: AgentMode, agentType?: string, onOutput?, onMessage?, onStatusChange?): Promise<AgentRun>`
+### `startAgent(taskId: string, mode: AgentMode, agentType: string, revisionReason?: RevisionReason, onOutput?, onMessage?, onStatusChange?): Promise<AgentRun>`
 
 Starts an agent in fire-and-forget mode.
 
-- Default `agentType`: `'claude-code'`
+- **`mode`**: `'new'` or `'revision'`
+- **`agentType`**: `'planner'`, `'designer'`, `'implementor'`, `'investigator'`, `'reviewer'`, `'task-workflow-reviewer'`
+- **`revisionReason`**: optional `'changes_requested'`, `'info_provided'`, or `'conflicts_detected'` (only when mode is `'revision'`)
 - **`onOutput`** callback receives raw output chunks (streamed to renderer)
 - **`onMessage`** callback receives structured `AgentChatMessage` objects
 - **`onStatusChange`** callback receives agent status updates
@@ -90,8 +92,9 @@ Queues a user message and conditionally starts a new agent if none is running.
 
 1. Queues the message via `agentService.queueMessage()` (the running agent picks it up, or a new agent receives it on first turn)
 2. Checks for a running agent — if one exists, returns `null` (message was queued, no new agent needed)
-3. Derives `mode` and `agentType` from the most recent run for this task (defaults to `implement` / `claude-code`)
-4. Calls `startAgent()` with the derived parameters and provided callbacks
+3. Derives `mode` and `agentType` from the most recent run for this task (defaults to `'new'` / `'implementor'`)
+4. When resuming a revision run, sets `revisionReason: 'info_provided'`
+5. Calls `startAgent()` with the derived parameters and provided callbacks
 
 This method consolidates the "send message to agent" business logic that was previously in the IPC handler.
 
@@ -208,7 +211,7 @@ WorkflowService finds transition where agentOutcome === 'info_provided'
     |
 Executes transition: needs_info -> implementing
     |
-Hook: start_agent(mode: 'implement') fires
+Hook: start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'info_provided') fires
     |
 Agent resumes with human's answer as context
 ```

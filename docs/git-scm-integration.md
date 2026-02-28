@@ -1,12 +1,12 @@
 ---
 title: Git & SCM Integration
 description: Worktrees, git operations, PR lifecycle, and branch strategy
-summary: LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<mode> convention.
+summary: LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<agentType> convention.
 priority: 3
 key_points:
   - "Interface: IWorktreeManager in src/main/interfaces/worktree-manager.ts"
   - "Implementation: LocalWorktreeManager in src/main/services/local-worktree-manager.ts"
-  - "Branch naming: task/<taskId>/<mode>"
+  - "Branch naming: task/<taskId>/<agentType>"
 ---
 # Git & SCM Integration
 
@@ -207,7 +207,7 @@ Phase N of M for task {taskId}
 - [ ] Subtask 2
 ```
 
-Each phase creates its own PR on a separate branch (`task/{taskId}/implement/phase-{n}`). If a PR already exists for the same branch, a force-push updates it instead of creating a duplicate. If the existing PR is on a different branch (i.e. from a prior phase), a new PR is created for the current phase.
+Each phase creates its own PR on a separate branch (`task/{taskId}/{agentType}/phase-{n}`). If a PR already exists for the same branch, a force-push updates it instead of creating a duplicate. If the existing PR is on a different branch (i.e. from a prior phase), a new PR is created for the current phase.
 
 ### PR Merge
 
@@ -257,7 +257,7 @@ This polling is necessary because GitHub computes merge status asynchronously af
 ### Changes Requested
 
 If the reviewer reports `changes_requested`:
-1. Transition to `implementing` with `start_agent(mode: 'request_changes')`
+1. Transition to `implementing` with `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested')`
 2. Agent receives review comments as context
 3. On completion, cycles back to `push_and_create_pr` → PR reviewer
 
@@ -266,10 +266,10 @@ If the reviewer reports `changes_requested`:
 ### Single-phase tasks
 
 ```
-task/{taskId}/{mode}
+task/{taskId}/{agentType}
 ```
 
-Example: `task/abc-123-def/implement`
+Example: `task/abc-123-def/implementor`
 
 The branch is created when the first agent runs for a task. Subsequent agents for the same task reuse the same worktree (and branch).
 
@@ -278,10 +278,10 @@ The branch is created when the first agent runs for a task. Subsequent agents fo
 For tasks with multiple implementation phases, the branch naming includes a phase index:
 
 ```
-task/{taskId}/implement/phase-{n}
+task/{taskId}/{agentType}/phase-{n}
 ```
 
-Example: `task/abc-123-def/implement/phase-1`, `task/abc-123-def/implement/phase-2`
+Example: `task/abc-123-def/implementor/phase-1`, `task/abc-123-def/implementor/phase-2`
 
 Each phase gets its own branch (and worktree). The phase index is 1-based.
 

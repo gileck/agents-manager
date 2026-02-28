@@ -1,10 +1,10 @@
 ---
 title: Agent System
 description: Agent types, execution lifecycle, prompts, validation, and context accumulation
-summary: "Agent architecture: Agent class combines a PromptBuilder (domain logic) with an AgentLib (engine logic) resolved from AgentLibRegistry. ImplementorPromptBuilder handles plan/implement/review; PrReviewerPromptBuilder handles code review. ScriptedAgent is the test mock."
+summary: "Agent architecture: Agent class combines a PromptBuilder (domain logic) with an AgentLib (engine logic) resolved from AgentLibRegistry. Role-based prompt builders: PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder. ScriptedAgent is the test mock."
 priority: 2
 key_points:
-  - "File: src/main/agents/ — Agent, ImplementorPromptBuilder, PrReviewerPromptBuilder, ScriptedAgent"
+  - "File: src/main/agents/ — Agent, PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder, ScriptedAgent"
   - "File: src/main/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib"
   - "Agent resolves AgentLib from registry via config.engine at execute() time"
   - "Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes"
@@ -17,19 +17,22 @@ Agent types, execution lifecycle, prompts, validation, and context accumulation.
 
 ```
 AgentLibRegistry                           Prompt Builders (domain logic)
-┌─────────────────────────────────┐        ┌─────────────────────────────────────┐
-│ IAgentLib interface             │        │ BaseAgentPromptBuilder              │
-│  ├── ClaudeCodeLib  (SDK)       │        │  ├── ImplementorPromptBuilder       │
-│  ├── CursorAgentLib (CLI)       │        │  ├── PrReviewerPromptBuilder        │
-│  └── CodexCliLib    (CLI)       │        │  └── TaskWorkflowReviewerPromptBuilder│
-└─────────────────────────────────┘        └─────────────────────────────────────┘
+┌─────────────────────────────────┐        ┌───────────────────────────────────────────┐
+│ IAgentLib interface             │        │ BaseAgentPromptBuilder                    │
+│  ├── ClaudeCodeLib  (SDK)       │        │  ├── PlannerPromptBuilder                 │
+│  ├── CursorAgentLib (CLI)       │        │  ├── DesignerPromptBuilder                │
+│  └── CodexCliLib    (CLI)       │        │  ├── ImplementorPromptBuilder             │
+└─────────────────────────────────┘        │  ├── InvestigatorPromptBuilder            │
+                │                          │  ├── ReviewerPromptBuilder                │
+                │                          │  └── TaskWorkflowReviewerPromptBuilder    │
+                │                          └───────────────────────────────────────────┘
                 │                                          │
                 └──────────► Agent(type, promptBuilder, registry) ◄─┘
                              implements IAgent
                              resolves lib from registry per execute()
 ```
 
-**Agent** is the single generic production `IAgent` implementation. It takes a `type`, a `BaseAgentPromptBuilder`, and an `AgentLibRegistry`. At execute() time, it reads `config.engine` (defaulting to `'claude-code'`) to resolve the right `IAgentLib`, delegates prompt building to the prompt builder, and delegates execution to the lib.
+**Agent** is the single generic production `IAgent` implementation. It takes a `type`, a `BaseAgentPromptBuilder`, and an `AgentLibRegistry`. At execute() time, it reads `config.engine` to resolve the right `IAgentLib`, delegates prompt building to the prompt builder, and delegates execution to the lib.
 
 ### Engine Selection
 
@@ -40,8 +43,11 @@ Each agent definition in the database has an `engine` field (`claude-code`, `cur
 ```
 IAgent (interface)
   └── Agent (PromptBuilder + AgentLibRegistry → IAgent)
-        ├── ImplementorPromptBuilder    — plan, implement, review, request_changes, investigate
-        ├── PrReviewerPromptBuilder     — code review with verdict extraction
+        ├── PlannerPromptBuilder        — plan creation and revision
+        ├── DesignerPromptBuilder       — technical design creation and revision
+        ├── ImplementorPromptBuilder    — implementation, request_changes, resolve_conflicts
+        ├── InvestigatorPromptBuilder   — bug investigation
+        ├── ReviewerPromptBuilder       — code review with verdict extraction
         └── TaskWorkflowReviewerPromptBuilder — task workflow review
   └── ScriptedAgent                     — test mock with pre-written scripts
 ```
@@ -57,9 +63,13 @@ Libs (engine logic):
 
 Prompt builders (domain logic):
 - `src/main/agents/base-agent-prompt-builder.ts` — `BaseAgentPromptBuilder` abstract base
+- `src/main/agents/planner-prompt-builder.ts` — `PlannerPromptBuilder`
+- `src/main/agents/designer-prompt-builder.ts` — `DesignerPromptBuilder`
 - `src/main/agents/implementor-prompt-builder.ts` — `ImplementorPromptBuilder`
-- `src/main/agents/pr-reviewer-prompt-builder.ts` — `PrReviewerPromptBuilder`
+- `src/main/agents/investigator-prompt-builder.ts` — `InvestigatorPromptBuilder`
+- `src/main/agents/reviewer-prompt-builder.ts` — `ReviewerPromptBuilder`
 - `src/main/agents/task-workflow-reviewer-prompt-builder.ts` — `TaskWorkflowReviewerPromptBuilder`
+- `src/main/agents/prompt-utils.ts` — Shared interactive field/instruction helpers
 
 Agent:
 - `src/main/agents/agent.ts` — `Agent` class (generic, resolves lib from registry)
@@ -105,6 +115,7 @@ Key abstract methods:
 - `inferOutcome(mode: string, exitCode: number, output: string): string` — outcome from exit code
 
 Overridable methods:
+- `isReadOnly(_context: AgentContext): boolean` — default `false`; builders override to return `true` for read-only agents (planner, investigator, reviewer)
 - `getMaxTurns(context): number` — default 100
 - `getOutputFormat(context): object | undefined` — JSON schema for structured output
 - `getTimeout(context, config): number` — default 10 minutes
@@ -119,26 +130,58 @@ The generic `Agent` class bridges prompt builder + lib registry → `IAgent`:
 5. Polls `lib.getTelemetry()` every 500ms for live cost/progress reporting
 6. Tracks active libs per runId in a `Map` so `stop()` can delegate to the correct lib
 
+### PlannerPromptBuilder
+
+`type: 'planner'`
+
+- `isReadOnly() = true`
+- Max turns: 150, Timeout: 10 min
+- Handles plan creation (`mode: 'new'`) and plan revision/resume (`mode: 'revision'`)
+- `inferOutcome()` → `'plan_complete'`
+- Structured output: `{ plan, planSummary, subtasks, phases }` + interactive fields
+- When `revisionReason === 'changes_requested'`: includes plan feedback in prompt
+- When `revisionReason === 'info_provided'`: includes user answers in prompt
+
+### DesignerPromptBuilder
+
+`type: 'designer'`
+
+- `isReadOnly() = false` (may create scaffolding)
+- Max turns: 150, Timeout: 10 min
+- Handles technical design creation (`mode: 'new'`) and design revision/resume (`mode: 'revision'`)
+- `inferOutcome()` → `'design_ready'`
+- Structured output: `{ technicalDesign, designSummary }` + interactive fields
+
 ### ImplementorPromptBuilder
 
-`type: 'claude-code'`
+`type: 'implementor'`
 
-| Mode | Max Turns | Timeout | Output Schema |
-|------|-----------|---------|---------------|
-| `plan` | 150 | 10 min | `{ plan, planSummary, subtasks }` |
-| `plan_revision` | 150 | 10 min | `{ plan, planSummary, subtasks }` |
-| `investigate` | 150 | 10 min | `{ plan, investigationSummary, subtasks }` |
-| `implement` | 200 | 30 min | `{ summary }` |
-| `request_changes` | 200 | 30 min | `{ summary }` |
-| `technical_design` | 150 | 10 min | `{ technicalDesign, designSummary }` |
-| `resolve_conflicts` | 50 | 10 min | `{ summary }` |
+- `isReadOnly() = false`
+- `inferOutcome()` → `'pr_ready'`
+- Only handles implementation, request changes, and conflict resolution
 
-Resume variants (`plan_resume`, `implement_resume`, `investigate_resume`, `technical_design_resume`) share the same settings as their base mode.
+| Mode | RevisionReason | Max Turns | Timeout | Output Schema |
+|------|----------------|-----------|---------|---------------|
+| `new` | — | 200 | 30 min | `{ summary }` + interactive fields |
+| `revision` | `changes_requested` | 200 | 30 min | `{ summary }` |
+| `revision` | `conflicts_detected` | 50 | 10 min | `{ summary }` |
+| `revision` | `info_provided` | 200 | 30 min | `{ summary }` + interactive fields |
 
-### PrReviewerPromptBuilder
+### InvestigatorPromptBuilder
 
-`type: 'pr-reviewer'`
+`type: 'investigator'`
 
+- `isReadOnly() = true`
+- Max turns: 150, Timeout: 10 min
+- Handles bug investigation (`mode: 'new'`) and investigation resume (`mode: 'revision'`)
+- `inferOutcome()` → `'investigation_complete'`
+- Structured output: `{ plan, investigationSummary, subtasks }` + interactive fields
+
+### ReviewerPromptBuilder
+
+`type: 'reviewer'`
+
+- `isReadOnly() = true`
 - Max turns: 50
 - Uses structured output with JSON schema for verdict extraction
 - Returns `{ verdict, summary, comments }` via structured output
@@ -165,32 +208,33 @@ Test-only agent with a configurable script function. Built-in test scripts:
 ## Agent Modes
 
 ```typescript
-type AgentMode = 'plan' | 'plan_revision' | 'plan_resume'
-  | 'implement' | 'implement_resume' | 'request_changes'
-  | 'investigate' | 'investigate_resume'
-  | 'technical_design' | 'technical_design_revision' | 'technical_design_resume'
-  | 'resolve_conflicts' | 'review';
+type AgentMode = 'new' | 'revision';
+type RevisionReason = 'changes_requested' | 'info_provided' | 'conflicts_detected';
 ```
 
-| Mode | Purpose | Default Outcome |
-|------|---------|----------------|
-| `plan` | Create implementation plan | `plan_complete` |
-| `plan_revision` | Revise plan based on admin feedback | `plan_complete` |
-| `plan_resume` | Resume interrupted plan | `plan_complete` |
-| `investigate` | Debug a bug report | `investigation_complete` |
-| `investigate_resume` | Resume interrupted investigation | `investigation_complete` |
-| `technical_design` | Create technical design document | `technical_design_complete` |
-| `implement` | Code implementation | `pr_ready` |
-| `implement_resume` | Resume interrupted implementation | `pr_ready` |
-| `request_changes` | Address reviewer feedback | `pr_ready` |
-| `resolve_conflicts` | Resolve merge conflicts | `pr_ready` |
-| `review` | PR code review | `approved` or `changes_requested` |
+Agent runs are identified by the combination of `agentType`, `mode`, and optionally `revisionReason`:
+
+| Agent Type | Mode | RevisionReason | Purpose | Default Outcome |
+|-----------|------|----------------|---------|----------------|
+| `planner` | `new` | — | Create implementation plan | `plan_complete` |
+| `planner` | `revision` | `changes_requested` | Revise plan based on admin feedback | `plan_complete` |
+| `planner` | `revision` | `info_provided` | Resume plan with user answers | `plan_complete` |
+| `designer` | `new` | — | Create technical design | `design_ready` |
+| `designer` | `revision` | `changes_requested` | Revise design based on feedback | `design_ready` |
+| `designer` | `revision` | `info_provided` | Resume design with user answers | `design_ready` |
+| `implementor` | `new` | — | Code implementation | `pr_ready` |
+| `implementor` | `revision` | `changes_requested` | Address reviewer feedback | `pr_ready` |
+| `implementor` | `revision` | `info_provided` | Resume implementation with user answers | `pr_ready` |
+| `implementor` | `revision` | `conflicts_detected` | Resolve merge conflicts | `pr_ready` |
+| `investigator` | `new` | — | Debug a bug report | `investigation_complete` |
+| `investigator` | `revision` | `info_provided` | Resume investigation with user answers | `investigation_complete` |
+| `reviewer` | `new` | — | PR code review | `approved` or `changes_requested` |
 
 ## Execution Lifecycle
 
 **File:** `src/main/services/agent-service.ts`
 
-`AgentService.execute(taskId, mode, agentType, onOutput?)` performs 8 steps:
+`AgentService.execute(taskId, mode, agentType, revisionReason?, onOutput?)` performs 8 steps:
 
 ### Step 1: Fetch Task + Project
 
@@ -213,7 +257,8 @@ Links or creates a task phase for the current mode, marks it as active.
 Reuses an existing worktree or creates a new one:
 
 ```
-Branch naming: task/{taskId}/{mode}
+Branch naming: task/{taskId}/{agentType}
+Multi-phase:   task/{taskId}/{agentType}/phase-{n}
 Worktree path: {projectPath}/.agent-worktrees/{taskId}
 ```
 
@@ -268,7 +313,7 @@ const result = await agent.execute(context, config, wrappedOnOutput, onLog, onPr
 
 ### Validation Loop
 
-For `implement` and `request_changes` modes (not plan/investigate), if the project has `config.validationCommands`:
+For the `implementor` agent type (not planner/designer/investigator/reviewer), if the project has `config.validationCommands`:
 
 1. Run each validation command in the worktree
 2. If validation fails, re-run the agent with validation errors appended to the prompt
@@ -363,9 +408,9 @@ The previous attempt produced validation errors. Fix these issues, then stage an
 
 ## Structured Output
 
-JSON schemas returned per mode via `getOutputFormat()`:
+JSON schemas returned per agent type via `getOutputFormat()`:
 
-**plan / plan_revision:**
+**planner:**
 ```json
 {
   "plan": "Full implementation plan as markdown",
@@ -374,7 +419,15 @@ JSON schemas returned per mode via `getOutputFormat()`:
 }
 ```
 
-**investigate:**
+**designer:**
+```json
+{
+  "technicalDesign": "Full technical design as markdown",
+  "designSummary": "Short 2-3 sentence summary"
+}
+```
+
+**investigator:**
 ```json
 {
   "plan": "Detailed investigation report",
@@ -383,7 +436,7 @@ JSON schemas returned per mode via `getOutputFormat()`:
 }
 ```
 
-**implement / request_changes:**
+**implementor:**
 ```json
 {
   "summary": "Short summary of changes"
@@ -409,17 +462,18 @@ interface TaskContextEntry {
 
 After each successful agent run (exitCode === 0), a context entry is saved:
 
-| Agent Type | Mode | Entry Type |
-|-----------|------|------------|
-| `claude-code` | `plan` | `plan_summary` |
-| `claude-code` | `plan_revision` | `plan_revision_summary` |
-| `claude-code` | `investigate` | `investigation_summary` |
-| `claude-code` | `implement` | `implementation_summary` |
-| `claude-code` | `request_changes` | `fix_summary` |
-| `pr-reviewer` | (approved) | `review_approved` |
-| `pr-reviewer` | (changes_requested) | `review_feedback` |
+| Agent Type | Mode/Reason | Entry Type |
+|-----------|-------------|------------|
+| `planner` | `new` | `plan_summary` |
+| `planner` | `revision` + `changes_requested` | `plan_revision_summary` |
+| `designer` | any | `design_summary` |
+| `investigator` | any | `investigation_summary` |
+| `implementor` | `new` | `implementation_summary` |
+| `implementor` | `revision` + `changes_requested` | `fix_summary` |
+| `reviewer` | (approved) | `review_approved` |
+| `reviewer` | (changes_requested) | `review_feedback` |
 
-The summary is extracted from the agent's structured output (`planSummary`, `investigationSummary`, or `summary` field). Context entries are loaded and prepended to subsequent agent prompts, giving each run knowledge of prior work.
+The summary is extracted from the agent's structured output (`planSummary`, `investigationSummary`, `designSummary`, or `summary` field). Context entries are loaded and prepended to subsequent agent prompts, giving each run knowledge of prior work.
 
 ## Orphan Recovery
 
@@ -475,7 +529,7 @@ The abort controller is also triggered by the timeout timer. On abort, the SDK l
 - **ESM import:** The Claude SDK uses ESM. `ClaudeCodeLib` uses a dynamic `import()` to load the SDK at runtime.
 - **Agent definition lookup failure:** If `getDefinitionByMode()` throws (definition missing or corrupt), the error is caught silently and the agent falls back to its hardcoded `buildPrompt()`.
 - **AbortController keying:** The `runId` passed to `IAgentLib` is set to `context.task.id` (task ID) in `Agent.execute()`, not the `run.id` from the database. Concurrent runs on the same task are prevented by the `no_running_agent` guard.
-- **Engine fallback:** If the agent definition has no engine set, `AgentService` defaults to `claude-code`.
+- **Engine fallback:** If the agent definition has no engine set, `AgentService` defaults to `claude-code` engine.
 - **CLI backend token counts:** The CLI backend (`cursor-agent`, `codex-cli`) always returns 0 for token counts because these engines do not expose usage telemetry.
 
 ## AgentSupervisor

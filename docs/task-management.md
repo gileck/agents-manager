@@ -108,7 +108,7 @@ interface Subtask {
 }
 ```
 
-**Populated by:** The plan agent during `plan` or `plan_revision` mode. The agent's structured output includes a `subtasks` array of step names.
+**Populated by:** The planner agent (agentType `planner`) during `new` or `revision` mode. The agent's structured output includes a `subtasks` array of step names.
 
 **Tracked via CLI:** The `npx agents-manager tasks subtask` command group allows agents to update subtask status during execution:
 - `npx agents-manager tasks subtask update <taskId> --name "Step 1" --status done`
@@ -129,7 +129,7 @@ The `plan` field holds a markdown-formatted implementation plan, populated by th
 
 Admin feedback for plan revision. Stored as a JSON array of `PlanComment` objects.
 
-When a plan needs revision, an admin adds comments. The `plan_revision` agent receives these comments via the `{planCommentsSection}` template variable, allowing it to address specific feedback.
+When a plan needs revision, an admin adds comments. The planner agent (in revision mode with `revisionReason: 'changes_requested'`) receives these comments via the `{planCommentsSection}` template variable, allowing it to address specific feedback.
 
 ## Features / Epics
 

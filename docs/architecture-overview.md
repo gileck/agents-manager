@@ -93,7 +93,7 @@ export interface AppServices {
 1. Create agent-related stores (runs, artifacts, phases, prompts, context, features, definitions)
 2. Create factory functions for project-scoped instances
 3. Create `AgentLibRegistry`, register engine libs (`ClaudeCodeLib`, `CursorAgentLib`, `CodexCliLib`)
-4. Instantiate `AgentFrameworkImpl`, register `Agent` instances with prompt builders (`ImplementorPromptBuilder`, `PrReviewerPromptBuilder`, `TaskWorkflowReviewerPromptBuilder`) and the `AgentLibRegistry`
+4. Instantiate `AgentFrameworkImpl`, register `Agent` instances with prompt builders (`PlannerPromptBuilder`, `DesignerPromptBuilder`, `ImplementorPromptBuilder`, `InvestigatorPromptBuilder`, `ReviewerPromptBuilder`, `TaskWorkflowReviewerPromptBuilder`) and the `AgentLibRegistry`
 5. Load `NotificationRouter` (real or stub, see below)
 6. Create `AgentService` and `WorkflowService`
 7. Register hook handlers (agent, notification, prompt, SCM) — must happen after `WorkflowService` creation

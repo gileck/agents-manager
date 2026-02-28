@@ -85,9 +85,12 @@ The AI execution layer.
 
 `Agent` class combines a **PromptBuilder** (what to say) with an **AgentLib** (how to execute it).
 
-Prompt builders:
-- `ImplementorPromptBuilder` — plan/implement/review workflow
-- `PrReviewerPromptBuilder` — code review workflow
+Prompt builders (role-based):
+- `PlannerPromptBuilder` — plan creation and revision
+- `DesignerPromptBuilder` — technical design creation and revision
+- `ImplementorPromptBuilder` — implementation, request changes, conflict resolution
+- `InvestigatorPromptBuilder` — bug investigation
+- `ReviewerPromptBuilder` — code review workflow
 - `TaskWorkflowReviewerPromptBuilder` — task workflow review
 
 ### Agent Libs / Engines (`src/main/libs/`)

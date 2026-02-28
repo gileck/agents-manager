@@ -189,7 +189,7 @@ This works because:
 
 ## Edge Cases
 
-- **Default agent type in CLI is `scripted`** — unlike the Electron UI which defaults to `claude-code`. This is intentional for testing.
+- **Default agent type in CLI is `scripted`** — unlike the Electron UI which uses the agent type from the pipeline hooks. This is intentional for testing.
 - **CLI is usable while Electron is running** — WAL mode allows concurrent read/write access from both processes.
 - **Database is closed via `.finally()`** — on the `parseAsync()` promise chain to ensure cleanup even if a command throws.
 - **`tasks list` requires a project** — uses `requireProject()` which throws with a helpful message listing available projects if no project context can be resolved.
