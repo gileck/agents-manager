@@ -558,6 +558,18 @@ export class AgentService implements IAgentService {
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog);
 
+      // Release spawn lock before transition so that start_agent hooks
+      // (which call agentService.execute()) can re-acquire it for follow-up agents.
+      // The agent run is fully recorded at this point — the lock only needs to
+      // protect the setup/execution phase. The finally block's delete is kept as a safety net.
+      this.spawningTasks.delete(taskId);
+      this.taskEventLog.log({
+        taskId,
+        category: 'agent_debug',
+        severity: 'debug',
+        message: `Spawn lock released before outcome transition (runId=${run.id})`,
+      }).catch(() => {});
+
       // Handle outcome — resolve outcome and execute transitions
       await this.outcomeResolver.resolveAndTransition({
         taskId, result, run, worktree, worktreeManager, phase, context, summary: agentSummary,
