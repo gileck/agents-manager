@@ -60,7 +60,7 @@ export function registerNotificationHandler(
   engine: IPipelineEngine,
   deps: { notificationRouter: INotificationRouter; taskStore: ITaskStore },
 ): void {
-  engine.registerHook('notify', async (task: Task, transition: Transition, _context: TransitionContext, params?: Record<string, unknown>): Promise<HookResult> => {
+  engine.registerHook('notify', async (task: Task, transition: Transition, context: TransitionContext, params?: Record<string, unknown>): Promise<HookResult> => {
     const titleTemplate = (params?.titleTemplate as string) ?? 'Task update';
     const bodyTemplate = (params?.bodyTemplate as string) ?? '{taskTitle}: {fromStatus} → {toStatus}';
 
@@ -68,6 +68,7 @@ export function registerNotificationHandler(
       '{taskTitle}': task.title,
       '{fromStatus}': transition.from,
       '{toStatus}': transition.to,
+      '{summary}': (context.data?.summary as string) ?? '',
     };
 
     const applyTemplate = (template: string): string => {

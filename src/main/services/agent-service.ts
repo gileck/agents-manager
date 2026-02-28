@@ -554,6 +554,7 @@ export class AgentService implements IAgentService {
       };
       await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog, context.revisionReason);
       await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog, context.revisionReason);
+      const agentSummary = await this.postRunExtractor.appendSummaryComment(taskId, agentType, result, postRunLog);
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog);
 
@@ -566,7 +567,7 @@ export class AgentService implements IAgentService {
 
       // Handle outcome — resolve outcome and execute transitions
       await this.outcomeResolver.resolveAndTransition({
-        taskId, result, run, worktree, worktreeManager, phase, context,
+        taskId, result, run, worktree, worktreeManager, phase, context, summary: agentSummary,
       });
 
       // Log completion event

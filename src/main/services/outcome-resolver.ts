@@ -26,8 +26,9 @@ export class OutcomeResolver {
     worktreeManager: IWorktreeManager;
     phase: { id: string };
     context: AgentContext;
+    summary?: string;
   }): Promise<void> {
-    const { taskId, result, run, worktree, worktreeManager, phase, context } = params;
+    const { taskId, result, run, worktree, worktreeManager, phase, context, summary } = params;
     const completedAt = now();
 
     if (result.exitCode === 0) {
@@ -61,6 +62,7 @@ export class OutcomeResolver {
           agentRunId: run.id,
           payload: result.payload,
           branch: worktree.branch,
+          ...(summary ? { summary } : {}),
         });
       }
     } else {
