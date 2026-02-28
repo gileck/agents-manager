@@ -3,7 +3,12 @@ import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { Task, Transition, TransitionContext, AgentMode, HookResult } from '../../shared/types';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import { sendToRenderer } from '@template/main/core/window';
+function trySendToRenderer(...args: unknown[]): void {
+  try {
+    const { sendToRenderer } = require('@template/main/core/window');
+    sendToRenderer(...args);
+  } catch { /* Not in Electron context */ }
+}
 
 export interface AgentHandlerDeps {
   workflowService: IWorkflowService;
@@ -24,9 +29,9 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
     // Fire-and-forget: agent runs asynchronously via WorkflowService (logs activity)
     deps.workflowService.startAgent(
       task.id, mode, agentType,
-      (chunk) => { try { sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, task.id, chunk); } catch { /* window may be closed */ } },
-      (msg) => { try { sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, task.id, msg); } catch { /* window may be closed */ } },
-      (status) => { try { sendToRenderer(IPC_CHANNELS.AGENT_STATUS, task.id, status); } catch { /* window may be closed */ } },
+      (chunk) => { trySendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, task.id, chunk); },
+      (msg) => { trySendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, task.id, msg); },
+      (status) => { trySendToRenderer(IPC_CHANNELS.AGENT_STATUS, task.id, status); },
     ).catch(async (err) => {
       const msg = err instanceof Error ? err.message : String(err);
       try {

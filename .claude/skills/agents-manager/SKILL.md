@@ -10,10 +10,8 @@ Use the `agents-manager` CLI to manage tasks. It connects directly to the same S
 
 ## How to Run
 
-Run via the bootstrap script (resolves `@template` path aliases):
-
 ```bash
-node bootstrap-cli.js <command> [args]
+npx agents-manager <command> [args]
 ```
 
 For the full CLI reference, see `docs/plan/architecture/workflow-cli.md`.
