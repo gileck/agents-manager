@@ -763,7 +763,7 @@ export interface Notification {
 
 export interface TelegramBotLogEntry {
   timestamp: number;
-  direction: 'in' | 'out';
+  direction: 'in' | 'out' | 'status';
   message: string;
 }
 
