@@ -6,7 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
-import type { TaskUpdateInput, TelegramBotLogEntry, ChatSession } from '../../shared/types';
+import type { TaskUpdateInput, TelegramBotLogEntry, ChatSession, AgentChatMessage } from '../../shared/types';
 import type { ChatAgentService } from './chat-agent-service';
 import { buildTelegramSystemPrompt } from './chat-prompt-parts';
 import { getSetting } from '@template/main/services/settings-service';
@@ -52,6 +52,9 @@ export class TelegramAgentBotService implements ITelegramBotService {
   private projectId = '';
   private chatId = '';
   public onLog?: (entry: TelegramBotLogEntry) => void;
+  public onOutput?: (sessionId: string, chunk: string) => void;
+  public onMessage?: (sessionId: string, msg: AgentChatMessage) => void;
+  private currentSessionId: string | null = null;
 
   // Track which sessions have an active agent query
   private runningSessionIds = new Set<string>();
@@ -97,6 +100,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
       this.deps.chatAgentService.stop(sessionId);
     }
     this.runningSessionIds.clear();
+    this.currentSessionId = null;
     if (this.bot) {
       await this.bot.stopPolling();
       this.bot = null;
@@ -106,6 +110,10 @@ export class TelegramAgentBotService implements ITelegramBotService {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  getSessionId(): string | null {
+    return this.currentSessionId;
   }
 
   private startPendingActionsCleanup(): void {
@@ -481,6 +489,18 @@ export class TelegramAgentBotService implements ITelegramBotService {
     const typingInterval = this.startTypingIndicator(chatId);
     this.runningSessionIds.add(session.id);
 
+    // Safe helpers to forward events to the renderer
+    const safeEmitOutput = (chunk: string) => {
+      try { this.onOutput?.(session.id, chunk); } catch (err) {
+        console.warn('[telegram-agent-bot] onOutput callback failed:', err);
+      }
+    };
+    const safeEmitMessage = (msg: AgentChatMessage) => {
+      try { this.onMessage?.(session.id, msg); } catch (err) {
+        console.warn('[telegram-agent-bot] onMessage callback failed:', err);
+      }
+    };
+
     try {
       // Build Telegram-specific system prompt
       const scope = await this.deps.chatAgentService.getSessionScope(session.id);
@@ -496,10 +516,14 @@ export class TelegramAgentBotService implements ITelegramBotService {
         onEvent: (event) => {
           if (event.type === 'text') {
             responseText += event.text;
-          } else if (event.type === 'message' && event.message.type === 'assistant_text') {
-            responseText += event.message.text;
-          } else if (event.type === 'message' && event.message.type === 'tool_use') {
-            this.log('status', `Agent tool: ${event.message.toolName}`);
+            safeEmitOutput(event.text);
+          } else if (event.type === 'message') {
+            safeEmitMessage(event.message);
+            if (event.message.type === 'assistant_text') {
+              responseText += event.message.text;
+            } else if (event.message.type === 'tool_use') {
+              this.log('status', `Agent tool: ${event.message.toolName}`);
+            }
           }
         },
       });
@@ -522,6 +546,9 @@ export class TelegramAgentBotService implements ITelegramBotService {
       } else {
         await this.send(chatId, 'The agent did not produce a response\\.', { parse_mode: 'MarkdownV2' });
       }
+
+      // Signal chat completion to renderer
+      safeEmitOutput('__CHAT_COMPLETE__');
     } catch (err) {
       this.stopTypingIndicator(typingInterval);
       this.runningSessionIds.delete(session.id);
@@ -530,6 +557,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
       this.log('status', `Agent error: ${errMsg}`);
       console.error('[telegram-agent-bot] Agent error:', err);
       await this.send(chatId, 'An error occurred while processing your request. Please try again.');
+      safeEmitOutput('__CHAT_COMPLETE__');
     }
   }
 
@@ -539,9 +567,12 @@ export class TelegramAgentBotService implements ITelegramBotService {
 
   private async getOrCreateSession(chatId: number): Promise<ChatSession> {
     const existing = await this.findSession(chatId);
-    if (existing) return existing;
+    if (existing) {
+      this.currentSessionId = existing.id;
+      return existing;
+    }
 
-    return this.deps.chatSessionStore.createSession({
+    const session = await this.deps.chatSessionStore.createSession({
       scopeType: 'project',
       scopeId: this.projectId,
       projectId: this.projectId,
@@ -549,6 +580,8 @@ export class TelegramAgentBotService implements ITelegramBotService {
       source: 'telegram',
       agentLib: 'claude-code',
     });
+    this.currentSessionId = session.id;
+    return session;
   }
 
   private async findSession(chatId: number): Promise<ChatSession | null> {

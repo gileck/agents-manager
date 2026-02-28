@@ -117,6 +117,7 @@ const IPC_CHANNELS = {
   TELEGRAM_BOT_STOP: 'telegram:bot-stop',
   TELEGRAM_BOT_STATUS: 'telegram:bot-status',
   TELEGRAM_BOT_LOG: 'telegram:bot-log',
+  TELEGRAM_BOT_SESSION: 'telegram:bot-session',
   TELEGRAM_BOT_STATUS_CHANGED: 'telegram:bot-status-changed',
   OPEN_IN_CHROME: 'shell:open-in-chrome',
   OPEN_IN_ITERM: 'shell:open-in-iterm',
@@ -390,6 +391,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_BOT_STOP, projectId),
     botStatus: (projectId: string): Promise<{ running: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_BOT_STATUS, projectId),
+    botSession: (projectId: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_BOT_SESSION, projectId),
   },
 
   // Chat operations

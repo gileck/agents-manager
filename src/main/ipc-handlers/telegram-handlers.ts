@@ -3,7 +3,7 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry';
 import { sendToRenderer } from '@template/main/core/window';
 import type { AppServices } from '../providers/setup';
-import type { TelegramBotLogEntry } from '../../shared/types';
+import type { TelegramBotLogEntry, AgentChatMessage } from '../../shared/types';
 import { TelegramAgentBotService } from '../services/telegram-agent-bot-service';
 import { TelegramNotificationRouter } from '../services/telegram-notification-router';
 import type { INotificationRouter } from '../interfaces/notification-router';
@@ -33,6 +33,12 @@ async function startBotForProject(
 
   botService.onLog = (entry: TelegramBotLogEntry) => {
     sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_LOG, projectId, entry);
+  };
+  botService.onOutput = (sessionId: string, chunk: string) => {
+    sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, chunk);
+  };
+  botService.onMessage = (sessionId: string, msg: AgentChatMessage) => {
+    sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, msg);
   };
 
   await botService.start(projectId, botToken, chatId);
@@ -90,6 +96,12 @@ export function registerTelegramHandlers(services: AppServices): void {
     validateId(projectId);
     const entry = activeBots.get(projectId);
     return { running: !!entry };
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TELEGRAM_BOT_SESSION, async (_, projectId: string) => {
+    validateId(projectId);
+    const entry = activeBots.get(projectId);
+    return entry?.botService.getSessionId() ?? null;
   });
 
   registerIpcHandler(IPC_CHANNELS.TELEGRAM_TEST, async (_, botToken: string, chatId: string) => {
