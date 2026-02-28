@@ -859,6 +859,10 @@ export function getMigrations(): Migration[] {
       name: '078_role_based_agent_types',
       sql: getRoleBasedAgentTypesSql(),
     },
+    {
+      name: '079_force_default_pipeline_agent',
+      sql: `INSERT OR REPLACE INTO settings (key, value) VALUES ('default_pipeline_id', 'pipeline-agent')`,
+    },
   ];
 }
 
