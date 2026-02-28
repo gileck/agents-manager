@@ -195,7 +195,7 @@ export function createTestContext(): TestContext {
     createScmPlatform: () => scmPlatform,
   });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
-  registerNotificationHandler(pipelineEngine, { notificationRouter, taskStore });
+  registerNotificationHandler(pipelineEngine, { notificationRouter });
   // NOTE: registerAgentHandler is intentionally NOT called here.
   // The start_agent hook fires background agents during transitions,
   // which causes race conditions with test-controlled agents.

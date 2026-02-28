@@ -589,7 +589,6 @@ export class AgentService implements IAgentService {
           title: `Agent ${finalStatus}`,
           body: `${agentType} agent ${finalStatus} for task: ${task.title}`,
           channel: run.id,
-          actions: [{ label: 'View', callbackData: `v|${taskId}` }],
         });
       } catch (notifErr) {
         const notifMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
