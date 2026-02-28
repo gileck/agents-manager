@@ -61,7 +61,7 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
             });
           }
         } catch { /* best-effort verification */ }
-      }, 5000);
+      }, 5000).unref();
     }
     return { success: true };
   });
