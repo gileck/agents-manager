@@ -4,13 +4,13 @@ import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry'
 import { sendToRenderer } from '@template/main/core/window';
 import type { AppServices } from '../providers/setup';
 import type { TelegramBotLogEntry } from '../../shared/types';
-import { TelegramBotService } from '../services/telegram-bot-service';
+import { TelegramAgentBotService } from '../services/telegram-agent-bot-service';
 import { TelegramNotificationRouter } from '../services/telegram-notification-router';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import { validateTelegramConfig } from '../services/telegram-config-validator';
 
 /** Module-scoped active bots map shared across handler registrations */
-const activeBots = new Map<string, { botService: TelegramBotService; notificationRouter: INotificationRouter }>();
+const activeBots = new Map<string, { botService: TelegramAgentBotService; notificationRouter: INotificationRouter }>();
 
 /** Guard against double-registration of the before-quit listener */
 let quitListenerRegistered = false;
@@ -43,12 +43,14 @@ export function registerTelegramHandlers(services: AppServices): void {
       tg.chatId as string | undefined,
     );
 
-    const botService = new TelegramBotService({
+    const botService = new TelegramAgentBotService({
       taskStore: services.taskStore,
       projectStore: services.projectStore,
       pipelineStore: services.pipelineStore,
       pipelineEngine: services.pipelineEngine,
       workflowService: services.workflowService,
+      chatMessageStore: services.chatMessageStore,
+      chatSessionStore: services.chatSessionStore,
     });
 
     botService.onLog = (entry: TelegramBotLogEntry) => {

@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import type { AppServices } from '../../main/providers/setup';
 import { requireProject } from '../context';
 import { getResolvedConfig } from '../../main/services/config-service';
-import { TelegramBotService } from '../../main/services/telegram-bot-service';
+import { TelegramAgentBotService } from '../../main/services/telegram-agent-bot-service';
 import { TelegramNotificationRouter } from '../../main/services/telegram-notification-router';
 import { validateTelegramConfig } from '../../main/services/telegram-config-validator';
 
@@ -28,12 +28,14 @@ export function registerTelegramCommands(program: Command, getServices: () => Ap
         return;
       }
 
-      const botService = new TelegramBotService({
+      const botService = new TelegramAgentBotService({
         taskStore: services.taskStore,
         projectStore: services.projectStore,
         pipelineStore: services.pipelineStore,
         pipelineEngine: services.pipelineEngine,
         workflowService: services.workflowService,
+        chatMessageStore: services.chatMessageStore,
+        chatSessionStore: services.chatSessionStore,
       });
 
       await botService.start(project.id, botToken, chatId);
