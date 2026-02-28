@@ -438,8 +438,8 @@ export type HookFn = (task: Task, transition: Transition, context: TransitionCon
 // ============================================
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
-export type AgentMode = 'plan' | 'implement' | 'review' | 'request_changes' | 'plan_revision' | 'investigate' | 'resolve_conflicts' | 'technical_design' | 'technical_design_revision'
-  | 'plan_resume' | 'implement_resume' | 'investigate_resume' | 'technical_design_resume';
+export type AgentMode = 'new' | 'revision';
+export type RevisionReason = 'changes_requested' | 'info_provided' | 'conflicts_detected';
 
 export interface AgentRun {
   id: string;
@@ -502,7 +502,6 @@ export interface TaskArtifactCreateInput {
   data?: Record<string, unknown>;
 }
 
-export type PhaseType = 'plan' | 'implement' | 'review';
 export type PhaseStatus = 'pending' | 'active' | 'completed' | 'failed';
 
 export interface TaskPhase {
@@ -576,6 +575,7 @@ export interface AgentContext {
   project: Project;
   workdir: string;
   mode: AgentMode;
+  revisionReason?: RevisionReason;
   taskContext?: TaskContextEntry[];
   validationErrors?: string;
   resolvedPrompt?: string;

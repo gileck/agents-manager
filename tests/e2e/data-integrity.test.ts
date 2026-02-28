@@ -37,7 +37,7 @@ describe('Data Integrity', () => {
       ctx.agentRunStore.createRun({
         taskId: 'non-existent-task',
         agentType: 'scripted',
-        mode: 'plan',
+        mode: 'new',
       }),
     ).rejects.toThrow();
   });
@@ -93,7 +93,7 @@ describe('Data Integrity', () => {
     const run = await ctx.agentRunStore.createRun({
       taskId: task.id,
       agentType: 'scripted',
-      mode: 'plan',
+      mode: 'new',
     });
     expect(run.taskId).toBe(task.id);
 

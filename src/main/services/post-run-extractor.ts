@@ -1,7 +1,7 @@
 import type {
-  AgentMode,
   AgentRunResult,
   ImplementationPhase,
+  RevisionReason,
   Subtask,
   TaskUpdateInput,
 } from '../../shared/types';
@@ -30,11 +30,10 @@ export class PostRunExtractor {
   async extractPlan(
     taskId: string,
     result: AgentRunResult,
-    mode: AgentMode,
+    agentType: string,
     onLog: OnLog,
   ): Promise<void> {
-    const isPlanMode = mode === 'plan' || mode === 'plan_revision' || mode === 'plan_resume'
-      || mode === 'investigate' || mode === 'investigate_resume';
+    const isPlanMode = agentType === 'planner' || agentType === 'investigator';
     if (result.exitCode !== 0 || !isPlanMode) return;
 
     const so = result.structuredOutput as {
@@ -85,10 +84,10 @@ export class PostRunExtractor {
   async extractTechnicalDesign(
     taskId: string,
     result: AgentRunResult,
-    mode: AgentMode,
+    agentType: string,
     onLog: OnLog,
   ): Promise<void> {
-    const isTdMode = mode === 'technical_design' || mode === 'technical_design_revision' || mode === 'technical_design_resume';
+    const isTdMode = agentType === 'designer';
     if (result.exitCode !== 0 || !isTdMode) return;
 
     const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string } | undefined;
@@ -111,7 +110,7 @@ export class PostRunExtractor {
     taskId: string,
     agentRunId: string,
     agentType: string,
-    mode: AgentMode,
+    revisionReason: RevisionReason | undefined,
     result: AgentRunResult,
     onLog: OnLog,
   ): Promise<void> {
@@ -127,11 +126,11 @@ export class PostRunExtractor {
       } | undefined;
       const structuredSummary = so?.investigationSummary ?? so?.designSummary ?? so?.planSummary ?? so?.summary;
       const summary = structuredSummary || this.parseContextSummary(result.output);
-      const entryType = getContextEntryType(agentType, mode, result.outcome);
-      onLog(`Saving context entry: type=${entryType}, source=${agentType === 'pr-reviewer' ? 'reviewer' : 'agent'}, summaryLength=${summary.length}`);
+      const entryType = getContextEntryType(agentType, revisionReason, result.outcome);
+      onLog(`Saving context entry: type=${entryType}, source=${agentType === 'reviewer' ? 'reviewer' : 'agent'}, summaryLength=${summary.length}`);
 
       const entryData: Record<string, unknown> = {};
-      if (agentType === 'pr-reviewer') {
+      if (agentType === 'reviewer') {
         entryData.verdict = result.outcome;
         if (result.payload?.comments) {
           entryData.comments = result.payload.comments;
@@ -156,7 +155,7 @@ export class PostRunExtractor {
         entryData.executionSummary = wso?.executionSummary;
         entryData.suggestedTasks = wso?.suggestedTasks;
       }
-      const entrySource = agentType === 'pr-reviewer' ? 'reviewer'
+      const entrySource = agentType === 'reviewer' ? 'reviewer'
         : agentType === 'task-workflow-reviewer' ? 'workflow-reviewer'
         : 'agent';
       await this.taskContextStore.addEntry({
@@ -282,23 +281,23 @@ export class PostRunExtractor {
   }
 }
 
-/** Maps (agentType, mode, outcome) to a context entry type string. */
-export function getContextEntryType(agentType: string, mode: AgentMode, outcome?: string): string {
+/** Maps (agentType, revisionReason, outcome) to a context entry type string. */
+export function getContextEntryType(agentType: string, revisionReason?: RevisionReason, outcome?: string): string {
   if (agentType === 'task-workflow-reviewer') return 'workflow_review';
-  if (agentType === 'pr-reviewer') return outcome === 'approved' ? 'review_approved' : 'review_feedback';
-  switch (mode) {
-    case 'plan': return 'plan_summary';
-    case 'plan_revision': return 'plan_revision_summary';
-    case 'plan_resume': return 'plan_summary';
-    case 'investigate': return 'investigation_summary';
-    case 'investigate_resume': return 'investigation_summary';
-    case 'implement': return 'implementation_summary';
-    case 'implement_resume': return 'implementation_summary';
-    case 'request_changes': return 'fix_summary';
-    case 'resolve_conflicts': return 'conflict_resolution_summary';
-    case 'technical_design': return 'technical_design_summary';
-    case 'technical_design_revision': return 'technical_design_revision_summary';
-    case 'technical_design_resume': return 'technical_design_summary';
-    default: return 'agent_output';
+  if (agentType === 'reviewer') return outcome === 'approved' ? 'review_approved' : 'review_feedback';
+  switch (agentType) {
+    case 'planner':
+      return revisionReason === 'changes_requested' ? 'plan_revision_summary' : 'plan_summary';
+    case 'investigator':
+      return 'investigation_summary';
+    case 'implementor':
+      if (revisionReason === 'changes_requested') return 'fix_summary';
+      if (revisionReason === 'conflicts_detected') return 'conflict_resolution_summary';
+      return 'implementation_summary';
+    case 'designer':
+      return revisionReason === 'changes_requested' ? 'technical_design_revision_summary' : 'technical_design_summary';
+    default:
+      console.warn(`getContextEntryType: unexpected agentType '${agentType}', using 'agent_output'`);
+      return 'agent_output';
   }
 }

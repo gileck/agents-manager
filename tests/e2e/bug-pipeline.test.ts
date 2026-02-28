@@ -39,7 +39,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     // reported → investigating (manual, starts investigate agent)
     let current = await ctx.transitionTo(task.id, 'investigating');
     expect(current.status).toBe('investigating');
-    expect(startAgentCalls.some((c) => c.mode === 'investigate')).toBe(true);
+    expect(startAgentCalls.some((c) => c.mode === 'new' && c.agentType === 'investigator')).toBe(true);
 
     // investigating → investigation_review (agent outcome)
     current = (await ctx.pipelineEngine.executeTransition(current, 'investigation_review', {
@@ -51,7 +51,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     // investigation_review → designing (manual, starts tech design agent)
     current = await ctx.transitionTo(current.id, 'designing');
     expect(current.status).toBe('designing');
-    expect(startAgentCalls.some((c) => c.mode === 'technical_design')).toBe(true);
+    expect(startAgentCalls.some((c) => c.mode === 'new' && c.agentType === 'designer')).toBe(true);
 
     // designing → design_review (agent outcome)
     current = (await ctx.pipelineEngine.executeTransition(current, 'design_review', {
@@ -63,7 +63,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     // design_review → implementing (manual, starts implement agent)
     current = await ctx.transitionTo(current.id, 'implementing');
     expect(current.status).toBe('implementing');
-    expect(startAgentCalls.some((c) => c.mode === 'implement')).toBe(true);
+    expect(startAgentCalls.some((c) => c.mode === 'new' && c.agentType === 'implementor')).toBe(true);
 
     // Verify transition history covers the full path
     const history = ctx.getTransitionHistory(task.id);
@@ -83,7 +83,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     // investigation_review → investigating (request changes)
     const current = await ctx.transitionTo(task.id, 'investigating');
     expect(current.status).toBe('investigating');
-    expect(startAgentCalls.some((c) => c.mode === 'investigate')).toBe(true);
+    expect(startAgentCalls.some((c) => c.mode === 'new' && c.agentType === 'investigator')).toBe(true);
   });
 
   it('should support needs_info from investigating', async () => {
@@ -93,7 +93,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     const run = await ctx.agentRunStore.createRun({
       taskId: task.id,
       agentType: 'scripted',
-      mode: 'investigate',
+      mode: 'new',
     });
 
     // investigating → needs_info (agent outcome)
@@ -118,7 +118,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     const run = await ctx.agentRunStore.createRun({
       taskId: task.id,
       agentType: 'scripted',
-      mode: 'investigate',
+      mode: 'new',
     });
 
     // investigating → needs_info
@@ -136,7 +136,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     });
     expect(resumeResult.success).toBe(true);
     expect(resumeResult.task!.status).toBe('investigating');
-    expect(startAgentCalls.some((c) => c.mode === 'investigate_resume')).toBe(true);
+    expect(startAgentCalls.some((c) => c.mode === 'revision' && c.agentType === 'investigator')).toBe(true);
   });
 
   it('should support direct reported → implementing skip path', async () => {
@@ -144,7 +144,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
 
     const current = await ctx.transitionTo(task.id, 'implementing');
     expect(current.status).toBe('implementing');
-    expect(startAgentCalls.some((c) => c.mode === 'implement')).toBe(true);
+    expect(startAgentCalls.some((c) => c.mode === 'new' && c.agentType === 'implementor')).toBe(true);
   });
 
   it('should support cancel investigation back to reported', async () => {

@@ -5,6 +5,7 @@ import type {
   TransitionResult,
   AgentRun,
   AgentMode,
+  RevisionReason,
   PendingPrompt,
   DashboardStats,
   AgentChatMessage,
@@ -239,16 +240,16 @@ export class WorkflowService implements IWorkflowService {
     return result;
   }
 
-  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'claude-code', onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
+  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'implementor', revisionReason?: RevisionReason, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
     await this.activityLog.log({
       action: 'agent_start',
       entityType: 'agent_run',
       entityId: taskId,
       summary: `Starting ${agentType} agent in ${mode} mode`,
-      data: { agentType, mode },
+      data: { agentType, mode, revisionReason },
     });
 
-    const run = await this.agentService.execute(taskId, mode, agentType, onOutput, onMessage, onStatusChange);
+    const run = await this.agentService.execute(taskId, mode, agentType, revisionReason, onOutput, onMessage, onStatusChange);
     return run;
   }
 
@@ -273,10 +274,12 @@ export class WorkflowService implements IWorkflowService {
     // Derive mode and agentType from the last run
     const runs = await this.agentRunStore.getRunsForTask(taskId);
     const lastRun = runs[0];
-    const mode: AgentMode = lastRun?.mode || 'implement';
-    const agentType = lastRun?.agentType || 'claude-code';
+    const mode: AgentMode = lastRun?.mode || 'new';
+    const agentType = lastRun?.agentType || 'implementor';
+    // When resuming a revision run, the user is providing additional info
+    const revisionReason: RevisionReason | undefined = mode === 'revision' ? 'info_provided' : undefined;
 
-    return this.startAgent(taskId, mode, agentType, callbacks.onOutput, callbacks.onMessage, callbacks.onStatusChange);
+    return this.startAgent(taskId, mode, agentType, revisionReason, callbacks.onOutput, callbacks.onMessage, callbacks.onStatusChange);
   }
 
   async stopAgent(runId: string): Promise<void> {

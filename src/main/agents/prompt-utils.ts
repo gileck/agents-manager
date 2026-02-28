@@ -1,0 +1,61 @@
+/** Shared schema fields that let any agent ask interactive questions. */
+export function getInteractiveFields(): Record<string, object> {
+  return {
+    outcome: {
+      type: 'string',
+      enum: ['needs_info'],
+      description: 'Set to "needs_info" ONLY if you need user input before proceeding. Leave unset when work is complete.',
+    },
+    questions: {
+      type: 'array',
+      description: 'Questions for the user (only when outcome="needs_info"). Max 5.',
+      items: {
+        type: 'object',
+        properties: {
+          id:       { type: 'string', description: 'Unique question identifier (e.g. "q1")' },
+          question: { type: 'string', description: 'The question text' },
+          context:  { type: 'string', description: 'Why you need this answered' },
+          options:  {
+            type: 'array',
+            description: 'Options to choose from (omit for free-text questions)',
+            items: {
+              type: 'object',
+              properties: {
+                id:          { type: 'string' },
+                label:       { type: 'string' },
+                description: { type: 'string' },
+                recommended: { type: 'boolean' },
+              },
+              required: ['id', 'label', 'description'],
+            },
+          },
+        },
+        required: ['id', 'question'],
+      },
+    },
+  };
+}
+
+/** Prompt section telling agents they can ask interactive questions. */
+export function getInteractiveInstructions(agentType: string): string {
+  const base = [
+    '',
+    '## Interactive Questions',
+    'If you encounter ambiguity or need user input before proceeding, you can ask questions:',
+    '- Set `outcome` to `"needs_info"` in your output',
+    '- Provide a `questions` array with your questions (max 5)',
+    '- Each question has: `id`, `question`, optional `context`, optional `options[]`',
+    '- For multiple-choice: include `options` with `id`, `label`, `description`, and optionally `recommended: true`',
+    '- The user can also add custom text to any answer',
+    '- Only ask when genuinely needed — do not ask if you can make a reasonable decision yourself',
+  ];
+  if (agentType === 'designer') {
+    base.push(
+      '',
+      'For technical design, it is often valuable to propose multiple solution approaches.',
+      'When there are genuinely different viable approaches, present them as options with',
+      'clear descriptions including tradeoffs, pros/cons, and mark one as recommended.',
+    );
+  }
+  return base.join('\n');
+}

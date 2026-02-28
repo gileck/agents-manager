@@ -25,7 +25,7 @@ describe('Artifact Collection', () => {
   it('should create branch artifact after agent run', async () => {
     ctx.scriptedAgent.setScript(happyPlan);
 
-    const run = await ctx.workflowService.startAgent(taskId, 'plan', 'scripted');
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const artifacts = await ctx.taskArtifactStore.getArtifactsForTask(taskId, 'branch');
@@ -40,7 +40,7 @@ describe('Artifact Collection', () => {
     // First transition to implementing
     await ctx.transitionTo(taskId, 'implementing');
 
-    const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const prArtifacts = await ctx.taskArtifactStore.getArtifactsForTask(taskId, 'pr');
@@ -54,7 +54,7 @@ describe('Artifact Collection', () => {
 
     await ctx.transitionTo(taskId, 'implementing');
 
-    const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const diffArtifacts = await ctx.taskArtifactStore.getArtifactsForTask(taskId, 'diff');
@@ -67,7 +67,7 @@ describe('Artifact Collection', () => {
 
     await ctx.transitionTo(taskId, 'implementing');
 
-    const run = await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const updatedTask = await ctx.taskStore.getTask(taskId);

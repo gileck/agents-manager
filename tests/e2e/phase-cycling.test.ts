@@ -321,9 +321,9 @@ describe('Phase Cycling E2E', () => {
     // In the real system, the agent service creates a branch like
     // task/{taskId}/implement/phase-1. Let's verify the start_agent hook
     // was called with the correct mode.
-    const implCalls = startAgentCalls.filter(c => c.taskId === task.id && c.mode === 'implement');
+    const implCalls = startAgentCalls.filter(c => c.taskId === task.id && c.mode === 'new');
     expect(implCalls.length).toBeGreaterThanOrEqual(1);
-    expect(implCalls[0].agentType).toBe('claude-code');
+    expect(implCalls[0].agentType).toBe('implementor');
   });
 
   // -------------------------------------------------------------------------
@@ -380,7 +380,7 @@ describe('Phase Cycling E2E', () => {
     // The start_agent hook was called for phase 2 (via the done -> implementing system transition).
     // In a real scenario, this would create a new worktree. Verify start_agent was called.
     const phase2AgentCalls = startAgentCalls.filter(
-      c => c.taskId === task.id && c.mode === 'implement'
+      c => c.taskId === task.id && c.mode === 'new'
     );
     // Should have been called at least twice: once for phase 1, once for phase 2
     expect(phase2AgentCalls.length).toBeGreaterThanOrEqual(2);

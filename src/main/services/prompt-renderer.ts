@@ -46,9 +46,9 @@ export class PromptRenderer {
   }
 
   private buildSubtasksSection(context: AgentContext): string {
-    const { task, mode } = context;
+    const { task } = context;
 
-    if (mode === 'plan' || mode === 'investigate') {
+    if (context.task.status === 'planning' || context.task.status === 'investigating') {
       return [
         '',
         'At the end of your plan, include a "## Subtasks" section with a JSON array of subtask names that break down the implementation into concrete steps. Example:',

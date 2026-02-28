@@ -8,7 +8,7 @@ export function registerAgentHandlers(services: AppServices): void {
   registerIpcHandler(IPC_CHANNELS.AGENT_START, async (_, taskId: string, mode: AgentMode, agentType?: string) => {
     validateId(taskId);
     return services.workflowService.startAgent(
-      taskId, mode, agentType,
+      taskId, mode, agentType, undefined,
       (chunk) => sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, chunk),
       (msg) => sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, msg),
       (status) => sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, status),

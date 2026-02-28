@@ -8,7 +8,7 @@ import type { AgentContext } from '../../src/shared/types';
 function createContext(taskId: string = 'test-task'): AgentContext {
   return {
     task: { id: taskId, title: 'Test task', projectId: 'proj-1', pipelineId: 'pipe-1', status: 'planning', priority: 0, tags: [], metadata: {}, createdAt: Date.now(), updatedAt: Date.now() },
-    mode: 'plan',
+    mode: 'new',
     workdir: '/tmp/test',
     project: { id: 'proj-1', name: 'Test', path: '/tmp/test', description: null, config: {}, createdAt: Date.now(), updatedAt: Date.now() },
   };
@@ -32,7 +32,7 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     lib = new ClaudeCodeLib();
     const registry = new AgentLibRegistry();
     registry.register(lib);
-    agent = new Agent('claude-code', new ImplementorPromptBuilder(), registry);
+    agent = new Agent('implementor', new ImplementorPromptBuilder(), registry);
     mockQuery = vi.fn();
 
     // Mock the private loadQuery method on the lib to return our mock
@@ -68,7 +68,7 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
 
     expect(chunks).toEqual(['First response\n', ' continued\n']);
     expect(result.exitCode).toBe(0);
-    expect(result.outcome).toBe('plan_complete');
+    expect(result.outcome).toBe('pr_ready');
     expect(result.output).toContain('First response');
     expect(result.output).toContain(' continued');
     expect(result.costInputTokens).toBe(100);

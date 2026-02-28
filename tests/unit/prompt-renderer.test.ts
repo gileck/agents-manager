@@ -47,7 +47,7 @@ function createContext(overrides: Partial<AgentContext> = {}): AgentContext {
     task: createTask(),
     project: createProject(),
     workdir: '/home/user/project',
-    mode: 'plan',
+    mode: 'new',
     ...overrides,
   };
 }
@@ -126,22 +126,23 @@ describe('PromptRenderer', () => {
   // ============================================
   describe('Subtasks section rendering', () => {
     it('should render subtask instruction for plan mode', () => {
-      const ctx = createContext({ mode: 'plan' });
+      const ctx = createContext({ mode: 'new', task: createTask({ status: 'planning' }) });
       const result = renderer.render('{subtasksSection}', ctx);
       expect(result).toContain('## Subtasks');
       expect(result).toContain('JSON array');
     });
 
     it('should render subtask instruction for investigate mode', () => {
-      const ctx = createContext({ mode: 'investigate' });
+      const ctx = createContext({ mode: 'new', task: createTask({ status: 'investigating' }) });
       const result = renderer.render('{subtasksSection}', ctx);
       expect(result).toContain('## Subtasks');
     });
 
     it('should render subtask checklist when task has subtasks in implement mode', () => {
       const ctx = createContext({
-        mode: 'implement',
+        mode: 'new',
         task: createTask({
+          status: 'implementing',
           subtasks: [
             { name: 'Set up DB', status: 'done' },
             { name: 'Add API', status: 'open' },
@@ -155,7 +156,7 @@ describe('PromptRenderer', () => {
     });
 
     it('should return empty when implement mode has no subtasks', () => {
-      const ctx = createContext({ mode: 'implement' });
+      const ctx = createContext({ mode: 'new', task: createTask({ status: 'implementing' }) });
       const result = renderer.render('Before{subtasksSection}After', ctx);
       expect(result).toContain('BeforeAfter');
     });

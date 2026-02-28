@@ -9,8 +9,12 @@ interface ReviewStructuredOutput {
   comments: string[];
 }
 
-export class PrReviewerPromptBuilder extends BaseAgentPromptBuilder {
-  readonly type = 'pr-reviewer';
+export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
+  readonly type = 'reviewer';
+
+  protected isReadOnly(): boolean {
+    return true;
+  }
 
   protected getMaxTurns(_context: AgentContext): number {
     return 50;
@@ -61,8 +65,6 @@ export class PrReviewerPromptBuilder extends BaseAgentPromptBuilder {
       const pendingPhases = (task.phases ?? []).filter(p => p.status === 'pending');
       const completedPhases = (task.phases ?? []).filter(p => p.status === 'completed');
 
-      // Lead with phase framing — do NOT include the full task description,
-      // which lists features from all phases and would mislead the reviewer.
       lines.push(
         `You are a code reviewer. Task: **${task.title}** (multi-phase, ${totalPhases} phases total).`,
         '',
@@ -104,7 +106,6 @@ export class PrReviewerPromptBuilder extends BaseAgentPromptBuilder {
         '',
       );
 
-      // Include subtasks for single-phase reviews
       if (task.subtasks && task.subtasks.length > 0) {
         lines.push(
           '## Task Subtasks - ALL must be implemented:',
@@ -131,7 +132,6 @@ export class PrReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '3. Review the diff using the criteria below.',
     );
 
-    // Add explicit subtask verification step
     if ((multiPhase && activePhase) || (task.subtasks && task.subtasks.length > 0)) {
       lines.push(
         '4. Verify each subtask is implemented by finding corresponding code changes in the diff.',
@@ -146,7 +146,6 @@ export class PrReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '**Must-check (block if violated):**',
     );
 
-    // Make subtask verification mandatory for all tasks with subtasks
     if (multiPhase && activePhase) {
       lines.push(`- Completeness — are all Phase ${getActivePhaseIndex(task.phases) + 1} deliverables above implemented?`);
     } else if (task.subtasks && task.subtasks.length > 0) {

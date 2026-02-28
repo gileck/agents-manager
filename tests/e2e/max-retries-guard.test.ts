@@ -41,8 +41,8 @@ describe('max_retries guard', () => {
     for (let i = 0; i < 2; i++) {
       const run = await ctx.agentRunStore.createRun({
         taskId,
-        agentType: 'claude-code',
-        mode: 'plan',
+        agentType: 'planner',
+        mode: 'new',
       });
       await ctx.agentRunStore.updateRun(run.id, { status: 'failed', output: 'error' });
     }
@@ -61,8 +61,8 @@ describe('max_retries guard', () => {
     for (let i = 0; i < 4; i++) {
       const run = await ctx.agentRunStore.createRun({
         taskId,
-        agentType: 'claude-code',
-        mode: 'plan',
+        agentType: 'planner',
+        mode: 'new',
       });
       await ctx.agentRunStore.updateRun(run.id, { status: 'failed', output: 'error' });
     }
@@ -84,8 +84,8 @@ describe('max_retries guard', () => {
     for (let i = 0; i < 3; i++) {
       const run = await ctx.agentRunStore.createRun({
         taskId,
-        agentType: 'claude-code',
-        mode: 'plan',
+        agentType: 'planner',
+        mode: 'new',
       });
       await ctx.agentRunStore.updateRun(run.id, { status: 'failed', output: 'error' });
     }

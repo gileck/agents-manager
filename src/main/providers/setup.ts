@@ -46,8 +46,11 @@ import { LocalWorktreeManager } from '../services/local-worktree-manager';
 import { GitHubScmPlatform } from '../services/github-scm-platform';
 import { MultiChannelNotificationRouter } from '../services/multi-channel-notification-router';
 import { Agent } from '../agents/agent';
+import { PlannerPromptBuilder } from '../agents/planner-prompt-builder';
+import { DesignerPromptBuilder } from '../agents/designer-prompt-builder';
 import { ImplementorPromptBuilder } from '../agents/implementor-prompt-builder';
-import { PrReviewerPromptBuilder } from '../agents/pr-reviewer-prompt-builder';
+import { InvestigatorPromptBuilder } from '../agents/investigator-prompt-builder';
+import { ReviewerPromptBuilder } from '../agents/reviewer-prompt-builder';
 import { TaskWorkflowReviewerPromptBuilder } from '../agents/task-workflow-reviewer-prompt-builder';
 import { ClaudeCodeLib } from '../libs/claude-code-lib';
 import { CursorAgentLib } from '../libs/cursor-agent-lib';
@@ -164,8 +167,11 @@ export function createAppServices(db: Database.Database): AppServices {
 
   // Agent framework — each Agent combines a prompt builder with the lib registry
   const agentFramework = new AgentFrameworkImpl();
-  agentFramework.registerAgent(new Agent('claude-code', new ImplementorPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('pr-reviewer', new PrReviewerPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('planner', new PlannerPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('designer', new DesignerPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('implementor', new ImplementorPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('investigator', new InvestigatorPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('reviewer', new ReviewerPromptBuilder(), agentLibRegistry));
   agentFramework.registerAgent(new Agent('task-workflow-reviewer', new TaskWorkflowReviewerPromptBuilder(), agentLibRegistry));
 
   // Report builder for workflow reviewer agent

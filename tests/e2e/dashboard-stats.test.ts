@@ -67,12 +67,12 @@ describe('Dashboard Stats', () => {
     await ctx.agentRunStore.createRun({
       taskId: task1.id,
       agentType: 'scripted',
-      mode: 'plan',
+      mode: 'new',
     });
     await ctx.agentRunStore.createRun({
       taskId: task2.id,
       agentType: 'scripted',
-      mode: 'plan',
+      mode: 'new',
     });
 
     const stats = await ctx.workflowService.getDashboardStats();

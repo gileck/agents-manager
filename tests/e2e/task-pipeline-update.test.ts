@@ -98,7 +98,7 @@ describe('Task Pipeline Update', () => {
     const task = await ctx.workflowService.createTask(createTaskInput(projectId, pipeline1.id));
 
     // Create a running agent
-    await ctx.agentRunStore.createRun({ taskId: task.id, agentType: 'test-agent', mode: 'implement' });
+    await ctx.agentRunStore.createRun({ taskId: task.id, agentType: 'test-agent', mode: 'new' });
 
     // Try to update pipeline
     await expect(

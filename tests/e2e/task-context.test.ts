@@ -51,7 +51,7 @@ describe('Task Context', () => {
     const run = await ctx.agentRunStore.createRun({
       taskId,
       agentType: 'scripted',
-      mode: 'plan',
+      mode: 'new',
     });
 
     const entry = await ctx.taskContextStore.addEntry(

@@ -1,0 +1,125 @@
+import type { AgentContext, AgentConfig } from '../../shared/types';
+import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
+import { getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+
+export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
+  readonly type = 'investigator';
+
+  protected isReadOnly(): boolean {
+    return true;
+  }
+
+  protected getMaxTurns(): number {
+    return 150;
+  }
+
+  protected getTimeout(_context: AgentContext, config: AgentConfig): number {
+    return config.timeout || 10 * 60 * 1000;
+  }
+
+  protected getOutputFormat(): object {
+    return {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        properties: {
+          plan: { type: 'string', description: 'The detailed investigation report as markdown (root cause analysis, findings, fix suggestion)' },
+          investigationSummary: { type: 'string', description: 'A short 2-3 sentence summary of the investigation findings for display in task context' },
+          subtasks: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Concrete fix steps that break down the suggested fix',
+          },
+          ...getInteractiveFields(),
+        },
+        required: ['plan', 'investigationSummary', 'subtasks'],
+      },
+    };
+  }
+
+  buildPrompt(context: AgentContext): string {
+    const { task, mode, revisionReason } = context;
+    const desc = task.description ? ` ${task.description}` : '';
+
+    let prompt: string;
+
+    if (mode === 'revision' && revisionReason === 'info_provided') {
+      // Investigation resume (was: investigate_resume)
+      const ivrLines = [
+        `Continue investigating this bug using the user's decisions.`,
+        ``,
+        `Bug: ${task.title}.${desc}`,
+      ];
+      if (task.subtasks && task.subtasks.length > 0) {
+        ivrLines.push('', '## Subtasks');
+        for (const st of task.subtasks) {
+          ivrLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
+        }
+      }
+      ivrLines.push(
+        '',
+        '## Instructions',
+        '1. Review the user\'s answers to your questions in the Task Context above.',
+        '2. Use their decisions to guide your investigation.',
+        '3. For targeted file lookups (when you know approximately what you are looking for — function names, file patterns, error strings), use Read, Grep, and Glob directly. Only spawn Task/Explore sub-agents when you need broad codebase discovery across unknown directories or when the search space is genuinely large. Do not run the same searches both directly and via a sub-agent.',
+        '4. Write a detailed investigation report with your findings.',
+        '5. Suggest a concrete fix plan, including any tests that should be added or updated.',
+        '6. Break the fix into subtasks.',
+      );
+      prompt = ivrLines.join('\n');
+    } else {
+      // New investigation (was: investigate)
+      const invAmCli = `node ${context.project.path}/bootstrap-cli.js`;
+      const invLines = [
+        `You are a bug investigator. Analyze the following bug report, investigate the root cause, and suggest a fix with concrete steps.`,
+        ``,
+        `Bug: ${task.title}.${desc}`,
+        ``,
+        `## Instructions`,
+        `1. Read the bug report carefully — it may contain debug logs, error traces, timeline entries, and context from the reporter.`,
+        `2. Use the CLI to gather additional debugging info about this task:`,
+        `   - \`${invAmCli} tasks get ${task.id} --json\` — full task details`,
+        `   - \`${invAmCli} events list --task ${task.id} --json\` — task event log`,
+        `3. Investigate the codebase to find the root cause.`,
+        `   - For targeted file lookups (when you know approximately what you are looking for — function names, file patterns, error strings), use Read, Grep, and Glob directly.`,
+        `   - Only spawn Task/Explore sub-agents when you need broad codebase discovery across unknown directories or when the search space is genuinely large.`,
+        `   - Do not run the same searches both directly and via a sub-agent.`,
+        `4. Attempt to reproduce the issue — run relevant commands or tests to confirm the bug.`,
+        `5. Write a detailed investigation report with your findings.`,
+        `6. Check existing test coverage for the affected code and note any gaps.`,
+        `7. Suggest a concrete fix plan, including any tests that should be added or updated.`,
+        `8. Break the fix into subtasks.`,
+      ];
+      const relatedTaskId = task.metadata?.relatedTaskId as string | undefined;
+      if (relatedTaskId) {
+        invLines.push(
+          ``,
+          `## Related Task`,
+          `This bug references task \`${relatedTaskId}\`. Use the CLI to inspect it:`,
+          `  ${invAmCli} tasks get ${relatedTaskId} --json`,
+          `  ${invAmCli} events list --task ${relatedTaskId} --json`,
+        );
+      }
+      if (task.subtasks && task.subtasks.length > 0) {
+        invLines.push('', '## Subtasks');
+        for (const st of task.subtasks) {
+          invLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
+        }
+      }
+      prompt = invLines.join('\n');
+    }
+
+    prompt += getInteractiveInstructions(this.type);
+
+    if (context.validationErrors) {
+      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
+    }
+
+    return prompt;
+  }
+
+  inferOutcome(_mode: string, exitCode: number, _output: string): string {
+    if (exitCode !== 0) return 'failed';
+    return 'investigation_complete';
+  }
+}

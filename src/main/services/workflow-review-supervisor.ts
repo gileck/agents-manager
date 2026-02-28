@@ -83,7 +83,7 @@ export class WorkflowReviewSupervisor {
           message: 'Starting automatic workflow review',
         });
 
-        const run = await this.workflowService.startAgent(task.id, 'review', 'task-workflow-reviewer');
+        const run = await this.workflowService.startAgent(task.id, 'new', 'task-workflow-reviewer');
 
         // Don't remove from reviewing set in finally — keep it until the
         // background agent completes so the next poll cycle won't re-trigger.

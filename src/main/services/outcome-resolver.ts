@@ -45,8 +45,8 @@ export class OutcomeResolver {
         effectiveOutcome = await this.verifyBranchDiff(taskId, worktree);
       }
 
-      // Early conflict detection (skip for resolve_conflicts mode)
-      if (effectiveOutcome === 'pr_ready' && context.mode !== 'resolve_conflicts') {
+      // Early conflict detection (skip for conflicts_detected revision)
+      if (effectiveOutcome === 'pr_ready' && context.revisionReason !== 'conflicts_detected') {
         effectiveOutcome = await this.detectConflicts(taskId, worktree);
       }
 

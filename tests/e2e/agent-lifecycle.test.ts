@@ -26,7 +26,7 @@ describe('Agent Lifecycle', () => {
   it('should start agent in plan mode and complete with plan_complete outcome', async () => {
     ctx.scriptedAgent.setScript(happyPlan);
 
-    const run = await ctx.workflowService.startAgent(taskId, 'plan', 'scripted');
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
     const completedRun = await ctx.agentRunStore.getRun(run.id);
 
@@ -35,7 +35,7 @@ describe('Agent Lifecycle', () => {
     expect(completedRun!.exitCode).toBe(0);
     expect(completedRun!.taskId).toBe(taskId);
     expect(completedRun!.agentType).toBe('scripted');
-    expect(completedRun!.mode).toBe('plan');
+    expect(completedRun!.mode).toBe('new');
   });
 
   it('should record agent run in store with cost tokens', async () => {
@@ -47,7 +47,7 @@ describe('Agent Lifecycle', () => {
       costOutputTokens: 500,
     }));
 
-    const run = await ctx.workflowService.startAgent(taskId, 'plan', 'scripted');
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const storedRun = await ctx.agentRunStore.getRun(run.id);
@@ -66,7 +66,7 @@ describe('Agent Lifecycle', () => {
       error: 'Simulated failure',
     }));
 
-    const run = await ctx.workflowService.startAgent(taskId, 'plan', 'scripted');
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
     const completedRun = await ctx.agentRunStore.getRun(run.id);
 
@@ -78,7 +78,7 @@ describe('Agent Lifecycle', () => {
   it('should log events for agent start and completion', async () => {
     ctx.scriptedAgent.setScript(happyPlan);
 
-    const run = await ctx.workflowService.startAgent(taskId, 'plan', 'scripted');
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const events = await ctx.taskEventLog.getEvents({ taskId, category: 'agent' });
@@ -90,7 +90,7 @@ describe('Agent Lifecycle', () => {
   it('should log activity for agent start', async () => {
     ctx.scriptedAgent.setScript(happyImplement);
 
-    const run = await ctx.workflowService.startAgent(taskId, 'implement', 'scripted');
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const entries = await ctx.activityLog.getEntries({ action: 'agent_start' });

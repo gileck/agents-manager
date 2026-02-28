@@ -1,6 +1,7 @@
 import type {
   AgentRun,
   AgentMode,
+  RevisionReason,
   AgentContext,
   AgentConfig,
   AgentChatMessage,
@@ -135,7 +136,7 @@ export class AgentService implements IAgentService {
     this.messageQueues.set(taskId, queue);
   }
 
-  async execute(taskId: string, mode: AgentMode, agentType: string, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
+  async execute(taskId: string, mode: AgentMode, agentType: string, revisionReason?: RevisionReason, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
     // Pre-spawn guard: prevent duplicate agent launches for the same task
     if (this.spawningTasks.has(taskId)) {
       throw new Error(`Agent already spawning for task ${taskId} — duplicate launch prevented`);
@@ -177,11 +178,11 @@ export class AgentService implements IAgentService {
     let worktree = await worktreeManager.get(taskId);
     if (!worktree) {
       // Phase-aware branch naming: append /phase-{n} for multi-phase tasks
-      let branch = `task/${taskId}/${mode}`;
+      let branch = `task/${taskId}/${agentType}`;
       if (isMultiPhase(task)) {
         const phaseIdx = getActivePhaseIndex(task.phases);
         if (phaseIdx >= 0) {
-          branch = `task/${taskId}/implement/phase-${phaseIdx + 1}`;
+          branch = `task/${taskId}/${agentType}/phase-${phaseIdx + 1}`;
         }
       }
       worktree = await worktreeManager.create(branch, taskId);
@@ -230,12 +231,12 @@ export class AgentService implements IAgentService {
       // Skip for resolve_conflicts — the agent handles the entire rebase itself,
       // and the pre-agent rebase would predictably fail (that's why we're here).
       await gitOps.fetch('origin');
-      if (mode === 'resolve_conflicts') {
+      if (revisionReason === 'conflicts_detected') {
         await this.taskEventLog.log({
           taskId,
           category: 'worktree',
           severity: 'info',
-          message: 'Skipping pre-agent rebase for resolve_conflicts mode (agent will rebase)',
+          message: 'Skipping pre-agent rebase for conflicts_detected (agent will rebase)',
           data: { taskId },
         });
       } else {
@@ -309,6 +310,7 @@ export class AgentService implements IAgentService {
       project,
       workdir: worktree.path,
       mode,
+      revisionReason,
       customPrompt,
     };
 
@@ -412,7 +414,7 @@ export class AgentService implements IAgentService {
     const activePhaseForSync = getActivePhase(task.phases);
     const activePhaseIdxForSync = getActivePhaseIndex(task.phases);
     const effectiveSubtasks = (isMultiPhase(task) && activePhaseForSync) ? activePhaseForSync.subtasks : task.subtasks;
-    const hasSubtaskTracking = (context.mode === 'implement' || context.mode === 'implement_resume' || context.mode === 'request_changes') && effectiveSubtasks && effectiveSubtasks.length > 0;
+    const hasSubtaskTracking = agentType === 'implementor' && effectiveSubtasks && effectiveSubtasks.length > 0;
 
     const subtaskInterceptor = hasSubtaskTracking
       ? new SubtaskSyncInterceptor(
@@ -491,7 +493,7 @@ export class AgentService implements IAgentService {
       }).catch(() => {});
 
       // Post-agent validation loop
-      const validationCommands = ValidationRunner.getValidationCommands(context.mode, context.project.config);
+      const validationCommands = ValidationRunner.getValidationCommands(agentType, context.project.config);
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
 
       if (validationCommands.length > 0) {
@@ -550,9 +552,9 @@ export class AgentService implements IAgentService {
       const postRunLog = (message: string) => {
         this.taskEventLog.log({ taskId, category: 'agent_debug', severity: 'debug', message }).catch(() => {});
       };
-      await this.postRunExtractor.extractPlan(taskId, result, context.mode, postRunLog);
-      await this.postRunExtractor.extractTechnicalDesign(taskId, result, context.mode, postRunLog);
-      await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.mode, result, postRunLog);
+      await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog);
+      await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog);
+      await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog);
 
       // Handle outcome — resolve outcome and execute transitions
@@ -609,7 +611,7 @@ export class AgentService implements IAgentService {
           // Release spawn lock before recursive execute() so the follow-up can re-acquire it
           this.spawningTasks.delete(taskId);
           const callbacks = this.activeCallbacks.get(taskId);
-          await this.execute(taskId, context.mode, agentType, callbacks?.onOutput, callbacks?.onMessage, callbacks?.onStatusChange);
+          await this.execute(taskId, context.mode, agentType, context.revisionReason, callbacks?.onOutput, callbacks?.onMessage, callbacks?.onStatusChange);
         } catch (queueErr) {
           const queueMsg = queueErr instanceof Error ? queueErr.message : String(queueErr);
           this.taskEventLog.log({

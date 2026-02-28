@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PrReviewerPromptBuilder } from '../../src/main/agents/pr-reviewer-prompt-builder';
+import { ReviewerPromptBuilder } from '../../src/main/agents/reviewer-prompt-builder';
 import { ClaudeCodeLib } from '../../src/main/libs/claude-code-lib';
 import { Agent } from '../../src/main/agents/agent';
 import { AgentLibRegistry } from '../../src/main/services/agent-lib-registry';
@@ -8,7 +8,7 @@ import type { AgentContext } from '../../src/shared/types';
 function createContext(taskId: string = 'test-task'): AgentContext {
   return {
     task: { id: taskId, title: 'Test task', projectId: 'proj-1', pipelineId: 'pipe-1', status: 'reviewing', priority: 0, tags: [], metadata: {}, createdAt: Date.now(), updatedAt: Date.now() },
-    mode: 'review',
+    mode: 'new',
     workdir: '/tmp/test',
     project: { id: 'proj-1', name: 'Test Project', path: '/tmp/test' },
   } as AgentContext;
@@ -22,11 +22,11 @@ async function* mockQueryGenerator(messages: SdkStreamMessage[]) {
   }
 }
 
-describe('PrReviewerPromptBuilder', () => {
-  let promptBuilder: PrReviewerPromptBuilder;
+describe('ReviewerPromptBuilder', () => {
+  let promptBuilder: ReviewerPromptBuilder;
 
   beforeEach(() => {
-    promptBuilder = new PrReviewerPromptBuilder();
+    promptBuilder = new ReviewerPromptBuilder();
   });
 
   describe('getOutputFormat', () => {
@@ -183,7 +183,7 @@ describe('PrReviewerPromptBuilder', () => {
       lib = new ClaudeCodeLib();
       const registry = new AgentLibRegistry();
       registry.register(lib);
-      composedAgent = new Agent('pr-reviewer', new PrReviewerPromptBuilder(), registry);
+      composedAgent = new Agent('reviewer', new ReviewerPromptBuilder(), registry);
       mockQuery = vi.fn();
 
       // Mock the private loadQuery method on the lib to return our mock

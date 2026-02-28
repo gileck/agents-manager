@@ -152,7 +152,12 @@ export function createTestContext(): TestContext {
   const agentFramework = new AgentFrameworkImpl();
   const scriptedAgent = new ScriptedAgent(happyPlan);
   agentFramework.registerAgent(scriptedAgent);
-  agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'claude-code'));
+  agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'planner'));
+  agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'designer'));
+  agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'implementor'));
+  agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'investigator'));
+  agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'reviewer'));
+  agentFramework.registerAgent(new ScriptedAgent(happyPlan, 'task-workflow-reviewer'));
 
   // Validation runner + outcome resolver for agent post-processing
   const validationRunner = new ValidationRunner(agentRunStore, taskEventLog);

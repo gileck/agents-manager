@@ -851,6 +851,14 @@ export function getMigrations(): Migration[] {
         ALTER TABLE chat_sessions ADD COLUMN source TEXT NOT NULL DEFAULT 'desktop'
       `,
     },
+    {
+      name: '077_rename_agent_type_implementor',
+      sql: getRenameAgentTypeImplementorSql(),
+    },
+    {
+      name: '078_role_based_agent_types',
+      sql: getRoleBasedAgentTypesSql(),
+    },
   ];
 }
 
@@ -1761,6 +1769,49 @@ function getUpdateAgentPromptTemplatesSql(): string {
   ].join(';\n');
 }
 
+function getRenameAgentTypeImplementorSql(): string {
+  // Rename agent type 'claude-code' → 'implementor' to disambiguate from the
+  // 'claude-code' execution engine name. The agent type identifies the prompt
+  // builder / role, not the engine.
+  const ts = Date.now();
+
+  // 1. Merge modes from agent-def-claude-code into agent-def-implementor
+  //    so the single 'implementor' agent definition covers all modes.
+  //    We read modes from agent-def-claude-code and concat them into agent-def-implementor.
+  const mergeModes = `
+    UPDATE agent_definitions
+    SET modes = (
+      SELECT json_group_array(json(je.value))
+      FROM (
+        SELECT value FROM json_each((SELECT modes FROM agent_definitions WHERE id = 'agent-def-implementor'))
+        UNION ALL
+        SELECT value FROM json_each((SELECT modes FROM agent_definitions WHERE id = 'agent-def-claude-code'))
+      ) je
+    ),
+    name = 'Implementor',
+    description = 'Plans, investigates, designs, implements, and fixes code changes',
+    updated_at = ${ts}
+    WHERE id = 'agent-def-implementor'
+  `;
+
+  // 2. Delete the old agent-def-claude-code row (no longer referenced)
+  const deleteOld = `DELETE FROM agent_definitions WHERE id = 'agent-def-claude-code'`;
+
+  // 3. Update existing agent_runs so old records reference the new type
+  //    (needed for WorkflowService.resumeAgent and AgentService.stop lookups)
+  const updateRuns = `UPDATE agent_runs SET agent_type = 'implementor' WHERE agent_type = 'claude-code'`;
+
+  // 4. Re-seed pipeline transitions with agentType: 'implementor'
+  const pipelineStatements: string[] = [];
+  for (const p of SEEDED_PIPELINES) {
+    const statuses = escSql(JSON.stringify(p.statuses));
+    const transitions = escSql(JSON.stringify(p.transitions));
+    pipelineStatements.push(`UPDATE pipelines SET statuses = '${statuses}', transitions = '${transitions}', updated_at = ${ts} WHERE id = '${escSql(p.id)}'`);
+  }
+
+  return [mergeModes, deleteOld, updateRuns, ...pipelineStatements].join(';\n');
+}
+
 function getSeedNewEngineAgentDefinitionsSql(): string {
   const ts = Date.now();
   const emptyModes = escSql(JSON.stringify([]));
@@ -1769,4 +1820,109 @@ function getSeedNewEngineAgentDefinitionsSql(): string {
     `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, model, system_prompt, modes, timeout, skills, created_at, updated_at) VALUES ('agent-def-cursor-agent', 'Cursor Agent', 'Agent powered by Cursor CLI', 'cursor-agent', NULL, NULL, '${emptyModes}', NULL, '${emptySkills}', ${ts}, ${ts})`,
     `INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, model, system_prompt, modes, timeout, skills, created_at, updated_at) VALUES ('agent-def-codex-cli', 'Codex CLI Agent', 'Agent powered by OpenAI Codex CLI', 'codex-cli', NULL, NULL, '${emptyModes}', NULL, '${emptySkills}', ${ts}, ${ts})`,
   ].join(';\n');
+}
+
+function getRoleBasedAgentTypesSql(): string {
+  const ts = Date.now();
+  const statements: string[] = [];
+
+  // --- 1. Create new agent definitions for planner, designer, investigator ---
+  const plannerModes = escSql(JSON.stringify([
+    { mode: 'new', promptTemplate: '' },
+    { mode: 'revision', promptTemplate: '' },
+  ]));
+  const designerModes = escSql(JSON.stringify([
+    { mode: 'new', promptTemplate: '' },
+    { mode: 'revision', promptTemplate: '' },
+  ]));
+  const investigatorModes = escSql(JSON.stringify([
+    { mode: 'new', promptTemplate: '' },
+    { mode: 'revision', promptTemplate: '' },
+  ]));
+  const emptySkills = escSql(JSON.stringify([]));
+
+  statements.push(`INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, skills, created_at, updated_at) VALUES ('agent-def-planner', 'Planner', 'Creates and revises implementation plans', 'claude-code', '${plannerModes}', 1, '${emptySkills}', ${ts}, ${ts})`);
+  statements.push(`INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, skills, created_at, updated_at) VALUES ('agent-def-designer', 'Designer', 'Creates and revises technical designs', 'claude-code', '${designerModes}', 1, '${emptySkills}', ${ts}, ${ts})`);
+  statements.push(`INSERT OR IGNORE INTO agent_definitions (id, name, description, engine, modes, is_built_in, skills, created_at, updated_at) VALUES ('agent-def-investigator', 'Investigator', 'Investigates bugs and issues', 'claude-code', '${investigatorModes}', 1, '${emptySkills}', ${ts}, ${ts})`);
+
+  // --- 2. Rename agent-def-pr-reviewer → agent-def-reviewer ---
+  // Insert new row with reviewer ID, then delete old pr-reviewer row
+  statements.push(`INSERT OR REPLACE INTO agent_definitions (id, name, description, engine, modes, is_built_in, skills, created_at, updated_at) SELECT 'agent-def-reviewer', 'Reviewer', description, engine, modes, is_built_in, skills, created_at, ${ts} FROM agent_definitions WHERE id = 'agent-def-pr-reviewer'`);
+  statements.push(`DELETE FROM agent_definitions WHERE id = 'agent-def-pr-reviewer'`);
+
+  // --- 3. Update implementor modes to new/revision ---
+  const implementorModes = escSql(JSON.stringify([
+    { mode: 'new', promptTemplate: '' },
+    { mode: 'revision', promptTemplate: '' },
+  ]));
+  statements.push(`UPDATE agent_definitions SET modes = '${implementorModes}', name = 'Implementor', description = 'Implements code changes and addresses review feedback', updated_at = ${ts} WHERE id = 'agent-def-implementor'`);
+
+  // --- 4. Update reviewer modes to new ---
+  const reviewerModes = escSql(JSON.stringify([
+    { mode: 'new', promptTemplate: '' },
+  ]));
+  statements.push(`UPDATE agent_definitions SET modes = '${reviewerModes}', updated_at = ${ts} WHERE id = 'agent-def-reviewer'`);
+
+  // --- 5. Update task-workflow-reviewer modes ---
+  const workflowReviewerModes = escSql(JSON.stringify([
+    { mode: 'new', promptTemplate: '' },
+  ]));
+  statements.push(`UPDATE agent_definitions SET modes = '${workflowReviewerModes}', updated_at = ${ts} WHERE id = 'agent-def-task-workflow-reviewer'`);
+
+  // --- 6. Widen agent_runs mode CHECK and update existing records ---
+  // Rebuild agent_runs without CHECK on mode (TypeScript enforces the constraint)
+  statements.push(`
+    CREATE TABLE task_phases_tmp (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, phase TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')), agent_run_id TEXT, started_at INTEGER, completed_at INTEGER, FOREIGN KEY(task_id) REFERENCES tasks(id));
+    INSERT INTO task_phases_tmp SELECT * FROM task_phases;
+    DROP TABLE task_phases;
+    CREATE TABLE pending_prompts_tmp (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, agent_run_id TEXT NOT NULL, prompt_type TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}', response TEXT, status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')), created_at INTEGER NOT NULL, answered_at INTEGER, resume_outcome TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id));
+    INSERT INTO pending_prompts_tmp SELECT * FROM pending_prompts;
+    DROP TABLE pending_prompts;
+    CREATE TABLE agent_runs_new (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, agent_type TEXT NOT NULL, mode TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')), output TEXT, outcome TEXT, payload TEXT, prompt TEXT, exit_code INTEGER, started_at INTEGER NOT NULL, completed_at INTEGER, cost_input_tokens INTEGER, cost_output_tokens INTEGER, error TEXT, timeout_ms INTEGER, max_turns INTEGER, message_count INTEGER, messages TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id));
+    INSERT INTO agent_runs_new SELECT id, task_id, agent_type, mode, status, output, outcome, payload, prompt, exit_code, started_at, completed_at, cost_input_tokens, cost_output_tokens, error, timeout_ms, max_turns, message_count, messages FROM agent_runs;
+    DROP TABLE agent_runs;
+    ALTER TABLE agent_runs_new RENAME TO agent_runs;
+    CREATE TABLE task_phases (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, phase TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')), agent_run_id TEXT, started_at INTEGER, completed_at INTEGER, FOREIGN KEY(task_id) REFERENCES tasks(id), FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id));
+    INSERT INTO task_phases SELECT * FROM task_phases_tmp;
+    DROP TABLE task_phases_tmp;
+    CREATE TABLE pending_prompts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, agent_run_id TEXT NOT NULL, prompt_type TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}', response TEXT, status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')), created_at INTEGER NOT NULL, answered_at INTEGER, resume_outcome TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id), FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id));
+    INSERT INTO pending_prompts SELECT * FROM pending_prompts_tmp;
+    DROP TABLE pending_prompts_tmp;
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_task_id ON agent_runs(task_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+    CREATE INDEX IF NOT EXISTS idx_task_phases_task_id ON task_phases(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
+  `);
+
+  // --- 7. Update existing agent_runs: map old modes to new modes and update agentType ---
+  // plan, plan_revision, plan_resume → planner
+  statements.push(`UPDATE agent_runs SET agent_type = 'planner', mode = 'new' WHERE agent_type = 'implementor' AND mode = 'plan'`);
+  statements.push(`UPDATE agent_runs SET agent_type = 'planner', mode = 'revision' WHERE agent_type = 'implementor' AND mode = 'plan_revision'`);
+  statements.push(`UPDATE agent_runs SET agent_type = 'planner', mode = 'revision' WHERE agent_type = 'implementor' AND mode = 'plan_resume'`);
+  // technical_design, technical_design_revision, technical_design_resume → designer
+  statements.push(`UPDATE agent_runs SET agent_type = 'designer', mode = 'new' WHERE agent_type = 'implementor' AND mode = 'technical_design'`);
+  statements.push(`UPDATE agent_runs SET agent_type = 'designer', mode = 'revision' WHERE agent_type = 'implementor' AND mode = 'technical_design_revision'`);
+  statements.push(`UPDATE agent_runs SET agent_type = 'designer', mode = 'revision' WHERE agent_type = 'implementor' AND mode = 'technical_design_resume'`);
+  // investigate, investigate_resume → investigator
+  statements.push(`UPDATE agent_runs SET agent_type = 'investigator', mode = 'new' WHERE agent_type = 'implementor' AND mode = 'investigate'`);
+  statements.push(`UPDATE agent_runs SET agent_type = 'investigator', mode = 'revision' WHERE agent_type = 'implementor' AND mode = 'investigate_resume'`);
+  // implement → implementor new
+  statements.push(`UPDATE agent_runs SET mode = 'new' WHERE agent_type = 'implementor' AND mode = 'implement'`);
+  statements.push(`UPDATE agent_runs SET mode = 'revision' WHERE agent_type = 'implementor' AND mode = 'request_changes'`);
+  statements.push(`UPDATE agent_runs SET mode = 'revision' WHERE agent_type = 'implementor' AND mode = 'resolve_conflicts'`);
+  statements.push(`UPDATE agent_runs SET mode = 'revision' WHERE agent_type = 'implementor' AND mode = 'implement_resume'`);
+  // review → reviewer new
+  statements.push(`UPDATE agent_runs SET agent_type = 'reviewer', mode = 'new' WHERE agent_type = 'pr-reviewer' AND mode = 'review'`);
+  // workflow review
+  statements.push(`UPDATE agent_runs SET mode = 'new' WHERE agent_type = 'task-workflow-reviewer' AND mode = 'review'`);
+
+  // --- 8. Re-seed pipelines with new hook params ---
+  for (const p of SEEDED_PIPELINES) {
+    const statuses = escSql(JSON.stringify(p.statuses));
+    const transitions = escSql(JSON.stringify(p.transitions));
+    statements.push(`UPDATE pipelines SET statuses = '${statuses}', transitions = '${transitions}', updated_at = ${ts} WHERE id = '${escSql(p.id)}'`);
+  }
+
+  return statements.join(';\n');
 }

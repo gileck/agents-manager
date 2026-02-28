@@ -27,7 +27,7 @@ function createContext(): AgentContext {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     },
-    mode: 'review',
+    mode: 'new',
     workdir: '/tmp/test',
     project: { id: 'proj-1', name: 'Test Project', path: '/tmp/test', description: null, config: {}, createdAt: Date.now(), updatedAt: Date.now() },
   };

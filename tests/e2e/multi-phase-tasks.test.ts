@@ -28,12 +28,12 @@ describe('Multi-Phase Tasks', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const phases = await ctx.taskPhaseStore.getPhasesForTask(taskId);
     expect(phases.length).toBe(1);
-    expect(phases[0].phase).toBe('plan');
+    expect(phases[0].phase).toBe('new');
     expect(phases[0].status).toBe('completed');
     expect(phases[0].completedAt).not.toBeNull();
   });
@@ -44,7 +44,7 @@ describe('Multi-Phase Tasks', () => {
     // Run plan phase
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
-    const planRun = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const planRun = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(planRun.id);
 
     // Manually approve plan → move to implementing
@@ -52,18 +52,17 @@ describe('Multi-Phase Tasks', () => {
 
     // Run implement phase
     ctx.scriptedAgent.setScript(happyImplement);
-    const implRun = await ctx.agentService.execute(taskId, 'implement', 'scripted');
+    const implRun = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(implRun.id);
 
     const phases = await ctx.taskPhaseStore.getPhasesForTask(taskId);
     expect(phases.length).toBe(2);
 
-    const planPhase = phases.find((p) => p.phase === 'plan');
-    const implPhase = phases.find((p) => p.phase === 'implement');
-    expect(planPhase).toBeTruthy();
-    expect(implPhase).toBeTruthy();
-    expect(planPhase!.status).toBe('completed');
-    expect(implPhase!.status).toBe('completed');
+    // Both phases use mode 'new'; verify by order (chronological)
+    expect(phases[0].phase).toBe('new');
+    expect(phases[1].phase).toBe('new');
+    expect(phases[0].status).toBe('completed');
+    expect(phases[1].status).toBe('completed');
   });
 
   it('should link agent run to phase via agentRunId', async () => {
@@ -72,7 +71,7 @@ describe('Multi-Phase Tasks', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const phases = await ctx.taskPhaseStore.getPhasesForTask(taskId);

@@ -27,7 +27,7 @@ describe('Prompt Response Flow', () => {
 
     await ctx.transitionTo(taskId, 'planning');
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const prompts = await ctx.pendingPromptStore.getPendingForTask(taskId);
@@ -42,7 +42,7 @@ describe('Prompt Response Flow', () => {
 
     await ctx.transitionTo(taskId, 'planning');
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const updatedTask = await ctx.taskStore.getTask(taskId);
@@ -53,7 +53,7 @@ describe('Prompt Response Flow', () => {
     ctx.scriptedAgent.setScript(humanInTheLoop);
 
     await ctx.transitionTo(taskId, 'planning');
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const prompts = await ctx.pendingPromptStore.getPendingForTask(taskId);
@@ -73,7 +73,7 @@ describe('Prompt Response Flow', () => {
     ctx.scriptedAgent.setScript(humanInTheLoop);
 
     await ctx.transitionTo(taskId, 'planning');
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const prompts = await ctx.pendingPromptStore.getPendingForTask(taskId);

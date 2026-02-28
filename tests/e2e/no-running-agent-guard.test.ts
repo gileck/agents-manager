@@ -32,8 +32,8 @@ describe('no_running_agent guard', () => {
     // Create a running agent run
     await ctx.agentRunStore.createRun({
       taskId,
-      agentType: 'claude-code',
-      mode: 'plan',
+      agentType: 'planner',
+      mode: 'new',
     });
 
     await expect(ctx.transitionTo(taskId, 'planning')).rejects.toThrow('no_running_agent');
@@ -42,8 +42,8 @@ describe('no_running_agent guard', () => {
   it('should allow transition after agent completes', async () => {
     const run = await ctx.agentRunStore.createRun({
       taskId,
-      agentType: 'claude-code',
-      mode: 'plan',
+      agentType: 'planner',
+      mode: 'new',
     });
 
     // Complete the run
@@ -61,8 +61,8 @@ describe('no_running_agent guard', () => {
   it('should allow transition after agent fails', async () => {
     const run = await ctx.agentRunStore.createRun({
       taskId,
-      agentType: 'claude-code',
-      mode: 'plan',
+      agentType: 'planner',
+      mode: 'new',
     });
 
     // Fail the run

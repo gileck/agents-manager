@@ -21,21 +21,20 @@ describe('Agent Definition CRUD', () => {
     const builtIn = defs.filter(d => d.isBuiltIn);
     expect(builtIn.length).toBeGreaterThanOrEqual(2);
 
-    const planAgent = builtIn.find(d => d.id === 'agent-def-claude-code');
-    expect(planAgent).toBeDefined();
-    // Production migrations rename this from 'Implementor' -> 'Claude Code Agent' -> 'Plan Agent'
-    expect(planAgent!.name).toBe('Plan Agent');
+    const implementor = builtIn.find(d => d.id === 'agent-def-implementor');
+    expect(implementor).toBeDefined();
+    expect(implementor!.name).toBe('Implementor');
 
-    const reviewer = builtIn.find(d => d.id === 'agent-def-pr-reviewer');
+    const reviewer = builtIn.find(d => d.id === 'agent-def-reviewer');
     expect(reviewer).toBeDefined();
-    expect(reviewer!.name).toBe('PR Reviewer');
+    expect(reviewer!.name).toBe('Reviewer');
   });
 
   it('should get a definition by ID', async () => {
-    const def = await ctx.agentDefinitionStore.getDefinition('agent-def-claude-code');
+    const def = await ctx.agentDefinitionStore.getDefinition('agent-def-implementor');
 
     expect(def).not.toBeNull();
-    expect(def!.id).toBe('agent-def-claude-code');
+    expect(def!.id).toBe('agent-def-implementor');
     expect(def!.engine).toBe('claude-code');
     expect(def!.isBuiltIn).toBe(true);
     expect(Array.isArray(def!.modes)).toBe(true);
@@ -45,10 +44,10 @@ describe('Agent Definition CRUD', () => {
   });
 
   it('should get a definition by agent type', async () => {
-    const def = await ctx.agentDefinitionStore.getDefinitionByAgentType('claude-code');
+    const def = await ctx.agentDefinitionStore.getDefinitionByAgentType('implementor');
 
     expect(def).not.toBeNull();
-    expect(def!.id).toBe('agent-def-claude-code');
+    expect(def!.id).toBe('agent-def-implementor');
   });
 
   it('should return null for non-existent agent type', async () => {
@@ -57,10 +56,11 @@ describe('Agent Definition CRUD', () => {
   });
 
   it('should get a definition by mode', async () => {
-    const def = await ctx.agentDefinitionStore.getDefinitionByMode('review');
+    const def = await ctx.agentDefinitionStore.getDefinitionByMode('new');
 
     expect(def).not.toBeNull();
-    expect(def!.id).toBe('agent-def-pr-reviewer');
+    // Multiple definitions have 'new' mode; just verify one was found
+    expect(def!.id).toBeDefined();
   });
 
   it('should create a custom definition', async () => {
@@ -83,7 +83,7 @@ describe('Agent Definition CRUD', () => {
 
   it('should update definition fields', async () => {
     const created = await ctx.agentDefinitionStore.createDefinition(createAgentDefinitionInput());
-    const newModes = [{ mode: 'implement', promptTemplate: 'Implement: {taskTitle}' }];
+    const newModes = [{ mode: 'new', promptTemplate: 'Implement: {taskTitle}' }];
 
     const updated = await ctx.agentDefinitionStore.updateDefinition(created.id, {
       name: 'Updated Agent',
@@ -121,7 +121,7 @@ describe('Agent Definition CRUD', () => {
 
   it('should throw when deleting a built-in definition', async () => {
     await expect(
-      ctx.agentDefinitionStore.deleteDefinition('agent-def-claude-code'),
+      ctx.agentDefinitionStore.deleteDefinition('agent-def-implementor'),
     ).rejects.toThrow('Cannot delete built-in');
   });
 });

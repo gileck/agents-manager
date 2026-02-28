@@ -49,7 +49,7 @@ describe('Agent Outcome Transitions', () => {
       const run = await ctx.agentRunStore.createRun({
         taskId: task.id,
         agentType: 'scripted',
-        mode: 'implement',
+        mode: 'new',
       });
 
       // Call OutcomeResolver directly
@@ -60,7 +60,7 @@ describe('Agent Outcome Transitions', () => {
         worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
         worktreeManager: ctx.worktreeManager,
         phase: { id: phase.id },
-        context: { workdir: '/tmp', mode: 'implement' } as never,
+        context: { workdir: '/tmp', mode: 'new' } as never,
       });
 
       const updatedTask = await ctx.taskStore.getTask(task.id);
@@ -84,7 +84,7 @@ describe('Agent Outcome Transitions', () => {
       const run = await ctx.agentRunStore.createRun({
         taskId: task.id,
         agentType: 'scripted',
-        mode: 'implement',
+        mode: 'new',
       });
 
       await ctx.outcomeResolver.resolveAndTransition({
@@ -94,7 +94,7 @@ describe('Agent Outcome Transitions', () => {
         worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
         worktreeManager: ctx.worktreeManager,
         phase: { id: phase.id },
-        context: { workdir: '/tmp', mode: 'implement' } as never,
+        context: { workdir: '/tmp', mode: 'new' } as never,
       });
 
       const updatedTask = await ctx.taskStore.getTask(task.id);
@@ -117,7 +117,7 @@ describe('Agent Outcome Transitions', () => {
       const run = await ctx.agentRunStore.createRun({
         taskId: task.id,
         agentType: 'scripted',
-        mode: 'implement',
+        mode: 'new',
       });
       // Mark the run as completed so no_running_agent guard passes for self-transition
       await ctx.agentRunStore.updateRun(run.id, { status: 'completed', completedAt: now() });
@@ -129,15 +129,15 @@ describe('Agent Outcome Transitions', () => {
         worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
         worktreeManager: ctx.worktreeManager,
         phase: { id: phase.id },
-        context: { workdir: '/tmp', mode: 'implement' } as never,
+        context: { workdir: '/tmp', mode: 'new' } as never,
       });
 
       // Task should still be implementing (self-transition with conflicts_detected)
       const updatedTask = await ctx.taskStore.getTask(task.id);
       expect(updatedTask!.status).toBe('implementing');
 
-      // Verify the start_agent hook was called with resolve_conflicts mode
-      expect(startAgentCalls.some((c) => c.mode === 'resolve_conflicts')).toBe(true);
+      // Verify the start_agent hook was called with revision mode (conflicts_detected)
+      expect(startAgentCalls.some((c) => c.mode === 'revision')).toBe(true);
 
       // Verify event log records the conflict detection
       const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'git' });
@@ -157,7 +157,7 @@ describe('Agent Outcome Transitions', () => {
       const run = await ctx.agentRunStore.createRun({
         taskId: task.id,
         agentType: 'scripted',
-        mode: 'implement',
+        mode: 'new',
       });
       // Mark the run as failed so no_running_agent guard passes for retry transition
       await ctx.agentRunStore.updateRun(run.id, { status: 'failed', completedAt: now() });
@@ -169,7 +169,7 @@ describe('Agent Outcome Transitions', () => {
         worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
         worktreeManager: ctx.worktreeManager,
         phase: { id: phase.id },
-        context: { workdir: '/tmp', mode: 'implement' } as never,
+        context: { workdir: '/tmp', mode: 'new' } as never,
       });
 
       // Phase should be marked failed
@@ -183,7 +183,7 @@ describe('Agent Outcome Transitions', () => {
       // Task should still be implementing (failed self-transition via max_retries guard)
       const updatedTask = await ctx.taskStore.getTask(task.id);
       expect(updatedTask!.status).toBe('implementing');
-      expect(startAgentCalls.some((c) => c.mode === 'implement')).toBe(true);
+      expect(startAgentCalls.some((c) => c.mode === 'new')).toBe(true);
     });
   });
 });

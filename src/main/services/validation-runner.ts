@@ -1,4 +1,4 @@
-import type { AgentMode, AgentRunResult, AgentConfig, AgentContext, AgentChatMessage } from '../../shared/types';
+import type { AgentRunResult, AgentConfig, AgentContext, AgentChatMessage } from '../../shared/types';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IAgent } from '../interfaces/agent';
@@ -8,11 +8,9 @@ import { getShellEnv } from './shell-env';
 
 const execAsync = promisify(exec);
 
-const NON_VALIDATABLE_MODES: readonly AgentMode[] = [
-  'plan', 'plan_revision', 'plan_resume',
-  'investigate', 'investigate_resume',
-  'technical_design', 'technical_design_revision', 'technical_design_resume',
-];
+const NON_VALIDATABLE_AGENT_TYPES = new Set([
+  'planner', 'designer', 'investigator', 'reviewer', 'task-workflow-reviewer',
+]);
 
 export class ValidationRunner {
   constructor(
@@ -20,8 +18,8 @@ export class ValidationRunner {
     private taskEventLog: ITaskEventLog,
   ) {}
 
-  static getValidationCommands(mode: AgentMode, projectConfig?: Record<string, unknown>): string[] {
-    if (NON_VALIDATABLE_MODES.includes(mode)) return [];
+  static getValidationCommands(agentType: string, projectConfig?: Record<string, unknown>): string[] {
+    if (NON_VALIDATABLE_AGENT_TYPES.has(agentType)) return [];
     return (projectConfig?.validationCommands as string[] | undefined) ?? [];
   }
 

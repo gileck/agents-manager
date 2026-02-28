@@ -33,7 +33,7 @@ describe('Error Scenarios', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
     const completedRun = await ctx.agentRunStore.getRun(run.id);
 
@@ -50,7 +50,7 @@ describe('Error Scenarios', () => {
       outcome: 'failed',
     }));
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const worktree = await ctx.worktreeManager.get(taskId);
@@ -80,7 +80,7 @@ describe('Error Scenarios', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
 
     const events = await ctx.taskEventLog.getEvents({ taskId, category: 'agent', severity: 'error' });
@@ -95,7 +95,7 @@ describe('Error Scenarios', () => {
     const task = await ctx.taskStore.getTask(taskId);
     await ctx.pipelineEngine.executeTransition(task!, 'planning', { trigger: 'agent' });
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
     const completedRun = await ctx.agentRunStore.getRun(run.id);
 

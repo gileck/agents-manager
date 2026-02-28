@@ -26,7 +26,7 @@ describe('Orphan Recovery (recoverOrphanedRuns)', () => {
     const run = await ctx.agentRunStore.createRun({
       taskId: task.id,
       agentType: 'scripted',
-      mode: 'implement',
+      mode: 'new',
     });
 
     const recovered = await ctx.agentService.recoverOrphanedRuns();
@@ -48,7 +48,7 @@ describe('Orphan Recovery (recoverOrphanedRuns)', () => {
     await ctx.agentRunStore.createRun({
       taskId: task.id,
       agentType: 'scripted',
-      mode: 'implement',
+      mode: 'new',
     });
 
     // Create an active phase
@@ -71,7 +71,7 @@ describe('Orphan Recovery (recoverOrphanedRuns)', () => {
     await ctx.agentRunStore.createRun({
       taskId: task.id,
       agentType: 'scripted',
-      mode: 'implement',
+      mode: 'new',
     });
 
     // Simulate a locked worktree
@@ -93,7 +93,7 @@ describe('Orphan Recovery (recoverOrphanedRuns)', () => {
     await ctx.agentRunStore.createRun({
       taskId: task.id,
       agentType: 'scripted',
-      mode: 'implement',
+      mode: 'new',
     });
 
     await ctx.agentService.recoverOrphanedRuns();

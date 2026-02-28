@@ -1,7 +1,7 @@
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
-import type { Task, Transition, TransitionContext, AgentMode, HookResult } from '../../shared/types';
+import type { Task, Transition, TransitionContext, AgentMode, RevisionReason, HookResult } from '../../shared/types';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 function trySendToRenderer(...args: unknown[]): void {
   try {
@@ -26,9 +26,11 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
     }
     const mode = params.mode as AgentMode;
     const agentType = params.agentType as string;
+    const revisionReason = params.revisionReason as RevisionReason | undefined;
     // Fire-and-forget: agent runs asynchronously via WorkflowService (logs activity)
     deps.workflowService.startAgent(
       task.id, mode, agentType,
+      revisionReason,
       (chunk) => { trySendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, task.id, chunk); },
       (msg) => { trySendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, task.id, msg); },
       (status) => { trySendToRenderer(IPC_CHANNELS.AGENT_STATUS, task.id, status); },

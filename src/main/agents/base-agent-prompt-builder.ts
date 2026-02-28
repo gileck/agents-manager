@@ -16,6 +16,10 @@ export abstract class BaseAgentPromptBuilder {
   abstract buildPrompt(context: AgentContext): string;
   abstract inferOutcome(mode: string, exitCode: number, output: string): string;
 
+  protected isReadOnly(_context: AgentContext): boolean {
+    return false;
+  }
+
   protected getMaxTurns(_context: AgentContext): number {
     return 100;
   }
@@ -52,26 +56,12 @@ export abstract class BaseAgentPromptBuilder {
       throw new Error(`AgentContext.workdir is required but was not set for task "${context.task.id}"`);
     }
 
-    /**
-     * Determines whether the agent should run in read-only mode (no file writes).
-     *
-     * Read-only modes are those that only analyze code without producing changes:
-     * plan, plan_revision, plan_resume, investigate, investigate_resume, and review.
-     *
-     * Note: technical_design* modes are intentionally excluded because the agent
-     * may need to inspect and create design artifacts or scaffolding files in the
-     * worktree, even though the primary output is a design document.
-     */
-    const isReadOnlyMode = context.mode === 'plan' || context.mode === 'plan_revision' || context.mode === 'plan_resume'
-      || context.mode === 'investigate' || context.mode === 'investigate_resume'
-      || context.mode === 'review';
-
     return {
       prompt,
       maxTurns: this.getMaxTurns(context),
       timeoutMs: this.getTimeout(context, config),
       outputFormat: this.getOutputFormat(context),
-      readOnly: isReadOnlyMode,
+      readOnly: this.isReadOnly(context),
     };
   }
 

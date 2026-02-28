@@ -9,7 +9,7 @@ export function registerAgentCommands(program: Command, getServices: () => AppSe
   agent
     .command('start <taskId>')
     .description('Start an agent on a task')
-    .option('--mode <mode>', 'Agent mode: plan, implement, review', 'plan')
+    .option('--mode <mode>', 'Agent mode: new, revision', 'new')
     .option('--type <agentType>', 'Agent type', 'scripted')
     .action(async (taskId: string, cmdOpts: { mode: string; type: string }) => {
       const opts = program.opts() as OutputOptions;

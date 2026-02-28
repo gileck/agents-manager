@@ -32,7 +32,7 @@ describe('Agent Output Streaming', () => {
     }));
 
     // No output chunks set, so onOutput should not receive anything
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted', onOutput);
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted', undefined, onOutput);
     await ctx.agentService.waitForCompletion(run.id);
 
     expect(chunks).toEqual([]);
@@ -49,7 +49,7 @@ describe('Agent Output Streaming', () => {
       outcome: 'plan_complete',
     }));
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted', onOutput);
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted', undefined, onOutput);
     await ctx.agentService.waitForCompletion(run.id);
 
     // Verify onOutput received the chunks from ScriptedAgent
@@ -69,7 +69,7 @@ describe('Agent Output Streaming', () => {
       outcome: 'plan_complete',
     }));
 
-    const run = await ctx.workflowService.startAgent(taskId, 'plan', 'scripted', onOutput);
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted', undefined, onOutput);
     await ctx.agentService.waitForCompletion(run.id);
     const completedRun = await ctx.agentRunStore.getRun(run.id);
 
@@ -88,7 +88,7 @@ describe('Agent Output Streaming', () => {
     }));
 
     // No onOutput callback provided
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted');
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted');
     await ctx.agentService.waitForCompletion(run.id);
     const completedRun = await ctx.agentRunStore.getRun(run.id);
 
@@ -108,7 +108,7 @@ describe('Agent Output Streaming', () => {
 
     const executeSpy = vi.spyOn(ctx.scriptedAgent, 'execute');
 
-    const run = await ctx.agentService.execute(taskId, 'plan', 'scripted', onOutput);
+    const run = await ctx.agentService.execute(taskId, 'new', 'scripted', undefined, onOutput);
     await ctx.agentService.waitForCompletion(run.id);
 
     // Verify an onOutput wrapper was passed through to agent.execute()

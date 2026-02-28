@@ -17,8 +17,8 @@ function makeRun(overrides: Partial<AgentRun> = {}): AgentRun {
   return {
     id: 'run-1',
     taskId: 'task-1',
-    agentType: 'claude',
-    mode: 'implement',
+    agentType: 'implementor',
+    mode: 'new',
     status: 'running',
     output: null,
     outcome: null,
@@ -127,7 +127,7 @@ describe('AgentSupervisor', () => {
     });
 
     it('includes elapsed time and memory diagnostics in ghost run log', async () => {
-      const ghostRun = makeRun({ id: 'ghost-diag', taskId: 'task-1', startedAt: 1000, agentType: 'claude-code' });
+      const ghostRun = makeRun({ id: 'ghost-diag', taskId: 'task-1', startedAt: 1000, agentType: 'implementor' });
       agentRunStore.getActiveRuns.mockResolvedValue([ghostRun]);
       agentService.getActiveRunIds.mockReturnValue(['other-run']); // one other run active in memory
       mockedNow.mockReturnValue(61000); // 60s elapsed
@@ -142,8 +142,8 @@ describe('AgentSupervisor', () => {
         message: expect.stringContaining('running for 60s'),
         data: expect.objectContaining({
           agentRunId: 'ghost-diag',
-          agentType: 'claude-code',
-          mode: 'implement',
+          agentType: 'implementor',
+          mode: 'new',
           elapsedMs: 60000,
           startedAt: 1000,
           activeInMemoryCount: 1,

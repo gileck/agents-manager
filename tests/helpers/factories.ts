@@ -51,7 +51,7 @@ export function createAgentRunInput(
   return {
     taskId,
     agentType: 'scripted',
-    mode: 'plan' as AgentMode,
+    mode: 'new' as AgentMode,
     ...overrides,
   };
 }
@@ -74,7 +74,7 @@ export function createAgentDefinitionInput(
   return {
     name: 'Custom Agent',
     engine: 'claude-code',
-    modes: [{ mode: 'plan', promptTemplate: 'Plan: {taskTitle}' }],
+    modes: [{ mode: 'new', promptTemplate: 'Plan: {taskTitle}' }],
     ...overrides,
   };
 }
