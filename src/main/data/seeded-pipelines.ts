@@ -129,9 +129,9 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'designer', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
     // Agent outcome auto-transitions
     { from: 'planning', to: 'plan_review', trigger: 'agent', agentOutcome: 'plan_complete',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Plan ready', bodyTemplate: 'Plan ready: {taskTitle}' }, policy: 'best_effort' }] },
+      hooks: [{ name: 'notify', params: { titleTemplate: 'Plan ready', bodyTemplate: 'Plan ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' }] },
     { from: 'designing', to: 'design_review', trigger: 'agent', agentOutcome: 'design_ready',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Design ready', bodyTemplate: 'Technical design ready: {taskTitle}' }, policy: 'best_effort' }] },
+      hooks: [{ name: 'notify', params: { titleTemplate: 'Design ready', bodyTemplate: 'Technical design ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' }] },
     { from: 'designing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
       hooks: [
         { name: 'create_prompt', params: { resumeOutcome: 'info_provided' }, policy: 'required' },
@@ -145,7 +145,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
       hooks: [
         { name: 'push_and_create_pr', policy: 'required' },
-        { name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}' }, policy: 'best_effort' },
+        { name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' },
         { name: 'start_agent', params: { mode: 'new', agentType: 'reviewer' }, policy: 'fire_and_forget' },
       ] },
     { from: 'implementing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
@@ -268,9 +268,9 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'reviewer' }, policy: 'fire_and_forget' }] },
     // Agent outcome auto-transitions
     { from: 'investigating', to: 'investigation_review', trigger: 'agent', agentOutcome: 'investigation_complete',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Investigation ready', bodyTemplate: 'Investigation ready: {taskTitle}' }, policy: 'best_effort' }] },
+      hooks: [{ name: 'notify', params: { titleTemplate: 'Investigation ready', bodyTemplate: 'Investigation ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' }] },
     { from: 'designing', to: 'design_review', trigger: 'agent', agentOutcome: 'design_ready',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Design ready', bodyTemplate: 'Technical design ready: {taskTitle}' }, policy: 'best_effort' }] },
+      hooks: [{ name: 'notify', params: { titleTemplate: 'Design ready', bodyTemplate: 'Technical design ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' }] },
     { from: 'designing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
       hooks: [
         { name: 'create_prompt', params: { resumeOutcome: 'info_provided' }, policy: 'required' },
@@ -284,7 +284,7 @@ export const BUG_AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
       hooks: [
         { name: 'push_and_create_pr', policy: 'required' },
-        { name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}' }, policy: 'best_effort' },
+        { name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' },
         { name: 'start_agent', params: { mode: 'new', agentType: 'reviewer' }, policy: 'fire_and_forget' },
       ] },
     { from: 'implementing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',

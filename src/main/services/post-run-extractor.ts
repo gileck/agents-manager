@@ -277,6 +277,55 @@ export class PostRunExtractor {
     onLog(`Marked ${unaddressed.length} ${field} as addressed`);
   }
 
+  /**
+   * Append the agent's summary as a comment on the appropriate artifact (planComments or technicalDesignComments).
+   * Returns the normalized summary string so the caller can forward it downstream.
+   */
+  async appendSummaryComment(
+    taskId: string,
+    agentType: string,
+    result: AgentRunResult,
+    onLog: OnLog,
+  ): Promise<string | undefined> {
+    if (result.exitCode !== 0) return undefined;
+
+    const so = result.structuredOutput as {
+      summary?: string;
+      planSummary?: string;
+      investigationSummary?: string;
+      designSummary?: string;
+    } | undefined;
+
+    const summary = so?.investigationSummary ?? so?.designSummary ?? so?.planSummary ?? so?.summary;
+    if (!summary || !summary.trim()) return undefined;
+
+    const comment = { author: 'agent', content: summary.trim(), createdAt: Date.now() };
+
+    try {
+      if (agentType === 'planner' || agentType === 'investigator') {
+        const task = await this.taskStore.getTask(taskId);
+        const existing = task?.planComments ?? [];
+        await this.taskStore.updateTask(taskId, { planComments: [...existing, comment] });
+        onLog(`Appended agent summary comment to planComments (length=${summary.length})`);
+      } else if (agentType === 'designer') {
+        const task = await this.taskStore.getTask(taskId);
+        const existing = task?.technicalDesignComments ?? [];
+        await this.taskStore.updateTask(taskId, { technicalDesignComments: [...existing, comment] });
+        onLog(`Appended agent summary comment to technicalDesignComments (length=${summary.length})`);
+      }
+    } catch (err) {
+      // Non-fatal — don't block pipeline on comment append failure
+      await this.taskEventLog.log({
+        taskId,
+        category: 'agent',
+        severity: 'warning',
+        message: `Failed to append summary comment: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+
+    return summary.trim();
+  }
+
   // ------- Raw output parsing helpers -------
 
   private parseRawPlan(output: string): string {

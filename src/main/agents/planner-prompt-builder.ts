@@ -76,6 +76,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         '- Address every piece of feedback — do not skip or partially address any comment.',
         '- If feedback is ambiguous, interpret it in the most reasonable way and note your interpretation.',
         '- Keep parts of the plan that were not criticized — only revise what the feedback targets.',
+        '- In the `planSummary` field, describe what you changed and how you addressed the admin\'s feedback.',
       );
       prompt = prLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
