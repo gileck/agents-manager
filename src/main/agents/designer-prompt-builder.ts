@@ -59,6 +59,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
         '- If feedback conflicts with a technical constraint, explain the constraint and propose an alternative that satisfies the intent.',
         '- Keep parts of the design that were not criticized — only revise what the feedback targets.',
         '- Produce an updated design document.',
+        '- In the `designSummary` field, describe what you changed and how you addressed the admin\'s feedback.',
       );
       prompt = tdrLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {

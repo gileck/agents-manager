@@ -94,9 +94,10 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         `1. Read the reviewer's feedback in the Task Context above carefully.`,
         `2. Fix every issue mentioned — do not skip or ignore any feedback.`,
         `3. Do not make unrelated changes — only fix what the reviewer asked for.`,
-        `4. Run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass.`,
-        `5. Stage and commit with a descriptive message that references which reviewer feedback was addressed.`,
-        `6. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\` to make sure nothing broke.`,
+        `4. In the \`summary\` field, describe what you changed and how you addressed the reviewer's feedback.`,
+        `5. Run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass.`,
+        `6. Stage and commit with a descriptive message that references which reviewer feedback was addressed.`,
+        `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\` to make sure nothing broke.`,
       );
       prompt = rcLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'conflicts_detected') {
