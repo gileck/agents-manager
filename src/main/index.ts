@@ -1,4 +1,4 @@
-import { app, Tray } from 'electron';
+import { app, dialog, Tray } from 'electron';
 import { initializeApp } from '@template/main/core/app';
 import { createTray, buildStandardMenu } from '@template/main/core/tray';
 import { sendToRenderer } from '@template/main/core/window';
@@ -63,6 +63,11 @@ initializeApp({
       });
     } catch (err) {
       console.error('Fatal: onReady failed:', err);
+      dialog.showErrorBox(
+        'Agents Manager — Startup Failed',
+        `Initialization failed:\n${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw err; // Re-throw to prevent creating a broken window
     }
   },
   onBeforeQuit: () => {
