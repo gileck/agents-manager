@@ -12,6 +12,7 @@ import { registerPromptsCommands } from './commands/prompts';
 import { registerPipelinesCommands } from './commands/pipelines';
 import { registerStatusCommand } from './commands/status';
 import { registerTelegramCommands } from './commands/telegram';
+import { registerDaemonCommands } from './commands/daemon';
 import { initShellEnv } from '../core/services/shell-env';
 
 const program = new Command();
@@ -50,6 +51,7 @@ registerPromptsCommands(program, getServices);
 registerPipelinesCommands(program, getServices);
 registerStatusCommand(program, getServices);
 registerTelegramCommands(program, getServices);
+registerDaemonCommands(program);
 
 // Eagerly warm the shell PATH cache so git/gh commands find the right binaries.
 // Fire-and-forget: the synchronous fallback in getUserShellPath() handles cold cache.
