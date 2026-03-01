@@ -129,6 +129,8 @@ const IPC_CHANNELS = {
   CHAT_SUMMARIZE: 'chat:summarize',
   CHAT_OUTPUT: 'chat:output',
   CHAT_MESSAGE: 'chat:message',
+  TASK_CHAT_OUTPUT: 'task-chat:output',
+  TASK_CHAT_MESSAGE: 'task-chat:message',
   CHAT_COSTS: 'chat:costs',
   CHAT_SESSION_CREATE: 'chat:session:create',
   CHAT_SESSION_LIST: 'chat:session:list',
@@ -471,6 +473,16 @@ const api = {
       const listener = (_: IpcRendererEvent, sessionId: string, msg: AgentChatMessage) => callback(sessionId, msg);
       ipcRenderer.on(IPC_CHANNELS.CHAT_MESSAGE, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_MESSAGE, listener);
+    },
+    taskChatOutput: (callback: (sessionId: string, chunk: string) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, chunk: string) => callback(sessionId, chunk);
+      ipcRenderer.on(IPC_CHANNELS.TASK_CHAT_OUTPUT, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_CHAT_OUTPUT, listener);
+    },
+    taskChatMessage: (callback: (sessionId: string, msg: AgentChatMessage) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, msg: AgentChatMessage) => callback(sessionId, msg);
+      ipcRenderer.on(IPC_CHANNELS.TASK_CHAT_MESSAGE, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_CHAT_MESSAGE, listener);
     },
     telegramBotLog: (callback: (projectId: string, entry: TelegramBotLogEntry) => void) => {
       const listener = (_: IpcRendererEvent, projectId: string, entry: TelegramBotLogEntry) => callback(projectId, entry);

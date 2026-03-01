@@ -46,6 +46,10 @@ initializeApp({
         sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, data));
       wsClient.subscribeGlobal('chat:message', (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, data));
+      wsClient.subscribeGlobal('task-chat:output', (sessionId, data) =>
+        sendToRenderer(IPC_CHANNELS.TASK_CHAT_OUTPUT, sessionId, data));
+      wsClient.subscribeGlobal('task-chat:message', (sessionId, data) =>
+        sendToRenderer(IPC_CHANNELS.TASK_CHAT_MESSAGE, sessionId, data));
       wsClient.subscribeGlobal('telegram:bot-log', (projectId, data) =>
         sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_LOG, projectId, data));
       wsClient.subscribeGlobal('telegram:bot-status-changed', (projectId, data) =>

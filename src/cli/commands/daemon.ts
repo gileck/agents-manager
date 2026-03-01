@@ -54,6 +54,14 @@ function removePidFile(): void {
   }
 }
 
+function removeTokenFile(): void {
+  try {
+    fs.unlinkSync(TOKEN_FILE);
+  } catch {
+    // ignore if already removed
+  }
+}
+
 function writeTokenFile(): string {
   ensureDaemonDir();
   const token = crypto.randomBytes(32).toString('hex');
@@ -190,6 +198,7 @@ export function registerDaemonCommands(program: Command): void {
         await httpRequest('POST', '/api/shutdown', port);
         console.log('Daemon stopped.');
         removePidFile();
+        removeTokenFile();
         return;
       } catch {
         // HTTP shutdown failed — try SIGTERM
@@ -215,11 +224,13 @@ export function registerDaemonCommands(program: Command): void {
           process.exitCode = 1;
         }
         removePidFile();
+        removeTokenFile();
         return;
       }
 
       console.error('Daemon is not running (no PID file or process not found).');
       removePidFile();
+      removeTokenFile();
       process.exitCode = 1;
     });
 

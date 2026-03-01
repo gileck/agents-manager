@@ -1,15 +1,15 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
 import type { ApiClient } from '../../client';
-import type { AgentMode } from '../../shared/types';
+import type { AgentMode, RevisionReason } from '../../shared/types';
 
 export function registerAgentHandlers(api: ApiClient): void {
   // Streaming callbacks are no longer set up here — the daemon broadcasts
   // agent output/message/status via WebSocket, and the Electron main process
   // forwards those WS events to the renderer separately.
 
-  registerIpcHandler(IPC_CHANNELS.AGENT_START, async (_, taskId: string, mode: AgentMode, agentType?: string) => {
-    return api.agents.start(taskId, mode, agentType);
+  registerIpcHandler(IPC_CHANNELS.AGENT_START, async (_, taskId: string, mode: AgentMode, agentType?: string, revisionReason?: RevisionReason) => {
+    return api.agents.start(taskId, mode, agentType, revisionReason);
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_STOP, async (_, runId: string) => {
