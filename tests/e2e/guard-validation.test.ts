@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { FEATURE_PIPELINE, SIMPLE_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 import type { GuardResult } from '../../src/shared/types';
 
 describe('Guard Validation', () => {
@@ -21,8 +21,23 @@ describe('Guard Validation', () => {
 
   describe('has_pr guard', () => {
     it('should pass when task has a PR link', async () => {
+      // Create a custom pipeline with has_pr guard to test the guard in isolation
+      const prPipeline = await ctx.pipelineStore.createPipeline({
+        name: 'PR Guard Test',
+        taskType: 'pr-guard-test',
+        statuses: [
+          { name: 'open', label: 'Open' },
+          { name: 'in_progress', label: 'In Progress' },
+          { name: 'in_review', label: 'In Review' },
+        ],
+        transitions: [
+          { from: 'open', to: 'in_progress', trigger: 'manual', label: 'Start' },
+          { from: 'in_progress', to: 'in_review', trigger: 'manual', label: 'Submit for Review', guards: [{ name: 'has_pr' }] },
+        ],
+      });
+
       const task = await ctx.taskStore.createTask(
-        createTaskInput(projectId, FEATURE_PIPELINE.id, { prLink: 'https://github.com/org/repo/pull/1' }),
+        createTaskInput(projectId, prPipeline.id, { prLink: 'https://github.com/org/repo/pull/1' }),
       );
 
       // Move to in_progress first
@@ -36,7 +51,21 @@ describe('Guard Validation', () => {
     });
 
     it('should fail when task has no PR link', async () => {
-      const task = await ctx.taskStore.createTask(createTaskInput(projectId, FEATURE_PIPELINE.id));
+      const prPipeline = await ctx.pipelineStore.createPipeline({
+        name: 'PR Guard Test 2',
+        taskType: 'pr-guard-test-2',
+        statuses: [
+          { name: 'open', label: 'Open' },
+          { name: 'in_progress', label: 'In Progress' },
+          { name: 'in_review', label: 'In Review' },
+        ],
+        transitions: [
+          { from: 'open', to: 'in_progress', trigger: 'manual', label: 'Start' },
+          { from: 'in_progress', to: 'in_review', trigger: 'manual', label: 'Submit for Review', guards: [{ name: 'has_pr' }] },
+        ],
+      });
+
+      const task = await ctx.taskStore.createTask(createTaskInput(projectId, prPipeline.id));
 
       // Move to in_progress first
       const result1 = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
@@ -69,7 +98,22 @@ describe('Guard Validation', () => {
         ],
       });
 
-      const dep = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+      // Use a simple custom pipeline for the dependency task too
+      const depPipeline = await ctx.pipelineStore.createPipeline({
+        name: 'Dep Pipeline',
+        taskType: 'dep-test',
+        statuses: [
+          { name: 'open', label: 'Open' },
+          { name: 'in_progress', label: 'In Progress' },
+          { name: 'done', label: 'Done', isFinal: true },
+        ],
+        transitions: [
+          { from: 'open', to: 'in_progress', trigger: 'manual' },
+          { from: 'in_progress', to: 'done', trigger: 'manual' },
+        ],
+      });
+
+      const dep = await ctx.taskStore.createTask(createTaskInput(projectId, depPipeline.id));
       const task = await ctx.taskStore.createTask(createTaskInput(projectId, customPipeline.id));
       await ctx.taskStore.addDependency(task.id, dep.id);
 
@@ -97,7 +141,7 @@ describe('Guard Validation', () => {
         ],
       });
 
-      const dep = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+      const dep = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
       const task = await ctx.taskStore.createTask(createTaskInput(projectId, customPipeline.id));
       await ctx.taskStore.addDependency(task.id, dep.id);
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, createFeatureInput, resetCounters } from '../helpers/factories';
-import { SIMPLE_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 
 describe('Project CRUD', () => {
   let ctx: TestContext;
@@ -101,9 +101,9 @@ describe('Project CRUD', () => {
 
   it('should throw when deleting a project that has tasks (foreign key constraint)', async () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
-    await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
-    await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
-    await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
+    await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
+    await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
 
     // Foreign key constraint prevents deleting a project with tasks
     await expect(ctx.projectStore.deleteProject(project.id)).rejects.toThrow();
@@ -111,7 +111,7 @@ describe('Project CRUD', () => {
 
   it('should throw when deleting a project that has tasks with artifacts (foreign key constraint)', async () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
-    const task = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    const task = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
     await ctx.taskArtifactStore.createArtifact({
       taskId: task.id,
       type: 'branch',
@@ -132,8 +132,8 @@ describe('Project CRUD', () => {
 
   it('should allow deleting a project after its tasks are deleted first', async () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
-    const task1 = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
-    const task2 = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    const task1 = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
 
     // Delete tasks first, then project
     await ctx.taskStore.deleteTask(task1.id);

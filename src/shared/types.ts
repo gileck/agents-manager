@@ -54,7 +54,6 @@ export interface AppSettings {
   notificationsEnabled: boolean;
   currentProjectId: string | null;
   defaultPipelineId: string | null;
-  bugPipelineId: string | null;
   themeConfig: string | null;
   chatDefaultAgentLib: string | null;
 }

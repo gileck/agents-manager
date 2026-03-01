@@ -7,7 +7,7 @@ guidelines:
   - "Always call ctx.cleanup() in afterEach to close the in-memory DB"
   - "Use SEEDED_PIPELINES.length instead of hardcoded counts"
   - "Call resetCounters() in beforeEach when using factories"
-  - "Use AGENT_PIPELINE.id for agent tests, SIMPLE_PIPELINE.id for basic flows"
+  - "Use AGENT_PIPELINE.id for all tests (the only seeded pipeline)"
 key_points:
   - "npx vitest run — run all tests; npx vitest run <file> — run single file"
   - "ctx.transitionTo(taskId, status) — throws with guard details on failure"
@@ -91,7 +91,7 @@ TestContext registers the same guards and hooks as production:
 
 - **Guards:** `registerCoreGuards()` — `has_pr`, `dependencies_resolved`, `no_running_agent`, `max_retries`
 - **Hooks:** `registerScmHandler()`, `registerPromptHandler()`, `registerNotificationHandler()`
-- **Pipelines:** All `SEEDED_PIPELINES` are inserted (Simple, Feature, Bug, Agent, Investigation)
+- **Pipelines:** All `SEEDED_PIPELINES` are inserted (Agent pipeline only)
 
 The in-memory DB has the full schema including all tables, indexes, and seed data.
 
@@ -206,22 +206,32 @@ describe('Feature Name', () => {
 
 ### Use the right pipeline
 
-Different pipelines have different statuses, transitions, and guards:
+There is one seeded pipeline: AGENT_PIPELINE (agent-driven workflow with investigation, design, plan, implement, and review phases).
 
-| Pipeline | ID | Use for |
-|----------|----|---------|
-| Simple | `pipeline-simple` | Basic open/in_progress/done flows |
-| Feature | `pipeline-feature` | PR review flows, `has_pr` guard |
-| Agent | `pipeline-agent` | Agent workflows: planning, implementing, `no_running_agent` and `max_retries` guards |
-| Bug | `pipeline-bug` | Bug investigation flows |
-| Investigation | `pipeline-investigation` | Investigation workflows |
-
-Import pipeline constants from `src/core/data/seeded-pipelines`:
+Import the pipeline constant from `src/core/data/seeded-pipelines`:
 
 ```ts
-import { SIMPLE_PIPELINE, AGENT_PIPELINE, FEATURE_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 
 const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+```
+
+For tests that need a simpler pipeline (e.g., `open → in_progress → done`), create a custom inline pipeline:
+
+```ts
+const simplePipeline = await ctx.pipelineStore.createPipeline({
+  name: 'Simple Test',
+  taskType: 'test',
+  statuses: [
+    { name: 'open', label: 'Open' },
+    { name: 'in_progress', label: 'In Progress' },
+    { name: 'done', label: 'Done', isFinal: true },
+  ],
+  transitions: [
+    { from: 'open', to: 'in_progress', trigger: 'manual' },
+    { from: 'in_progress', to: 'done', trigger: 'manual' },
+  ],
+});
 ```
 
 ### Avoid hardcoded counts

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { SIMPLE_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 
 describe('Task Dependencies', () => {
   let ctx: TestContext;
@@ -19,8 +19,8 @@ describe('Task Dependencies', () => {
   });
 
   it('should add a dependency between tasks', async () => {
-    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskStore.addDependency(task2.id, task1.id);
 
@@ -30,8 +30,8 @@ describe('Task Dependencies', () => {
   });
 
   it('should remove a dependency between tasks', async () => {
-    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskStore.addDependency(task2.id, task1.id);
     await ctx.taskStore.removeDependency(task2.id, task1.id);
@@ -41,9 +41,9 @@ describe('Task Dependencies', () => {
   });
 
   it('should get dependents of a task', async () => {
-    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const task3 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const task3 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskStore.addDependency(task2.id, task1.id);
     await ctx.taskStore.addDependency(task3.id, task1.id);
@@ -56,9 +56,9 @@ describe('Task Dependencies', () => {
   });
 
   it('should handle multiple dependencies for a task', async () => {
-    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const task3 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const task3 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskStore.addDependency(task3.id, task1.id);
     await ctx.taskStore.addDependency(task3.id, task2.id);
@@ -71,8 +71,8 @@ describe('Task Dependencies', () => {
   });
 
   it('should not duplicate dependencies', async () => {
-    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskStore.addDependency(task2.id, task1.id);
     await ctx.taskStore.addDependency(task2.id, task1.id); // duplicate
@@ -82,8 +82,8 @@ describe('Task Dependencies', () => {
   });
 
   it('should clean up dependencies when task is deleted', async () => {
-    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task1 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskStore.addDependency(task2.id, task1.id);
     await ctx.taskStore.deleteTask(task1.id);
@@ -96,7 +96,7 @@ describe('Task Dependencies', () => {
   // addDependency uses INSERT OR IGNORE so circular deps are silently accepted.
 
   it('should allow self-dependency (documents current behavior)', async () => {
-    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     // Self-dependency is not prevented by the system
     await ctx.taskStore.addDependency(task.id, task.id);
@@ -107,8 +107,8 @@ describe('Task Dependencies', () => {
   });
 
   it('should allow direct circular dependency A→B→A (documents current behavior)', async () => {
-    const taskA = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const taskB = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const taskA = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const taskB = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskStore.addDependency(taskA.id, taskB.id); // A depends on B
     // Adding reverse dependency is not prevented
@@ -124,9 +124,9 @@ describe('Task Dependencies', () => {
   });
 
   it('should allow transitive circular dependency A→B→C→A (documents current behavior)', async () => {
-    const taskA = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const taskB = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const taskC = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const taskA = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const taskB = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const taskC = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskStore.addDependency(taskA.id, taskB.id); // A depends on B
     await ctx.taskStore.addDependency(taskB.id, taskC.id); // B depends on C
@@ -143,9 +143,9 @@ describe('Task Dependencies', () => {
   });
 
   it('should still accept valid dependencies after a circular dependency', async () => {
-    const taskA = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const taskB = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    const taskC = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const taskA = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const taskB = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const taskC = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     // Create circular dependency A→B→A
     await ctx.taskStore.addDependency(taskA.id, taskB.id);

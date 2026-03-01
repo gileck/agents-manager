@@ -107,10 +107,10 @@ describe('Ready to Merge Flow', () => {
     });
   });
 
-  describe('pipeline-bug-agent workflow', () => {
-    it('should transition from pr_review to ready_to_merge on approval', async () => {
+  describe('investigation pipeline workflow', () => {
+    it('should transition from pr_review to ready_to_merge on approval (investigation path)', async () => {
       const task = await ctx.taskStore.createTask(
-        createTaskInput(projectId, 'pipeline-bug-agent', { status: 'pr_review' })
+        createTaskInput(projectId, 'pipeline-agent', { status: 'pr_review' })
       );
 
       // Manually approve the PR (without merge)
@@ -119,9 +119,9 @@ describe('Ready to Merge Flow', () => {
       expect(result.task?.status).toBe('ready_to_merge');
     });
 
-    it('should allow admin to merge from ready_to_merge to done', async () => {
+    it('should allow admin to merge from ready_to_merge to done (investigation path)', async () => {
       const task = await ctx.taskStore.createTask(
-        createTaskInput(projectId, 'pipeline-bug-agent', {
+        createTaskInput(projectId, 'pipeline-agent', {
           status: 'ready_to_merge',
           prLink: 'https://github.com/org/repo/pull/2'
         })
@@ -143,9 +143,9 @@ describe('Ready to Merge Flow', () => {
       expect(result.task?.status).toBe('done');
     });
 
-    it('should block non-admin user from merging in bug pipeline', async () => {
+    it('should block non-admin user from merging', async () => {
       const task = await ctx.taskStore.createTask(
-        createTaskInput(projectId, 'pipeline-bug-agent', { status: 'ready_to_merge' })
+        createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
       );
 
       // Create a non-admin user in the database

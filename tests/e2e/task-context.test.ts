@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, createTaskContextInput, resetCounters } from '../helpers/factories';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 
 describe('Task Context', () => {
   let ctx: TestContext;
@@ -11,7 +12,7 @@ describe('Task Context', () => {
     ctx = createTestContext();
 
     const project = await ctx.projectStore.createProject(createProjectInput());
-    const task = await ctx.taskStore.createTask(createTaskInput(project.id, 'pipeline-simple'));
+    const task = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
     taskId = task.id;
   });
 

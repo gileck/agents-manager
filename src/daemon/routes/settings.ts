@@ -10,7 +10,6 @@ function readCurrentSettings(services: AppServices): AppSettings {
     notificationsEnabled: settingsStore.get('notifications_enabled', 'true') === 'true',
     currentProjectId: settingsStore.get('current_project_id', '') || null,
     defaultPipelineId: settingsStore.get('default_pipeline_id', '') || null,
-    bugPipelineId: settingsStore.get('bug_pipeline_id', '') || null,
     themeConfig: settingsStore.get('theme_config', '') || null,
     chatDefaultAgentLib: settingsStore.get('chat_default_agent_lib', '') || null,
   };
@@ -42,9 +41,6 @@ export function settingsRoutes(services: AppServices): Router {
       }
       if (updates.defaultPipelineId !== undefined) {
         settingsStore.set('default_pipeline_id', updates.defaultPipelineId ?? '');
-      }
-      if (updates.bugPipelineId !== undefined) {
-        settingsStore.set('bug_pipeline_id', updates.bugPipelineId ?? '');
       }
       if (updates.themeConfig !== undefined) {
         settingsStore.set('theme_config', updates.themeConfig ?? '');

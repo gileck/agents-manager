@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
-import { createProjectInput, resetCounters } from '../helpers/factories';
-import { BUG_AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 import type { HookResult } from '../../src/shared/types';
 
-describe('BUG_AGENT_PIPELINE E2E', () => {
+describe('Investigation Flow (AGENT_PIPELINE)', () => {
   let ctx: TestContext;
   let projectId: string;
   let startAgentCalls: Array<{ taskId: string; mode: string; agentType: string }>;
@@ -32,11 +32,11 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     ctx.cleanup();
   });
 
-  it('should transition through full investigation → design → implement → merge path', async () => {
-    // Start at reported
-    const task = await ctx.createTaskAtStatus(projectId, BUG_AGENT_PIPELINE.id, 'reported');
+  it('should transition through full investigation → design → implement path', async () => {
+    // Start at open
+    const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'open');
 
-    // reported → investigating (manual, starts investigate agent)
+    // open → investigating (manual, starts investigator agent)
     let current = await ctx.transitionTo(task.id, 'investigating');
     expect(current.status).toBe('investigating');
     expect(startAgentCalls.some((c) => c.mode === 'new' && c.agentType === 'investigator')).toBe(true);
@@ -78,7 +78,9 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
   });
 
   it('should support investigation_review → request changes → re-investigate', async () => {
-    const task = await ctx.createTaskAtStatus(projectId, BUG_AGENT_PIPELINE.id, 'investigation_review');
+    const task = await ctx.taskStore.createTask(
+      createTaskInput(projectId, AGENT_PIPELINE.id, { status: 'investigation_review' }),
+    );
 
     // investigation_review → investigating (request changes)
     const current = await ctx.transitionTo(task.id, 'investigating');
@@ -87,7 +89,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
   });
 
   it('should support needs_info from investigating', async () => {
-    const task = await ctx.createTaskAtStatus(projectId, BUG_AGENT_PIPELINE.id, 'investigating');
+    const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'investigating');
 
     // Create an agent run (create_prompt hook requires agentRunId in context)
     const run = await ctx.agentRunStore.createRun({
@@ -112,7 +114,7 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
   });
 
   it('should resume from needs_info back to investigating', async () => {
-    const task = await ctx.createTaskAtStatus(projectId, BUG_AGENT_PIPELINE.id, 'investigating');
+    const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'investigating');
 
     // Create an agent run for the needs_info transition
     const run = await ctx.agentRunStore.createRun({
@@ -139,18 +141,18 @@ describe('BUG_AGENT_PIPELINE E2E', () => {
     expect(startAgentCalls.some((c) => c.mode === 'revision' && c.agentType === 'investigator')).toBe(true);
   });
 
-  it('should support direct reported → implementing skip path', async () => {
-    const task = await ctx.createTaskAtStatus(projectId, BUG_AGENT_PIPELINE.id, 'reported');
+  it('should support direct open → implementing skip path', async () => {
+    const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'open');
 
     const current = await ctx.transitionTo(task.id, 'implementing');
     expect(current.status).toBe('implementing');
     expect(startAgentCalls.some((c) => c.mode === 'new' && c.agentType === 'implementor')).toBe(true);
   });
 
-  it('should support cancel investigation back to reported', async () => {
-    const task = await ctx.createTaskAtStatus(projectId, BUG_AGENT_PIPELINE.id, 'investigating');
+  it('should support cancel investigation back to open', async () => {
+    const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'investigating');
 
-    const current = await ctx.transitionTo(task.id, 'reported');
-    expect(current.status).toBe('reported');
+    const current = await ctx.transitionTo(task.id, 'open');
+    expect(current.status).toBe('open');
   });
 });

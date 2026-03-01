@@ -1,12 +1,12 @@
 ---
 title: Pipeline Engine
 description: State machine, transitions, guards, hooks, and seeded pipelines
-summary: "PipelineEngine drives task state transitions. Transitions have triggers (manual/agent/system), guards (blocking checks), and hooks (async side-effects with three execution policies). Five seeded pipelines: AGENT_PIPELINE, BUG_AGENT_PIPELINE, SIMPLE_PIPELINE, FEATURE_PIPELINE, and BUG_PIPELINE."
+summary: "PipelineEngine drives task state transitions. Transitions have triggers (manual/agent/system), guards (blocking checks), and hooks (async side-effects with three execution policies). One seeded pipeline: AGENT_PIPELINE (agent-driven workflow with investigation, design, plan, implement, and review phases)."
 priority: 2
 key_points:
   - "Guards are synchronous and block transitions; hooks are async side-effects after success"
   - "Hook execution policies: required (rollback on failure), best_effort (log only), fire_and_forget (not awaited)"
-  - "Use AGENT_PIPELINE.id for agent workflow tests, SIMPLE_PIPELINE.id for basic flows"
+  - "Use AGENT_PIPELINE.id for all tests (the only seeded pipeline)"
   - "File: src/core/services/pipeline-engine.ts"
 ---
 # Pipeline Engine
@@ -218,67 +218,25 @@ type HookFn = (
 
 **File:** `src/core/data/seeded-pipelines.ts`
 
-Five pipelines are seeded via migration 011.
+One pipeline is seeded: AGENT_PIPELINE.
 
-### 1. Simple Pipeline (`pipeline-simple`, task type: `simple`)
+### Agent Pipeline (`pipeline-agent`, task type: `agent`)
 
-```
-open → in_progress → done
-         ↓
-       open (reopen)
-```
+The unified agent-driven workflow with investigation, technical design, plan, implement, and review phases.
 
-Three statuses, three manual transitions. No guards or hooks.
-
-### 2. Feature Pipeline (`pipeline-feature`, task type: `feature`)
-
-```
-backlog → in_progress → in_review → done
-                ↓            ↓
-             backlog    in_progress (request changes)
-```
-
-| From | To | Guards | Hooks |
-|------|----|--------|-------|
-| `backlog` | `in_progress` | — | — |
-| `in_progress` | `in_review` | `has_pr` | — |
-| `in_review` | `done` | — | — |
-| `in_review` | `in_progress` | — | — |
-| `in_progress` | `backlog` | — | — |
-
-All manual triggers.
-
-### 3. Bug Pipeline (`pipeline-bug`, task type: `bug`)
-
-```
-reported → investigating → fixing → resolved
-                ↓              ↓
-             reported    investigating (reopen)
-```
-
-| From | To | Guards | Hooks |
-|------|----|--------|-------|
-| `reported` | `investigating` | — | — |
-| `investigating` | `fixing` | — | — |
-| `fixing` | `resolved` | — | — |
-| `fixing` | `investigating` | — | — |
-| `investigating` | `reported` | — | — |
-
-Five statuses (including `resolved`), five manual transitions. No guards or hooks.
-
-### 4. Agent Pipeline (`pipeline-agent`, task type: `agent`)
-
-The main agent-driven workflow with technical design, plan, implement, and review phases.
-
-**Statuses (10):** `open`, `designing`, `design_review`, `planning`, `plan_review`, `implementing`, `pr_review`, `ready_to_merge`, `needs_info`, `done`
+**Statuses (12):** `open`, `investigating`, `investigation_review`, `designing`, `design_review`, `planning`, `plan_review`, `implementing`, `pr_review`, `ready_to_merge`, `needs_info`, `done`
 
 **Manual transitions (user-triggered):**
 
 | From | To | Guards | Hooks |
 |------|----|--------|-------|
+| `open` | `investigating` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'investigator')` |
 | `open` | `designing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'designer')` |
 | `open` | `planning` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'planner')` |
 | `open` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `investigation_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `investigation_review` | `designing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'designer')` |
+| `investigation_review` | `investigating` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'investigator')` |
 | `design_review` | `planning` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'planner')` |
 | `design_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
 | `design_review` | `designing` | `no_running_agent` | `start_agent(mode: 'revision', agentType: 'designer', revisionReason: 'changes_requested')` |
@@ -295,17 +253,22 @@ The main agent-driven workflow with technical design, plan, implement, and revie
 
 | From | To | Label |
 |------|----|-------|
+| `investigating` | `open` | Cancel Investigation |
 | `planning` | `open` | Cancel Planning |
 | `designing` | `open` | Cancel Design |
 | `implementing` | `open` | Cancel Implementation |
 | `implementing` | `plan_review` | Back to Plan Review |
 | `implementing` | `design_review` | Back to Design Review |
+| `implementing` | `investigation_review` | Back to Investigation Review |
 | `design_review` | `open` | Cancel Design Review |
 
 **Agent outcome transitions (auto-triggered):**
 
 | From | Outcome | To | Hooks |
 |------|---------|----|-------|
+| `investigating` | `investigation_complete` | `investigation_review` | `notify` |
+| `investigating` | `needs_info` | `needs_info` | `create_prompt(resumeOutcome: 'info_provided')` (required), `notify` |
+| `investigating` | `failed` | `investigating` | `start_agent` (retry, guarded by `max_retries(3)` + `no_running_agent`) |
 | `designing` | `design_ready` | `design_review` | `notify` |
 | `designing` | `needs_info` | `needs_info` | `create_prompt(resumeOutcome: 'info_provided')` (required), `notify` |
 | `designing` | `failed` | `designing` | `start_agent` (retry, guarded by `max_retries(3)` + `no_running_agent`) |
@@ -326,11 +289,12 @@ The main agent-driven workflow with technical design, plan, implement, and revie
 
 | From | To | Hooks |
 |------|----|-------|
+| `needs_info` | `investigating` | `start_agent(mode: 'revision', agentType: 'investigator', revisionReason: 'info_provided')` |
+| `needs_info` | `designing` | `start_agent(mode: 'revision', agentType: 'designer', revisionReason: 'info_provided')` |
 | `needs_info` | `planning` | `start_agent(mode: 'revision', agentType: 'planner', revisionReason: 'info_provided')` |
 | `needs_info` | `implementing` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'info_provided')` |
-| `needs_info` | `designing` | `start_agent(mode: 'revision', agentType: 'designer', revisionReason: 'info_provided')` |
 
-Note: All three `info_provided` transitions share the same outcome. Disambiguation uses `resumeToStatus` in `context.data` (set by `respondToPrompt`). If no `resumeToStatus` is provided, the first match is used (defaults to `planning`).
+Note: All four `info_provided` transitions share the same outcome. Disambiguation uses `resumeToStatus` in `context.data` (set by `respondToPrompt`). If no `resumeToStatus` is provided, the first match is used.
 
 **System transitions:**
 
@@ -339,51 +303,6 @@ Note: All three `info_provided` transitions share the same outcome. Disambiguati
 | `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
 
 Phase cycling: when `advance_phase` detects remaining pending phases after merge, it fires this system transition to continue implementing the next phase.
-
-### 5. Bug Agent Pipeline (`pipeline-bug-agent`, task type: `bug-agent`)
-
-Agent-driven bug investigation and fix workflow.
-
-**Statuses (10):** `reported`, `investigating`, `investigation_review`, `designing`, `design_review`, `implementing`, `pr_review`, `ready_to_merge`, `needs_info`, `done`
-
-The flow adds an investigation phase before design/implementation:
-`reported → investigating → investigation_review → [designing → design_review →] implementing → pr_review → ready_to_merge → done`
-
-**Manual transitions:**
-
-| From | To | Guards | Hooks |
-|------|----|--------|-------|
-| `reported` | `investigating` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'investigator')` |
-| `reported` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
-| `investigation_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
-| `investigation_review` | `designing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'designer')` |
-| `investigation_review` | `investigating` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'investigator')` |
-| `design_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
-| `design_review` | `designing` | `no_running_agent` | `start_agent(mode: 'revision', agentType: 'designer', revisionReason: 'changes_requested')` |
-| `pr_review` | `implementing` | `no_running_agent` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested')` |
-| `pr_review` | `ready_to_merge` | — | — |
-| `pr_review` | `pr_review` | `no_running_agent` | `start_agent(mode: 'new', agentType: 'reviewer')` |
-| `ready_to_merge` | `done` | `is_admin` | `merge_pr` (required), `advance_phase` (best_effort) |
-| `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
-| `done` | `ready_to_merge` | — | — (merge retry) |
-
-**Recovery transitions (manual):**
-
-| From | To | Label |
-|------|----|-------|
-| `investigating` | `reported` | Cancel Investigation |
-| `designing` | `reported` | Cancel Design |
-| `implementing` | `reported` | Cancel Implementation |
-| `implementing` | `investigation_review` | Back to Investigation Review |
-| `implementing` | `design_review` | Back to Design Review |
-| `design_review` | `reported` | Cancel Design Review |
-
-**Agent outcome transitions** mirror the Agent Pipeline with the following additions:
-- `investigating → investigation_review` on `investigation_complete`
-- `investigating → investigating` on `failed` (retry, guarded)
-- `investigating → needs_info` on `needs_info`
-- `needs_info → investigating` on `info_provided` (with `start_agent(mode: 'revision', agentType: 'investigator', revisionReason: 'info_provided')`)
-- `implementing → reported` on `no_changes` (instead of `open`)
 
 ## Outcome-Driven Transitions
 
@@ -465,4 +384,4 @@ type HookExecutionPolicy = 'required' | 'best_effort' | 'fire_and_forget';
 - **TOCTOU protection** — both `executeTransition` and `executeForceTransition` re-fetch the task inside a synchronous transaction and verify the status has not changed since the caller read it.
 - The `pr_ready` outcome is verified by `AgentService` — it checks the branch actually has changes via `git diff`. If no changes exist, the outcome is overridden to `no_changes`.
 - **Phase cycling** — after merge, `advance_phase` marks the current phase done and triggers `done → implementing` if more phases remain. This loop continues until all phases are complete.
-- **`info_provided` multi-target routing** — three `info_provided` transitions exist (to `planning`, `implementing`, `designing`). `tryOutcomeTransition` uses `resumeToStatus` from `context.data` to select the correct target. A warning is logged if multiple candidates exist without a `resumeToStatus`.
+- **`info_provided` multi-target routing** — four `info_provided` transitions exist (to `investigating`, `designing`, `planning`, `implementing`). `tryOutcomeTransition` uses `resumeToStatus` from `context.data` to select the correct target. A warning is logged if multiple candidates exist without a `resumeToStatus`.

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import type { HookResult } from '../../src/shared/types';
 
 describe('Workflow Service Lifecycle', () => {
   let ctx: TestContext;
@@ -9,6 +11,11 @@ describe('Workflow Service Lifecycle', () => {
   beforeEach(async () => {
     resetCounters();
     ctx = createTestContext();
+
+    // Register stub start_agent hook so fire_and_forget hooks don't log warnings
+    ctx.pipelineEngine.registerHook('start_agent', async (): Promise<HookResult> => {
+      return { success: true };
+    });
 
     const project = await ctx.projectStore.createProject(createProjectInput());
     projectId = project.id;
@@ -20,7 +27,7 @@ describe('Workflow Service Lifecycle', () => {
 
   it('should log activity on createTask', async () => {
     const task = await ctx.workflowService.createTask(
-      createTaskInput(projectId, 'pipeline-simple'),
+      createTaskInput(projectId, AGENT_PIPELINE.id),
     );
 
     const entries = await ctx.activityLog.getEntries({
@@ -36,7 +43,7 @@ describe('Workflow Service Lifecycle', () => {
 
   it('should log activity on updateTask', async () => {
     const task = await ctx.workflowService.createTask(
-      createTaskInput(projectId, 'pipeline-simple'),
+      createTaskInput(projectId, AGENT_PIPELINE.id),
     );
 
     await ctx.workflowService.updateTask(task.id, { title: 'Updated Title' });
@@ -53,7 +60,7 @@ describe('Workflow Service Lifecycle', () => {
 
   it('should log activity on deleteTask', async () => {
     const task = await ctx.workflowService.createTask(
-      createTaskInput(projectId, 'pipeline-simple'),
+      createTaskInput(projectId, AGENT_PIPELINE.id),
     );
     const id = task.id;
 
@@ -71,7 +78,7 @@ describe('Workflow Service Lifecycle', () => {
 
   it('should clean up worktree on deleteTask', async () => {
     const task = await ctx.workflowService.createTask(
-      createTaskInput(projectId, 'pipeline-simple'),
+      createTaskInput(projectId, AGENT_PIPELINE.id),
     );
 
     // Simulate a worktree existing for this task
@@ -88,13 +95,13 @@ describe('Workflow Service Lifecycle', () => {
 
   it('should reset task to initial status', async () => {
     const task = await ctx.workflowService.createTask(
-      createTaskInput(projectId, 'pipeline-simple'),
+      createTaskInput(projectId, AGENT_PIPELINE.id),
     );
 
-    // Transition to in_progress
-    await ctx.transitionTo(task.id, 'in_progress');
-    const inProgress = await ctx.taskStore.getTask(task.id);
-    expect(inProgress!.status).toBe('in_progress');
+    // Transition to designing
+    await ctx.transitionTo(task.id, 'designing');
+    const designing = await ctx.taskStore.getTask(task.id);
+    expect(designing!.status).toBe('designing');
 
     // Reset
     const reset = await ctx.workflowService.resetTask(task.id);
@@ -104,7 +111,7 @@ describe('Workflow Service Lifecycle', () => {
 
   it('should clean worktree on resetTask', async () => {
     const task = await ctx.workflowService.createTask(
-      createTaskInput(projectId, 'pipeline-simple'),
+      createTaskInput(projectId, AGENT_PIPELINE.id),
     );
 
     const wm = ctx.worktreeManager;
@@ -118,10 +125,10 @@ describe('Workflow Service Lifecycle', () => {
 
   it('should log transition with actor', async () => {
     const task = await ctx.workflowService.createTask(
-      createTaskInput(projectId, 'pipeline-simple'),
+      createTaskInput(projectId, AGENT_PIPELINE.id),
     );
 
-    await ctx.workflowService.transitionTask(task.id, 'in_progress', 'alice');
+    await ctx.workflowService.transitionTask(task.id, 'designing', 'alice');
 
     const entries = await ctx.activityLog.getEntries({
       entityType: 'task',
@@ -132,12 +139,27 @@ describe('Workflow Service Lifecycle', () => {
     expect(transitionEntry).toBeDefined();
     expect(transitionEntry!.data).toHaveProperty('actor', 'alice');
     expect(transitionEntry!.data).toHaveProperty('fromStatus', 'open');
-    expect(transitionEntry!.data).toHaveProperty('toStatus', 'in_progress');
+    expect(transitionEntry!.data).toHaveProperty('toStatus', 'designing');
   });
 
   it('should clean worktree on transition to final status', async () => {
+    // Use a custom simple pipeline to easily reach a final status
+    const simplePipeline = await ctx.pipelineStore.createPipeline({
+      name: 'Simple Lifecycle Test',
+      taskType: 'lifecycle-test',
+      statuses: [
+        { name: 'open', label: 'Open' },
+        { name: 'in_progress', label: 'In Progress' },
+        { name: 'done', label: 'Done', isFinal: true },
+      ],
+      transitions: [
+        { from: 'open', to: 'in_progress', trigger: 'manual' },
+        { from: 'in_progress', to: 'done', trigger: 'manual' },
+      ],
+    });
+
     const task = await ctx.workflowService.createTask(
-      createTaskInput(projectId, 'pipeline-simple'),
+      createTaskInput(projectId, simplePipeline.id),
     );
 
     const wm = ctx.worktreeManager;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { SIMPLE_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 
 describe('Data Integrity', () => {
   let ctx: TestContext;
@@ -20,7 +20,7 @@ describe('Data Integrity', () => {
 
   it('should throw when creating a task with non-existent projectId', async () => {
     await expect(
-      ctx.taskStore.createTask(createTaskInput('non-existent-project', SIMPLE_PIPELINE.id)),
+      ctx.taskStore.createTask(createTaskInput('non-existent-project', AGENT_PIPELINE.id)),
     ).rejects.toThrow();
   });
 
@@ -60,7 +60,7 @@ describe('Data Integrity', () => {
 
   it('should throw when creating a dependency where only the source task exists', async () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
-    const task = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    const task = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
 
     await expect(
       ctx.taskStore.addDependency(task.id, 'non-existent-task'),
@@ -69,7 +69,7 @@ describe('Data Integrity', () => {
 
   it('should throw when creating a dependency where only the target task exists', async () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
-    const task = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    const task = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
 
     await expect(
       ctx.taskStore.addDependency('non-existent-task', task.id),
@@ -87,7 +87,7 @@ describe('Data Integrity', () => {
 
   it('should allow creating valid records when all foreign keys exist', async () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
-    const task = await ctx.taskStore.createTask(createTaskInput(project.id, SIMPLE_PIPELINE.id));
+    const task = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
 
     // All of these should succeed with valid foreign keys
     const run = await ctx.agentRunStore.createRun({

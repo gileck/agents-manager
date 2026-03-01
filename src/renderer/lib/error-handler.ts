@@ -27,7 +27,7 @@ export async function createBugReport(title: string, message: string, fullDetail
       return;
     }
 
-    let pipelineId = settings.bugPipelineId ?? settings.defaultPipelineId;
+    let pipelineId = settings.defaultPipelineId;
     if (!pipelineId) {
       const pipelines = await window.api.pipelines.list();
       if (pipelines.length === 0) {

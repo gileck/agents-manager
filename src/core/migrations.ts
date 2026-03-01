@@ -867,6 +867,10 @@ export function getMigrations(): Migration[] {
       name: '079_force_default_pipeline_agent',
       sql: `INSERT OR REPLACE INTO settings (key, value) VALUES ('default_pipeline_id', 'pipeline-agent')`,
     },
+    {
+      name: '080_consolidate_to_single_pipeline',
+      sql: getConsolidateToSinglePipelineSql(),
+    },
   ];
 }
 
@@ -1937,6 +1941,55 @@ function getRoleBasedAgentTypesSql(): string {
   const seededIds = SEEDED_PIPELINES.map(p => `'${escSql(p.id)}'`).join(',');
   statements.push(`UPDATE pipelines SET transitions = REPLACE(transitions, '"claude-code"', '"implementor"'), updated_at = ${ts} WHERE id NOT IN (${seededIds}) AND transitions LIKE '%"claude-code"%'`);
   statements.push(`UPDATE pipelines SET transitions = REPLACE(transitions, '"pr-reviewer"', '"reviewer"'), updated_at = ${ts} WHERE id NOT IN (${seededIds}) AND transitions LIKE '%"pr-reviewer"%'`);
+
+  return statements.join(';\n');
+}
+
+function getConsolidateToSinglePipelineSql(): string {
+  const ts = Date.now();
+  const agentPipeline = SEEDED_PIPELINES.find((p) => p.id === 'pipeline-agent');
+  if (!agentPipeline) {
+    throw new Error('Migration 080: AGENT_PIPELINE (pipeline-agent) not found in SEEDED_PIPELINES');
+  }
+
+  const statuses = escSql(JSON.stringify(agentPipeline.statuses));
+  const transitions = escSql(JSON.stringify(agentPipeline.transitions));
+  const statements: string[] = [];
+
+  // 1. Map tasks from old pipelines to pipeline-agent with status mapping
+  const statusMappings: Record<string, string> = {
+    reported: 'open',
+    backlog: 'open',
+    in_progress: 'implementing',
+    fixing: 'implementing',
+    in_review: 'pr_review',
+    resolved: 'done',
+  };
+  for (const [oldStatus, newStatus] of Object.entries(statusMappings)) {
+    statements.push(
+      `UPDATE tasks SET status = '${newStatus}', updated_at = ${ts} WHERE pipeline_id IN ('pipeline-simple','pipeline-feature','pipeline-bug','pipeline-bug-agent') AND status = '${oldStatus}'`
+    );
+  }
+  // Reassign all tasks from old pipelines to pipeline-agent
+  statements.push(
+    `UPDATE tasks SET pipeline_id = 'pipeline-agent', updated_at = ${ts} WHERE pipeline_id IN ('pipeline-simple','pipeline-feature','pipeline-bug','pipeline-bug-agent')`
+  );
+
+  // 2. Update AGENT_PIPELINE row with new statuses/transitions
+  statements.push(
+    `UPDATE pipelines SET statuses = '${statuses}', transitions = '${transitions}', updated_at = ${ts} WHERE id = 'pipeline-agent'`
+  );
+
+  // 3. Delete old pipeline rows
+  statements.push(
+    `DELETE FROM pipelines WHERE id IN ('pipeline-simple','pipeline-feature','pipeline-bug','pipeline-bug-agent')`
+  );
+
+  // 4. Remove bug_pipeline_id setting
+  statements.push(`DELETE FROM settings WHERE key = 'bug_pipeline_id'`);
+
+  // 5. Ensure default_pipeline_id is pipeline-agent
+  statements.push(`INSERT OR REPLACE INTO settings (key, value) VALUES ('default_pipeline_id', 'pipeline-agent')`);
 
   return statements.join(';\n');
 }

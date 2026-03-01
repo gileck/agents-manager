@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import type { HookResult } from '../../src/shared/types';
 
 describe('Dashboard Stats', () => {
   let ctx: TestContext;
@@ -8,6 +10,11 @@ describe('Dashboard Stats', () => {
   beforeEach(() => {
     resetCounters();
     ctx = createTestContext();
+
+    // Register stub start_agent hook so fire_and_forget hooks don't interfere
+    ctx.pipelineEngine.registerHook('start_agent', async (): Promise<HookResult> => {
+      return { success: true };
+    });
   });
 
   afterEach(() => {
@@ -37,21 +44,21 @@ describe('Dashboard Stats', () => {
   it('should aggregate tasks by status', async () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
 
-    // Create tasks in 'open' status (simple pipeline default)
-    await ctx.taskStore.createTask(createTaskInput(project.id, 'pipeline-simple'));
-    await ctx.taskStore.createTask(createTaskInput(project.id, 'pipeline-simple'));
+    // Create tasks in 'open' status (agent pipeline default)
+    await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
+    await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
 
-    // Transition one to in_progress
+    // Transition one to designing
     const taskToTransition = await ctx.taskStore.createTask(
-      createTaskInput(project.id, 'pipeline-simple'),
+      createTaskInput(project.id, AGENT_PIPELINE.id),
     );
-    await ctx.transitionTo(taskToTransition.id, 'in_progress');
+    await ctx.transitionTo(taskToTransition.id, 'designing');
 
     const stats = await ctx.workflowService.getDashboardStats();
 
     expect(stats.totalTasks).toBe(3);
     expect(stats.tasksByStatus['open']).toBe(2);
-    expect(stats.tasksByStatus['in_progress']).toBe(1);
+    expect(stats.tasksByStatus['designing']).toBe(1);
 
     // Verify status counts sum to total
     const totalByStatus = Object.values(stats.tasksByStatus as Record<string, number>).reduce((a: number, b: number) => a + b, 0);
@@ -60,8 +67,8 @@ describe('Dashboard Stats', () => {
 
   it('should count active agent runs', async () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
-    const task1 = await ctx.taskStore.createTask(createTaskInput(project.id, 'pipeline-simple'));
-    const task2 = await ctx.taskStore.createTask(createTaskInput(project.id, 'pipeline-simple'));
+    const task1 = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
+    const task2 = await ctx.taskStore.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
 
     // Create two running agents
     await ctx.agentRunStore.createRun({
@@ -84,8 +91,8 @@ describe('Dashboard Stats', () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
 
     // Use workflowService.createTask which logs activity (one entry per task creation)
-    await ctx.workflowService.createTask(createTaskInput(project.id, 'pipeline-simple'));
-    await ctx.workflowService.createTask(createTaskInput(project.id, 'pipeline-simple'));
+    await ctx.workflowService.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
+    await ctx.workflowService.createTask(createTaskInput(project.id, AGENT_PIPELINE.id));
 
     const stats = await ctx.workflowService.getDashboardStats();
 

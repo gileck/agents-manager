@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createFeatureInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { SIMPLE_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import type { HookResult } from '../../src/shared/types';
 
 describe('Feature CRUD', () => {
   let ctx: TestContext;
@@ -9,6 +10,11 @@ describe('Feature CRUD', () => {
   beforeEach(() => {
     resetCounters();
     ctx = createTestContext();
+
+    // Register stub start_agent hook so fire_and_forget hooks don't log warnings
+    ctx.pipelineEngine.registerHook('start_agent', async (): Promise<HookResult> => {
+      return { success: true };
+    });
   });
 
   afterEach(() => {
@@ -114,7 +120,7 @@ describe('Feature CRUD', () => {
     const project = await ctx.projectStore.createProject(createProjectInput());
     const feature = await ctx.featureStore.createFeature(createFeatureInput(project.id));
     const task = await ctx.taskStore.createTask(
-      createTaskInput(project.id, 'pipeline-simple', { featureId: feature.id }),
+      createTaskInput(project.id, AGENT_PIPELINE.id, { featureId: feature.id }),
     );
 
     expect(task.featureId).toBe(feature.id);
@@ -135,13 +141,13 @@ describe('Feature CRUD', () => {
     const feature = await ctx.featureStore.createFeature(createFeatureInput(project.id));
 
     const task1 = await ctx.taskStore.createTask(
-      createTaskInput(project.id, SIMPLE_PIPELINE.id, { featureId: feature.id }),
+      createTaskInput(project.id, AGENT_PIPELINE.id, { featureId: feature.id }),
     );
     const task2 = await ctx.taskStore.createTask(
-      createTaskInput(project.id, SIMPLE_PIPELINE.id, { featureId: feature.id }),
+      createTaskInput(project.id, AGENT_PIPELINE.id, { featureId: feature.id }),
     );
     const task3 = await ctx.taskStore.createTask(
-      createTaskInput(project.id, SIMPLE_PIPELINE.id, { featureId: feature.id }),
+      createTaskInput(project.id, AGENT_PIPELINE.id, { featureId: feature.id }),
     );
 
     // Verify all tasks are linked to the feature
@@ -171,20 +177,20 @@ describe('Feature CRUD', () => {
     const feature = await ctx.featureStore.createFeature(createFeatureInput(project.id));
 
     const task = await ctx.taskStore.createTask(
-      createTaskInput(project.id, SIMPLE_PIPELINE.id, { featureId: feature.id }),
+      createTaskInput(project.id, AGENT_PIPELINE.id, { featureId: feature.id }),
     );
 
-    // Transition the task to in_progress so it's not in the default status
-    await ctx.transitionTo(task.id, 'in_progress');
-    const inProgressTask = await ctx.taskStore.getTask(task.id);
-    expect(inProgressTask!.status).toBe('in_progress');
+    // Transition the task to designing so it's not in the default status
+    await ctx.transitionTo(task.id, 'designing');
+    const designingTask = await ctx.taskStore.getTask(task.id);
+    expect(designingTask!.status).toBe('designing');
 
     // Delete the feature
     await ctx.featureStore.deleteFeature(feature.id);
 
-    // Task status should remain unchanged (still in_progress)
+    // Task status should remain unchanged (still designing)
     const updatedTask = await ctx.taskStore.getTask(task.id);
     expect(updatedTask!.featureId).toBeNull();
-    expect(updatedTask!.status).toBe('in_progress');
+    expect(updatedTask!.status).toBe('designing');
   });
 });

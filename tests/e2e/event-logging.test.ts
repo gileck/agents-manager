@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { SIMPLE_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import type { HookResult } from '../../src/shared/types';
 
 describe('Event Logging', () => {
   let ctx: TestContext;
@@ -10,6 +11,12 @@ describe('Event Logging', () => {
   beforeEach(async () => {
     resetCounters();
     ctx = createTestContext();
+
+    // Register stub start_agent hook so fire_and_forget hooks don't log extra system events
+    ctx.pipelineEngine.registerHook('start_agent', async (): Promise<HookResult> => {
+      return { success: true };
+    });
+
     const project = await ctx.projectStore.createProject(createProjectInput());
     projectId = project.id;
   });
@@ -19,22 +26,22 @@ describe('Event Logging', () => {
   });
 
   it('should log status_change event on transition', async () => {
-    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    await ctx.transitionTo(task.id, 'in_progress');
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    await ctx.transitionTo(task.id, 'designing');
 
     const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'status_change' });
     expect(events).toHaveLength(1);
     expect(events[0].message).toContain('open');
-    expect(events[0].message).toContain('in_progress');
+    expect(events[0].message).toContain('designing');
     expect(events[0].data).toEqual(expect.objectContaining({
       fromStatus: 'open',
-      toStatus: 'in_progress',
+      toStatus: 'designing',
     }));
   });
 
   it('should filter events by category', async () => {
-    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
-    await ctx.transitionTo(task.id, 'in_progress');
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    await ctx.transitionTo(task.id, 'designing');
 
     // Add a system event manually
     await ctx.taskEventLog.log({
@@ -52,7 +59,7 @@ describe('Event Logging', () => {
   });
 
   it('should filter events by severity', async () => {
-    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskEventLog.log({
       taskId: task.id,
@@ -83,7 +90,7 @@ describe('Event Logging', () => {
   });
 
   it('should filter events by time range', async () => {
-    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     const before = Date.now();
     await ctx.taskEventLog.log({
@@ -104,7 +111,7 @@ describe('Event Logging', () => {
   });
 
   it('should return events in chronological order', async () => {
-    const task = await ctx.taskStore.createTask(createTaskInput(projectId, SIMPLE_PIPELINE.id));
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     await ctx.taskEventLog.log({ taskId: task.id, category: 'system', message: 'First' });
     await ctx.taskEventLog.log({ taskId: task.id, category: 'system', message: 'Second' });

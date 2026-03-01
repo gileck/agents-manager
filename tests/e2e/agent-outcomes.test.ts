@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, resetCounters } from '../helpers/factories';
-import { AGENT_PIPELINE, BUG_AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 import { StubGitOps } from '../../src/core/services/stub-git-ops';
 import type { HookResult } from '../../src/shared/types';
 import { now } from '../../src/core/stores/utils';
@@ -33,7 +33,7 @@ describe('Agent Outcome Transitions', () => {
   });
 
   describe('no_changes outcome', () => {
-    it('should transition implementing → open when no diff detected (AGENT_PIPELINE)', async () => {
+    it('should transition implementing → open when no diff detected', async () => {
       const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
 
       // Configure empty diff to trigger no_changes
@@ -69,36 +69,6 @@ describe('Agent Outcome Transitions', () => {
       // Verify event log records the no_changes detection
       const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'agent' });
       expect(events.some((e) => e.message.includes('no changes detected'))).toBe(true);
-    });
-
-    it('should transition implementing → reported for no_changes in BUG_AGENT_PIPELINE', async () => {
-      const task = await ctx.createTaskAtStatus(projectId, BUG_AGENT_PIPELINE.id, 'implementing');
-
-      (ctx.gitOps as StubGitOps).diffOverride = '';
-
-      await ctx.worktreeManager.create('task/test-branch', task.id);
-      await ctx.worktreeManager.lock(task.id);
-      const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1' });
-      await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
-
-      const run = await ctx.agentRunStore.createRun({
-        taskId: task.id,
-        agentType: 'scripted',
-        mode: 'new',
-      });
-
-      await ctx.outcomeResolver.resolveAndTransition({
-        taskId: task.id,
-        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
-        run: { id: run.id },
-        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
-        worktreeManager: ctx.worktreeManager,
-        phase: { id: phase.id },
-        context: { workdir: '/tmp', mode: 'new' } as never,
-      });
-
-      const updatedTask = await ctx.taskStore.getTask(task.id);
-      expect(updatedTask!.status).toBe('reported');
     });
   });
 

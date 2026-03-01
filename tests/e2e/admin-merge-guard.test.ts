@@ -187,10 +187,10 @@ describe('Admin Merge Guard', () => {
     });
   });
 
-  describe('multiple pipelines', () => {
-    it('should enforce admin guard in bug-agent pipeline', async () => {
+  describe('admin guard round-trip', () => {
+    it('should block non-admin then allow admin on same task', async () => {
       const task = await ctx.taskStore.createTask(
-        createTaskInput(projectId, 'pipeline-bug-agent', {
+        createTaskInput(projectId, 'pipeline-agent', {
           status: 'ready_to_merge',
           prLink: 'https://github.com/org/repo/pull/2'
         })
