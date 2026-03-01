@@ -246,13 +246,16 @@ This plan splits the work into **5 incremental PRs**. Each PR leaves the app ful
 
 | Streaming path | Source file | Callbacks used | WS channel |
 |------|------|------|------|
-| Agent output/message/status (pipeline hook) | `handlers/agent-handler.ts` | `onOutput`, `onMessage`, `onStatus` | `agent:output`, `agent:message`, `agent:status` |
-| Agent output/message/status (IPC start) | `ipc-handlers/agent-handlers.ts` | same pattern via `startAgent()` | same |
+| Agent output/message/status (pipeline hook) | `index.ts` (via `createStreamingCallbacks`) | `onOutput`, `onMessage`, `onStatus` | `agent:output`, `agent:message`, `agent:status` |
+| Agent output/message/status (IPC start) | `ipc-handlers/agent-handlers.ts` | inline callbacks via `startAgent()` | same |
 | Agent resume (IPC send message) | `ipc-handlers/agent-handlers.ts` | `onOutput`, `onMessage`, `onStatusChange` via `resumeAgent()` | same |
-| Chat output/message | `ipc-handlers/chat-session-handlers.ts` | `onEvent` callback with `sendToRenderer` | `chat:output`, `chat:message` |
+| Chat output/message + completion sentinel | `ipc-handlers/chat-session-handlers.ts` | `onEvent` callback (type=`text`/`message`) | `chat:output`, `chat:message` |
 | Task chat output/message | `ipc-handlers/chat-session-handlers.ts` | same pattern, task-scoped | `task-chat:output`, `task-chat:message` |
 | Telegram agent streaming | `ipc-handlers/telegram-handlers.ts` | `botService.onOutput`, `botService.onMessage` | `chat:output`, `chat:message` |
-| Interrupted runs broadcast | `ipc-handlers/agent-handlers.ts` | `sendToRenderer` for recovered runs | `agent:interrupted-runs` |
+| Telegram bot log | `ipc-handlers/telegram-handlers.ts` | `botService.onLog` callback | `telegram:bot-log` |
+| Telegram bot status changes | `ipc-handlers/telegram-handlers.ts` | direct `sendToRenderer` (running/stopped/failed) | `telegram:bot-status-changed` |
+| Interrupted runs broadcast | `index.ts` | direct `sendToRenderer` | `agent:interrupted-runs` |
+| Desktop notification navigation | `services/desktop-notification-router.ts` | direct `sendToRenderer` | `navigate` |
 
 **Checklist:**
 - [ ] Streaming inventory table completed with all paths
