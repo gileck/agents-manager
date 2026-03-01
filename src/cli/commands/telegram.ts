@@ -5,6 +5,7 @@ import { getResolvedConfig } from '../../main/services/config-service';
 import { TelegramAgentBotService } from '../../main/services/telegram-agent-bot-service';
 import { TelegramNotificationRouter } from '../../main/services/telegram-notification-router';
 import { validateTelegramConfig } from '../../main/services/telegram-config-validator';
+import { getSetting } from '@template/main/services/settings-service';
 
 export function registerTelegramCommands(program: Command, getServices: () => AppServices): void {
   const telegram = program.command('telegram').description('Telegram bot integration');
@@ -36,6 +37,7 @@ export function registerTelegramCommands(program: Command, getServices: () => Ap
         workflowService: services.workflowService,
         chatSessionStore: services.chatSessionStore,
         chatAgentService: services.chatAgentService,
+        defaultPipelineId: getSetting('default_pipeline_id', ''),
       });
 
       await botService.start(project.id, botToken, chatId);

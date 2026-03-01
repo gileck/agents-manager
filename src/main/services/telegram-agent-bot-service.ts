@@ -9,7 +9,7 @@ import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { TaskUpdateInput, TelegramBotLogEntry, ChatSession, AgentChatMessage } from '../../shared/types';
 import type { ChatAgentService } from './chat-agent-service';
 import { buildTelegramSystemPrompt } from './chat-prompt-parts';
-import { getSetting } from '@template/main/services/settings-service';
+
 
 /** Maximum allowed length for free-text input from Telegram users */
 const MAX_INPUT_LENGTH = 2000;
@@ -44,6 +44,7 @@ interface BotDeps {
   workflowService: IWorkflowService;
   chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
+  defaultPipelineId?: string;
 }
 
 export class TelegramAgentBotService implements ITelegramBotService {
@@ -424,7 +425,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
       return;
     }
 
-    const defaultPipelineId = getSetting('default_pipeline_id', '');
+    const defaultPipelineId = this.deps.defaultPipelineId ?? '';
     const pipelineId = defaultPipelineId || pipelines[0].id;
 
     const task = await this.deps.workflowService.createTask({
