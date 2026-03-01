@@ -20,9 +20,9 @@ function getDaemonPort(): number {
 }
 
 function getDaemonBinaryPath(): string {
-  // dist-daemon/index.js relative to the project root
-  // __dirname is src/cli/commands/ when running from source, or dist equivalent
-  return path.resolve(__dirname, '../../dist-daemon/index.js');
+  // dist-daemon/index.js at the project root
+  // __dirname is src/cli/commands/ (source) or dist-cli/cli/commands/ (built) — 3 levels deep
+  return path.resolve(__dirname, '../../../dist-daemon/index.js');
 }
 
 function ensureDaemonDir(): void {

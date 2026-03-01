@@ -9,8 +9,8 @@ export function healthRoutes(): Router {
 
   router.post('/api/shutdown', (_req, res) => {
     res.status(204).end();
-    // Graceful shutdown after the response is sent
-    setTimeout(() => process.exit(0), 100);
+    // Trigger the registered SIGTERM handler for graceful shutdown
+    setImmediate(() => process.emit('SIGTERM'));
   });
 
   return router;

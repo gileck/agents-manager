@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
+import { WS_CHANNELS } from './channels';
 
 export class DaemonWsServer {
   private wss: WebSocketServer;
@@ -47,9 +48,9 @@ export class DaemonWsServer {
 
   createStreamingCallbacks(taskId: string) {
     return {
-      onOutput: (chunk: string) => this.broadcast('agent:output', taskId, chunk),
-      onMessage: (msg: unknown) => this.broadcast('agent:message', taskId, msg),
-      onStatus: (status: string) => this.broadcast('agent:status', taskId, status),
+      onOutput: (chunk: string) => this.broadcast(WS_CHANNELS.AGENT_OUTPUT, taskId, chunk),
+      onMessage: (msg: unknown) => this.broadcast(WS_CHANNELS.AGENT_MESSAGE, taskId, msg),
+      onStatus: (status: string) => this.broadcast(WS_CHANNELS.AGENT_STATUS, taskId, status),
     };
   }
 

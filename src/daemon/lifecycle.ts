@@ -7,4 +7,5 @@ export function startSupervisors(services: AppServices): void {
 
 export function stopSupervisors(services: AppServices): void {
   services.agentSupervisor.stop();
+  services.workflowReviewSupervisor.stop();
 }
