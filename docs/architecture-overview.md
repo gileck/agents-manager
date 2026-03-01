@@ -1,12 +1,12 @@
 ---
 title: Architecture Overview
 description: System architecture, composition root, and the single-execution-engine principle
-summary: All business logic lives in src/main/services/ (WorkflowService). The Electron renderer and CLI are UI-only interfaces that share the same createAppServices(db) composition root and SQLite database.
+summary: "Three-tier daemon architecture: daemon (src/core/ services + SQLite), Electron (thin IPC\u2192API client shell), CLI (thin Commander\u2192API client shell). All business logic lives in src/core/services/ (WorkflowService). The daemon is the sole DB owner."
 priority: 1
 key_points:
-  - "NEVER add business logic to the renderer or CLI — all logic goes in WorkflowService"
+  - "NEVER add business logic to the renderer, CLI, or IPC handlers \u2014 all logic goes in WorkflowService (src/core/services/)"
   - "src/ is application code; template/ is framework infrastructure (DO NOT MODIFY)"
-  - "Both UIs use createAppServices(db) → same WorkflowService → same SQLite file"
+  - "Daemon (src/daemon/) is the sole DB owner; Electron and CLI connect via HTTP/WS API client (src/client/)"
 ---
 # Architecture Overview
 
@@ -14,36 +14,46 @@ System architecture, composition root, and the single-execution-engine principle
 
 ## System Overview
 
-Agents Manager is an Electron + React + CLI + SQLite application for managing AI agent workflows. It provides:
+Agents Manager is a three-tier application for managing AI agent workflows. A long-running **daemon process** owns all business logic and the database, while **Electron** and a **CLI** act as thin client shells that communicate with the daemon via HTTP/WebSocket.
 
-- **Electron main process** — all business logic, services, and data access
-- **React renderer** — UI-only dashboard (communicates via IPC)
-- **CLI (`am`)** — terminal interface that shares the same services and database
-- **SQLite** (better-sqlite3) — single-file persistence with WAL mode for concurrency
-
-All three entry points instantiate the same `AppServices` object via `createAppServices(db)` from `src/main/providers/setup.ts`.
+- **Daemon process** (`src/daemon/`) — owns the SQLite database, runs all services (WorkflowService, AgentService, etc.), exposes a REST API (Express) and a WebSocket server for push events
+- **Electron main process** (`src/main/`) — thin shell: auto-starts the daemon via `ensureDaemon()`, creates an API client from `src/client/`, registers IPC handlers that delegate to the API client, forwards WebSocket events to the renderer
+- **CLI (`am`)** (`src/cli/`) — thin shell: auto-starts the daemon via `ensureDaemon()`, creates an API client, Commander commands delegate to the API client
+- **React renderer** (`src/renderer/`) — UI-only dashboard (communicates via IPC to Electron main, which forwards to daemon)
+- **SQLite** (better-sqlite3) — single-file persistence with WAL mode, owned exclusively by the daemon
 
 ```
-┌─────────────────────────────────────────────────┐
-│  WorkflowService (the engine)                   │
-│  src/main/services/                             │
-│                                                 │
-│  ALL features go here. All UIs consume this.    │
-└──────────────┬──────────────────┬───────────────┘
-               │ IPC              │ createAppServices(db)
-┌──────────────┴─────┐  ┌────────┴────────────────┐
-│  Electron Renderer │  │  CLI (am)                │
-│  src/renderer/     │  │  src/cli/                │
-│  React UI          │  │  Terminal UI             │
-│  UI ONLY           │  │  UI ONLY                 │
-└────────────────────┘  └─────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  Daemon Process (src/daemon/)                           │
+│  ┌────────────────────────────────────────────────┐     │
+│  │  WorkflowService + all services (src/core/)    │     │
+│  │  SQLite DB (sole owner)                        │     │
+│  └────────────────────────────────────────────────┘     │
+│  REST API (Express)  ←──┐     WebSocket Server          │
+└──────────────────────────┼──────────────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        │ API Client       │ API Client       │
+        │ (src/client/)    │ (src/client/)    │
+┌───────┴────────┐  ┌─────┴──────────────────┐
+│  Electron Main │  │  CLI (am)              │
+│  src/main/     │  │  src/cli/              │
+│  IPC → API     │  │  Commander → API       │
+│  WS → Renderer │  │  Thin shell            │
+└───────┬────────┘  └────────────────────────┘
+        │ IPC
+┌───────┴────────┐
+│  Renderer      │
+│  src/renderer/ │
+│  React UI      │
+└────────────────┘
 ```
 
 ## Composition Root: `createAppServices(db)`
 
-**File:** `src/main/providers/setup.ts`
+**File:** `src/core/providers/setup.ts`
 
-The composition root is a single function that wires all dependencies. It returns an `AppServices` object consumed by both entry points.
+The composition root is a single function that wires all dependencies. It returns an `AppServices` object consumed **only by the daemon process** — neither Electron nor CLI call it directly.
 
 ```typescript
 export interface AppServices {
@@ -64,10 +74,12 @@ export interface AppServices {
   notificationRouter: MultiChannelNotificationRouter;
   agentService: IAgentService;
   workflowService: IWorkflowService;
+  pipelineInspectionService: IPipelineInspectionService;
   taskContextStore: ITaskContextStore;
   featureStore: IFeatureStore;
   agentDefinitionStore: IAgentDefinitionStore;
   kanbanBoardStore: IKanbanBoardStore;
+  settingsStore: ISettingsStore;
   createWorktreeManager: (path: string) => IWorktreeManager;
   createGitOps: (cwd: string) => IGitOps;
   agentSupervisor: AgentSupervisor;
@@ -94,13 +106,13 @@ export interface AppServices {
 2. Create factory functions for project-scoped instances
 3. Create `AgentLibRegistry`, register engine libs (`ClaudeCodeLib`, `CursorAgentLib`, `CodexCliLib`)
 4. Instantiate `AgentFrameworkImpl`, register `Agent` instances with prompt builders (`PlannerPromptBuilder`, `DesignerPromptBuilder`, `ImplementorPromptBuilder`, `InvestigatorPromptBuilder`, `ReviewerPromptBuilder`, `TaskWorkflowReviewerPromptBuilder`) and the `AgentLibRegistry`
-5. Load `NotificationRouter` (real or stub, see below)
+5. Create `MultiChannelNotificationRouter` (empty by default; callers inject initial routers via config)
 6. Create `AgentService` and `WorkflowService`
 7. Register hook handlers (agent, notification, prompt, SCM) — must happen after `WorkflowService` creation
 
 ## Interface-First Design
 
-The `src/main/interfaces/` directory contains 21 interface files defining every service boundary:
+The `src/core/interfaces/` directory defines every service boundary. Key interfaces:
 
 | Interface | File | Key Methods |
 |-----------|------|-------------|
@@ -121,12 +133,13 @@ The `src/main/interfaces/` directory contains 21 interface files defining every 
 | `IGitOps` | `git-ops.ts` | `createBranch`, `checkout`, `fetch`, `push`, `pull`, `diff`, `commit`, `rebase`, `rebaseAbort`, `getCurrentBranch`, `clean`, `status` |
 | `IScmPlatform` | `scm-platform.ts` | `createPR`, `mergePR`, `getPRStatus` |
 | `INotificationRouter` | `notification-router.ts` | `send` |
-| `IWorkflowService` | `workflow-service.ts` | `createTask`, `updateTask`, `deleteTask`, `resetTask`, `transitionTask`, `forceTransitionTask`, `getPipelineDiagnostics`, `retryHook`, `advancePhase`, `startAgent`, `resumeAgent`, `stopAgent`, `respondToPrompt`, `mergePR`, `getDashboardStats` |
+| `IWorkflowService` | `workflow-service.ts` | `createTask`, `updateTask`, `deleteTask`, `resetTask`, `transitionTask`, `forceTransitionTask`, `startAgent`, `resumeAgent`, `stopAgent`, `respondToPrompt`, `mergePR`, `getDashboardStats` |
+| `IPipelineInspectionService` | `pipeline-inspection-service.ts` | `getPipelineDiagnostics`, `retryHook`, `advancePhase` |
 | `ITaskContextStore` | `task-context-store.ts` | `addEntry`, `getEntriesForTask` |
 | `IFeatureStore` | `feature-store.ts` | `getFeature`, `listFeatures`, `createFeature`, `updateFeature`, `deleteFeature` |
 | `IAgentDefinitionStore` | `agent-definition-store.ts` | `getDefinition`, `listDefinitions`, `getDefinitionByAgentType`, `getDefinitionByMode` |
 
-Most interfaces are re-exported from `src/main/interfaces/index.ts`.
+Most interfaces are re-exported from `src/core/interfaces/index.ts`.
 
 ## Handler Registration Pattern
 
@@ -140,7 +153,7 @@ engine.registerGuard('guard_name', (task, transition, context, db, params?) => {
 });
 ```
 
-Built-in guards are registered via `registerCoreGuards(engine, db)` in `src/main/handlers/core-guards.ts`. See [pipeline-engine.md](./pipeline-engine.md) for the full list.
+Built-in guards are registered via `registerCoreGuards(engine, db)` in `src/core/handlers/core-guards.ts`. See [pipeline-engine.md](./pipeline-engine.md) for the full list.
 
 ### Hooks
 
@@ -161,39 +174,65 @@ engine.registerHook('hook_name', async (task, transition, context) => {
 
 | Hook Name | Handler File | Purpose |
 |-----------|-------------|---------|
-| `start_agent` | `src/main/handlers/agent-handler.ts` | Fire-and-forget agent execution |
-| `notify` | `src/main/handlers/notification-handler.ts` | Desktop notifications (templated) |
-| `create_prompt` | `src/main/handlers/prompt-handler.ts` | Create pending prompt for human input |
-| `merge_pr` | `src/main/handlers/scm-handler.ts` | Merge PR via GitHub CLI |
-| `push_and_create_pr` | `src/main/handlers/scm-handler.ts` | Rebase, push, create PR |
-| `advance_phase` | `src/main/handlers/phase-handler.ts` | Advance to next implementation phase |
+| `start_agent` | `src/core/handlers/agent-handler.ts` | Fire-and-forget agent execution |
+| `notify` | `src/core/handlers/notification-handler.ts` | Notifications (templated) |
+| `create_prompt` | `src/core/handlers/prompt-handler.ts` | Create pending prompt for human input |
+| `merge_pr` | `src/core/handlers/scm-handler.ts` | Merge PR via GitHub CLI |
+| `push_and_create_pr` | `src/core/handlers/scm-handler.ts` | Rebase, push, create PR |
+| `advance_phase` | `src/core/handlers/phase-handler.ts` | Advance to next implementation phase |
 
 ## Entry Points
 
-### Electron Main Process (`src/main/index.ts`)
+### Daemon (`src/daemon/index.ts`)
+
+The daemon is the sole process that owns the database and runs all services:
 
 ```typescript
-initDatabase({ filename: 'agents-manager.db', migrations: getMigrations() });
-const db = getDatabase();
-services = createAppServices(db);
-registerIpcHandlers(services);
+// Opens DB (path resolved internally), creates all services with streaming callbacks
+const db = openDatabase();
+const services = createAppServices(db, { createStreamingCallbacks });
+const { httpServer } = createServer(services, wsHolder);
+const wsServer = new DaemonWsServer(httpServer);
+startSupervisors(services);
+httpServer.listen(PORT, '127.0.0.1');
 ```
 
-IPC handlers in `src/main/ipc-handlers.ts` expose `AppServices` methods to the renderer via 57+ IPC channels (see [ipc-and-renderer.md](./ipc-and-renderer.md)).
+### Electron Main Process (`src/main/index.ts`)
+
+The Electron main process is a thin shell that delegates all operations to the daemon:
+
+```typescript
+// Auto-start daemon if not already running
+const { url: daemonUrl, wsUrl: daemonWsUrl } = await ensureDaemon();
+// Create API client pointing to daemon HTTP
+const api = createApiClient(daemonUrl);
+// Register IPC handlers that delegate to API client
+registerIpcHandlers(api);
+// Create WS client to forward daemon events to renderer
+const wsClient = createWsClient(daemonWsUrl, { reconnect: true });
+// Forward each WS channel individually
+wsClient.subscribeGlobal('agent:output', (taskId, data) =>
+  sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, data));
+// ... (one subscribeGlobal per push event channel)
+```
+
+IPC handlers in `src/main/ipc-handlers/` expose API client methods to the renderer via IPC channels (see [ipc-and-renderer.md](./ipc-and-renderer.md)).
 
 ### CLI (`src/cli/index.ts`)
 
+The CLI is a thin Commander.js shell that delegates all operations to the daemon:
+
 ```typescript
-function getServices(): AppServices {
-  if (!_services) {
-    const result = openDatabase(opts.db); // src/cli/db.ts
-    _services = result.services;
-  }
-  return _services;
-}
+// Auto-start daemon if not already running (src/cli/ensure-daemon.ts)
+const daemonUrl = await ensureDaemon();
+// Create API client pointing to daemon HTTP
+const api = createApiClient(daemonUrl);
+// Commander commands call api methods
 ```
 
-`openDatabase()` (in `src/cli/db.ts`) opens the same SQLite file, enables WAL + foreign keys, runs migrations, and calls `createAppServices(db)`. See [cli-reference.md](./cli-reference.md) for the full CLI reference.
+Note: The CLI's `ensureDaemon()` (from `src/cli/ensure-daemon.ts`) returns a URL string, while Electron's `ensureDaemon()` (from `src/main/daemon-launcher.ts`) returns `{ url, wsUrl }` since Electron also needs the WebSocket URL.
+
+See [cli-reference.md](./cli-reference.md) for the full CLI reference.
 
 ## Stub vs Real Implementations
 
@@ -201,22 +240,20 @@ function getServices(): AppServices {
 
 The notification subsystem uses a composite router pattern. `MultiChannelNotificationRouter` wraps multiple `INotificationRouter` implementations and dispatches notifications to all channels in parallel via `Promise.allSettled`.
 
-At startup, the composition root creates a `MultiChannelNotificationRouter` and registers a `DesktopNotificationRouter` (or `StubNotificationRouter` if Electron APIs are unavailable). When a Telegram bot is started for a project, a `TelegramNotificationRouter` is dynamically added to the composite router.
+At startup, the composition root creates an empty `MultiChannelNotificationRouter`. Callers can inject initial routers via `config.notificationRouters` (tests inject a `StubNotificationRouter`). When a Telegram bot is started for a project, a `TelegramNotificationRouter` is dynamically added to the composite router.
 
 ```typescript
-// Composite router dispatches to all registered channels
+// Composite router starts empty in production
 const multiRouter = new MultiChannelNotificationRouter();
-multiRouter.addRouter(desktopOrStubRouter);
 // Later, when Telegram bot starts:
 multiRouter.addRouter(telegramRouter);
 ```
 
 | Implementation | File | Behavior |
 |---------------|------|----------|
-| `MultiChannelNotificationRouter` | `src/main/services/multi-channel-notification-router.ts` | Composite router dispatching to all registered channels via `Promise.allSettled` |
-| `DesktopNotificationRouter` | `src/main/services/desktop-notification-router.ts` | macOS native notifications, navigates to task on click |
-| `TelegramNotificationRouter` | `src/main/services/telegram-notification-router.ts` | Sends MarkdownV2-formatted messages to a Telegram chat |
-| `StubNotificationRouter` | `src/main/services/stub-notification-router.ts` | Collects notifications in-memory for testing |
+| `MultiChannelNotificationRouter` | `src/core/services/multi-channel-notification-router.ts` | Composite router dispatching to all registered channels via `Promise.allSettled` |
+| `TelegramNotificationRouter` | `src/core/services/telegram-notification-router.ts` | Sends MarkdownV2-formatted messages to a Telegram chat |
+| `StubNotificationRouter` | `src/core/services/stub-notification-router.ts` | Collects notifications in-memory for testing |
 
 ### Git Operations
 
@@ -224,11 +261,11 @@ multiRouter.addRouter(telegramRouter);
 
 | Implementation | File | Behavior |
 |---------------|------|----------|
-| `LocalGitOps` | `src/main/services/local-git-ops.ts` | Shells out to `git` CLI |
-| `StubGitOps` | `src/main/services/stub-git-ops.ts` | In-memory no-op for testing |
-| `GitHubScmPlatform` | `src/main/services/github-scm-platform.ts` | Shells out to `gh` CLI |
+| `LocalGitOps` | `src/core/services/local-git-ops.ts` | Shells out to `git` CLI |
+| `StubGitOps` | `src/core/services/stub-git-ops.ts` | In-memory no-op for testing |
+| `GitHubScmPlatform` | `src/core/services/github-scm-platform.ts` | Shells out to `gh` CLI |
 
-The real implementations use resolved shell environment from `src/main/services/shell-env.ts`.
+The real implementations use resolved shell environment from `src/core/services/shell-env.ts`.
 
 ## Factory Functions
 
@@ -244,7 +281,6 @@ These are passed to `AgentService`, `WorkflowService`, and SCM handler as constr
 
 ## Edge Cases
 
-- **DesktopNotificationRouter** is loaded via `require()` with try/catch — it fails silently in CLI environments and falls back to the stub.
+- The daemon is the sole DB owner — Electron and CLI never open the database directly.
+- Electron auto-starts the daemon via `ensureDaemon()` if not already running.
 - Factory functions create **new instances per call**, not singletons. Each agent run gets its own `GitOps` and `WorktreeManager` scoped to the project path.
-- Both Electron and CLI can access the database concurrently thanks to SQLite WAL mode.
-- The CLI lazy-opens the database on first command execution — not at program startup.

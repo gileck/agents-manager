@@ -1,12 +1,12 @@
 ---
 title: Workflow Service
 description: Central orchestration, activity logging, and prompt handling
-summary: WorkflowService is the single entry point for all business operations — task CRUD, transitions, agent management, prompt handling. All IPC handlers and CLI commands delegate to it.
+summary: WorkflowService is the single entry point for all business operations — task CRUD, transitions, agent management, prompt handling. All daemon route handlers delegate to it.
 priority: 2
 key_points:
-  - "File: src/main/services/workflow-service.ts"
-  - "Interface: src/main/interfaces/workflow-service.ts"
-  - "All business logic goes here — never in IPC handlers or CLI commands"
+  - "File: src/core/services/workflow-service.ts"
+  - "Interface: src/core/interfaces/workflow-service.ts"
+  - "All business logic goes here — never in IPC handlers, CLI commands, or daemon route handlers"
 ---
 # Workflow Service
 
@@ -16,10 +16,10 @@ Central orchestration, activity logging, and prompt handling.
 
 `WorkflowService` is the central orchestration layer. All business operations — task CRUD, transitions, agent management, prompt handling — go through this service. It enforces activity logging, worktree cleanup, and cross-cutting concerns.
 
-**File:** `src/main/services/workflow-service.ts`
-**Interface:** `src/main/interfaces/workflow-service.ts`
+**File:** `src/core/services/workflow-service.ts`
+**Interface:** `src/core/interfaces/workflow-service.ts`
 
-**Exception:** `PROJECT_CREATE`, `PROJECT_UPDATE`, and `PROJECT_DELETE` IPC handlers call `projectStore` directly, bypassing WorkflowService. This is by design — project CRUD has no cross-cutting concerns (no worktree cleanup, no pipeline transitions). No activity logging occurs for project mutations.
+**Exception:** `PROJECT_CREATE`, `PROJECT_UPDATE`, and `PROJECT_DELETE` route handlers call `projectStore` directly, bypassing WorkflowService. This is by design — project CRUD has no cross-cutting concerns (no worktree cleanup, no pipeline transitions). No activity logging occurs for project mutations.
 
 ## Full API Surface
 
@@ -254,9 +254,9 @@ Called in three scenarios:
 ## Edge Cases
 
 - **`transitionTask` uses `trigger: 'manual'` only.** Agent-triggered transitions are handled internally by `AgentService.tryOutcomeTransition()`, not through the workflow service's public API.
-- **IPC handler strips `status`** from update payloads. The `TASK_UPDATE` IPC handler removes the `status` field before calling `workflowService.updateTask()` to force all status changes through `transitionTask()`.
+- **Route handler strips `status`** from update payloads. The `TASK_UPDATE` IPC handler removes the `status` field before calling `workflowService.updateTask()` to force all status changes through `transitionTask()`.
 - **`respondToPrompt` can fail to find a matching transition** when `resumeOutcome` is set but no transition's `agentOutcome` matches the outcome from the current task status. This is logged as a warning event on the task timeline but does not throw.
 - **`mergePR` takes the most recent PR artifact** — `artifacts[artifacts.length - 1]`. If a task has multiple PR artifacts (from retries), only the latest is used.
 - **Worktree cleanup is best-effort** — all exceptions during cleanup are caught and ignored. This prevents cleanup failures from blocking task deletion or status transitions.
 - **`forceTransitionTask` does NOT clean up worktrees** — unlike `transitionTask`, force transitions skip worktree cleanup even on final states.
-- **Project CRUD bypasses WorkflowService** — `PROJECT_CREATE`, `PROJECT_UPDATE`, and `PROJECT_DELETE` IPC handlers call `projectStore` directly. This is an intentional exception to the single-entry-point principle.
+- **Project CRUD bypasses WorkflowService** — `PROJECT_CREATE`, `PROJECT_UPDATE`, and `PROJECT_DELETE` route handlers call `projectStore` directly. This is an intentional exception to the single-entry-point principle.

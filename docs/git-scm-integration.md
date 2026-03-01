@@ -4,8 +4,8 @@ description: Worktrees, git operations, PR lifecycle, and branch strategy
 summary: LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<agentType> convention.
 priority: 3
 key_points:
-  - "Interface: IWorktreeManager in src/main/interfaces/worktree-manager.ts"
-  - "Implementation: LocalWorktreeManager in src/main/services/local-worktree-manager.ts"
+  - "Interface: IWorktreeManager in src/core/interfaces/worktree-manager.ts"
+  - "Implementation: LocalWorktreeManager in src/core/services/local-worktree-manager.ts"
   - "Branch naming: task/<taskId>/<agentType>"
 ---
 # Git & SCM Integration
@@ -14,8 +14,8 @@ Worktrees, git operations, PR lifecycle, and branch strategy.
 
 ## Worktree Management
 
-**Interface:** `IWorktreeManager` in `src/main/interfaces/worktree-manager.ts`
-**Implementation:** `LocalWorktreeManager` in `src/main/services/local-worktree-manager.ts`
+**Interface:** `IWorktreeManager` in `src/core/interfaces/worktree-manager.ts`
+**Implementation:** `LocalWorktreeManager` in `src/core/services/local-worktree-manager.ts`
 
 ```typescript
 interface IWorktreeManager {
@@ -95,8 +95,8 @@ Uses `git worktree list --porcelain` output format. Extracts:
 
 ## Git Operations
 
-**Interface:** `IGitOps` in `src/main/interfaces/git-ops.ts`
-**Implementation:** `LocalGitOps` in `src/main/services/local-git-ops.ts`
+**Interface:** `IGitOps` in `src/core/interfaces/git-ops.ts`
+**Implementation:** `LocalGitOps` in `src/core/services/local-git-ops.ts`
 
 ```typescript
 export class LocalGitOps implements IGitOps {
@@ -161,8 +161,8 @@ The rebase before push ensures the PR diff contains only the agent's changes, no
 
 ## SCM Platform
 
-**Interface:** `IScmPlatform` in `src/main/interfaces/scm-platform.ts`
-**Implementation:** `GitHubScmPlatform` in `src/main/services/github-scm-platform.ts`
+**Interface:** `IScmPlatform` in `src/core/interfaces/scm-platform.ts`
+**Implementation:** `GitHubScmPlatform` in `src/core/services/github-scm-platform.ts`
 
 ```typescript
 export class GitHubScmPlatform implements IScmPlatform {
@@ -287,7 +287,7 @@ Each phase gets its own branch (and worktree). The phase index is 1-based.
 
 ## Shell Environment Resolution
 
-**File:** `src/main/services/shell-env.ts`
+**File:** `src/shared/shell-env.ts` (canonical location; re-exported from `src/core/services/shell-env.ts`)
 
 Electron GUI apps on macOS launch with a minimal PATH that doesn't include tools from nvm, fnm, Homebrew, etc.
 

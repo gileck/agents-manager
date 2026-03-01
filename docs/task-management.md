@@ -1,7 +1,7 @@
 ---
 title: Task Management
 description: Tasks, dependencies, subtasks, features, and filtering
-summary: "Tasks are the core work unit, each bound to a project and pipeline. Tasks support dependencies (blockedBy), subtasks, and feature grouping. File: src/main/services/task-store.ts."
+summary: "Tasks are the core work unit, each bound to a project and pipeline. Tasks support dependencies (blockedBy), subtasks, and feature grouping. File: src/core/stores/sqlite-task-store.ts."
 priority: 3
 key_points:
   - "Task fields: id, projectId, pipelineId, title, description, status, featureId"
@@ -53,9 +53,9 @@ interface PlanComment {
 
 ## Task CRUD
 
-**Store:** `src/main/stores/sqlite-task-store.ts` implements `ITaskStore`
+**Store:** `src/core/stores/sqlite-task-store.ts` implements `ITaskStore`
 
-All CRUD operations go through `WorkflowService` (`src/main/services/workflow-service.ts`), which adds activity logging on each operation.
+All CRUD operations go through `WorkflowService` (`src/core/services/workflow-service.ts`), which adds activity logging on each operation.
 
 | Operation | WorkflowService Method | Activity Action |
 |-----------|----------------------|-----------------|
@@ -133,7 +133,7 @@ When a plan needs revision, an admin adds comments. The planner agent (in revisi
 
 ## Features / Epics
 
-**Store:** `src/main/stores/sqlite-feature-store.ts` implements `IFeatureStore`
+**Store:** `src/core/stores/sqlite-feature-store.ts` implements `IFeatureStore`
 
 ```typescript
 interface Feature {
@@ -184,7 +184,7 @@ Results are ordered by `created_at DESC`.
 
 ## Task Artifacts
 
-**Store:** `src/main/stores/sqlite-task-artifact-store.ts`
+**Store:** `src/core/stores/sqlite-task-artifact-store.ts`
 
 ```typescript
 interface TaskArtifact {

@@ -4,8 +4,8 @@ description: Agent types, execution lifecycle, prompts, validation, and context 
 summary: "Agent architecture: Agent class combines a PromptBuilder (domain logic) with an AgentLib (engine logic) resolved from AgentLibRegistry. Role-based prompt builders: PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder. ScriptedAgent is the test mock."
 priority: 2
 key_points:
-  - "File: src/main/agents/ — Agent, PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder, ScriptedAgent"
-  - "File: src/main/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib"
+  - "File: src/core/agents/ — Agent, PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder, ScriptedAgent"
+  - "File: src/core/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib"
   - "Agent resolves AgentLib from registry via config.engine at execute() time"
   - "Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes"
 ---
@@ -55,26 +55,26 @@ IAgent (interface)
 **File locations:**
 
 Libs (engine logic):
-- `src/main/interfaces/agent-lib.ts` — `IAgentLib` interface and types
-- `src/main/libs/claude-code-lib.ts` — Claude SDK engine
-- `src/main/libs/cursor-agent-lib.ts` — Cursor CLI engine
-- `src/main/libs/codex-cli-lib.ts` — Codex CLI engine
-- `src/main/services/agent-lib-registry.ts` — Engine registry
+- `src/core/interfaces/agent-lib.ts` — `IAgentLib` interface and types
+- `src/core/libs/claude-code-lib.ts` — Claude SDK engine
+- `src/core/libs/cursor-agent-lib.ts` — Cursor CLI engine
+- `src/core/libs/codex-cli-lib.ts` — Codex CLI engine
+- `src/core/services/agent-lib-registry.ts` — Engine registry
 
 Prompt builders (domain logic):
-- `src/main/agents/base-agent-prompt-builder.ts` — `BaseAgentPromptBuilder` abstract base
-- `src/main/agents/planner-prompt-builder.ts` — `PlannerPromptBuilder`
-- `src/main/agents/designer-prompt-builder.ts` — `DesignerPromptBuilder`
-- `src/main/agents/implementor-prompt-builder.ts` — `ImplementorPromptBuilder`
-- `src/main/agents/investigator-prompt-builder.ts` — `InvestigatorPromptBuilder`
-- `src/main/agents/reviewer-prompt-builder.ts` — `ReviewerPromptBuilder`
-- `src/main/agents/task-workflow-reviewer-prompt-builder.ts` — `TaskWorkflowReviewerPromptBuilder`
-- `src/main/agents/prompt-utils.ts` — Shared interactive field/instruction helpers
+- `src/core/agents/base-agent-prompt-builder.ts` — `BaseAgentPromptBuilder` abstract base
+- `src/core/agents/planner-prompt-builder.ts` — `PlannerPromptBuilder`
+- `src/core/agents/designer-prompt-builder.ts` — `DesignerPromptBuilder`
+- `src/core/agents/implementor-prompt-builder.ts` — `ImplementorPromptBuilder`
+- `src/core/agents/investigator-prompt-builder.ts` — `InvestigatorPromptBuilder`
+- `src/core/agents/reviewer-prompt-builder.ts` — `ReviewerPromptBuilder`
+- `src/core/agents/task-workflow-reviewer-prompt-builder.ts` — `TaskWorkflowReviewerPromptBuilder`
+- `src/core/agents/prompt-utils.ts` — Shared interactive field/instruction helpers
 
 Agent:
-- `src/main/agents/agent.ts` — `Agent` class (generic, resolves lib from registry)
-- `src/main/interfaces/agent.ts` — `IAgent` interface
-- `src/main/agents/scripted-agent.ts` — `ScriptedAgent` (test mock, implements IAgent directly)
+- `src/core/agents/agent.ts` — `Agent` class (generic, resolves lib from registry)
+- `src/core/interfaces/agent.ts` — `IAgent` interface
+- `src/core/agents/scripted-agent.ts` — `ScriptedAgent` (test mock, implements IAgent directly)
 
 ### IAgent Interface
 
@@ -232,7 +232,7 @@ Agent runs are identified by the combination of `agentType`, `mode`, and optiona
 
 ## Execution Lifecycle
 
-**File:** `src/main/services/agent-service.ts`
+**File:** `src/core/services/agent-service.ts`
 
 `AgentService.execute(taskId, mode, agentType, revisionReason?, onOutput?)` performs 8 steps:
 
@@ -352,7 +352,7 @@ After resolution, the builder appends skills (if any) and prepends task context 
 
 ### PromptRenderer
 
-**File:** `src/main/services/prompt-renderer.ts`
+**File:** `src/core/services/prompt-renderer.ts`
 
 `PromptRenderer` handles all DB-backed template rendering. It performs simple string replacement of placeholder variables, then auto-appends a summary suffix and any validation errors.
 
@@ -534,7 +534,7 @@ The abort controller is also triggered by the timeout timer. On abort, the SDK l
 
 ## AgentSupervisor
 
-**File:** `src/main/services/agent-supervisor.ts`
+**File:** `src/core/services/agent-supervisor.ts`
 
 The `AgentSupervisor` is a background watchdog that periodically polls for agent runs that are stale or orphaned.
 
@@ -558,7 +558,7 @@ On each poll, the supervisor iterates all active runs from the database:
 
 ## SandboxGuard
 
-**File:** `src/main/services/sandbox-guard.ts`
+**File:** `src/core/services/sandbox-guard.ts`
 
 `SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by both `ClaudeCodeLib` (task agents) and `ChatAgentService` (chat agents) as a `preToolUse` hook.
 
@@ -587,7 +587,7 @@ Any error during guard evaluation results in the tool call being blocked (not al
 
 ## ChatAgentService
 
-**File:** `src/main/services/chat-agent-service.ts`
+**File:** `src/core/services/chat-agent-service.ts`
 
 `ChatAgentService` handles interactive chat sessions with AI agents, supporting both project-scoped and task-scoped conversations.
 

@@ -7,7 +7,7 @@ key_points:
   - "Guards are synchronous and block transitions; hooks are async side-effects after success"
   - "Hook execution policies: required (rollback on failure), best_effort (log only), fire_and_forget (not awaited)"
   - "Use AGENT_PIPELINE.id for agent workflow tests, SIMPLE_PIPELINE.id for basic flows"
-  - "File: src/main/services/pipeline-engine.ts"
+  - "File: src/core/services/pipeline-engine.ts"
 ---
 # Pipeline Engine
 
@@ -25,7 +25,7 @@ A **Pipeline** defines a set of statuses and the transitions between them. Each 
 
 ## PipelineEngine Implementation
 
-**File:** `src/main/services/pipeline-engine.ts`
+**File:** `src/core/services/pipeline-engine.ts`
 
 ```typescript
 export class PipelineEngine implements IPipelineEngine {
@@ -127,7 +127,7 @@ When a `required` hook fails, the engine performs a transactional rollback:
 
 ## Built-in Guards
 
-**File:** `src/main/handlers/core-guards.ts`
+**File:** `src/core/handlers/core-guards.ts`
 
 | Guard | Logic | Failure Reason |
 |-------|-------|----------------|
@@ -163,7 +163,7 @@ type HookFn = (
 ) => Promise<{ success: boolean; error?: string } | void>;
 ```
 
-### `start_agent` (`src/main/handlers/agent-handler.ts`)
+### `start_agent` (`src/core/handlers/agent-handler.ts`)
 
 - **Params:** `{ mode: AgentMode, agentType: string, revisionReason?: RevisionReason }` (mode and agentType required)
 - **Policy:** Always registered as `fire_and_forget`
@@ -172,14 +172,14 @@ type HookFn = (
 - Returns `{ success: true }` immediately before the agent actually starts
 - Errors logged to task event log (don't block transition)
 
-### `notify` (`src/main/handlers/notification-handler.ts`)
+### `notify` (`src/core/handlers/notification-handler.ts`)
 
 - **Params:** `{ titleTemplate?: string, bodyTemplate?: string }`
 - Defaults: title `"Task update"`, body `"{taskTitle}: {fromStatus} → {toStatus}"`
 - Template variables: `{taskTitle}`, `{fromStatus}`, `{toStatus}`
 - Routes through `INotificationRouter` (real desktop or stub)
 
-### `create_prompt` (`src/main/handlers/prompt-handler.ts`)
+### `create_prompt` (`src/core/handlers/prompt-handler.ts`)
 
 - **Params:** `{ resumeOutcome?: string }`
 - **Requires:** `context.data.agentRunId`
@@ -187,7 +187,7 @@ type HookFn = (
 - Creates a pending prompt in the database for human-in-the-loop interaction
 - `resumeOutcome` enables automatic transition when the human responds (see [workflow-service.md](./workflow-service.md))
 
-### `merge_pr` (`src/main/handlers/scm-handler.ts`)
+### `merge_pr` (`src/core/handlers/scm-handler.ts`)
 
 - **Policy:** `required` — if merge fails, the transition rolls back
 - Fetches the most recent `pr` artifact for the task
@@ -195,7 +195,7 @@ type HookFn = (
 - Merges via `scmPlatform.mergePR(prUrl)` (squash + delete-branch)
 - Optionally pulls `origin/main` if `project.config.pullMainAfterMerge` is set
 
-### `push_and_create_pr` (`src/main/handlers/scm-handler.ts`)
+### `push_and_create_pr` (`src/core/handlers/scm-handler.ts`)
 
 - **Policy:** `required` — if push/PR creation fails, the transition rolls back
 - Resolves worktree path (or project root if no worktree)
@@ -206,7 +206,7 @@ type HookFn = (
 - Creates PR with task title and automated body
 - Saves `pr` artifact, updates task `prLink` and `branchName`
 
-### `advance_phase` (`src/main/handlers/phase-handler.ts`)
+### `advance_phase` (`src/core/handlers/phase-handler.ts`)
 
 - **Policy:** `best_effort`
 - Marks the current implementation phase as completed
@@ -216,7 +216,7 @@ type HookFn = (
 
 ## Seeded Pipelines
 
-**File:** `src/main/data/seeded-pipelines.ts`
+**File:** `src/core/data/seeded-pipelines.ts`
 
 Five pipelines are seeded via migration 011.
 
@@ -414,7 +414,7 @@ When an agent reports `needs_info`:
 
 ## Outcome Schemas
 
-**File:** `src/main/handlers/outcome-schemas.ts`
+**File:** `src/core/handlers/outcome-schemas.ts`
 
 **With payloads:**
 
