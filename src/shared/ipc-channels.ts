@@ -83,6 +83,7 @@ export const IPC_CHANNELS = {
   // Task context entries
   TASK_CONTEXT_ENTRIES: 'task:context-entries',
   TASK_ADD_CONTEXT_ENTRY: 'task:add-context-entry',
+  TASK_ADD_FEEDBACK: 'task:add-feedback',
 
   // Debug timeline
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',

@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { formatCommentsForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
 
 export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'planner';
@@ -69,7 +69,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         prLines.push('', '## Current Plan', task.plan);
       }
-      prLines.push(...formatCommentsForPrompt(task.planComments, 'Admin Feedback'));
+      prLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Admin Feedback'));
       prLines.push(
         '',
         '## Revision Guidelines',
@@ -86,7 +86,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         ``,
         `Task: ${task.title}.${desc}`,
       ];
-      prLines.push(...formatCommentsForPrompt(task.planComments, 'Admin Feedback'));
+      prLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Admin Feedback'));
       prLines.push(
         '',
         '## Instructions',
@@ -117,7 +117,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         `Output phases in the "phases" array field. Each phase has a "name" and its own "subtasks" array.`,
         `When using phases, the "subtasks" field should be empty (subtasks live inside phases).`,
       ];
-      planLines.push(...formatCommentsForPrompt(task.planComments, 'Admin Feedback'));
+      planLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Admin Feedback'));
       prompt = planLines.join('\n');
     }
 

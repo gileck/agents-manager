@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
-import type { Transition, PlanComment } from '../../../shared/types';
+import type { Transition, TaskContextEntry } from '../../../shared/types';
 
 interface DesignReviewSectionProps {
   taskId: string;
-  designComments: PlanComment[];
+  entries: TaskContextEntry[];
   transitions: Transition[];
   transitioning: string | null;
   onTransition: (toStatus: string) => Promise<void> | void;
@@ -15,7 +15,7 @@ interface DesignReviewSectionProps {
 
 export function DesignReviewSection({
   taskId,
-  designComments,
+  entries,
   transitions,
   transitioning,
   onTransition,
@@ -31,13 +31,9 @@ export function DesignReviewSection({
     setSaving(true);
     try {
       if (newComment.trim()) {
-        const comment: PlanComment = {
-          author: 'admin',
+        await window.api.tasks.addFeedback(taskId, {
+          entryType: 'design_feedback',
           content: newComment.trim(),
-          createdAt: Date.now(),
-        };
-        await window.api.tasks.update(taskId, {
-          technicalDesignComments: [...(designComments ?? []), comment],
         });
         setNewComment('');
         await onRefetch();
@@ -56,22 +52,22 @@ export function DesignReviewSection({
         <CardTitle className="text-base">Design Review</CardTitle>
       </CardHeader>
       <CardContent>
-        {designComments && designComments.length > 0 && (
+        {entries && entries.length > 0 && (
           <div className="space-y-2 mb-4">
-            {designComments.map((comment, i) => (
-              <div key={i} className={`rounded-md bg-muted px-3 py-2${comment.addressed ? ' opacity-50' : ''}`}>
+            {entries.map((entry) => (
+              <div key={entry.id} className={`rounded-md bg-muted px-3 py-2${entry.addressed ? ' opacity-50' : ''}`}>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold">{comment.author}</span>
+                  <span className="text-xs font-semibold">{entry.source}</span>
                   <span className="text-xs text-muted-foreground">
-                    {new Date(comment.createdAt).toLocaleString()}
+                    {new Date(entry.createdAt).toLocaleString()}
                   </span>
-                  {comment.addressed && (
+                  {entry.addressed && (
                     <span className="text-xs bg-muted-foreground/20 text-muted-foreground px-1.5 py-0.5 rounded">
                       Addressed
                     </span>
                   )}
                 </div>
-                <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+                <p className="text-sm whitespace-pre-wrap">{entry.summary}</p>
               </div>
             ))}
           </div>

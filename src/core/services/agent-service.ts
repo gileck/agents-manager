@@ -552,11 +552,14 @@ export class AgentService implements IAgentService {
       const postRunLog = (message: string) => {
         this.taskEventLog.log({ taskId, category: 'agent_debug', severity: 'debug', message }).catch(() => {});
       };
-      await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog, context.revisionReason);
-      await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog, context.revisionReason);
-      const agentSummary = await this.postRunExtractor.appendSummaryComment(taskId, agentType, result, postRunLog);
+      await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog, context.revisionReason, run.id);
+      await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog, context.revisionReason, run.id);
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog);
+
+      // Extract summary for outcome transition context (previously done by appendSummaryComment)
+      const so = result.structuredOutput as { summary?: string; planSummary?: string; investigationSummary?: string; designSummary?: string } | undefined;
+      const agentSummary = so?.investigationSummary ?? so?.designSummary ?? so?.planSummary ?? so?.summary;
 
       // Release spawn lock before transition so that start_agent hooks
       // (which call agentService.execute()) can re-acquire it for follow-up agents.

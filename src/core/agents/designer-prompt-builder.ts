@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { formatCommentsForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
 
 export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'designer';
@@ -51,7 +51,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
       if (task.technicalDesign) {
         tdrLines.push('', '## Current Technical Design', task.technicalDesign);
       }
-      tdrLines.push(...formatCommentsForPrompt(task.technicalDesignComments, 'Admin Feedback on Design'));
+      tdrLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Admin Feedback on Design'));
       tdrLines.push(
         '',
         '## Revision Guidelines',
@@ -103,7 +103,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         tdLines.push('', '## Plan', task.plan);
       }
-      tdLines.push(...formatCommentsForPrompt(task.planComments, 'Plan Comments'));
+      tdLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
       tdLines.push(
         '',
         '## Instructions',

@@ -214,7 +214,7 @@ export function taskRoutes(services: AppServices): Router {
   });
 
   // ============================================
-  // Context Entries
+  // Context Entries & Feedback
   // ============================================
 
   router.get('/api/tasks/:id/context', async (req, res, next) => {
@@ -236,6 +236,18 @@ export function taskRoutes(services: AppServices): Router {
       const entry = await services.workflowService.addContextEntry(req.params.id, {
         source, entryType, summary, data,
       });
+      res.status(201).json(entry);
+    } catch (err) { next(err); }
+  });
+
+  router.post('/api/tasks/:id/feedback', async (req, res, next) => {
+    try {
+      const { entryType, content } = req.body as { entryType?: string; content?: string };
+      if (!entryType || !content) {
+        res.status(400).json({ error: 'entryType and content are required' });
+        return;
+      }
+      const entry = await services.workflowService.addTaskFeedback(req.params.id, entryType, content);
       res.status(201).json(entry);
     } catch (err) { next(err); }
   });

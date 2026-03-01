@@ -1,10 +1,7 @@
-import type { PlanComment } from '../../shared/types';
+import type { PlanComment, TaskContextEntry } from '../../shared/types';
 
 /**
- * Format plan/design comments for inclusion in agent prompts.
- * Splits comments into actionable (new) and already-addressed groups.
- * Only new comments are shown as actionable feedback; addressed comments
- * get a one-line summary note.
+ * @deprecated Use formatFeedbackForPrompt instead, which works with TaskContextEntry.
  */
 export function formatCommentsForPrompt(
   comments: PlanComment[],
@@ -30,6 +27,45 @@ export function formatCommentsForPrompt(
       lines.push('');
     }
     lines.push(`Note: ${addressedCount} previous feedback comment${addressedCount > 1 ? 's were' : ' was'} already addressed in the current plan.`);
+  }
+
+  return lines;
+}
+
+/**
+ * Format context entries of specific feedback types for inclusion in agent prompts.
+ * Splits entries into actionable (unaddressed) and already-addressed groups.
+ * Only unaddressed entries are shown as actionable feedback; addressed entries
+ * get a one-line summary count.
+ */
+export function formatFeedbackForPrompt(
+  entries: TaskContextEntry[] | undefined,
+  feedbackTypes: string[],
+  sectionTitle: string,
+): string[] {
+  if (!entries || entries.length === 0) return [];
+
+  const matching = entries.filter(e => feedbackTypes.includes(e.entryType));
+  if (matching.length === 0) return [];
+
+  const unaddressed = matching.filter(e => !e.addressed);
+  const addressedCount = matching.length - unaddressed.length;
+
+  const lines: string[] = [];
+
+  if (unaddressed.length > 0) {
+    lines.push('', `## ${sectionTitle}`);
+    for (const entry of unaddressed) {
+      const time = new Date(entry.createdAt).toLocaleString();
+      lines.push(`- **${entry.source}** (${time}): ${entry.summary}`);
+    }
+  }
+
+  if (addressedCount > 0) {
+    if (unaddressed.length === 0) {
+      lines.push('');
+    }
+    lines.push(`Note: ${addressedCount} previous feedback comment${addressedCount > 1 ? 's were' : ' was'} already addressed.`);
   }
 
   return lines;

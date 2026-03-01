@@ -2,6 +2,7 @@ import type {
   Task,
   TaskCreateInput,
   TaskUpdateInput,
+  TaskContextEntry,
   TransitionResult,
   AgentRun,
   AgentMode,
@@ -9,7 +10,6 @@ import type {
   PendingPrompt,
   DashboardStats,
   AgentChatMessage,
-  TaskContextEntry,
 } from '../../shared/types';
 
 export interface IWorkflowService {
@@ -26,4 +26,5 @@ export interface IWorkflowService {
   mergePR(taskId: string): Promise<TransitionResult>;
   getDashboardStats(now?: number): Promise<DashboardStats>;
   addContextEntry(taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry>;
+  addTaskFeedback(taskId: string, entryType: string, content: string): Promise<TaskContextEntry>;
 }

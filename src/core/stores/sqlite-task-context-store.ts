@@ -12,6 +12,8 @@ interface TaskContextEntryRow {
   summary: string;
   data: string;
   created_at: number;
+  addressed: number;
+  addressed_by_run_id: string | null;
 }
 
 function rowToEntry(row: TaskContextEntryRow): TaskContextEntry {
@@ -24,6 +26,8 @@ function rowToEntry(row: TaskContextEntryRow): TaskContextEntry {
     summary: row.summary,
     data: parseJson<Record<string, unknown>>(row.data, {}),
     createdAt: row.created_at,
+    addressed: row.addressed === 1,
+    addressedByRunId: row.addressed_by_run_id,
   };
 }
 
@@ -34,11 +38,12 @@ export class SqliteTaskContextStore implements ITaskContextStore {
     try {
       const id = generateId();
       const timestamp = now();
+      const addressed = input.addressed ? 1 : 0;
 
       this.db.prepare(`
-        INSERT INTO task_context_entries (id, task_id, agent_run_id, source, entry_type, summary, data, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, input.taskId, input.agentRunId ?? null, input.source, input.entryType, input.summary, JSON.stringify(input.data ?? {}), timestamp);
+        INSERT INTO task_context_entries (id, task_id, agent_run_id, source, entry_type, summary, data, created_at, addressed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, input.taskId, input.agentRunId ?? null, input.source, input.entryType, input.summary, JSON.stringify(input.data ?? {}), timestamp, addressed);
 
       return {
         id,
@@ -49,6 +54,8 @@ export class SqliteTaskContextStore implements ITaskContextStore {
         summary: input.summary,
         data: input.data ?? {},
         createdAt: timestamp,
+        addressed: !!input.addressed,
+        addressedByRunId: null,
       };
     } catch (err) {
       console.error('SqliteTaskContextStore.addEntry failed:', err);
@@ -64,6 +71,21 @@ export class SqliteTaskContextStore implements ITaskContextStore {
       return rows.map(rowToEntry);
     } catch (err) {
       console.error('SqliteTaskContextStore.getEntriesForTask failed:', err);
+      throw err;
+    }
+  }
+
+  async markEntriesAsAddressed(taskId: string, entryTypes: string[], addressedByRunId: string): Promise<number> {
+    try {
+      const placeholders = entryTypes.map(() => '?').join(', ');
+      const result = this.db.prepare(`
+        UPDATE task_context_entries
+        SET addressed = 1, addressed_by_run_id = ?
+        WHERE task_id = ? AND entry_type IN (${placeholders}) AND addressed = 0
+      `).run(addressedByRunId, taskId, ...entryTypes);
+      return result.changes;
+    } catch (err) {
+      console.error('SqliteTaskContextStore.markEntriesAsAddressed failed:', err);
       throw err;
     }
   }

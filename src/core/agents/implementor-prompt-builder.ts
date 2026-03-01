@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { formatCommentsForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 
 export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
@@ -98,7 +98,8 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         rcLines.push('', '## Plan', task.plan);
       }
-      rcLines.push(...formatCommentsForPrompt(task.planComments, 'Plan Comments'));
+      rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
+      rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['implementation_feedback'], 'Implementation Feedback'));
       if (task.technicalDesign) {
         rcLines.push('', '## Technical Design', task.technicalDesign);
       }
@@ -237,7 +238,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         lines.push('', '## Plan', task.plan);
       }
-      lines.push(...formatCommentsForPrompt(task.planComments, 'Plan Comments'));
+      lines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
       if (task.technicalDesign) {
         lines.push('', '## Technical Design', task.technicalDesign);
       }

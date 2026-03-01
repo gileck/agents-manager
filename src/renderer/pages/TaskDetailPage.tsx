@@ -27,10 +27,11 @@ import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
 import { ImplementationTab } from '../components/tasks/ImplementationTab';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { PlanReviewCard } from '../components/plan/PlanReviewCard';
+import { CommentThread } from '../components/plan/CommentThread';
+import { CommentInput } from '../components/plan/CommentInput';
 import type {
   Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, HookFailure,
-  PlanComment,
 } from '../../shared/types';
 import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
 import { ChatPanel } from '../components/chat/ChatPanel';
@@ -214,6 +215,19 @@ export function TaskDetailPage() {
       setTransitionError(err instanceof Error ? err.message : 'Connection error. Please try again.');
     } finally {
       setTransitioning(null);
+    }
+  };
+
+  const handleFeedbackAction = async (toStatus: string, comment: string, entryType: string) => {
+    try {
+      if (comment.trim()) {
+        await window.api.tasks.addFeedback(id!, { entryType, content: comment.trim() });
+        await refetchContext();
+      }
+      await handleTransition(toStatus);
+    } catch (err) {
+      console.error(`Feedback action failed (${entryType}):`, err);
+      setTransitionError(err instanceof Error ? err.message : 'Failed to submit feedback');
     }
   };
 
@@ -518,6 +532,27 @@ export function TaskDetailPage() {
               refetchDiagnostics={refetchDiagnostics}
             />
           )}
+          {/* PR Review feedback section */}
+          {task.status === 'pr_review' && (() => {
+            const implFeedback = (contextEntries ?? []).filter(e => e.entryType === 'implementation_feedback');
+            const reviseTransition = (transitions ?? []).find(t => t.to === 'implementing');
+            return (
+              <div className="mt-3 border rounded-md p-4">
+                <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Implementation Feedback</h4>
+                {implFeedback.length > 0 && (
+                  <div className="mb-4">
+                    <CommentThread entries={implFeedback} emptyMessage="No implementation feedback yet." />
+                  </div>
+                )}
+                <CommentInput
+                  placeholder="Add feedback for the implementor agent..."
+                  reviseTransition={reviseTransition}
+                  transitioning={transitioning}
+                  onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'implementation_feedback')}
+                />
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -650,27 +685,14 @@ export function TaskDetailPage() {
             title="Plan"
             content={task.plan}
             emptyContentMessage="No plan yet. A plan will appear here after the planning agent completes."
-            comments={task.planComments || []}
+            entries={(contextEntries ?? []).filter(e => e.entryType === 'plan_feedback')}
             isReviewStatus={task.status === 'plan_review'}
             transitions={transitions ?? []}
             transitioning={transitioning}
             commentPlaceholder="Add feedback for the planning agent..."
             approveToStatus="implementing"
             reviseToStatus="planning"
-            onAction={async (toStatus, comment) => {
-              if (comment.trim()) {
-                const newComment: PlanComment = {
-                  author: 'admin',
-                  content: comment.trim(),
-                  createdAt: Date.now(),
-                };
-                await window.api.tasks.update(id!, {
-                  planComments: [...(task.planComments ?? []), newComment],
-                });
-                await refetch();
-              }
-              await handleTransition(toStatus);
-            }}
+            onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'plan_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
           />
         </TabsContent>
@@ -680,27 +702,14 @@ export function TaskDetailPage() {
             title="Technical Design"
             content={task.technicalDesign}
             emptyContentMessage="No technical design yet. A design document will appear here after the design agent completes."
-            comments={task.technicalDesignComments || []}
+            entries={(contextEntries ?? []).filter(e => e.entryType === 'design_feedback')}
             isReviewStatus={task.status === 'design_review'}
             transitions={transitions ?? []}
             transitioning={transitioning}
             commentPlaceholder="Add feedback for the design agent..."
             approveToStatus="implementing"
             reviseToStatus="designing"
-            onAction={async (toStatus, comment) => {
-              if (comment.trim()) {
-                const newComment: PlanComment = {
-                  author: 'admin',
-                  content: comment.trim(),
-                  createdAt: Date.now(),
-                };
-                await window.api.tasks.update(id!, {
-                  technicalDesignComments: [...(task.technicalDesignComments ?? []), newComment],
-                });
-                await refetch();
-              }
-              await handleTransition(toStatus);
-            }}
+            onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'design_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
           />
         </TabsContent>

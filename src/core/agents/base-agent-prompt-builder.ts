@@ -1,4 +1,5 @@
 import type { AgentContext, AgentConfig, AgentRunResult } from '../../shared/types';
+import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
 import type { AgentLibResult } from '../interfaces/agent-lib';
 import { PromptRenderer } from '../services/prompt-renderer';
 
@@ -45,11 +46,40 @@ export abstract class BaseAgentPromptBuilder {
       }
     }
     if (context.taskContext?.length) {
-      const block = context.taskContext.map(e => {
-        const ts = new Date(e.createdAt).toISOString();
-        return `### [${e.source}] ${e.entryType} (${ts})\n${e.summary}`;
-      }).join('\n\n');
-      prompt = `## Task Context\n\n${block}\n\n---\n\n${prompt}`;
+      const feedbackTypeSet = new Set<string>(FEEDBACK_ENTRY_TYPES);
+      const feedbackEntries = context.taskContext.filter(e => feedbackTypeSet.has(e.entryType));
+      const workEntries = context.taskContext.filter(e => !feedbackTypeSet.has(e.entryType));
+
+      const sections: string[] = [];
+
+      // Unaddressed feedback — shown prominently
+      const unaddressed = feedbackEntries.filter(e => !e.addressed);
+      if (unaddressed.length > 0) {
+        const block = unaddressed.map(e => {
+          const ts = new Date(e.createdAt).toISOString();
+          return `### [${e.source}] ${e.entryType} (${ts})\n${e.summary}`;
+        }).join('\n\n');
+        sections.push(`## Unaddressed Feedback\n\n${block}`);
+      }
+
+      // Work product context (agent summaries, user inputs, etc.)
+      if (workEntries.length > 0) {
+        const block = workEntries.map(e => {
+          const ts = new Date(e.createdAt).toISOString();
+          return `### [${e.source}] ${e.entryType} (${ts})\n${e.summary}`;
+        }).join('\n\n');
+        sections.push(`## Task Context\n\n${block}`);
+      }
+
+      // Addressed feedback — collapsed to count
+      const addressedCount = feedbackEntries.filter(e => e.addressed).length;
+      if (addressedCount > 0) {
+        sections.push(`Note: ${addressedCount} previous feedback comment${addressedCount > 1 ? 's were' : ' was'} already addressed.`);
+      }
+
+      if (sections.length > 0) {
+        prompt = `${sections.join('\n\n')}\n\n---\n\n${prompt}`;
+      }
     }
 
     if (!context.workdir) {

@@ -2,6 +2,7 @@ import type {
   Task,
   TaskCreateInput,
   TaskUpdateInput,
+  TaskContextEntry,
   TransitionResult,
   AgentRun,
   AgentMode,
@@ -9,8 +10,8 @@ import type {
   PendingPrompt,
   DashboardStats,
   AgentChatMessage,
-  TaskContextEntry,
 } from '../../shared/types';
+import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
@@ -377,6 +378,31 @@ export class WorkflowService implements IWorkflowService {
       activeAgentRuns: activeRuns.length,
       recentActivityCount: recentActivity.length,
     };
+  }
+
+  async addTaskFeedback(taskId: string, entryType: string, content: string): Promise<TaskContextEntry> {
+    if (!(FEEDBACK_ENTRY_TYPES as readonly string[]).includes(entryType)) {
+      throw new Error(`Invalid feedback entry type: ${entryType}. Must be one of: ${FEEDBACK_ENTRY_TYPES.join(', ')}`);
+    }
+    const task = await this.taskStore.getTask(taskId);
+    if (!task) throw new Error(`Task not found: ${taskId}`);
+
+    const entry = await this.taskContextStore.addEntry({
+      taskId,
+      source: 'admin',
+      entryType,
+      summary: content,
+    });
+
+    await this.activityLog.log({
+      action: 'update',
+      entityType: 'task',
+      entityId: taskId,
+      projectId: task.projectId,
+      summary: `Added ${entryType} feedback`,
+    });
+
+    return entry;
   }
 
   async forceTransitionTask(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult> {

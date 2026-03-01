@@ -1,5 +1,5 @@
 import type { AgentContext } from '../../shared/types';
-import { formatCommentsForPrompt } from '../agents/prompt-utils';
+import { formatCommentsForPrompt, formatFeedbackForPrompt } from '../agents/prompt-utils';
 
 export class PromptRenderer {
   render(template: string, context: AgentContext): string {
@@ -84,6 +84,9 @@ export class PromptRenderer {
   }
 
   private buildPlanCommentsSection(context: AgentContext): string {
+    if (context.taskContext?.some(e => e.entryType === 'plan_feedback')) {
+      return formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Admin Feedback').join('\n');
+    }
     return formatCommentsForPrompt(context.task.planComments, 'Admin Feedback').join('\n');
   }
 
@@ -123,6 +126,9 @@ export class PromptRenderer {
   }
 
   private buildTechnicalDesignCommentsSection(context: AgentContext): string {
+    if (context.taskContext?.some(e => e.entryType === 'design_feedback')) {
+      return formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Admin Feedback on Design').join('\n');
+    }
     return formatCommentsForPrompt(context.task.technicalDesignComments, 'Admin Feedback on Design').join('\n');
   }
 

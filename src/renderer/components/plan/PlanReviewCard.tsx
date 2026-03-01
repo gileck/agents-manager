@@ -2,13 +2,13 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { CommentThread } from './CommentThread';
 import { CommentInput } from './CommentInput';
-import type { PlanComment, Transition } from '../../../shared/types';
+import type { TaskContextEntry, Transition } from '../../../shared/types';
 
 interface PlanReviewCardProps {
   title: string;
   content: string | null;
   emptyContentMessage: string;
-  comments: PlanComment[];
+  entries: TaskContextEntry[];
   isReviewStatus: boolean;
   transitions: Transition[];
   transitioning: string | null;
@@ -23,7 +23,7 @@ export function PlanReviewCard({
   title,
   content,
   emptyContentMessage,
-  comments,
+  entries,
   isReviewStatus,
   transitions,
   transitioning,
@@ -52,15 +52,15 @@ export function PlanReviewCard({
         </div>
 
         {/* Comments Section - Always visible */}
-        {(comments.length > 0 || isReviewStatus) && (
+        {(entries.length > 0 || isReviewStatus) && (
           <div className="border-t pt-4 mt-6">
             <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Review Comments</h4>
 
             {/* Comment History */}
-            {comments.length > 0 && (
+            {entries.length > 0 && (
               <div className="mb-4">
                 <CommentThread
-                  comments={comments}
+                  entries={entries}
                   emptyMessage="No review comments yet."
                 />
               </div>

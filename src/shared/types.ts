@@ -242,7 +242,10 @@ export interface ImplementationPhase {
   prLink?: string;      // PR URL for this phase (set after merge)
 }
 
-// Plan comment types
+/**
+ * @deprecated Use TaskContextEntry with FEEDBACK_ENTRY_TYPES instead.
+ * Retained for backward compatibility with JSON blob columns.
+ */
 export interface PlanComment {
   author: string;
   content: string;
@@ -269,7 +272,9 @@ export interface Task {
   technicalDesign: string | null;
   subtasks: Subtask[];
   phases: ImplementationPhase[] | null;
+  /** @deprecated Use TaskContextEntry with entryType='plan_feedback' instead. */
   planComments: PlanComment[];
+  /** @deprecated Use TaskContextEntry with entryType='design_feedback' instead. */
   technicalDesignComments: PlanComment[];
   metadata: Record<string, unknown>;
   createdAt: number;
@@ -309,7 +314,9 @@ export interface TaskUpdateInput {
   technicalDesign?: string | null;
   subtasks?: Subtask[];
   phases?: ImplementationPhase[] | null;
+  /** @deprecated Use addTaskFeedback API with entryType='plan_feedback' instead. */
   planComments?: PlanComment[];
+  /** @deprecated Use addTaskFeedback API with entryType='design_feedback' instead. */
   technicalDesignComments?: PlanComment[];
   metadata?: Record<string, unknown>;
   pipelineId?: string;
@@ -561,6 +568,8 @@ export interface TaskContextEntry {
   summary: string;
   data: Record<string, unknown>;
   createdAt: number;
+  addressed: boolean;
+  addressedByRunId: string | null;
 }
 
 export interface TaskContextEntryCreateInput {
@@ -570,7 +579,12 @@ export interface TaskContextEntryCreateInput {
   entryType: string;
   summary: string;
   data?: Record<string, unknown>;
+  addressed?: boolean;
 }
+
+export const FEEDBACK_ENTRY_TYPES = [
+  'plan_feedback', 'design_feedback', 'implementation_feedback',
+] as const;
 
 export interface AgentContext {
   task: Task;

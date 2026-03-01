@@ -33,6 +33,7 @@ export class PostRunExtractor {
     agentType: string,
     onLog: OnLog,
     revisionReason?: RevisionReason,
+    agentRunId?: string,
   ): Promise<void> {
     const isPlanMode = agentType === 'planner' || agentType === 'investigator';
     if (result.exitCode !== 0 || !isPlanMode) return;
@@ -78,12 +79,16 @@ export class PostRunExtractor {
       }
     }
 
-    // After a successful revision, mark all existing plan comments as addressed
+    // After a successful revision, mark all existing plan feedback as addressed
     if (revisionReason === 'changes_requested') {
-      try {
-        await this.markCommentsAsAddressed(taskId, 'planComments', onLog);
-      } catch (err) {
-        onLog(`Warning: failed to mark planComments as addressed: ${err instanceof Error ? err.message : String(err)}`);
+      if (!agentRunId) {
+        onLog('Warning: agentRunId is required to mark plan_feedback as addressed but was not provided');
+      } else {
+        try {
+          await this.markFeedbackAsAddressed(taskId, ['plan_feedback'], agentRunId, onLog);
+        } catch (err) {
+          onLog(`Warning: failed to mark plan_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }
   }
@@ -97,6 +102,7 @@ export class PostRunExtractor {
     agentType: string,
     onLog: OnLog,
     revisionReason?: RevisionReason,
+    agentRunId?: string,
   ): Promise<void> {
     const isTdMode = agentType === 'designer';
     if (result.exitCode !== 0 || !isTdMode) return;
@@ -113,12 +119,16 @@ export class PostRunExtractor {
       }
     }
 
-    // After a successful revision, mark all existing design comments as addressed
+    // After a successful revision, mark all existing design feedback as addressed
     if (revisionReason === 'changes_requested') {
-      try {
-        await this.markCommentsAsAddressed(taskId, 'technicalDesignComments', onLog);
-      } catch (err) {
-        onLog(`Warning: failed to mark technicalDesignComments as addressed: ${err instanceof Error ? err.message : String(err)}`);
+      if (!agentRunId) {
+        onLog('Warning: agentRunId is required to mark design_feedback as addressed but was not provided');
+      } else {
+        try {
+          await this.markFeedbackAsAddressed(taskId, ['design_feedback'], agentRunId, onLog);
+        } catch (err) {
+          onLog(`Warning: failed to mark design_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }
   }
@@ -183,6 +193,7 @@ export class PostRunExtractor {
         source: entrySource,
         entryType, summary, data: entryData,
       });
+
     } catch (err) {
       // Non-fatal -- don't block pipeline on context entry failure
       await this.taskEventLog.log({
@@ -191,6 +202,15 @@ export class PostRunExtractor {
         severity: 'warning',
         message: `Failed to save context entry: ${err instanceof Error ? err.message : String(err)}`,
       });
+    }
+
+    // When implementor addresses reviewer changes, mark implementation_feedback as addressed
+    if (agentType === 'implementor' && revisionReason === 'changes_requested') {
+      try {
+        await this.markFeedbackAsAddressed(taskId, ['implementation_feedback'], agentRunId, onLog);
+      } catch (err) {
+        onLog(`Warning: failed to mark implementation_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 
@@ -256,74 +276,18 @@ export class PostRunExtractor {
     }
   }
 
-  // ------- Comment addressing helper -------
+  // ------- Feedback addressing helper -------
 
-  private async markCommentsAsAddressed(
+  private async markFeedbackAsAddressed(
     taskId: string,
-    field: 'planComments' | 'technicalDesignComments',
+    feedbackTypes: string[],
+    agentRunId: string,
     onLog: OnLog,
   ): Promise<void> {
-    const task = await this.taskStore.getTask(taskId);
-    if (!task) return;
-
-    const comments = task[field];
-    if (!comments || comments.length === 0) return;
-
-    const unaddressed = comments.filter(c => !c.addressed);
-    if (unaddressed.length === 0) return;
-
-    const updated = comments.map(c => c.addressed ? c : { ...c, addressed: true });
-    await this.taskStore.updateTask(taskId, { [field]: updated });
-    onLog(`Marked ${unaddressed.length} ${field} as addressed`);
-  }
-
-  /**
-   * Append the agent's summary as a comment on the appropriate artifact (planComments or technicalDesignComments).
-   * Returns the normalized summary string so the caller can forward it downstream.
-   */
-  async appendSummaryComment(
-    taskId: string,
-    agentType: string,
-    result: AgentRunResult,
-    onLog: OnLog,
-  ): Promise<string | undefined> {
-    if (result.exitCode !== 0) return undefined;
-
-    const so = result.structuredOutput as {
-      summary?: string;
-      planSummary?: string;
-      investigationSummary?: string;
-      designSummary?: string;
-    } | undefined;
-
-    const summary = so?.investigationSummary ?? so?.designSummary ?? so?.planSummary ?? so?.summary;
-    if (!summary || !summary.trim()) return undefined;
-
-    const comment = { author: 'agent', content: summary.trim(), createdAt: Date.now() };
-
-    try {
-      if (agentType === 'planner' || agentType === 'investigator') {
-        const task = await this.taskStore.getTask(taskId);
-        const existing = task?.planComments ?? [];
-        await this.taskStore.updateTask(taskId, { planComments: [...existing, comment] });
-        onLog(`Appended agent summary comment to planComments (length=${summary.length})`);
-      } else if (agentType === 'designer') {
-        const task = await this.taskStore.getTask(taskId);
-        const existing = task?.technicalDesignComments ?? [];
-        await this.taskStore.updateTask(taskId, { technicalDesignComments: [...existing, comment] });
-        onLog(`Appended agent summary comment to technicalDesignComments (length=${summary.length})`);
-      }
-    } catch (err) {
-      // Non-fatal — don't block pipeline on comment append failure
-      await this.taskEventLog.log({
-        taskId,
-        category: 'agent',
-        severity: 'warning',
-        message: `Failed to append summary comment: ${err instanceof Error ? err.message : String(err)}`,
-      });
+    const count = await this.taskContextStore.markEntriesAsAddressed(taskId, feedbackTypes, agentRunId);
+    if (count > 0) {
+      onLog(`Marked ${count} feedback entries as addressed (types=${feedbackTypes.join(',')})`);
     }
-
-    return summary.trim();
   }
 
   // ------- Raw output parsing helpers -------

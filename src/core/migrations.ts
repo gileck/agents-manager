@@ -875,6 +875,17 @@ export function getMigrations(): Migration[] {
       name: '081_reseed_pipelines_request_changes',
       sql: getReseedPipelinesSql(),
     },
+    {
+      name: '082_add_addressed_to_context_entries',
+      sql: `
+        ALTER TABLE task_context_entries ADD COLUMN addressed INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE task_context_entries ADD COLUMN addressed_by_run_id TEXT
+      `,
+    },
+    {
+      name: '083_migrate_plan_design_comments_to_context_entries',
+      sql: getMigratePlanDesignCommentsSql(),
+    },
   ];
 }
 
@@ -1996,4 +2007,53 @@ function getConsolidateToSinglePipelineSql(): string {
   statements.push(`INSERT OR REPLACE INTO settings (key, value) VALUES ('default_pipeline_id', 'pipeline-agent')`);
 
   return statements.join(';\n');
+}
+
+/**
+ * Migrate plan_comments and technical_design_comments JSON blobs into task_context_entries.
+ * Only migrates admin comments (author='admin') as feedback entries.
+ * Agent summaries are skipped since saveContextEntry() already writes them.
+ */
+function getMigratePlanDesignCommentsSql(): string {
+  // Use SQLite json_each to iterate over JSON arrays stored in tasks columns.
+  // Only migrate admin-authored comments as feedback entries.
+  // Agent-authored comments are skipped (already stored as context entries by saveContextEntry).
+  return [
+    // Migrate planComments with author='admin' → plan_feedback
+    `INSERT INTO task_context_entries (id, task_id, agent_run_id, source, entry_type, summary, data, created_at, addressed, addressed_by_run_id)
+     SELECT
+       'ctx-migrate-plan-' || tasks.id || '-' || j.key,
+       tasks.id,
+       NULL,
+       'admin',
+       'plan_feedback',
+       COALESCE(json_extract(j.value, '$.content'), '(empty comment)'),
+       '{}',
+       COALESCE(json_extract(j.value, '$.createdAt'), CAST(strftime('%s', 'now') AS INTEGER) * 1000),
+       CASE WHEN json_extract(j.value, '$.addressed') = 1 THEN 1 ELSE 0 END,
+       NULL
+     FROM tasks, json_each(tasks.plan_comments) AS j
+     WHERE tasks.plan_comments IS NOT NULL
+       AND tasks.plan_comments != '[]'
+       AND tasks.plan_comments != 'null'
+       AND json_extract(j.value, '$.author') = 'admin'`,
+    // Migrate technicalDesignComments with author='admin' → design_feedback
+    `INSERT INTO task_context_entries (id, task_id, agent_run_id, source, entry_type, summary, data, created_at, addressed, addressed_by_run_id)
+     SELECT
+       'ctx-migrate-design-' || tasks.id || '-' || j.key,
+       tasks.id,
+       NULL,
+       'admin',
+       'design_feedback',
+       COALESCE(json_extract(j.value, '$.content'), '(empty comment)'),
+       '{}',
+       COALESCE(json_extract(j.value, '$.createdAt'), CAST(strftime('%s', 'now') AS INTEGER) * 1000),
+       CASE WHEN json_extract(j.value, '$.addressed') = 1 THEN 1 ELSE 0 END,
+       NULL
+     FROM tasks, json_each(tasks.technical_design_comments) AS j
+     WHERE tasks.technical_design_comments IS NOT NULL
+       AND tasks.technical_design_comments != '[]'
+       AND tasks.technical_design_comments != 'null'
+       AND json_extract(j.value, '$.author') = 'admin'`,
+  ].join(';\n');
 }
