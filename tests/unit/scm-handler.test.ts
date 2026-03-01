@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { IProjectStore } from '../../src/main/interfaces/project-store';
-import type { ITaskStore } from '../../src/main/interfaces/task-store';
-import type { ITaskArtifactStore } from '../../src/main/interfaces/task-artifact-store';
-import type { ITaskEventLog } from '../../src/main/interfaces/task-event-log';
-import type { IWorktreeManager } from '../../src/main/interfaces/worktree-manager';
-import type { IGitOps } from '../../src/main/interfaces/git-ops';
-import type { IScmPlatform } from '../../src/main/interfaces/scm-platform';
-import type { IPipelineEngine } from '../../src/main/interfaces/pipeline-engine';
+import type { IProjectStore } from '../../src/core/interfaces/project-store';
+import type { ITaskStore } from '../../src/core/interfaces/task-store';
+import type { ITaskArtifactStore } from '../../src/core/interfaces/task-artifact-store';
+import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
+import type { IWorktreeManager } from '../../src/core/interfaces/worktree-manager';
+import type { IGitOps } from '../../src/core/interfaces/git-ops';
+import type { IScmPlatform } from '../../src/core/interfaces/scm-platform';
+import type { IPipelineEngine } from '../../src/core/interfaces/pipeline-engine';
 import type { Task, Transition, TransitionContext, HookResult, TaskArtifact, TaskEvent, Project } from '../../src/shared/types';
-import { registerScmHandler, type ScmHandlerDeps } from '../../src/main/handlers/scm-handler';
+import { registerScmHandler, type ScmHandlerDeps } from '../../src/core/handlers/scm-handler';
 
 // Helper to create a minimal Task for testing
 function makeTask(overrides?: Partial<Task>): Task {

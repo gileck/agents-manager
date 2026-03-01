@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, resetCounters } from '../helpers/factories';
-import { AGENT_PIPELINE, BUG_AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
-import { StubGitOps } from '../../src/main/services/stub-git-ops';
+import { AGENT_PIPELINE, BUG_AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { StubGitOps } from '../../src/core/services/stub-git-ops';
 import type { HookResult } from '../../src/shared/types';
-import { now } from '../../src/main/stores/utils';
+import { now } from '../../src/core/stores/utils';
 
 describe('Agent Outcome Transitions', () => {
   let ctx: TestContext;

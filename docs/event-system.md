@@ -4,7 +4,7 @@ description: Events, activity log, transition history, and debug timeline
 summary: Three log systems — activity log (per-task timeline), transition history (status change audit trail), and the debug timeline (detailed agent turn events). All stored in SQLite.
 priority: 4
 key_points:
-  - "Activity log: src/main/stores/activity-log-store.ts"
+  - "Activity log: src/core/stores/sqlite-activity-log.ts"
   - "Transition history: recorded on every successful pipeline transition"
   - "Debug timeline: agent turns, tool calls, and output chunks"
 ---
@@ -24,8 +24,8 @@ The application maintains three complementary log systems, each serving a differ
 
 ## TaskEventLog
 
-**Interface:** `ITaskEventLog` in `src/main/interfaces/task-event-log.ts`
-**Store:** `src/main/stores/sqlite-task-event-log.ts`
+**Interface:** `ITaskEventLog` in `src/core/interfaces/task-event-log.ts`
+**Store:** `src/core/stores/sqlite-task-event-log.ts`
 
 ```typescript
 interface TaskEvent {
@@ -74,8 +74,8 @@ Results ordered by `created_at ASC`.
 
 ## ActivityLog
 
-**Interface:** `IActivityLog` in `src/main/interfaces/activity-log.ts`
-**Store:** `src/main/stores/sqlite-activity-log.ts`
+**Interface:** `IActivityLog` in `src/core/interfaces/activity-log.ts`
+**Store:** `src/core/stores/sqlite-activity-log.ts`
 
 ```typescript
 interface ActivityEntry {
@@ -149,8 +149,8 @@ Indexed by `(task_id, created_at)` for efficient per-task queries.
 
 ## Task Context Entries
 
-**Interface:** `ITaskContextStore` in `src/main/interfaces/task-context-store.ts`
-**Store:** `src/main/stores/sqlite-task-context-store.ts`
+**Interface:** `ITaskContextStore` in `src/core/interfaces/task-context-store.ts`
+**Store:** `src/core/stores/sqlite-task-context-store.ts`
 
 ```typescript
 interface TaskContextEntry {
@@ -178,7 +178,7 @@ Ordered by `created_at ASC` — chronological accumulation.
 
 ## Debug Timeline
 
-**IPC handler:** `TASK_DEBUG_TIMELINE` in `src/main/ipc-handlers.ts`
+**IPC handler:** `TASK_DEBUG_TIMELINE` in `src/core/services/timeline/timeline-service.ts`
 
 The debug timeline aggregates data from 8 sources into a unified, time-sorted view:
 

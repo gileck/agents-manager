@@ -2,8 +2,7 @@ import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { getMigrations } from '../main/migrations';
-import { createAppServices, type AppServices } from '../main/providers/setup';
+import { getMigrations } from './migrations';
 
 const DEFAULT_DB_PATH = path.join(
   os.homedir(),
@@ -13,8 +12,21 @@ const DEFAULT_DB_PATH = path.join(
   'agents-manager.db',
 );
 
-function resolveDbPath(flagPath?: string): string {
-  if (flagPath) return flagPath;
+export interface OpenDatabaseOptions {
+  /** Explicit path to the database file. Overrides AM_DB_PATH env var and default. */
+  dbPath?: string;
+  /** Path to the better-sqlite3 native binding. Overrides BETTER_SQLITE3_BINDING env var. */
+  nativeBinding?: string;
+}
+
+/**
+ * Resolves the database file path from (in priority order):
+ * 1. Explicit `dbPath` option
+ * 2. AM_DB_PATH environment variable
+ * 3. Default macOS Application Support path
+ */
+export function resolveDbPath(dbPath?: string): string {
+  if (dbPath) return dbPath;
   if (process.env.AM_DB_PATH) return process.env.AM_DB_PATH;
   return DEFAULT_DB_PATH;
 }
@@ -37,13 +49,16 @@ function resolveNativeBinding(): string | undefined {
     // anything else (EACCES, ELOOP, etc.) is worth surfacing.
     const code = (err as NodeJS.ErrnoException)?.code;
     if (code !== 'MODULE_NOT_FOUND') {
-      console.warn(`[cli/db] resolveNativeBinding: unexpected error: ${err instanceof Error ? err.message : String(err)}`);
+      console.warn(`[core/db] resolveNativeBinding: unexpected error: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
   return undefined;
 }
 
+/**
+ * Runs all pending migrations on the database.
+ */
 function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS migrations (
@@ -69,21 +84,27 @@ function runMigrations(db: Database.Database): void {
   }
 }
 
-export function openDatabase(flagPath?: string): { db: Database.Database; services: AppServices } {
-  const dbPath = resolveDbPath(flagPath);
+/**
+ * Opens (or creates) the SQLite database, enables WAL mode and foreign keys,
+ * and runs all pending migrations.
+ *
+ * Shared by the daemon, CLI, and test infrastructure.
+ */
+export function openDatabase(options: OpenDatabaseOptions = {}): Database.Database {
+  const dbPath = resolveDbPath(options.dbPath);
 
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  const nativeBinding = resolveNativeBinding();
+  const nativeBinding = options.nativeBinding ?? resolveNativeBinding();
+
   const db = new Database(dbPath, { nativeBinding });
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
   runMigrations(db);
 
-  const services = createAppServices(db);
-  return { db, services };
+  return db;
 }

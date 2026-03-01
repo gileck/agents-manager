@@ -9,13 +9,17 @@ The daemon is a Node.js process that hosts all business logic and exposes it ove
 
 All three UIs (Electron, Web, CLI) use the same API through a shared client SDK.
 
+**Framework:** Express (simple, familiar, performance irrelevant for local daemon).
+
+**Settings storage:** SQLite table (consistent with all other data, accessible by daemon without Electron).
+
 ```
 ┌─────────────────────────────────────────────────┐
 │                   Daemon                         │
 │                                                  │
 │   src/core/ (business logic)                     │
 │       ↑                                          │
-│   src/daemon/ (HTTP + WS server)                 │
+│   src/daemon/ (Express + WS server)              │
 │       ↑                                          │
 │   localhost:3847                                  │
 └──────────┬──────────────┬──────────────┬─────────┘
@@ -49,6 +53,10 @@ Optional token auth: on startup the daemon writes a random token to `~/.agents-m
 ---
 
 ## Conventions
+
+### CORS
+
+The daemon enables CORS for all origins (`cors({ origin: true })`). Since the daemon binds to `127.0.0.1`, only local clients can connect. This allows the Web UI (served from a different port or origin) to make fetch requests to the daemon.
 
 ### Request/Response Format
 
@@ -466,6 +474,8 @@ If the WebSocket disconnects (network issue, client restart):
 4. Client can call `GET /api/agent/runs/:runId` to get the current state and accumulated output
 5. If the agent is still running, new output will stream from the reconnection point
 
+**Future optimization:** A per-task ring buffer in the daemon could allow clients to catch up on recent output after reconnection. Not needed for v1 since agent output is also persisted in the database via the debug timeline.
+
 The client SDK handles reconnection automatically:
 
 ```typescript
@@ -813,7 +823,7 @@ export function registerAgentCommands(program: Command, api: ApiClient, ws: WsCl
 agents-manager daemon start
 
 # Background (production)
-agents-manager daemon start --detach
+agents-manager daemon start --detach  # or -d
 
 # With custom port
 agents-manager daemon start --port 4000

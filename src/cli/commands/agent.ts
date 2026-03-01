@@ -1,9 +1,9 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../main/providers/setup';
+import type { ApiClient } from '../../client/api-client';
 import type { AgentMode } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 
-export function registerAgentCommands(program: Command, getServices: () => AppServices): void {
+export function registerAgentCommands(program: Command, api: ApiClient): void {
   const agent = program.command('agent').description('Manage agent runs');
 
   agent
@@ -13,8 +13,7 @@ export function registerAgentCommands(program: Command, getServices: () => AppSe
     .option('--type <agentType>', 'Agent type', 'scripted')
     .action(async (taskId: string, cmdOpts: { mode: string; type: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const run = await services.workflowService.startAgent(
+      const run = await api.agents.start(
         taskId,
         cmdOpts.mode as AgentMode,
         cmdOpts.type,
@@ -23,12 +22,11 @@ export function registerAgentCommands(program: Command, getServices: () => AppSe
     });
 
   agent
-    .command('stop <runId>')
+    .command('stop <taskId> <runId>')
     .description('Stop a running agent')
-    .action(async (runId: string) => {
+    .action(async (taskId: string, runId: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      await services.workflowService.stopAgent(runId);
+      await api.agents.stop(taskId, runId);
       if (opts.json) {
         output({ stopped: true, runId }, opts);
       } else if (!opts.quiet) {
@@ -44,18 +42,17 @@ export function registerAgentCommands(program: Command, getServices: () => AppSe
     .option('--all', 'Show all runs (including completed)')
     .action(async (cmdOpts: { task?: string; active?: boolean; all?: boolean }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      let runs;
+      let runs: unknown[];
       if (cmdOpts.all) {
-        runs = await services.agentRunStore.getAllRuns();
+        runs = await api.agents.getAllRuns();
       } else if (cmdOpts.active) {
-        runs = await services.agentRunStore.getActiveRuns();
+        runs = await api.agents.getActiveRuns();
       } else if (cmdOpts.task) {
-        runs = await services.agentRunStore.getRunsForTask(cmdOpts.task);
+        runs = await api.agents.runs(cmdOpts.task);
       } else {
-        runs = await services.agentRunStore.getActiveRuns();
+        runs = await api.agents.getActiveRuns();
       }
-      const rows = runs.map((r) => ({
+      const rows = (runs as { id: string; taskId: string; agentType: string; mode: string; status: string; startedAt: number }[]).map((r) => ({
         runId: r.id,
         task: r.taskId,
         agent: r.agentType,
@@ -72,13 +69,12 @@ export function registerAgentCommands(program: Command, getServices: () => AppSe
     .description('Get agent run details')
     .action(async (runId: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const run = await services.agentRunStore.getRun(runId);
-      if (!run) {
+      try {
+        const run = await api.agents.getRun(runId);
+        output(run, opts);
+      } catch {
         console.error(`Agent run not found: ${runId}`);
         process.exitCode = 1;
-        return;
       }
-      output(run, opts);
     });
 }

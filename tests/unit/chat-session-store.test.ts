@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { SqliteChatSessionStore } from '../../src/main/stores/sqlite-chat-session-store';
-import type { ChatSessionCreateInput } from '../../src/main/interfaces/chat-session-store';
-import { getMigrations } from '../../src/main/migrations';
+import { SqliteChatSessionStore } from '../../src/core/stores/sqlite-chat-session-store';
+import type { ChatSessionCreateInput } from '../../src/core/interfaces/chat-session-store';
+import { getMigrations } from '../../src/core/migrations';
 
 function applyMigrations(db: Database.Database): void {
   db.exec(`

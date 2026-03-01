@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SandboxGuard } from '../../src/main/services/sandbox-guard';
+import { SandboxGuard } from '../../src/core/services/sandbox-guard';
 
 // Mock fs.realpathSync to return the input as-is (avoid filesystem dependency)
 vi.mock('fs', () => ({

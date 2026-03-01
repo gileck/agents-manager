@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { ChatAgentService, type RunningAgent } from '../../src/main/services/chat-agent-service';
-import type { IChatMessageStore } from '../../src/main/interfaces/chat-message-store';
-import type { IChatSessionStore } from '../../src/main/interfaces/chat-session-store';
-import type { IProjectStore } from '../../src/main/interfaces/project-store';
-import type { ITaskStore } from '../../src/main/interfaces/task-store';
-import type { IPipelineStore } from '../../src/main/interfaces/pipeline-store';
-import type { AgentLibRegistry } from '../../src/main/services/agent-lib-registry';
-import type { ChatSession } from '../../src/main/interfaces/chat-session-store';
+import { ChatAgentService, type RunningAgent } from '../../src/core/services/chat-agent-service';
+import type { IChatMessageStore } from '../../src/core/interfaces/chat-message-store';
+import type { IChatSessionStore } from '../../src/core/interfaces/chat-session-store';
+import type { IProjectStore } from '../../src/core/interfaces/project-store';
+import type { ITaskStore } from '../../src/core/interfaces/task-store';
+import type { IPipelineStore } from '../../src/core/interfaces/pipeline-store';
+import type { AgentLibRegistry } from '../../src/core/services/agent-lib-registry';
+import type { ChatSession } from '../../src/core/interfaces/chat-session-store';
 import type { Project } from '../../src/shared/types';
 
 // Mock the ESM import function
-vi.mock('../../src/main/services/chat-agent-service', async (importOriginal) => {
+vi.mock('../../src/core/services/chat-agent-service', async (importOriginal) => {
   const mod = await importOriginal() as Record<string, unknown>;
   return {
     ...mod,

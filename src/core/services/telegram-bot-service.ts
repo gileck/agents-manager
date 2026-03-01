@@ -6,7 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { TaskUpdateInput, TelegramBotLogEntry } from '../../shared/types';
-import { getSetting } from '@template/main/services/settings-service';
+
 
 /** Maximum allowed length for free-text input from Telegram users */
 const MAX_INPUT_LENGTH = 2000;
@@ -30,6 +30,7 @@ interface BotDeps {
   pipelineStore: IPipelineStore;
   pipelineEngine: IPipelineEngine;
   workflowService: IWorkflowService;
+  defaultPipelineId?: string;
 }
 
 export class TelegramBotService implements ITelegramBotService {
@@ -352,7 +353,7 @@ export class TelegramBotService implements ITelegramBotService {
     }
 
     // Get default pipeline from settings or fall back to first pipeline
-    const defaultPipelineId = getSetting('default_pipeline_id', '');
+    const defaultPipelineId = this.deps.defaultPipelineId ?? '';
     const pipelineId = defaultPipelineId || pipelines[0].id;
 
     const task = await this.deps.workflowService.createTask({

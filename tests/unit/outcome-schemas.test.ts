@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateOutcomePayload, OUTCOME_SCHEMAS } from '../../src/main/handlers/outcome-schemas';
+import { validateOutcomePayload, OUTCOME_SCHEMAS } from '../../src/core/handlers/outcome-schemas';
 
 describe('validateOutcomePayload', () => {
   // ============================================

@@ -54,7 +54,7 @@ tests/
 
 ## TestContext (`tests/helpers/test-context.ts`)
 
-`createTestContext()` builds a complete, isolated service graph using an **in-memory SQLite database**. It mirrors the production composition root (`createAppServices`) but substitutes stubs for external dependencies (git, SCM, worktrees).
+`createTestContext()` builds a complete, isolated service graph using an **in-memory SQLite database**. It mirrors the production composition root (`createAppServices`) — the same one the daemon uses — but substitutes stubs for external dependencies (git, SCM, worktrees).
 
 ### What it provides
 
@@ -155,7 +155,7 @@ Use `pipelineEngine.executeTransition()` directly when:
 Tests use `ScriptedAgent` to control agent behavior without running real agents. Pre-built scripts cover common outcomes:
 
 ```ts
-import { happyPlan, happyImplement, happyReview, humanInTheLoop, failAfterSteps } from '../../src/main/agents/scripted-agent';
+import { happyPlan, happyImplement, happyReview, humanInTheLoop, failAfterSteps } from '../../src/core/agents/scripted-agent';
 
 ctx.scriptedAgent.setScript(happyPlan);       // outcome: 'plan_complete'
 ctx.scriptedAgent.setScript(happyImplement);   // outcome: 'pr_ready'
@@ -216,10 +216,10 @@ Different pipelines have different statuses, transitions, and guards:
 | Bug | `pipeline-bug` | Bug investigation flows |
 | Investigation | `pipeline-investigation` | Investigation workflows |
 
-Import pipeline constants from `src/main/data/seeded-pipelines`:
+Import pipeline constants from `src/core/data/seeded-pipelines`:
 
 ```ts
-import { SIMPLE_PIPELINE, AGENT_PIPELINE, FEATURE_PIPELINE } from '../../src/main/data/seeded-pipelines';
+import { SIMPLE_PIPELINE, AGENT_PIPELINE, FEATURE_PIPELINE } from '../../src/core/data/seeded-pipelines';
 
 const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 ```
@@ -233,7 +233,7 @@ Reference source-of-truth constants instead of magic numbers:
 expect(pipelines.length).toBe(5);
 
 // Good — stays correct automatically
-import { SEEDED_PIPELINES } from '../../src/main/data/seeded-pipelines';
+import { SEEDED_PIPELINES } from '../../src/core/data/seeded-pipelines';
 expect(pipelines.length).toBe(SEEDED_PIPELINES.length);
 ```
 

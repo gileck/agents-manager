@@ -1,11 +1,10 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../main/providers/setup';
+import type { ApiClient } from '../../client/api-client';
 import type { Subtask, SubtaskStatus } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject } from '../context';
-import { getSetting } from '@template/main/services/settings-service';
 
-export function registerTaskCommands(program: Command, getServices: () => AppServices): void {
+export function registerTaskCommands(program: Command, api: ApiClient): void {
   const tasks = program.command('tasks').description('Manage tasks');
 
   tasks
@@ -17,9 +16,8 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .option('--assignee <name>', 'Filter by assignee')
     .action(async (cmdOpts: { status?: string; priority?: number; assignee?: string }) => {
       const opts = program.opts() as OutputOptions & { project?: string };
-      const services = getServices();
-      const project = await requireProject(services, opts.project);
-      const list = await services.taskStore.listTasks({
+      const project = await requireProject(api, opts.project);
+      const list = await api.tasks.list({
         projectId: project.id,
         status: cmdOpts.status,
         priority: cmdOpts.priority,
@@ -45,22 +43,20 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .description('Get task details')
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.taskStore.getTask(id);
-      if (!task) {
+      try {
+        const task = await api.tasks.get(id);
+        const deps = await api.tasks.getDependencies(id) as { id: string }[];
+        const transitions = await api.tasks.getTransitions(id) as { to: string }[];
+        const detail = {
+          ...task,
+          dependencies: deps.map((d) => d.id),
+          validTransitions: transitions.map((t) => t.to),
+        };
+        output(detail, opts);
+      } catch {
         console.error(`Task not found: ${id}`);
         process.exitCode = 1;
-        return;
       }
-
-      const deps = await services.taskStore.getDependencies(id);
-      const transitions = await services.pipelineEngine.getValidTransitions(task, 'manual');
-      const detail = {
-        ...task,
-        dependencies: deps.map((d) => d.id),
-        validTransitions: transitions.map((t) => t.to),
-      };
-      output(detail, opts);
     });
 
   tasks
@@ -81,24 +77,20 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
       tags?: string;
     }) => {
       const opts = program.opts() as OutputOptions & { project?: string };
-      const services = getServices();
-      const project = await requireProject(services, opts.project);
+      const project = await requireProject(api, opts.project);
 
       let pipelineId = cmdOpts.pipeline;
       if (!pipelineId) {
-        // Try to get default from settings (may fail in CLI context where
-        // the template DB singleton is not initialized)
-        let defaultPipelineId = '';
+        // Try to get default from settings
         try {
-          defaultPipelineId = getSetting('default_pipeline_id', '');
+          const settings = await api.settings.get();
+          pipelineId = settings.defaultPipelineId || 'pipeline-agent';
         } catch {
-          // Template DB singleton not available in CLI — fall through to pipeline list
+          pipelineId = 'pipeline-agent';
         }
-
-        pipelineId = defaultPipelineId || 'pipeline-agent';
       }
 
-      const task = await services.workflowService.createTask({
+      const task = await api.tasks.create({
         projectId: project.id,
         pipelineId,
         title: cmdOpts.title,
@@ -128,21 +120,20 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
       pipeline?: string;
     }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.workflowService.updateTask(id, {
-        title: cmdOpts.title,
-        description: cmdOpts.description,
-        priority: cmdOpts.priority,
-        assignee: cmdOpts.assignee,
-        tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
-        pipelineId: cmdOpts.pipeline,
-      });
-      if (!task) {
+      try {
+        const task = await api.tasks.update(id, {
+          title: cmdOpts.title,
+          description: cmdOpts.description,
+          priority: cmdOpts.priority,
+          assignee: cmdOpts.assignee,
+          tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
+          pipelineId: cmdOpts.pipeline,
+        });
+        output(task, opts);
+      } catch {
         console.error(`Task not found: ${id}`);
         process.exitCode = 1;
-        return;
       }
-      output(task, opts);
     });
 
   tasks
@@ -150,17 +141,16 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .description('Delete a task')
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const deleted = await services.workflowService.deleteTask(id);
-      if (!deleted) {
+      try {
+        await api.tasks.delete(id);
+        if (opts.json) {
+          output({ deleted: true, id }, opts);
+        } else if (!opts.quiet) {
+          console.log(`Deleted task ${id}`);
+        }
+      } catch {
         console.error(`Task not found: ${id}`);
         process.exitCode = 1;
-        return;
-      }
-      if (opts.json) {
-        output({ deleted: true, id }, opts);
-      } else if (!opts.quiet) {
-        console.log(`Deleted task ${id}`);
       }
     });
 
@@ -170,14 +160,8 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .option('--pipeline <id>', 'Switch to a different pipeline during reset')
     .action(async (id: string, cmdOpts: { pipeline?: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
       try {
-        const result = await services.workflowService.resetTask(id, cmdOpts.pipeline);
-        if (!result) {
-          console.error(`Task not found: ${id}`);
-          process.exitCode = 1;
-          return;
-        }
+        const result = await api.tasks.reset(id, cmdOpts.pipeline);
         output(result, opts);
       } catch (err) {
         console.error(err instanceof Error ? err.message : 'Failed to reset task');
@@ -193,8 +177,12 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .option('--actor <name>', 'Actor performing the transition')
     .action(async (id: string, status: string, cmdOpts: { actor?: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const result = await services.workflowService.transitionTask(id, status, cmdOpts.actor);
+      const result = await api.tasks.transition(id, status, cmdOpts.actor) as {
+        success: boolean;
+        error?: string;
+        guardFailures?: { guard: string; reason: string }[];
+        task?: unknown;
+      };
       if (!result.success) {
         console.error(`Transition failed: ${result.error}`);
         if (result.guardFailures) {
@@ -213,21 +201,24 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .description('Show valid transitions for a task')
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.taskStore.getTask(id);
-      if (!task) {
+      try {
+        const transitions = await api.tasks.getTransitions(id) as {
+          from: string;
+          to: string;
+          trigger: string;
+          label?: string;
+        }[];
+        const rows = transitions.map((t) => ({
+          from: t.from,
+          to: t.to,
+          trigger: t.trigger,
+          label: t.label ?? '',
+        }));
+        output(rows, opts);
+      } catch {
         console.error(`Task not found: ${id}`);
         process.exitCode = 1;
-        return;
       }
-      const transitions = await services.pipelineEngine.getValidTransitions(task, 'manual');
-      const rows = transitions.map((t) => ({
-        from: t.from,
-        to: t.to,
-        trigger: t.trigger,
-        label: t.label ?? '',
-      }));
-      output(rows, opts);
     });
 
   tasks
@@ -236,26 +227,28 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .option('--actor <name>', 'Actor performing the transition')
     .action(async (id: string, cmdOpts: { actor?: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.taskStore.getTask(id);
-      if (!task) {
+      try {
+        const transitions = await api.tasks.getTransitions(id) as { to: string }[];
+        if (transitions.length === 0) {
+          console.error('No available transitions for this task.');
+          process.exitCode = 1;
+          return;
+        }
+        const result = await api.tasks.transition(id, transitions[0].to, cmdOpts.actor) as {
+          success: boolean;
+          error?: string;
+          task?: unknown;
+        };
+        if (!result.success) {
+          console.error(`Transition failed: ${result.error}`);
+          process.exitCode = 1;
+          return;
+        }
+        output(result.task!, opts);
+      } catch {
         console.error(`Task not found: ${id}`);
         process.exitCode = 1;
-        return;
       }
-      const transitions = await services.pipelineEngine.getValidTransitions(task, 'manual');
-      if (transitions.length === 0) {
-        console.error('No available transitions for this task.');
-        process.exitCode = 1;
-        return;
-      }
-      const result = await services.workflowService.transitionTask(id, transitions[0].to, cmdOpts.actor);
-      if (!result.success) {
-        console.error(`Transition failed: ${result.error}`);
-        process.exitCode = 1;
-        return;
-      }
-      output(result.task!, opts);
     });
 
   // Subtask commands
@@ -267,14 +260,13 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .description('List subtasks for a task')
     .action(async (taskId: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.taskStore.getTask(taskId);
-      if (!task) {
+      try {
+        const task = await api.tasks.get(taskId);
+        output(task.subtasks, opts);
+      } catch {
         console.error(`Task not found: ${taskId}`);
         process.exitCode = 1;
-        return;
       }
-      output(task.subtasks, opts);
     });
 
   subtask
@@ -284,17 +276,16 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .option('--status <status>', 'Subtask status (open|in_progress|done)', 'open')
     .action(async (taskId: string, cmdOpts: { name: string; status: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.taskStore.getTask(taskId);
-      if (!task) {
+      try {
+        const task = await api.tasks.get(taskId);
+        const newSubtask: Subtask = { name: cmdOpts.name, status: cmdOpts.status as SubtaskStatus };
+        const subtasks = [...task.subtasks, newSubtask];
+        await api.tasks.update(taskId, { subtasks });
+        output(subtasks, opts);
+      } catch {
         console.error(`Task not found: ${taskId}`);
         process.exitCode = 1;
-        return;
       }
-      const newSubtask: Subtask = { name: cmdOpts.name, status: cmdOpts.status as SubtaskStatus };
-      const subtasks = [...task.subtasks, newSubtask];
-      await services.taskStore.updateTask(taskId, { subtasks });
-      output(subtasks, opts);
     });
 
   subtask
@@ -304,18 +295,17 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .requiredOption('--status <status>', 'New status (open|in_progress|done)')
     .action(async (taskId: string, cmdOpts: { name: string; status: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.taskStore.getTask(taskId);
-      if (!task) {
+      try {
+        const task = await api.tasks.get(taskId);
+        const subtasks = task.subtasks.map((s) =>
+          s.name === cmdOpts.name ? { ...s, status: cmdOpts.status as SubtaskStatus } : s
+        );
+        await api.tasks.update(taskId, { subtasks });
+        output(subtasks, opts);
+      } catch {
         console.error(`Task not found: ${taskId}`);
         process.exitCode = 1;
-        return;
       }
-      const subtasks = task.subtasks.map((s) =>
-        s.name === cmdOpts.name ? { ...s, status: cmdOpts.status as SubtaskStatus } : s
-      );
-      await services.taskStore.updateTask(taskId, { subtasks });
-      output(subtasks, opts);
     });
 
   subtask
@@ -324,16 +314,15 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .requiredOption('--name <name>', 'Subtask name')
     .action(async (taskId: string, cmdOpts: { name: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.taskStore.getTask(taskId);
-      if (!task) {
+      try {
+        const task = await api.tasks.get(taskId);
+        const subtasks = task.subtasks.filter((s) => s.name !== cmdOpts.name);
+        await api.tasks.update(taskId, { subtasks });
+        output(subtasks, opts);
+      } catch {
         console.error(`Task not found: ${taskId}`);
         process.exitCode = 1;
-        return;
       }
-      const subtasks = task.subtasks.filter((s) => s.name !== cmdOpts.name);
-      await services.taskStore.updateTask(taskId, { subtasks });
-      output(subtasks, opts);
     });
 
   subtask
@@ -342,13 +331,6 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
     .requiredOption('--subtasks <json>', 'JSON array of subtasks')
     .action(async (taskId: string, cmdOpts: { subtasks: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const task = await services.taskStore.getTask(taskId);
-      if (!task) {
-        console.error(`Task not found: ${taskId}`);
-        process.exitCode = 1;
-        return;
-      }
       let subtasks: Subtask[];
       try {
         subtasks = JSON.parse(cmdOpts.subtasks);
@@ -357,7 +339,14 @@ export function registerTaskCommands(program: Command, getServices: () => AppSer
         process.exitCode = 1;
         return;
       }
-      await services.taskStore.updateTask(taskId, { subtasks });
-      output(subtasks, opts);
+      try {
+        // Verify task exists first
+        await api.tasks.get(taskId);
+        await api.tasks.update(taskId, { subtasks });
+        output(subtasks, opts);
+      } catch {
+        console.error(`Task not found: ${taskId}`);
+        process.exitCode = 1;
+      }
     });
 }

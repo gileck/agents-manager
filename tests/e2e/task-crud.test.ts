@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { SIMPLE_PIPELINE, FEATURE_PIPELINE } from '../../src/main/data/seeded-pipelines';
+import { SIMPLE_PIPELINE, FEATURE_PIPELINE } from '../../src/core/data/seeded-pipelines';
 
 describe('Task CRUD', () => {
   let ctx: TestContext;

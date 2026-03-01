@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
-import { SEEDED_PIPELINES } from '../../src/main/data/seeded-pipelines';
+import { SEEDED_PIPELINES } from '../../src/core/data/seeded-pipelines';
 import { resolveProject, requireProject } from '../../src/cli/context';
 import { output } from '../../src/cli/output';
 
@@ -152,25 +152,37 @@ describe('CLI Integration', () => {
   });
 
   describe('Project auto-detection', () => {
+    function mockApiFromCtx() {
+      return {
+        projects: {
+          list: () => ctx.projectStore.listProjects(),
+          get: (id: string) => ctx.projectStore.getProject(id).then((p) => {
+            if (!p) throw new Error('Not found');
+            return p;
+          }),
+        },
+      } as Parameters<typeof resolveProject>[0];
+    }
+
     it('should resolve project from explicit ID', async () => {
       const project = await ctx.projectStore.createProject({
         name: 'Resolve Test',
         path: '/tmp/resolve-test',
       });
 
-      const resolved = await resolveProject(ctx as unknown as Parameters<typeof resolveProject>[0], project.id);
+      const resolved = await resolveProject(mockApiFromCtx(), project.id);
       expect(resolved).not.toBeNull();
       expect(resolved!.id).toBe(project.id);
     });
 
     it('should throw for missing project ID', async () => {
       await expect(
-        resolveProject(ctx as unknown as Parameters<typeof resolveProject>[0], 'nonexistent'),
+        resolveProject(mockApiFromCtx(), 'nonexistent'),
       ).rejects.toThrow('Project not found');
     });
 
     it('should return null when no project matches', async () => {
-      const resolved = await resolveProject(ctx as unknown as Parameters<typeof resolveProject>[0]);
+      const resolved = await resolveProject(mockApiFromCtx());
       expect(resolved).toBeNull();
     });
 
@@ -181,7 +193,7 @@ describe('CLI Integration', () => {
       });
 
       await expect(
-        requireProject(ctx as unknown as Parameters<typeof requireProject>[0]),
+        requireProject(mockApiFromCtx()),
       ).rejects.toThrow('No project detected');
     });
   });

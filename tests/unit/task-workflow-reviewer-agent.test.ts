@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TaskWorkflowReviewerPromptBuilder } from '../../src/main/agents/task-workflow-reviewer-prompt-builder';
+import { TaskWorkflowReviewerPromptBuilder } from '../../src/core/agents/task-workflow-reviewer-prompt-builder';
 import type { AgentContext, AgentConfig } from '../../src/shared/types';
 
 function createContext(): AgentContext {

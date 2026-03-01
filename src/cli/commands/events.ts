@@ -1,9 +1,9 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../main/providers/setup';
+import type { ApiClient } from '../../client/api-client';
 import type { TaskEventCategory } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 
-export function registerEventsCommands(program: Command, getServices: () => AppServices): void {
+export function registerEventsCommands(program: Command, api: ApiClient): void {
   const events = program.command('events').description('View task events');
 
   events
@@ -13,11 +13,10 @@ export function registerEventsCommands(program: Command, getServices: () => AppS
     .option('--category <cat>', 'Filter by category')
     .action(async (cmdOpts: { task: string; category?: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const list = await services.taskEventLog.getEvents({
+      const list = await api.events.list({
         taskId: cmdOpts.task,
         category: cmdOpts.category as TaskEventCategory | undefined,
-      });
+      }) as { id: string; category: string; severity: string; message: string; createdAt: number }[];
       const rows = list.map((e) => ({
         id: e.id,
         category: e.category,

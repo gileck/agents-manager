@@ -1,11 +1,11 @@
 ---
 title: Notifications
 description: Notification architecture, channels, Telegram bot, and configuration
-summary: The notification subsystem uses a composite router pattern (MultiChannelNotificationRouter) dispatching to Desktop and Telegram channels. TelegramBotService provides bidirectional task management via Telegram commands.
+summary: The notification subsystem uses a composite router pattern (MultiChannelNotificationRouter) dispatching to Telegram channel. TelegramBotService provides bidirectional task management via Telegram commands.
 priority: 7
 key_points:
   - "MultiChannelNotificationRouter dispatches to all registered INotificationRouter channels via Promise.allSettled"
-  - "Two active channels: DesktopNotificationRouter (native OS) and TelegramNotificationRouter (Telegram chat)"
+  - "Active channel: TelegramNotificationRouter (Telegram chat) — DesktopNotificationRouter was removed"
   - "TelegramBotService provides bidirectional task management via /tasks, /task, /create, /help commands"
   - "StubNotificationRouter collects notifications in-memory for testing"
 ---
@@ -17,10 +17,11 @@ Architecture, channels, Telegram bot lifecycle, and configuration.
 
 The notification subsystem uses the **composite router pattern**. `MultiChannelNotificationRouter` implements `INotificationRouter` and wraps an array of channel-specific routers. When `send()` is called, it dispatches to all registered routers in parallel via `Promise.allSettled`, logging any individual channel failures without blocking other channels.
 
+At startup, the daemon composition root creates an empty `MultiChannelNotificationRouter`. Callers can inject initial routers via config (tests inject a `StubNotificationRouter`). When a Telegram bot is started for a project, a `TelegramNotificationRouter` is dynamically added to the composite router.
+
 ```
 INotificationRouter (interface)
 ├── MultiChannelNotificationRouter (composite — dispatches to all children)
-│   ├── DesktopNotificationRouter (macOS native notifications)
 │   ├── TelegramNotificationRouter (Telegram chat messages)
 │   └── ... (additional channels can be added)
 └── StubNotificationRouter (in-memory collector for testing)
@@ -30,34 +31,27 @@ INotificationRouter (interface)
 
 | File | Purpose |
 |------|---------|
-| `src/main/interfaces/notification-router.ts` | `INotificationRouter` interface with `send(notification)` method |
-| `src/main/services/multi-channel-notification-router.ts` | Composite router with `addRouter()` / `removeRouter()` |
-| `src/main/services/desktop-notification-router.ts` | macOS native notifications via Electron; navigates to task on click |
-| `src/main/services/telegram-notification-router.ts` | Sends MarkdownV2-formatted messages to a configured Telegram chat |
-| `src/main/services/stub-notification-router.ts` | In-memory notification collector for testing |
-| `src/main/services/telegram-bot-service.ts` | Bidirectional Telegram bot with task management commands |
-| `src/main/ipc-handlers/telegram-handlers.ts` | IPC handlers for starting/stopping the Telegram bot |
-| `src/main/handlers/notification-handler.ts` | Pipeline hook that sends notifications on status transitions |
+| `src/core/interfaces/notification-router.ts` | `INotificationRouter` interface with `send(notification)` method |
+| `src/core/services/multi-channel-notification-router.ts` | Composite router with `addRouter()` / `removeRouter()` |
+| `src/core/services/telegram-notification-router.ts` | Sends MarkdownV2-formatted messages to a configured Telegram chat |
+| `src/core/services/stub-notification-router.ts` | In-memory notification collector for testing |
+| `src/core/services/telegram-agent-bot-service.ts` | Bidirectional Telegram bot with task management commands and chat/session support |
+| `src/daemon/routes/telegram.ts` | Telegram bot managed via daemon HTTP routes |
+| `src/core/handlers/notification-handler.ts` | Pipeline hook that sends notifications on status transitions |
 
 ## Notification Sources
 
 Notifications are triggered from two places:
 
-1. **Pipeline hooks** (`src/main/handlers/notification-handler.ts`): Registered as a `notify` hook on the pipeline engine. Fires after successful status transitions, sending templated messages through the composite router.
+1. **Pipeline hooks** (`src/core/handlers/notification-handler.ts`): Registered as a `notify` hook on the pipeline engine. Fires after successful status transitions, sending templated messages through the composite router.
 
-2. **Agent completion** (`src/main/services/agent-service.ts`): After an agent run completes or fails, a notification is sent via the composite router. The `send()` call is awaited and failures are logged to `taskEventLog` with severity `warning`.
+2. **Agent completion** (`src/core/services/agent-service.ts`): After an agent run completes or fails, a notification is sent via the composite router. The `send()` call is awaited and failures are logged to `taskEventLog` with severity `warning`.
 
 ## Channels
 
-### DesktopNotificationRouter
-
-Uses Electron's native notification API (`@template/main/services/notification`). Clicking the notification brings the app window to the foreground and navigates to the task detail page.
-
-Loaded via dynamic `require()` with try/catch fallback to `StubNotificationRouter` when Electron APIs are unavailable (e.g., in the CLI).
-
 ### TelegramNotificationRouter
 
-Wraps a `TelegramBot` instance and sends MarkdownV2-formatted messages to a configured chat ID. Dynamically added to / removed from the composite router when the Telegram bot is started / stopped.
+Wraps a `TelegramBot` instance and sends MarkdownV2-formatted messages to a configured chat ID. Dynamically added to / removed from the composite router when the Telegram bot is started / stopped. The Telegram bot is started/stopped via daemon HTTP routes (`POST /api/telegram/start`, `POST /api/telegram/stop`).
 
 ### StubNotificationRouter
 
@@ -68,11 +62,13 @@ Collects all notifications in a `sent` array with timestamps. Use `clear()` to r
 ### Lifecycle
 
 1. User configures `botToken` and `chatId` in project settings
-2. User clicks "Start Bot" in the UI, triggering the `TELEGRAM_BOT_START` IPC handler
-3. Handler validates token format (`/^\d+:[A-Za-z0-9_-]+$/`) and chat ID format (`/^-?\d+$/`)
-4. `TelegramBotService.start()` creates a `TelegramBot` with long-polling, registers command handlers, and starts a pending-actions cleanup interval
-5. A `TelegramNotificationRouter` is created and added to the composite router
-6. On stop, the bot is removed from the composite router, polling stops, and pending actions are cleared
+2. On daemon startup, `autoStartTelegramBots()` starts bots for all projects where `botToken` and `chatId` are set and `autoStart !== false` (defaults to `true`)
+3. User can also manually click "Start Bot" in the UI → IPC handler → API client → daemon `POST /api/telegram/start` route
+4. Handler validates token format (`/^\d+:[A-Za-z0-9_-]+$/`) and chat ID format (`/^-?\d+$/`)
+5. `TelegramBotService.start()` creates a `TelegramBot` with long-polling, registers command handlers, and starts a pending-actions cleanup interval
+6. A `TelegramNotificationRouter` is created and added to the composite router
+7. On stop, the bot is removed from the composite router, polling stops, and pending actions are cleared
+8. During daemon shutdown, `stopAllBots()` is called to cleanly shut down all active Telegram bots
 
 ### Commands
 
@@ -121,13 +117,14 @@ Telegram bot configuration is stored per-project in `project.config.telegram`:
 ```typescript
 {
   telegram: {
-    botToken: string;  // Format: <number>:<alphanumeric-string>
-    chatId: string;    // Format: numeric, optionally prefixed with -
+    botToken: string;   // Format: <number>:<alphanumeric-string>
+    chatId: string;     // Format: numeric, optionally prefixed with -
+    autoStart?: boolean; // Default: true — auto-start bot on daemon load
   }
 }
 ```
 
-Both values are validated in the IPC handler before the bot is started.
+Both `botToken` and `chatId` are validated before the bot is started. When `autoStart` is not explicitly set to `false`, the daemon will auto-start the bot on load for any project with valid telegram config.
 
 ## Testing
 

@@ -1,54 +1,44 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry';
-import { sendToRenderer } from '@template/main/core/window';
-import type { AppServices } from '../providers/setup';
-import type { AgentMode } from '../../shared/types';
+import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
+import type { ApiClient } from '../../client';
+import type { AgentMode, RevisionReason } from '../../shared/types';
 
-export function registerAgentHandlers(services: AppServices): void {
-  registerIpcHandler(IPC_CHANNELS.AGENT_START, async (_, taskId: string, mode: AgentMode, agentType?: string) => {
-    validateId(taskId);
-    return services.workflowService.startAgent(
-      taskId, mode, agentType, undefined,
-      (chunk) => sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, chunk),
-      (msg) => sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, msg),
-      (status) => sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, status),
-    );
+export function registerAgentHandlers(api: ApiClient): void {
+  // Streaming callbacks are no longer set up here — the daemon broadcasts
+  // agent output/message/status via WebSocket, and the Electron main process
+  // forwards those WS events to the renderer separately.
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_START, async (_, taskId: string, mode: AgentMode, agentType?: string, revisionReason?: RevisionReason) => {
+    return api.agents.start(taskId, mode, agentType, revisionReason);
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_STOP, async (_, runId: string) => {
-    validateId(runId);
-    return services.workflowService.stopAgent(runId);
+    // The old IPC handler received only runId. The API client needs (taskId, runId)
+    // but the daemon route ignores taskId — it only reads runId from the body.
+    return api.agents.stop('_', runId);
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_RUNS, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.agentRunStore.getRunsForTask(taskId);
+    return api.agents.runs(taskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_GET, async (_, runId: string) => {
-    validateId(runId);
-    return services.agentRunStore.getRun(runId);
+    return api.agents.getRun(runId);
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_ACTIVE_TASK_IDS, async () => {
-    const runs = await services.agentRunStore.getActiveRuns();
-    return [...new Set(runs.map((r) => r.taskId))];
+    return api.agents.getActiveTaskIds();
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_ACTIVE_RUNS, async () => {
-    return services.agentRunStore.getActiveRuns();
+    return api.agents.getActiveRuns();
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_ALL_RUNS, async () => {
-    return services.agentRunStore.getAllRuns();
+    return api.agents.getAllRuns();
   });
 
   registerIpcHandler(IPC_CHANNELS.AGENT_SEND_MESSAGE, async (_, taskId: string, message: string) => {
-    validateId(taskId);
-    return services.workflowService.resumeAgent(taskId, message, {
-      onOutput: (chunk) => sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, chunk),
-      onMessage: (msg) => sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, msg),
-      onStatusChange: (status) => sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, status),
-    });
+    return api.agents.message(taskId, message);
   });
 }

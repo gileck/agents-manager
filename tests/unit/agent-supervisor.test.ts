@@ -1,19 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AgentSupervisor } from '../../src/main/services/agent-supervisor';
-import type { IAgentRunStore } from '../../src/main/interfaces/agent-run-store';
-import type { IAgentService } from '../../src/main/interfaces/agent-service';
-import type { ITaskEventLog } from '../../src/main/interfaces/task-event-log';
-import type { ITaskStore } from '../../src/main/interfaces/task-store';
-import type { IPipelineStore } from '../../src/main/interfaces/pipeline-store';
-import type { IPipelineInspectionService } from '../../src/main/interfaces/pipeline-inspection-service';
+import { AgentSupervisor } from '../../src/core/services/agent-supervisor';
+import type { IAgentRunStore } from '../../src/core/interfaces/agent-run-store';
+import type { IAgentService } from '../../src/core/interfaces/agent-service';
+import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
+import type { ITaskStore } from '../../src/core/interfaces/task-store';
+import type { IPipelineStore } from '../../src/core/interfaces/pipeline-store';
+import type { IPipelineInspectionService } from '../../src/core/interfaces/pipeline-inspection-service';
 import type { AgentRun, Task, Pipeline } from '../../src/shared/types';
 
 // Mock the `now()` utility so we can control time
-vi.mock('../../src/main/stores/utils', () => ({
+vi.mock('../../src/core/stores/utils', () => ({
   now: vi.fn(() => Date.now()),
 }));
 
-import { now } from '../../src/main/stores/utils';
+import { now } from '../../src/core/stores/utils';
 const mockedNow = vi.mocked(now);
 
 function makeRun(overrides: Partial<AgentRun> = {}): AgentRun {

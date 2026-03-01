@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 import type { AgentRunResult } from '../../src/shared/types';
 
 describe('Error Scenarios', () => {

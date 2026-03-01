@@ -8,12 +8,12 @@ Run `yarn build:claude` to regenerate.
 
 System architecture, composition root, and the single-execution-engine principle
 
-**Summary:** All business logic lives in src/main/services/ (WorkflowService). The Electron renderer and CLI are UI-only interfaces that share the same createAppServices(db) composition root and SQLite database.
+**Summary:** Three-tier daemon architecture: daemon (src/core/ services + SQLite), Electron (thin IPC→API client shell), CLI (thin Commander→API client shell). All business logic lives in src/core/services/ (WorkflowService). The daemon is the sole DB owner.
 
 **Key Points:**
-- NEVER add business logic to the renderer or CLI — all logic goes in WorkflowService
+- NEVER add business logic to the renderer, CLI, or IPC handlers — all logic goes in WorkflowService (src/core/services/)
 - src/ is application code; template/ is framework infrastructure (DO NOT MODIFY)
-- Both UIs use createAppServices(db) → same WorkflowService → same SQLite file
+- Daemon (src/daemon/) is the sole DB owner; Electron and CLI connect via HTTP/WS API client (src/client/)
 
 **Docs:** [architecture-overview.md](docs/architecture-overview.md)
 
@@ -39,12 +39,29 @@ Agent types, execution lifecycle, prompts, validation, and context accumulation
 **Summary:** Agent architecture: Agent class combines a PromptBuilder (domain logic) with an AgentLib (engine logic) resolved from AgentLibRegistry. Role-based prompt builders: PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder. ScriptedAgent is the test mock.
 
 **Key Points:**
-- File: src/main/agents/ — Agent, PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder, ScriptedAgent
-- File: src/main/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib
+- File: src/core/agents/ — Agent, PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder, ScriptedAgent
+- File: src/core/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib
 - Agent resolves AgentLib from registry via config.engine at execute() time
 - Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes
 
 **Docs:** [agent-system.md](docs/agent-system.md)
+
+---
+
+## Client-Daemon Convergence
+
+How all UI clients (Electron, CLI, Telegram bot) converge on the same daemon logic
+
+**Summary:** Every UI action — whether from Electron, CLI, Telegram bot, or a future web client — ends up calling the same WorkflowService methods in the daemon process. This guarantees identical behavior: pipeline guards, hooks, agent execution, notifications, and event logging all run the same way regardless of the originating client.
+
+**Key Points:**
+- All clients converge on the same daemon WorkflowService — transitions, task CRUD, agent starts all go through one code path
+- Telegram bot runs inside the daemon process with direct service references (zero network hops)
+- Electron and CLI are thin HTTP clients — they call daemon REST endpoints that delegate to the same services
+- Pipeline hooks (start_agent, notify, push_and_create_pr) fire identically regardless of which client triggered the transition
+- Daemon singleton enforced by health check probe + OS TCP port bind on fixed port 3847
+
+**Docs:** [client-daemon-convergence.md](docs/client-daemon-convergence.md)
 
 ---
 
@@ -90,7 +107,7 @@ State machine, transitions, guards, hooks, and seeded pipelines
 - Guards are synchronous and block transitions; hooks are async side-effects after success
 - Hook execution policies: required (rollback on failure), best_effort (log only), fire_and_forget (not awaited)
 - Use AGENT_PIPELINE.id for agent workflow tests, SIMPLE_PIPELINE.id for basic flows
-- File: src/main/services/pipeline-engine.ts
+- File: src/core/services/pipeline-engine.ts
 
 **Docs:** [pipeline-engine.md](docs/pipeline-engine.md)
 
@@ -114,12 +131,12 @@ Test infrastructure, TestContext, factories, and best practices
 
 Central orchestration, activity logging, and prompt handling
 
-**Summary:** WorkflowService is the single entry point for all business operations — task CRUD, transitions, agent management, prompt handling. All IPC handlers and CLI commands delegate to it.
+**Summary:** WorkflowService is the single entry point for all business operations — task CRUD, transitions, agent management, prompt handling. All daemon route handlers delegate to it.
 
 **Key Points:**
-- File: src/main/services/workflow-service.ts
-- Interface: src/main/interfaces/workflow-service.ts
-- All business logic goes here — never in IPC handlers or CLI commands
+- File: src/core/services/workflow-service.ts
+- Interface: src/core/interfaces/workflow-service.ts
+- All business logic goes here — never in IPC handlers, CLI commands, or daemon route handlers
 
 **Docs:** [workflow-service.md](docs/workflow-service.md)
 
@@ -144,12 +161,12 @@ Dual native builds for Electron and Node ABI coexistence
 
 The agents-manager command-line tool, commands, and project context
 
-**Summary:** The agents-manager CLI is built with Commander.js and shares the same WorkflowService and SQLite database as the Electron app. It instantiates services via createAppServices(db) directly — no IPC needed.
+**Summary:** The agents-manager CLI is built with Commander.js and connects to the daemon process via an HTTP API client. It auto-starts the daemon if needed via ensureDaemon().
 
 **Key Points:**
 - File: src/cli/index.ts
 - Run via: npx agents-manager
-- CLI is UI-only — no business logic; delegates everything to WorkflowService
+- CLI is UI-only — no business logic; all commands delegate to daemon API client
 
 **Docs:** [cli-reference.md](docs/cli-reference.md)
 
@@ -159,11 +176,11 @@ The agents-manager command-line tool, commands, and project context
 
 SQLite schema, stores, and migrations
 
-**Summary:** better-sqlite3 with WAL mode. DB path resolves from --db flag, AM_DB_PATH env, or ~/Library/Application Support/agents-manager/agents-manager.db. Migrations run at startup via src/main/migrations.ts.
+**Summary:** better-sqlite3 with WAL mode. Daemon is the sole DB owner via src/core/db.ts. DB path resolves from AM_DB_PATH env or ~/Library/Application Support/agents-manager/agents-manager.db. Migrations run at daemon startup via src/core/migrations.ts.
 
 **Key Points:**
-- All stores are in src/main/stores/ — task-store, project-store, pipeline-store, etc.
-- Migrations: src/main/migrations.ts — additive only, never destructive
+- All stores are in src/core/stores/ — task-store, project-store, pipeline-store, etc.
+- Migrations: src/core/migrations.ts — additive only, never destructive
 - Cast db.prepare().all() results: as { field: type }[]
 
 **Docs:** [data-layer.md](docs/data-layer.md)
@@ -177,8 +194,8 @@ Worktrees, git operations, PR lifecycle, and branch strategy
 **Summary:** LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<agentType> convention.
 
 **Key Points:**
-- Interface: IWorktreeManager in src/main/interfaces/worktree-manager.ts
-- Implementation: LocalWorktreeManager in src/main/services/local-worktree-manager.ts
+- Interface: IWorktreeManager in src/core/interfaces/worktree-manager.ts
+- Implementation: LocalWorktreeManager in src/core/services/local-worktree-manager.ts
 - Branch naming: task/<taskId>/<agentType>
 
 **Docs:** [git-scm-integration.md](docs/git-scm-integration.md)
@@ -189,13 +206,13 @@ Worktrees, git operations, PR lifecycle, and branch strategy
 
 IPC channels, renderer pages, hooks, and streaming
 
-**Summary:** 107 IPC channels defined in src/shared/ipc-channels.ts. Handlers are split into domain files under src/main/ipc-handlers/. Renderer pages in src/renderer/pages/. Custom hooks in src/renderer/hooks/ use window.api (the preload bridge) to call IPC handlers.
+**Summary:** IPC channels defined in src/shared/ipc-channels.ts. IPC handlers in src/main/ipc-handlers/ are thin wrappers calling the daemon API client. Push events originate from daemon WS → Electron wsClient → sendToRenderer() → renderer.
 
 **Key Points:**
 - IPC channels: src/shared/ipc-channels.ts
-- IPC handlers: src/main/ipc-handlers/ (domain-scoped files)
-- Renderer calls window.api.<method>() — never direct DB access
-- Streaming uses onMessage callback pattern for live agent output
+- IPC handlers: src/main/ipc-handlers/ — thin wrappers delegating to API client
+- Renderer calls window.api.<method>() — never direct DB or service access
+- Push events: daemon WS → Electron wsClient → sendToRenderer() → renderer
 - Preload bridge duplicates channel constants (sandboxed — cannot import shared module)
 
 **Docs:** [ipc-and-renderer.md](docs/ipc-and-renderer.md)
@@ -206,7 +223,7 @@ IPC channels, renderer pages, hooks, and streaming
 
 Tasks, dependencies, subtasks, features, and filtering
 
-**Summary:** Tasks are the core work unit, each bound to a project and pipeline. Tasks support dependencies (blockedBy), subtasks, and feature grouping. File: src/main/services/task-store.ts.
+**Summary:** Tasks are the core work unit, each bound to a project and pipeline. Tasks support dependencies (blockedBy), subtasks, and feature grouping. File: src/core/stores/sqlite-task-store.ts.
 
 **Key Points:**
 - Task fields: id, projectId, pipelineId, title, description, status, featureId
@@ -224,7 +241,7 @@ Events, activity log, transition history, and debug timeline
 **Summary:** Three log systems — activity log (per-task timeline), transition history (status change audit trail), and the debug timeline (detailed agent turn events). All stored in SQLite.
 
 **Key Points:**
-- Activity log: src/main/stores/activity-log-store.ts
+- Activity log: src/core/stores/sqlite-activity-log.ts
 - Transition history: recorded on every successful pipeline transition
 - Debug timeline: agent turns, tool calls, and output chunks
 
@@ -236,11 +253,11 @@ Events, activity log, transition history, and debug timeline
 
 Notification architecture, channels, Telegram bot, and configuration
 
-**Summary:** The notification subsystem uses a composite router pattern (MultiChannelNotificationRouter) dispatching to Desktop and Telegram channels. TelegramBotService provides bidirectional task management via Telegram commands.
+**Summary:** The notification subsystem uses a composite router pattern (MultiChannelNotificationRouter) dispatching to Telegram channel. TelegramBotService provides bidirectional task management via Telegram commands.
 
 **Key Points:**
 - MultiChannelNotificationRouter dispatches to all registered INotificationRouter channels via Promise.allSettled
-- Two active channels: DesktopNotificationRouter (native OS) and TelegramNotificationRouter (Telegram chat)
+- Active channel: TelegramNotificationRouter (Telegram chat) — DesktopNotificationRouter was removed
 - TelegramBotService provides bidirectional task management via /tasks, /task, /create, /help commands
 - StubNotificationRouter collects notifications in-memory for testing
 

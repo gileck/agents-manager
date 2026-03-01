@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, resetCounters } from '../helpers/factories';
-import { BUG_AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
+import { BUG_AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 import type { HookResult } from '../../src/shared/types';
 
 describe('BUG_AGENT_PIPELINE E2E', () => {

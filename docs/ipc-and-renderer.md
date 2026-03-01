@@ -1,14 +1,14 @@
 ---
 title: IPC and Renderer
 description: IPC channels, renderer pages, hooks, and streaming
-summary: 107 IPC channels defined in src/shared/ipc-channels.ts. Handlers are split into domain files under src/main/ipc-handlers/. Renderer pages in src/renderer/pages/. Custom hooks in src/renderer/hooks/ use window.api (the preload bridge) to call IPC handlers.
+summary: "IPC channels defined in src/shared/ipc-channels.ts. IPC handlers in src/main/ipc-handlers/ are thin wrappers calling the daemon API client. Push events originate from daemon WS → Electron wsClient → sendToRenderer() → renderer."
 priority: 3
 key_points:
   - "IPC channels: src/shared/ipc-channels.ts"
-  - "IPC handlers: src/main/ipc-handlers/ (domain-scoped files)"
-  - "Renderer calls window.api.<method>() — never direct DB access"
-  - "Streaming uses onMessage callback pattern for live agent output"
-  - "Preload bridge duplicates channel constants (sandboxed — cannot import shared module)"
+  - "IPC handlers: src/main/ipc-handlers/ \u2014 thin wrappers delegating to API client"
+  - "Renderer calls window.api.<method>() \u2014 never direct DB or service access"
+  - "Push events: daemon WS \u2192 Electron wsClient \u2192 sendToRenderer() \u2192 renderer"
+  - "Preload bridge duplicates channel constants (sandboxed \u2014 cannot import shared module)"
 ---
 # IPC and Renderer
 
@@ -16,7 +16,7 @@ IPC channels, renderer pages, hooks, and streaming.
 
 ## IPC Channel Definitions
 
-**File:** `src/shared/ipc-channels.ts` — 107 channels
+**File:** `src/shared/ipc-channels.ts`
 
 ### Channel Inventory
 
@@ -83,12 +83,17 @@ IPC channels, renderer pages, hooks, and streaming.
 **Shell (3):**
 `shell:open-in-chrome`, `shell:open-in-iterm`, `shell:open-in-vscode`
 
-**Telegram (5):**
-`telegram:test`, `telegram:bot-start`, `telegram:bot-stop`, `telegram:bot-status`, `telegram:bot-log` (push)
+**Task Chat (2):**
+`task-chat:output` (push), `task-chat:message` (push)
+
+**Telegram (7):**
+`telegram:test`, `telegram:bot-start`, `telegram:bot-stop`, `telegram:bot-status`, `telegram:bot-log` (push), `telegram:bot-session`, `telegram:bot-status-changed` (push)
 
 ## IPC Handler Registration
 
 **Directory:** `src/main/ipc-handlers/`
+
+IPC handlers are thin wrappers that call the daemon API client (`src/client/api-client.ts`). They do **not** call services or stores directly. All business logic runs in the daemon process. IPC handlers merely translate between the Electron IPC protocol and HTTP/WS calls to the daemon.
 
 Handlers are split into domain-scoped files. The barrel `index.ts` calls all registrars:
 
@@ -111,7 +116,7 @@ Most channels use the standard IPC request-response pattern: the renderer calls 
 
 ### Push Events (main to renderer)
 
-8 push event channels stream data from main to renderer:
+Push event channels stream data from daemon → Electron main → renderer:
 
 | Channel | Direction | Purpose |
 |---------|-----------|---------|
@@ -122,7 +127,24 @@ Most channels use the standard IPC request-response pattern: the renderer calls 
 | `agent:status` | main -> renderer | Agent run status changes (running, completed, failed) |
 | `chat:output` | main -> renderer | Streams chat output chunks during conversation |
 | `chat:message` | main -> renderer | Structured chat messages |
+| `task-chat:output` | main -> renderer | Streams task-scoped chat output chunks |
+| `task-chat:message` | main -> renderer | Structured task-scoped chat messages |
 | `telegram:bot-log` | main -> renderer | Telegram bot activity log entries |
+| `telegram:bot-status-changed` | main -> renderer | Telegram bot status change notifications |
+
+### WebSocket Event Forwarding Chain
+
+Push events originate in the daemon and are forwarded to the renderer through a WebSocket relay:
+
+1. **Daemon services** emit events (e.g., `agentService` emits output chunks during agent execution)
+2. **DaemonWsServer** (`src/daemon/ws/ws-server.ts`) broadcasts these events to all connected WebSocket clients
+3. **Electron main process** maintains a `WsClient` (`src/client/ws-client.ts`) connected to the daemon WebSocket server
+4. **WsClient** receives events and calls `sendToRenderer()` to forward them to the renderer via IPC push channels
+
+Example flow:
+```
+daemon agentService → wsServer.broadcast('agent:output') → Electron wsClient → sendToRenderer(AGENT_OUTPUT) → renderer
+```
 
 ## Preload Bridge
 
@@ -248,9 +270,10 @@ src/renderer/
 
 ## Edge Cases
 
-- **Agent output** is delivered via IPC push events, not request-response. The renderer listens for `AGENT_OUTPUT` events and appends chunks to the display buffer in real time.
+- **IPC handlers are now thin proxies** — they validate inputs and forward to the daemon API client. Business logic has moved to daemon route handlers.
+- **Agent output** is delivered via IPC push events, not request-response. The renderer listens for `AGENT_OUTPUT` events and appends chunks to the display buffer in real time. Events originate from the daemon WebSocket and are forwarded by the Electron WsClient.
 - **Git IPC** handlers resolve the worktree path from `taskId`. The `git:diff`, `git:status`, etc. handlers look up the task's worktree to set the correct `cwd` for git operations. Project-scoped git operations (`git:project-log`, `git:branch`, `git:commit-detail`) use the project path directly.
-- **Debug timeline** aggregates data from 8 tables (events, activity, transitions, agent runs, phases, artifacts, prompts, context entries). The `TASK_DEBUG_TIMELINE` IPC handler delegates to `TimelineService`.
+- **Debug timeline** aggregates data from 8 tables (events, activity, transitions, agent runs, phases, artifacts, prompts, context entries). The `TASK_DEBUG_TIMELINE` IPC handler delegates to `TimelineService` in `src/core/services/timeline/timeline-service.ts`.
 - **`TASK_UPDATE` strips `status`** — the IPC handler destructures `{ status, ...safeInput }` and passes only `safeInput` to the workflow service, forcing status changes through `transitionTask()`.
 - **`useActiveAgentRuns` polls** rather than using push events, because the active runs endpoint returns aggregate data (including task titles). The 3-second poll interval is a pragmatic choice.
 - **Preload channel sync** — a Vitest test (`tests/unit/ipc-channel-sync.test.ts`) reads the preload source as text and asserts that every channel from `src/shared/ipc-channels.ts` appears, preventing drift between the two copies.

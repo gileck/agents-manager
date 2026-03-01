@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
-import { loadGlobalConfig, loadProjectConfig, getResolvedConfig } from '../../src/main/services/config-service';
+import { loadGlobalConfig, loadProjectConfig, getResolvedConfig } from '../../src/core/services/config-service';
 
 vi.mock('fs');
 vi.mock('os');

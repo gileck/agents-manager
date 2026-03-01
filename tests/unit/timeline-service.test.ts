@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { TimelineService } from '../../src/main/services/timeline/timeline-service';
-import type { ITimelineSource } from '../../src/main/services/timeline/types';
+import { TimelineService } from '../../src/core/services/timeline/timeline-service';
+import type { ITimelineSource } from '../../src/core/services/timeline/types';
 import type { DebugTimelineEntry } from '../../src/shared/types';
 
 function makeEntry(overrides: Partial<DebugTimelineEntry> = {}): DebugTimelineEntry {

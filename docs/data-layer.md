@@ -1,11 +1,11 @@
 ---
 title: Data Layer
 description: SQLite schema, stores, and migrations
-summary: better-sqlite3 with WAL mode. DB path resolves from --db flag, AM_DB_PATH env, or ~/Library/Application Support/agents-manager/agents-manager.db. Migrations run at startup via src/main/migrations.ts.
+summary: "better-sqlite3 with WAL mode. Daemon is the sole DB owner via src/core/db.ts. DB path resolves from AM_DB_PATH env or ~/Library/Application Support/agents-manager/agents-manager.db. Migrations run at daemon startup via src/core/migrations.ts."
 priority: 3
 key_points:
-  - "All stores are in src/main/stores/ — task-store, project-store, pipeline-store, etc."
-  - "Migrations: src/main/migrations.ts — additive only, never destructive"
+  - "All stores are in src/core/stores/ — task-store, project-store, pipeline-store, etc."
+  - "Migrations: src/core/migrations.ts — additive only, never destructive"
   - "Cast db.prepare().all() results: as { field: type }[]"
 ---
 # Data Layer
@@ -17,9 +17,8 @@ SQLite schema, stores, and migrations.
 **Library:** better-sqlite3 (synchronous SQLite binding for Node.js)
 
 **Path resolution (in order):**
-1. Explicit `--db` flag (CLI only)
-2. `AM_DB_PATH` environment variable
-3. Default: `~/Library/Application Support/agents-manager/agents-manager.db`
+1. `AM_DB_PATH` environment variable
+2. Default: `~/Library/Application Support/agents-manager/agents-manager.db`
 
 **Pragmas:**
 ```sql
@@ -27,11 +26,11 @@ PRAGMA journal_mode = WAL;    -- Write-Ahead Logging for concurrent access
 PRAGMA foreign_keys = ON;     -- Enforce referential integrity
 ```
 
-WAL mode allows the CLI and Electron app to access the database concurrently without locking conflicts.
+The daemon is the sole database owner. WAL mode is still enabled for safe concurrent reads within the daemon process.
 
 ## Table Inventory
 
-**File:** `src/main/migrations.ts` — 73 sequential migrations
+**File:** `src/core/migrations.ts` — 73 sequential migrations
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
@@ -61,8 +60,8 @@ WAL mode allows the CLI and Electron app to access the database concurrently wit
 
 Each table has a corresponding store class following a consistent pattern:
 
-**File naming:** `src/main/stores/sqlite-{entity}.ts`
-**Interface:** `src/main/interfaces/{entity}.ts`
+**File naming:** `src/core/stores/sqlite-{entity}.ts`
+**Interface:** `src/core/interfaces/{entity}.ts`
 
 ### Pattern
 
@@ -98,7 +97,7 @@ Stores like `sqlite-task-store.ts` and `sqlite-project-store.ts` use selective U
 
 ## Migration System
 
-Migrations are defined as an array of `{ name, sql }` objects in `src/main/migrations.ts`. They run sequentially on startup.
+Migrations are defined as an array of `{ name, sql }` objects in `src/core/migrations.ts`. They run sequentially on startup.
 
 **Execution:**
 1. Create `migrations` table if not exists (name TEXT UNIQUE)
@@ -144,7 +143,7 @@ This pattern is used when adding new enum values (e.g., widening the agent_runs.
 
 ### Utility: `parseJson()`
 
-**File:** `src/main/stores/utils.ts`
+**File:** `src/core/stores/utils.ts`
 
 ```typescript
 function parseJson<T>(raw: string | null | undefined, fallback: T): T
@@ -180,7 +179,7 @@ All JSON fields are serialized with `JSON.stringify()` on write and parsed with 
 
 ### Pipelines (migration 011)
 
-Source: `src/main/data/seeded-pipelines.ts` — `SEEDED_PIPELINES` array
+Source: `src/core/data/seeded-pipelines.ts` — `SEEDED_PIPELINES` array
 
 Uses `INSERT OR IGNORE` to seed 5 pipelines:
 - `pipeline-simple` (task type: `simple`)
@@ -214,7 +213,8 @@ Seeds default settings:
 
 - **Sync transactions** protect against TOCTOU: the pipeline engine re-fetches the task inside a `db.transaction()` callback before checking guards and updating status.
 - **CHECK constraint widening** requires full table rebuilds because SQLite doesn't support modifying CHECK constraints in place. Three migrations (023, 030, 037) use this pattern.
-- **Concurrent CLI + Electron** access is safe via WAL mode. Both open the same database file with WAL enabled.
+- **The daemon is the sole DB owner** — Electron and CLI connect via HTTP, not direct DB access.
+- **DB is opened via `src/core/db.ts`** which handles path resolution, pragma setup, and migration execution.
 - **`parseJson()` never throws** — it catches parse errors and returns the fallback value. This makes JSON column reads safe even with corrupted data.
 - **Migration idempotency** — the `migrations` table with UNIQUE name constraint prevents re-running applied migrations.
 - **Foreign keys** are enabled via pragma. Cascade behavior varies: some tables use ON DELETE CASCADE, others handle cascades in application code (e.g., `resetTask` manually deletes related rows).

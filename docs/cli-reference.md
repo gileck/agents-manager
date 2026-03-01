@@ -1,12 +1,12 @@
 ---
 title: CLI Reference
 description: The agents-manager command-line tool, commands, and project context
-summary: The agents-manager CLI is built with Commander.js and shares the same WorkflowService and SQLite database as the Electron app. It instantiates services via createAppServices(db) directly — no IPC needed.
+summary: The agents-manager CLI is built with Commander.js and connects to the daemon process via an HTTP API client. It auto-starts the daemon if needed via ensureDaemon().
 priority: 3
 key_points:
   - "File: src/cli/index.ts"
   - "Run via: npx agents-manager"
-  - "CLI is UI-only — no business logic; delegates everything to WorkflowService"
+  - "CLI is UI-only — no business logic; all commands delegate to daemon API client"
 ---
 # CLI Reference
 
@@ -16,7 +16,7 @@ The `npx agents-manager` command-line tool, commands, and project context.
 
 **File:** `src/cli/index.ts`
 
-The CLI is built with Commander.js and provides terminal access to the same services and database used by the Electron app.
+The CLI is built with Commander.js and connects to the daemon process via an HTTP API client. It auto-starts the daemon if needed and delegates all operations through `src/client/api-client.ts`.
 
 ```bash
 npx agents-manager [options] <command> [subcommand]
@@ -31,26 +31,19 @@ npx agents-manager [options] <command> [subcommand]
 | `--quiet` | Minimal output (IDs only) |
 | `--verbose` | Verbose output |
 | `--no-color` | Disable colored output |
-| `--db <path>` | Database path override |
 
-## Database Access
+## Daemon Connection
 
-**File:** `src/cli/db.ts`
+**File:** `src/cli/ensure-daemon.ts`
 
-The CLI opens the same SQLite file as the Electron app:
+The CLI connects to the daemon process via HTTP. On startup, `ensureDaemon()` checks if the daemon is already running and starts it if needed.
 
 ```typescript
-function openDatabase(flagPath?: string): { db: Database.Database; services: AppServices }
+const daemonUrl = await ensureDaemon();
+const api = createApiClient(daemonUrl);
 ```
 
-Path resolution:
-1. `--db <path>` flag
-2. `AM_DB_PATH` environment variable
-3. Default: `~/Library/Application Support/agents-manager/agents-manager.db`
-
-The database is lazy-opened on first command execution (not at program startup). WAL mode and foreign keys are enabled. Migrations run automatically.
-
-The database is closed after the command completes via `.finally()` on the `parseAsync()` promise chain.
+All commands delegate to the daemon API client (`src/client/api-client.ts`). The CLI never opens the database directly.
 
 ## Command Groups
 
@@ -88,7 +81,7 @@ npx agents-manager tasks subtask remove <taskId> --name <n>  # Remove subtask
 npx agents-manager tasks subtask set <taskId> --subtasks <json>  # Replace all subtasks
 ```
 
-**Note:** Subtask commands bypass WorkflowService and call `taskStore.updateTask()` directly. This is intentional — subtask updates are lightweight field edits that do not require pipeline transition logic.
+**Note:** Subtask commands use a dedicated daemon API endpoint for lightweight field updates that do not require pipeline transition logic.
 
 ### `agent` — Agent Run Management
 
@@ -142,6 +135,16 @@ The `start` command is long-running — it starts a Telegram bot that listens fo
 
 The `status` command checks whether the Telegram configuration is present and displays the current state.
 
+### `daemon` — Daemon Lifecycle
+
+```bash
+npx agents-manager daemon start                            # Start the daemon process
+npx agents-manager daemon stop                             # Stop the daemon process
+npx agents-manager daemon status                           # Show daemon status (running/stopped, PID, port)
+```
+
+The `daemon` commands manage the background daemon process lifecycle. They do not require the daemon to be running (they are registered before `ensureDaemon()` is called).
+
 ### `status` — Dashboard
 
 ```bash
@@ -183,14 +186,13 @@ npx agents-manager tasks subtask update <taskId> --name "Step 1" --status done
 ```
 
 This works because:
-- The CLI opens the same database file
+- The CLI auto-connects to the running daemon
 - The agent worktree has `npx agents-manager` accessible via PATH
-- SQLite WAL mode handles concurrent access
+- The CLI connects to the same daemon process that manages the agent
 
 ## Edge Cases
 
 - **Default agent type in CLI is `scripted`** — unlike the Electron UI which uses the agent type from the pipeline hooks. This is intentional for testing.
-- **CLI is usable while Electron is running** — WAL mode allows concurrent read/write access from both processes.
-- **Database is closed via `.finally()`** — on the `parseAsync()` promise chain to ensure cleanup even if a command throws.
+- **CLI and Electron both connect to the same daemon process via HTTP** — no direct DB access.
 - **`tasks list` requires a project** — uses `requireProject()` which throws with a helpful message listing available projects if no project context can be resolved.
-- **Subtask commands bypass WorkflowService** — they call `taskStore.updateTask()` directly because subtask edits are lightweight field updates that do not need pipeline transition logic.
+- **Subtask commands use a dedicated API endpoint** — subtask edits are lightweight field updates that do not need pipeline transition logic.

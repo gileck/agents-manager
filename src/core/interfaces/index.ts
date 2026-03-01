@@ -26,3 +26,4 @@ export type { IKanbanBoardStore } from './kanban-board-store';
 export type { IChatMessageStore } from './chat-message-store';
 export type { IAgentDefinitionStore } from './agent-definition-store';
 export type { IAgentLib } from './agent-lib';
+export type { ISettingsStore } from './settings-store';

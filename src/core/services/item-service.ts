@@ -1,11 +1,11 @@
-import { getDatabase, generateId } from '@template/main/services/database';
+import { randomUUID } from 'crypto';
+import type Database from 'better-sqlite3';
 import type { Item, ItemCreateInput, ItemUpdateInput } from '../../shared/types';
 
 interface ItemRow { id: string; name: string; description: string | null; created_at: string; updated_at: string; }
 
-export function createItem(input: ItemCreateInput): Item {
-  const db = getDatabase();
-  const id = generateId();
+export function createItem(db: Database.Database, input: ItemCreateInput): Item {
+  const id = randomUUID();
   const now = new Date().toISOString();
 
   db.prepare(`
@@ -22,8 +22,7 @@ export function createItem(input: ItemCreateInput): Item {
   };
 }
 
-export function getItem(id: string): Item | null {
-  const db = getDatabase();
+export function getItem(db: Database.Database, id: string): Item | null {
   const row = db.prepare('SELECT * FROM items WHERE id = ?').get(id) as ItemRow | undefined;
 
   if (!row) return null;
@@ -37,8 +36,7 @@ export function getItem(id: string): Item | null {
   };
 }
 
-export function listItems(): Item[] {
-  const db = getDatabase();
+export function listItems(db: Database.Database): Item[] {
   const rows = db.prepare('SELECT * FROM items ORDER BY created_at DESC').all() as ItemRow[];
 
   return rows.map(row => ({
@@ -50,8 +48,7 @@ export function listItems(): Item[] {
   }));
 }
 
-export function updateItem(id: string, input: ItemUpdateInput): Item | null {
-  const db = getDatabase();
+export function updateItem(db: Database.Database, id: string, input: ItemUpdateInput): Item | null {
   const now = new Date().toISOString();
 
   const updates: string[] = [];
@@ -68,7 +65,7 @@ export function updateItem(id: string, input: ItemUpdateInput): Item | null {
   }
 
   if (updates.length === 0) {
-    return getItem(id);
+    return getItem(db, id);
   }
 
   updates.push('updated_at = ?');
@@ -78,11 +75,10 @@ export function updateItem(id: string, input: ItemUpdateInput): Item | null {
 
   db.prepare(`UPDATE items SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
-  return getItem(id);
+  return getItem(db, id);
 }
 
-export function deleteItem(id: string): boolean {
-  const db = getDatabase();
+export function deleteItem(db: Database.Database, id: string): boolean {
   const result = db.prepare('DELETE FROM items WHERE id = ?').run(id);
   return result.changes > 0;
 }

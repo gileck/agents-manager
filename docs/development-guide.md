@@ -26,6 +26,7 @@ key_points:
 ```bash
 # Development
 yarn build             # Build all (main + preload + renderer)
+yarn build:daemon      # Build daemon process
 yarn start             # Build and run (no DevTools)
 yarn start:devtools    # Build and run with DevTools
 yarn electron          # Run without rebuilding (no DevTools)
@@ -81,9 +82,13 @@ The deploy script (`scripts/deploy.sh`):
 | `template/main/services/notification.ts` | macOS notifications |
 | `template/main/ipc/ipc-registry.ts` | IPC handler registration with validation |
 | `template/preload/bridge.ts` | Context bridge utilities |
-| `src/main/index.ts` | App initialization |
-| `src/main/ipc-handlers.ts` | IPC handler registration |
-| `src/main/migrations.ts` | Database schema |
+| `src/daemon/index.ts` | Daemon entry point (DB, services, HTTP/WS server) |
+| `src/daemon/server.ts` | Express server with API routes |
+| `src/core/providers/setup.ts` | Composition root (createAppServices) |
+| `src/core/migrations.ts` | Database schema migrations |
+| `src/client/api-client.ts` | HTTP API client for daemon |
+| `src/main/index.ts` | Electron thin shell (daemon client) |
+| `src/main/ipc-handlers/` | IPC handlers (delegates to API client) |
 | `src/preload/index.ts` | IPC API exposed to renderer |
 | `src/renderer/App.tsx` | React Router setup |
 
@@ -119,14 +124,14 @@ SQLite database is stored at:
 ~/Library/Application Support/<app-name>/<db-filename>.db
 ```
 
-Configure the database filename in `src/main/index.ts` via `initDatabase({ filename: 'my-app.db' })`.
+The daemon owns the database and opens it via `src/core/db.ts`. Path resolves from `AM_DB_PATH` environment variable or the default location above. Electron and CLI never open the database directly — they connect to the daemon via HTTP.
 
 ## Git Ignored Files
 
 The `.gitignore` file excludes common build artifacts and temporary files from version control:
 
 **Build outputs:**
-- `dist/`, `dist-main/` - Compiled TypeScript and bundled code
+- `dist/`, `dist-main/`, `dist-daemon/` - Compiled TypeScript and bundled code
 - `release/` - Electron builder output
 - `build/`, `out/` - Alternative build directories
 

@@ -20,6 +20,7 @@ import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IKanbanBoardStore } from '../interfaces/kanban-board-store';
+import type { ISettingsStore } from '../interfaces/settings-store';
 import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -36,6 +37,7 @@ import { SqliteAgentDefinitionStore } from '../stores/sqlite-agent-definition-st
 import { SqliteChatMessageStore } from '../stores/sqlite-chat-message-store';
 import { SqliteChatSessionStore } from '../stores/sqlite-chat-session-store';
 import { SqliteKanbanBoardStore } from '../stores/sqlite-kanban-board-store';
+import { SqliteSettingsStore } from '../stores/settings-store';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
@@ -74,13 +76,18 @@ import { ArtifactSource } from '../services/timeline/sources/artifact-source';
 import { PromptSource } from '../services/timeline/sources/prompt-source';
 import { ContextSource } from '../services/timeline/sources/context-source';
 import { registerCoreGuards } from '../handlers/core-guards';
-import { registerAgentHandler } from '../handlers/agent-handler';
+import { registerAgentHandler, type StreamingCallbacks } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
 import { registerPromptHandler } from '../handlers/prompt-handler';
 import { registerScmHandler } from '../handlers/scm-handler';
 import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
-import { getSetting } from '@template/main/services/settings-service';
+
+export interface AppServicesConfig {
+  createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
+  notificationRouters?: import('../interfaces/notification-router').INotificationRouter[];
+  imageStorageDir?: string;
+}
 
 export interface AppServices {
   db: Database.Database;
@@ -114,9 +121,10 @@ export interface AppServices {
   chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
   agentLibRegistry: AgentLibRegistryType;
+  settingsStore: ISettingsStore;
 }
 
-export function createAppServices(db: Database.Database): AppServices {
+export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
   // Phase 1 stores
   const projectStore = new SqliteProjectStore(db);
   const pipelineStore = new SqlitePipelineStore(db);
@@ -139,19 +147,21 @@ export function createAppServices(db: Database.Database): AppServices {
   const chatMessageStore = new SqliteChatMessageStore(db);
   const chatSessionStore = new SqliteChatSessionStore(db);
   const kanbanBoardStore = new SqliteKanbanBoardStore(db);
+  const settingsStore = new SqliteSettingsStore(db);
 
   // Phase 2 infrastructure — factory functions create project-scoped instances
   const createGitOps = (cwd: string) => new LocalGitOps(cwd);
   const createWorktreeManager = (path: string) => new LocalWorktreeManager(path);
   const createScmPlatform = (path: string) => new GitHubScmPlatform(path);
   const notificationRouter = new MultiChannelNotificationRouter();
+  if (config?.notificationRouters) {
+    for (const router of config.notificationRouters) {
+      notificationRouter.addRouter(router);
+    }
+  }
   try {
-    const { DesktopNotificationRouter } = require('../services/desktop-notification-router');
-    notificationRouter.addRouter(new DesktopNotificationRouter());
-  } catch { /* Not in Electron */ }
-  try {
-    const config = getResolvedConfig();
-    const { botToken, chatId } = validateTelegramConfig(config.telegram?.botToken, config.telegram?.chatId);
+    const resolvedConfig = getResolvedConfig();
+    const { botToken, chatId } = validateTelegramConfig(resolvedConfig.telegram?.botToken, resolvedConfig.telegram?.chatId);
     const TelegramBot = require('node-telegram-bot-api');
     const bot = new TelegramBot(botToken); // no polling — send-only
     notificationRouter.addRouter(new TelegramNotificationRouter(bot, chatId));
@@ -237,16 +247,16 @@ export function createAppServices(db: Database.Database): AppServices {
   // Chat agent service (unified: handles both project and task scopes)
   const getDefaultAgentLib = () => {
     try {
-      return getSetting('chat_default_agent_lib', 'claude-code');
+      return settingsStore.get('chat_default_agent_lib', 'claude-code');
     } catch (err) {
       console.error('[setup] Failed to read chat_default_agent_lib setting:', err);
       return 'claude-code';
     }
   };
-  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib);
+  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib, config?.imageStorageDir);
 
   // Register hooks (must be after workflowService is created)
-  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore });
+  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore, createStreamingCallbacks: config?.createStreamingCallbacks });
   registerNotificationHandler(pipelineEngine, { notificationRouter, taskStore });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerScmHandler(pipelineEngine, {
@@ -287,5 +297,6 @@ export function createAppServices(db: Database.Database): AppServices {
     chatSessionStore,
     chatAgentService,
     agentLibRegistry,
+    settingsStore,
   };
 }

@@ -32,11 +32,11 @@ const mockExecFile = Object.assign(
 vi.mock('child_process', () => ({
   execFile: mockExecFile,
 }));
-vi.mock('../../src/main/services/shell-env', () => ({
+vi.mock('../../src/core/services/shell-env', () => ({
   getShellEnv: () => ({ PATH: '/usr/bin', HOME: '/home/test' }),
 }));
 
-const { LocalGitOps } = await import('../../src/main/services/local-git-ops');
+const { LocalGitOps } = await import('../../src/core/services/local-git-ops');
 
 describe('LocalGitOps', () => {
   const CWD = '/home/test/worktree';

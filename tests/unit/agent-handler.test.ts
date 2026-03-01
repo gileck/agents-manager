@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { registerAgentHandler } from '../../src/main/handlers/agent-handler';
-import type { IPipelineEngine } from '../../src/main/interfaces/pipeline-engine';
-import type { IWorkflowService } from '../../src/main/interfaces/workflow-service';
-import type { ITaskEventLog } from '../../src/main/interfaces/task-event-log';
-import type { IAgentRunStore } from '../../src/main/interfaces/agent-run-store';
+import { registerAgentHandler } from '../../src/core/handlers/agent-handler';
+import type { IPipelineEngine } from '../../src/core/interfaces/pipeline-engine';
+import type { IWorkflowService } from '../../src/core/interfaces/workflow-service';
+import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
+import type { IAgentRunStore } from '../../src/core/interfaces/agent-run-store';
 import type { HookFn, Task, Transition, TransitionContext, AgentRun } from '../../src/shared/types';
 
 // Suppress trySendToRenderer require errors in test

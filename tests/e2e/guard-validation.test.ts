@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { FEATURE_PIPELINE, SIMPLE_PIPELINE } from '../../src/main/data/seeded-pipelines';
+import { FEATURE_PIPELINE, SIMPLE_PIPELINE } from '../../src/core/data/seeded-pipelines';
 import type { GuardResult } from '../../src/shared/types';
 
 describe('Guard Validation', () => {

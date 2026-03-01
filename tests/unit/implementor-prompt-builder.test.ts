@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { ImplementorPromptBuilder } from '../../src/main/agents/implementor-prompt-builder';
+import { ImplementorPromptBuilder } from '../../src/core/agents/implementor-prompt-builder';
 import type { AgentContext, AgentConfig, Task, Project, AgentMode, RevisionReason } from '../../src/shared/types';
-import type { AgentLibResult } from '../../src/main/interfaces/agent-lib';
+import type { AgentLibResult } from '../../src/core/interfaces/agent-lib';
 
 function createTask(overrides: Partial<Task> = {}): Task {
   return {

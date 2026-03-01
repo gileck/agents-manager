@@ -117,13 +117,18 @@ function killProcessTree(pid: number) {
 
 ## Shutdown Ordering
 
-The `onBeforeQuit` handler in `src/main/index.ts` must execute cleanup steps in a specific order:
+The daemon shutdown handler in `src/daemon/index.ts` must execute cleanup steps in a specific order:
 
-1. **Stop supervisors** (`agentSupervisor.stop()`) -- prevents new work from being scheduled
-2. **Flush logs** (`flushLogs()`) -- writes any buffered log entries to the database
-3. **Close database** (`closeDatabase()`) -- shuts down the SQLite connection
+1. **Stop Telegram bots** (`stopAllBots()`) — cleanly shuts down all active bots
+2. **Stop supervisors** (`stopSupervisors(services)`) — stops AgentSupervisor and WorkflowReviewSupervisor
+3. **Close WebSocket server** (`wsServer.close()`) — disconnects all WS clients
+4. **Close all HTTP connections** (`httpServer.closeAllConnections()`) — forcibly terminates keep-alive connections
+5. **Close HTTP server** (`httpServer.close()`) — stops accepting new connections
+6. **Close database** (`db.close()`) — shuts down the SQLite connection
 
-Calling `closeDatabase()` before `flushLogs()` would silently discard pending log writes. Always flush I/O before closing the resources they depend on.
+Always stop services that depend on the database before closing the database itself.
+
+> **Note:** The Electron main process also handles shutdown by disconnecting the WS client and cleaning up the tray icon, but does not manage DB or services directly.
 
 ## Component Layering Convention
 
