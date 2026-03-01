@@ -1,118 +1,87 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
-import type { AppServices } from '../../core/providers/setup';
+import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
+import type { ApiClient } from '../../client';
 import type {
-  TaskCreateInput,
-  TaskUpdateInput,
   TaskFilter,
   TaskEventFilter,
   ActivityFilter,
-  DebugTimelineEntry,
 } from '../../shared/types';
 
-export function registerTaskHandlers(services: AppServices): void {
+export function registerTaskHandlers(api: ApiClient): void {
   // ============================================
   // Task Operations
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.TASK_LIST, async (_, filter?: TaskFilter) => {
-    return services.taskStore.listTasks(filter);
+    return api.tasks.list(filter);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_GET, async (_, id: string) => {
-    validateId(id);
-    return services.taskStore.getTask(id);
+    return api.tasks.get(id);
   });
 
-  registerIpcHandler(IPC_CHANNELS.TASK_CREATE, async (_, input: TaskCreateInput) => {
-    validateInput(input, ['projectId', 'pipelineId', 'title']);
-    return services.workflowService.createTask(input);
+  registerIpcHandler(IPC_CHANNELS.TASK_CREATE, async (_, input: unknown) => {
+    return api.tasks.create(input as Parameters<typeof api.tasks.create>[0]);
   });
 
-  registerIpcHandler(IPC_CHANNELS.TASK_UPDATE, async (_, id: string, input: TaskUpdateInput) => {
-    validateId(id);
-    // Strip status to prevent bypassing pipeline transitions via direct update
-    const { status: _status, ...safeInput } = input;
-    return services.workflowService.updateTask(id, safeInput);
+  registerIpcHandler(IPC_CHANNELS.TASK_UPDATE, async (_, id: string, input: unknown) => {
+    return api.tasks.update(id, input as Parameters<typeof api.tasks.update>[1]);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_DELETE, async (_, id: string) => {
-    validateId(id);
-    return services.workflowService.deleteTask(id);
+    return api.tasks.delete(id);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_RESET, async (_, id: string, pipelineId?: string) => {
-    validateId(id);
-    if (pipelineId !== undefined) validateId(pipelineId, 'pipelineId');
-    return services.workflowService.resetTask(id, pipelineId);
+    return api.tasks.reset(id, pipelineId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_TRANSITION, async (_, taskId: string, toStatus: string, actor?: string) => {
-    validateId(taskId);
-    return services.workflowService.transitionTask(taskId, toStatus, actor);
+    return api.tasks.transition(taskId, toStatus, actor);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_TRANSITIONS, async (_, taskId: string) => {
-    validateId(taskId);
-    const task = await services.taskStore.getTask(taskId);
-    if (!task) return [];
-    return services.pipelineEngine.getValidTransitions(task, 'manual');
+    return api.tasks.getTransitions(taskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_DEPENDENCIES, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.taskStore.getDependencies(taskId);
+    return api.tasks.getDependencies(taskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_DEPENDENTS, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.taskStore.getDependents(taskId);
+    return api.tasks.getDependents(taskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_ADD_DEPENDENCY, async (_, taskId: string, dependsOnTaskId: string) => {
-    validateId(taskId);
-    validateId(dependsOnTaskId);
-    await services.taskStore.addDependency(taskId, dependsOnTaskId);
+    return api.tasks.addDependency(taskId, dependsOnTaskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_REMOVE_DEPENDENCY, async (_, taskId: string, dependsOnTaskId: string) => {
-    validateId(taskId);
-    validateId(dependsOnTaskId);
-    await services.taskStore.removeDependency(taskId, dependsOnTaskId);
+    return api.tasks.removeDependency(taskId, dependsOnTaskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_ALL_TRANSITIONS, async (_, taskId: string) => {
-    validateId(taskId);
-    const task = await services.taskStore.getTask(taskId);
-    if (!task) return { manual: [], agent: [], system: [] };
-    return services.pipelineEngine.getAllTransitions(task);
+    return api.tasks.getAllTransitions(taskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_FORCE_TRANSITION, async (_, taskId: string, toStatus: string, actor?: string) => {
-    validateId(taskId);
-    return services.workflowService.forceTransitionTask(taskId, toStatus, actor);
+    return api.tasks.forceTransition(taskId, toStatus, actor);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_GUARD_CHECK, async (_, taskId: string, toStatus: string, trigger: string) => {
-    validateId(taskId);
-    const task = await services.taskStore.getTask(taskId);
-    if (!task) return null;
-    return services.pipelineEngine.checkGuards(task, toStatus, trigger as 'manual' | 'agent' | 'system');
+    return api.tasks.guardCheck(taskId, toStatus, trigger);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_HOOK_RETRY, async (_, taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string) => {
-    validateId(taskId);
-    return services.pipelineInspectionService.retryHook(taskId, hookName, transitionFrom, transitionTo);
+    return api.tasks.retryHook(taskId, hookName, transitionFrom, transitionTo);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_PIPELINE_DIAGNOSTICS, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.pipelineInspectionService.getPipelineDiagnostics(taskId);
+    return api.tasks.getPipelineDiagnostics(taskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_ADVANCE_PHASE, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.pipelineInspectionService.advancePhase(taskId);
+    return api.tasks.advancePhase(taskId);
   });
 
   // ============================================
@@ -120,7 +89,7 @@ export function registerTaskHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.EVENT_LIST, async (_, filter?: TaskEventFilter) => {
-    return services.taskEventLog.getEvents(filter);
+    return api.events.list(filter);
   });
 
   // ============================================
@@ -128,7 +97,7 @@ export function registerTaskHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.ACTIVITY_LIST, async (_, filter?: ActivityFilter) => {
-    return services.activityLog.getEntries(filter);
+    return api.events.listActivities(filter);
   });
 
   // ============================================
@@ -136,13 +105,11 @@ export function registerTaskHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.PROMPT_LIST, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.pendingPromptStore.getPendingForTask(taskId);
+    return api.tasks.getPrompts(taskId);
   });
 
   registerIpcHandler(IPC_CHANNELS.PROMPT_RESPOND, async (_, promptId: string, response: Record<string, unknown>) => {
-    validateId(promptId);
-    return services.workflowService.respondToPrompt(promptId, response);
+    return api.prompts.respond(promptId, response);
   });
 
   // ============================================
@@ -150,8 +117,7 @@ export function registerTaskHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.ARTIFACT_LIST, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.taskArtifactStore.getArtifactsForTask(taskId);
+    return api.tasks.getArtifacts(taskId);
   });
 
   // ============================================
@@ -159,17 +125,15 @@ export function registerTaskHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.TASK_CONTEXT_ENTRIES, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.taskContextStore.getEntriesForTask(taskId);
+    return api.tasks.getContext(taskId);
   });
 
   // ============================================
   // Debug Timeline
   // ============================================
 
-  registerIpcHandler(IPC_CHANNELS.TASK_DEBUG_TIMELINE, async (_, taskId: string): Promise<DebugTimelineEntry[]> => {
-    validateId(taskId);
-    return services.timelineService.getTimeline(taskId);
+  registerIpcHandler(IPC_CHANNELS.TASK_DEBUG_TIMELINE, async (_, taskId: string) => {
+    return api.tasks.getTimeline(taskId);
   });
 
   // ============================================
@@ -177,13 +141,7 @@ export function registerTaskHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.TASK_WORKTREE, async (_, taskId: string) => {
-    validateId(taskId);
-    const task = await services.taskStore.getTask(taskId);
-    if (!task) return null;
-    const project = await services.projectStore.getProject(task.projectId);
-    if (!project?.path) return null;
-    const wm = services.createWorktreeManager(project.path);
-    return wm.get(taskId);
+    return api.tasks.getWorktree(taskId);
   });
 
   // ============================================
@@ -191,8 +149,7 @@ export function registerTaskHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.TASK_WORKFLOW_REVIEW, async (_, taskId: string) => {
-    validateId(taskId);
-    return services.workflowService.startAgent(taskId, 'new', 'task-workflow-reviewer');
+    return api.agents.workflowReview(taskId);
   });
 
   // ============================================
@@ -200,6 +157,6 @@ export function registerTaskHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.DASHBOARD_STATS, async () => {
-    return services.workflowService.getDashboardStats();
+    return api.dashboard.getStats();
   });
 }

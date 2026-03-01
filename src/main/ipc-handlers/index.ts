@@ -1,9 +1,7 @@
 import { app } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
-import * as itemService from '../../core/services/item-service';
-import type { AppServices } from '../../core/providers/setup';
-import type { ItemCreateInput, ItemUpdateInput } from '../../shared/types';
+import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
+import type { ApiClient } from '../../client';
 
 import { registerSettingsHandlers } from './settings-handlers';
 import { registerAgentHandlers } from './agent-handlers';
@@ -18,40 +16,36 @@ import { registerFeatureHandlers } from './feature-handlers';
 import { registerAgentDefHandlers } from './agent-def-handlers';
 import { registerPipelineHandlers } from './pipeline-handlers';
 
-export function registerIpcHandlers(services: AppServices): void {
+export function registerIpcHandlers(api: ApiClient): void {
   // ============================================
-  // Item Operations (template)
+  // Item Operations (template) — delegate to daemon API
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.ITEM_LIST, async () => {
-    return itemService.listItems(services.db);
+    return api.items.list();
   });
 
   registerIpcHandler(IPC_CHANNELS.ITEM_GET, async (_, id: string) => {
-    validateId(id);
-    return itemService.getItem(services.db, id);
+    return api.items.get(id);
   });
 
-  registerIpcHandler(IPC_CHANNELS.ITEM_CREATE, async (_, input: ItemCreateInput) => {
-    validateInput(input, ['name']);
-    return itemService.createItem(services.db, input);
+  registerIpcHandler(IPC_CHANNELS.ITEM_CREATE, async (_, input: unknown) => {
+    return api.items.create(input as Parameters<typeof api.items.create>[0]);
   });
 
-  registerIpcHandler(IPC_CHANNELS.ITEM_UPDATE, async (_, id: string, input: ItemUpdateInput) => {
-    validateId(id);
-    return itemService.updateItem(services.db, id, input);
+  registerIpcHandler(IPC_CHANNELS.ITEM_UPDATE, async (_, id: string, input: unknown) => {
+    return api.items.update(id, input as Parameters<typeof api.items.update>[1]);
   });
 
   registerIpcHandler(IPC_CHANNELS.ITEM_DELETE, async (_, id: string) => {
-    validateId(id);
-    return itemService.deleteItem(services.db, id);
+    return api.items.delete(id);
   });
 
   // ============================================
   // Settings Operations
   // ============================================
 
-  registerSettingsHandlers(services);
+  registerSettingsHandlers(api);
 
   // ============================================
   // App Operations
@@ -65,15 +59,15 @@ export function registerIpcHandlers(services: AppServices): void {
   // Domain Handler Groups
   // ============================================
 
-  registerProjectHandlers(services);
-  registerTaskHandlers(services);
-  registerPipelineHandlers(services);
-  registerAgentHandlers(services);
-  registerAgentDefHandlers(services);
-  registerFeatureHandlers(services);
-  registerKanbanHandlers(services);
-  registerGitHandlers(services);
-  registerTelegramHandlers(services);
-  registerChatSessionHandlers(services);
+  registerProjectHandlers(api);
+  registerTaskHandlers(api);
+  registerPipelineHandlers(api);
+  registerAgentHandlers(api);
+  registerAgentDefHandlers(api);
+  registerFeatureHandlers(api);
+  registerKanbanHandlers(api);
+  registerGitHandlers(api);
+  registerTelegramHandlers(api);
+  registerChatSessionHandlers(api);
   registerShellHandlers();
 }
