@@ -207,7 +207,7 @@ export class PostRunExtractor {
     if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) return;
 
     const wso = result.structuredOutput as {
-      suggestedTasks?: Array<{ title: string; description: string; priority?: number }>;
+      suggestedTasks?: Array<{ title: string; description: string; debugInfo?: string; priority?: number }>;
     } | undefined;
 
     const tasks = wso?.suggestedTasks;
@@ -229,6 +229,7 @@ export class PostRunExtractor {
           pipelineId: AGENT_PIPELINE_ID,
           title: suggested.title,
           description: suggested.description,
+          debugInfo: suggested.debugInfo || undefined,
           priority,
           tags: ['workflow-review'],
         });
