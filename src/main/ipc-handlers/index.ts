@@ -24,27 +24,27 @@ export function registerIpcHandlers(services: AppServices): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.ITEM_LIST, async () => {
-    return itemService.listItems();
+    return itemService.listItems(services.db);
   });
 
   registerIpcHandler(IPC_CHANNELS.ITEM_GET, async (_, id: string) => {
     validateId(id);
-    return itemService.getItem(id);
+    return itemService.getItem(services.db, id);
   });
 
   registerIpcHandler(IPC_CHANNELS.ITEM_CREATE, async (_, input: ItemCreateInput) => {
     validateInput(input, ['name']);
-    return itemService.createItem(input);
+    return itemService.createItem(services.db, input);
   });
 
   registerIpcHandler(IPC_CHANNELS.ITEM_UPDATE, async (_, id: string, input: ItemUpdateInput) => {
     validateId(id);
-    return itemService.updateItem(id, input);
+    return itemService.updateItem(services.db, id, input);
   });
 
   registerIpcHandler(IPC_CHANNELS.ITEM_DELETE, async (_, id: string) => {
     validateId(id);
-    return itemService.deleteItem(id);
+    return itemService.deleteItem(services.db, id);
   });
 
   // ============================================
