@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ReviewerPromptBuilder } from '../../src/main/agents/reviewer-prompt-builder';
-import { ClaudeCodeLib } from '../../src/main/libs/claude-code-lib';
-import { Agent } from '../../src/main/agents/agent';
-import { AgentLibRegistry } from '../../src/main/services/agent-lib-registry';
+import { ReviewerPromptBuilder } from '../../src/core/agents/reviewer-prompt-builder';
+import { ClaudeCodeLib } from '../../src/core/libs/claude-code-lib';
+import { Agent } from '../../src/core/agents/agent';
+import { AgentLibRegistry } from '../../src/core/services/agent-lib-registry';
 import type { AgentContext } from '../../src/shared/types';
 
 function createContext(taskId: string = 'test-task'): AgentContext {

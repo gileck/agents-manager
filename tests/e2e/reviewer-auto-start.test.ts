@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, resetCounters } from '../helpers/factories';
-import { AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
-import { happyImplement, happyReview, type ScriptedAgent } from '../../src/main/agents/scripted-agent';
-import { registerAgentHandler } from '../../src/main/handlers/agent-handler';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { happyImplement, happyReview, type ScriptedAgent } from '../../src/core/agents/scripted-agent';
+import { registerAgentHandler } from '../../src/core/handlers/agent-handler';
 
 describe('Reviewer Auto-Start After Implementor', () => {
   let ctx: TestContext;

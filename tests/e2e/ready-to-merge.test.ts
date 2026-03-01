@@ -73,7 +73,7 @@ describe('Ready to Merge Flow', () => {
       );
 
       // Create a non-admin user in the database
-      const userStore = new (await import('../../src/main/stores/sqlite-user-store')).SqliteUserStore(ctx.db);
+      const userStore = new (await import('../../src/core/stores/sqlite-user-store')).SqliteUserStore(ctx.db);
       await userStore.createUser('regular-user', 'user');
 
       // Non-admin tries to merge the PR
@@ -149,7 +149,7 @@ describe('Ready to Merge Flow', () => {
       );
 
       // Create a non-admin user in the database
-      const userStore = new (await import('../../src/main/stores/sqlite-user-store')).SqliteUserStore(ctx.db);
+      const userStore = new (await import('../../src/core/stores/sqlite-user-store')).SqliteUserStore(ctx.db);
       await userStore.createUser('bug-fixer', 'user');
 
       // Non-admin tries to merge the PR

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AgentFrameworkImpl } from '../../src/main/services/agent-framework-impl';
-import type { IAgent } from '../../src/main/interfaces/agent';
+import { AgentFrameworkImpl } from '../../src/core/services/agent-framework-impl';
+import type { IAgent } from '../../src/core/interfaces/agent';
 import type { AgentRunResult } from '../../src/shared/types';
 
 function createMockAgent(type: string, available = true): IAgent {

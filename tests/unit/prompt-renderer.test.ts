@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PromptRenderer } from '../../src/main/services/prompt-renderer';
+import { PromptRenderer } from '../../src/core/services/prompt-renderer';
 import type { AgentContext, Task, Project, TaskContextEntry } from '../../src/shared/types';
 
 function createTask(overrides: Partial<Task> = {}): Task {

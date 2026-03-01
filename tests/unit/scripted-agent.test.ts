@@ -6,7 +6,7 @@ import {
   happyReview,
   humanInTheLoop,
   failAfterSteps,
-} from '../../src/main/agents/scripted-agent';
+} from '../../src/core/agents/scripted-agent';
 import type { AgentContext, AgentConfig } from '../../src/shared/types';
 
 function createContext(): AgentContext {

@@ -33,11 +33,11 @@ const mockExecFile = Object.assign(
 vi.mock('child_process', () => ({
   execFile: mockExecFile,
 }));
-vi.mock('../../src/main/services/shell-env', () => ({
+vi.mock('../../src/core/services/shell-env', () => ({
   getShellEnv: () => ({ PATH: '/usr/bin', HOME: '/home/test' }),
 }));
 
-const { LocalWorktreeManager } = await import('../../src/main/services/local-worktree-manager');
+const { LocalWorktreeManager } = await import('../../src/core/services/local-worktree-manager');
 
 describe('LocalWorktreeManager', () => {
   const PROJECT_PATH = '/home/test/my-project';

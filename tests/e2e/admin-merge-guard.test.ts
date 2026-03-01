@@ -13,7 +13,7 @@ describe('Admin Merge Guard', () => {
     projectId = project.id;
 
     // Import and create user store
-    const { SqliteUserStore } = await import('../../src/main/stores/sqlite-user-store');
+    const { SqliteUserStore } = await import('../../src/core/stores/sqlite-user-store');
     const userStore = new SqliteUserStore(ctx.db);
 
     // Create test users

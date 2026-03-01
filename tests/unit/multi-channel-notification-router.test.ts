@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MultiChannelNotificationRouter } from '../../src/main/services/multi-channel-notification-router';
-import type { INotificationRouter } from '../../src/main/interfaces/notification-router';
+import { MultiChannelNotificationRouter } from '../../src/core/services/multi-channel-notification-router';
+import type { INotificationRouter } from '../../src/core/interfaces/notification-router';
 import type { Notification } from '../../src/shared/types';
 
 function createStubRouter(name?: string): INotificationRouter & { calls: Notification[] } {

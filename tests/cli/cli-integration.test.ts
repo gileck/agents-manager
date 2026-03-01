@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
-import { SEEDED_PIPELINES } from '../../src/main/data/seeded-pipelines';
+import { SEEDED_PIPELINES } from '../../src/core/data/seeded-pipelines';
 import { resolveProject, requireProject } from '../../src/cli/context';
 import { output } from '../../src/cli/output';
 

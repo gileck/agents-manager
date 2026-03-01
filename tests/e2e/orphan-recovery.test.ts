@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, resetCounters } from '../helpers/factories';
-import { AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
-import { now } from '../../src/main/stores/utils';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
+import { now } from '../../src/core/stores/utils';
 
 describe('Orphan Recovery (recoverOrphanedRuns)', () => {
   let ctx: TestContext;

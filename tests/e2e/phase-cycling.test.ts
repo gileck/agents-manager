@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
-import { AGENT_PIPELINE } from '../../src/main/data/seeded-pipelines';
+import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 import type { ImplementationPhase, Task, HookResult } from '../../src/shared/types';
 
 describe('Phase Cycling E2E', () => {
@@ -58,7 +58,7 @@ describe('Phase Cycling E2E', () => {
    */
   async function createPrArtifact(taskId: string, branch: string, phaseLabel?: string): Promise<string> {
     const prTitle = phaseLabel ? `[${phaseLabel}] Test Task` : 'Test Task';
-    const prInfo = await (ctx.scmPlatform as import('../../src/main/services/stub-scm-platform').StubScmPlatform).createPR({
+    const prInfo = await (ctx.scmPlatform as import('../../src/core/services/stub-scm-platform').StubScmPlatform).createPR({
       title: prTitle,
       body: `Automated PR for task ${taskId}`,
       head: branch,
@@ -276,7 +276,7 @@ describe('Phase Cycling E2E', () => {
 
     // Create worktree for the task (needed by push_and_create_pr hook)
     const branch = `task/${task.id}/implement/phase-1`;
-    await (ctx.worktreeManager as import('../../src/main/services/stub-worktree-manager').StubWorktreeManager).create(branch, task.id);
+    await (ctx.worktreeManager as import('../../src/core/services/stub-worktree-manager').StubWorktreeManager).create(branch, task.id);
 
     // Use the actual push_and_create_pr hook by triggering the agent transition
     // The hook is already registered by registerScmHandler in test-context
@@ -337,7 +337,7 @@ describe('Phase Cycling E2E', () => {
 
     // Create worktree for phase 1
     const branch1 = `task/${task.id}/implement/phase-1`;
-    const wm = ctx.worktreeManager as import('../../src/main/services/stub-worktree-manager').StubWorktreeManager;
+    const wm = ctx.worktreeManager as import('../../src/core/services/stub-worktree-manager').StubWorktreeManager;
     await wm.create(branch1, task.id);
 
     // Verify worktree exists
@@ -397,7 +397,7 @@ describe('Phase Cycling E2E', () => {
 
     // Create worktree and PR artifact for phase 1
     const branch1 = `task/${task.id}/implement/phase-1`;
-    const wm = ctx.worktreeManager as import('../../src/main/services/stub-worktree-manager').StubWorktreeManager;
+    const wm = ctx.worktreeManager as import('../../src/core/services/stub-worktree-manager').StubWorktreeManager;
     await wm.create(branch1, task.id);
     await createPrArtifact(task.id, branch1, 'Phase 1/3');
 

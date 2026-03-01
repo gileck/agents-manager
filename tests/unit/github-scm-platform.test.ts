@@ -28,11 +28,11 @@ const mockExecFile = Object.assign(
 vi.mock('child_process', () => ({
   execFile: mockExecFile,
 }));
-vi.mock('../../src/main/services/shell-env', () => ({
+vi.mock('../../src/core/services/shell-env', () => ({
   getShellEnv: () => ({ PATH: '/usr/bin', HOME: '/home/test' }),
 }));
 
-const { GitHubScmPlatform } = await import('../../src/main/services/github-scm-platform');
+const { GitHubScmPlatform } = await import('../../src/core/services/github-scm-platform');
 
 describe('GitHubScmPlatform', () => {
   const REPO_PATH = '/home/test/repo';
