@@ -2,12 +2,12 @@ import { app } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry';
 import { sendToRenderer } from '@template/main/core/window';
-import type { AppServices } from '../providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import type { TelegramBotLogEntry, AgentChatMessage } from '../../shared/types';
-import { TelegramAgentBotService } from '../services/telegram-agent-bot-service';
-import { TelegramNotificationRouter } from '../services/telegram-notification-router';
-import type { INotificationRouter } from '../interfaces/notification-router';
-import { validateTelegramConfig } from '../services/telegram-config-validator';
+import { TelegramAgentBotService } from '../../core/services/telegram-agent-bot-service';
+import { TelegramNotificationRouter } from '../../core/services/telegram-notification-router';
+import type { INotificationRouter } from '../../core/interfaces/notification-router';
+import { validateTelegramConfig } from '../../core/services/telegram-config-validator';
 
 /** Module-scoped active bots map shared across handler registrations */
 const activeBots = new Map<string, { botService: TelegramAgentBotService; notificationRouter: INotificationRouter }>();

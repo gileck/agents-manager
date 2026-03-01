@@ -1,6 +1,6 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
-import type { AppServices } from '../providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import type { FeatureCreateInput, FeatureUpdateInput, FeatureFilter } from '../../shared/types';
 
 export function registerFeatureHandlers(services: AppServices): void {

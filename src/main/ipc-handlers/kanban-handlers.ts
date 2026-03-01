@@ -1,6 +1,6 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
-import type { AppServices } from '../providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import type { KanbanBoardCreateInput, KanbanBoardUpdateInput } from '../../shared/types';
 
 const VALID_SORT_BY = ['priority', 'created', 'updated', 'manual'] as const;

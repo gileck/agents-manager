@@ -1,8 +1,8 @@
 import { app } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
-import * as itemService from '../services/item-service';
-import type { AppServices } from '../providers/setup';
+import * as itemService from '../../core/services/item-service';
+import type { AppServices } from '../../core/providers/setup';
 import type { ItemCreateInput, ItemUpdateInput } from '../../shared/types';
 
 import { registerSettingsHandlers } from './settings-handlers';

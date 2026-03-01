@@ -1,6 +1,6 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
-import type { AppServices } from '../providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import type { AgentDefinitionCreateInput, AgentDefinitionUpdateInput } from '../../shared/types';
 
 export function registerAgentDefHandlers(services: AppServices): void {

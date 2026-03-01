@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../main/providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import { output, type OutputOptions } from '../output';
 
 export function registerStatusCommand(program: Command, getServices: () => AppServices): void {

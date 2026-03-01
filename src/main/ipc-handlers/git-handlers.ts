@@ -1,9 +1,9 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry';
-import { LocalGitOps } from '../services/local-git-ops';
-import type { AppServices } from '../providers/setup';
+import { LocalGitOps } from '../../core/services/local-git-ops';
+import type { AppServices } from '../../core/providers/setup';
 import type { GitLogEntry, GitCommitDetail } from '../../shared/types';
-import type { IGitOps } from '../interfaces/git-ops';
+import type { IGitOps } from '../../core/interfaces/git-ops';
 
 async function getTaskGitOps(services: AppServices, taskId: string): Promise<LocalGitOps | null> {
   const task = await services.taskStore.getTask(taskId);

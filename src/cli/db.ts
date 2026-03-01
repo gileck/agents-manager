@@ -2,8 +2,8 @@ import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { getMigrations } from '../main/migrations';
-import { createAppServices, type AppServices } from '../main/providers/setup';
+import { getMigrations } from '../core/migrations';
+import { createAppServices, type AppServices } from '../core/providers/setup';
 
 const DEFAULT_DB_PATH = path.join(
   os.homedir(),

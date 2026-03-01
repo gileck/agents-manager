@@ -1,7 +1,7 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
 import type { AppSettings } from '../../shared/types';
-import type { AppServices } from '../providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 
 /** Read all current settings from the store into an AppSettings object. */
 function readCurrentSettings(services: AppServices): AppSettings {

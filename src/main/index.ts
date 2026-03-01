@@ -6,10 +6,10 @@ import { initDatabase, closeDatabase, getDatabase } from '@template/main/service
 import { flushLogs } from '@template/main/services/log-service';
 import { registerIpcHandlers } from './ipc-handlers';
 import { autoStartTelegramBots } from './ipc-handlers/telegram-handlers';
-import { getMigrations } from './migrations';
-import { createAppServices, type AppServices } from './providers/setup';
+import { getMigrations } from '../core/migrations';
+import { createAppServices, type AppServices } from '../core/providers/setup';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
-import { initShellEnv } from './services/shell-env';
+import { initShellEnv } from '../core/services/shell-env';
 import { DesktopNotificationRouter } from './services/desktop-notification-router';
 
 // Keep a global reference to prevent garbage collection

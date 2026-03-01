@@ -34,7 +34,7 @@ export function registerShellHandlers(): void {
     const { execFile: execFileCb } = await import('child_process');
     const { promisify } = await import('util');
     const execFileAsync = promisify(execFileCb);
-    const env = (await import('../services/shell-env')).getShellEnv();
+    const env = (await import('../../core/services/shell-env')).getShellEnv();
     const script = `
       on run argv
         set dirPath to item 1 of argv
@@ -59,7 +59,7 @@ export function registerShellHandlers(): void {
     const { execFile: execFileCb } = await import('child_process');
     const { promisify } = await import('util');
     const execFileAsync = promisify(execFileCb);
-    const env = (await import('../services/shell-env')).getShellEnv();
+    const env = (await import('../../core/services/shell-env')).getShellEnv();
     await execFileAsync('code', [dirPath], { env });
   });
 }

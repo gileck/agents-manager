@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../main/providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import type { Subtask, SubtaskStatus } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject } from '../context';

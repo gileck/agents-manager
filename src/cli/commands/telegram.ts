@@ -1,10 +1,10 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../main/providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import { requireProject } from '../context';
-import { getResolvedConfig } from '../../main/services/config-service';
-import { TelegramAgentBotService } from '../../main/services/telegram-agent-bot-service';
-import { TelegramNotificationRouter } from '../../main/services/telegram-notification-router';
-import { validateTelegramConfig } from '../../main/services/telegram-config-validator';
+import { getResolvedConfig } from '../../core/services/config-service';
+import { TelegramAgentBotService } from '../../core/services/telegram-agent-bot-service';
+import { TelegramNotificationRouter } from '../../core/services/telegram-notification-router';
+import { validateTelegramConfig } from '../../core/services/telegram-config-validator';
 import { getSetting } from '@template/main/services/settings-service';
 
 export function registerTelegramCommands(program: Command, getServices: () => AppServices): void {

@@ -1,9 +1,9 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry';
 import { sendToRenderer } from '@template/main/core/window';
-import type { AppServices } from '../providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import type { ChatImage } from '../../shared/types';
-import { buildDesktopSystemPrompt } from '../services/chat-prompt-parts';
+import { buildDesktopSystemPrompt } from '../../core/services/chat-prompt-parts';
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 

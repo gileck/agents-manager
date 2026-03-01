@@ -1,7 +1,7 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler, validateId } from '@template/main/ipc/ipc-registry';
 import { sendToRenderer } from '@template/main/core/window';
-import type { AppServices } from '../providers/setup';
+import type { AppServices } from '../../core/providers/setup';
 import type { AgentMode } from '../../shared/types';
 
 export function registerAgentHandlers(services: AppServices): void {

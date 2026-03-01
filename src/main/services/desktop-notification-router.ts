@@ -1,5 +1,5 @@
 import type { Notification } from '../../shared/types';
-import type { INotificationRouter } from '../interfaces/notification-router';
+import type { INotificationRouter } from '../../core/interfaces/notification-router';
 import { sendNotification } from '@template/main/services/notification';
 import { showWindow, sendToRenderer } from '@template/main/core/window';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';

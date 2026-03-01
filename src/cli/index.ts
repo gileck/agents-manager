@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { openDatabase } from './db';
-import type { AppServices } from '../main/providers/setup';
+import type { AppServices } from '../core/providers/setup';
 import { registerProjectCommands } from './commands/projects';
 import { registerTaskCommands } from './commands/tasks';
 import { registerAgentCommands } from './commands/agent';
@@ -12,7 +12,7 @@ import { registerPromptsCommands } from './commands/prompts';
 import { registerPipelinesCommands } from './commands/pipelines';
 import { registerStatusCommand } from './commands/status';
 import { registerTelegramCommands } from './commands/telegram';
-import { initShellEnv } from '../main/services/shell-env';
+import { initShellEnv } from '../core/services/shell-env';
 
 const program = new Command();
 

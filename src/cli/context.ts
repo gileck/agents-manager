@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { AppServices } from '../main/providers/setup';
+import type { AppServices } from '../core/providers/setup';
 import type { Project } from '../shared/types';
 
 export async function resolveProject(
