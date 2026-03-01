@@ -1,8 +1,8 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../core/providers/setup';
+import type { ApiClient } from '../../client/api-client';
 import { output, type OutputOptions } from '../output';
 
-export function registerProjectCommands(program: Command, getServices: () => AppServices): void {
+export function registerProjectCommands(program: Command, api: ApiClient): void {
   const projects = program.command('projects').description('Manage projects');
 
   projects
@@ -11,8 +11,7 @@ export function registerProjectCommands(program: Command, getServices: () => App
     .description('List all projects')
     .action(async () => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const list = await services.projectStore.listProjects();
+      const list = await api.projects.list();
       const rows = list.map((p) => ({ id: p.id, name: p.name, path: p.path ?? '' }));
       output(rows, opts);
     });
@@ -22,14 +21,13 @@ export function registerProjectCommands(program: Command, getServices: () => App
     .description('Get project details')
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const project = await services.projectStore.getProject(id);
-      if (!project) {
+      try {
+        const project = await api.projects.get(id);
+        output(project, opts);
+      } catch {
         console.error(`Project not found: ${id}`);
         process.exitCode = 1;
-        return;
       }
-      output(project, opts);
     });
 
   projects
@@ -40,8 +38,7 @@ export function registerProjectCommands(program: Command, getServices: () => App
     .option('--path <path>', 'Project path')
     .action(async (cmdOpts: { name: string; description?: string; path?: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const project = await services.projectStore.createProject({
+      const project = await api.projects.create({
         name: cmdOpts.name,
         description: cmdOpts.description,
         path: cmdOpts.path,
@@ -57,18 +54,17 @@ export function registerProjectCommands(program: Command, getServices: () => App
     .option('--path <path>', 'Project path')
     .action(async (id: string, cmdOpts: { name?: string; description?: string; path?: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const project = await services.projectStore.updateProject(id, {
-        name: cmdOpts.name,
-        description: cmdOpts.description,
-        path: cmdOpts.path,
-      });
-      if (!project) {
+      try {
+        const project = await api.projects.update(id, {
+          name: cmdOpts.name,
+          description: cmdOpts.description,
+          path: cmdOpts.path,
+        });
+        output(project, opts);
+      } catch {
         console.error(`Project not found: ${id}`);
         process.exitCode = 1;
-        return;
       }
-      output(project, opts);
     });
 
   projects
@@ -76,17 +72,16 @@ export function registerProjectCommands(program: Command, getServices: () => App
     .description('Delete a project')
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const deleted = await services.projectStore.deleteProject(id);
-      if (!deleted) {
+      try {
+        await api.projects.delete(id);
+        if (opts.json) {
+          output({ deleted: true, id }, opts);
+        } else if (!opts.quiet) {
+          console.log(`Deleted project ${id}`);
+        }
+      } catch {
         console.error(`Project not found: ${id}`);
         process.exitCode = 1;
-        return;
-      }
-      if (opts.json) {
-        output({ deleted: true, id }, opts);
-      } else if (!opts.quiet) {
-        console.log(`Deleted project ${id}`);
       }
     });
 }

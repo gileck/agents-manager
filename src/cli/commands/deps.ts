@@ -1,8 +1,8 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../core/providers/setup';
+import type { ApiClient } from '../../client/api-client';
 import { output, type OutputOptions } from '../output';
 
-export function registerDepsCommands(program: Command, getServices: () => AppServices): void {
+export function registerDepsCommands(program: Command, api: ApiClient): void {
   const deps = program.command('deps').description('Manage task dependencies');
 
   deps
@@ -10,8 +10,7 @@ export function registerDepsCommands(program: Command, getServices: () => AppSer
     .description('List dependencies for a task')
     .action(async (taskId: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const dependencies = await services.taskStore.getDependencies(taskId);
+      const dependencies = await api.tasks.getDependencies(taskId) as { id: string; title: string; status: string }[];
       const rows = dependencies.map((t) => ({
         id: t.id,
         title: t.title,
@@ -25,8 +24,7 @@ export function registerDepsCommands(program: Command, getServices: () => AppSer
     .description('Add a dependency')
     .action(async (taskId: string, depId: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      await services.taskStore.addDependency(taskId, depId);
+      await api.tasks.addDependency(taskId, depId);
       if (opts.json) {
         output({ added: true, taskId, depId }, opts);
       } else if (!opts.quiet) {
@@ -39,8 +37,7 @@ export function registerDepsCommands(program: Command, getServices: () => AppSer
     .description('Remove a dependency')
     .action(async (taskId: string, depId: string) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      await services.taskStore.removeDependency(taskId, depId);
+      await api.tasks.removeDependency(taskId, depId);
       if (opts.json) {
         output({ removed: true, taskId, depId }, opts);
       } else if (!opts.quiet) {

@@ -1,33 +1,33 @@
 import * as path from 'path';
-import type { AppServices } from '../core/providers/setup';
+import type { ApiClient } from '../client/api-client';
 import type { Project } from '../shared/types';
 
 export async function resolveProject(
-  services: AppServices,
+  api: ApiClient,
   flagProjectId?: string,
 ): Promise<Project | null> {
   // 1. Explicit --project flag
   if (flagProjectId) {
-    const project = await services.projectStore.getProject(flagProjectId);
-    if (!project) {
+    try {
+      return await api.projects.get(flagProjectId);
+    } catch {
       throw new Error(`Project not found: ${flagProjectId}`);
     }
-    return project;
   }
 
   // 2. AM_PROJECT_ID env var
   const envId = process.env.AM_PROJECT_ID;
   if (envId) {
-    const project = await services.projectStore.getProject(envId);
-    if (!project) {
+    try {
+      return await api.projects.get(envId);
+    } catch {
       throw new Error(`Project not found (AM_PROJECT_ID): ${envId}`);
     }
-    return project;
   }
 
   // 3. Match cwd against known project paths
   const cwd = process.cwd();
-  const projects = await services.projectStore.listProjects();
+  const projects = await api.projects.list();
   for (const project of projects) {
     if (project.path) {
       const resolved = path.resolve(project.path);
@@ -41,12 +41,12 @@ export async function resolveProject(
 }
 
 export async function requireProject(
-  services: AppServices,
+  api: ApiClient,
   flagProjectId?: string,
 ): Promise<Project> {
-  const project = await resolveProject(services, flagProjectId);
+  const project = await resolveProject(api, flagProjectId);
   if (!project) {
-    const projects = await services.projectStore.listProjects();
+    const projects = await api.projects.list();
     const list = projects.length > 0
       ? projects.map((p) => `  ${p.id}  ${p.name}${p.path ? `  (${p.path})` : ''}`).join('\n')
       : '  (none)';

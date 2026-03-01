@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { openDatabase } from './db';
-import type { AppServices } from '../core/providers/setup';
+import { createApiClient, ApiError } from '../client/api-client';
+import { ensureDaemon } from './ensure-daemon';
 import { registerProjectCommands } from './commands/projects';
 import { registerTaskCommands } from './commands/tasks';
 import { registerAgentCommands } from './commands/agent';
@@ -13,7 +13,6 @@ import { registerPipelinesCommands } from './commands/pipelines';
 import { registerStatusCommand } from './commands/status';
 import { registerTelegramCommands } from './commands/telegram';
 import { registerDaemonCommands } from './commands/daemon';
-import { initShellEnv } from '../core/services/shell-env';
 
 const program = new Command();
 
@@ -25,44 +24,45 @@ program
   .option('--json', 'Output as JSON')
   .option('--quiet', 'Minimal output (IDs only)')
   .option('--verbose', 'Verbose output')
-  .option('--no-color', 'Disable colored output')
-  .option('--db <path>', 'Database path');
+  .option('--no-color', 'Disable colored output');
 
-let _services: AppServices | null = null;
-let _db: import('better-sqlite3').Database | null = null;
+async function main(): Promise<void> {
+  // Daemon commands manage the daemon lifecycle directly — they don't need
+  // the API client.  Register them before we decide whether to auto-start.
+  registerDaemonCommands(program);
 
-function getServices(): AppServices {
-  if (!_services) {
-    const opts = program.opts() as { db?: string };
-    const result = openDatabase(opts.db);
-    _db = result.db;
-    _services = result.services;
+  // Peek at argv to see if the user is running a daemon sub-command.
+  // If so, skip the ensureDaemon() step entirely.
+  const isDaemonCommand = process.argv.length >= 3 && process.argv[2] === 'daemon';
+
+  if (!isDaemonCommand) {
+    // Ensure the daemon is running and create the API client
+    const daemonUrl = await ensureDaemon();
+    const api = createApiClient(daemonUrl);
+
+    // Register all API-backed commands
+    registerProjectCommands(program, api);
+    registerTaskCommands(program, api);
+    registerAgentCommands(program, api);
+    registerDepsCommands(program, api);
+    registerEventsCommands(program, api);
+    registerPromptsCommands(program, api);
+    registerPipelinesCommands(program, api);
+    registerStatusCommand(program, api);
+    registerTelegramCommands(program, api);
   }
-  return _services;
+
+  await program.parseAsync(process.argv);
 }
 
-// Register all commands
-registerProjectCommands(program, getServices);
-registerTaskCommands(program, getServices);
-registerAgentCommands(program, getServices);
-registerDepsCommands(program, getServices);
-registerEventsCommands(program, getServices);
-registerPromptsCommands(program, getServices);
-registerPipelinesCommands(program, getServices);
-registerStatusCommand(program, getServices);
-registerTelegramCommands(program, getServices);
-registerDaemonCommands(program);
-
-// Eagerly warm the shell PATH cache so git/gh commands find the right binaries.
-// Fire-and-forget: the synchronous fallback in getUserShellPath() handles cold cache.
-void initShellEnv();
-
 // Run
-program.parseAsync(process.argv).catch((err: Error) => {
-  console.error(err.message);
-  process.exitCode = 1;
-}).finally(() => {
-  if (_db) {
-    _db.close();
+main().catch((err: unknown) => {
+  if (err instanceof ApiError) {
+    console.error(`API error (${err.status}): ${err.message}`);
+  } else if (err instanceof Error) {
+    console.error(err.message);
+  } else {
+    console.error(String(err));
   }
+  process.exitCode = 1;
 });

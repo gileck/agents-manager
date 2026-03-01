@@ -1,83 +1,56 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../core/providers/setup';
+import type { ApiClient } from '../../client/api-client';
 import { requireProject } from '../context';
-import { getResolvedConfig } from '../../core/services/config-service';
-import { TelegramAgentBotService } from '../../core/services/telegram-agent-bot-service';
-import { TelegramNotificationRouter } from '../../core/services/telegram-notification-router';
-import { validateTelegramConfig } from '../../core/services/telegram-config-validator';
-import { getSetting } from '@template/main/services/settings-service';
 
-export function registerTelegramCommands(program: Command, getServices: () => AppServices): void {
+export function registerTelegramCommands(program: Command, api: ApiClient): void {
   const telegram = program.command('telegram').description('Telegram bot integration');
 
   telegram
     .command('start')
-    .description('Start the Telegram bot (long-running)')
+    .description('Start the Telegram bot (via daemon)')
     .action(async () => {
       const opts = program.opts() as { project?: string };
-      const services = getServices();
-      const project = await requireProject(services, opts.project);
+      const project = await requireProject(api, opts.project);
 
-      const config = getResolvedConfig(project.path ?? undefined);
-      let botToken: string;
-      let chatId: string;
       try {
-        ({ botToken, chatId } = validateTelegramConfig(config.telegram?.botToken, config.telegram?.chatId));
+        await api.telegram.start(project.id);
+        console.log(`Telegram bot started for project "${project.name}".`);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
         process.exitCode = 1;
-        return;
       }
+    });
 
-      const botService = new TelegramAgentBotService({
-        taskStore: services.taskStore,
-        projectStore: services.projectStore,
-        pipelineStore: services.pipelineStore,
-        pipelineEngine: services.pipelineEngine,
-        workflowService: services.workflowService,
-        chatSessionStore: services.chatSessionStore,
-        chatAgentService: services.chatAgentService,
-        defaultPipelineId: getSetting('default_pipeline_id', ''),
-      });
+  telegram
+    .command('stop')
+    .description('Stop the Telegram bot')
+    .action(async () => {
+      const opts = program.opts() as { project?: string };
+      const project = await requireProject(api, opts.project);
 
-      await botService.start(project.id, botToken, chatId);
-
-      // Reuse the single bot instance for notifications to avoid Telegram 409 conflicts
-      const bot = botService.getBot()!;
-      const telegramRouter = new TelegramNotificationRouter(bot, chatId);
-      services.notificationRouter.addRouter(telegramRouter);
-
-      console.log(`Telegram bot started for project "${project.name}". Press Ctrl+C to stop.`);
-
-      await new Promise<void>((resolve) => {
-        let resolved = false;
-        const shutdown = () => {
-          if (resolved) return;
-          resolved = true;
-          console.log('\nShutting down Telegram bot...');
-          services.notificationRouter.removeRouter(telegramRouter);
-          botService.stop().then(resolve, resolve);
-        };
-        process.once('SIGINT', shutdown);
-        process.once('SIGTERM', shutdown);
-      });
+      try {
+        await api.telegram.stop(project.id);
+        console.log('Telegram bot stopped.');
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = 1;
+      }
     });
 
   telegram
     .command('status')
-    .description('Show Telegram configuration status')
+    .description('Show Telegram bot status')
     .action(async () => {
       const opts = program.opts() as { project?: string };
-      const services = getServices();
-      const project = await requireProject(services, opts.project);
+      const project = await requireProject(api, opts.project);
 
-      const config = getResolvedConfig(project.path ?? undefined);
-      const hasBotToken = !!config.telegram?.botToken;
-      const hasChatId = !!config.telegram?.chatId;
-
-      console.log(`Project: ${project.name}`);
-      console.log(`Bot Token: ${hasBotToken ? 'configured' : 'not set'}`);
-      console.log(`Chat ID: ${hasChatId ? config.telegram!.chatId : 'not set'}`);
-      console.log(`Status: ${hasBotToken && hasChatId ? 'ready' : 'not configured'}`);
+      try {
+        const status = await api.telegram.getStatus(project.id);
+        console.log(`Project: ${project.name}`);
+        console.log(`Status: ${status.running ? 'running' : 'not running'}`);
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = 1;
+      }
     });
 }

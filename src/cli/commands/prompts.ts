@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import type { AppServices } from '../../core/providers/setup';
+import type { ApiClient } from '../../client/api-client';
 import { output, type OutputOptions } from '../output';
 
 interface QuestionOption {
@@ -16,7 +16,7 @@ interface Question {
   options?: QuestionOption[];
 }
 
-export function registerPromptsCommands(program: Command, getServices: () => AppServices): void {
+export function registerPromptsCommands(program: Command, api: ApiClient): void {
   const prompts = program.command('prompts').description('Manage agent prompts');
 
   prompts
@@ -25,8 +25,13 @@ export function registerPromptsCommands(program: Command, getServices: () => App
     .requiredOption('--task <taskId>', 'Task ID')
     .action(async (cmdOpts: { task: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
-      const list = await services.pendingPromptStore.getPendingForTask(cmdOpts.task);
+      const list = await api.prompts.getPending(cmdOpts.task) as {
+        id: string;
+        promptType: string;
+        status: string;
+        createdAt: number;
+        payload: Record<string, unknown>;
+      }[];
 
       if (opts.json) {
         output(list, opts);
@@ -65,7 +70,6 @@ export function registerPromptsCommands(program: Command, getServices: () => App
     .requiredOption('--response <json>', 'Response JSON (e.g. \'{"answers":[{"questionId":"q1","selectedOptionId":"opt1"}]}\')')
     .action(async (id: string, cmdOpts: { response: string }) => {
       const opts = program.opts() as OutputOptions;
-      const services = getServices();
       let parsed: Record<string, unknown>;
       try {
         parsed = JSON.parse(cmdOpts.response);
@@ -74,13 +78,13 @@ export function registerPromptsCommands(program: Command, getServices: () => App
         process.exitCode = 1;
         return;
       }
-      const prompt = await services.workflowService.respondToPrompt(id, parsed);
-      if (!prompt) {
+      try {
+        const prompt = await api.prompts.respond(id, parsed);
+        output(prompt, opts);
+      } catch {
         console.error(`Prompt not found: ${id}`);
         process.exitCode = 1;
-        return;
       }
-      output(prompt, opts);
     });
 }
 
