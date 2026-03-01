@@ -4,11 +4,12 @@
  * binary as a detached background process and waits for the health check.
  */
 
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as http from 'http';
+import { getUserShellPath } from '../shared/shell-env';
 
 const DAEMON_DIR = path.join(os.homedir(), '.agents-manager');
 
@@ -35,6 +36,27 @@ function getDaemonBinaryPath(): string {
   // __dirname varies between source (src/main/ — 2 levels) and built
   // (dist-main/src/main/ — 3 levels), so we find root via package.json.
   return path.join(findProjectRoot(), 'dist-daemon', 'index.js');
+}
+
+function findSystemNode(): string {
+  // In Electron, process.execPath is the Electron binary, not node.
+  // Resolve the system node binary from the user's shell PATH.
+  const shellPath = getUserShellPath();
+  for (const dir of shellPath.split(':')) {
+    const candidate = path.join(dir, 'node');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  // Last resort: try `which node` with the shell PATH
+  try {
+    return execFileSync('/usr/bin/which', ['node'], {
+      encoding: 'utf-8',
+      env: { ...process.env, PATH: shellPath },
+      timeout: 3000,
+    }).trim();
+  } catch {
+    // Fall back to process.execPath (may work in non-Electron contexts)
+    return process.execPath;
+  }
 }
 
 function ensureDaemonDir(): void {
@@ -89,10 +111,11 @@ export async function ensureDaemon(): Promise<{ url: string; wsUrl: string }> {
     );
   }
 
-  const child = spawn(process.execPath, [daemonBin], {
+  const nodeBin = findSystemNode();
+  const child = spawn(nodeBin, [daemonBin], {
     detached: true,
     stdio: 'ignore',
-    env: { ...process.env, AM_DAEMON_PORT: String(port) },
+    env: { ...process.env, AM_DAEMON_PORT: String(port), PATH: getUserShellPath() },
   });
   child.unref();
 
