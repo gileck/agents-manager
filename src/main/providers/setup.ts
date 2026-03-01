@@ -20,6 +20,7 @@ import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IKanbanBoardStore } from '../interfaces/kanban-board-store';
+import type { ISettingsStore } from '../interfaces/settings-store';
 import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -36,6 +37,7 @@ import { SqliteAgentDefinitionStore } from '../stores/sqlite-agent-definition-st
 import { SqliteChatMessageStore } from '../stores/sqlite-chat-message-store';
 import { SqliteChatSessionStore } from '../stores/sqlite-chat-session-store';
 import { SqliteKanbanBoardStore } from '../stores/sqlite-kanban-board-store';
+import { SqliteSettingsStore } from '../stores/settings-store';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
@@ -80,7 +82,6 @@ import { registerPromptHandler } from '../handlers/prompt-handler';
 import { registerScmHandler } from '../handlers/scm-handler';
 import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
-import { getSetting } from '@template/main/services/settings-service';
 
 export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
@@ -119,6 +120,7 @@ export interface AppServices {
   chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
   agentLibRegistry: AgentLibRegistryType;
+  settingsStore: ISettingsStore;
 }
 
 export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
@@ -144,6 +146,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const chatMessageStore = new SqliteChatMessageStore(db);
   const chatSessionStore = new SqliteChatSessionStore(db);
   const kanbanBoardStore = new SqliteKanbanBoardStore(db);
+  const settingsStore = new SqliteSettingsStore(db);
 
   // Phase 2 infrastructure — factory functions create project-scoped instances
   const createGitOps = (cwd: string) => new LocalGitOps(cwd);
@@ -243,7 +246,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   // Chat agent service (unified: handles both project and task scopes)
   const getDefaultAgentLib = () => {
     try {
-      return getSetting('chat_default_agent_lib', 'claude-code');
+      return settingsStore.get('chat_default_agent_lib', 'claude-code');
     } catch (err) {
       console.error('[setup] Failed to read chat_default_agent_lib setting:', err);
       return 'claude-code';
@@ -293,5 +296,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     chatSessionStore,
     chatAgentService,
     agentLibRegistry,
+    settingsStore,
   };
 }

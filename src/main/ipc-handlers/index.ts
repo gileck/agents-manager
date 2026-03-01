@@ -51,7 +51,7 @@ export function registerIpcHandlers(services: AppServices): void {
   // Settings Operations
   // ============================================
 
-  registerSettingsHandlers();
+  registerSettingsHandlers(services);
 
   // ============================================
   // App Operations
