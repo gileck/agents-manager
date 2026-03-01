@@ -28,7 +28,7 @@ async function main() {
   });
 
   // Create the HTTP server and Express app
-  const { httpServer } = createServer(services);
+  const { httpServer } = createServer(services, wsHolder);
 
   // Attach WebSocket server to the HTTP server
   const wsServer = new DaemonWsServer(httpServer);

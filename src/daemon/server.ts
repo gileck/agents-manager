@@ -21,8 +21,12 @@ import { promptRoutes } from './routes/prompts';
 import { artifactRoutes } from './routes/artifacts';
 import { errorHandler } from './middleware/error-handler';
 import type { AppServices } from '../core/providers/setup';
+import type { DaemonWsServer } from './ws/ws-server';
 
-export function createServer(services: AppServices) {
+/** Mutable holder resolved after the WS server is created */
+export type WsHolder = { server?: DaemonWsServer };
+
+export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
   const app = express();
   app.use(cors({ origin: true }));
   app.use(express.json());
@@ -43,10 +47,10 @@ export function createServer(services: AppServices) {
   app.use(eventRoutes(services));
 
   // Action routes (side-effects: agents, chat, git, etc.)
-  app.use(agentRoutes(services));
-  app.use(chatRoutes(services));
-  app.use(taskChatRoutes(services));
-  app.use(telegramRoutes(services));
+  app.use(agentRoutes(services, wsHolder));
+  app.use(chatRoutes(services, wsHolder));
+  app.use(taskChatRoutes(services, wsHolder));
+  app.use(telegramRoutes(services, wsHolder));
   app.use(gitRoutes(services));
   app.use(promptRoutes(services));
   app.use(artifactRoutes(services));

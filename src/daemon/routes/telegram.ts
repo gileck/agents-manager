@@ -4,6 +4,8 @@ import { TelegramAgentBotService } from '../../core/services/telegram-agent-bot-
 import { TelegramNotificationRouter } from '../../core/services/telegram-notification-router';
 import { validateTelegramConfig } from '../../core/services/telegram-config-validator';
 import type { INotificationRouter } from '../../core/interfaces/notification-router';
+import type { WsHolder } from '../server';
+import { WS_CHANNELS } from '../ws/channels';
 
 /** Module-scoped active bots map shared across handler registrations */
 const activeBots = new Map<string, {
@@ -11,7 +13,7 @@ const activeBots = new Map<string, {
   notificationRouter: INotificationRouter;
 }>();
 
-export function telegramRoutes(services: AppServices): Router {
+export function telegramRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
 
   // POST /api/telegram/start — start bot for project
@@ -50,7 +52,12 @@ export function telegramRoutes(services: AppServices): Router {
         defaultPipelineId: services.settingsStore.get('default_pipeline_id', ''),
       });
 
-      // TODO: Wire onLog, onOutput, onMessage via WebSocket in Phase 19
+      // Wire streaming callbacks via WebSocket
+      const ws = wsHolder.server;
+      botService.onLog = (entry) => ws?.broadcast(WS_CHANNELS.TELEGRAM_BOT_LOG, projectId, entry);
+      botService.onOutput = (sessionId, chunk) => ws?.broadcast(WS_CHANNELS.CHAT_OUTPUT, sessionId, chunk);
+      botService.onMessage = (sessionId, msg) => ws?.broadcast(WS_CHANNELS.CHAT_MESSAGE, sessionId, msg);
+
       await botService.start(projectId, botToken, chatId);
 
       const bot = botService.getBot()!;

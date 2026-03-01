@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
 import { buildDesktopSystemPrompt } from '../../core/services/chat-prompt-parts';
+import type { WsHolder } from '../server';
+import { WS_CHANNELS } from '../ws/channels';
 
-export function chatRoutes(services: AppServices): Router {
+export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
 
   // POST /api/chat/sessions — create session
@@ -138,13 +140,16 @@ export function chatRoutes(services: AppServices): Router {
       const scope = await services.chatAgentService.getSessionScope(sessionId);
       const systemPrompt = buildDesktopSystemPrompt(scope);
 
-      // TODO: Wire streaming callbacks (onEvent) via WebSocket in Phase 19
+      const ws = wsHolder.server;
       const { userMessage } = await services.chatAgentService.send(
         sessionId,
         message,
         {
           systemPrompt,
-          onEvent: () => {}, // placeholder — streaming wired in Phase 19
+          onEvent: (event) => {
+            if (event.type === 'text') ws?.broadcast(WS_CHANNELS.CHAT_OUTPUT, sessionId, event.text);
+            else if (event.type === 'message') ws?.broadcast(WS_CHANNELS.CHAT_MESSAGE, sessionId, event.message);
+          },
         },
       );
 

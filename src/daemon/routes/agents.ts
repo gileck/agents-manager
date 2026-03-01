@@ -1,26 +1,32 @@
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
-import type { AgentMode } from '../../shared/types';
+import type { AgentMode, RevisionReason } from '../../shared/types';
+import type { WsHolder } from '../server';
+import { WS_CHANNELS } from '../ws/channels';
 
-export function agentRoutes(services: AppServices): Router {
+export function agentRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
 
   // POST /api/tasks/:taskId/agent/start — start agent
   router.post('/api/tasks/:taskId/agent/start', async (req, res, next) => {
     try {
       const { taskId } = req.params;
-      const { mode, agentType } = req.body as { mode: AgentMode; agentType?: string };
+      const { mode, agentType, revisionReason } = req.body as {
+        mode: AgentMode;
+        agentType?: string;
+        revisionReason?: RevisionReason;
+      };
       if (!mode) {
         res.status(400).json({ error: 'mode is required' });
         return;
       }
-      // TODO: Wire streaming callbacks (onOutput, onMessage, onStatusChange) in Phase 19
+      const ws = wsHolder.server;
       const run = await services.workflowService.startAgent(
         taskId, mode, agentType,
-        undefined, // revisionReason
-        () => {},  // onOutput placeholder
-        () => {},  // onMessage placeholder
-        () => {},  // onStatusChange placeholder
+        revisionReason,
+        (chunk) => ws?.broadcast(WS_CHANNELS.AGENT_OUTPUT, taskId, chunk),
+        (msg) => ws?.broadcast(WS_CHANNELS.AGENT_MESSAGE, taskId, msg),
+        (status) => ws?.broadcast(WS_CHANNELS.AGENT_STATUS, taskId, status),
       );
       res.json(run);
     } catch (err) { next(err); }
@@ -48,11 +54,11 @@ export function agentRoutes(services: AppServices): Router {
         res.status(400).json({ error: 'message is required and must be a string' });
         return;
       }
-      // TODO: Wire streaming callbacks (onOutput, onMessage, onStatusChange) in Phase 19
+      const ws = wsHolder.server;
       const run = await services.workflowService.resumeAgent(taskId, message, {
-        onOutput: () => {},
-        onMessage: () => {},
-        onStatusChange: () => {},
+        onOutput: (chunk) => ws?.broadcast(WS_CHANNELS.AGENT_OUTPUT, taskId, chunk),
+        onMessage: (msg) => ws?.broadcast(WS_CHANNELS.AGENT_MESSAGE, taskId, msg),
+        onStatusChange: (status) => ws?.broadcast(WS_CHANNELS.AGENT_STATUS, taskId, status),
       });
       res.json(run ?? { ok: true });
     } catch (err) { next(err); }
