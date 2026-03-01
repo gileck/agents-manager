@@ -65,6 +65,7 @@ export function telegramRoutes(services: AppServices, wsHolder: WsHolder): Route
       services.notificationRouter.addRouter(telegramRouter);
 
       activeBots.set(projectId, { botService, notificationRouter: telegramRouter });
+      ws?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS, projectId, { running: true });
       res.json({ ok: true });
     } catch (err) { next(err); }
   });
@@ -87,6 +88,8 @@ export function telegramRoutes(services: AppServices, wsHolder: WsHolder): Route
       services.notificationRouter.removeRouter(entry.notificationRouter);
       await entry.botService.stop();
       activeBots.delete(projectId);
+      const ws = wsHolder.server;
+      ws?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS, projectId, { running: false });
       res.json({ ok: true });
     } catch (err) { next(err); }
   });
@@ -100,6 +103,39 @@ export function telegramRoutes(services: AppServices, wsHolder: WsHolder): Route
     }
     const entry = activeBots.get(projectId);
     res.json({ running: !!entry });
+  });
+
+  // GET /api/telegram/session — get session ID for project bot
+  router.get('/api/telegram/session', (req, res) => {
+    const { projectId } = req.query as { projectId?: string };
+    if (!projectId) {
+      res.status(400).json({ error: 'projectId query param is required' });
+      return;
+    }
+    const entry = activeBots.get(projectId);
+    res.json({ sessionId: entry?.botService.getSessionId() ?? null });
+  });
+
+  // POST /api/telegram/test — send test message
+  router.post('/api/telegram/test', async (req, res, next) => {
+    try {
+      const { botToken, chatId } = req.body as { botToken?: string; chatId?: string };
+      if (!botToken || !chatId) {
+        res.status(400).json({ error: 'botToken and chatId are required' });
+        return;
+      }
+      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: 'Test notification from Agents Manager' }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error((body as Record<string, unknown>).description as string ?? `Telegram API error: ${response.status}`);
+      }
+      res.json({ ok: true });
+    } catch (err) { next(err); }
   });
 
   return router;

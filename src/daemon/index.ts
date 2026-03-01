@@ -2,6 +2,7 @@ import { openDatabase } from '../core/db';
 import { createAppServices } from '../core/providers/setup';
 import { createServer } from './server';
 import { DaemonWsServer } from './ws/ws-server';
+import { WS_CHANNELS } from './ws/channels';
 import { startSupervisors, stopSupervisors } from './lifecycle';
 
 const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
@@ -36,6 +37,16 @@ async function main() {
 
   // Start background supervisors
   startSupervisors(services);
+
+  // Recover orphaned agent runs from previous daemon session
+  services.agentService.recoverOrphanedRuns().then((interrupted) => {
+    if (interrupted.length > 0) {
+      console.log(`Recovered ${interrupted.length} orphaned agent run(s).`);
+      wsServer.broadcast(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, undefined, interrupted);
+    }
+  }).catch((err) => {
+    console.error('Failed to recover orphaned runs:', err);
+  });
 
   // Start listening
   httpServer.listen(PORT, () => {

@@ -213,25 +213,6 @@ export function taskRoutes(services: AppServices): Router {
     } catch (err) { next(err); }
   });
 
-  router.post('/api/prompts/:promptId/respond', async (req, res, next) => {
-    try {
-      const response = req.body as Record<string, unknown>;
-      const result = await services.workflowService.respondToPrompt(req.params.promptId, response);
-      res.json(result);
-    } catch (err) { next(err); }
-  });
-
-  // ============================================
-  // Artifacts
-  // ============================================
-
-  router.get('/api/tasks/:id/artifacts', async (req, res, next) => {
-    try {
-      const artifacts = await services.taskArtifactStore.getArtifactsForTask(req.params.id);
-      res.json(artifacts);
-    } catch (err) { next(err); }
-  });
-
   // ============================================
   // Context Entries
   // ============================================
