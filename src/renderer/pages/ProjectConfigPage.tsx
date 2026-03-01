@@ -37,6 +37,7 @@ export function ProjectConfigPage() {
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramStreamThinking, setTelegramStreamThinking] = useState(false);
+  const [telegramAutoStart, setTelegramAutoStart] = useState(true);
   const [telegramTesting, setTelegramTesting] = useState(false);
 
   // Track whether we've loaded initial data (to skip auto-save on first populate)
@@ -70,6 +71,7 @@ export function ProjectConfigPage() {
     setTelegramBotToken((tg.botToken as string) ?? '');
     setTelegramChatId((tg.chatId as string) ?? '');
     setTelegramStreamThinking(!!tg.streamThinking);
+    setTelegramAutoStart(tg.autoStart !== false);
     // Mark initialized after React processes the state batch
     requestAnimationFrame(() => { initialized.current = true; });
   }, [project]);
@@ -81,7 +83,7 @@ export function ProjectConfigPage() {
       validationCommands: Array<{ id: number; cmd: string }>;
       maxValidationRetries: string; telegramEnabled: boolean;
       telegramBotToken: string; telegramChatId: string;
-      telegramStreamThinking: boolean;
+      telegramStreamThinking: boolean; telegramAutoStart: boolean;
     }
   ) => {
     if (!id) return;
@@ -99,6 +101,7 @@ export function ProjectConfigPage() {
         botToken: fields.telegramBotToken || undefined,
         chatId: fields.telegramChatId || undefined,
         streamThinking: fields.telegramStreamThinking,
+        autoStart: fields.telegramAutoStart,
       },
     };
 
@@ -129,12 +132,13 @@ export function ProjectConfigPage() {
         defaultAgentLib, model, agentTimeout, maxConcurrentAgents, defaultBranch,
         pullMainAfterMerge, validationCommands, maxValidationRetries,
         telegramEnabled, telegramBotToken, telegramChatId, telegramStreamThinking,
+        telegramAutoStart,
       });
     }, 500);
     return () => clearTimeout(timerRef.current);
   }, [defaultAgentLib, model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
       validationCommands, maxValidationRetries, telegramEnabled, telegramBotToken, telegramChatId,
-      telegramStreamThinking, saveConfig]);
+      telegramStreamThinking, telegramAutoStart, saveConfig]);
 
   const addValidationCommand = () =>
     setValidationCommands(prev => [...prev, { id: nextCmdId++, cmd: '' }]);
@@ -363,6 +367,14 @@ export function ProjectConfigPage() {
                       id="telegramStreamThinking"
                       checked={telegramStreamThinking}
                       onCheckedChange={setTelegramStreamThinking}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="telegramAutoStart">Auto-start on daemon load</Label>
+                    <Switch
+                      id="telegramAutoStart"
+                      checked={telegramAutoStart}
+                      onCheckedChange={setTelegramAutoStart}
                     />
                   </div>
                   <div className="flex justify-end gap-2">

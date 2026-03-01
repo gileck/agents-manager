@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTheme } from '../../hooks/useTheme';
+import type { TelegramBotLogEntry } from '../../../shared/types';
 import {
   Select,
   SelectTrigger,
@@ -22,6 +23,7 @@ export function TopMenu() {
   const { resolvedTheme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [telegramStatus, setTelegramStatus] = useState<TelegramBotStatus>('unknown');
+  const [recentLogs, setRecentLogs] = useState<TelegramBotLogEntry[]>([]);
 
   useEffect(() => {
     if (!currentProjectId) {
@@ -44,6 +46,19 @@ export function TopMenu() {
     return () => { unsub(); };
   }, [currentProjectId]);
 
+  // Subscribe to bot log events for tooltip
+  useEffect(() => {
+    if (!currentProjectId) {
+      setRecentLogs([]);
+      return;
+    }
+    const unsub = window.api.on.telegramBotLog((projectId, entry) => {
+      if (projectId !== currentProjectId) return;
+      setRecentLogs(prev => [...prev, entry].slice(-5));
+    });
+    return () => { unsub(); setRecentLogs([]); };
+  }, [currentProjectId]);
+
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
@@ -53,6 +68,18 @@ export function TopMenu() {
     : telegramStatus === 'failed'
       ? 'bg-red-500'
       : 'bg-gray-400';
+
+  const telegramTooltip = (() => {
+    const lines = [`Telegram bot: ${telegramStatus}`];
+    if (recentLogs.length > 0) {
+      lines.push('─────');
+      for (const log of recentLogs) {
+        const time = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        lines.push(`${time} ${log.message}`);
+      }
+    }
+    return lines.join('\n');
+  })();
 
   return (
     <div className="h-12 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
@@ -85,7 +112,7 @@ export function TopMenu() {
             variant="ghost"
             size="icon"
             onClick={() => navigate(`/projects/${currentProjectId}/telegram`)}
-            title={`Telegram bot: ${telegramStatus}`}
+            title={telegramTooltip}
           >
             <div className="relative">
               <Send className="h-3.5 w-3.5 text-muted-foreground" />

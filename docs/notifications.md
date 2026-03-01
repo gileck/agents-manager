@@ -62,12 +62,13 @@ Collects all notifications in a `sent` array with timestamps. Use `clear()` to r
 ### Lifecycle
 
 1. User configures `botToken` and `chatId` in project settings
-2. User clicks "Start Bot" in the UI → IPC handler → API client → daemon `POST /api/telegram/start` route
-3. Handler validates token format (`/^\d+:[A-Za-z0-9_-]+$/`) and chat ID format (`/^-?\d+$/`)
-4. `TelegramBotService.start()` creates a `TelegramBot` with long-polling, registers command handlers, and starts a pending-actions cleanup interval
-5. A `TelegramNotificationRouter` is created and added to the composite router
-6. On stop, the bot is removed from the composite router, polling stops, and pending actions are cleared
-7. During daemon shutdown, `stopAllBots()` is called to cleanly shut down all active Telegram bots
+2. On daemon startup, `autoStartTelegramBots()` starts bots for all projects where `botToken` and `chatId` are set and `autoStart !== false` (defaults to `true`)
+3. User can also manually click "Start Bot" in the UI → IPC handler → API client → daemon `POST /api/telegram/start` route
+4. Handler validates token format (`/^\d+:[A-Za-z0-9_-]+$/`) and chat ID format (`/^-?\d+$/`)
+5. `TelegramBotService.start()` creates a `TelegramBot` with long-polling, registers command handlers, and starts a pending-actions cleanup interval
+6. A `TelegramNotificationRouter` is created and added to the composite router
+7. On stop, the bot is removed from the composite router, polling stops, and pending actions are cleared
+8. During daemon shutdown, `stopAllBots()` is called to cleanly shut down all active Telegram bots
 
 ### Commands
 
@@ -116,13 +117,14 @@ Telegram bot configuration is stored per-project in `project.config.telegram`:
 ```typescript
 {
   telegram: {
-    botToken: string;  // Format: <number>:<alphanumeric-string>
-    chatId: string;    // Format: numeric, optionally prefixed with -
+    botToken: string;   // Format: <number>:<alphanumeric-string>
+    chatId: string;     // Format: numeric, optionally prefixed with -
+    autoStart?: boolean; // Default: true — auto-start bot on daemon load
   }
 }
 ```
 
-Both values are validated in the IPC handler before the bot is started.
+Both `botToken` and `chatId` are validated before the bot is started. When `autoStart` is not explicitly set to `false`, the daemon will auto-start the bot on load for any project with valid telegram config.
 
 ## Testing
 

@@ -184,7 +184,7 @@ All paths clean up dependencies, worktrees, and related data identically because
 
 ## Why the Telegram Bot Lives Inside the Daemon
 
-The Telegram bot is instantiated when a user starts it via the UI (`POST /api/telegram/start`). The daemon's route handler creates a `TelegramAgentBotService` and passes it the daemon's own service references:
+The Telegram bot lives inside the daemon process so it is available even without Electron running. On daemon startup, `autoStartTelegramBots()` automatically starts bots for all projects with valid telegram config (where `autoStart !== false`). Users can also manually start/stop bots via the UI (`POST /api/telegram/start`). The daemon's route handler creates a `TelegramAgentBotService` and passes it the daemon's own service references:
 
 ```typescript
 // src/daemon/routes/telegram.ts:54-63

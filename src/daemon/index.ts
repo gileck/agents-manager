@@ -4,7 +4,7 @@ import { createServer } from './server';
 import { DaemonWsServer } from './ws/ws-server';
 import { WS_CHANNELS } from './ws/channels';
 import { startSupervisors, stopSupervisors } from './lifecycle';
-import { stopAllBots } from './routes/telegram';
+import { stopAllBots, autoStartTelegramBots } from './routes/telegram';
 
 const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
 
@@ -38,6 +38,10 @@ async function main() {
 
   // Start background supervisors
   startSupervisors(services);
+
+  // Auto-start Telegram bots for projects with config
+  autoStartTelegramBots(services, wsHolder).catch(err =>
+    console.error('Failed to auto-start Telegram bots:', err));
 
   // Recover orphaned agent runs from previous daemon session
   services.agentService.recoverOrphanedRuns().then((interrupted) => {
