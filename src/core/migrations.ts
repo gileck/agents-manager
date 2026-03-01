@@ -867,6 +867,10 @@ export function getMigrations(): Migration[] {
       name: '079_force_default_pipeline_agent',
       sql: `INSERT OR REPLACE INTO settings (key, value) VALUES ('default_pipeline_id', 'pipeline-agent')`,
     },
+    {
+      name: '080_add_debug_info_column',
+      sql: `ALTER TABLE tasks ADD COLUMN debug_info TEXT`,
+    },
   ];
 }
 

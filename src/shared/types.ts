@@ -268,6 +268,7 @@ export interface Task {
   branchName: string | null;
   plan: string | null;
   technicalDesign: string | null;
+  debugInfo: string | null;
   subtasks: Subtask[];
   phases: ImplementationPhase[] | null;
   planComments: PlanComment[];
@@ -290,6 +291,7 @@ export interface TaskCreateInput {
   assignee?: string;
   prLink?: string;
   branchName?: string;
+  debugInfo?: string;
   subtasks?: Subtask[];
   phases?: ImplementationPhase[] | null;
   metadata?: Record<string, unknown>;
@@ -308,6 +310,7 @@ export interface TaskUpdateInput {
   branchName?: string | null;
   plan?: string | null;
   technicalDesign?: string | null;
+  debugInfo?: string | null;
   subtasks?: Subtask[];
   phases?: ImplementationPhase[] | null;
   planComments?: PlanComment[];

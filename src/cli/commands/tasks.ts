@@ -68,6 +68,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
     .option('--tags <tags>', 'Comma-separated tags')
+    .option('--debug-info <text>', 'Debug info for bug investigation')
     .action(async (cmdOpts: {
       title: string;
       description?: string;
@@ -75,6 +76,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       priority?: number;
       assignee?: string;
       tags?: string;
+      debugInfo?: string;
     }) => {
       const opts = program.opts() as OutputOptions & { project?: string };
       const project = await requireProject(api, opts.project);
@@ -95,6 +97,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         pipelineId,
         title: cmdOpts.title,
         description: cmdOpts.description,
+        debugInfo: cmdOpts.debugInfo,
         priority: cmdOpts.priority,
         assignee: cmdOpts.assignee,
         tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
@@ -111,6 +114,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .option('--assignee <name>', 'Assignee')
     .option('--tags <tags>', 'Comma-separated tags')
     .option('--pipeline <id>', 'Pipeline ID')
+    .option('--debug-info <text>', 'Debug info for bug investigation')
     .action(async (id: string, cmdOpts: {
       title?: string;
       description?: string;
@@ -118,12 +122,14 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       assignee?: string;
       tags?: string;
       pipeline?: string;
+      debugInfo?: string;
     }) => {
       const opts = program.opts() as OutputOptions;
       try {
         const task = await api.tasks.update(id, {
           title: cmdOpts.title,
           description: cmdOpts.description,
+          debugInfo: cmdOpts.debugInfo,
           priority: cmdOpts.priority,
           assignee: cmdOpts.assignee,
           tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
