@@ -4,10 +4,13 @@ Audit performed to identify every file in `src/main/` that imports from `electro
 
 ## Summary
 
-- **Total files in `src/main/`:** 96
-- **Files with Electron/template imports:** 8 (including 2 notification routers)
-- **Files that are pure business logic with leaking imports:** 4
-- **Files that are correctly Electron-only:** 4
+- **Total files in `src/main/`:** ~128
+- **Files with `@template/*` imports:** ~20 (12 in `ipc-handlers/`, 3 in `services/`, plus `index.ts`, `providers/setup.ts`, `migrations.ts`, `desktop-notification-router.ts`)
+- **Files with `electron` imports:** 4 (`index.ts`, `ipc-handlers/index.ts`, `ipc-handlers/shell-handlers.ts`, `ipc-handlers/telegram-handlers.ts`)
+- **Files that are pure business logic with leaking imports:** 4 (items 1–4 below)
+- **Files that are correctly Electron-only:** IPC handlers directory (13 files), `index.ts`, `desktop-notification-router.ts`
+
+**Note:** The IPC handlers are split into 13 domain-scoped files under `src/main/ipc-handlers/` (not a single `ipc-handlers.ts` file). All of them are correctly Electron-only.
 
 ## Detailed Findings
 
@@ -16,7 +19,7 @@ Audit performed to identify every file in `src/main/` that imports from `electro
 **Imports:**
 ```typescript
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import { sendToRenderer } from '@template/main/core/window';
+const { sendToRenderer } = require('@template/main/core/window');  // dynamic require
 ```
 
 **Why it leaks:** This is a pipeline hook (pure business logic) that directly calls `sendToRenderer()` to stream agent output, messages, and status to the Electron renderer. It should not know about the renderer at all.
@@ -79,19 +82,29 @@ import { initDatabase, closeDatabase, getDatabase } from '@template/main/service
 
 ---
 
-### 6. `src/main/ipc-handlers.ts` (CORRECTLY ELECTRON-ONLY)
+### 6. `src/main/ipc-handlers/` (CORRECTLY ELECTRON-ONLY — 13 files)
 
-**Imports:**
-```typescript
-import { app, shell } from 'electron';
-import { registerIpcHandler, validateId, validateInput } from '@template/main/ipc/ipc-registry';
-import { sendToRenderer } from '@template/main/core/window';
-import { getSetting, setSetting } from '@template/main/services/settings-service';
-```
+The IPC handlers are split into domain-scoped files:
 
-**Status:** Pure IPC bridge — validates inputs, delegates to services, streams responses. Correctly placed — stays in `src/main/`.
+| File | Imports from |
+|------|-------------|
+| `index.ts` | `electron`, `@template/main/ipc/ipc-registry`, `@template/main/core/window`, `@template/main/services/settings-service` |
+| `agent-handlers.ts` | `@template/main/ipc/ipc-registry`, `@template/main/core/window` |
+| `agent-def-handlers.ts` | `@template/main/ipc/ipc-registry` |
+| `chat-session-handlers.ts` | `@template/main/ipc/ipc-registry`, `@template/main/core/window` |
+| `feature-handlers.ts` | `@template/main/ipc/ipc-registry` |
+| `git-handlers.ts` | `@template/main/ipc/ipc-registry` |
+| `kanban-handlers.ts` | `@template/main/ipc/ipc-registry` |
+| `pipeline-handlers.ts` | `@template/main/ipc/ipc-registry` |
+| `project-handlers.ts` | `@template/main/ipc/ipc-registry` |
+| `settings-handlers.ts` | `@template/main/ipc/ipc-registry`, `@template/main/services/settings-service` |
+| `shell-handlers.ts` | `electron`, `@template/main/ipc/ipc-registry` |
+| `task-handlers.ts` | `@template/main/ipc/ipc-registry` |
+| `telegram-handlers.ts` | `electron`, `@template/main/ipc/ipc-registry`, `@template/main/core/window` |
 
-**Note:** Contains ~6 spots of leaked business logic that could be extracted to core services in a future PR (see implementation plan, PR 3). The most significant is `AGENT_SEND_MESSAGE` (lines 314-332), which contains non-trivial logic: it queries active runs to check if an agent is already running, selects the last run's `mode` and `agentType` as defaults, and decides whether to queue a message or start a new agent. This should move to a `WorkflowService.sendAgentMessage()` method.
+**Status:** All are pure IPC bridges — validate inputs, delegate to services, stream responses. Correctly placed — all stay in `src/main/ipc-handlers/`.
+
+**Note:** The `AGENT_SEND_MESSAGE` handler in `agent-handlers.ts` correctly delegates to `workflowService.resumeAgent()` — it does not contain leaked business logic. The streaming callbacks (`sendToRenderer`) in agent-handlers, chat-session-handlers, and telegram-handlers are correctly Electron-only and will be replaced with API client calls in PR 4.
 
 ---
 
@@ -107,17 +120,13 @@ import { showWindow, sendToRenderer } from '@template/main/core/window';
 
 ---
 
-### 8. `src/main/services/electron-notification-router.ts` (CORRECTLY ELECTRON-ONLY)
+### 8. ~~`src/main/services/electron-notification-router.ts`~~ (DOES NOT EXIST)
 
-**Imports:**
-```typescript
-import { sendNotification, navigateToRoute } from '@template/main/services/notification';
-import { showWindow } from '@template/main/core/window';
-```
-
-**Status:** Electron-specific notification sender. Stays in `src/main/`.
-
-**Note:** This file is not currently wired into the application — it is not imported or instantiated anywhere in `setup.ts`, `ipc-handlers.ts`, or `index.ts`. It appears to be orphaned or reserved for future use. Only `DesktopNotificationRouter` is used via the dynamic require in `setup.ts`.
+This file was referenced in earlier analysis but does not exist in the codebase. The only Electron-specific notification routers are:
+- `desktop-notification-router.ts` (item 7 above — actively used via dynamic require in `setup.ts`)
+- `telegram-notification-router.ts` (pure business logic, no Electron imports — will move to `src/core/`)
+- `multi-channel-notification-router.ts` (pure business logic — will move to `src/core/`)
+- `stub-notification-router.ts` (test utility — will move to `src/core/`)
 
 ---
 

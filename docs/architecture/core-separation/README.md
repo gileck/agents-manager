@@ -72,18 +72,34 @@ All three call the same REST + WebSocket API.
 
 See [api-design.md](./api-design.md) for the full API specification.
 
+## Key Decisions
+
+| Decision | Choice |
+|----------|--------|
+| Settings storage | SQLite table (new `settings` table + `SettingsStore`) |
+| HTTP framework | Express |
+| Daemon build | esbuild single-file bundle (`dist-daemon/index.js`) |
+| CLI mode | Daemon-required + auto-start |
+| Telegram bot callbacks | Wired at daemon startup (not in route handlers) |
+
 ## Implementation Strategy
 
-The refactor is split into **4 incremental PRs**:
+The refactor is split into **5 incremental PRs**:
 
 | PR | What | Outcome |
 |----|------|---------|
 | **PR 1** | Decouple Electron imports from business logic | All business logic files are pure Node.js |
 | **PR 2** | Move files to `src/core/` | Clean `core/` directory with zero Electron deps |
-| **PR 3** | Build the daemon server (`src/daemon/`) | Daemon runs independently, exposes REST + WS API |
+| **PR 3a** | Daemon infrastructure | Daemon process starts, health endpoint responds, WS server runs |
+| **PR 3b** | Port all routes + wire streaming | Full REST + WebSocket API, daemon is feature-complete |
 | **PR 4** | Convert Electron + CLI to thin clients | All UIs use the daemon API instead of direct imports |
 
 Each PR leaves the app fully functional.
+
+**Rewrite vs Refactor strategy:**
+- **PRs 1–2:** Refactor (surgical fixes + mechanical file moves — low risk)
+- **PR 3b:** Write fresh (daemon routes are new code; IPC handlers are reference only)
+- **PR 4:** Rewrite (CLI and Electron handlers are replaced with trivial API client wrappers; old code is deleted)
 
 See [implementation-plan.md](./implementation-plan.md) for detailed steps.
 See [coupling-analysis.md](./coupling-analysis.md) for the current dependency audit.
