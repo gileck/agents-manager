@@ -86,8 +86,20 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     if (project.config?.pullMainAfterMerge) {
       try {
         const gitOps = deps.createGitOps(project.path);
-        await gitOps.pull('main');
-        await ghLog('Pulled origin/main to local main');
+        // Check if working tree is clean before pulling
+        let dirty = false;
+        try {
+          const statusOutput = await gitOps.status();
+          dirty = statusOutput.length > 0;
+        } catch {
+          // If status check fails, attempt pull anyway
+        }
+        if (dirty) {
+          await ghLog('Skipping local main pull — working tree is dirty', 'warning');
+        } else {
+          await gitOps.pull('main');
+          await ghLog('Pulled origin/main to local main');
+        }
       } catch (err) {
         await ghLog(`Failed to pull main after merge (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
       }
