@@ -5,5 +5,5 @@
     "module": "CommonJS",
     "target": "ES2022"
   },
-  "include": ["../src/cli/**/*", "../src/main/**/*", "../src/shared/**/*", "../template/main/**/*", "../template/shared/**/*"]
+  "include": ["../src/cli/**/*", "../src/core/**/*", "../src/shared/**/*", "../template/main/**/*", "../template/shared/**/*"]
 }
