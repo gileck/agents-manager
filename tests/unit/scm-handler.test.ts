@@ -351,6 +351,78 @@ describe('registerScmHandler', () => {
       expect(mockScmPlatform.mergePR).toHaveBeenCalledWith('https://github.com/owner/repo/pull/42');
     });
 
+    it('pulls main when pullMainAfterMerge is enabled and tree is clean', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockProjectStore.getProject as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'proj-1',
+        name: 'Test Project',
+        description: null,
+        path: '/home/test/project',
+        config: { pullMainAfterMerge: true },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } satisfies Project);
+      (mockGitOps.status as ReturnType<typeof vi.fn>).mockResolvedValue('');
+
+      const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(result.success).toBe(true);
+      expect(mockGitOps.status).toHaveBeenCalled();
+      expect(mockGitOps.pull).toHaveBeenCalledWith('main');
+    });
+
+    it('skips pull with warning when pullMainAfterMerge is enabled and tree is dirty', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockProjectStore.getProject as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'proj-1',
+        name: 'Test Project',
+        description: null,
+        path: '/home/test/project',
+        config: { pullMainAfterMerge: true },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } satisfies Project);
+      (mockGitOps.status as ReturnType<typeof vi.fn>).mockResolvedValue('M src/file.ts\n');
+
+      const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(result.success).toBe(true);
+      expect(mockGitOps.status).toHaveBeenCalled();
+      expect(mockGitOps.pull).not.toHaveBeenCalled();
+      expect(mockTaskEventLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'warning',
+          message: expect.stringContaining('working tree is dirty'),
+        }),
+      );
+    });
+
+    it('still attempts pull when status check throws', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockProjectStore.getProject as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'proj-1',
+        name: 'Test Project',
+        description: null,
+        path: '/home/test/project',
+        config: { pullMainAfterMerge: true },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } satisfies Project);
+      (mockGitOps.status as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('git status failed'));
+
+      const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(result.success).toBe(true);
+      expect(mockGitOps.status).toHaveBeenCalled();
+      expect(mockGitOps.pull).toHaveBeenCalledWith('main');
+    });
+
     it('succeeds when PR is already merged (isPRMergeable returns true)', async () => {
       (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
         makeArtifact(),
