@@ -128,6 +128,10 @@ export function registerTaskHandlers(api: ApiClient): void {
     return api.tasks.getContext(taskId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.TASK_ADD_CONTEXT_ENTRY, async (_, taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }) => {
+    return api.tasks.addContext(taskId, input);
+  });
+
   // ============================================
   // Debug Timeline
   // ============================================

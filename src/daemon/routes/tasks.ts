@@ -224,6 +224,22 @@ export function taskRoutes(services: AppServices): Router {
     } catch (err) { next(err); }
   });
 
+  router.post('/api/tasks/:id/context', async (req, res, next) => {
+    try {
+      const { source, entryType, summary, data } = req.body as {
+        source?: string; entryType?: string; summary?: string; data?: Record<string, unknown>;
+      };
+      if (!source || !entryType || !summary) {
+        res.status(400).json({ error: 'source, entryType, and summary are required' });
+        return;
+      }
+      const entry = await services.workflowService.addContextEntry(req.params.id, {
+        source, entryType, summary, data,
+      });
+      res.status(201).json(entry);
+    } catch (err) { next(err); }
+  });
+
   // ============================================
   // Worktree
   // ============================================

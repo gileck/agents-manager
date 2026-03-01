@@ -89,6 +89,7 @@ const IPC_CHANNELS = {
   PROMPT_RESPOND: 'prompt:respond',
   ARTIFACT_LIST: 'artifact:list',
   TASK_CONTEXT_ENTRIES: 'task:context-entries',
+  TASK_ADD_CONTEXT_ENTRY: 'task:add-context-entry',
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
   TASK_WORKTREE: 'task:worktree',
   FEATURE_LIST: 'feature:list',
@@ -234,6 +235,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_ADVANCE_PHASE, taskId),
     contextEntries: (taskId: string): Promise<TaskContextEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_CONTEXT_ENTRIES, taskId),
+    addContextEntry: (taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_ADD_CONTEXT_ENTRY, taskId, input),
     debugTimeline: (taskId: string): Promise<DebugTimelineEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEBUG_TIMELINE, taskId),
     worktree: (taskId: string): Promise<Worktree | null> =>

@@ -9,6 +9,7 @@ import type {
   PendingPrompt,
   DashboardStats,
   AgentChatMessage,
+  TaskContextEntry,
 } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IProjectStore } from '../interfaces/project-store';
@@ -443,6 +444,17 @@ export class WorkflowService implements IWorkflowService {
     }
 
     return { success: true };
+  }
+
+  async addContextEntry(taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry> {
+    const entry = await this.taskContextStore.addEntry({ taskId, ...input });
+    await this.activityLog.log({
+      action: 'update',
+      entityType: 'task',
+      entityId: taskId,
+      summary: `Added ${input.entryType} context entry`,
+    });
+    return entry;
   }
 
   private formatQASummary(questions: unknown, answers: Record<string, unknown>): string {

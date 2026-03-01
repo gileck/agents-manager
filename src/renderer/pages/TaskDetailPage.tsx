@@ -24,6 +24,7 @@ import { PipelineControlPanel } from '../components/pipeline/PipelineControlPane
 import { HookFailureBanner } from '../components/pipeline/HookFailureBanner';
 import { PipelineProgress } from '../components/pipeline/PipelineProgress';
 import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
+import { ImplementationTab } from '../components/tasks/ImplementationTab';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { PlanReviewCard } from '../components/plan/PlanReviewCard';
 import type {
@@ -106,13 +107,17 @@ export function TaskDetailPage() {
     refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext,
   });
 
-  const initialTab = task?.status === 'plan_review' ? 'plan' : task?.status === 'design_review' ? 'design' : 'details';
+  const initialTab = task?.status === 'plan_review' ? 'plan'
+    : task?.status === 'design_review' ? 'design'
+    : (task?.status === 'pr_review' || task?.status === 'ready_to_merge') ? 'implementation'
+    : 'details';
   const [tab, setTab] = useLocalStorage(`taskDetail.tab.${id}`, initialTab);
 
   // Auto-switch to relevant tab when entering review statuses
   useEffect(() => {
     if (task?.status === 'plan_review') setTab('plan');
     else if (task?.status === 'design_review') setTab('design');
+    else if (task?.status === 'pr_review' || task?.status === 'ready_to_merge') setTab('implementation');
   }, [task?.status]);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -425,6 +430,7 @@ export function TaskDetailPage() {
   // Tab content indicators
   const hasPlan = !!task.plan;
   const hasDesign = !!task.technicalDesign;
+  const hasImplementation = !!task.prLink || (artifacts?.some((a) => a.type === 'diff') ?? false);
   const hasReview = contextEntries?.some(e => e.entryType === 'workflow_review') ?? false;
 
   return (
@@ -609,6 +615,12 @@ export function TaskDetailPage() {
               {hasDesign && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
             </span>
           </TabsTrigger>
+          <TabsTrigger value="implementation" className={hasImplementation ? '' : 'opacity-40'}>
+            <span className="flex items-center gap-1.5">
+              Implementation
+              {hasImplementation && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
+            </span>
+          </TabsTrigger>
           <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="review" className={hasReview ? '' : 'opacity-40'}>Review</TabsTrigger>
         </TabsList>
@@ -690,6 +702,19 @@ export function TaskDetailPage() {
               await handleTransition(toStatus);
             }}
             renderContent={(content) => <PlanMarkdown content={content} />}
+          />
+        </TabsContent>
+
+        <TabsContent value="implementation" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <ImplementationTab
+            taskId={id!}
+            task={task}
+            artifacts={artifacts ?? null}
+            transitions={transitions ?? []}
+            transitioning={transitioning}
+            contextEntries={contextEntries ?? null}
+            onTransition={handleTransition}
+            onContextAdded={refetchContext}
           />
         </TabsContent>
 

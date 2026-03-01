@@ -871,6 +871,10 @@ export function getMigrations(): Migration[] {
       name: '080_consolidate_to_single_pipeline',
       sql: getConsolidateToSinglePipelineSql(),
     },
+    {
+      name: '081_reseed_pipelines_request_changes',
+      sql: getReseedPipelinesSql(),
+    },
   ];
 }
 

@@ -9,6 +9,7 @@ import type {
   PendingPrompt,
   DashboardStats,
   AgentChatMessage,
+  TaskContextEntry,
 } from '../../shared/types';
 
 export interface IWorkflowService {
@@ -24,4 +25,5 @@ export interface IWorkflowService {
   respondToPrompt(promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null>;
   mergePR(taskId: string): Promise<TransitionResult>;
   getDashboardStats(now?: number): Promise<DashboardStats>;
+  addContextEntry(taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry>;
 }

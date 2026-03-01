@@ -195,10 +195,10 @@ export const AGENT_PIPELINE: SeededPipeline = {
     // === Workflow review acknowledgment (no-op self-transition) ===
     { from: 'done', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },
 
-    // === Merge conflict recovery from ready_to_merge ===
-    { from: 'ready_to_merge', to: 'implementing', trigger: 'manual', label: 'Resolve Conflicts',
+    // === Request changes from ready_to_merge ===
+    { from: 'ready_to_merge', to: 'implementing', trigger: 'manual', label: 'Request Changes',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'conflicts_detected' }, policy: 'fire_and_forget' }] },
+      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
 
     // === Manual recovery if merge_pr safety net catches a conflict ===
     { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },

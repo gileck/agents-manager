@@ -181,7 +181,7 @@ export function StatusActionBar({
   // Human review (plan_review, investigation_review, pr_review, etc.)
   if (statusMeta.isHumanReview) {
     // PR review has special handling for the PR link
-    if (status === 'pr_review') {
+    if (status === 'pr_review' || status === 'ready_to_merge') {
       return (
         <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
           {task.prLink ? (
