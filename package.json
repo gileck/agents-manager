@@ -7,7 +7,7 @@
     "agents-manager": "./bootstrap-cli.js"
   },
   "scripts": {
-    "clean": "rm -rf dist dist-main dist-cli",
+    "clean": "rm -rf dist dist-main dist-cli dist-daemon",
     "build": "npm run clean && npm run build:main && npm run build:preload && npm run build:renderer",
     "build:main": "tsc -p config/tsconfig.main.json",
     "build:preload": "tsc -p config/tsconfig.preload.json",
@@ -27,7 +27,7 @@
     "dist": "npm run rebuild:electron && npm run build && electron-builder",
     "deploy": "./scripts/deploy.sh",
     "build:cli": "tsc -p config/tsconfig.cli.json",
-    "build:daemon": "tsc -p config/tsconfig.daemon.json",
+    "build:daemon": "esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api",
     "lint": "eslint src/ template/ tests/",
     "typecheck": "tsc --noEmit -p config/tsconfig.main.json && tsc --noEmit -p config/tsconfig.preload.json && tsc --noEmit -p config/tsconfig.renderer.json && tsc --noEmit -p config/tsconfig.cli.json && tsc --noEmit -p config/tsconfig.daemon.json",
     "checks": "yarn typecheck && yarn lint",
@@ -96,6 +96,7 @@
     "css-loader": "^7.1.2",
     "electron": "^40.2.1",
     "electron-builder": "^26.4.0",
+    "esbuild": "^0.27.3",
     "eslint": "^10.0.0-rc.2",
     "html-webpack-plugin": "^5.6.5",
     "postcss": "^8.4.49",
