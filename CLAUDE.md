@@ -48,6 +48,23 @@ Agent types, execution lifecycle, prompts, validation, and context accumulation
 
 ---
 
+## Client-Daemon Convergence
+
+How all UI clients (Electron, CLI, Telegram bot) converge on the same daemon logic
+
+**Summary:** Every UI action — whether from Electron, CLI, Telegram bot, or a future web client — ends up calling the same WorkflowService methods in the daemon process. This guarantees identical behavior: pipeline guards, hooks, agent execution, notifications, and event logging all run the same way regardless of the originating client.
+
+**Key Points:**
+- All clients converge on the same daemon WorkflowService — transitions, task CRUD, agent starts all go through one code path
+- Telegram bot runs inside the daemon process with direct service references (zero network hops)
+- Electron and CLI are thin HTTP clients — they call daemon REST endpoints that delegate to the same services
+- Pipeline hooks (start_agent, notify, push_and_create_pr) fire identically regardless of which client triggered the transition
+- Daemon singleton enforced by health check probe + OS TCP port bind on fixed port 3847
+
+**Docs:** [client-daemon-convergence.md](docs/client-daemon-convergence.md)
+
+---
+
 ## Known Issues & Fixes
 
 Documented solutions to common Electron + React + SQLite problems in this project
