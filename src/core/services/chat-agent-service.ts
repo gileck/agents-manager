@@ -16,6 +16,7 @@ import type { MessageParam } from '@anthropic-ai/sdk/resources';
 import type { SessionScope } from './chat-prompt-parts';
 import { SandboxGuard } from './sandbox-guard';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 
@@ -73,24 +74,10 @@ const MEDIA_TYPE_TO_EXT: Record<string, string> = {
   'image/webp': 'webp',
 };
 
-function getImageStorageDir(): string {
-  try {
-    const { app } = require('electron');
-    return path.join(app.getPath('userData'), 'chat-images');
-  } catch (err) {
-    const home = process.env.HOME;
-    if (!home) {
-      throw new Error(`Cannot determine image storage directory: Electron unavailable and HOME not set. ${err instanceof Error ? err.message : String(err)}`);
-    }
-    console.warn(`[ChatAgentService] Electron app.getPath unavailable, falling back to ${home}/.agents-manager/chat-images`);
-    return path.join(home, '.agents-manager', 'chat-images');
-  }
-}
-
 /** Save images to disk and return refs with file paths. */
-async function saveImagesToDisk(sessionId: string, images: ChatImage[]): Promise<ChatImageRef[]> {
+async function saveImagesToDisk(sessionId: string, images: ChatImage[], imageStorageDir: string): Promise<ChatImageRef[]> {
   const safeSessionId = path.basename(sessionId);
-  const baseDir = path.join(getImageStorageDir(), safeSessionId);
+  const baseDir = path.join(imageStorageDir, safeSessionId);
   await fs.promises.mkdir(baseDir, { recursive: true });
 
   return Promise.all(images.map(async (img) => {
@@ -132,6 +119,7 @@ const DEFAULT_AGENT_LIB = 'claude-code';
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   private runningAgents = new Map<string, RunningAgent>();
+  private imageStorageDir: string;
 
   constructor(
     private chatMessageStore: IChatMessageStore,
@@ -141,7 +129,11 @@ export class ChatAgentService {
     private pipelineStore: IPipelineStore,
     private agentLibRegistry: AgentLibRegistry,
     private getDefaultAgentLib: () => string = () => DEFAULT_AGENT_LIB,
-  ) {}
+    imageStorageDir?: string,
+  ) {
+    this.imageStorageDir = imageStorageDir
+      ?? path.join(process.env.HOME || os.homedir(), '.agents-manager', 'chat-images');
+  }
 
   /**
    * Returns scope information for a session so consumers can build
@@ -210,7 +202,7 @@ export class ChatAgentService {
     // Save images to disk and build refs
     let imageRefs: ChatImageRef[] | undefined;
     if (images && images.length > 0) {
-      imageRefs = await saveImagesToDisk(sessionId, images);
+      imageRefs = await saveImagesToDisk(sessionId, images, this.imageStorageDir);
     }
 
     // Persist user message — store as JSON envelope if images are present
@@ -462,7 +454,7 @@ export class ChatAgentService {
     const useAgentLib = agentLibName !== DEFAULT_AGENT_LIB;
 
     // Set up sandbox: read-only access to project path + image storage dir, block write tools
-    const imageDir = getImageStorageDir();
+    const imageDir = this.imageStorageDir;
     const sandboxGuard = new SandboxGuard([], [projectPath, imageDir]);
 
     let costInputTokens: number | undefined;

@@ -123,6 +123,7 @@
       "bootstrap.js",
       "dist-main/**/*",
       "dist/**/*",
+      "dist-daemon/**/*",
       "assets/**/*"
     ],
     "extraResources": [

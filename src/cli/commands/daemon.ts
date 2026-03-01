@@ -3,12 +3,10 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import * as crypto from 'crypto';
 import * as http from 'http';
 
 const DAEMON_DIR = path.join(os.homedir(), '.agents-manager');
 const PID_FILE = path.join(DAEMON_DIR, 'daemon.pid');
-const TOKEN_FILE = path.join(DAEMON_DIR, 'daemon.token');
 
 function getDaemonPort(): number {
   const envPort = process.env.AM_DAEMON_PORT;
@@ -59,21 +57,6 @@ function removePidFile(): void {
   } catch {
     // ignore if already removed
   }
-}
-
-function removeTokenFile(): void {
-  try {
-    fs.unlinkSync(TOKEN_FILE);
-  } catch {
-    // ignore if already removed
-  }
-}
-
-function writeTokenFile(): string {
-  ensureDaemonDir();
-  const token = crypto.randomBytes(32).toString('hex');
-  fs.writeFileSync(TOKEN_FILE, token, 'utf-8');
-  return token;
 }
 
 function httpRequest(method: string, urlPath: string, port: number): Promise<{ status: number; body: string }> {
@@ -162,7 +145,6 @@ export function registerDaemonCommands(program: Command): void {
         }
 
         writePidFile(pid);
-        writeTokenFile();
 
         console.log(`Starting daemon on port ${port} (PID: ${pid})...`);
 
@@ -205,7 +187,6 @@ export function registerDaemonCommands(program: Command): void {
         await httpRequest('POST', '/api/shutdown', port);
         console.log('Daemon stopped.');
         removePidFile();
-        removeTokenFile();
         return;
       } catch {
         // HTTP shutdown failed — try SIGTERM
@@ -231,13 +212,11 @@ export function registerDaemonCommands(program: Command): void {
           process.exitCode = 1;
         }
         removePidFile();
-        removeTokenFile();
         return;
       }
 
       console.error('Daemon is not running (no PID file or process not found).');
       removePidFile();
-      removeTokenFile();
       process.exitCode = 1;
     });
 

@@ -4,6 +4,7 @@ import { createServer } from './server';
 import { DaemonWsServer } from './ws/ws-server';
 import { WS_CHANNELS } from './ws/channels';
 import { startSupervisors, stopSupervisors } from './lifecycle';
+import { stopAllBots } from './routes/telegram';
 
 const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
 
@@ -54,8 +55,9 @@ async function main() {
   });
 
   // Graceful shutdown
-  const shutdown = () => {
+  const shutdown = async () => {
     console.log('Shutting down daemon...');
+    await stopAllBots().catch(err => console.warn('Failed to stop Telegram bots:', err));
     stopSupervisors(services);
     wsServer.close();
     httpServer.closeAllConnections();

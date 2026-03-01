@@ -11,11 +11,9 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import * as crypto from 'crypto';
 import * as http from 'http';
 
 const DAEMON_DIR = path.join(os.homedir(), '.agents-manager');
-const TOKEN_FILE = path.join(DAEMON_DIR, 'daemon.token');
 
 function getDaemonPort(): number {
   const envPort = process.env.AM_DAEMON_PORT;
@@ -49,12 +47,6 @@ function writePidFile(pid: number): void {
   ensureDaemonDir();
   const pidFile = path.join(DAEMON_DIR, 'daemon.pid');
   fs.writeFileSync(pidFile, String(pid), 'utf-8');
-}
-
-function writeTokenFile(): void {
-  ensureDaemonDir();
-  const token = crypto.randomBytes(32).toString('hex');
-  fs.writeFileSync(TOKEN_FILE, token, 'utf-8');
 }
 
 function httpHealthCheck(port: number): Promise<boolean> {
@@ -115,7 +107,6 @@ export async function ensureDaemon(): Promise<string> {
   }
 
   writePidFile(pid);
-  writeTokenFile();
 
   // 3. Wait for health check to pass
   const healthy = await waitForHealth(port);

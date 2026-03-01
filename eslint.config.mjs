@@ -44,10 +44,8 @@ export default tseslint.config(
   },
   // Architectural boundary: Electron main process must not import from src/core/
   // Uses relative patterns only (no **/core/**) to avoid matching @template/main/core/ imports.
-  // Excludes src/main/services/ which may contain Electron-specific services needing core interfaces.
   {
     files: ["src/main/**/*.ts"],
-    ignores: ["src/main/services/**"],
     rules: {
       "no-restricted-imports": [
         "error",

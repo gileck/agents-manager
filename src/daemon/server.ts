@@ -28,7 +28,16 @@ export type WsHolder = { server?: DaemonWsServer };
 
 export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
   const app = express();
-  app.use(cors({ origin: true }));
+  app.use(cors({
+    origin: (origin, cb) => {
+      // Allow requests with no origin (Electron, CLI, same-origin) and localhost origins
+      if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        cb(null, true);
+      } else {
+        cb(new Error('CORS blocked'));
+      }
+    },
+  }));
   app.use(express.json());
 
   // Register routes

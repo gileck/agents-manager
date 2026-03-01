@@ -6,6 +6,7 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
 import { createApiClient, createWsClient } from '../client';
 import { ensureDaemon } from './daemon-launcher';
+import { initShellEnv } from '../shared/shell-env';
 import type { WsClient } from '../client';
 
 // Keep a global reference to prevent garbage collection
@@ -21,6 +22,9 @@ initializeApp({
   singleInstance: true,
   onReady: async () => {
     try {
+      // Pre-warm shell PATH cache so synchronous getShellEnv() calls are instant
+      await initShellEnv();
+
       // Auto-start daemon if not running
       const { url: daemonUrl, wsUrl: daemonWsUrl } = await ensureDaemon();
 

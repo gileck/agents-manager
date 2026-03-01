@@ -86,6 +86,7 @@ import { ChatAgentService } from '../services/chat-agent-service';
 export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
   notificationRouters?: import('../interfaces/notification-router').INotificationRouter[];
+  imageStorageDir?: string;
 }
 
 export interface AppServices {
@@ -252,7 +253,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
       return 'claude-code';
     }
   };
-  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib);
+  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib, config?.imageStorageDir);
 
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore, createStreamingCallbacks: config?.createStreamingCallbacks });

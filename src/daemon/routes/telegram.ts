@@ -13,6 +13,16 @@ const activeBots = new Map<string, {
   notificationRouter: INotificationRouter;
 }>();
 
+/** Stop all active Telegram bots — called during daemon shutdown. */
+export async function stopAllBots(): Promise<void> {
+  for (const [, entry] of activeBots) {
+    try { await entry.botService.stop(); } catch (err) {
+      console.warn('[telegram] Failed to stop bot:', err);
+    }
+  }
+  activeBots.clear();
+}
+
 export function telegramRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
 
