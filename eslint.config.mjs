@@ -27,5 +27,33 @@ export default tseslint.config(
       "@typescript-eslint/no-empty-object-type": "off",
       "require-yield": "off",
     },
+  },
+  // Architectural boundary: CLI must not import from src/core/
+  {
+    files: ["src/cli/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["**/core/**", "../core/**", "../../core/**"], message: "CLI must use the daemon API client (src/client/), not core services directly." },
+          ],
+        },
+      ],
+    },
+  },
+  // Architectural boundary: Electron IPC handlers must not import from src/core/
+  {
+    files: ["src/main/ipc-handlers/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["**/core/**", "../core/**", "../../core/**"], message: "IPC handlers must use the daemon API client (src/client/), not core services directly." },
+          ],
+        },
+      ],
+    },
   }
 );
