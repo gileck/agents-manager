@@ -19,6 +19,31 @@ function resolveDbPath(flagPath?: string): string {
   return DEFAULT_DB_PATH;
 }
 
+/**
+ * Auto-resolve the Node-compatible better-sqlite3 native binding.
+ * Prefers the BETTER_SQLITE3_BINDING env var (set by bootstrap-cli.js),
+ * but falls back to locating build-node/ via require.resolve so the CLI
+ * works in worktrees and other contexts where the env var isn't set.
+ */
+function resolveNativeBinding(): string | undefined {
+  if (process.env.BETTER_SQLITE3_BINDING) return process.env.BETTER_SQLITE3_BINDING;
+
+  try {
+    const pkgDir = path.dirname(require.resolve('better-sqlite3/package.json'));
+    const nodeBinding = path.join(pkgDir, 'build-node', 'Release', 'better_sqlite3.node');
+    if (fs.existsSync(nodeBinding)) return nodeBinding;
+  } catch (err: unknown) {
+    // MODULE_NOT_FOUND is expected when better-sqlite3 isn't installed;
+    // anything else (EACCES, ELOOP, etc.) is worth surfacing.
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code !== 'MODULE_NOT_FOUND') {
+      console.warn(`[cli/db] resolveNativeBinding: unexpected error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return undefined;
+}
+
 function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS migrations (
@@ -52,7 +77,7 @@ export function openDatabase(flagPath?: string): { db: Database.Database; servic
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  const nativeBinding = process.env.BETTER_SQLITE3_BINDING || undefined;
+  const nativeBinding = resolveNativeBinding();
   const db = new Database(dbPath, { nativeBinding });
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');

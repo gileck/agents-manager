@@ -1,7 +1,7 @@
 ---
 title: Known Issues & Fixes
 description: Documented solutions to common Electron + React + SQLite problems in this project
-summary: Nine documented issues with known fixes covering Electron rendering, SQLite compatibility, Tailwind CSS quirks, macOS PATH resolution, and native module ABI mismatches.
+summary: Ten documented issues with known fixes covering Electron rendering, SQLite compatibility, Tailwind CSS quirks, macOS PATH resolution, and native module ABI mismatches.
 priority: 2
 key_points:
   - "Blank screen: add backgroundColor '#ffffff' to BrowserWindow options"
@@ -198,3 +198,12 @@ export function getShellEnv(): NodeJS.ProcessEnv {
 **Solution:** The project maintains dual builds (`build/` for Electron, `build-node/` for system Node). Both are created automatically by `postinstall`. The CLI selects the correct binary via the `nativeBinding` option.
 
 See [cli-native-bindings.md](./cli-native-bindings.md) for full details and troubleshooting.
+
+## 10. Native Binding Not Found in Worktrees
+
+**Problem:** When agents run in git worktrees (`.agent-worktrees/` or `.claude/worktrees/`), `better-sqlite3` fails with a `NODE_MODULE_VERSION` mismatch because `node_modules` is symlinked from the main repo and the default `build/` contains the Electron ABI binary.
+
+**Solution:** `src/cli/db.ts` auto-resolves the `build-node/` binding via `require.resolve` — no env var needed. If you hit this error outside the CLI (e.g., ad-hoc scripts), set the env var:
+```bash
+export BETTER_SQLITE3_BINDING=node_modules/better-sqlite3/build-node/Release/better_sqlite3.node
+```
