@@ -37,12 +37,9 @@ export async function createBugReport(title: string, message: string, fullDetail
       pipelineId = pipelines[0].id;
     }
 
-    const description = [
-      '## Error',
-      '```',
-      message,
-      '```',
-      '',
+    const description = `## Error\n\`\`\`\n${message}\n\`\`\``;
+
+    const debugInfo = [
       '## Stack Trace',
       '```',
       fullDetail,
@@ -54,6 +51,7 @@ export async function createBugReport(title: string, message: string, fullDetail
       pipelineId,
       title: `[Bug] ${title}`,
       description,
+      debugInfo,
       tags: ['bug'],
     });
 

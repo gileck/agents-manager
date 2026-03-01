@@ -18,6 +18,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     pipelineId: 'pipe-1',
     title: 'Test task',
     description: null,
+    debugInfo: null,
     status: 'implementing',
     priority: 1,
     tags: [],
