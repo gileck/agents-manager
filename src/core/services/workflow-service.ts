@@ -249,6 +249,39 @@ export class WorkflowService implements IWorkflowService {
       data: { agentType, mode, revisionReason },
     });
 
+    // Warn (but never block) when the agent type doesn't match what the pipeline expects
+    try {
+      if (agentType !== 'task-workflow-reviewer') {
+        const task = await this.taskStore.getTask(taskId);
+        if (task) {
+          const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+          if (pipeline) {
+            const expectedTypes = new Set<string>();
+            for (const t of pipeline.transitions) {
+              if (t.from === task.status && t.hooks) {
+                for (const h of t.hooks) {
+                  if (h.name === 'start_agent' && h.params?.agentType) {
+                    expectedTypes.add(h.params.agentType as string);
+                  }
+                }
+              }
+            }
+            if (expectedTypes.size > 0 && !expectedTypes.has(agentType)) {
+              await this.taskEventLog.log({
+                taskId,
+                category: 'system',
+                severity: 'warning',
+                message: `Agent type mismatch: launching "${agentType}" but status "${task.status}" expects [${[...expectedTypes].join(', ')}]`,
+                data: { agentType, taskStatus: task.status, expectedTypes: [...expectedTypes] },
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      // Validation errors must never prevent agent launch
+    }
+
     const run = await this.agentService.execute(taskId, mode, agentType, revisionReason, onOutput, onMessage, onStatusChange);
     return run;
   }
