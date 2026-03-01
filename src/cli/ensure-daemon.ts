@@ -26,10 +26,17 @@ function getDaemonPort(): number {
   return 3847;
 }
 
+function findProjectRoot(): string {
+  let dir = __dirname;
+  while (dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
+    dir = path.dirname(dir);
+  }
+  return process.cwd();
+}
+
 function getDaemonBinaryPath(): string {
-  // dist-daemon/index.js at the project root.
-  // The CLI runs from source via bootstrap-cli.js (tsx), so __dirname = src/cli/ — 2 levels deep.
-  return path.resolve(__dirname, '../../dist-daemon/index.js');
+  return path.join(findProjectRoot(), 'dist-daemon', 'index.js');
 }
 
 function ensureDaemonDir(): void {

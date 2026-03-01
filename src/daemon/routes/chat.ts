@@ -264,9 +264,9 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   });
 
   // GET /api/chat/agents — list running chat agents
-  router.get('/api/chat/agents', (_req, res, next) => {
+  router.get('/api/chat/agents', async (_req, res, next) => {
     try {
-      const agents = services.chatAgentService.getRunningAgents();
+      const agents = await services.chatAgentService.getRunningAgents();
       res.json(agents);
     } catch (err) { next(err); }
   });

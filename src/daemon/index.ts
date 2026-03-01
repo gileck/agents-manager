@@ -49,8 +49,8 @@ async function main() {
   });
 
   // Start listening
-  httpServer.listen(PORT, () => {
-    console.log(`Daemon listening on http://localhost:${PORT}`);
+  httpServer.listen(PORT, '127.0.0.1', () => {
+    console.log(`Daemon listening on http://127.0.0.1:${PORT}`);
   });
 
   // Graceful shutdown
@@ -58,6 +58,7 @@ async function main() {
     console.log('Shutting down daemon...');
     stopSupervisors(services);
     wsServer.close();
+    httpServer.closeAllConnections();
     httpServer.close(() => {
       db.close();
       process.exit(0);
