@@ -36,7 +36,13 @@ initializeApp({
 
       // Initialize domain services
       const db = getDatabase();
-      services = createAppServices(db);
+      services = createAppServices(db, {
+        createStreamingCallbacks: (taskId) => ({
+          onOutput: (chunk) => sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, chunk),
+          onMessage: (msg) => sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, msg),
+          onStatus: (status) => sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, status),
+        }),
+      });
 
       // Register IPC handlers
       registerIpcHandlers(services);

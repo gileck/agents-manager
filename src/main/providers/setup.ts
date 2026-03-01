@@ -74,13 +74,17 @@ import { ArtifactSource } from '../services/timeline/sources/artifact-source';
 import { PromptSource } from '../services/timeline/sources/prompt-source';
 import { ContextSource } from '../services/timeline/sources/context-source';
 import { registerCoreGuards } from '../handlers/core-guards';
-import { registerAgentHandler } from '../handlers/agent-handler';
+import { registerAgentHandler, type StreamingCallbacks } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
 import { registerPromptHandler } from '../handlers/prompt-handler';
 import { registerScmHandler } from '../handlers/scm-handler';
 import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
 import { getSetting } from '@template/main/services/settings-service';
+
+export interface AppServicesConfig {
+  createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
+}
 
 export interface AppServices {
   db: Database.Database;
@@ -116,7 +120,7 @@ export interface AppServices {
   agentLibRegistry: AgentLibRegistryType;
 }
 
-export function createAppServices(db: Database.Database): AppServices {
+export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
   // Phase 1 stores
   const projectStore = new SqliteProjectStore(db);
   const pipelineStore = new SqlitePipelineStore(db);
@@ -246,7 +250,7 @@ export function createAppServices(db: Database.Database): AppServices {
   const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib);
 
   // Register hooks (must be after workflowService is created)
-  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore });
+  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore, createStreamingCallbacks: config?.createStreamingCallbacks });
   registerNotificationHandler(pipelineEngine, { notificationRouter, taskStore });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerScmHandler(pipelineEngine, {
