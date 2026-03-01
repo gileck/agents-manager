@@ -1,5 +1,9 @@
-import type { Migration } from '@template/main/services/database';
 import { SEEDED_PIPELINES } from './data/seeded-pipelines';
+
+export interface Migration {
+  name: string;
+  sql: string;
+}
 
 export function getMigrations(): Migration[] {
   return [
