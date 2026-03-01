@@ -101,7 +101,7 @@ export interface ApiClient {
 
   // Agents
   agents: {
-    start(taskId: string, mode: AgentMode, agentType?: string, revisionReason?: RevisionReason): Promise<unknown>;
+    start(taskId: string, mode: AgentMode, agentType: string, revisionReason?: RevisionReason): Promise<unknown>;
     stop(taskId: string, runId: string): Promise<unknown>;
     message(taskId: string, message: string): Promise<unknown>;
     runs(taskId: string): Promise<unknown[]>;
@@ -306,7 +306,7 @@ export function createApiClient(baseUrl: string, token?: string): ApiClient {
 
     // -- Agents --------------------------------------------------------------
     agents: {
-      start: (taskId, mode, agentType?, revisionReason?) =>
+      start: (taskId, mode, agentType, revisionReason?) =>
         req('POST', `/api/tasks/${taskId}/agent/start`, { mode, agentType, revisionReason }),
       stop: (taskId, runId) =>
         req('POST', `/api/tasks/${taskId}/agent/stop`, { runId }),

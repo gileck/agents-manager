@@ -240,7 +240,7 @@ export class WorkflowService implements IWorkflowService {
     return result;
   }
 
-  async startAgent(taskId: string, mode: AgentMode, agentType: string = 'implementor', revisionReason?: RevisionReason, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
+  async startAgent(taskId: string, mode: AgentMode, agentType: string, revisionReason?: RevisionReason, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
     await this.activityLog.log({
       action: 'agent_start',
       entityType: 'agent_run',

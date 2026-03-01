@@ -20,6 +20,10 @@ export function agentRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(400).json({ error: 'mode is required' });
         return;
       }
+      if (!agentType) {
+        res.status(400).json({ error: 'agentType is required' });
+        return;
+      }
       const ws = wsHolder.server;
       const run = await services.workflowService.startAgent(
         taskId, mode, agentType,

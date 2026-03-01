@@ -8,7 +8,7 @@ export function registerAgentHandlers(api: ApiClient): void {
   // agent output/message/status via WebSocket, and the Electron main process
   // forwards those WS events to the renderer separately.
 
-  registerIpcHandler(IPC_CHANNELS.AGENT_START, async (_, taskId: string, mode: AgentMode, agentType?: string, revisionReason?: RevisionReason) => {
+  registerIpcHandler(IPC_CHANNELS.AGENT_START, async (_, taskId: string, mode: AgentMode, agentType: string, revisionReason?: RevisionReason) => {
     return api.agents.start(taskId, mode, agentType, revisionReason);
   });
 

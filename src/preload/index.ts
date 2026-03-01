@@ -304,7 +304,7 @@ const api = {
 
   // Agent operations
   agents: {
-    start: (taskId: string, mode: AgentMode, agentType?: string): Promise<AgentRun> =>
+    start: (taskId: string, mode: AgentMode, agentType: string): Promise<AgentRun> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_START, taskId, mode, agentType),
     stop: (runId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_STOP, runId),
