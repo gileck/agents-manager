@@ -5,10 +5,8 @@ import { sendToRenderer } from '@template/main/core/window';
 import { registerIpcHandlers } from './ipc-handlers';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
 import { createApiClient, createWsClient } from '../client';
+import { ensureDaemon } from './daemon-launcher';
 import type { WsClient } from '../client';
-
-const DAEMON_URL = 'http://localhost:3847';
-const DAEMON_WS_URL = 'ws://localhost:3847/ws';
 
 // Keep a global reference to prevent garbage collection
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -23,14 +21,17 @@ initializeApp({
   singleInstance: true,
   onReady: async () => {
     try {
+      // Auto-start daemon if not running
+      const { url: daemonUrl, wsUrl: daemonWsUrl } = await ensureDaemon();
+
       // Create the API client to delegate IPC calls to the daemon
-      const api = createApiClient(DAEMON_URL);
+      const api = createApiClient(daemonUrl);
 
       // Register IPC handlers (thin wrappers around the API client)
       registerIpcHandlers(api);
 
       // Set up WebSocket client for real-time event forwarding
-      wsClient = createWsClient(DAEMON_WS_URL, { reconnect: true });
+      wsClient = createWsClient(daemonWsUrl, { reconnect: true });
 
       // Forward daemon WS events to the Electron renderer
       wsClient.subscribeGlobal('agent:output', (taskId, data) =>
