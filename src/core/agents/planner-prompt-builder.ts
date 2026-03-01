@@ -92,7 +92,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         '## Instructions',
         '1. Review the user\'s answers to your questions in the Task Context above.',
         '2. Use their decisions to guide your implementation plan.',
-        '3. **Explore the codebase** to ground your plan in real file paths and existing patterns.',
+        '3. **Explore the codebase** to ground your plan in real file paths and existing patterns. If the task description already includes a detailed design with specific files and data flows, focus exploration on verifying assumptions and identifying gaps rather than rediscovering what was already specified.',
         '4. Produce a complete implementation plan with 3-8 concrete, independently testable subtasks ordered by dependency.',
       );
       prompt = prLines.join('\n');
@@ -103,6 +103,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         ``,
         `## Instructions`,
         `1. **Explore the codebase first.** Read relevant files, understand the directory structure, and identify existing patterns before planning.`,
+        `   **Shortcut for pre-designed tasks:** If the task description already includes a detailed design section with specific files to modify, data flow descriptions, and edge cases, adopt the provided design as your plan basis. Focus exploration on verifying assumptions and identifying gaps rather than rediscovering the architecture from scratch. Still produce a complete plan with subtasks, but reference the provided design rather than re-deriving it.`,
         `2. Describe the current state — what exists today and what needs to change.`,
         `3. Outline your approach — the high-level strategy, key decisions, and any alternatives you considered.`,
         `4. List specific files to create or modify, with a short description of each change.`,
