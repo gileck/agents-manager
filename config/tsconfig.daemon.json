@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../dist-daemon",
+    "module": "CommonJS",
+    "target": "ES2022"
+  },
+  "include": ["../src/daemon/**/*", "../src/core/**/*", "../src/shared/**/*"]
+}

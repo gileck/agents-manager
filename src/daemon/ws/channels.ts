@@ -1,0 +1,13 @@
+export const WS_CHANNELS = {
+  AGENT_OUTPUT: 'agent:output',
+  AGENT_MESSAGE: 'agent:message',
+  AGENT_STATUS: 'agent:status',
+  AGENT_INTERRUPTED_RUNS: 'agent:interrupted-runs',
+  CHAT_OUTPUT: 'chat:output',
+  CHAT_MESSAGE: 'chat:message',
+  TASK_CHAT_OUTPUT: 'task-chat:output',
+  TASK_CHAT_MESSAGE: 'task-chat:message',
+  TELEGRAM_BOT_LOG: 'telegram:bot-log',
+  TELEGRAM_BOT_STATUS: 'telegram:bot-status-changed',
+  NAVIGATE: 'navigate',
+} as const;
