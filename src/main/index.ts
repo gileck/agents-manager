@@ -10,6 +10,7 @@ import { getMigrations } from './migrations';
 import { createAppServices, type AppServices } from './providers/setup';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
 import { initShellEnv } from './services/shell-env';
+import { DesktopNotificationRouter } from './services/desktop-notification-router';
 
 // Keep a global reference to prevent garbage collection
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -42,6 +43,7 @@ initializeApp({
           onMessage: (msg) => sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, msg),
           onStatus: (status) => sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, status),
         }),
+        notificationRouters: [new DesktopNotificationRouter()],
       });
 
       // Register IPC handlers

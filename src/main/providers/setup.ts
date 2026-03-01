@@ -84,6 +84,7 @@ import { getSetting } from '@template/main/services/settings-service';
 
 export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
+  notificationRouters?: import('../interfaces/notification-router').INotificationRouter[];
 }
 
 export interface AppServices {
@@ -149,10 +150,11 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const createWorktreeManager = (path: string) => new LocalWorktreeManager(path);
   const createScmPlatform = (path: string) => new GitHubScmPlatform(path);
   const notificationRouter = new MultiChannelNotificationRouter();
-  try {
-    const { DesktopNotificationRouter } = require('../services/desktop-notification-router');
-    notificationRouter.addRouter(new DesktopNotificationRouter());
-  } catch { /* Not in Electron */ }
+  if (config?.notificationRouters) {
+    for (const router of config.notificationRouters) {
+      notificationRouter.addRouter(router);
+    }
+  }
   try {
     const config = getResolvedConfig();
     const { botToken, chatId } = validateTelegramConfig(config.telegram?.botToken, config.telegram?.chatId);
