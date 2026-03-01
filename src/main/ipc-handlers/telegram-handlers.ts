@@ -8,7 +8,6 @@ import { TelegramAgentBotService } from '../services/telegram-agent-bot-service'
 import { TelegramNotificationRouter } from '../services/telegram-notification-router';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import { validateTelegramConfig } from '../services/telegram-config-validator';
-import { getSetting } from '@template/main/services/settings-service';
 
 /** Module-scoped active bots map shared across handler registrations */
 const activeBots = new Map<string, { botService: TelegramAgentBotService; notificationRouter: INotificationRouter }>();
@@ -30,7 +29,7 @@ async function startBotForProject(
     workflowService: services.workflowService,
     chatSessionStore: services.chatSessionStore,
     chatAgentService: services.chatAgentService,
-    defaultPipelineId: getSetting('default_pipeline_id', ''),
+    defaultPipelineId: services.settingsStore.get('default_pipeline_id', ''),
   });
 
   botService.onLog = (entry: TelegramBotLogEntry) => {

@@ -159,8 +159,8 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     }
   }
   try {
-    const config = getResolvedConfig();
-    const { botToken, chatId } = validateTelegramConfig(config.telegram?.botToken, config.telegram?.chatId);
+    const resolvedConfig = getResolvedConfig();
+    const { botToken, chatId } = validateTelegramConfig(resolvedConfig.telegram?.botToken, resolvedConfig.telegram?.chatId);
     const TelegramBot = require('node-telegram-bot-api');
     const bot = new TelegramBot(botToken); // no polling — send-only
     notificationRouter.addRouter(new TelegramNotificationRouter(bot, chatId));
