@@ -1,4 +1,4 @@
-import type { CreatePRParams, PRInfo, PRStatus } from '../../shared/types';
+import type { CreatePRParams, PRInfo, PRStatus, PRChecksResult, PRStateUpper } from '../../shared/types';
 import type { IScmPlatform } from '../interfaces/scm-platform';
 
 export class StubScmPlatform implements IScmPlatform {
@@ -37,5 +37,19 @@ export class StubScmPlatform implements IScmPlatform {
 
   async getPRStatus(prUrl: string): Promise<PRStatus> {
     return this.prStatuses.get(prUrl) ?? 'open';
+  }
+
+  async getPRChecks(prUrl: string): Promise<PRChecksResult> {
+    const match = prUrl.match(/\/pull\/(\d+)/);
+    if (!match) throw new Error(`StubScmPlatform: Cannot extract PR number from: ${prUrl}`);
+    const prNumber = parseInt(match[1], 10);
+    return {
+      prNumber,
+      prState: (this.prStatuses.get(prUrl) ?? 'OPEN').toUpperCase() as PRStateUpper,
+      mergeable: this.mergeableResult ? 'MERGEABLE' : 'CONFLICTING',
+      mergeStateStatus: 'CLEAN',
+      checks: [],
+      fetchedAt: Date.now(),
+    };
   }
 }

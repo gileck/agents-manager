@@ -34,6 +34,7 @@ import type {
   KanbanBoardUpdateInput,
   AppDebugLogEntry,
   AppDebugLogFilter,
+  PRChecksResult,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -114,6 +115,7 @@ const IPC_CHANNELS = {
   GIT_PULL: 'git:pull',
   GIT_LOG: 'git:log',
   GIT_SHOW: 'git:show',
+  GIT_PR_CHECKS: 'git:pr-checks',
   TASK_WORKFLOW_REVIEW: 'task:workflow-review',
   DASHBOARD_STATS: 'dashboard:stats',
   TELEGRAM_TEST: 'telegram:test',
@@ -378,6 +380,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.GIT_LOG, taskId),
     show: (taskId: string, hash: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_SHOW, taskId, hash),
+    prChecks: (taskId: string): Promise<PRChecksResult | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_PR_CHECKS, taskId),
     // Source control (project-scoped)
     projectLog: (projectId: string, count?: number): Promise<GitLogEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_PROJECT_LOG, projectId, count),

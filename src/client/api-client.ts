@@ -17,6 +17,7 @@ import type {
   KanbanBoardCreateInput, KanbanBoardUpdateInput,
   AgentDefinitionCreateInput, AgentDefinitionUpdateInput,
   AppDebugLogEntry, AppDebugLogFilter,
+  PRChecksResult,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -218,6 +219,8 @@ export interface ApiClient {
     clean(taskId: string): Promise<unknown>;
     pull(taskId: string, branch?: string): Promise<unknown>;
     showCommit(taskId: string, hash: string): Promise<unknown>;
+    // PR operations
+    getPRChecks(taskId: string): Promise<PRChecksResult | null>;
     // Project-scoped git operations
     getProjectLog(projectId: string, count?: number): Promise<unknown[]>;
     getProjectBranch(projectId: string): Promise<{ branch: string }>;
@@ -485,6 +488,9 @@ export function createApiClient(baseUrl: string, token?: string): ApiClient {
         req('POST', `/api/tasks/${taskId}/git/pull`, branch ? { branch } : {}),
       showCommit: (taskId, hash) =>
         req('GET', `/api/tasks/${taskId}/git/show/${hash}`),
+      // PR operations
+      getPRChecks: (taskId) =>
+        req('GET', `/api/tasks/${taskId}/pr/checks`),
       // Project-scoped
       getProjectLog: (projectId, count?) =>
         req('GET', `/api/projects/${projectId}/git/log${qs({ count })}`),

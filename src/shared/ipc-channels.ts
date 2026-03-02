@@ -115,6 +115,7 @@ export const IPC_CHANNELS = {
   GIT_PULL: 'git:pull',
   GIT_LOG: 'git:log',
   GIT_SHOW: 'git:show',
+  GIT_PR_CHECKS: 'git:pr-checks',
 
   // Workflow review
   TASK_WORKFLOW_REVIEW: 'task:workflow-review',

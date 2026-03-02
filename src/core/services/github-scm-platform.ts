@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import type { CreatePRParams, PRInfo, PRStatus } from '../../shared/types';
+import type { CreatePRParams, PRInfo, PRStatus, PRChecksResult, PRCheckRun, PRMergeableState, PRCheckState, PRCheckConclusion, PRStateUpper, PRMergeStateStatus } from '../../shared/types';
 import type { IScmPlatform } from '../interfaces/scm-platform';
 import { getShellEnv } from './shell-env';
 
@@ -110,5 +110,38 @@ export class GitHubScmPlatform implements IScmPlatform {
     if (state === 'MERGED') return 'merged';
     if (state === 'CLOSED') return 'closed';
     return 'open';
+  }
+
+  async getPRChecks(prUrl: string): Promise<PRChecksResult> {
+    const prNumber = this.extractPRNumber(prUrl);
+    const output = await this.gh([
+      'pr', 'view', String(prNumber),
+      '--json', 'state,mergeable,mergeStateStatus,statusCheckRollup',
+    ]);
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(output);
+    } catch {
+      throw new Error(`getPRChecks: Failed to parse gh output for PR #${prNumber}: ${output.slice(0, 200)}`);
+    }
+
+    const rawRollup = data.statusCheckRollup;
+    const rollup = Array.isArray(rawRollup) ? rawRollup as Array<Record<string, unknown>> : [];
+    const checks: PRCheckRun[] = rollup.map((node) => ({
+      name: (node.name as string) ?? (node.context as string) ?? 'unknown',
+      state: ((node.status as string) ?? (node.state as string) ?? 'QUEUED').toUpperCase() as PRCheckState,
+      conclusion: node.conclusion ? (node.conclusion as string).toUpperCase() as PRCheckConclusion : null,
+      startedAt: (node.startedAt as string) ?? null,
+      completedAt: (node.completedAt as string) ?? null,
+    }));
+
+    return {
+      prNumber,
+      prState: ((data.state as string) ?? 'OPEN').toUpperCase() as PRStateUpper,
+      mergeable: ((data.mergeable as string) ?? 'UNKNOWN').toUpperCase() as PRMergeableState,
+      mergeStateStatus: ((data.mergeStateStatus as string) ?? 'UNKNOWN').toUpperCase() as PRMergeStateStatus,
+      checks,
+      fetchedAt: Date.now(),
+    };
   }
 }

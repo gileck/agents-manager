@@ -6,6 +6,7 @@ import { MetricsCard } from './MetricsCard';
 import { AgentRunsCard } from './AgentRunsCard';
 import { ArtifactsCard } from './ArtifactsCard';
 import { GitStatusCard } from './GitStatusCard';
+import { PRChecksCard } from './PRChecksCard';
 import { TimelineCard } from './TimelineCard';
 import { ContextCard } from './ContextCard';
 import { PhasedSubtasksSection } from './PhasedSubtasksSection';
@@ -273,6 +274,7 @@ export function TaskDetailDashboard({
         <MetricsCard agentRuns={agentRuns} />
         <AgentRunsCard agentRuns={agentRuns} onNavigateToRun={(runId) => navigate(`/agents/${runId}`)} />
         <ArtifactsCard artifacts={artifacts} />
+        {task.prLink && <PRChecksCard taskId={taskId} />}
         <GitStatusCard taskId={taskId} />
       </div>
     </div>

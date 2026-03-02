@@ -43,6 +43,10 @@ export function registerGitHandlers(api: ApiClient): void {
     return api.git.showCommit(taskId, hash);
   });
 
+  registerIpcHandler(IPC_CHANNELS.GIT_PR_CHECKS, async (_, taskId: string) => {
+    return api.git.getPRChecks(taskId);
+  });
+
   // ============================================
   // Source Control Operations (project-scoped)
   // ============================================

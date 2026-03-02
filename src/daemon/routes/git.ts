@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { LocalGitOps } from '../../core/services/local-git-ops';
+import { GitHubScmPlatform } from '../../core/services/github-scm-platform';
 import type { AppServices } from '../../core/providers/setup';
 import type { IGitOps } from '../../core/interfaces/git-ops';
 
@@ -191,6 +192,34 @@ export function gitRoutes(services: AppServices): Router {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         services.taskEventLog.log({ taskId, category: 'git', severity: 'warning', message: `GIT_SHOW failed: ${msg}` }).catch(() => {});
+        res.json(null);
+      }
+    } catch (err) { next(err); }
+  });
+
+  // GET /api/tasks/:taskId/pr/checks — get PR check runs and merge status
+  router.get('/api/tasks/:taskId/pr/checks', async (req, res, next) => {
+    try {
+      const { taskId } = req.params;
+      const task = await services.taskStore.getTask(taskId);
+      if (!task?.prLink) {
+        res.json(null);
+        return;
+      }
+      const project = await services.projectStore.getProject(task.projectId);
+      if (!project?.path) {
+        res.json(null);
+        return;
+      }
+      try {
+        const scm = new GitHubScmPlatform(project.path);
+        const result = await scm.getPRChecks(task.prLink);
+        res.json(result);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        services.taskEventLog.log({ taskId, category: 'github', severity: 'warning', message: `PR_CHECKS failed: ${msg}` }).catch(logErr => {
+          console.error(`Failed to log PR_CHECKS error for task ${taskId}:`, logErr);
+        });
         res.json(null);
       }
     } catch (err) { next(err); }

@@ -779,6 +779,31 @@ export interface PRInfo {
 
 export type PRStatus = 'open' | 'closed' | 'merged';
 
+// PR Checks types
+export type PRCheckState = 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED' | 'PENDING' | 'WAITING';
+export type PRCheckConclusion = 'SUCCESS' | 'FAILURE' | 'NEUTRAL' | 'CANCELLED' | 'TIMED_OUT' | 'ACTION_REQUIRED' | 'SKIPPED' | 'STALE' | null;
+
+export interface PRCheckRun {
+  name: string;
+  state: PRCheckState;
+  conclusion: PRCheckConclusion;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+export type PRStateUpper = 'OPEN' | 'CLOSED' | 'MERGED';
+export type PRMergeStateStatus = 'BEHIND' | 'BLOCKED' | 'CLEAN' | 'DIRTY' | 'DRAFT' | 'HAS_HOOKS' | 'UNKNOWN' | 'UNSTABLE';
+
+export interface PRChecksResult {
+  prNumber: number;
+  prState: PRStateUpper;
+  mergeable: PRMergeableState;
+  mergeStateStatus: PRMergeStateStatus;
+  checks: PRCheckRun[];
+  fetchedAt: number;
+}
+
 export type NotificationAction =
   | { label: string; callbackData: string; url?: never }
   | { label: string; url: string; callbackData?: never };
