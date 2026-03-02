@@ -76,6 +76,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         '- Address every piece of feedback — do not skip or partially address any comment.',
         '- If feedback is ambiguous, interpret it in the most reasonable way and note your interpretation.',
         '- Keep parts of the plan that were not criticized — only revise what the feedback targets.',
+        '- Re-assess and include a complexity indicator right after the plan title (see Complexity Assessment below).',
         '- In the `planSummary` field, describe what you changed and how you addressed the admin\'s feedback.',
       );
       prompt = prLines.join('\n');
@@ -94,6 +95,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         '2. Use their decisions to guide your implementation plan.',
         '3. **Explore the codebase** to ground your plan in real file paths and existing patterns. If the task description already includes a detailed design with specific files and data flows, focus exploration on verifying assumptions and identifying gaps rather than rediscovering what was already specified.',
         '4. Produce a complete implementation plan with 3-8 concrete, independently testable subtasks ordered by dependency.',
+        '5. Include a complexity assessment right after the plan title (see Complexity Assessment below).',
       );
       prompt = prLines.join('\n');
     } else {
@@ -109,6 +111,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         `4. List specific files to create or modify, with a short description of each change.`,
         `5. Identify edge cases, error handling, and potential risks.`,
         `6. Break the plan into 3-8 concrete subtasks. Each subtask should be independently testable and ordered by dependency.`,
+        `7. Include a complexity assessment right after the plan title (see Complexity Assessment below).`,
         ``,
         `## Multi-Phase Tasks (Optional)`,
         `For large tasks that would result in a massive PR, you can organize subtasks into sequential **implementation phases**.`,
@@ -120,6 +123,27 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       planLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Admin Feedback'));
       prompt = planLines.join('\n');
     }
+
+    prompt += [
+      '',
+      '',
+      '## Complexity Assessment',
+      'Right after the plan title and short description, include a complexity section in this format:',
+      '',
+      '```',
+      '## Plan - [TITLE]',
+      '[short plan description]',
+      '',
+      '## Complexity: <Small|Medium|Large|Extra-Large>',
+      '[one-sentence explanation]',
+      '```',
+      '',
+      'Assess complexity based on:',
+      '- **Small**: 1-2 files, isolated change, minimal risk (e.g. prompt tweak, config change)',
+      '- **Medium**: 3-5 files, moderate scope, some cross-cutting concerns',
+      '- **Large**: 6-10 files, significant feature work, multiple components affected',
+      '- **Extra-Large**: 10+ files, architectural changes, high risk, multiple phases likely needed',
+    ].join('\n');
 
     prompt += getInteractiveInstructions(this.type);
 
