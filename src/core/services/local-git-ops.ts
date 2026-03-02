@@ -19,8 +19,10 @@ export class LocalGitOps implements IGitOps {
     return stdout.trim();
   }
 
-  async fetch(remote = 'origin'): Promise<void> {
-    await this.git(['fetch', remote]);
+  async fetch(remote = 'origin', refspec?: string): Promise<void> {
+    const args = ['fetch', remote];
+    if (refspec) args.push(refspec);
+    await this.git(args);
   }
 
   async createBranch(name: string, baseBranch?: string): Promise<void> {

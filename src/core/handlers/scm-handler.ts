@@ -81,27 +81,18 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       throw err; // Let pipeline engine log the hook failure
     }
 
-    // Optionally pull origin/main to local main so the user's checkout
-    // stays up-to-date with merged task branches.
+    // Optionally fetch origin/main to update the local main ref so the
+    // user's checkout stays up-to-date with merged task branches.
+    // Uses `git fetch origin main:main` instead of `git pull` because the
+    // worktree is on a task branch, not main — pull would try to merge
+    // into the current branch and fail.
     if (project.config?.pullMainAfterMerge) {
       try {
         const gitOps = deps.createGitOps(project.path);
-        // Check if working tree is clean before pulling
-        let dirty = false;
-        try {
-          const statusOutput = await gitOps.status();
-          dirty = statusOutput.length > 0;
-        } catch {
-          // If status check fails, attempt pull anyway
-        }
-        if (dirty) {
-          await ghLog('Skipping local main pull — working tree is dirty', 'warning');
-        } else {
-          await gitOps.pull('main');
-          await ghLog('Pulled origin/main to local main');
-        }
+        await gitOps.fetch('origin', 'main:main');
+        await ghLog('Fetched origin/main to local main');
       } catch (err) {
-        await ghLog(`Failed to pull main after merge (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
+        await ghLog(`Failed to fetch main after merge (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
       }
     }
 
