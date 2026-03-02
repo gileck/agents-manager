@@ -14,6 +14,8 @@ export class CodexCliLib implements IAgentLib {
   readonly name = 'codex-cli';
 
   private runningStates = new Map<string, RunState>();
+  /** Tracks why a process was killed, survives the stop() → close gap. */
+  private stoppedReasons = new Map<string, string>();
 
   getDefaultModel(): string { return 'gpt-5.3-codex'; }
 
@@ -86,6 +88,7 @@ export class CodexCliLib implements IAgentLib {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
+      this.stoppedReasons.set(runId, 'timeout');
       try { process.kill(-proc.pid!, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
       state.killTimer = setTimeout(() => { try { process.kill(-proc.pid!, 'SIGKILL'); } catch { /* process already exited */ } }, 5000);
     }, options.timeoutMs);
@@ -137,20 +140,33 @@ export class CodexCliLib implements IAgentLib {
         stderrOutput += data.toString();
       });
 
-      proc.on('close', (code) => {
+      proc.on('close', (code, signal) => {
         clearTimeout(timer);
         if (state.killTimer) clearTimeout(state.killTimer);
         this.runningStates.delete(runId);
 
+        // Determine kill reason for signal-related exits
+        let killReason: string | undefined;
+        const rawExitCode = code ?? (signal === 'SIGTERM' ? 143 : signal === 'SIGKILL' ? 137 : undefined);
+        const isSignalExit = rawExitCode === 143 || rawExitCode === 137 || signal != null;
+
         if (timedOut) {
           isError = true;
+          killReason = 'timeout';
           errorMessage = `codex timed out after ${Math.round(options.timeoutMs / 1000)}s`;
           log(errorMessage);
+        } else if (isSignalExit) {
+          killReason = this.stoppedReasons.get(runId) ?? 'external_signal';
+          isError = true;
+          errorMessage = stderrOutput || `codex exited with code ${rawExitCode} [kill_reason=${killReason}]`;
+          log(`codex killed: ${errorMessage}`);
         } else if (code !== 0 && !isError) {
           isError = true;
           errorMessage = stderrOutput || `codex exited with code ${code}`;
           log(`codex failed: ${errorMessage}`);
         }
+
+        this.stoppedReasons.delete(runId);
 
         log(`codex completed: exitCode=${code}, messages=${state.messageCount}`);
 
@@ -159,6 +175,8 @@ export class CodexCliLib implements IAgentLib {
           output: resultText || errorMessage || '',
           error: isError ? errorMessage : undefined,
           structuredOutput,
+          killReason,
+          rawExitCode: rawExitCode ?? undefined,
         });
       });
 
@@ -166,6 +184,7 @@ export class CodexCliLib implements IAgentLib {
         clearTimeout(timer);
         if (state.killTimer) clearTimeout(state.killTimer);
         this.runningStates.delete(runId);
+        this.stoppedReasons.delete(runId);
         isError = true;
         errorMessage = `Failed to spawn codex: ${err.message}`;
         log(errorMessage);
@@ -184,6 +203,7 @@ export class CodexCliLib implements IAgentLib {
       console.warn(`[CodexCliLib] stop called for unknown runId: ${runId}`);
       return;
     }
+    this.stoppedReasons.set(runId, 'stopped');
     try { process.kill(-state.process.pid!, 'SIGTERM'); } catch { state.process.kill('SIGTERM'); }
     state.killTimer = setTimeout(() => { try { process.kill(-state.process.pid!, 'SIGKILL'); } catch { /* process already exited */ } }, 5000);
     this.runningStates.delete(runId);

@@ -88,6 +88,8 @@ export abstract class BaseAgentPromptBuilder {
       costOutputTokens: libResult.costOutputTokens,
       structuredOutput: libResult.structuredOutput,
       prompt,
+      killReason: libResult.killReason,
+      rawExitCode: libResult.rawExitCode,
     };
     if (payload) result.payload = payload;
     return result;
