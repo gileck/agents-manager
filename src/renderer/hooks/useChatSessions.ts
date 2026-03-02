@@ -30,6 +30,9 @@ export function useChatSessions(scope: ChatScope | null) {
       return;
     }
 
+    // Clear stale sessions immediately so old tabs don't remain clickable during load
+    setSessions([]);
+    setCurrentSessionId(null);
     setLoading(true);
     setError(null);
 
@@ -48,8 +51,8 @@ export function useChatSessions(scope: ChatScope | null) {
         } else {
           // Restore persisted session if it still exists, otherwise fall back to first
           const stored = localStorage.getItem(storageKey(currentScope));
-          const restoredSession = stored && loadedSessions.find(s => s.id === stored);
-          const nextId = restoredSession ? stored : loadedSessions[0].id;
+          const match = stored ? loadedSessions.find(s => s.id === stored) : undefined;
+          const nextId = match ? match.id : loadedSessions[0].id;
           setCurrentSessionId(nextId);
           localStorage.setItem(storageKey(currentScope), nextId);
         }
@@ -139,13 +142,12 @@ export function useChatSessions(scope: ChatScope | null) {
   }, []);
 
   const switchSession = useCallback((sessionId: string) => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (session) {
-      const currentScope = scopeRef.current;
-      setCurrentSessionId(sessionId);
-      if (currentScope) localStorage.setItem(storageKey(currentScope), sessionId);
-    }
-  }, [sessions]);
+    const currentScope = scopeRef.current;
+    setCurrentSessionId(sessionId);
+    if (currentScope) localStorage.setItem(storageKey(currentScope), sessionId);
+  }, []);
+
+  const clearError = useCallback(() => setError(null), []);
 
   return {
     sessions,
@@ -153,6 +155,7 @@ export function useChatSessions(scope: ChatScope | null) {
     currentSession: sessions.find((s) => s.id === currentSessionId) || null,
     loading,
     error,
+    clearError,
     createSession,
     renameSession,
     updateSession,

@@ -1,6 +1,39 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { reportError } from '../../lib/error-handler';
+
+interface CopyableCodeBlockProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+function CopyableCodeBlock({ children, className, ...props }: CopyableCodeBlockProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    const text = String(children).replace(/\n$/, '');
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch((err) => reportError(err, 'Copy code'));
+  };
+
+  return (
+    <div className="relative my-2 group">
+      <pre className="bg-muted rounded p-3 overflow-x-auto text-xs">
+        <code className={className} {...props}>{children}</code>
+      </pre>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 text-xs bg-background border border-border rounded hover:bg-muted"
+      >
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+    </div>
+  );
+}
 
 interface MarkdownContentProps {
   content: string;
@@ -21,11 +54,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         code: ({ className, children, ...props }) => {
           const isBlock = className?.includes('language-');
           if (isBlock) {
-            return (
-              <pre className="bg-muted rounded p-3 overflow-x-auto my-2 text-xs">
-                <code className={className} {...props}>{children}</code>
-              </pre>
-            );
+            return <CopyableCodeBlock className={className} {...props}>{children}</CopyableCodeBlock>;
           }
           return (
             <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono" {...props}>

@@ -61,17 +61,6 @@ export function SessionTabs({
   };
 
   const handleDelete = (sessionId: string) => {
-    // Check if session has running agent
-    const hasRunningAgent = activeAgents.some(
-      agent => agent.sessionId === sessionId && agent.status === 'running'
-    );
-
-    if (hasRunningAgent) {
-      if (!confirm('This session has a running agent. Are you sure you want to delete it?')) {
-        return;
-      }
-    }
-
     onSessionDelete(sessionId);
     setContextMenuSession(null);
   };
@@ -134,7 +123,15 @@ export function SessionTabs({
                     />
                   </form>
                 ) : (
-                  <span className="text-sm font-medium">{session.name}</span>
+                  <span
+                    className="text-sm font-medium"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      handleStartRename(session.id, session.name);
+                    }}
+                  >
+                    {session.name}
+                  </span>
                 )}
 
                 {/* Agent count badge */}

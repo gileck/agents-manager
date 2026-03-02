@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Trash2, FileText, MessageSquare, PanelRightClose, PanelRightOpen, Cpu } from 'lucide-react';
 import { InlineError } from '../InlineError';
+import { reportError } from '../../lib/error-handler';
 import { useChat } from '../../hooks/useChat';
 import { useChatSessions, ChatScope } from '../../hooks/useChatSessions';
 import { useActiveAgents } from '../../hooks/useActiveAgents';
@@ -24,6 +25,8 @@ export function ChatPanel({ scope }: ChatPanelProps) {
     deleteSession,
     switchSession,
     loading: sessionsLoading,
+    error: sessionsError,
+    clearError: clearSessionsError,
   } = useChatSessions(scope);
 
   const {
@@ -51,7 +54,7 @@ export function ChatPanel({ scope }: ChatPanelProps) {
   // Load available agent libs once
   useEffect(() => {
     window.api.agentLibs.list().then(setAgentLibs).catch((err) => {
-      console.error('[ChatPanel] Failed to load agent libs:', err);
+      reportError(err, 'ChatPanel: load agent libs');
     });
   }, []);
 
@@ -61,20 +64,18 @@ export function ChatPanel({ scope }: ChatPanelProps) {
     [agents, scope.type, scope.id],
   );
 
-  const handleNavigateToSession = useCallback((sessionId: string) => {
-    switchSession(sessionId);
-  }, [switchSession]);
-
   const handleAgentLibChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (!currentSessionId) return;
     try {
       await updateSession(currentSessionId, { agentLib: e.target.value || null });
     } catch (err) {
-      console.error('[ChatPanel] Failed to update agent lib:', err);
+      reportError(err, 'ChatPanel: update agent lib');
     }
   }, [currentSessionId, updateSession]);
 
   const selectedAgentLib = currentSession?.agentLib || 'claude-code';
+
+  const estimatedCost = (tokenUsage.inputTokens / 1_000_000) * 3.0 + (tokenUsage.outputTokens / 1_000_000) * 15.0;
 
   return (
     <div className="flex flex-col h-full">
@@ -103,6 +104,15 @@ export function ChatPanel({ scope }: ChatPanelProps) {
                 ))}
               </select>
             </div>
+          )}
+          {/* Compact token cost display */}
+          {estimatedCost > 0 && (
+            <span
+              className="text-xs text-muted-foreground font-mono px-1"
+              title={`Input: ${tokenUsage.inputTokens.toLocaleString()} tokens | Output: ${tokenUsage.outputTokens.toLocaleString()} tokens`}
+            >
+              ${estimatedCost.toFixed(4)}
+            </span>
           )}
           <button
             onClick={() => setShowSidebar(!showSidebar)}
@@ -146,6 +156,12 @@ export function ChatPanel({ scope }: ChatPanelProps) {
         />
       )}
 
+      {sessionsError && (
+        <div className="py-2 px-6">
+          <InlineError message={sessionsError} context="Sessions" onDismiss={clearSessionsError} />
+        </div>
+      )}
+
       {error && (
         <div className="py-2 px-6">
           <InlineError message={error} context="Chat" onDismiss={clearError} />
@@ -165,6 +181,7 @@ export function ChatPanel({ scope }: ChatPanelProps) {
               isQueued={isQueued}
               onSend={sendMessage}
               onStop={stopChat}
+              tokenUsage={tokenUsage}
               emptyState={
                 <div className="text-center text-muted-foreground py-16">
                   <MessageSquare className="h-8 w-8 mx-auto mb-3 opacity-40" />
@@ -193,7 +210,7 @@ export function ChatPanel({ scope }: ChatPanelProps) {
             {scopeAgents.length > 0 && (
               <ActiveAgentsPanel
                 agents={scopeAgents}
-                onNavigateToSession={handleNavigateToSession}
+                onNavigateToSession={switchSession}
                 onStopAgent={stopAgent}
               />
             )}

@@ -23,7 +23,7 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
   }, []);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    endRef.current?.scrollIntoView({ behavior: 'instant' });
   }, [messages.length]);
 
   const rendered = useMemo(() => {

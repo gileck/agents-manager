@@ -13,6 +13,7 @@ interface AgentChatProps {
   showSidebar?: boolean;
   run?: AgentRun | null;
   emptyState?: React.ReactNode;
+  tokenUsage?: { inputTokens: number; outputTokens: number };
 }
 
 export function AgentChat({
@@ -24,6 +25,7 @@ export function AgentChat({
   showSidebar = false,
   run,
   emptyState,
+  tokenUsage,
 }: AgentChatProps) {
   return (
     <div className="flex-1 min-h-0 flex">
@@ -40,6 +42,7 @@ export function AgentChat({
           onStop={onStop}
           isRunning={isRunning}
           isQueued={isQueued}
+          tokenUsage={tokenUsage}
         />
       </div>
       {showSidebar && (

@@ -1,23 +1,42 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../ui/button';
+import { reportError } from '../../lib/error-handler';
 import type { ChatImage } from '../../../shared/types';
 
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MAX_IMAGES = 5;
+
+const CONTEXT_WINDOW = 200_000;
+
+function getContextColor(percent: number): string {
+  if (percent > 80) return '#ef4444';
+  if (percent > 50) return '#f59e0b';
+  return '#22c55e';
+}
 
 interface ChatInputProps {
   onSend: (message: string, images?: ChatImage[]) => void;
   onStop?: () => void;
   isRunning: boolean;
   isQueued: boolean;
+  tokenUsage?: { inputTokens: number; outputTokens: number };
 }
 
-export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProps) {
+export function ChatInput({ onSend, onStop, isRunning, isQueued, tokenUsage }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [images, setImages] = useState<ChatImage[]>([]);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea height to match content
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
 
   const addImageFile = useCallback((file: File) => {
     if (!VALID_IMAGE_TYPES.has(file.type)) return;
@@ -36,7 +55,7 @@ export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProp
       });
     };
     reader.onerror = () => {
-      console.error(`[ChatInput] Failed to read file "${file.name}":`, reader.error);
+      reportError(reader.error, `ChatInput: read file "${file.name}"`);
     };
     reader.readAsDataURL(file);
   }, []);
@@ -106,7 +125,13 @@ export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProp
     return () => document.removeEventListener('keydown', handleKey);
   }, [previewIndex, images.length]);
 
-  const canSend = value.trim().length > 0 || images.length > 0;
+  const contextPercent = tokenUsage
+    ? Math.min((tokenUsage.inputTokens / CONTEXT_WINDOW) * 100, 100)
+    : 0;
+  const circleRadius = 9;
+  const circleCircumference = 2 * Math.PI * circleRadius;
+  const circleOffset = circleCircumference * (1 - contextPercent / 100);
+  const circleColor = getContextColor(contextPercent);
 
   return (
     <form
@@ -221,7 +246,8 @@ export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProp
           }}
         />
         <textarea
-          className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[40px] max-h-[120px] focus:outline-none focus:ring-2 focus:ring-ring"
+          ref={textareaRef}
+          className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[40px] max-h-[240px] overflow-y-auto focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder={isRunning ? 'Type a message (will be queued)...' : 'Type a message...'}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -229,18 +255,34 @@ export function ChatInput({ onSend, onStop, isRunning, isQueued }: ChatInputProp
           onPaste={handlePaste}
           rows={1}
         />
-        <div className="flex gap-1">
-          {isRunning && onStop && (
-            <Button type="button" variant="destructive" size="sm" onClick={onStop}>
-              Stop
-            </Button>
-          )}
-          <Button type="submit" size="sm" disabled={!canSend}>
-            {isRunning ? 'Queue' : 'Send'}
+        {tokenUsage !== undefined && (
+          <svg
+            width="22" height="22"
+            viewBox="0 0 22 22"
+            className="shrink-0 mb-1"
+            aria-label={`Context: ${contextPercent.toFixed(1)}% used`}
+          >
+            <title>{`Context: ${contextPercent.toFixed(1)}% used (${tokenUsage.inputTokens.toLocaleString()} / ${CONTEXT_WINDOW.toLocaleString()} tokens)`}</title>
+            <circle cx="11" cy="11" r={circleRadius} fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/20" />
+            <circle
+              cx="11" cy="11" r={circleRadius}
+              fill="none"
+              stroke={circleColor}
+              strokeWidth="2"
+              strokeDasharray={circleCircumference}
+              strokeDashoffset={circleOffset}
+              strokeLinecap="round"
+              transform="rotate(-90 11 11)"
+            />
+          </svg>
+        )}
+        {isRunning && onStop && (
+          <Button type="button" variant="destructive" size="sm" onClick={onStop} className="mb-0.5">
+            Stop
           </Button>
-        </div>
+        )}
         {isQueued && (
-          <span className="text-xs text-muted-foreground ml-1">Message queued</span>
+          <span className="text-xs text-muted-foreground mb-1">Queued</span>
         )}
       </div>
     </form>
