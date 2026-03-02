@@ -141,7 +141,11 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
       lines.push('4. **Make every comment actionable** — say what to change, not just what is wrong.');
     }
 
-    lines.push('',
+    lines.push(
+      '',
+      '## Read-Only Constraint',
+      'IMPORTANT: Do NOT modify the worktree. Do not run git stash, git checkout, git clean, git reset, or any file-modifying command. Use only read-only git commands (git diff, git log, git show, git blame). To check if an issue is pre-existing, compare the branch diff against origin/main rather than switching branches.',
+      '',
       '## Review Criteria',
       '**Must-check (block if violated):**',
     );
