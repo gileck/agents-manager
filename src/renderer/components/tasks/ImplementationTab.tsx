@@ -161,7 +161,7 @@ export function ImplementationTab({
   // Check if a back-to-implementing transition is available (covers both "Request Changes" and legacy "Resolve Conflicts")
   const canRequestChanges = transitions.some((t) => t.to === 'implementing');
   // Check if merge/approve transitions are available
-  const mergeTransition = transitions.find((t) => t.label?.toLowerCase().includes('merge'));
+  const mergeTransition = transitions.find((t) => t.label?.toLowerCase().includes('merge') && !t.label?.toLowerCase().includes('failed'));
   const approveTransition = transitions.find((t) => t.label?.toLowerCase().includes('approve'));
 
   return (
