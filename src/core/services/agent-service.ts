@@ -724,6 +724,27 @@ export class AgentService implements IAgentService {
     }
   }
 
+  async stopAllRunningAgents(): Promise<void> {
+    const activeRunIds = this.getActiveRunIds();
+    if (activeRunIds.length === 0) return;
+
+    console.log(`Stopping ${activeRunIds.length} running agent(s)...`);
+    const results = await Promise.allSettled(
+      activeRunIds.map(runId =>
+        this.stop(runId).catch(err => {
+          console.warn(`Failed to stop agent run ${runId}:`, err instanceof Error ? err.message : String(err));
+        })
+      )
+    );
+
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (failed > 0) {
+      console.warn(`${failed}/${activeRunIds.length} agent stop(s) failed during shutdown`);
+    } else {
+      console.log(`All ${activeRunIds.length} agent run(s) stopped.`);
+    }
+  }
+
   async stop(runId: string): Promise<void> {
     const run = await this.agentRunStore.getRun(runId);
     if (!run) throw new Error(`Agent run not found: ${runId}`);
