@@ -32,6 +32,21 @@ Package manager, commands, deployment, dev tips, app behavior, assets, and key f
 
 ---
 
+## Error Handling Guidelines
+
+Error display patterns, user-facing error requirements, and error handling rules
+
+**Guidelines:**
+- NEVER use bare `console.error` in renderer code — always pair with `reportError()` or `<InlineError>`
+- NEVER use empty `.catch(() => {})` — at minimum use `.catch((err) => reportError(err, 'Context'))`
+- Every error the user triggers must be visible via toast or inline error with Copy Error + Report Bug
+- Use `reportError(err, 'Context')` for async operations in event handlers and callbacks
+- Use `<InlineError message={msg} context={ctx} />` for data loading errors in component render
+
+**Full docs:** [error-handling.md](docs/error-handling.md)
+
+---
+
 ## Agent System
 
 Agent types, execution lifecycle, prompts, validation, and context accumulation
