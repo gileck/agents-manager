@@ -25,4 +25,8 @@ export interface IGitOps {
   /** Delete a remote branch: `git push origin --delete <branch>`. */
   deleteRemoteBranch(branch: string): Promise<void>;
   getCommitDetail(hash: string): Promise<GitCommitDetail>;
+  /** Return the merge-base commit hash of two refs: `git merge-base <ref1> <ref2>`. */
+  mergeBase(ref1: string, ref2: string): Promise<string>;
+  /** Return the resolved commit hash: `git rev-parse <ref>`. */
+  revParse(ref: string): Promise<string>;
 }

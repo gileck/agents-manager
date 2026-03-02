@@ -113,6 +113,14 @@ export class LocalGitOps implements IGitOps {
     await this.git(['push', 'origin', '--delete', branch]);
   }
 
+  async mergeBase(ref1: string, ref2: string): Promise<string> {
+    return this.git(['merge-base', ref1, ref2]);
+  }
+
+  async revParse(ref: string): Promise<string> {
+    return this.git(['rev-parse', ref]);
+  }
+
   async getCommitDetail(hash: string): Promise<GitCommitDetail> {
     const body = await this.git(['log', '-1', '--format=%b', hash]);
     const filesOutput = await this.git(['diff', '--name-status', `${hash}^`, hash]);
