@@ -599,12 +599,23 @@ export class AgentService implements IAgentService {
 
       // Send native notification
       try {
+        let notifBody = `${agentType} agent ${finalStatus} for task: ${task.title}`;
+        const notifActions = [{ label: 'View', callbackData: `v|${taskId}` }];
+
+        if (finalStatus === 'failed') {
+          if (result.error) {
+            const truncatedError = result.error.length > 500 ? result.error.slice(0, 500) + '...' : result.error;
+            notifBody += `\n\nReason: ${truncatedError}`;
+          }
+          notifActions.push({ label: 'Restart Agent', callbackData: `ra|${taskId}` });
+        }
+
         await this.notificationRouter.send({
           taskId,
           title: `Agent ${finalStatus}`,
-          body: `${agentType} agent ${finalStatus} for task: ${task.title}`,
+          body: notifBody,
           channel: run.id,
-          actions: [{ label: 'View', callbackData: `v|${taskId}` }],
+          actions: notifActions,
         });
       } catch (notifErr) {
         const notifMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);

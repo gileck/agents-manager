@@ -6,6 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
+import type { IPipelineInspectionService } from '../interfaces/pipeline-inspection-service';
 import type { TaskUpdateInput, TelegramBotLogEntry, ChatSession, AgentChatMessage } from '../../shared/types';
 import type { ChatAgentService } from './chat-agent-service';
 import { buildTelegramSystemPrompt } from './chat-prompt-parts';
@@ -45,6 +46,7 @@ interface BotDeps {
   workflowService: IWorkflowService;
   chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
+  pipelineInspectionService: IPipelineInspectionService;
   defaultPipelineId?: string;
 }
 
@@ -289,6 +291,8 @@ export class TelegramAgentBotService implements ITelegramBotService {
       });
     } else if (data.startsWith('cd|')) {
       await this.handleDelete(chatId, data.slice(3));
+    } else if (data.startsWith('ra|')) {
+      await this.handleRestartAgent(chatId, data.slice(3));
     }
   }
 
@@ -446,6 +450,21 @@ export class TelegramAgentBotService implements ITelegramBotService {
       await this.send(chatId, `Deleted task \`${taskId}\``, { parse_mode: 'MarkdownV2' });
     } else {
       await this.send(chatId, 'Delete failed\\.', { parse_mode: 'MarkdownV2' });
+    }
+  }
+
+  private async handleRestartAgent(chatId: number, taskId: string): Promise<void> {
+    try {
+      await this.send(chatId, `Restarting agent for task \`${esc(taskId)}\`\\.\\.\\.`, { parse_mode: 'MarkdownV2' });
+      const result = await this.deps.pipelineInspectionService.retryHook(taskId, 'start_agent');
+      if (result.success) {
+        await this.send(chatId, `Agent restart triggered for task \`${esc(taskId)}\``, { parse_mode: 'MarkdownV2' });
+      } else {
+        await this.send(chatId, `Agent restart failed: ${esc(result.error ?? 'Unknown error')}`, { parse_mode: 'MarkdownV2' });
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      await this.send(chatId, `Agent restart failed: ${esc(errMsg)}`, { parse_mode: 'MarkdownV2' });
     }
   }
 
