@@ -27,6 +27,7 @@ import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useRouteRestore } from './hooks/useRouteRestore';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
+import { ProjectChatSessionsProvider } from './contexts/ProjectChatSessionsContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/toaster';
 
@@ -141,10 +142,12 @@ function AppRoutes() {
 export default function App() {
   return (
     <CurrentProjectProvider>
-      <ErrorBoundary>
-        <AppRoutes />
-      </ErrorBoundary>
-      <Toaster />
+      <ProjectChatSessionsProvider>
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
+        <Toaster />
+      </ProjectChatSessionsProvider>
     </CurrentProjectProvider>
   );
 }

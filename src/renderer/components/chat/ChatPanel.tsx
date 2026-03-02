@@ -12,9 +12,11 @@ import { ActiveAgentsPanel } from './ActiveAgentsPanel';
 
 export interface ChatPanelProps {
   scope: ChatScope;
+  sessionsOverride?: ReturnType<typeof useChatSessions>;
 }
 
-export function ChatPanel({ scope }: ChatPanelProps) {
+export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
+  const localSessions = useChatSessions(sessionsOverride ? null : scope);
   const {
     sessions,
     currentSessionId,
@@ -27,7 +29,7 @@ export function ChatPanel({ scope }: ChatPanelProps) {
     loading: sessionsLoading,
     error: sessionsError,
     clearError: clearSessionsError,
-  } = useChatSessions(scope);
+  } = sessionsOverride ?? localSessions;
 
   const {
     agents,

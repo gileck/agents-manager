@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Plus, MoreVertical } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useChatSessions } from '../../hooks/useChatSessions';
+import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import { Input } from '../ui/input';
@@ -11,10 +11,6 @@ import { SidebarSection } from './SidebarSection';
 
 export function SidebarSessions() {
   const { currentProjectId } = useCurrentProject();
-  const scope = useMemo(
-    () => currentProjectId ? { type: 'project' as const, id: currentProjectId } : null,
-    [currentProjectId],
-  );
   const {
     sessions,
     currentSessionId,
@@ -22,7 +18,7 @@ export function SidebarSessions() {
     renameSession,
     deleteSession,
     switchSession,
-  } = useChatSessions(scope);
+  } = useProjectChatSessions();
   const navigate = useNavigate();
 
   const [renameId, setRenameId] = useState<string | null>(null);

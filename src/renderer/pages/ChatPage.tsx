@@ -1,10 +1,12 @@
 import React from 'react';
 import { MessageSquare } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
+import { useProjectChatSessions } from '../contexts/ProjectChatSessionsContext';
 import { ChatPanel } from '../components/chat/ChatPanel';
 
 export function ChatPage() {
   const { currentProjectId } = useCurrentProject();
+  const sessions = useProjectChatSessions();
 
   if (!currentProjectId) {
     return (
@@ -18,5 +20,10 @@ export function ChatPage() {
     );
   }
 
-  return <ChatPanel scope={{ type: 'project', id: currentProjectId }} />;
+  return (
+    <ChatPanel
+      scope={{ type: 'project', id: currentProjectId }}
+      sessionsOverride={sessions}
+    />
+  );
 }
