@@ -181,15 +181,12 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
         sections.push(`- **Related Task:** \`${currentTaskId}\``);
       }
 
-      if (debugLogs.trim()) {
-        sections.push('', '## Debug Logs', '```', debugLogs.trim(), '```');
-      }
-
       const task = await window.api.tasks.create({
         projectId,
         pipelineId,
         title: `[Bug] ${title.trim()}`,
         description: sections.join('\n'),
+        debugInfo: debugLogs.trim() || undefined,
         tags: ['bug'],
         metadata: {
           ...(currentTaskId ? { relatedTaskId: currentTaskId } : {}),

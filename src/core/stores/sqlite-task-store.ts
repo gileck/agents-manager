@@ -20,6 +20,7 @@ interface TaskRow {
   feature_id: string | null;
   plan: string | null;
   technical_design: string | null;
+  debug_info: string | null;
   subtasks: string;
   phases: string | null;
   plan_comments: string;
@@ -46,6 +47,7 @@ function rowToTask(row: TaskRow): Task {
     branchName: row.branch_name,
     plan: row.plan,
     technicalDesign: row.technical_design,
+    debugInfo: row.debug_info,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
     phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),
@@ -149,8 +151,8 @@ export class SqliteTaskStore implements ITaskStore {
       }
 
       this.db.prepare(`
-        INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, project_id, pipeline_id, title, description, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, debug_info, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         input.projectId,
@@ -167,6 +169,7 @@ export class SqliteTaskStore implements ITaskStore {
         input.branchName ?? null,
         null,
         null,
+        input.debugInfo ?? null,
         JSON.stringify(input.subtasks ?? []),
         input.phases ? JSON.stringify(input.phases) : null,
         '[]',
@@ -238,6 +241,10 @@ export class SqliteTaskStore implements ITaskStore {
       if (input.technicalDesign !== undefined) {
         updates.push('technical_design = ?');
         values.push(input.technicalDesign);
+      }
+      if (input.debugInfo !== undefined) {
+        updates.push('debug_info = ?');
+        values.push(input.debugInfo);
       }
       if (input.subtasks !== undefined) {
         updates.push('subtasks = ?');

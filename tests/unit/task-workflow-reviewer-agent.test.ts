@@ -20,7 +20,9 @@ function createContext(): AgentContext {
       branchName: null,
       plan: null,
       technicalDesign: null,
+      debugInfo: null,
       subtasks: [],
+      phases: null,
       planComments: [],
       technicalDesignComments: [],
       metadata: {},
@@ -147,6 +149,25 @@ describe('TaskWorkflowReviewerPromptBuilder', () => {
       };
 
       expect(format.schema.properties.findings.type).toBe('array');
+    });
+
+    it('suggestedTasks items schema includes debugInfo property', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const format = (promptBuilder as any).getOutputFormat(createContext()) as {
+        schema: {
+          properties: {
+            suggestedTasks: {
+              items: {
+                properties: Record<string, { type: string }>;
+              };
+            };
+          };
+        };
+      };
+
+      const taskProps = format.schema.properties.suggestedTasks.items.properties;
+      expect(taskProps.debugInfo).toBeDefined();
+      expect(taskProps.debugInfo.type).toBe('string');
     });
   });
 

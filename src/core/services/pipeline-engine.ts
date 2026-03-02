@@ -41,6 +41,7 @@ interface TaskRow {
   feature_id: string | null;
   plan: string | null;
   technical_design: string | null;
+  debug_info: string | null;
   subtasks: string;
   phases: string | null;
   plan_comments: string;
@@ -67,6 +68,7 @@ function rowToTask(row: TaskRow): Task {
     branchName: row.branch_name,
     plan: row.plan,
     technicalDesign: row.technical_design,
+    debugInfo: row.debug_info,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
     phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),

@@ -62,8 +62,8 @@ npx agents-manager projects delete <id>                      # Delete project
 ```bash
 npx agents-manager tasks list|ls [--status] [--priority] [--assignee]  # List tasks (requires project)
 npx agents-manager tasks get|show <id>                       # Get task with deps and valid transitions
-npx agents-manager tasks create --title <t> [--desc] [--pipeline] [--priority] [--assignee] [--tags]
-npx agents-manager tasks update <id> [--title] [--desc] [--priority] [--assignee] [--tags]
+npx agents-manager tasks create --title <t> [--desc] [--pipeline] [--priority] [--assignee] [--tags] [--debug-info <text>]
+npx agents-manager tasks update <id> [--title] [--desc] [--priority] [--assignee] [--tags] [--debug-info <text>]
 npx agents-manager tasks delete <id>                         # Delete task
 npx agents-manager tasks transition|move <id> <status> [--actor]  # Transition task
 npx agents-manager tasks transitions <id>                    # Show valid transitions
