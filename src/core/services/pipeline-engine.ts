@@ -559,6 +559,14 @@ export class PipelineEngine implements IPipelineEngine {
             message: `Hook "${hook.name}" failed (fire_and_forget${forced ? ', forced' : ''}): ${message}`,
             data: { hookName: hook.name, error: message, ...(forced ? { forced: true } : {}) },
           });
+          // Log hook_execution event for fire_and_forget failure
+          this.taskEventLog.log({
+            taskId,
+            category: 'hook_execution',
+            severity: 'error',
+            message: `Hook "${hook.name}" failed (fire_and_forget): ${message}`,
+            data: { ...hookEventBase, result: 'failure', error: message },
+          }).catch((logErr) => console.error('Audit log write failed:', logErr));
         });
         continue;
       }
