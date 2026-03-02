@@ -128,9 +128,29 @@ export class OutcomeResolver {
   }
 
   private async detectConflicts(taskId: string, worktree: { branch: string; path: string }): Promise<'pr_ready' | 'conflicts_detected'> {
+    const gitOps = this.createGitOps(worktree.path);
+    await gitOps.fetch('origin');
+
+    // Fast-path: if branch is already rebased onto origin/main, skip the rebase attempt
     try {
-      const gitOps = this.createGitOps(worktree.path);
-      await gitOps.fetch('origin');
+      const [mergeBase, originMain] = await Promise.all([
+        gitOps.mergeBase('HEAD', 'origin/main'),
+        gitOps.revParse('origin/main'),
+      ]);
+      if (mergeBase === originMain) {
+        await this.taskEventLog.log({
+          taskId,
+          category: 'git',
+          severity: 'info',
+          message: 'Branch already rebased onto origin/main — skipping rebase',
+        });
+        return 'pr_ready';
+      }
+    } catch {
+      // merge-base check failed — fall through to rebase
+    }
+
+    try {
       await gitOps.rebase('origin/main');
       await this.taskEventLog.log({
         taskId,
@@ -140,7 +160,6 @@ export class OutcomeResolver {
       });
     } catch {
       try {
-        const gitOps = this.createGitOps(worktree.path);
         await gitOps.rebaseAbort();
       } catch { /* may not be in rebase state */ }
       await this.taskEventLog.log({

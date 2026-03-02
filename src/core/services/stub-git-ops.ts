@@ -8,6 +8,8 @@ export class StubGitOps implements IGitOps {
   private commitCounter = 0;
   private failures: Partial<Record<string, Error>> = {};
   diffOverride?: string;
+  mergeBaseOverride?: string;
+  revParseOverride?: string;
 
   setFailure(method: string, error: Error): void {
     this.failures[method] = error;
@@ -16,6 +18,8 @@ export class StubGitOps implements IGitOps {
   clearFailures(): void {
     this.failures = {};
     this.diffOverride = undefined;
+    this.mergeBaseOverride = undefined;
+    this.revParseOverride = undefined;
   }
 
   private throwIfConfigured(method: string): void {
@@ -109,6 +113,16 @@ export class StubGitOps implements IGitOps {
   async showCommit(_hash: string): Promise<string> {
     this.throwIfConfigured('showCommit');
     return '';
+  }
+
+  async mergeBase(_ref1: string, _ref2: string): Promise<string> {
+    this.throwIfConfigured('mergeBase');
+    return this.mergeBaseOverride ?? 'stub-merge-base';
+  }
+
+  async revParse(_ref: string): Promise<string> {
+    this.throwIfConfigured('revParse');
+    return this.revParseOverride ?? 'stub-rev-parse';
   }
 
   async getCommitDetail(hash: string): Promise<GitCommitDetail> {
