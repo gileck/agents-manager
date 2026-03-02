@@ -27,7 +27,7 @@ export class StubGitOps implements IGitOps {
     if (err) throw err;
   }
 
-  async fetch(_remote?: string): Promise<void> {
+  async fetch(_remote?: string, _refspec?: string): Promise<void> {
     this.throwIfConfigured('fetch');
   }
 
