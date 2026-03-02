@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, json } from 'express';
 import type { AppServices } from '../../core/providers/setup';
 import { buildDesktopSystemPrompt } from '../../core/services/chat-prompt-parts';
 import type { WsHolder } from '../server';
@@ -138,7 +138,8 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   });
 
   // POST /api/chat/sessions/:id/send — send message (streaming wired later)
-  router.post('/api/chat/sessions/:id/send', async (req, res, next) => {
+  // Higher body limit for base64-encoded image payloads
+  router.post('/api/chat/sessions/:id/send', json({ limit: '50mb' }), async (req, res, next) => {
     try {
       const sessionId = req.params.id;
       const { message, images } = req.body as { message: string; images?: unknown };

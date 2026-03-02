@@ -37,6 +37,7 @@ export function ChatPanel({ scope }: ChatPanelProps) {
     isQueued,
     loading,
     error,
+    clearError,
     sendMessage,
     stopChat,
     clearChat,
@@ -147,7 +148,7 @@ export function ChatPanel({ scope }: ChatPanelProps) {
 
       {error && (
         <div className="py-2 px-6">
-          <InlineError message={error} context="Chat" />
+          <InlineError message={error} context="Chat" onDismiss={clearError} />
         </div>
       )}
 

@@ -221,12 +221,15 @@ export function useChat(sessionId: string | null) {
     return { inputTokens: inputTokens + streamInput, outputTokens: outputTokens + streamOutput };
   }, [dbMessages, streamingMessages]);
 
+  const clearError = useCallback(() => setError(null), []);
+
   return {
     messages,
     isStreaming,
     isQueued: queuedMessage !== null,
     loading,
     error,
+    clearError,
     sendMessage,
     stopChat,
     clearChat,
