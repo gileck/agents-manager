@@ -345,7 +345,7 @@ export interface TaskDependency {
 }
 
 // Task event types
-export type TaskEventCategory = 'status_change' | 'field_update' | 'dependency_change' | 'comment' | 'system' | 'agent' | 'agent_debug' | 'git' | 'github' | 'worktree';
+export type TaskEventCategory = 'status_change' | 'field_update' | 'dependency_change' | 'comment' | 'system' | 'agent' | 'agent_debug' | 'git' | 'github' | 'worktree' | 'hook_execution';
 export type TaskEventSeverity = 'debug' | 'info' | 'warning' | 'error';
 
 export interface TaskEvent {
