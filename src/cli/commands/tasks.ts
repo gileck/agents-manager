@@ -3,6 +3,8 @@ import type { ApiClient } from '../../client/api-client';
 import type { Subtask, SubtaskStatus } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject } from '../context';
+import { readStdinOrValue } from '../stdin';
+import { handleCliError } from '../error';
 
 export function registerTaskCommands(program: Command, api: ApiClient): void {
   const tasks = program.command('tasks').description('Manage tasks');
@@ -14,37 +16,85 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .option('--status <status>', 'Filter by status')
     .option('--priority <n>', 'Filter by priority', parseInt)
     .option('--assignee <name>', 'Filter by assignee')
-    .action(async (cmdOpts: { status?: string; priority?: number; assignee?: string }) => {
+    .option('--feature <id>', 'Filter by feature ID')
+    .option('--parent <id>', 'Filter by parent task ID')
+    .option('--tag <tag>', 'Filter by tag')
+    .option('--search <text>', 'Free-text search')
+    .action(async (cmdOpts: {
+      status?: string;
+      priority?: number;
+      assignee?: string;
+      feature?: string;
+      parent?: string;
+      tag?: string;
+      search?: string;
+    }) => {
       const opts = program.opts() as OutputOptions & { project?: string };
-      const project = await requireProject(api, opts.project);
-      const list = await api.tasks.list({
-        projectId: project.id,
-        status: cmdOpts.status,
-        priority: cmdOpts.priority,
-        assignee: cmdOpts.assignee,
-      });
-      const rows = list.map((t) => {
-        const done = t.subtasks.filter((s) => s.status === 'done').length;
-        const total = t.subtasks.length;
-        return {
-          status: t.status,
-          priority: t.priority,
-          title: t.title,
-          id: t.id,
-          ...(total > 0 ? { subtasks: `${done}/${total}` } : {}),
-        };
-      });
-      output(rows, opts);
+      try {
+        const project = await requireProject(api, opts.project);
+        const list = await api.tasks.list({
+          projectId: project.id,
+          status: cmdOpts.status,
+          priority: cmdOpts.priority,
+          assignee: cmdOpts.assignee,
+          featureId: cmdOpts.feature,
+          parentTaskId: cmdOpts.parent,
+          tag: cmdOpts.tag,
+          search: cmdOpts.search,
+        });
+        const rows = list.map((t) => {
+          const done = t.subtasks.filter((s) => s.status === 'done').length;
+          const total = t.subtasks.length;
+          return {
+            status: t.status,
+            priority: t.priority,
+            title: t.title,
+            id: t.id,
+            ...(total > 0 ? { subtasks: `${done}/${total}` } : {}),
+          };
+        });
+        output(rows, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to list tasks');
+      }
     });
 
   tasks
     .command('get <id>')
     .alias('show')
     .description('Get task details')
-    .action(async (id: string) => {
+    .option('--field <name>', 'Extract single field value (raw output)')
+    .action(async (id: string, cmdOpts: { field?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
         const task = await api.tasks.get(id);
+
+        if (cmdOpts.field) {
+          const validFields = [
+            'plan', 'technicalDesign', 'debugInfo', 'phases', 'subtasks',
+            'metadata', 'prLink', 'branchName', 'description', 'tags',
+            'assignee', 'featureId', 'parentTaskId',
+          ];
+          if (!validFields.includes(cmdOpts.field)) {
+            console.error(`Invalid field: ${cmdOpts.field}\nValid fields: ${validFields.join(', ')}`);
+            process.exitCode = 1;
+            return;
+          }
+          const value = (task as unknown as Record<string, unknown>)[cmdOpts.field];
+          if (value === null || value === undefined) {
+            if (opts.json) {
+              console.log('null');
+            }
+            return;
+          }
+          if (typeof value === 'object') {
+            console.log(JSON.stringify(value, null, 2));
+          } else {
+            console.log(String(value));
+          }
+          return;
+        }
+
         const deps = await api.tasks.getDependencies(id) as { id: string }[];
         const transitions = await api.tasks.getTransitions(id) as { to: string }[];
         const detail = {
@@ -53,9 +103,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           validTransitions: transitions.map((t) => t.to),
         };
         output(detail, opts);
-      } catch {
-        console.error(`Task not found: ${id}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to get task');
       }
     });
 
@@ -69,6 +118,11 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .option('--assignee <name>', 'Assignee')
     .option('--tags <tags>', 'Comma-separated tags')
     .option('--debug-info <text>', 'Debug info for bug investigation')
+    .option('--feature <id>', 'Feature ID')
+    .option('--parent-task <id>', 'Parent task ID')
+    .option('--pr-link <link>', 'PR link')
+    .option('--branch-name <name>', 'Branch name')
+    .option('--metadata <json>', 'Metadata JSON object')
     .action(async (cmdOpts: {
       title: string;
       description?: string;
@@ -77,32 +131,57 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       assignee?: string;
       tags?: string;
       debugInfo?: string;
+      feature?: string;
+      parentTask?: string;
+      prLink?: string;
+      branchName?: string;
+      metadata?: string;
     }) => {
       const opts = program.opts() as OutputOptions & { project?: string };
-      const project = await requireProject(api, opts.project);
+      try {
+        const project = await requireProject(api, opts.project);
 
-      let pipelineId = cmdOpts.pipeline;
-      if (!pipelineId) {
-        // Try to get default from settings
-        try {
-          const settings = await api.settings.get();
-          pipelineId = settings.defaultPipelineId || 'pipeline-agent';
-        } catch {
-          pipelineId = 'pipeline-agent';
+        let pipelineId = cmdOpts.pipeline;
+        if (!pipelineId) {
+          try {
+            const settings = await api.settings.get();
+            pipelineId = settings.defaultPipelineId || 'pipeline-agent';
+          } catch (settingsErr) {
+            console.error(`Warning: Could not fetch default pipeline (${settingsErr instanceof Error ? settingsErr.message : 'unknown error'}). Using 'pipeline-agent'.`);
+            pipelineId = 'pipeline-agent';
+          }
         }
-      }
 
-      const task = await api.tasks.create({
-        projectId: project.id,
-        pipelineId,
-        title: cmdOpts.title,
-        description: cmdOpts.description,
-        debugInfo: cmdOpts.debugInfo,
-        priority: cmdOpts.priority,
-        assignee: cmdOpts.assignee,
-        tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
-      });
-      output(task, opts);
+        let metadata: Record<string, unknown> | undefined;
+        if (cmdOpts.metadata) {
+          try {
+            metadata = JSON.parse(cmdOpts.metadata);
+          } catch {
+            console.error('Invalid JSON for --metadata');
+            process.exitCode = 1;
+            return;
+          }
+        }
+
+        const task = await api.tasks.create({
+          projectId: project.id,
+          pipelineId,
+          title: cmdOpts.title,
+          description: cmdOpts.description,
+          debugInfo: cmdOpts.debugInfo,
+          priority: cmdOpts.priority,
+          assignee: cmdOpts.assignee,
+          tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
+          featureId: cmdOpts.feature,
+          parentTaskId: cmdOpts.parentTask,
+          prLink: cmdOpts.prLink,
+          branchName: cmdOpts.branchName,
+          metadata,
+        });
+        output(task, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to create task');
+      }
     });
 
   tasks
@@ -115,6 +194,14 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .option('--tags <tags>', 'Comma-separated tags')
     .option('--pipeline <id>', 'Pipeline ID')
     .option('--debug-info <text>', 'Debug info for bug investigation')
+    .option('--plan <text>', 'Set plan (use - for stdin)')
+    .option('--technical-design <text>', 'Set technical design (use - for stdin)')
+    .option('--pr-link <link>', 'Set PR link (use "" to clear)')
+    .option('--branch-name <name>', 'Set branch name (use "" to clear)')
+    .option('--feature <id>', 'Set feature ID (use "" to clear)')
+    .option('--parent-task <id>', 'Set parent task ID (use "" to clear)')
+    .option('--metadata <json>', 'Merge metadata (JSON object)')
+    .option('--phases <json>', 'Set implementation phases (JSON array)')
     .action(async (id: string, cmdOpts: {
       title?: string;
       description?: string;
@@ -123,22 +210,59 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       tags?: string;
       pipeline?: string;
       debugInfo?: string;
+      plan?: string;
+      technicalDesign?: string;
+      prLink?: string;
+      branchName?: string;
+      feature?: string;
+      parentTask?: string;
+      metadata?: string;
+      phases?: string;
     }) => {
       const opts = program.opts() as OutputOptions;
       try {
-        const task = await api.tasks.update(id, {
-          title: cmdOpts.title,
-          description: cmdOpts.description,
-          debugInfo: cmdOpts.debugInfo,
-          priority: cmdOpts.priority,
-          assignee: cmdOpts.assignee,
-          tags: cmdOpts.tags?.split(',').map((t) => t.trim()),
-          pipelineId: cmdOpts.pipeline,
-        });
+        const planValue = await readStdinOrValue(cmdOpts.plan);
+        const designValue = await readStdinOrValue(cmdOpts.technicalDesign);
+
+        const updateInput: Record<string, unknown> = {};
+        if (cmdOpts.title !== undefined) updateInput.title = cmdOpts.title;
+        if (cmdOpts.description !== undefined) updateInput.description = cmdOpts.description;
+        if (cmdOpts.debugInfo !== undefined) updateInput.debugInfo = cmdOpts.debugInfo;
+        if (cmdOpts.priority !== undefined) updateInput.priority = cmdOpts.priority;
+        if (cmdOpts.assignee !== undefined) updateInput.assignee = cmdOpts.assignee || null;
+        if (cmdOpts.tags !== undefined) updateInput.tags = cmdOpts.tags.split(',').map((t) => t.trim());
+        if (cmdOpts.pipeline !== undefined) updateInput.pipelineId = cmdOpts.pipeline;
+        if (planValue !== undefined) updateInput.plan = planValue || null;
+        if (designValue !== undefined) updateInput.technicalDesign = designValue || null;
+        if (cmdOpts.prLink !== undefined) updateInput.prLink = cmdOpts.prLink || null;
+        if (cmdOpts.branchName !== undefined) updateInput.branchName = cmdOpts.branchName || null;
+        if (cmdOpts.feature !== undefined) updateInput.featureId = cmdOpts.feature || null;
+        if (cmdOpts.parentTask !== undefined) updateInput.parentTaskId = cmdOpts.parentTask || null;
+
+        if (cmdOpts.metadata !== undefined) {
+          try {
+            updateInput.metadata = JSON.parse(cmdOpts.metadata);
+          } catch {
+            console.error('Invalid JSON for --metadata');
+            process.exitCode = 1;
+            return;
+          }
+        }
+
+        if (cmdOpts.phases !== undefined) {
+          try {
+            updateInput.phases = JSON.parse(cmdOpts.phases);
+          } catch {
+            console.error('Invalid JSON for --phases');
+            process.exitCode = 1;
+            return;
+          }
+        }
+
+        const task = await api.tasks.update(id, updateInput);
         output(task, opts);
-      } catch {
-        console.error(`Task not found: ${id}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to update task');
       }
     });
 
@@ -154,9 +278,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         } else if (!opts.quiet) {
           console.log(`Deleted task ${id}`);
         }
-      } catch {
-        console.error(`Task not found: ${id}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to delete task');
       }
     });
 
@@ -170,8 +293,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         const result = await api.tasks.reset(id, cmdOpts.pipeline);
         output(result, opts);
       } catch (err) {
-        console.error(err instanceof Error ? err.message : 'Failed to reset task');
-        process.exitCode = 1;
+        handleCliError(err, 'Failed to reset task');
       }
     });
 
@@ -183,23 +305,45 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .option('--actor <name>', 'Actor performing the transition')
     .action(async (id: string, status: string, cmdOpts: { actor?: string }) => {
       const opts = program.opts() as OutputOptions;
-      const result = await api.tasks.transition(id, status, cmdOpts.actor) as {
-        success: boolean;
-        error?: string;
-        guardFailures?: { guard: string; reason: string }[];
-        task?: unknown;
-      };
-      if (!result.success) {
-        console.error(`Transition failed: ${result.error}`);
-        if (result.guardFailures) {
-          for (const f of result.guardFailures) {
-            console.error(`  Guard "${f.guard}": ${f.reason}`);
+      try {
+        const result = await api.tasks.transition(id, status, cmdOpts.actor) as {
+          success: boolean;
+          error?: string;
+          guardFailures?: { guard: string; reason: string }[];
+          task?: unknown;
+        };
+        if (!result.success) {
+          console.error(`Transition failed: ${result.error}`);
+          if (result.guardFailures) {
+            for (const f of result.guardFailures) {
+              console.error(`  Guard "${f.guard}": ${f.reason}`);
+            }
           }
+          process.exitCode = 1;
+          return;
         }
-        process.exitCode = 1;
-        return;
+        if (result.task) {
+          output(result.task, opts);
+        } else if (!opts.quiet) {
+          console.log('Transition succeeded.');
+        }
+      } catch (err) {
+        handleCliError(err, 'Transition failed');
       }
-      output(result.task!, opts);
+    });
+
+  tasks
+    .command('force-transition <id> <status>')
+    .description('Force a task transition (bypass guards)')
+    .option('--actor <name>', 'Actor performing the transition')
+    .action(async (id: string, status: string, cmdOpts: { actor?: string }) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const result = await api.tasks.forceTransition(id, status, cmdOpts.actor);
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Force transition failed');
+      }
     });
 
   tasks
@@ -221,9 +365,78 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           label: t.label ?? '',
         }));
         output(rows, opts);
-      } catch {
-        console.error(`Task not found: ${id}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to get transitions');
+      }
+    });
+
+  tasks
+    .command('all-transitions <id>')
+    .description('Show all pipeline transitions for a task')
+    .action(async (id: string) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const result = await api.tasks.getAllTransitions(id);
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to get all transitions');
+      }
+    });
+
+  tasks
+    .command('diagnostics <id>')
+    .description('Get pipeline diagnostics for a task')
+    .action(async (id: string) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const result = await api.tasks.getPipelineDiagnostics(id);
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to get diagnostics');
+      }
+    });
+
+  tasks
+    .command('advance-phase <id>')
+    .description('Advance to the next implementation phase')
+    .action(async (id: string) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const result = await api.tasks.advancePhase(id);
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to advance phase');
+      }
+    });
+
+  tasks
+    .command('hook-retry <id>')
+    .description('Retry a failed hook')
+    .requiredOption('--hook <name>', 'Hook name')
+    .option('--from <status>', 'Transition from status')
+    .option('--to <status>', 'Transition to status')
+    .action(async (id: string, cmdOpts: { hook: string; from?: string; to?: string }) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const result = await api.tasks.retryHook(id, cmdOpts.hook, cmdOpts.from, cmdOpts.to);
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Hook retry failed');
+      }
+    });
+
+  tasks
+    .command('guard-check <id>')
+    .description('Check if a transition is allowed')
+    .requiredOption('--to <status>', 'Target status')
+    .requiredOption('--trigger <trigger>', 'Trigger type')
+    .action(async (id: string, cmdOpts: { to: string; trigger: string }) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const result = await api.tasks.guardCheck(id, cmdOpts.to, cmdOpts.trigger);
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Guard check failed');
       }
     });
 
@@ -250,10 +463,146 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           process.exitCode = 1;
           return;
         }
-        output(result.task!, opts);
-      } catch {
-        console.error(`Task not found: ${id}`);
-        process.exitCode = 1;
+        if (result.task) {
+          output(result.task, opts);
+        } else if (!opts.quiet) {
+          console.log('Task started.');
+        }
+      } catch (err) {
+        handleCliError(err, 'Failed to start task');
+      }
+    });
+
+  // Context commands
+  const context = tasks.command('context').description('Manage task context entries');
+
+  context
+    .command('list <id>')
+    .alias('ls')
+    .description('List context entries for a task')
+    .action(async (id: string) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const entries = await api.tasks.getContext(id) as {
+          id: string;
+          source: string;
+          entryType: string;
+          summary: string;
+          addressed: boolean;
+          createdAt: number;
+        }[];
+        const rows = entries.map((e) => ({
+          id: e.id,
+          source: e.source,
+          entryType: e.entryType,
+          summary: e.summary,
+          addressed: e.addressed,
+          createdAt: new Date(e.createdAt).toISOString(),
+        }));
+        output(rows, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to get context');
+      }
+    });
+
+  context
+    .command('add <id>')
+    .description('Add a context entry to a task')
+    .requiredOption('--source <src>', 'Context source')
+    .requiredOption('--type <type>', 'Entry type')
+    .requiredOption('--summary <text>', 'Summary (use - for stdin)')
+    .option('--data <json>', 'Additional data (JSON object)')
+    .action(async (id: string, cmdOpts: { source: string; type: string; summary: string; data?: string }) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const summary = await readStdinOrValue(cmdOpts.summary);
+        if (!summary) {
+          console.error('Summary is required');
+          process.exitCode = 1;
+          return;
+        }
+        let data: Record<string, unknown> | undefined;
+        if (cmdOpts.data) {
+          try {
+            data = JSON.parse(cmdOpts.data);
+          } catch {
+            console.error('Invalid JSON for --data');
+            process.exitCode = 1;
+            return;
+          }
+        }
+        const result = await api.tasks.addContext(id, {
+          source: cmdOpts.source,
+          entryType: cmdOpts.type,
+          summary,
+          data,
+        });
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to add context');
+      }
+    });
+
+  tasks
+    .command('feedback <id>')
+    .description('Add feedback to a task')
+    .requiredOption('--type <type>', 'Feedback type (plan_feedback|design_feedback|implementation_feedback)')
+    .requiredOption('--content <text>', 'Feedback content (use - for stdin)')
+    .action(async (id: string, cmdOpts: { type: string; content: string }) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const content = await readStdinOrValue(cmdOpts.content);
+        if (!content) {
+          console.error('Content is required');
+          process.exitCode = 1;
+          return;
+        }
+        const result = await api.tasks.addFeedback(id, {
+          entryType: cmdOpts.type,
+          content,
+        });
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to add feedback');
+      }
+    });
+
+  tasks
+    .command('artifacts <id>')
+    .description('List artifacts for a task')
+    .action(async (id: string) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const artifacts = await api.tasks.getArtifacts(id);
+        output(artifacts, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to get artifacts');
+      }
+    });
+
+  tasks
+    .command('timeline <id>')
+    .description('Get timeline for a task')
+    .action(async (id: string) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const timeline = await api.tasks.getTimeline(id);
+        output(timeline, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to get timeline');
+      }
+    });
+
+  tasks
+    .command('worktree <id>')
+    .description('Get worktree info for a task')
+    .action(async (id: string) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const worktree = await api.tasks.getWorktree(id);
+        output(worktree, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to get worktree');
       }
     });
 
@@ -269,9 +618,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       try {
         const task = await api.tasks.get(taskId);
         output(task.subtasks, opts);
-      } catch {
-        console.error(`Task not found: ${taskId}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to get subtasks');
       }
     });
 
@@ -288,9 +636,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         const subtasks = [...task.subtasks, newSubtask];
         await api.tasks.update(taskId, { subtasks });
         output(subtasks, opts);
-      } catch {
-        console.error(`Task not found: ${taskId}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to add subtask');
       }
     });
 
@@ -308,9 +655,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         );
         await api.tasks.update(taskId, { subtasks });
         output(subtasks, opts);
-      } catch {
-        console.error(`Task not found: ${taskId}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to update subtask');
       }
     });
 
@@ -325,9 +671,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         const subtasks = task.subtasks.filter((s) => s.name !== cmdOpts.name);
         await api.tasks.update(taskId, { subtasks });
         output(subtasks, opts);
-      } catch {
-        console.error(`Task not found: ${taskId}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to remove subtask');
       }
     });
 
@@ -346,13 +691,11 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         return;
       }
       try {
-        // Verify task exists first
         await api.tasks.get(taskId);
         await api.tasks.update(taskId, { subtasks });
         output(subtasks, opts);
-      } catch {
-        console.error(`Task not found: ${taskId}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to set subtasks');
       }
     });
 }

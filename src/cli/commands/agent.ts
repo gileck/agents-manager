@@ -1,7 +1,9 @@
 import { Command } from 'commander';
 import type { ApiClient } from '../../client/api-client';
-import type { AgentMode } from '../../shared/types';
+import type { AgentMode, RevisionReason } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
+import { readStdinOrValue } from '../stdin';
+import { handleCliError } from '../error';
 
 export function registerAgentCommands(program: Command, api: ApiClient): void {
   const agent = program.command('agent').description('Manage agent runs');
@@ -11,14 +13,20 @@ export function registerAgentCommands(program: Command, api: ApiClient): void {
     .description('Start an agent on a task')
     .option('--mode <mode>', 'Agent mode: new, revision', 'new')
     .option('--type <agentType>', 'Agent type', 'scripted')
-    .action(async (taskId: string, cmdOpts: { mode: string; type: string }) => {
+    .option('--revision-reason <reason>', 'Revision reason (changes_requested|info_provided|conflicts_detected)')
+    .action(async (taskId: string, cmdOpts: { mode: string; type: string; revisionReason?: string }) => {
       const opts = program.opts() as OutputOptions;
-      const run = await api.agents.start(
-        taskId,
-        cmdOpts.mode as AgentMode,
-        cmdOpts.type,
-      );
-      output(run, opts);
+      try {
+        const run = await api.agents.start(
+          taskId,
+          cmdOpts.mode as AgentMode,
+          cmdOpts.type,
+          cmdOpts.revisionReason as RevisionReason | undefined,
+        );
+        output(run, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to start agent');
+      }
     });
 
   agent
@@ -26,11 +34,71 @@ export function registerAgentCommands(program: Command, api: ApiClient): void {
     .description('Stop a running agent')
     .action(async (taskId: string, runId: string) => {
       const opts = program.opts() as OutputOptions;
-      await api.agents.stop(taskId, runId);
-      if (opts.json) {
-        output({ stopped: true, runId }, opts);
-      } else if (!opts.quiet) {
-        console.log(`Stopped agent run ${runId}`);
+      try {
+        await api.agents.stop(taskId, runId);
+        if (opts.json) {
+          output({ stopped: true, runId }, opts);
+        } else if (!opts.quiet) {
+          console.log(`Stopped agent run ${runId}`);
+        }
+      } catch (err) {
+        handleCliError(err, 'Failed to stop agent');
+      }
+    });
+
+  agent
+    .command('message <taskId>')
+    .description('Send a message to a running agent')
+    .requiredOption('--message <text>', 'Message to send (use - for stdin)')
+    .action(async (taskId: string, cmdOpts: { message: string }) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const message = await readStdinOrValue(cmdOpts.message);
+        if (!message) {
+          console.error('Message is required');
+          process.exitCode = 1;
+          return;
+        }
+        const result = await api.agents.message(taskId, message);
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to send message');
+      }
+    });
+
+  agent
+    .command('review <taskId>')
+    .description('Trigger workflow review for a task')
+    .action(async (taskId: string) => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const result = await api.agents.workflowReview(taskId);
+        output(result, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to trigger review');
+      }
+    });
+
+  agent
+    .command('active-tasks')
+    .description('List task IDs with active agents')
+    .action(async () => {
+      const opts = program.opts() as OutputOptions;
+      try {
+        const taskIds = await api.agents.getActiveTaskIds();
+        if (opts.json) {
+          console.log(JSON.stringify(taskIds, null, 2));
+        } else if (opts.quiet) {
+          for (const id of taskIds) console.log(id);
+        } else {
+          if (taskIds.length === 0) {
+            console.log('No active agent tasks.');
+          } else {
+            for (const id of taskIds) console.log(id);
+          }
+        }
+      } catch (err) {
+        handleCliError(err, 'Failed to get active tasks');
       }
     });
 
@@ -42,25 +110,29 @@ export function registerAgentCommands(program: Command, api: ApiClient): void {
     .option('--all', 'Show all runs (including completed)')
     .action(async (cmdOpts: { task?: string; active?: boolean; all?: boolean }) => {
       const opts = program.opts() as OutputOptions;
-      let runs: unknown[];
-      if (cmdOpts.all) {
-        runs = await api.agents.getAllRuns();
-      } else if (cmdOpts.active) {
-        runs = await api.agents.getActiveRuns();
-      } else if (cmdOpts.task) {
-        runs = await api.agents.runs(cmdOpts.task);
-      } else {
-        runs = await api.agents.getActiveRuns();
+      try {
+        let runs: unknown[];
+        if (cmdOpts.all) {
+          runs = await api.agents.getAllRuns();
+        } else if (cmdOpts.active) {
+          runs = await api.agents.getActiveRuns();
+        } else if (cmdOpts.task) {
+          runs = await api.agents.runs(cmdOpts.task);
+        } else {
+          runs = await api.agents.getActiveRuns();
+        }
+        const rows = (runs as { id: string; taskId: string; agentType: string; mode: string; status: string; startedAt: number }[]).map((r) => ({
+          runId: r.id,
+          task: r.taskId,
+          agent: r.agentType,
+          mode: r.mode,
+          status: r.status,
+          started: new Date(r.startedAt).toISOString(),
+        }));
+        output(rows, opts);
+      } catch (err) {
+        handleCliError(err, 'Failed to list agent runs');
       }
-      const rows = (runs as { id: string; taskId: string; agentType: string; mode: string; status: string; startedAt: number }[]).map((r) => ({
-        runId: r.id,
-        task: r.taskId,
-        agent: r.agentType,
-        mode: r.mode,
-        status: r.status,
-        started: new Date(r.startedAt).toISOString(),
-      }));
-      output(rows, opts);
     });
 
   agent
@@ -72,9 +144,8 @@ export function registerAgentCommands(program: Command, api: ApiClient): void {
       try {
         const run = await api.agents.getRun(runId);
         output(run, opts);
-      } catch {
-        console.error(`Agent run not found: ${runId}`);
-        process.exitCode = 1;
+      } catch (err) {
+        handleCliError(err, 'Failed to get agent run');
       }
     });
 }

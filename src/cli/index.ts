@@ -14,6 +14,9 @@ import { registerStatusCommand } from './commands/status';
 import { registerTelegramCommands } from './commands/telegram';
 import { registerDaemonCommands } from './commands/daemon';
 import { registerLogsCommands } from './commands/logs';
+import { registerGitCommands } from './commands/git';
+import { registerFeatureCommands } from './commands/features';
+import { registerSettingsCommands } from './commands/settings';
 
 const program = new Command();
 
@@ -52,6 +55,9 @@ async function main(): Promise<void> {
     registerStatusCommand(program, api);
     registerTelegramCommands(program, api);
     registerLogsCommands(program, api);
+    registerGitCommands(program, api);
+    registerFeatureCommands(program, api);
+    registerSettingsCommands(program, api);
   }
 
   await program.parseAsync(process.argv);
