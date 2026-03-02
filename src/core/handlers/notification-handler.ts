@@ -2,6 +2,7 @@ import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { Task, Transition, TransitionContext, HookResult, NotificationAction } from '../../shared/types';
+import { getAppLogger } from '../services/app-logger';
 
 function getActionsForStatus(task: Task, toStatus: string): NotificationAction[] {
   const viewAction: NotificationAction = { label: '\u{1F441}\u{FE0F} View', callbackData: `v|${task.id}` };
@@ -87,11 +88,11 @@ export function registerNotificationHandler(
       if (freshTask) {
         effectiveTask = freshTask;
       } else {
-        console.warn(`[notification-handler] Task ${task.id} not found on re-read during transition to ${transition.to}. Using stale task data.`);
+        getAppLogger().warn('notification-handler', `Task ${task.id} not found on re-read during transition to ${transition.to}. Using stale task data.`);
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.warn(`[notification-handler] Failed to re-read task ${task.id}: ${errMsg}. Using stale task data.`);
+      getAppLogger().warn('notification-handler', `Failed to re-read task ${task.id}: ${errMsg}. Using stale task data.`);
     }
     const actions = getActionsForStatus(effectiveTask, transition.to);
 

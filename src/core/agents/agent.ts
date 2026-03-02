@@ -3,6 +3,7 @@ import type { IAgent } from '../interfaces/agent';
 import type { IAgentLib, AgentLibTelemetry } from '../interfaces/agent-lib';
 import type { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import type { AgentLibRegistry } from '../services/agent-lib-registry';
+import { getAppLogger } from '../services/app-logger';
 
 export class Agent implements IAgent {
   readonly type: string;
@@ -123,7 +124,7 @@ export class Agent implements IAgent {
       this.activeLibs.delete(runId);
       await lib.stop(runId);
     } else {
-      console.warn(`[Agent:${this.type}] stop called for unknown runId: ${runId}`);
+      getAppLogger().warn('Agent', `stop called for unknown runId: ${runId}`, { agentType: this.type });
     }
   }
 

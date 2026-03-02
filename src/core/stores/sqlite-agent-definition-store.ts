@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { AgentDefinition, AgentDefinitionCreateInput, AgentDefinitionUpdateInput, AgentModeConfig } from '../../shared/types';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface AgentDefinitionRow {
   id: string;
@@ -43,7 +44,7 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
       const row = this.db.prepare('SELECT * FROM agent_definitions WHERE id = ?').get(id) as AgentDefinitionRow | undefined;
       return row ? rowToDefinition(row) : null;
     } catch (err) {
-      console.error('SqliteAgentDefinitionStore.getDefinition failed:', err);
+      getAppLogger().logError('AgentDefinitionStore', 'getDefinition failed', err);
       throw err;
     }
   }
@@ -53,7 +54,7 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
       const rows = this.db.prepare('SELECT * FROM agent_definitions ORDER BY is_built_in DESC, created_at DESC').all() as AgentDefinitionRow[];
       return rows.map(rowToDefinition);
     } catch (err) {
-      console.error('SqliteAgentDefinitionStore.listDefinitions failed:', err);
+      getAppLogger().logError('AgentDefinitionStore', 'listDefinitions failed', err);
       throw err;
     }
   }
@@ -63,7 +64,7 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
       const id = 'agent-def-' + agentType;
       return this.getDefinition(id);
     } catch (err) {
-      console.error('SqliteAgentDefinitionStore.getDefinitionByAgentType failed:', err);
+      getAppLogger().logError('AgentDefinitionStore', 'getDefinitionByAgentType failed', err);
       throw err;
     }
   }
@@ -80,7 +81,7 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
       `).get(mode) as AgentDefinitionRow | undefined;
       return row ? rowToDefinition(row) : null;
     } catch (err) {
-      console.error('SqliteAgentDefinitionStore.getDefinitionByMode failed:', err);
+      getAppLogger().logError('AgentDefinitionStore', 'getDefinitionByMode failed', err);
       throw err;
     }
   }
@@ -109,7 +110,7 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
 
       return (await this.getDefinition(id))!;
     } catch (err) {
-      console.error('SqliteAgentDefinitionStore.createDefinition failed:', err);
+      getAppLogger().logError('AgentDefinitionStore', 'createDefinition failed', err);
       throw err;
     }
   }
@@ -164,7 +165,7 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
       this.db.prepare(`UPDATE agent_definitions SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       return (await this.getDefinition(id))!;
     } catch (err) {
-      console.error('SqliteAgentDefinitionStore.updateDefinition failed:', err);
+      getAppLogger().logError('AgentDefinitionStore', 'updateDefinition failed', err);
       throw err;
     }
   }
@@ -178,7 +179,7 @@ export class SqliteAgentDefinitionStore implements IAgentDefinitionStore {
       const result = this.db.prepare('DELETE FROM agent_definitions WHERE id = ?').run(id);
       return result.changes > 0;
     } catch (err) {
-      console.error('SqliteAgentDefinitionStore.deleteDefinition failed:', err);
+      getAppLogger().logError('AgentDefinitionStore', 'deleteDefinition failed', err);
       throw err;
     }
   }

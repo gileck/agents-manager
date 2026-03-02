@@ -11,6 +11,7 @@ import type { TaskUpdateInput, TelegramBotLogEntry, ChatSession, AgentChatMessag
 import type { ChatAgentService } from './chat-agent-service';
 import { buildTelegramSystemPrompt } from './chat-prompt-parts';
 import { statusEmoji } from './telegram-emoji';
+import { getAppLogger } from './app-logger';
 
 
 /** Maximum allowed length for free-text input from Telegram users */
@@ -516,12 +517,12 @@ export class TelegramAgentBotService implements ITelegramBotService {
     // Safe helpers to forward events to the renderer
     const safeEmitOutput = (chunk: string) => {
       try { this.onOutput?.(session.id, chunk); } catch (err) {
-        console.warn('[telegram-agent-bot] onOutput callback failed:', err);
+        getAppLogger().warn('TelegramAgentBot', 'onOutput callback failed', { error: err instanceof Error ? err.message : String(err) });
       }
     };
     const safeEmitMessage = (msg: AgentChatMessage) => {
       try { this.onMessage?.(session.id, msg); } catch (err) {
-        console.warn('[telegram-agent-bot] onMessage callback failed:', err);
+        getAppLogger().warn('TelegramAgentBot', 'onMessage callback failed', { error: err instanceof Error ? err.message : String(err) });
       }
     };
 
@@ -615,7 +616,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
 
       const errMsg = err instanceof Error ? err.message : String(err);
       this.log('status', `Agent error: ${errMsg}`);
-      console.error('[telegram-agent-bot] Agent error:', err);
+      getAppLogger().logError('TelegramAgentBot', 'Agent error', err);
       await this.send(chatId, 'An error occurred while processing your request. Please try again.');
       safeEmitOutput('__CHAT_COMPLETE__');
     }
@@ -628,7 +629,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
       const tg = project.config.telegram as Record<string, unknown> | undefined;
       return !!tg?.streamThinking;
     } catch (err) {
-      console.error('[telegram-agent-bot] Failed to read streamThinking config:', err);
+      getAppLogger().logError('TelegramAgentBot', 'Failed to read streamThinking config', err);
       this.log('status', 'Warning: Could not read streamThinking config — defaulting to off');
       return false;
     }
@@ -746,7 +747,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
   }
 
   private logError = (err: unknown): void => {
-    console.error('[telegram-agent-bot]', err);
+    getAppLogger().logError('TelegramAgentBot', 'Unhandled error', err);
   };
 }
 

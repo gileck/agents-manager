@@ -40,7 +40,7 @@ import { SqliteChatSessionStore } from '../stores/sqlite-chat-session-store';
 import { SqliteKanbanBoardStore } from '../stores/sqlite-kanban-board-store';
 import { SqliteSettingsStore } from '../stores/settings-store';
 import { SqliteAppDebugLog } from '../stores/sqlite-app-debug-log';
-import { AppLogger } from '../services/app-logger';
+import { AppLogger, initAppLogger, getAppLogger } from '../services/app-logger';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
@@ -138,7 +138,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const activityLog = new SqliteActivityLog(db);
   const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, db);
   const appDebugLog = new SqliteAppDebugLog(db);
-  const appLogger = new AppLogger(appDebugLog);
+  const appLogger = initAppLogger(appDebugLog);
 
   // Register built-in guards
   registerCoreGuards(pipelineEngine, db);
@@ -256,7 +256,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     try {
       return settingsStore.get('chat_default_agent_lib', 'claude-code');
     } catch (err) {
-      console.error('[setup] Failed to read chat_default_agent_lib setting:', err);
+      getAppLogger().logError('setup', 'Failed to read chat_default_agent_lib setting', err);
       return 'claude-code';
     }
   };

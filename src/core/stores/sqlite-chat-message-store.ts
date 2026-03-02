@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { ChatMessage, ChatMessageCreateInput } from '../../shared/types';
 import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import { generateId, now } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface ChatMessageRow {
   id: string;
@@ -47,7 +48,7 @@ export class SqliteChatMessageStore implements IChatMessageStore {
         costOutputTokens: input.costOutputTokens ?? null,
       };
     } catch (err) {
-      console.error('SqliteChatMessageStore.addMessage failed:', err);
+      getAppLogger().logError('ChatMessageStore', 'addMessage failed', err);
       throw err;
     }
   }
@@ -59,7 +60,7 @@ export class SqliteChatMessageStore implements IChatMessageStore {
       ).all(sessionId, limit) as ChatMessageRow[];
       return rows.map(rowToMessage);
     } catch (err) {
-      console.error('SqliteChatMessageStore.getMessagesForSession failed:', err);
+      getAppLogger().logError('ChatMessageStore', 'getMessagesForSession failed', err);
       throw err;
     }
   }
@@ -68,7 +69,7 @@ export class SqliteChatMessageStore implements IChatMessageStore {
     try {
       this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
     } catch (err) {
-      console.error('SqliteChatMessageStore.clearMessages failed:', err);
+      getAppLogger().logError('ChatMessageStore', 'clearMessages failed', err);
       throw err;
     }
   }
@@ -103,7 +104,7 @@ export class SqliteChatMessageStore implements IChatMessageStore {
       txn();
       return result;
     } catch (err) {
-      console.error('SqliteChatMessageStore.replaceAllMessages failed:', err);
+      getAppLogger().logError('ChatMessageStore', 'replaceAllMessages failed', err);
       throw err;
     }
   }
@@ -115,7 +116,7 @@ export class SqliteChatMessageStore implements IChatMessageStore {
       ).get() as { input_tokens: number; output_tokens: number };
       return { inputTokens: row.input_tokens, outputTokens: row.output_tokens };
     } catch (err) {
-      console.error('SqliteChatMessageStore.getCostSummary failed:', err);
+      getAppLogger().logError('ChatMessageStore', 'getCostSummary failed', err);
       throw err;
     }
   }

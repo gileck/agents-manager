@@ -1,5 +1,6 @@
 import type { INotificationRouter } from '../interfaces/notification-router';
 import type { Notification } from '../../shared/types';
+import { getAppLogger } from './app-logger';
 
 export class MultiChannelNotificationRouter implements INotificationRouter {
   private routers: INotificationRouter[] = [];
@@ -23,10 +24,7 @@ export class MultiChannelNotificationRouter implements INotificationRouter {
       const r = results[i];
       if (r.status === 'rejected') {
         const routerName = this.routers[i]?.constructor?.name ?? `router[${i}]`;
-        console.error(
-          `[notification-router] ${routerName} failed for task ${notification.taskId}:`,
-          r.reason,
-        );
+        getAppLogger().logError('notification-router', `${routerName} failed for task ${notification.taskId}`, r.reason);
       }
     }
   }

@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { AgentRun, AgentRunCreateInput, AgentRunUpdateInput, AgentChatMessage } from '../../shared/types';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface AgentRunRow {
   id: string;
@@ -64,7 +65,7 @@ export class SqliteAgentRunStore implements IAgentRunStore {
 
       return (await this.getRun(id))!;
     } catch (err) {
-      console.error('SqliteAgentRunStore.createRun failed:', err);
+      getAppLogger().logError('AgentRunStore', 'createRun failed', err);
       throw err;
     }
   }
@@ -140,7 +141,7 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       this.db.prepare(`UPDATE agent_runs SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       return (await this.getRun(id))!;
     } catch (err) {
-      console.error('SqliteAgentRunStore.updateRun failed:', err);
+      getAppLogger().logError('AgentRunStore', 'updateRun failed', err);
       throw err;
     }
   }
@@ -150,7 +151,7 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       const row = this.db.prepare('SELECT * FROM agent_runs WHERE id = ?').get(id) as AgentRunRow | undefined;
       return row ? rowToRun(row) : null;
     } catch (err) {
-      console.error('SqliteAgentRunStore.getRun failed:', err);
+      getAppLogger().logError('AgentRunStore', 'getRun failed', err);
       throw err;
     }
   }
@@ -160,7 +161,7 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       const rows = this.db.prepare('SELECT * FROM agent_runs WHERE task_id = ? ORDER BY started_at DESC').all(taskId) as AgentRunRow[];
       return rows.map(rowToRun);
     } catch (err) {
-      console.error('SqliteAgentRunStore.getRunsForTask failed:', err);
+      getAppLogger().logError('AgentRunStore', 'getRunsForTask failed', err);
       throw err;
     }
   }
@@ -170,7 +171,7 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       const rows = this.db.prepare("SELECT * FROM agent_runs WHERE status = 'running'").all() as AgentRunRow[];
       return rows.map(rowToRun);
     } catch (err) {
-      console.error('SqliteAgentRunStore.getActiveRuns failed:', err);
+      getAppLogger().logError('AgentRunStore', 'getActiveRuns failed', err);
       throw err;
     }
   }
@@ -180,7 +181,7 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       const rows = this.db.prepare('SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT ?').all(limit) as AgentRunRow[];
       return rows.map(rowToRun);
     } catch (err) {
-      console.error('SqliteAgentRunStore.getAllRuns failed:', err);
+      getAppLogger().logError('AgentRunStore', 'getAllRuns failed', err);
       throw err;
     }
   }

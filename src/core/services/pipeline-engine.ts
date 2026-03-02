@@ -24,6 +24,7 @@ import type { ITaskStore } from '../interfaces/task-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import { generateId, now, parseJson } from '../stores/utils';
+import { getAppLogger } from './app-logger';
 
 interface TaskRow {
   id: string;
@@ -211,7 +212,7 @@ export class PipelineEngine implements IPipelineEngine {
         severity: 'warning',
         message: `Transition ${task.status} → ${toStatus} blocked by guards: ${guardFailures.map(g => `${g.guard}: ${g.reason}`).join('; ')}`,
         data: { fromStatus: task.status, toStatus, trigger: ctx.trigger, guardFailures },
-      }).catch((err) => console.error('Audit log write failed:', err));
+      }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
       return { success: false, guardFailures };
     }
 
@@ -238,7 +239,7 @@ export class PipelineEngine implements IPipelineEngine {
       if (followUp) {
         const freshRow = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow | undefined;
         if (!freshRow) {
-          console.error(`[pipeline-engine] Follow-up transition skipped: task ${task.id} not found after rollback`);
+          getAppLogger().error('PipelineEngine', `Follow-up transition skipped: task ${task.id} not found after rollback`);
         } else {
           this.taskEventLog.log({
             taskId: task.id,
@@ -246,7 +247,7 @@ export class PipelineEngine implements IPipelineEngine {
             severity: 'info',
             message: `Dispatching follow-up transition to "${followUp.to}" after rollback`,
             data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger },
-          }).catch((err) => console.error('Audit log write failed:', err));
+          }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
 
           this.executeTransition(rowToTask(freshRow), followUp.to, { trigger: followUp.trigger, actor: ctx.actor })
             .catch(err => {
@@ -257,7 +258,7 @@ export class PipelineEngine implements IPipelineEngine {
                 severity: 'error',
                 message: `Follow-up transition to "${followUp.to}" failed: ${msg}`,
                 data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger, error: msg },
-              }).catch((logErr) => console.error('Audit log write failed:', logErr));
+              }).catch((logErr) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', logErr));
             });
         }
       }
@@ -527,7 +528,7 @@ export class PipelineEngine implements IPipelineEngine {
             severity: 'warning',
             message: `Hook "${hook.name}" not registered — skipping`,
             data: { hookName: hook.name },
-          }).catch((err) => console.error('Audit log write failed:', err));
+          }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
         }
         continue;
       }
@@ -559,7 +560,7 @@ export class PipelineEngine implements IPipelineEngine {
             severity,
             message: `Hook "${hook.name}" failed${forced ? ' during force transition' : ''} (${policy}): ${failure.error}`,
             data: { hookName: hook.name, error: failure.error, policy, ...(forced ? { forced: true } : {}) },
-          }).catch((err) => console.error('Audit log write failed:', err));
+          }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
         } else {
           this.taskEventLog.log({
             taskId,
@@ -567,7 +568,7 @@ export class PipelineEngine implements IPipelineEngine {
             severity: 'info',
             message: `Hook "${hook.name}" succeeded (${policy})`,
             data: { hookName: hook.name, policy },
-          }).catch((err) => console.error('Audit log write failed:', err));
+          }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -580,7 +581,7 @@ export class PipelineEngine implements IPipelineEngine {
           severity,
           message: `Hook "${hook.name}" threw${forced ? ' during force transition' : ''} (${policy}): ${message}`,
           data: { hookName: hook.name, error: message, policy, ...(forced ? { forced: true } : {}) },
-        }).catch((err) => console.error('Audit log write failed:', err));
+        }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
       }
     }
 
@@ -627,7 +628,7 @@ export class PipelineEngine implements IPipelineEngine {
         severity: 'error',
         message: `CRITICAL: Rollback failed for transition ${originalStatus} → ${failedToStatus}: ${rollbackMsg}`,
         data: { rollbackError: rollbackMsg, failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
-      }).catch((err) => console.error('Audit log write failed:', err));
+      }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
     }
   }
 }

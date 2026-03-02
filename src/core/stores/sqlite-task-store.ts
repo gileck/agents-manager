@@ -3,6 +3,7 @@ import type { Task, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, Imple
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface TaskRow {
   id: string;
@@ -69,7 +70,7 @@ export class SqliteTaskStore implements ITaskStore {
       const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined;
       return row ? rowToTask(row) : null;
     } catch (err) {
-      console.error('SqliteTaskStore.getTask failed:', err);
+      getAppLogger().logError('TaskStore', 'getTask failed', err);
       throw err;
     }
   }
@@ -129,7 +130,7 @@ export class SqliteTaskStore implements ITaskStore {
       const rows = this.db.prepare(`SELECT * FROM tasks ${where} ORDER BY created_at DESC`).all(...values) as TaskRow[];
       return rows.map(rowToTask);
     } catch (err) {
-      console.error('SqliteTaskStore.listTasks failed:', err);
+      getAppLogger().logError('TaskStore', 'listTasks failed', err);
       throw err;
     }
   }
@@ -181,7 +182,7 @@ export class SqliteTaskStore implements ITaskStore {
 
       return (await this.getTask(id))!;
     } catch (err) {
-      console.error('SqliteTaskStore.createTask failed:', err);
+      getAppLogger().logError('TaskStore', 'createTask failed', err);
       throw err;
     }
   }
@@ -280,7 +281,7 @@ export class SqliteTaskStore implements ITaskStore {
       this.db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       return (await this.getTask(id))!;
     } catch (err) {
-      console.error('SqliteTaskStore.updateTask failed:', err);
+      getAppLogger().logError('TaskStore', 'updateTask failed', err);
       throw err;
     }
   }
@@ -304,7 +305,7 @@ export class SqliteTaskStore implements ITaskStore {
       });
       return txn();
     } catch (err) {
-      console.error('SqliteTaskStore.deleteTask failed:', err);
+      getAppLogger().logError('TaskStore', 'deleteTask failed', err);
       throw err;
     }
   }
@@ -346,7 +347,7 @@ export class SqliteTaskStore implements ITaskStore {
 
       return this.getTask(id);
     } catch (err) {
-      console.error('SqliteTaskStore.resetTask failed:', err);
+      getAppLogger().logError('TaskStore', 'resetTask failed', err);
       throw err;
     }
   }
@@ -358,7 +359,7 @@ export class SqliteTaskStore implements ITaskStore {
         VALUES (?, ?)
       `).run(taskId, dependsOnTaskId);
     } catch (err) {
-      console.error('SqliteTaskStore.addDependency failed:', err);
+      getAppLogger().logError('TaskStore', 'addDependency failed', err);
       throw err;
     }
   }
@@ -367,7 +368,7 @@ export class SqliteTaskStore implements ITaskStore {
     try {
       this.db.prepare('DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_task_id = ?').run(taskId, dependsOnTaskId);
     } catch (err) {
-      console.error('SqliteTaskStore.removeDependency failed:', err);
+      getAppLogger().logError('TaskStore', 'removeDependency failed', err);
       throw err;
     }
   }
@@ -382,7 +383,7 @@ export class SqliteTaskStore implements ITaskStore {
       `).all(taskId) as TaskRow[];
       return rows.map(rowToTask);
     } catch (err) {
-      console.error('SqliteTaskStore.getDependencies failed:', err);
+      getAppLogger().logError('TaskStore', 'getDependencies failed', err);
       throw err;
     }
   }
@@ -397,7 +398,7 @@ export class SqliteTaskStore implements ITaskStore {
       `).all(taskId) as TaskRow[];
       return rows.map(rowToTask);
     } catch (err) {
-      console.error('SqliteTaskStore.getDependents failed:', err);
+      getAppLogger().logError('TaskStore', 'getDependents failed', err);
       throw err;
     }
   }
@@ -409,7 +410,7 @@ export class SqliteTaskStore implements ITaskStore {
       ).all() as { status: string; count: number }[];
       return rows;
     } catch (err) {
-      console.error('SqliteTaskStore.getStatusCounts failed:', err);
+      getAppLogger().logError('TaskStore', 'getStatusCounts failed', err);
       throw err;
     }
   }
@@ -419,7 +420,7 @@ export class SqliteTaskStore implements ITaskStore {
       const row = this.db.prepare('SELECT COUNT(*) as count FROM tasks').get() as { count: number };
       return row.count;
     } catch (err) {
-      console.error('SqliteTaskStore.getTotalCount failed:', err);
+      getAppLogger().logError('TaskStore', 'getTotalCount failed', err);
       throw err;
     }
   }

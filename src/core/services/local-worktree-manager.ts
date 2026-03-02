@@ -5,6 +5,7 @@ import { join } from 'path';
 import type { Worktree } from '../../shared/types';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import { getShellEnv } from './shell-env';
+import { getAppLogger } from './app-logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -143,7 +144,7 @@ export class LocalWorktreeManager implements IWorktreeManager {
       try {
         await this.git(['worktree', 'remove', wt.path, '--force']);
       } catch (err) {
-        console.warn('Worktree cleanup failed:', err);
+        getAppLogger().warn('WorktreeManager', 'Worktree cleanup failed', { error: err instanceof Error ? err.message : String(err) });
       }
     }
   }

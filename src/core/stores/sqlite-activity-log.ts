@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { ActivityEntry, ActivityCreateInput, ActivityFilter } from '../../shared/types';
 import type { IActivityLog } from '../interfaces/activity-log';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface ActivityRow {
   id: string;
@@ -60,7 +61,7 @@ export class SqliteActivityLog implements IActivityLog {
         createdAt: timestamp,
       };
     } catch (err) {
-      console.error('SqliteActivityLog.log failed:', err);
+      getAppLogger().logError('ActivityLog', 'log failed', err);
       throw err;
     }
   }
@@ -100,7 +101,7 @@ export class SqliteActivityLog implements IActivityLog {
       const rows = this.db.prepare(`SELECT * FROM activity_log ${where} ORDER BY created_at ASC LIMIT ?`).all(...values, limit) as ActivityRow[];
       return rows.map(rowToEntry);
     } catch (err) {
-      console.error('SqliteActivityLog.getEntries failed:', err);
+      getAppLogger().logError('ActivityLog', 'getEntries failed', err);
       throw err;
     }
   }

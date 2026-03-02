@@ -6,6 +6,7 @@ import { validateTelegramConfig } from '../../core/services/telegram-config-vali
 import type { INotificationRouter } from '../../core/interfaces/notification-router';
 import type { WsHolder } from '../server';
 import { WS_CHANNELS } from '../ws/channels';
+import { getAppLogger } from '../../core/services/app-logger';
 
 /** Module-scoped active bots map shared across handler registrations */
 const activeBots = new Map<string, {
@@ -17,7 +18,7 @@ const activeBots = new Map<string, {
 export async function stopAllBots(): Promise<void> {
   for (const [, entry] of activeBots) {
     try { await entry.botService.stop(); } catch (err) {
-      console.warn('[telegram] Failed to stop bot:', err);
+      getAppLogger().warn('telegram', 'Failed to stop bot', { error: err instanceof Error ? err.message : String(err) });
     }
   }
   activeBots.clear();
@@ -87,16 +88,16 @@ export async function autoStartTelegramBots(
 
     try {
       await startBotForProject(project.id, services, wsHolder);
-      console.log(`[telegram] Auto-started bot for project "${project.name}"`);
+      getAppLogger().info('telegram', `Auto-started bot for project "${project.name}"`);
       started++;
     } catch (err) {
-      console.warn(`[telegram] Failed to auto-start bot for project "${project.name}":`, err);
+      getAppLogger().logError('telegram', `Failed to auto-start bot for project "${project.name}"`, err);
       wsHolder.server?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS, project.id, 'failed');
     }
   }
 
   if (started > 0) {
-    console.log(`[telegram] Auto-started ${started} bot(s)`);
+    getAppLogger().info('telegram', `Auto-started ${started} bot(s)`);
   }
 }
 

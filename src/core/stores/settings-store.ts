@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { ISettingsStore } from '../interfaces/settings-store';
+import { getAppLogger } from '../services/app-logger';
 
 export class SqliteSettingsStore implements ISettingsStore {
   constructor(private db: Database.Database) {}
@@ -9,7 +10,7 @@ export class SqliteSettingsStore implements ISettingsStore {
       const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
       return row?.value ?? defaultValue;
     } catch (err) {
-      console.error('SqliteSettingsStore.get failed:', err);
+      getAppLogger().logError('SettingsStore', 'get failed', err);
       return defaultValue;
     }
   }
@@ -18,7 +19,7 @@ export class SqliteSettingsStore implements ISettingsStore {
     try {
       this.db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
     } catch (err) {
-      console.error('SqliteSettingsStore.set failed:', err);
+      getAppLogger().logError('SettingsStore', 'set failed', err);
       throw err;
     }
   }
@@ -32,7 +33,7 @@ export class SqliteSettingsStore implements ISettingsStore {
       }
       return settings;
     } catch (err) {
-      console.error('SqliteSettingsStore.getAll failed:', err);
+      getAppLogger().logError('SettingsStore', 'getAll failed', err);
       throw err;
     }
   }
@@ -47,7 +48,7 @@ export class SqliteSettingsStore implements ISettingsStore {
       });
       runAll();
     } catch (err) {
-      console.error('SqliteSettingsStore.setMany failed:', err);
+      getAppLogger().logError('SettingsStore', 'setMany failed', err);
       throw err;
     }
   }

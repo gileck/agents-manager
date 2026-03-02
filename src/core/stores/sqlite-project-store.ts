@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { Project, ProjectCreateInput, ProjectUpdateInput } from '../../shared/types';
 import type { IProjectStore } from '../interfaces/project-store';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface ProjectRow {
   id: string;
@@ -33,7 +34,7 @@ export class SqliteProjectStore implements IProjectStore {
       const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow | undefined;
       return row ? rowToProject(row) : null;
     } catch (err) {
-      console.error('SqliteProjectStore.getProject failed:', err);
+      getAppLogger().logError('ProjectStore', 'getProject failed', err);
       throw err;
     }
   }
@@ -43,7 +44,7 @@ export class SqliteProjectStore implements IProjectStore {
       const rows = this.db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all() as ProjectRow[];
       return rows.map(rowToProject);
     } catch (err) {
-      console.error('SqliteProjectStore.listProjects failed:', err);
+      getAppLogger().logError('ProjectStore', 'listProjects failed', err);
       throw err;
     }
   }
@@ -61,7 +62,7 @@ export class SqliteProjectStore implements IProjectStore {
 
       return (await this.getProject(id))!;
     } catch (err) {
-      console.error('SqliteProjectStore.createProject failed:', err);
+      getAppLogger().logError('ProjectStore', 'createProject failed', err);
       throw err;
     }
   }
@@ -100,7 +101,7 @@ export class SqliteProjectStore implements IProjectStore {
       this.db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       return (await this.getProject(id))!;
     } catch (err) {
-      console.error('SqliteProjectStore.updateProject failed:', err);
+      getAppLogger().logError('ProjectStore', 'updateProject failed', err);
       throw err;
     }
   }
@@ -110,7 +111,7 @@ export class SqliteProjectStore implements IProjectStore {
       const result = this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
       return result.changes > 0;
     } catch (err) {
-      console.error('SqliteProjectStore.deleteProject failed:', err);
+      getAppLogger().logError('ProjectStore', 'deleteProject failed', err);
       throw err;
     }
   }

@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { TaskPhase, TaskPhaseCreateInput, TaskPhaseUpdateInput } from '../../shared/types';
 import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import { generateId } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface TaskPhaseRow {
   id: string;
@@ -39,7 +40,7 @@ export class SqliteTaskPhaseStore implements ITaskPhaseStore {
 
       return (await this.getPhase(id))!;
     } catch (err) {
-      console.error('SqliteTaskPhaseStore.createPhase failed:', err);
+      getAppLogger().logError('TaskPhaseStore', 'createPhase failed', err);
       throw err;
     }
   }
@@ -75,7 +76,7 @@ export class SqliteTaskPhaseStore implements ITaskPhaseStore {
       this.db.prepare(`UPDATE task_phases SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       return (await this.getPhase(id))!;
     } catch (err) {
-      console.error('SqliteTaskPhaseStore.updatePhase failed:', err);
+      getAppLogger().logError('TaskPhaseStore', 'updatePhase failed', err);
       throw err;
     }
   }
@@ -85,7 +86,7 @@ export class SqliteTaskPhaseStore implements ITaskPhaseStore {
       const rows = this.db.prepare('SELECT * FROM task_phases WHERE task_id = ? ORDER BY started_at ASC').all(taskId) as TaskPhaseRow[];
       return rows.map(rowToPhase);
     } catch (err) {
-      console.error('SqliteTaskPhaseStore.getPhasesForTask failed:', err);
+      getAppLogger().logError('TaskPhaseStore', 'getPhasesForTask failed', err);
       throw err;
     }
   }
@@ -95,7 +96,7 @@ export class SqliteTaskPhaseStore implements ITaskPhaseStore {
       const row = this.db.prepare("SELECT * FROM task_phases WHERE task_id = ? AND status = 'active' LIMIT 1").get(taskId) as TaskPhaseRow | undefined;
       return row ? rowToPhase(row) : null;
     } catch (err) {
-      console.error('SqliteTaskPhaseStore.getActivePhase failed:', err);
+      getAppLogger().logError('TaskPhaseStore', 'getActivePhase failed', err);
       throw err;
     }
   }
@@ -105,7 +106,7 @@ export class SqliteTaskPhaseStore implements ITaskPhaseStore {
       const row = this.db.prepare('SELECT * FROM task_phases WHERE id = ?').get(id) as TaskPhaseRow | undefined;
       return row ? rowToPhase(row) : null;
     } catch (err) {
-      console.error('SqliteTaskPhaseStore.getPhase failed:', err);
+      getAppLogger().logError('TaskPhaseStore', 'getPhase failed', err);
       throw err;
     }
   }

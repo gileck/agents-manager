@@ -3,6 +3,7 @@ import { LocalGitOps } from '../../core/services/local-git-ops';
 import { GitHubScmPlatform } from '../../core/services/github-scm-platform';
 import type { AppServices } from '../../core/providers/setup';
 import type { IGitOps } from '../../core/interfaces/git-ops';
+import { getAppLogger } from '../../core/services/app-logger';
 
 /**
  * Resolve a LocalGitOps instance scoped to the task's worktree.
@@ -218,7 +219,7 @@ export function gitRoutes(services: AppServices): Router {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         services.taskEventLog.log({ taskId, category: 'github', severity: 'warning', message: `PR_CHECKS failed: ${msg}` }).catch(logErr => {
-          console.error(`Failed to log PR_CHECKS error for task ${taskId}:`, logErr);
+          getAppLogger().logError('git-routes', `Failed to log PR_CHECKS error for task ${taskId}`, logErr);
         });
         res.json(null);
       }

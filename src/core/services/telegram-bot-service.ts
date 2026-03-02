@@ -7,6 +7,7 @@ import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { TaskUpdateInput, TelegramBotLogEntry } from '../../shared/types';
 import { statusEmoji } from './telegram-emoji';
+import { getAppLogger } from './app-logger';
 
 
 /** Maximum allowed length for free-text input from Telegram users */
@@ -390,7 +391,7 @@ export class TelegramBotService implements ITelegramBotService {
   }
 
   private logError = (err: unknown): void => {
-    console.error('[telegram-bot]', err);
+    getAppLogger().logError('TelegramBotService', 'Unhandled error', err);
   };
 }
 

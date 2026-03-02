@@ -29,6 +29,7 @@ import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/
 import { SubtaskSyncInterceptor } from './subtask-sync-interceptor';
 import { AgentOutputFlusher } from './agent-output-flusher';
 import { PostRunExtractor } from './post-run-extractor';
+import { getAppLogger } from './app-logger';
 
 export class AgentService implements IAgentService {
   private backgroundPromises = new Map<string, Promise<void>>();
@@ -123,7 +124,7 @@ export class AgentService implements IAgentService {
 
         recovered.push({ ...run, status: 'failed', outcome: 'interrupted', completedAt });
       } catch (err) {
-        console.error(`Failed to recover orphaned run ${run.id}:`, err);
+        getAppLogger().logError('AgentService', `Failed to recover orphaned run ${run.id}`, err);
       }
     }
 
@@ -731,20 +732,20 @@ export class AgentService implements IAgentService {
     const activeRunIds = this.getActiveRunIds();
     if (activeRunIds.length === 0) return;
 
-    console.log(`Stopping ${activeRunIds.length} running agent(s)...`);
+    getAppLogger().info('AgentService', `Stopping ${activeRunIds.length} running agent(s)`);
     const results = await Promise.allSettled(
       activeRunIds.map(runId =>
         this.stop(runId).catch(err => {
-          console.warn(`Failed to stop agent run ${runId}:`, err instanceof Error ? err.message : String(err));
+          getAppLogger().warn('AgentService', `Failed to stop agent run ${runId}`, { error: err instanceof Error ? err.message : String(err) });
         })
       )
     );
 
     const failed = results.filter(r => r.status === 'rejected').length;
     if (failed > 0) {
-      console.warn(`${failed}/${activeRunIds.length} agent stop(s) failed during shutdown`);
+      getAppLogger().warn('AgentService', `${failed}/${activeRunIds.length} agent stop(s) failed during shutdown`);
     } else {
-      console.log(`All ${activeRunIds.length} agent run(s) stopped.`);
+      getAppLogger().info('AgentService', `All ${activeRunIds.length} agent run(s) stopped`);
     }
   }
 

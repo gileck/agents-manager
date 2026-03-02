@@ -30,3 +30,26 @@ export class AppLogger {
     this.log.log({ level: 'error', source, message, data });
   }
 }
+
+// --- Module-level singleton ---
+
+let _instance: AppLogger | null = null;
+
+// Console-based fallback for pre-init period.
+// debug is intentionally silent — debug-level noise before logger init is dropped.
+const _fallback = {
+  debug: (_s: string, _m: string, _d?: Record<string, unknown>) => {},
+  info: (s: string, m: string, d?: Record<string, unknown>) => console.log(`[${s}] ${m}`, d ?? ''),
+  warn: (s: string, m: string, d?: Record<string, unknown>) => console.warn(`[${s}] ${m}`, d ?? ''),
+  error: (s: string, m: string, d?: Record<string, unknown>) => console.error(`[${s}] ${m}`, d ?? ''),
+  logError: (s: string, m: string, err: unknown) => console.error(`[${s}] ${m}`, err),
+} as AppLogger;
+
+export function initAppLogger(log: IAppDebugLog): AppLogger {
+  _instance = new AppLogger(log);
+  return _instance;
+}
+
+export function getAppLogger(): AppLogger {
+  return _instance ?? _fallback;
+}

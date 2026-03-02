@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { User, UserRole } from '../../shared/types';
 import type { IUserStore } from '../interfaces/user-store';
 import { generateId, now } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface UserRow {
   id: string;
@@ -29,7 +30,7 @@ export class SqliteUserStore implements IUserStore {
       const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
       return row ? rowToUser(row) : null;
     } catch (err) {
-      console.error('SqliteUserStore.getUser failed:', err);
+      getAppLogger().logError('UserStore', 'getUser failed', err);
       throw err;
     }
   }
@@ -39,7 +40,7 @@ export class SqliteUserStore implements IUserStore {
       const row = this.db.prepare('SELECT * FROM users WHERE username = ?').get(username) as UserRow | undefined;
       return row ? rowToUser(row) : null;
     } catch (err) {
-      console.error('SqliteUserStore.getUserByUsername failed:', err);
+      getAppLogger().logError('UserStore', 'getUserByUsername failed', err);
       throw err;
     }
   }
@@ -49,7 +50,7 @@ export class SqliteUserStore implements IUserStore {
       const rows = this.db.prepare('SELECT * FROM users ORDER BY created_at DESC').all() as UserRow[];
       return rows.map(rowToUser);
     } catch (err) {
-      console.error('SqliteUserStore.listUsers failed:', err);
+      getAppLogger().logError('UserStore', 'listUsers failed', err);
       throw err;
     }
   }
@@ -66,7 +67,7 @@ export class SqliteUserStore implements IUserStore {
 
       return (await this.getUser(id))!;
     } catch (err) {
-      console.error('SqliteUserStore.createUser failed:', err);
+      getAppLogger().logError('UserStore', 'createUser failed', err);
       throw err;
     }
   }
@@ -81,7 +82,7 @@ export class SqliteUserStore implements IUserStore {
 
       return (await this.getUser(id))!;
     } catch (err) {
-      console.error('SqliteUserStore.updateUserRole failed:', err);
+      getAppLogger().logError('UserStore', 'updateUserRole failed', err);
       throw err;
     }
   }
@@ -91,7 +92,7 @@ export class SqliteUserStore implements IUserStore {
       const result = this.db.prepare('DELETE FROM users WHERE id = ?').run(id);
       return result.changes > 0;
     } catch (err) {
-      console.error('SqliteUserStore.deleteUser failed:', err);
+      getAppLogger().logError('UserStore', 'deleteUser failed', err);
       throw err;
     }
   }

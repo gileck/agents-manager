@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { TaskContextEntry, TaskContextEntryCreateInput } from '../../shared/types';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface TaskContextEntryRow {
   id: string;
@@ -58,7 +59,7 @@ export class SqliteTaskContextStore implements ITaskContextStore {
         addressedByRunId: null,
       };
     } catch (err) {
-      console.error('SqliteTaskContextStore.addEntry failed:', err);
+      getAppLogger().logError('TaskContextStore', 'addEntry failed', err);
       throw err;
     }
   }
@@ -70,7 +71,7 @@ export class SqliteTaskContextStore implements ITaskContextStore {
       ).all(taskId) as TaskContextEntryRow[];
       return rows.map(rowToEntry);
     } catch (err) {
-      console.error('SqliteTaskContextStore.getEntriesForTask failed:', err);
+      getAppLogger().logError('TaskContextStore', 'getEntriesForTask failed', err);
       throw err;
     }
   }
@@ -85,7 +86,7 @@ export class SqliteTaskContextStore implements ITaskContextStore {
       `).run(addressedByRunId, taskId, ...entryTypes);
       return result.changes;
     } catch (err) {
-      console.error('SqliteTaskContextStore.markEntriesAsAddressed failed:', err);
+      getAppLogger().logError('TaskContextStore', 'markEntriesAsAddressed failed', err);
       throw err;
     }
   }

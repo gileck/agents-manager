@@ -4,6 +4,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
+import { getAppLogger } from './app-logger';
 
 export class WorkflowReviewSupervisor {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -20,7 +21,7 @@ export class WorkflowReviewSupervisor {
 
   start(intervalMs = 5 * 60 * 1000): void {
     if (this.timer) return;
-    this.timer = setInterval(() => this.poll().catch(console.error), intervalMs);
+    this.timer = setInterval(() => this.poll().catch(err => getAppLogger().logError('WorkflowReviewSupervisor', 'poll error', err)), intervalMs);
   }
 
   stop(): void {
@@ -102,7 +103,7 @@ export class WorkflowReviewSupervisor {
         });
       }
     } catch (err) {
-      console.error('WorkflowReviewSupervisor poll error:', err);
+      getAppLogger().logError('WorkflowReviewSupervisor', 'poll error', err);
     }
   }
 

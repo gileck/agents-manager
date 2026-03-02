@@ -43,23 +43,20 @@ async function main() {
 
   // Auto-start Telegram bots for projects with config
   autoStartTelegramBots(services, wsHolder).catch(err => {
-    console.error('Failed to auto-start Telegram bots:', err);
     services.appLogger.logError('daemon', 'Failed to auto-start Telegram bots', err);
   });
 
   // Recover orphaned agent runs from previous daemon session
   services.agentService.recoverOrphanedRuns().then((interrupted) => {
     if (interrupted.length > 0) {
-      console.log(`Recovered ${interrupted.length} orphaned agent run(s).`);
       services.appLogger.info('daemon', `Recovered ${interrupted.length} orphaned agent run(s)`);
       wsServer.broadcast(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, undefined, interrupted);
     }
   }).catch((err) => {
-    console.error('Failed to recover orphaned runs:', err);
     services.appLogger.logError('daemon', 'Failed to recover orphaned runs', err);
   });
 
-  // Start listening
+  // Start listening — dual-output so operators can see daemon lifecycle on stdout/stderr
   httpServer.listen(PORT, '127.0.0.1', () => {
     console.log(`Daemon listening on http://127.0.0.1:${PORT}`);
     services.appLogger.info('daemon', `Daemon listening on http://127.0.0.1:${PORT}`);
@@ -74,7 +71,6 @@ async function main() {
     console.log('Shutting down daemon...');
     services.appLogger.info('daemon', 'Daemon shutting down');
     await stopAllBots().catch(err => {
-      console.warn('Failed to stop Telegram bots:', err);
       services.appLogger.logError('daemon', 'Failed to stop Telegram bots', err);
     });
     stopSupervisors(services);
@@ -90,7 +86,9 @@ async function main() {
         drainTimeout,
       ]);
     } catch (err) {
-      console.warn('Agent drain failed:', err instanceof Error ? err.message : String(err));
+      const drainMsg = err instanceof Error ? err.message : String(err);
+      console.warn('Agent drain failed:', drainMsg);
+      services.appLogger.warn('daemon', 'Agent drain failed', { error: drainMsg });
     }
 
     wsServer.close();

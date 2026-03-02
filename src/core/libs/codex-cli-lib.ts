@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
+import { getAppLogger } from '../services/app-logger';
 
 interface RunState {
   process: ChildProcess;
@@ -200,7 +201,7 @@ export class CodexCliLib implements IAgentLib {
   async stop(runId: string): Promise<void> {
     const state = this.runningStates.get(runId);
     if (!state) {
-      console.warn(`[CodexCliLib] stop called for unknown runId: ${runId}`);
+      getAppLogger().warn('CodexCliLib', `stop called for unknown runId: ${runId}`);
       return;
     }
     this.stoppedReasons.set(runId, 'stopped');

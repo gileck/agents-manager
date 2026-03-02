@@ -1,6 +1,7 @@
 import type { AgentChatMessage } from '../../shared/types';
 import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { SandboxGuard } from '../services/sandbox-guard';
+import { getAppLogger } from '../services/app-logger';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
@@ -244,7 +245,7 @@ export class ClaudeCodeLib implements IAgentLib {
   async stop(runId: string): Promise<void> {
     const state = this.runningStates.get(runId);
     if (!state) {
-      console.warn(`[ClaudeCodeLib] stop called for unknown runId: ${runId}`);
+      getAppLogger().warn('ClaudeCodeLib', `stop called for unknown runId: ${runId}`);
       return;
     }
     state.stoppedReason = 'stopped';

@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { TaskEvent, TaskEventCreateInput, TaskEventFilter } from '../../shared/types';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface TaskEventRow {
   id: string;
@@ -56,7 +57,7 @@ export class SqliteTaskEventLog implements ITaskEventLog {
         createdAt: timestamp,
       };
     } catch (err) {
-      console.error('SqliteTaskEventLog.log failed:', err);
+      getAppLogger().logError('TaskEventLog', 'log failed', err);
       throw err;
     }
   }
@@ -92,7 +93,7 @@ export class SqliteTaskEventLog implements ITaskEventLog {
       const rows = this.db.prepare(`SELECT * FROM task_events ${where} ORDER BY created_at ASC LIMIT ?`).all(...values, limit) as TaskEventRow[];
       return rows.map(rowToEvent);
     } catch (err) {
-      console.error('SqliteTaskEventLog.getEvents failed:', err);
+      getAppLogger().logError('TaskEventLog', 'getEvents failed', err);
       throw err;
     }
   }

@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import { getAppLogger } from './app-logger';
 
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
@@ -43,7 +44,7 @@ function parseUserContent(content: string): { text: string; images?: ChatImageRe
         return { text: parsed.text, images };
       }
     } catch (err) {
-      console.warn('[parseUserContent] Content starts with { but failed JSON parse:', err);
+      getAppLogger().warn('ChatAgentService', 'parseUserContent: Content starts with { but failed JSON parse', { error: err instanceof Error ? err.message : String(err) });
     }
   }
   return { text: content };
@@ -61,7 +62,7 @@ function extractTextFromContent(content: string): string {
           .join('');
       }
     } catch (err) {
-      console.warn('[extractTextFromContent] Content looks like JSON but failed to parse:', err);
+      getAppLogger().warn('ChatAgentService', 'extractTextFromContent: Content looks like JSON but failed to parse', { error: err instanceof Error ? err.message : String(err) });
     }
   }
   return parseUserContent(content).text;
@@ -221,7 +222,7 @@ export class ChatAgentService {
     // Safe event emitter
     const emitEvent = (event: ChatAgentEvent) => {
       try { onEvent?.(event); } catch (err) {
-        console.warn('[ChatAgentService] Event delivery failed:', err);
+        getAppLogger().warn('ChatAgentService', 'Event delivery failed', { error: err instanceof Error ? err.message : String(err) });
       }
     };
 
@@ -317,12 +318,12 @@ export class ChatAgentService {
     const sessionIds = [...this.runningControllers.keys()];
     if (sessionIds.length === 0) return;
 
-    console.log(`Stopping ${sessionIds.length} running chat agent(s)...`);
+    getAppLogger().info('ChatAgentService', `Stopping ${sessionIds.length} running chat agent(s)`);
     for (const sessionId of sessionIds) {
       try {
         this.stop(sessionId);
       } catch (err) {
-        console.warn(`Failed to stop chat agent session ${sessionId}:`, err instanceof Error ? err.message : String(err));
+        getAppLogger().warn('ChatAgentService', `Failed to stop chat agent session ${sessionId}`, { error: err instanceof Error ? err.message : String(err) });
       }
     }
   }
@@ -505,7 +506,7 @@ export class ChatAgentService {
         // Wire abort signal to AgentLib.stop() so the Stop button works
         const lib = this.agentLibRegistry.getLib(agentLibName);
         abortController.signal.addEventListener('abort', () => {
-          lib.stop(sessionId).catch(err => console.warn('[ChatAgentService] Failed to stop agent lib:', err));
+          lib.stop(sessionId).catch(err => getAppLogger().warn('ChatAgentService', 'Failed to stop agent lib', { error: err instanceof Error ? err.message : String(err) }));
         });
         await this.runViaAgentLib(lib, sessionId, projectPath, systemPrompt, prompt, emitEvent, emitMessage);
       } else {
@@ -544,8 +545,8 @@ export class ChatAgentService {
             costOutputTokens,
           });
         } catch (persistErr) {
-          console.error('[ChatAgentService] Failed to persist assistant response:', persistErr);
-          try { emitEvent({ type: 'text', text: '\n[Warning: Failed to save this response. It may not appear after refresh.]\n' }); } catch (deliveryErr) { console.warn('[ChatAgentService] persist-warning delivery failed:', deliveryErr); }
+          getAppLogger().logError('ChatAgentService', 'Failed to persist assistant response', persistErr);
+          try { emitEvent({ type: 'text', text: '\n[Warning: Failed to save this response. It may not appear after refresh.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'persist-warning delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
         }
       }
     }
@@ -738,7 +739,7 @@ export class ChatAgentService {
         const userMsg = message as SDKUserMessage;
         const content = userMsg.message?.content;
         if (!content || typeof content === 'string') {
-          console.warn('[ChatAgentService] user message with unexpected structure:', JSON.stringify(message).slice(0, 200));
+          getAppLogger().warn('ChatAgentService', 'user message with unexpected structure', { preview: JSON.stringify(message).slice(0, 200) });
         } else {
           for (const block of content) {
             const b = block as { type: string; tool_use_id?: string; content?: unknown };

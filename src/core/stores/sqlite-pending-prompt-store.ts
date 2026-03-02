@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { PendingPrompt, PendingPromptCreateInput } from '../../shared/types';
 import type { IPendingPromptStore } from '../interfaces/pending-prompt-store';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface PendingPromptRow {
   id: string;
@@ -46,7 +47,7 @@ export class SqlitePendingPromptStore implements IPendingPromptStore {
 
       return (await this.getPrompt(id))!;
     } catch (err) {
-      console.error('SqlitePendingPromptStore.createPrompt failed:', err);
+      getAppLogger().logError('PendingPromptStore', 'createPrompt failed', err);
       throw err;
     }
   }
@@ -62,7 +63,7 @@ export class SqlitePendingPromptStore implements IPendingPromptStore {
       if (result.changes === 0) return null;
       return (await this.getPrompt(id))!;
     } catch (err) {
-      console.error('SqlitePendingPromptStore.answerPrompt failed:', err);
+      getAppLogger().logError('PendingPromptStore', 'answerPrompt failed', err);
       throw err;
     }
   }
@@ -72,7 +73,7 @@ export class SqlitePendingPromptStore implements IPendingPromptStore {
       const row = this.db.prepare('SELECT * FROM pending_prompts WHERE id = ?').get(id) as PendingPromptRow | undefined;
       return row ? rowToPrompt(row) : null;
     } catch (err) {
-      console.error('SqlitePendingPromptStore.getPrompt failed:', err);
+      getAppLogger().logError('PendingPromptStore', 'getPrompt failed', err);
       throw err;
     }
   }
@@ -82,7 +83,7 @@ export class SqlitePendingPromptStore implements IPendingPromptStore {
       const rows = this.db.prepare("SELECT * FROM pending_prompts WHERE task_id = ? AND status = 'pending' ORDER BY created_at ASC").all(taskId) as PendingPromptRow[];
       return rows.map(rowToPrompt);
     } catch (err) {
-      console.error('SqlitePendingPromptStore.getPendingForTask failed:', err);
+      getAppLogger().logError('PendingPromptStore', 'getPendingForTask failed', err);
       throw err;
     }
   }
@@ -95,7 +96,7 @@ export class SqlitePendingPromptStore implements IPendingPromptStore {
       `).run(agentRunId);
       return result.changes;
     } catch (err) {
-      console.error('SqlitePendingPromptStore.expirePromptsForRun failed:', err);
+      getAppLogger().logError('PendingPromptStore', 'expirePromptsForRun failed', err);
       throw err;
     }
   }

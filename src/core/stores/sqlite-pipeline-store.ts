@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { Pipeline, PipelineCreateInput, PipelineUpdateInput, PipelineStatus, Transition } from '../../shared/types';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface PipelineRow {
   id: string;
@@ -67,7 +68,7 @@ export class SqlitePipelineStore implements IPipelineStore {
       const row = this.db.prepare('SELECT * FROM pipelines WHERE id = ?').get(id) as PipelineRow | undefined;
       return row ? rowToPipeline(row) : null;
     } catch (err) {
-      console.error('SqlitePipelineStore.getPipeline failed:', err);
+      getAppLogger().logError('PipelineStore', 'getPipeline failed', err);
       throw err;
     }
   }
@@ -77,7 +78,7 @@ export class SqlitePipelineStore implements IPipelineStore {
       const rows = this.db.prepare('SELECT * FROM pipelines ORDER BY created_at ASC').all() as PipelineRow[];
       return rows.map(rowToPipeline);
     } catch (err) {
-      console.error('SqlitePipelineStore.listPipelines failed:', err);
+      getAppLogger().logError('PipelineStore', 'listPipelines failed', err);
       throw err;
     }
   }
@@ -104,7 +105,7 @@ export class SqlitePipelineStore implements IPipelineStore {
 
       return (await this.getPipeline(id))!;
     } catch (err) {
-      console.error('SqlitePipelineStore.createPipeline failed:', err);
+      getAppLogger().logError('PipelineStore', 'createPipeline failed', err);
       throw err;
     }
   }
@@ -152,7 +153,7 @@ export class SqlitePipelineStore implements IPipelineStore {
       this.db.prepare(`UPDATE pipelines SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       return (await this.getPipeline(id))!;
     } catch (err) {
-      console.error('SqlitePipelineStore.updatePipeline failed:', err);
+      getAppLogger().logError('PipelineStore', 'updatePipeline failed', err);
       throw err;
     }
   }
@@ -162,7 +163,7 @@ export class SqlitePipelineStore implements IPipelineStore {
       const result = this.db.prepare('DELETE FROM pipelines WHERE id = ?').run(id);
       return result.changes > 0;
     } catch (err) {
-      console.error('SqlitePipelineStore.deletePipeline failed:', err);
+      getAppLogger().logError('PipelineStore', 'deletePipeline failed', err);
       throw err;
     }
   }
@@ -172,7 +173,7 @@ export class SqlitePipelineStore implements IPipelineStore {
       const row = this.db.prepare('SELECT * FROM pipelines WHERE task_type = ?').get(taskType) as PipelineRow | undefined;
       return row ? rowToPipeline(row) : null;
     } catch (err) {
-      console.error('SqlitePipelineStore.getPipelineForTaskType failed:', err);
+      getAppLogger().logError('PipelineStore', 'getPipelineForTaskType failed', err);
       throw err;
     }
   }

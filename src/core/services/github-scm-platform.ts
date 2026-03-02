@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import type { CreatePRParams, PRInfo, PRStatus, PRChecksResult, PRCheckRun, PRMergeableState, PRCheckState, PRCheckConclusion, PRStateUpper, PRMergeStateStatus } from '../../shared/types';
 import type { IScmPlatform } from '../interfaces/scm-platform';
 import { getShellEnv } from './shell-env';
+import { getAppLogger } from './app-logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -58,7 +59,7 @@ export class GitHubScmPlatform implements IScmPlatform {
       if (onProgress) {
         onProgress(msg);
       } else {
-        console.log(msg);
+        getAppLogger().info('GitHubScmPlatform', msg);
       }
     };
 

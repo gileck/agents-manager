@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { TaskArtifact, TaskArtifactCreateInput, ArtifactType } from '../../shared/types';
 import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import { generateId, now, parseJson } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface TaskArtifactRow {
   id: string;
@@ -42,7 +43,7 @@ export class SqliteTaskArtifactStore implements ITaskArtifactStore {
         createdAt: timestamp,
       };
     } catch (err) {
-      console.error('SqliteTaskArtifactStore.createArtifact failed:', err);
+      getAppLogger().logError('TaskArtifactStore', 'createArtifact failed', err);
       throw err;
     }
   }
@@ -61,7 +62,7 @@ export class SqliteTaskArtifactStore implements ITaskArtifactStore {
       const rows = this.db.prepare(`SELECT * FROM task_artifacts ${where} ORDER BY created_at ASC`).all(...values) as TaskArtifactRow[];
       return rows.map(rowToArtifact);
     } catch (err) {
-      console.error('SqliteTaskArtifactStore.getArtifactsForTask failed:', err);
+      getAppLogger().logError('TaskArtifactStore', 'getArtifactsForTask failed', err);
       throw err;
     }
   }
@@ -71,7 +72,7 @@ export class SqliteTaskArtifactStore implements ITaskArtifactStore {
       const result = this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(taskId);
       return result.changes;
     } catch (err) {
-      console.error('SqliteTaskArtifactStore.deleteArtifactsForTask failed:', err);
+      getAppLogger().logError('TaskArtifactStore', 'deleteArtifactsForTask failed', err);
       throw err;
     }
   }

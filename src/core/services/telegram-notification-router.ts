@@ -1,6 +1,7 @@
 import type TelegramBot from 'node-telegram-bot-api';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import type { Notification, NotificationAction } from '../../shared/types';
+import { getAppLogger } from './app-logger';
 
 export class TelegramNotificationRouter implements INotificationRouter {
   private bot: TelegramBot;
@@ -24,7 +25,7 @@ export class TelegramNotificationRouter implements INotificationRouter {
     try {
       await this.bot.sendMessage(this.chatId, text, options);
     } catch (err) {
-      console.error('[telegram-notification] MarkdownV2 send failed, retrying as plain text:', err);
+      getAppLogger().logError('TelegramNotificationRouter', 'MarkdownV2 send failed, retrying as plain text', err);
       // Retry as plain text with keyboard preserved
       const plainText = `${notification.title}\n${notification.body}`;
       const fallbackOptions: TelegramBot.SendMessageOptions = {};

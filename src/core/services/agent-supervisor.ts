@@ -6,6 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineInspectionService } from '../interfaces/pipeline-inspection-service';
 import type { AgentChatMessage } from '../../shared/types';
 import { now } from '../stores/utils';
+import { getAppLogger } from './app-logger';
 
 /** Grace period added on top of the per-run timeout to avoid racing with the SDK-level abort. */
 const GRACE_PERIOD_MS = 5 * 60 * 1000;
@@ -36,7 +37,7 @@ export class AgentSupervisor {
 
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => this.poll().catch(console.error), this.pollIntervalMs);
+    this.timer = setInterval(() => this.poll().catch(err => getAppLogger().logError('AgentSupervisor', 'poll error', err)), this.pollIntervalMs);
   }
 
   stop(): void {

@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { Feature, FeatureCreateInput, FeatureUpdateInput, FeatureFilter } from '../../shared/types';
 import type { IFeatureStore } from '../interfaces/feature-store';
 import { generateId, now } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 interface FeatureRow {
   id: string;
@@ -31,7 +32,7 @@ export class SqliteFeatureStore implements IFeatureStore {
       const row = this.db.prepare('SELECT * FROM features WHERE id = ?').get(id) as FeatureRow | undefined;
       return row ? rowToFeature(row) : null;
     } catch (err) {
-      console.error('SqliteFeatureStore.getFeature failed:', err);
+      getAppLogger().logError('FeatureStore', 'getFeature failed', err);
       throw err;
     }
   }
@@ -50,7 +51,7 @@ export class SqliteFeatureStore implements IFeatureStore {
       const rows = this.db.prepare(`SELECT * FROM features ${where} ORDER BY created_at DESC`).all(...values) as FeatureRow[];
       return rows.map(rowToFeature);
     } catch (err) {
-      console.error('SqliteFeatureStore.listFeatures failed:', err);
+      getAppLogger().logError('FeatureStore', 'listFeatures failed', err);
       throw err;
     }
   }
@@ -67,7 +68,7 @@ export class SqliteFeatureStore implements IFeatureStore {
 
       return (await this.getFeature(id))!;
     } catch (err) {
-      console.error('SqliteFeatureStore.createFeature failed:', err);
+      getAppLogger().logError('FeatureStore', 'createFeature failed', err);
       throw err;
     }
   }
@@ -98,7 +99,7 @@ export class SqliteFeatureStore implements IFeatureStore {
       this.db.prepare(`UPDATE features SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       return (await this.getFeature(id))!;
     } catch (err) {
-      console.error('SqliteFeatureStore.updateFeature failed:', err);
+      getAppLogger().logError('FeatureStore', 'updateFeature failed', err);
       throw err;
     }
   }
@@ -113,7 +114,7 @@ export class SqliteFeatureStore implements IFeatureStore {
       });
       return txn();
     } catch (err) {
-      console.error('SqliteFeatureStore.deleteFeature failed:', err);
+      getAppLogger().logError('FeatureStore', 'deleteFeature failed', err);
       throw err;
     }
   }

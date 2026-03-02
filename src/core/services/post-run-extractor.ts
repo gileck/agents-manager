@@ -8,6 +8,7 @@ import type {
 import type { ITaskStore } from '../interfaces/task-store';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
+import { getAppLogger } from './app-logger';
 
 type OnLog = (message: string) => void;
 
@@ -352,7 +353,7 @@ export function getContextEntryType(agentType: string, revisionReason?: Revision
     case 'designer':
       return revisionReason === 'changes_requested' ? 'technical_design_revision_summary' : 'technical_design_summary';
     default:
-      console.warn(`getContextEntryType: unexpected agentType '${agentType}', using 'agent_output'`);
+      getAppLogger().warn('PostRunExtractor', `getContextEntryType: unexpected agentType '${agentType}', using 'agent_output'`);
       return 'agent_output';
   }
 }

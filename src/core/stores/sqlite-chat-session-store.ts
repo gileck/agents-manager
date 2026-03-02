@@ -2,6 +2,7 @@ import type { IChatSessionStore, ChatSession, ChatSessionCreateInput, ChatSessio
 import type { ChatScopeType, ChatSessionSource } from '../../shared/types';
 import type Database from 'better-sqlite3';
 import { generateId, now } from './utils';
+import { getAppLogger } from '../services/app-logger';
 
 type AppDatabase = Database.Database;
 
@@ -31,7 +32,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       stmt.run(session.id, session.projectId, session.scopeType, session.scopeId, session.name, session.agentLib, session.source, session.createdAt, session.updatedAt);
       return session;
     } catch (error) {
-      console.error('SqliteChatSessionStore.createSession failed:', error);
+      getAppLogger().logError('ChatSessionStore', 'createSession failed', error);
       throw new Error(`Failed to create chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -47,7 +48,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       const row = stmt.get(id) as ChatSession | undefined;
       return row || null;
     } catch (error) {
-      console.error('SqliteChatSessionStore.getSession failed:', error);
+      getAppLogger().logError('ChatSessionStore', 'getSession failed', error);
       throw new Error(`Failed to get chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -72,7 +73,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       const rows = stmt.all(...params) as ChatSession[];
       return rows;
     } catch (error) {
-      console.error('SqliteChatSessionStore.listSessionsForScope failed:', error);
+      getAppLogger().logError('ChatSessionStore', 'listSessionsForScope failed', error);
       throw new Error(`Failed to list chat sessions: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -113,7 +114,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
 
       return this.getSession(id);
     } catch (error) {
-      console.error('SqliteChatSessionStore.updateSession failed:', error);
+      getAppLogger().logError('ChatSessionStore', 'updateSession failed', error);
       throw new Error(`Failed to update chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -128,7 +129,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       const result = stmt.run(id);
       return result.changes > 0;
     } catch (error) {
-      console.error('SqliteChatSessionStore.deleteSession failed:', error);
+      getAppLogger().logError('ChatSessionStore', 'deleteSession failed', error);
       throw new Error(`Failed to delete chat session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
