@@ -4,48 +4,48 @@ import type { ITaskStore } from '../interfaces/task-store';
 import type { Task, Transition, TransitionContext, HookResult, NotificationAction } from '../../shared/types';
 
 function getActionsForStatus(task: Task, toStatus: string): NotificationAction[] {
-  const viewAction: NotificationAction = { label: 'View', callbackData: `v|${task.id}` };
+  const viewAction: NotificationAction = { label: '\u{1F441}\u{FE0F} View', callbackData: `v|${task.id}` };
 
   switch (toStatus) {
     case 'plan_review':
       return [
         viewAction,
-        { label: 'Approve & Implement', callbackData: `t|${task.id}|implementing` },
-        { label: 'Request Changes', callbackData: `t|${task.id}|planning` },
+        { label: '\u{2705} Approve & Implement', callbackData: `t|${task.id}|implementing` },
+        { label: '\u{1F504} Request Changes', callbackData: `t|${task.id}|planning` },
       ];
     case 'design_review':
       return [
         viewAction,
-        { label: 'Approve & Plan', callbackData: `t|${task.id}|planning` },
-        { label: 'Approve & Implement', callbackData: `t|${task.id}|implementing` },
-        { label: 'Request Changes', callbackData: `t|${task.id}|designing` },
+        { label: '\u{2705} Approve & Plan', callbackData: `t|${task.id}|planning` },
+        { label: '\u{2705} Approve & Implement', callbackData: `t|${task.id}|implementing` },
+        { label: '\u{1F504} Request Changes', callbackData: `t|${task.id}|designing` },
       ];
     case 'investigation_review':
       return [
         viewAction,
-        { label: 'Approve & Implement', callbackData: `t|${task.id}|implementing` },
-        { label: 'Start Design', callbackData: `t|${task.id}|designing` },
-        { label: 'Request Changes', callbackData: `t|${task.id}|investigating` },
+        { label: '\u{2705} Approve & Implement', callbackData: `t|${task.id}|implementing` },
+        { label: '\u{1F3A8} Start Design', callbackData: `t|${task.id}|designing` },
+        { label: '\u{1F504} Request Changes', callbackData: `t|${task.id}|investigating` },
       ];
     case 'pr_review': {
       const actions: NotificationAction[] = [];
       if (task.prLink) {
-        actions.push({ label: 'View PR', url: task.prLink });
+        actions.push({ label: '\u{1F517} View PR', url: task.prLink });
       }
       actions.push(
-        { label: 'Approve', callbackData: `t|${task.id}|ready_to_merge` },
-        { label: 'Request Changes', callbackData: `t|${task.id}|implementing` },
+        { label: '\u{2705} Approve', callbackData: `t|${task.id}|ready_to_merge` },
+        { label: '\u{1F504} Request Changes', callbackData: `t|${task.id}|implementing` },
       );
       return actions;
     }
     case 'ready_to_merge': {
       const actions: NotificationAction[] = [];
       if (task.prLink) {
-        actions.push({ label: 'View PR', url: task.prLink });
+        actions.push({ label: '\u{1F517} View PR', url: task.prLink });
       }
       actions.push(
-        { label: 'Merge', callbackData: `t|${task.id}|done` },
-        { label: 'Request Changes', callbackData: `t|${task.id}|implementing` },
+        { label: '\u{1F500} Merge', callbackData: `t|${task.id}|done` },
+        { label: '\u{1F504} Request Changes', callbackData: `t|${task.id}|implementing` },
       );
       return actions;
     }
