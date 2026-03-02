@@ -53,19 +53,19 @@ export class PipelineInspectionService implements IPipelineInspectionService {
 
     const hookFailures: HookFailureRecord[] = recentEvents
       .filter((e) => e.category === 'system' && (e.severity === 'error' || e.severity === 'warning')
-        && e.data?.hook && typeof e.data.hook === 'string')
+        && e.data?.hookName && typeof e.data.hookName === 'string')
       .map((e) => {
         const retryableHooks = ['merge_pr', 'push_and_create_pr', 'advance_phase', 'delete_worktree'];
         return {
           id: e.id,
           taskId: e.taskId,
-          hookName: e.data.hook as string,
+          hookName: e.data.hookName as string,
           error: (e.data.error as string) ?? e.message,
           policy: (e.data.policy as HookFailureRecord['policy']) ?? 'best_effort',
           transitionFrom: (e.data.fromStatus as string) ?? '',
           transitionTo: (e.data.toStatus as string) ?? '',
           timestamp: e.createdAt,
-          retryable: retryableHooks.includes(e.data.hook as string),
+          retryable: retryableHooks.includes(e.data.hookName as string),
         };
       });
 
