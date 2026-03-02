@@ -18,6 +18,8 @@ import type {
   AgentDefinitionCreateInput, AgentDefinitionUpdateInput,
   AppDebugLogEntry, AppDebugLogFilter,
   PRChecksResult,
+  AutomatedAgent, AutomatedAgentCreateInput, AutomatedAgentUpdateInput, AutomatedAgentTemplate,
+  AgentRun,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -240,6 +242,18 @@ export interface ApiClient {
     getStatus(projectId: string): Promise<{ running: boolean }>;
     getSession(projectId: string): Promise<{ sessionId: string | null }>;
     test(botToken: string, chatId: string): Promise<unknown>;
+  };
+
+  // Automated Agents
+  automatedAgents: {
+    list(projectId?: string): Promise<AutomatedAgent[]>;
+    get(id: string): Promise<AutomatedAgent>;
+    create(input: AutomatedAgentCreateInput): Promise<AutomatedAgent>;
+    update(id: string, input: AutomatedAgentUpdateInput): Promise<AutomatedAgent>;
+    delete(id: string): Promise<void>;
+    trigger(id: string): Promise<AgentRun>;
+    getRuns(id: string, limit?: number): Promise<AgentRun[]>;
+    listTemplates(): Promise<AutomatedAgentTemplate[]>;
   };
 }
 
@@ -528,6 +542,18 @@ export function createApiClient(baseUrl: string, token?: string): ApiClient {
       getStatus: (projectId) => req('GET', `/api/telegram/status${qs({ projectId })}`),
       getSession: (projectId) => req('GET', `/api/telegram/session${qs({ projectId })}`),
       test: (botToken, chatId) => req('POST', '/api/telegram/test', { botToken, chatId }),
+    },
+
+    // -- Automated Agents ----------------------------------------------------
+    automatedAgents: {
+      list: (projectId?) => req('GET', `/api/automated-agents${qs({ projectId })}`),
+      get: (id) => req('GET', `/api/automated-agents/${id}`),
+      create: (input) => req('POST', '/api/automated-agents', input),
+      update: (id, input) => req('PUT', `/api/automated-agents/${id}`, input),
+      delete: (id) => req('DELETE', `/api/automated-agents/${id}`),
+      trigger: (id) => req('POST', `/api/automated-agents/${id}/trigger`),
+      getRuns: (id, limit?) => req('GET', `/api/automated-agents/${id}/runs${qs({ limit })}`),
+      listTemplates: () => req('GET', '/api/automated-agents/templates'),
     },
   };
 }

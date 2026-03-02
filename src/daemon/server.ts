@@ -19,6 +19,7 @@ import { telegramRoutes } from './routes/telegram';
 import { gitRoutes } from './routes/git';
 import { promptRoutes } from './routes/prompts';
 import { artifactRoutes } from './routes/artifacts';
+import { automatedAgentRoutes } from './routes/automated-agents';
 import { errorHandler } from './middleware/error-handler';
 import type { AppServices } from '../core/providers/setup';
 import type { DaemonWsServer } from './ws/ws-server';
@@ -63,6 +64,7 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
   app.use(gitRoutes(services));
   app.use(promptRoutes(services));
   app.use(artifactRoutes(services));
+  app.use(automatedAgentRoutes(services));
 
   // Error handler must be registered last
   app.use(errorHandler);

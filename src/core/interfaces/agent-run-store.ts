@@ -11,4 +11,6 @@ export interface IAgentRunStore {
    * @param limit - Maximum number of rows to return. Defaults to 1000.
    */
   getAllRuns(limit?: number): Promise<AgentRun[]>;
+  getRunsForAutomatedAgent(automatedAgentId: string, limit?: number): Promise<AgentRun[]>;
+  getActiveRunForAutomatedAgent(automatedAgentId: string): Promise<AgentRun | null>;
 }

@@ -182,4 +182,14 @@ export const IPC_CHANNELS = {
   // Debug Log operations
   DEBUG_LOG_LIST: 'debug-log:list',
   DEBUG_LOG_CLEAR: 'debug-log:clear',
+
+  // Automated Agent operations
+  AUTOMATED_AGENT_LIST: 'automated-agent:list',
+  AUTOMATED_AGENT_GET: 'automated-agent:get',
+  AUTOMATED_AGENT_CREATE: 'automated-agent:create',
+  AUTOMATED_AGENT_UPDATE: 'automated-agent:update',
+  AUTOMATED_AGENT_DELETE: 'automated-agent:delete',
+  AUTOMATED_AGENT_TRIGGER: 'automated-agent:trigger',
+  AUTOMATED_AGENT_RUNS: 'automated-agent:runs',
+  AUTOMATED_AGENT_TEMPLATES: 'automated-agent:templates',
 } as const;

@@ -906,6 +906,33 @@ export function getMigrations(): Migration[] {
       name: '085_add_debug_info_column',
       sql: `ALTER TABLE tasks ADD COLUMN debug_info TEXT`,
     },
+    {
+      name: '086_create_automated_agents',
+      sql: `
+        CREATE TABLE IF NOT EXISTS automated_agents (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          prompt_instructions TEXT NOT NULL DEFAULT '',
+          capabilities TEXT NOT NULL DEFAULT '{}',
+          schedule TEXT NOT NULL DEFAULT '{}',
+          enabled INTEGER NOT NULL DEFAULT 1,
+          max_run_duration_ms INTEGER NOT NULL DEFAULT 600000,
+          template_id TEXT,
+          last_run_at INTEGER,
+          last_run_status TEXT,
+          next_run_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_automated_agents_project ON automated_agents(project_id);
+        CREATE INDEX IF NOT EXISTS idx_automated_agents_schedule ON automated_agents(enabled, next_run_at);
+        ALTER TABLE agent_runs ADD COLUMN automated_agent_id TEXT;
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_auto_agent ON agent_runs(automated_agent_id)
+      `,
+    },
   ];
 }
 

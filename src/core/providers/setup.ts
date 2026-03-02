@@ -22,6 +22,7 @@ import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IKanbanBoardStore } from '../interfaces/kanban-board-store';
 import type { ISettingsStore } from '../interfaces/settings-store';
 import type { IAppDebugLog } from '../interfaces/app-debug-log';
+import type { IAutomatedAgentStore } from '../interfaces/automated-agent-store';
 import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -40,6 +41,7 @@ import { SqliteChatSessionStore } from '../stores/sqlite-chat-session-store';
 import { SqliteKanbanBoardStore } from '../stores/sqlite-kanban-board-store';
 import { SqliteSettingsStore } from '../stores/settings-store';
 import { SqliteAppDebugLog } from '../stores/sqlite-app-debug-log';
+import { SqliteAutomatedAgentStore } from '../stores/sqlite-automated-agent-store';
 import { AppLogger, initAppLogger, getAppLogger } from '../services/app-logger';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
@@ -85,6 +87,8 @@ import { registerPromptHandler } from '../handlers/prompt-handler';
 import { registerScmHandler } from '../handlers/scm-handler';
 import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
+import { ScheduledAgentService } from '../services/scheduled-agent-service';
+import { SchedulerSupervisor } from '../services/scheduler-supervisor';
 
 export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
@@ -127,6 +131,9 @@ export interface AppServices {
   settingsStore: ISettingsStore;
   appDebugLog: IAppDebugLog;
   appLogger: AppLogger;
+  automatedAgentStore: IAutomatedAgentStore;
+  scheduledAgentService: ScheduledAgentService;
+  schedulerSupervisor: SchedulerSupervisor;
 }
 
 export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
@@ -251,6 +258,14 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     workflowService, agentRunStore, taskEventLog,
   );
 
+  // Automated agent stores and services
+  const automatedAgentStore = new SqliteAutomatedAgentStore(db);
+  const scheduledAgentService = new ScheduledAgentService(
+    automatedAgentStore, agentRunStore, projectStore, taskStore,
+    agentLibRegistry, notificationRouter,
+  );
+  const schedulerSupervisor = new SchedulerSupervisor(automatedAgentStore, scheduledAgentService);
+
   // Chat agent service (unified: handles both project and task scopes)
   const getDefaultAgentLib = () => {
     try {
@@ -307,5 +322,8 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     settingsStore,
     appDebugLog,
     appLogger,
+    automatedAgentStore,
+    scheduledAgentService,
+    schedulerSupervisor,
   };
 }

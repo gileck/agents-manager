@@ -35,6 +35,10 @@ import type {
   AppDebugLogEntry,
   AppDebugLogFilter,
   PRChecksResult,
+  AutomatedAgent,
+  AutomatedAgentCreateInput,
+  AutomatedAgentUpdateInput,
+  AutomatedAgentTemplate,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -156,6 +160,14 @@ const IPC_CHANNELS = {
   AGENT_LIB_LIST_MODELS: 'agent-lib:list-models',
   DEBUG_LOG_LIST: 'debug-log:list',
   DEBUG_LOG_CLEAR: 'debug-log:clear',
+  AUTOMATED_AGENT_LIST: 'automated-agent:list',
+  AUTOMATED_AGENT_GET: 'automated-agent:get',
+  AUTOMATED_AGENT_CREATE: 'automated-agent:create',
+  AUTOMATED_AGENT_UPDATE: 'automated-agent:update',
+  AUTOMATED_AGENT_DELETE: 'automated-agent:delete',
+  AUTOMATED_AGENT_TRIGGER: 'automated-agent:trigger',
+  AUTOMATED_AGENT_RUNS: 'automated-agent:runs',
+  AUTOMATED_AGENT_TEMPLATES: 'automated-agent:templates',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -447,6 +459,26 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
     listAgents: (): Promise<RunningAgent[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_AGENTS_LIST),
+  },
+
+  // Automated Agent operations
+  automatedAgents: {
+    list: (projectId?: string): Promise<AutomatedAgent[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_LIST, projectId),
+    get: (id: string): Promise<AutomatedAgent | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_GET, id),
+    create: (input: AutomatedAgentCreateInput): Promise<AutomatedAgent> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_CREATE, input),
+    update: (id: string, input: AutomatedAgentUpdateInput): Promise<AutomatedAgent | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_UPDATE, id, input),
+    delete: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_DELETE, id),
+    trigger: (id: string): Promise<AgentRun> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_TRIGGER, id),
+    getRuns: (id: string, limit?: number): Promise<AgentRun[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_RUNS, id, limit),
+    listTemplates: (): Promise<AutomatedAgentTemplate[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_TEMPLATES),
   },
 
   // Shell operations

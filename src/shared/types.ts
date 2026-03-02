@@ -473,12 +473,14 @@ export interface AgentRun {
   maxTurns: number | null;
   messageCount: number | null;
   messages: AgentChatMessage[] | null;
+  automatedAgentId: string | null;
 }
 
 export interface AgentRunCreateInput {
   taskId: string;
   agentType: string;
   mode: AgentMode;
+  automatedAgentId?: string;
 }
 
 export interface AgentRunUpdateInput {
@@ -1095,4 +1097,73 @@ export interface AppDebugLogFilter {
   until?: number;
   /** Maximum number of rows to return. Defaults to 500. */
   limit?: number;
+}
+
+// ============================================
+// Automated Agent Types
+// ============================================
+
+export type AutomatedAgentScheduleType = 'interval' | 'daily-at' | 'cron' | 'manual';
+
+export interface AutomatedAgentSchedule {
+  type: AutomatedAgentScheduleType;
+  value: string; // interval: ms string, daily-at: "HH:MM", cron: expression, manual: ""
+}
+
+export interface AutomatedAgentCapabilities {
+  canCreateTasks: boolean;
+  canModifyTasks: boolean;
+  readOnly: boolean;
+  dryRun: boolean;
+  maxActions: number;
+}
+
+export interface AutomatedAgent {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  promptInstructions: string;
+  capabilities: AutomatedAgentCapabilities;
+  schedule: AutomatedAgentSchedule;
+  enabled: boolean;
+  maxRunDurationMs: number;
+  templateId: string | null;
+  lastRunAt: number | null;
+  lastRunStatus: string | null;
+  nextRunAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AutomatedAgentCreateInput {
+  projectId: string;
+  name: string;
+  description?: string;
+  promptInstructions: string;
+  capabilities?: Partial<AutomatedAgentCapabilities>;
+  schedule: AutomatedAgentSchedule;
+  enabled?: boolean;
+  maxRunDurationMs?: number;
+  templateId?: string;
+}
+
+export interface AutomatedAgentUpdateInput {
+  name?: string;
+  description?: string;
+  promptInstructions?: string;
+  capabilities?: Partial<AutomatedAgentCapabilities>;
+  schedule?: AutomatedAgentSchedule;
+  enabled?: boolean;
+  maxRunDurationMs?: number;
+}
+
+export interface AutomatedAgentTemplate {
+  id: string;
+  name: string;
+  description: string;
+  promptInstructions: string;
+  defaultSchedule: AutomatedAgentSchedule;
+  defaultCapabilities: AutomatedAgentCapabilities;
+  defaultMaxRunDurationMs: number;
 }

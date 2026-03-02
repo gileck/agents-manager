@@ -24,6 +24,7 @@ interface AgentRunRow {
   max_turns: number | null;
   message_count: number | null;
   messages: string | null;
+  automated_agent_id: string | null;
 }
 
 function rowToRun(row: AgentRunRow): AgentRun {
@@ -47,6 +48,7 @@ function rowToRun(row: AgentRunRow): AgentRun {
     maxTurns: row.max_turns ?? null,
     messageCount: row.message_count ?? null,
     messages: parseJson<AgentChatMessage[] | null>(row.messages, null),
+    automatedAgentId: row.automated_agent_id ?? null,
   };
 }
 
@@ -58,10 +60,17 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       const id = generateId();
       const timestamp = now();
 
-      this.db.prepare(`
-        INSERT INTO agent_runs (id, task_id, agent_type, mode, status, started_at)
-        VALUES (?, ?, ?, ?, 'running', ?)
-      `).run(id, input.taskId, input.agentType, input.mode, timestamp);
+      if (input.automatedAgentId) {
+        this.db.prepare(`
+          INSERT INTO agent_runs (id, task_id, agent_type, mode, status, started_at, automated_agent_id)
+          VALUES (?, ?, ?, ?, 'running', ?, ?)
+        `).run(id, input.taskId, input.agentType, input.mode, timestamp, input.automatedAgentId);
+      } else {
+        this.db.prepare(`
+          INSERT INTO agent_runs (id, task_id, agent_type, mode, status, started_at)
+          VALUES (?, ?, ?, ?, 'running', ?)
+        `).run(id, input.taskId, input.agentType, input.mode, timestamp);
+      }
 
       return (await this.getRun(id))!;
     } catch (err) {
@@ -182,6 +191,26 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       return rows.map(rowToRun);
     } catch (err) {
       getAppLogger().logError('AgentRunStore', 'getAllRuns failed', err);
+      throw err;
+    }
+  }
+
+  async getRunsForAutomatedAgent(automatedAgentId: string, limit: number = 50): Promise<AgentRun[]> {
+    try {
+      const rows = this.db.prepare('SELECT * FROM agent_runs WHERE automated_agent_id = ? ORDER BY started_at DESC LIMIT ?').all(automatedAgentId, limit) as AgentRunRow[];
+      return rows.map(rowToRun);
+    } catch (err) {
+      getAppLogger().logError('AgentRunStore', 'getRunsForAutomatedAgent failed', err);
+      throw err;
+    }
+  }
+
+  async getActiveRunForAutomatedAgent(automatedAgentId: string): Promise<AgentRun | null> {
+    try {
+      const row = this.db.prepare("SELECT * FROM agent_runs WHERE automated_agent_id = ? AND status = 'running' LIMIT 1").get(automatedAgentId) as AgentRunRow | undefined;
+      return row ? rowToRun(row) : null;
+    } catch (err) {
+      getAppLogger().logError('AgentRunStore', 'getActiveRunForAutomatedAgent failed', err);
       throw err;
     }
   }
