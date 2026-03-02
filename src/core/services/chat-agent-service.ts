@@ -313,6 +313,20 @@ export class ChatAgentService {
     return { userMessage, sessionId, completion };
   }
 
+  stopAll(): void {
+    const sessionIds = [...this.runningControllers.keys()];
+    if (sessionIds.length === 0) return;
+
+    console.log(`Stopping ${sessionIds.length} running chat agent(s)...`);
+    for (const sessionId of sessionIds) {
+      try {
+        this.stop(sessionId);
+      } catch (err) {
+        console.warn(`Failed to stop chat agent session ${sessionId}:`, err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+
   stop(sessionId: string): void {
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
