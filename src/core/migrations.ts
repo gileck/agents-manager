@@ -886,6 +886,22 @@ export function getMigrations(): Migration[] {
       name: '083_migrate_plan_design_comments_to_context_entries',
       sql: getMigratePlanDesignCommentsSql(),
     },
+    {
+      name: '084_create_app_debug_log',
+      sql: `
+        CREATE TABLE IF NOT EXISTS app_debug_log (
+          id TEXT PRIMARY KEY,
+          level TEXT NOT NULL,
+          source TEXT NOT NULL,
+          message TEXT NOT NULL,
+          data TEXT NOT NULL DEFAULT '{}',
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_app_debug_log_level ON app_debug_log(level);
+        CREATE INDEX IF NOT EXISTS idx_app_debug_log_source ON app_debug_log(source);
+        CREATE INDEX IF NOT EXISTS idx_app_debug_log_created_at ON app_debug_log(created_at)
+      `,
+    },
   ];
 }
 

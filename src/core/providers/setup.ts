@@ -21,6 +21,7 @@ import type { IChatMessageStore } from '../interfaces/chat-message-store';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IKanbanBoardStore } from '../interfaces/kanban-board-store';
 import type { ISettingsStore } from '../interfaces/settings-store';
+import type { IAppDebugLog } from '../interfaces/app-debug-log';
 import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -38,6 +39,8 @@ import { SqliteChatMessageStore } from '../stores/sqlite-chat-message-store';
 import { SqliteChatSessionStore } from '../stores/sqlite-chat-session-store';
 import { SqliteKanbanBoardStore } from '../stores/sqlite-kanban-board-store';
 import { SqliteSettingsStore } from '../stores/settings-store';
+import { SqliteAppDebugLog } from '../stores/sqlite-app-debug-log';
+import { AppLogger } from '../services/app-logger';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
 import { AgentService } from '../services/agent-service';
@@ -122,6 +125,8 @@ export interface AppServices {
   chatAgentService: ChatAgentService;
   agentLibRegistry: AgentLibRegistryType;
   settingsStore: ISettingsStore;
+  appDebugLog: IAppDebugLog;
+  appLogger: AppLogger;
 }
 
 export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
@@ -132,6 +137,8 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const taskEventLog = new SqliteTaskEventLog(db);
   const activityLog = new SqliteActivityLog(db);
   const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, db);
+  const appDebugLog = new SqliteAppDebugLog(db);
+  const appLogger = new AppLogger(appDebugLog);
 
   // Register built-in guards
   registerCoreGuards(pipelineEngine, db);
@@ -298,5 +305,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     chatAgentService,
     agentLibRegistry,
     settingsStore,
+    appDebugLog,
+    appLogger,
   };
 }

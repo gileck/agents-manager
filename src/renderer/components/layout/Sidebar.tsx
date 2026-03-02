@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../../lib/utils';
-import { LayoutDashboard, FolderOpen, CheckSquare, Layers, GitBranch, Settings, Bug, MessageSquare, DollarSign, Trello, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CheckSquare, Layers, GitBranch, Settings, Bug, MessageSquare, DollarSign, Trello, RefreshCw, ScrollText } from 'lucide-react';
 import { ActiveAgentsEntries } from './ActiveAgentsList';
 import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
 import { SidebarSection } from './SidebarSection';
@@ -16,6 +16,7 @@ const navItems = [
   { to: '/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/cost', icon: DollarSign, label: 'Cost' },
   { to: '/source-control', icon: GitBranch, label: 'Source Control' },
+  { to: '/debug-logs', icon: ScrollText, label: 'Debug Logs' },
 ];
 
 interface SidebarProps {

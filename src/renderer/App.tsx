@@ -22,6 +22,7 @@ import { TelegramPage } from './pages/TelegramPage';
 import { CostPage } from './pages/CostPage';
 import { SourceControlPage } from './pages/SourceControlPage';
 import { KanbanBoardPage } from './pages/KanbanBoardPage';
+import { DebugLogsPage } from './pages/DebugLogsPage';
 import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useRouteRestore } from './hooks/useRouteRestore';
@@ -123,6 +124,7 @@ function AppRoutes() {
         <Route path="chat" element={<ChatPage />} />
         <Route path="cost" element={<CostPage />} />
         <Route path="source-control" element={<SourceControlPage />} />
+        <Route path="debug-logs" element={<DebugLogsPage />} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="general" replace />} />
           <Route path="general" element={<SettingsPage />} />

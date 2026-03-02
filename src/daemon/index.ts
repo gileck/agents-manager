@@ -29,6 +29,8 @@ async function main() {
     },
   });
 
+  services.appLogger.info('daemon', 'Daemon starting');
+
   // Create the HTTP server and Express app
   const { httpServer } = createServer(services, wsHolder);
 
@@ -40,28 +42,37 @@ async function main() {
   startSupervisors(services);
 
   // Auto-start Telegram bots for projects with config
-  autoStartTelegramBots(services, wsHolder).catch(err =>
-    console.error('Failed to auto-start Telegram bots:', err));
+  autoStartTelegramBots(services, wsHolder).catch(err => {
+    console.error('Failed to auto-start Telegram bots:', err);
+    services.appLogger.logError('daemon', 'Failed to auto-start Telegram bots', err);
+  });
 
   // Recover orphaned agent runs from previous daemon session
   services.agentService.recoverOrphanedRuns().then((interrupted) => {
     if (interrupted.length > 0) {
       console.log(`Recovered ${interrupted.length} orphaned agent run(s).`);
+      services.appLogger.info('daemon', `Recovered ${interrupted.length} orphaned agent run(s)`);
       wsServer.broadcast(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, undefined, interrupted);
     }
   }).catch((err) => {
     console.error('Failed to recover orphaned runs:', err);
+    services.appLogger.logError('daemon', 'Failed to recover orphaned runs', err);
   });
 
   // Start listening
   httpServer.listen(PORT, '127.0.0.1', () => {
     console.log(`Daemon listening on http://127.0.0.1:${PORT}`);
+    services.appLogger.info('daemon', `Daemon listening on http://127.0.0.1:${PORT}`);
   });
 
   // Graceful shutdown
   const shutdown = async () => {
     console.log('Shutting down daemon...');
-    await stopAllBots().catch(err => console.warn('Failed to stop Telegram bots:', err));
+    services.appLogger.info('daemon', 'Daemon shutting down');
+    await stopAllBots().catch(err => {
+      console.warn('Failed to stop Telegram bots:', err);
+      services.appLogger.logError('daemon', 'Failed to stop Telegram bots', err);
+    });
     stopSupervisors(services);
     wsServer.close();
     httpServer.closeAllConnections();
@@ -75,7 +86,7 @@ async function main() {
   process.on('SIGINT', shutdown);
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error('Daemon failed to start:', err);
   process.exit(1);
 });

@@ -1032,3 +1032,35 @@ export interface KanbanBoardUpdateInput {
   showAssignee?: boolean;
   showTags?: boolean;
 }
+
+// ============================================
+// App Debug Log Types
+// ============================================
+
+export type AppLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface AppDebugLogEntry {
+  id: string;
+  level: AppLogLevel;
+  source: string;
+  message: string;
+  data: Record<string, unknown>;
+  createdAt: number;
+}
+
+export interface AppDebugLogCreateInput {
+  level: AppLogLevel;
+  source: string;
+  message: string;
+  data?: Record<string, unknown>;
+}
+
+export interface AppDebugLogFilter {
+  level?: AppLogLevel;
+  source?: string;
+  search?: string;
+  since?: number;
+  until?: number;
+  /** Maximum number of rows to return. Defaults to 500. */
+  limit?: number;
+}

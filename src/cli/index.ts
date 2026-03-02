@@ -13,6 +13,7 @@ import { registerPipelinesCommands } from './commands/pipelines';
 import { registerStatusCommand } from './commands/status';
 import { registerTelegramCommands } from './commands/telegram';
 import { registerDaemonCommands } from './commands/daemon';
+import { registerLogsCommands } from './commands/logs';
 
 const program = new Command();
 
@@ -50,6 +51,7 @@ async function main(): Promise<void> {
     registerPipelinesCommands(program, api);
     registerStatusCommand(program, api);
     registerTelegramCommands(program, api);
+    registerLogsCommands(program, api);
   }
 
   await program.parseAsync(process.argv);

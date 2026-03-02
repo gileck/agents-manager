@@ -3,6 +3,7 @@ import type { AppServices } from '../../core/providers/setup';
 import type {
   TaskEventFilter, TaskEventCategory, TaskEventSeverity,
   ActivityFilter, ActivityAction, ActivityEntity,
+  AppDebugLogFilter, AppLogLevel,
 } from '../../shared/types';
 
 export function eventRoutes(services: AppServices): Router {
@@ -53,6 +54,36 @@ export function eventRoutes(services: AppServices): Router {
     try {
       const timeline = services.timelineService.getTimeline(req.params.id);
       res.json(timeline);
+    } catch (err) { next(err); }
+  });
+
+  // ============================================
+  // App Debug Logs
+  // ============================================
+
+  router.get('/api/debug-logs', async (req, res, next) => {
+    try {
+      const filter: AppDebugLogFilter = {};
+      if (req.query.level) filter.level = req.query.level as AppLogLevel;
+      if (req.query.source) filter.source = req.query.source as string;
+      if (req.query.search) filter.search = req.query.search as string;
+      if (req.query.since) { const n = Number(req.query.since); if (!isNaN(n)) filter.since = n; }
+      if (req.query.until) { const n = Number(req.query.until); if (!isNaN(n)) filter.until = n; }
+      if (req.query.limit) { const n = Number(req.query.limit); if (!isNaN(n) && n > 0) filter.limit = n; }
+      const entries = await services.appDebugLog.getEntries(filter);
+      res.json(entries);
+    } catch (err) { next(err); }
+  });
+
+  router.delete('/api/debug-logs', async (req, res, next) => {
+    try {
+      let olderThanMs: number | undefined;
+      if (req.query.olderThanMs) {
+        const n = Number(req.query.olderThanMs);
+        if (!isNaN(n) && n > 0) olderThanMs = n;
+      }
+      const deleted = await services.appDebugLog.clear(olderThanMs);
+      res.json({ deleted });
     } catch (err) { next(err); }
   });
 

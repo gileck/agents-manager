@@ -16,6 +16,7 @@ import type {
   AgentMode, RevisionReason,
   KanbanBoardCreateInput, KanbanBoardUpdateInput,
   AgentDefinitionCreateInput, AgentDefinitionUpdateInput,
+  AppDebugLogEntry, AppDebugLogFilter,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -221,6 +222,12 @@ export interface ApiClient {
     getProjectLog(projectId: string, count?: number): Promise<unknown[]>;
     getProjectBranch(projectId: string): Promise<{ branch: string }>;
     getProjectCommit(projectId: string, hash: string): Promise<unknown>;
+  };
+
+  // Debug Logs
+  debugLogs: {
+    list(filter?: AppDebugLogFilter): Promise<AppDebugLogEntry[]>;
+    clear(olderThanMs?: number): Promise<{ deleted: number }>;
   };
 
   // Telegram
@@ -485,6 +492,27 @@ export function createApiClient(baseUrl: string, token?: string): ApiClient {
         req('GET', `/api/projects/${projectId}/git/branch`),
       getProjectCommit: (projectId, hash) =>
         req('GET', `/api/projects/${projectId}/git/commit/${hash}`),
+    },
+
+    // -- Debug Logs ----------------------------------------------------------
+    debugLogs: {
+      list: (filter?: AppDebugLogFilter) => {
+        const q: Record<string, string | number | undefined> = {};
+        if (filter) {
+          if (filter.level) q.level = filter.level;
+          if (filter.source) q.source = filter.source;
+          if (filter.search) q.search = filter.search;
+          if (filter.since !== undefined) q.since = filter.since;
+          if (filter.until !== undefined) q.until = filter.until;
+          if (filter.limit !== undefined) q.limit = filter.limit;
+        }
+        return req('GET', `/api/debug-logs${qs(q)}`);
+      },
+      clear: (olderThanMs?: number) => {
+        const q: Record<string, number | undefined> = {};
+        if (olderThanMs !== undefined) q.olderThanMs = olderThanMs;
+        return req('DELETE', `/api/debug-logs${qs(q)}`);
+      },
     },
 
     // -- Telegram ------------------------------------------------------------

@@ -177,4 +177,8 @@ export const IPC_CHANNELS = {
   // Agent Lib operations
   AGENT_LIB_LIST: 'agent-lib:list',
   AGENT_LIB_LIST_MODELS: 'agent-lib:list-models',
+
+  // Debug Log operations
+  DEBUG_LOG_LIST: 'debug-log:list',
+  DEBUG_LOG_CLEAR: 'debug-log:clear',
 } as const;

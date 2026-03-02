@@ -32,6 +32,8 @@ import type {
   KanbanBoardConfig,
   KanbanBoardCreateInput,
   KanbanBoardUpdateInput,
+  AppDebugLogEntry,
+  AppDebugLogFilter,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -150,6 +152,8 @@ const IPC_CHANNELS = {
   KANBAN_BOARD_UPDATE: 'kanban-board:update',
   KANBAN_BOARD_DELETE: 'kanban-board:delete',
   AGENT_LIB_LIST_MODELS: 'agent-lib:list-models',
+  DEBUG_LOG_LIST: 'debug-log:list',
+  DEBUG_LOG_CLEAR: 'debug-log:clear',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -387,6 +391,14 @@ const api = {
   dashboard: {
     stats: (): Promise<DashboardStats> =>
       ipcRenderer.invoke(IPC_CHANNELS.DASHBOARD_STATS),
+  },
+
+  // Debug Log operations
+  debugLogs: {
+    list: (filter?: AppDebugLogFilter): Promise<AppDebugLogEntry[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEBUG_LOG_LIST, filter),
+    clear: (olderThanMs?: number): Promise<{ deleted: number }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEBUG_LOG_CLEAR, olderThanMs),
   },
 
   // Telegram operations
