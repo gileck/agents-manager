@@ -29,6 +29,10 @@ export interface AgentLibResult {
   costInputTokens?: number;
   costOutputTokens?: number;
   structuredOutput?: Record<string, unknown>;
+  /** Why the process was killed: 'timeout', 'stopped' (user/supervisor), or 'external_signal'. */
+  killReason?: string;
+  /** Original OS exit code (e.g. 143 for SIGTERM, 137 for SIGKILL). */
+  rawExitCode?: number;
 }
 
 export interface AgentLibTelemetry {

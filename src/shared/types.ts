@@ -669,6 +669,10 @@ export interface AgentRunResult {
   costInputTokens?: number;
   costOutputTokens?: number;
   prompt?: string;
+  /** Why the process was killed: 'timeout', 'stopped', or 'external_signal'. */
+  killReason?: string;
+  /** Original OS exit code (e.g. 143 for SIGTERM, 137 for SIGKILL). */
+  rawExitCode?: number;
 }
 
 export interface AgentInfo {

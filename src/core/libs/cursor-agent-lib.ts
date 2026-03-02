@@ -14,6 +14,8 @@ export class CursorAgentLib implements IAgentLib {
   readonly name = 'cursor-agent';
 
   private runningStates = new Map<string, RunState>();
+  /** Tracks why a process was killed, survives the stop() → close gap. */
+  private stoppedReasons = new Map<string, string>();
 
   getDefaultModel(): string { return 'claude-4.6-opus'; }
 
@@ -90,6 +92,7 @@ export class CursorAgentLib implements IAgentLib {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
+      this.stoppedReasons.set(runId, 'timeout');
       try { process.kill(-proc.pid!, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
       state.killTimer = setTimeout(() => { try { process.kill(-proc.pid!, 'SIGKILL'); } catch { /* process already exited */ } }, 5000);
     }, options.timeoutMs);
@@ -137,20 +140,33 @@ export class CursorAgentLib implements IAgentLib {
         stderrOutput += data.toString();
       });
 
-      proc.on('close', (code) => {
+      proc.on('close', (code, signal) => {
         clearTimeout(timer);
         if (state.killTimer) clearTimeout(state.killTimer);
         this.runningStates.delete(runId);
 
+        // Determine kill reason for signal-related exits
+        let killReason: string | undefined;
+        const rawExitCode = code ?? (signal === 'SIGTERM' ? 143 : signal === 'SIGKILL' ? 137 : undefined);
+        const isSignalExit = rawExitCode === 143 || rawExitCode === 137 || signal != null;
+
         if (timedOut) {
           isError = true;
+          killReason = 'timeout';
           errorMessage = `cursor-agent timed out after ${Math.round(options.timeoutMs / 1000)}s`;
           log(errorMessage);
+        } else if (isSignalExit) {
+          killReason = this.stoppedReasons.get(runId) ?? 'external_signal';
+          isError = true;
+          errorMessage = stderrOutput || `cursor-agent exited with code ${rawExitCode} [kill_reason=${killReason}]`;
+          log(`cursor-agent killed: ${errorMessage}`);
         } else if (code !== 0 && !isError) {
           isError = true;
           errorMessage = stderrOutput || `cursor-agent exited with code ${code}`;
           log(`cursor-agent failed: ${errorMessage}`);
         }
+
+        this.stoppedReasons.delete(runId);
 
         log(`cursor-agent completed: exitCode=${code}, messages=${state.messageCount}`);
 
@@ -158,6 +174,8 @@ export class CursorAgentLib implements IAgentLib {
           exitCode: isError ? 1 : 0,
           output: resultText || errorMessage || '',
           error: isError ? errorMessage : undefined,
+          killReason,
+          rawExitCode: rawExitCode ?? undefined,
         });
       });
 
@@ -165,6 +183,7 @@ export class CursorAgentLib implements IAgentLib {
         clearTimeout(timer);
         if (state.killTimer) clearTimeout(state.killTimer);
         this.runningStates.delete(runId);
+        this.stoppedReasons.delete(runId);
         isError = true;
         errorMessage = `Failed to spawn cursor-agent: ${err.message}`;
         log(errorMessage);
@@ -183,6 +202,7 @@ export class CursorAgentLib implements IAgentLib {
       console.warn(`[CursorAgentLib] stop called for unknown runId: ${runId}`);
       return;
     }
+    this.stoppedReasons.set(runId, 'stopped');
     try { process.kill(-state.process.pid!, 'SIGTERM'); } catch { state.process.kill('SIGTERM'); }
     state.killTimer = setTimeout(() => { try { process.kill(-state.process.pid!, 'SIGKILL'); } catch { /* process already exited */ } }, 5000);
     this.runningStates.delete(runId);
