@@ -103,6 +103,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       if (task.technicalDesign) {
         rcLines.push('', '## Technical Design', task.technicalDesign);
       }
+      rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Design Feedback'));
       rcLines.push(
         ``,
         `## Instructions`,
@@ -242,6 +243,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       if (task.technicalDesign) {
         lines.push('', '## Technical Design', task.technicalDesign);
       }
+      lines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Design Feedback'));
       prompt = lines.join('\n');
     }
 
