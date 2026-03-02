@@ -252,7 +252,7 @@ This polling is necessary because GitHub computes merge status asynchronously af
 4. Reviewer reports `approved` → `merge_pr` hook:
    - Removes worktree (unlock + delete)
    - Merges PR via `gh pr merge --squash --delete-branch`
-   - Optionally pulls main: `git pull origin main`
+   - Optionally fetches main: `git fetch origin main:main`
 
 ### Changes Requested
 
