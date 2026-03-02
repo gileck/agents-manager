@@ -174,6 +174,7 @@ The generic `Agent` class bridges prompt builder + lib registry → `IAgent`:
 - `isReadOnly() = true`
 - Max turns: 150, Timeout: 10 min
 - Handles bug investigation (`mode: 'new'`) and investigation resume (`mode: 'revision'`)
+- Includes `task.debugInfo` (raw debug logs) in the prompt when present — this field is only consumed by the investigator, keeping downstream agent prompts clean
 - `inferOutcome()` → `'investigation_complete'`
 - Structured output: `{ plan, investigationSummary, subtasks }` + interactive fields
 

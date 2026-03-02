@@ -72,6 +72,82 @@ describe('Agent Outcome Transitions', () => {
     });
   });
 
+  describe('merge-base pre-check', () => {
+    it('should skip rebase and return pr_ready when branch is already rebased', async () => {
+      const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
+
+      // Configure mergeBase and revParse to return the same hash (branch already rebased)
+      const stub = ctx.gitOps as StubGitOps;
+      stub.mergeBaseOverride = 'abc123';
+      stub.revParseOverride = 'abc123';
+
+      await ctx.worktreeManager.create('task/test-branch', task.id);
+      await ctx.worktreeManager.lock(task.id);
+      const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1' });
+      await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
+
+      const run = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'scripted',
+        mode: 'new',
+      });
+
+      await ctx.outcomeResolver.resolveAndTransition({
+        taskId: task.id,
+        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
+        run: { id: run.id },
+        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
+        worktreeManager: ctx.worktreeManager,
+        phase: { id: phase.id },
+        context: { workdir: '/tmp', mode: 'new' } as never,
+      });
+
+      const updatedTask = await ctx.taskStore.getTask(task.id);
+      expect(updatedTask!.status).toBe('pr_review');
+
+      // Verify event log records the skip
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'git' });
+      expect(events.some((e) => e.message.includes('already rebased'))).toBe(true);
+    });
+
+    it('should fall through to normal rebase when merge-base check throws', async () => {
+      const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
+
+      // Configure mergeBase to throw — should fall through to rebase which succeeds
+      const stub = ctx.gitOps as StubGitOps;
+      stub.setFailure('mergeBase', new Error('fatal: not a valid ref'));
+
+      await ctx.worktreeManager.create('task/test-branch', task.id);
+      await ctx.worktreeManager.lock(task.id);
+      const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1' });
+      await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
+
+      const run = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'scripted',
+        mode: 'new',
+      });
+
+      await ctx.outcomeResolver.resolveAndTransition({
+        taskId: task.id,
+        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
+        run: { id: run.id },
+        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
+        worktreeManager: ctx.worktreeManager,
+        phase: { id: phase.id },
+        context: { workdir: '/tmp', mode: 'new' } as never,
+      });
+
+      // Should still succeed via normal rebase path
+      const updatedTask = await ctx.taskStore.getTask(task.id);
+      expect(updatedTask!.status).toBe('pr_review');
+
+      // Verify the rebase succeeded (not the merge-base skip)
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'git' });
+      expect(events.some((e) => e.message.includes('rebase onto origin/main succeeded'))).toBe(true);
+    });
+  });
+
   describe('conflicts_detected outcome', () => {
     it('should self-transition implementing → implementing on rebase failure', async () => {
       const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');

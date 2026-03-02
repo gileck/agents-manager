@@ -66,7 +66,11 @@ async function main() {
   });
 
   // Graceful shutdown
+  let shutdownInProgress = false;
   const shutdown = async () => {
+    if (shutdownInProgress) return;
+    shutdownInProgress = true;
+
     console.log('Shutting down daemon...');
     services.appLogger.info('daemon', 'Daemon shutting down');
     await stopAllBots().catch(err => {
@@ -74,6 +78,21 @@ async function main() {
       services.appLogger.logError('daemon', 'Failed to stop Telegram bots', err);
     });
     stopSupervisors(services);
+
+    // Drain running agents before closing connections
+    try {
+      const drainTimeout = new Promise<void>(resolve => setTimeout(resolve, 5000));
+      await Promise.race([
+        Promise.all([
+          services.agentService.stopAllRunningAgents(),
+          Promise.resolve(services.chatAgentService.stopAll()),
+        ]),
+        drainTimeout,
+      ]);
+    } catch (err) {
+      console.warn('Agent drain failed:', err instanceof Error ? err.message : String(err));
+    }
+
     wsServer.close();
     httpServer.closeAllConnections();
     httpServer.close(() => {

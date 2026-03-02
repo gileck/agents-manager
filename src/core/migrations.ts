@@ -902,6 +902,10 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_app_debug_log_created_at ON app_debug_log(created_at)
       `,
     },
+    {
+      name: '085_add_debug_info_column',
+      sql: `ALTER TABLE tasks ADD COLUMN debug_info TEXT`,
+    },
   ];
 }
 

@@ -38,6 +38,8 @@ interface RunState {
   messageCount: number;
   timeout: number;
   maxTurns: number;
+  /** Set by stop() before aborting so the catch block can distinguish user-stop from timeout. */
+  stoppedReason?: string;
 }
 
 export class ClaudeCodeLib implements IAgentLib {
@@ -102,6 +104,7 @@ export class ClaudeCodeLib implements IAgentLib {
     let structuredOutput: Record<string, unknown> | undefined;
     let isError = false;
     let errorMessage: string | undefined;
+    let killReason: string | undefined;
 
     const emit = (chunk: string) => {
       resultText += chunk;
@@ -207,12 +210,14 @@ export class ClaudeCodeLib implements IAgentLib {
       const sdkError = err instanceof Error ? err.message : String(err);
       errorMessage = sdkError;
       if (timedOut) {
+        killReason = 'timeout';
         const elapsed = Date.now() - startTime;
         errorMessage = `Agent timed out after ${Math.round(elapsed / 1000)}s (timeout=${Math.round(options.timeoutMs / 1000)}s, ${state.messageCount} messages processed)`;
         log(`${errorMessage} [sdk: ${sdkError}]`);
       } else if (abortController.signal.aborted) {
+        killReason = state.stoppedReason ?? 'stopped';
         const elapsed = Date.now() - startTime;
-        errorMessage = `Agent aborted after ${Math.round(elapsed / 1000)}s (${state.messageCount} messages processed)`;
+        errorMessage = `Agent aborted after ${Math.round(elapsed / 1000)}s (${state.messageCount} messages processed) [kill_reason=${killReason}]`;
         log(`${errorMessage} [sdk: ${sdkError}]`);
       } else {
         log(`Agent execution error: ${errorMessage}`);
@@ -223,13 +228,16 @@ export class ClaudeCodeLib implements IAgentLib {
     }
 
     const output = resultText || errorMessage || '';
+    const exitCode = isError ? 1 : 0;
     return {
-      exitCode: isError ? 1 : 0,
+      exitCode,
       output,
       error: isError ? errorMessage : undefined,
       costInputTokens,
       costOutputTokens,
       structuredOutput,
+      killReason,
+      rawExitCode: exitCode,
     };
   }
 
@@ -239,6 +247,7 @@ export class ClaudeCodeLib implements IAgentLib {
       console.warn(`[ClaudeCodeLib] stop called for unknown runId: ${runId}`);
       return;
     }
+    state.stoppedReason = 'stopped';
     state.abortController.abort();
     this.runningStates.delete(runId);
   }

@@ -32,6 +32,7 @@ interface Task {
   prLink: string | null;
   branchName: string | null;
   plan: string | null;
+  debugInfo: string | null;           // Raw debug logs for bug investigation (only used by investigator agent)
   subtasks: Subtask[];                // JSON array in DB
   planComments: PlanComment[];        // JSON array in DB
   metadata: Record<string, unknown>;  // JSON object in DB

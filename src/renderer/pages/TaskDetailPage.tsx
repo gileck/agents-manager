@@ -310,6 +310,7 @@ export function TaskDetailPage() {
         pipelineId: task.pipelineId,
         title: `${task.title} (copy)`,
         description: task.description ?? undefined,
+        debugInfo: task.debugInfo ?? undefined,
         priority: task.priority,
         assignee: task.assignee ?? undefined,
         tags: task.tags,

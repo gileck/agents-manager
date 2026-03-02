@@ -37,23 +37,16 @@ export async function createBugReport(title: string, message: string, fullDetail
       pipelineId = pipelines[0].id;
     }
 
-    const description = [
-      '## Error',
-      '```',
-      message,
-      '```',
-      '',
-      '## Stack Trace',
-      '```',
-      fullDetail,
-      '```',
-    ].join('\n');
+    const description = `## Error\n\`\`\`\n${message}\n\`\`\``;
+
+    const debugInfo = fullDetail;
 
     const task = await window.api.tasks.create({
       projectId,
       pipelineId,
       title: `[Bug] ${title}`,
       description,
+      debugInfo,
       tags: ['bug'],
     });
 

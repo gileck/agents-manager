@@ -136,14 +136,22 @@ export class TaskReviewReportBuilder {
 
     // ── HOOKS ──
     const hookEntries = timeline.filter(e => e.data?.hookName);
-    lines.push(`[[ HOOKS:START ]]`);
+    // Group hook entries by hookName
+    const hookGroups = new Map<string, typeof hookEntries>();
     for (const h of hookEntries) {
-      const hookName = h.data?.hookName ?? 'unknown';
-      const result = h.severity === 'error' ? 'failed' : 'success';
-      lines.push(`[[ HOOK:START name=${hookName} result=${result} ]]`);
-      lines.push(h.title);
-      if (h.data) {
-        lines.push(`Data: ${JSON.stringify(h.data)}`);
+      const name = h.data?.hookName as string;
+      if (!hookGroups.has(name)) hookGroups.set(name, []);
+      hookGroups.get(name)!.push(h);
+    }
+    lines.push(`[[ HOOKS:START ]]`);
+    for (const [hookName, entries] of hookGroups) {
+      const hasError = entries.some(e => e.severity === 'error');
+      const result = hasError ? 'failed' : 'success';
+      lines.push(`[[ HOOK:START name=${hookName} result=${result} events=${entries.length} ]]`);
+      for (const h of entries) {
+        const ts = new Date(h.timestamp).toISOString().split('T')[1].split('.')[0];
+        const severity = h.severity ?? 'info';
+        lines.push(`  [${ts}] (${severity}) ${h.title}`);
       }
       lines.push(`[[ HOOK:END name=${hookName} ]]`);
     }

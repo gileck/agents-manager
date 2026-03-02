@@ -5,6 +5,7 @@ export interface IAgentService {
   queueMessage(taskId: string, message: string): void;
   waitForCompletion(runId: string): Promise<void>;
   stop(runId: string): Promise<void>;
+  stopAllRunningAgents(): Promise<void>;
   recoverOrphanedRuns(): Promise<AgentRun[]>;
   getActiveRunIds(): string[];
   isSpawning(taskId: string): boolean;

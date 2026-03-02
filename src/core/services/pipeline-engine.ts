@@ -41,6 +41,7 @@ interface TaskRow {
   feature_id: string | null;
   plan: string | null;
   technical_design: string | null;
+  debug_info: string | null;
   subtasks: string;
   phases: string | null;
   plan_comments: string;
@@ -67,6 +68,7 @@ function rowToTask(row: TaskRow): Task {
     branchName: row.branch_name,
     plan: row.plan,
     technicalDesign: row.technical_design,
+    debugInfo: row.debug_info,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
     phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
     planComments: parseJson<PlanComment[]>(row.plan_comments, []),
@@ -514,7 +516,7 @@ export class PipelineEngine implements IPipelineEngine {
             category: 'system',
             severity: 'warning',
             message: `Hook "${hook.name}" not registered (skipped during force transition)`,
-            data: { hook: hook.name, forced: true },
+            data: { hookName: hook.name, forced: true },
           });
         } else {
           const failure: HookFailure = { hook: hook.name, error: `Hook "${hook.name}" not registered`, policy };
@@ -524,7 +526,7 @@ export class PipelineEngine implements IPipelineEngine {
             category: 'system',
             severity: 'warning',
             message: `Hook "${hook.name}" not registered — skipping`,
-            data: { hook: hook.name },
+            data: { hookName: hook.name },
           }).catch((err) => console.error('Audit log write failed:', err));
         }
         continue;
@@ -538,7 +540,7 @@ export class PipelineEngine implements IPipelineEngine {
             category: 'system',
             severity: 'error',
             message: `Hook "${hook.name}" failed (fire_and_forget${forced ? ', forced' : ''}): ${message}`,
-            data: { hook: hook.name, error: message, ...(forced ? { forced: true } : {}) },
+            data: { hookName: hook.name, error: message, ...(forced ? { forced: true } : {}) },
           });
         });
         continue;
@@ -556,7 +558,15 @@ export class PipelineEngine implements IPipelineEngine {
             category: 'system',
             severity,
             message: `Hook "${hook.name}" failed${forced ? ' during force transition' : ''} (${policy}): ${failure.error}`,
-            data: { hook: hook.name, error: failure.error, policy, ...(forced ? { forced: true } : {}) },
+            data: { hookName: hook.name, error: failure.error, policy, ...(forced ? { forced: true } : {}) },
+          }).catch((err) => console.error('Audit log write failed:', err));
+        } else {
+          this.taskEventLog.log({
+            taskId,
+            category: 'system',
+            severity: 'info',
+            message: `Hook "${hook.name}" succeeded (${policy})`,
+            data: { hookName: hook.name, policy },
           }).catch((err) => console.error('Audit log write failed:', err));
         }
       } catch (err) {
@@ -569,7 +579,7 @@ export class PipelineEngine implements IPipelineEngine {
           category: 'system',
           severity,
           message: `Hook "${hook.name}" threw${forced ? ' during force transition' : ''} (${policy}): ${message}`,
-          data: { hook: hook.name, error: message, policy, ...(forced ? { forced: true } : {}) },
+          data: { hookName: hook.name, error: message, policy, ...(forced ? { forced: true } : {}) },
         }).catch((err) => console.error('Audit log write failed:', err));
       }
     }

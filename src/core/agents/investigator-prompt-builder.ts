@@ -56,6 +56,9 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
           ivrLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
         }
       }
+      if (task.debugInfo) {
+        ivrLines.push('', '## Debug Info', '```', task.debugInfo, '```');
+      }
       ivrLines.push(
         '',
         '## Instructions',
@@ -99,6 +102,9 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
           `  ${invAmCli} tasks get ${relatedTaskId} --json`,
           `  ${invAmCli} events list --task ${relatedTaskId} --json`,
         );
+      }
+      if (task.debugInfo) {
+        invLines.push('', '## Debug Info', '```', task.debugInfo, '```');
       }
       if (task.subtasks && task.subtasks.length > 0) {
         invLines.push('', '## Subtasks');

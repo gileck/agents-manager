@@ -459,12 +459,22 @@ export class AgentService implements IAgentService {
           messageCount: partialMessageCount,
         });
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
+        // Extract kill metadata from error message if present (e.g. "[kill_reason=timeout]")
+        const killReasonMatch = errorMsg.match(/\[kill_reason=(\w+)\]/);
+        const killReason = killReasonMatch?.[1];
+        const exitCodeMatch = errorMsg.match(/exited with code (\d+)/);
+        const rawExitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : undefined;
         await this.taskEventLog.log({
           taskId,
           category: 'agent',
           severity: 'error',
           message: `Agent ${agentType} failed: ${errorMsg}`,
-          data: { agentRunId: run.id, error: errorMsg },
+          data: {
+            agentRunId: run.id,
+            error: errorMsg,
+            ...(killReason ? { killReason } : {}),
+            ...(rawExitCode != null ? { rawExitCode } : {}),
+          },
         });
         try {
           await worktreeManager.unlock(taskId);
@@ -583,12 +593,14 @@ export class AgentService implements IAgentService {
         taskId,
         category: 'agent',
         severity: result.exitCode === 0 ? 'info' : 'error',
-        message: `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}`,
+        message: `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}${result.killReason ? ` [kill_reason=${result.killReason}]` : ''}`,
         data: {
           agentRunId: run.id,
           exitCode: result.exitCode,
           outcome: result.outcome,
           ...(result.error ? { error: result.error } : {}),
+          ...(result.killReason ? { killReason: result.killReason } : {}),
+          ...(result.rawExitCode != null ? { rawExitCode: result.rawExitCode } : {}),
           costInputTokens: result.costInputTokens,
           costOutputTokens: result.costOutputTokens,
         },
@@ -712,6 +724,27 @@ export class AgentService implements IAgentService {
     const promise = this.backgroundPromises.get(runId);
     if (promise) {
       await promise;
+    }
+  }
+
+  async stopAllRunningAgents(): Promise<void> {
+    const activeRunIds = this.getActiveRunIds();
+    if (activeRunIds.length === 0) return;
+
+    console.log(`Stopping ${activeRunIds.length} running agent(s)...`);
+    const results = await Promise.allSettled(
+      activeRunIds.map(runId =>
+        this.stop(runId).catch(err => {
+          console.warn(`Failed to stop agent run ${runId}:`, err instanceof Error ? err.message : String(err));
+        })
+      )
+    );
+
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (failed > 0) {
+      console.warn(`${failed}/${activeRunIds.length} agent stop(s) failed during shutdown`);
+    } else {
+      console.log(`All ${activeRunIds.length} agent run(s) stopped.`);
     }
   }
 

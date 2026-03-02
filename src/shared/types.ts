@@ -270,6 +270,7 @@ export interface Task {
   branchName: string | null;
   plan: string | null;
   technicalDesign: string | null;
+  debugInfo: string | null;
   subtasks: Subtask[];
   phases: ImplementationPhase[] | null;
   /** @deprecated Use TaskContextEntry with entryType='plan_feedback' instead. */
@@ -294,6 +295,7 @@ export interface TaskCreateInput {
   assignee?: string;
   prLink?: string;
   branchName?: string;
+  debugInfo?: string;
   subtasks?: Subtask[];
   phases?: ImplementationPhase[] | null;
   metadata?: Record<string, unknown>;
@@ -312,6 +314,7 @@ export interface TaskUpdateInput {
   branchName?: string | null;
   plan?: string | null;
   technicalDesign?: string | null;
+  debugInfo?: string | null;
   subtasks?: Subtask[];
   phases?: ImplementationPhase[] | null;
   /** @deprecated Use addTaskFeedback API with entryType='plan_feedback' instead. */
@@ -679,6 +682,10 @@ export interface AgentRunResult {
   costInputTokens?: number;
   costOutputTokens?: number;
   prompt?: string;
+  /** Why the process was killed: 'timeout', 'stopped', or 'external_signal'. */
+  killReason?: string;
+  /** Original OS exit code (e.g. 143 for SIGTERM, 137 for SIGKILL). */
+  rawExitCode?: number;
 }
 
 export interface AgentInfo {
