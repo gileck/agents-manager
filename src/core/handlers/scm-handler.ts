@@ -22,7 +22,7 @@ export interface ScmHandlerDeps {
 export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps): void {
   engine.registerHook('merge_pr', async (task: Task, _transition: Transition, _context: TransitionContext, _params?: Record<string, unknown>): Promise<HookResult> => {
     const ghLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', data?: Record<string, unknown>) =>
-      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data });
+      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data: { hookName: 'merge_pr', ...data } });
 
     const artifacts = await deps.taskArtifactStore.getArtifactsForTask(task.id, 'pr');
     if (artifacts.length === 0) {
@@ -117,6 +117,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
         category: 'git',
         severity: 'error',
         message: 'push_and_create_pr hook: no branch in transition context',
+        data: { hookName: 'push_and_create_pr' },
       });
       return { success: false, error: 'No branch in transition context' };
     }
@@ -128,6 +129,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
         category: 'git',
         severity: 'error',
         message: `push_and_create_pr hook: project ${task.projectId} has no path`,
+        data: { hookName: 'push_and_create_pr' },
       });
       return { success: false, error: `Project ${task.projectId} has no path` };
     }
@@ -135,9 +137,9 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     const scmPlatform = deps.createScmPlatform(project.path);
 
     const gitLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', logData?: Record<string, unknown>) =>
-      deps.taskEventLog.log({ taskId: task.id, category: 'git', severity, message, data: logData });
+      deps.taskEventLog.log({ taskId: task.id, category: 'git', severity, message, data: { hookName: 'push_and_create_pr', ...logData } });
     const ghLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', logData?: Record<string, unknown>) =>
-      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data: logData });
+      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data: { hookName: 'push_and_create_pr', ...logData } });
 
     // Resolve the worktree path for this task so git operations run in the
     // checked-out branch (not the main repo checkout).
