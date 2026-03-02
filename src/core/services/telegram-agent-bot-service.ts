@@ -9,6 +9,7 @@ import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { TaskUpdateInput, TelegramBotLogEntry, ChatSession, AgentChatMessage } from '../../shared/types';
 import type { ChatAgentService } from './chat-agent-service';
 import { buildTelegramSystemPrompt } from './chat-prompt-parts';
+import { statusEmoji } from './telegram-emoji';
 
 
 /** Maximum allowed length for free-text input from Telegram users */
@@ -281,8 +282,8 @@ export class TelegramAgentBotService implements ITelegramBotService {
         parse_mode: 'MarkdownV2',
         reply_markup: {
           inline_keyboard: [[
-            { text: 'Confirm Delete', callback_data: `cd|${taskId}` },
-            { text: 'Cancel', callback_data: `v|${taskId}` },
+            { text: '\u{2757} Confirm Delete', callback_data: `cd|${taskId}` },
+            { text: '\u{274C} Cancel', callback_data: `v|${taskId}` },
           ]],
         },
       });
@@ -307,7 +308,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
     }
 
     const buttons = tasks.map((t) => ([{
-      text: `[${t.status}] ${t.title}`,
+      text: `${statusEmoji(t.status)} [${t.status}] ${t.title}`,
       callback_data: `v|${t.id}`,
     }]));
 
@@ -325,7 +326,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
     }
 
     const lines = [
-      `*${esc(task.title)}*`,
+      `${statusEmoji(task.status)} *${esc(task.title)}*`,
       `Status: \`${task.status}\``,
       `Priority: ${task.priority}`,
       `ID: \`${task.id}\``,
@@ -337,9 +338,9 @@ export class TelegramAgentBotService implements ITelegramBotService {
       parse_mode: 'MarkdownV2',
       reply_markup: {
         inline_keyboard: [[
-          { text: 'Transition', callback_data: `ts|${task.id}` },
-          { text: 'Edit', callback_data: `e|${task.id}` },
-          { text: 'Delete', callback_data: `d|${task.id}` },
+          { text: '\u{1F504} Transition', callback_data: `ts|${task.id}` },
+          { text: '\u{270F}\u{FE0F} Edit', callback_data: `e|${task.id}` },
+          { text: '\u{1F5D1}\u{FE0F} Delete', callback_data: `d|${task.id}` },
         ]],
       },
     });
