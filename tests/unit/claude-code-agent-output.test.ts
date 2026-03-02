@@ -203,6 +203,68 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     expect(callArgs.options.abortController).toBeInstanceOf(AbortController);
   });
 
+  it('should use accumulated tokens across multiple assistant messages instead of result-message tokens', async () => {
+    const messages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Step 1' }],
+          usage: { input_tokens: 1000, output_tokens: 200 },
+        },
+      },
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Step 2' }],
+          usage: { input_tokens: 2000, output_tokens: 500 },
+        },
+      },
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Step 3' }],
+          usage: { input_tokens: 1500, output_tokens: 300 },
+        },
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        // Result message reports only the last call's tokens (much lower)
+        usage: { input_tokens: 30, output_tokens: 15 },
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    // Should use accumulated totals (1000+2000+1500=4500 in, 200+500+300=1000 out)
+    // NOT the result message's 30/15
+    expect(result.costInputTokens).toBe(4500);
+    expect(result.costOutputTokens).toBe(1000);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should fall back to result-message tokens when no assistant messages have usage', async () => {
+    const messages = [
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        usage: { input_tokens: 100, output_tokens: 50 },
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    // No assistant messages → accumulated is 0, so fall back to result values
+    expect(result.costInputTokens).toBe(100);
+    expect(result.costOutputTokens).toBe(50);
+  });
+
   it('should abort via stop()', async () => {
     let resolveQuery: () => void;
     const queryPromise = new Promise<void>((r) => { resolveQuery = r; });
