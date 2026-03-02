@@ -509,6 +509,14 @@ export class PipelineEngine implements IPipelineEngine {
       const hookFn = this.hooks.get(hook.name);
       const policy: HookExecutionPolicy = hook.policy ?? 'best_effort';
 
+      const hookEventBase = {
+        hookName: hook.name,
+        transition: { from: transition.from, to: transition.to },
+        params: hook.params,
+        policy,
+        ...(forced ? { forced: true } : {}),
+      };
+
       if (!hookFn) {
         if (forced) {
           await this.taskEventLog.log({
@@ -533,6 +541,15 @@ export class PipelineEngine implements IPipelineEngine {
       }
 
       if (policy === 'fire_and_forget') {
+        // Log immediately — async, no duration available
+        this.taskEventLog.log({
+          taskId,
+          category: 'hook_execution',
+          severity: 'info',
+          message: `Hook "${hook.name}" fired (fire_and_forget)`,
+          data: { ...hookEventBase, result: 'fired' },
+        }).catch((err) => console.error('Audit log write failed:', err));
+
         hookFn(updatedTask, transition, ctx, hook.params).catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
           this.taskEventLog.log({
@@ -547,8 +564,10 @@ export class PipelineEngine implements IPipelineEngine {
       }
 
       // required or best_effort: await the hook
+      const hookStart = Date.now();
       try {
         const result = await hookFn(updatedTask, transition, ctx, hook.params);
+        const duration = Date.now() - hookStart;
         if (result && !result.success) {
           const failure: HookFailure = { hook: hook.name, error: result.error ?? 'Hook returned failure', policy, followUpTransition: result.followUpTransition };
           hookFailures.push(failure);
@@ -560,7 +579,16 @@ export class PipelineEngine implements IPipelineEngine {
             message: `Hook "${hook.name}" failed${forced ? ' during force transition' : ''} (${policy}): ${failure.error}`,
             data: { hookName: hook.name, error: failure.error, policy, ...(forced ? { forced: true } : {}) },
           }).catch((err) => console.error('Audit log write failed:', err));
+          // Log hook_execution event for failure
+          this.taskEventLog.log({
+            taskId,
+            category: 'hook_execution',
+            severity,
+            message: `Hook "${hook.name}" failed (${policy}): ${failure.error}`,
+            data: { ...hookEventBase, result: 'failure', error: failure.error, duration },
+          }).catch((err) => console.error('Audit log write failed:', err));
         } else {
+          // Log system event for success
           this.taskEventLog.log({
             taskId,
             category: 'system',
@@ -568,8 +596,17 @@ export class PipelineEngine implements IPipelineEngine {
             message: `Hook "${hook.name}" succeeded (${policy})`,
             data: { hookName: hook.name, policy },
           }).catch((err) => console.error('Audit log write failed:', err));
+          // Log hook_execution event for success
+          this.taskEventLog.log({
+            taskId,
+            category: 'hook_execution',
+            severity: 'info',
+            message: `Hook "${hook.name}" succeeded (${policy})`,
+            data: { ...hookEventBase, result: 'success', duration },
+          }).catch((err) => console.error('Audit log write failed:', err));
         }
       } catch (err) {
+        const duration = Date.now() - hookStart;
         const message = err instanceof Error ? err.message : String(err);
         const failure: HookFailure = { hook: hook.name, error: message, policy };
         hookFailures.push(failure);
@@ -581,6 +618,14 @@ export class PipelineEngine implements IPipelineEngine {
           message: `Hook "${hook.name}" threw${forced ? ' during force transition' : ''} (${policy}): ${message}`,
           data: { hookName: hook.name, error: message, policy, ...(forced ? { forced: true } : {}) },
         }).catch((err) => console.error('Audit log write failed:', err));
+        // Log hook_execution event for thrown error
+        this.taskEventLog.log({
+          taskId,
+          category: 'hook_execution',
+          severity,
+          message: `Hook "${hook.name}" threw (${policy}): ${message}`,
+          data: { ...hookEventBase, result: 'failure', error: message, duration },
+        }).catch((logErr) => console.error('Audit log write failed:', logErr));
       }
     }
 

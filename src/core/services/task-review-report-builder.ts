@@ -135,23 +135,27 @@ export class TaskReviewReportBuilder {
     lines.push(``);
 
     // ── HOOKS ──
-    const hookEntries = timeline.filter(e => e.data?.hookName);
+    const hookEntries = timeline.filter(e => e.data?.category === 'hook_execution');
     // Group hook entries by hookName
     const hookGroups = new Map<string, typeof hookEntries>();
     for (const h of hookEntries) {
-      const name = h.data?.hookName as string;
+      const name = (h.data?.hookName as string) ?? 'unknown';
       if (!hookGroups.has(name)) hookGroups.set(name, []);
       hookGroups.get(name)!.push(h);
     }
-    lines.push(`[[ HOOKS:START ]]`);
+    lines.push(`[[ HOOKS:START count=${hookEntries.length} ]]`);
     for (const [hookName, entries] of hookGroups) {
       const hasError = entries.some(e => e.severity === 'error');
       const result = hasError ? 'failed' : 'success';
       lines.push(`[[ HOOK:START name=${hookName} result=${result} events=${entries.length} ]]`);
       for (const h of entries) {
         const ts = new Date(h.timestamp).toISOString().split('T')[1].split('.')[0];
-        const severity = h.severity ?? 'info';
-        lines.push(`  [${ts}] (${severity}) ${h.title}`);
+        const hookResult = (h.data?.result as string) ?? (h.severity === 'error' ? 'failure' : 'success');
+        const transition = h.data?.transition as { from?: string; to?: string } | undefined;
+        const transitionStr = transition ? ` transition=${transition.from}→${transition.to}` : '';
+        const duration = h.data?.duration != null ? ` duration=${h.data.duration}ms` : '';
+        const error = h.data?.error ? ` error="${h.data.error}"` : '';
+        lines.push(`  [${ts}] (${hookResult})${transitionStr}${duration}${error} ${h.title}`);
       }
       lines.push(`[[ HOOK:END name=${hookName} ]]`);
     }
