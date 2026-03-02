@@ -113,6 +113,7 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '- [[ EVENT ... severity=warning/error ]] — Grep for warnings/errors across all events.',
       '- [[ HOOK:START name=... ]] — Hook execution details.',
       '- [[ ARTIFACT type=diff ]] — Code diff (scan briefly for scope, do NOT review code quality).',
+      '- [[ OPEN_TASKS:START/END ]] — All currently open tasks (ID and title). Use to check for duplicates before suggesting new tasks.',
       '',
       '## Investigation workflow',
       '1. Read the SUMMARY section (first ~50 lines) using Read tool.',
@@ -157,6 +158,10 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '    - **ROI**: impact vs effort assessment (e.g. "high impact, small fix" or "minor improvement, large refactor")',
       '  Set priority based on impact: 0=Critical (data loss, blocking), 1=High (significant waste),',
       '  2=Medium (minor inefficiency), 3=Low (nice-to-have improvement).',
+      '  DEDUPLICATION: Before suggesting a task, check the [[ OPEN_TASKS ]] section for tasks with',
+      '  similar titles or intent. If a similar task already exists, do NOT create a duplicate — skip',
+      '  it or reference the existing task ID. If unsure whether a task is a duplicate, use the task',
+      '  manager CLI to look up the existing task by title for more details.',
       '  Use empty array if no workflow improvements are needed.',
       '- If the workflow executed cleanly with no systemic issues, say so — do not invent findings.',
     ].join('\n');

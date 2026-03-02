@@ -21,13 +21,14 @@ export class TaskReviewReportBuilder {
     const lines: string[] = [];
 
     // Fetch all data in parallel
-    const [task, agentRuns, events, contextEntries, artifacts, timeline] = await Promise.all([
+    const [task, agentRuns, events, contextEntries, artifacts, timeline, allTasks] = await Promise.all([
       this.taskStore.getTask(taskId),
       this.agentRunStore.getRunsForTask(taskId),
       this.taskEventLog.getEvents({ taskId }),
       this.taskContextStore.getEntriesForTask(taskId),
       this.taskArtifactStore.getArtifactsForTask(taskId),
       Promise.resolve(this.timelineService.getTimeline(taskId)),
+      this.taskStore.listTasks(),
     ]);
 
     if (!task) {
@@ -185,6 +186,20 @@ export class TaskReviewReportBuilder {
       lines.push(`[[ CONTEXT_ENTRY:END ]]`);
     }
     lines.push(`[[ CONTEXT_ENTRIES:END ]]`);
+    lines.push(``);
+
+    // ── OPEN TASKS ──
+    const finalStatuses = new Set(['done', 'cancelled', 'archived']);
+    const openTasks = allTasks.filter(t => !finalStatuses.has(t.status));
+    lines.push(`[[ OPEN_TASKS:START count=${openTasks.length} ]]`);
+    if (openTasks.length === 0) {
+      lines.push(`No open tasks.`);
+    } else {
+      for (const t of openTasks) {
+        lines.push(`- [${t.id}] ${t.title}`);
+      }
+    }
+    lines.push(`[[ OPEN_TASKS:END ]]`);
 
     await fs.writeFile(outputPath, lines.join('\n'), 'utf-8');
   }
