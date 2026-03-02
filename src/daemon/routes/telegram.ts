@@ -50,6 +50,7 @@ export async function startBotForProject(
     workflowService: services.workflowService,
     chatSessionStore: services.chatSessionStore,
     chatAgentService: services.chatAgentService,
+    pipelineInspectionService: services.pipelineInspectionService,
     defaultPipelineId: services.settingsStore.get('default_pipeline_id', ''),
   });
 
