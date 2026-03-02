@@ -182,8 +182,14 @@ export class ClaudeCodeLib implements IAgentLib {
           if (resultMsg.structured_output) {
             structuredOutput = resultMsg.structured_output;
           }
-          costInputTokens = resultMsg.usage?.input_tokens;
-          costOutputTokens = resultMsg.usage?.output_tokens;
+          // Prefer accumulated token counts (summed across all API round-trips).
+          // Fall back to result message values when accumulated is zero (e.g. no assistant messages preceded the result).
+          costInputTokens = state.accumulatedInputTokens > 0
+            ? state.accumulatedInputTokens
+            : resultMsg.usage?.input_tokens;
+          costOutputTokens = state.accumulatedOutputTokens > 0
+            ? state.accumulatedOutputTokens
+            : resultMsg.usage?.output_tokens;
           if (costInputTokens != null || costOutputTokens != null) {
             onMessage?.({ type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, timestamp: Date.now() } as AgentChatMessage);
           }
@@ -205,7 +211,12 @@ export class ClaudeCodeLib implements IAgentLib {
           }
         }
       }
-      log(`SDK message loop completed: ${state.messageCount} messages, hasStructuredOutput=${!!structuredOutput}, isError=${isError}`);
+      log(`SDK message loop completed: ${state.messageCount} messages, hasStructuredOutput=${!!structuredOutput}, isError=${isError}`, {
+        accumulatedInputTokens: state.accumulatedInputTokens,
+        accumulatedOutputTokens: state.accumulatedOutputTokens,
+        resultInputTokens: costInputTokens,
+        resultOutputTokens: costOutputTokens,
+      });
     } catch (err) {
       isError = true;
       const sdkError = err instanceof Error ? err.message : String(err);
