@@ -459,12 +459,22 @@ export class AgentService implements IAgentService {
           messageCount: partialMessageCount,
         });
         await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
+        // Extract kill metadata from error message if present (e.g. "[kill_reason=timeout]")
+        const killReasonMatch = errorMsg.match(/\[kill_reason=(\w+)\]/);
+        const killReason = killReasonMatch?.[1];
+        const exitCodeMatch = errorMsg.match(/exited with code (\d+)/);
+        const rawExitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : undefined;
         await this.taskEventLog.log({
           taskId,
           category: 'agent',
           severity: 'error',
           message: `Agent ${agentType} failed: ${errorMsg}`,
-          data: { agentRunId: run.id, error: errorMsg },
+          data: {
+            agentRunId: run.id,
+            error: errorMsg,
+            ...(killReason ? { killReason } : {}),
+            ...(rawExitCode != null ? { rawExitCode } : {}),
+          },
         });
         try {
           await worktreeManager.unlock(taskId);

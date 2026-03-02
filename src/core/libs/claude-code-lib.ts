@@ -228,14 +228,16 @@ export class ClaudeCodeLib implements IAgentLib {
     }
 
     const output = resultText || errorMessage || '';
+    const exitCode = isError ? 1 : 0;
     return {
-      exitCode: isError ? 1 : 0,
+      exitCode,
       output,
       error: isError ? errorMessage : undefined,
       costInputTokens,
       costOutputTokens,
       structuredOutput,
       killReason,
+      rawExitCode: exitCode,
     };
   }
 
