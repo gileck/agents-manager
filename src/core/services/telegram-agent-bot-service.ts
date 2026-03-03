@@ -615,8 +615,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
         await this.send(chatId, 'The agent did not produce a response\\.', { parse_mode: 'MarkdownV2' });
       }
 
-      // Signal chat completion to renderer
-      safeEmitOutput('__CHAT_COMPLETE__');
+      // Completion sentinel is now emitted by ChatAgentService.runAgent() via onEvent callback
     } catch (err) {
       this.stopTypingIndicator(typingInterval);
       this.runningSessionIds.delete(session.id);
@@ -625,6 +624,8 @@ export class TelegramAgentBotService implements ITelegramBotService {
       this.log('status', `Agent error: ${errMsg}`);
       getAppLogger().logError('TelegramAgentBot', 'Agent error', err);
       await this.send(chatId, 'An error occurred while processing your request. Please try again.');
+      // If send() threw before runAgent started, no sentinel was emitted via onEvent.
+      // Emit it here to reset any renderer streaming state.
       safeEmitOutput('__CHAT_COMPLETE__');
     }
   }

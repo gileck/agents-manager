@@ -116,6 +116,7 @@ export interface RunningAgent {
 }
 
 const DEFAULT_AGENT_LIB = 'claude-code';
+const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
@@ -270,6 +271,8 @@ export class ChatAgentService {
   ): Promise<ChatSendResult> {
     const { systemPrompt, onEvent, images } = options;
 
+    getAppLogger().info('ChatAgentService', `send() called for session ${sessionId}`, { messageLength: message.length, hasImages: !!(images?.length) });
+
     // Get session to find scope
     const session = await this.chatSessionStore.getSession(sessionId);
     if (!session) {
@@ -279,6 +282,7 @@ export class ChatAgentService {
     // Don't abort previous running chat - allow parallel execution
     // but do check if there's already one running for this session
     if (this.runningControllers.has(sessionId)) {
+      getAppLogger().warn('ChatAgentService', `Rejecting send: agent already running for session ${sessionId}`);
       throw new Error('An agent is already running for this session');
     }
 
@@ -377,20 +381,16 @@ export class ChatAgentService {
     this.runningControllers.set(sessionId, abortController);
 
     const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images).catch((err) => {
-      // runningControllers already cleaned up by runAgent's finally block
-      emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` });
+      // Safety net: errors should be handled inside runAgent, but recover if one escapes
+      getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
+      try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
+      try { emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL }); } catch { /* best effort */ }
       const agent = this.runningAgents.get(sessionId);
-      if (agent) {
+      if (agent && agent.status === 'running') {
         agent.status = 'failed';
         agent.lastActivity = Date.now();
       }
-      // Clean up failed agent after a delay
-      setTimeout(() => {
-        const agent = this.runningAgents.get(sessionId);
-        if (agent && agent.status === 'failed') {
-          this.runningAgents.delete(sessionId);
-        }
-      }, 5000);
+      this.runningControllers.delete(sessionId);
     });
 
     return { userMessage, sessionId, completion };
@@ -413,13 +413,17 @@ export class ChatAgentService {
   stop(sessionId: string): void {
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
-      controller.abort();
-      this.runningControllers.delete(sessionId);
+      getAppLogger().info('ChatAgentService', `Stopping chat agent for session ${sessionId}`);
+      // Immediately reflect stop in agent status so UI doesn't show stale "running"
       const agent = this.runningAgents.get(sessionId);
       if (agent && agent.status === 'running') {
         agent.status = 'failed';
         agent.lastActivity = Date.now();
       }
+      controller.abort();
+      // runAgent's finally block handles runningControllers cleanup and sentinel emission
+    } else {
+      getAppLogger().warn('ChatAgentService', `No running controller found for session ${sessionId}`);
     }
   }
 
@@ -547,6 +551,8 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
   ): Promise<void> {
+    getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
+
     // Determine whether to use the AgentLib abstraction or the direct SDK
     const useAgentLib = agentLibName !== DEFAULT_AGENT_LIB;
 
@@ -607,6 +613,21 @@ export class ChatAgentService {
         agent.status = 'completed';
         agent.lastActivity = Date.now();
       }
+    } catch (err) {
+      // Handle errors inside runAgent so the sentinel in finally is always the last event
+      const errMsg = err instanceof Error ? err.message : String(err);
+      // Use the abort controller signal as source of truth (works regardless of error type)
+      if (abortController.signal.aborted) {
+        getAppLogger().info('ChatAgentService', `Chat agent aborted for session ${sessionId}`);
+      } else {
+        getAppLogger().logError('ChatAgentService', `Chat agent error for session ${sessionId}`, err);
+        emitEvent({ type: 'text', text: `\nError: ${errMsg}\n` });
+      }
+      const agent = this.runningAgents.get(sessionId);
+      if (agent) {
+        agent.status = 'failed';
+        agent.lastActivity = Date.now();
+      }
     } finally {
       this.runningControllers.delete(sessionId);
 
@@ -633,6 +654,10 @@ export class ChatAgentService {
           try { emitEvent({ type: 'text', text: '\n[Warning: Failed to save this response. It may not appear after refresh.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'persist-warning delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
         }
       }
+
+      // Signal completion to renderer so it can reset streaming state
+      getAppLogger().info('ChatAgentService', `Chat agent finished for session ${sessionId}, sending completion sentinel`);
+      emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
     }
   }
 

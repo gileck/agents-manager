@@ -4,6 +4,7 @@ import { buildDesktopSystemPrompt } from '../../core/services/chat-prompt-parts'
 import type { WsHolder } from '../server';
 import { WS_CHANNELS } from '../ws/channels';
 import type { ChatImage } from '../../shared/types';
+import { getAppLogger } from '../../core/services/app-logger';
 
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MAX_IMAGES_PER_MESSAGE = 5;
@@ -109,6 +110,8 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         return;
       }
 
+      getAppLogger().info('ChatRoute', `POST /send for session ${sessionId}`, { messageLength: message.length });
+
       const scope = await services.chatAgentService.getSessionScope(sessionId);
       const systemPrompt = buildDesktopSystemPrompt(scope);
 
@@ -133,6 +136,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   // POST /api/chat/sessions/:id/stop — stop generation
   router.post('/api/chat/sessions/:id/stop', (req, res, next) => {
     try {
+      getAppLogger().info('ChatRoute', `POST /stop for session ${req.params.id}`);
       services.chatAgentService.stop(req.params.id);
       res.json({ ok: true });
     } catch (err) { next(err); }
