@@ -77,7 +77,7 @@ export class CursorAgentLib implements IAgentLib {
     const { onOutput, onLog, onMessage, onUserToolResult } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
-    const args = [JSON.stringify(options.prompt), '-p', '--output-format', 'stream-json', '--force'];
+    const args = [options.prompt, '-p', '--output-format', 'stream-json', '--force'];
     if (options.readOnly) {
       args.push('--mode=plan');
     }
@@ -89,6 +89,7 @@ export class CursorAgentLib implements IAgentLib {
 
     const env = getShellEnv();
     const proc = spawn('cursor-agent', args, { cwd: options.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    proc.stdin?.end();
 
     const state: RunState = {
       process: proc,
@@ -122,10 +123,16 @@ export class CursorAgentLib implements IAgentLib {
     const timer = setTimeout(() => {
       timedOut = true;
       this.stoppedReasons.set(runId, 'timeout');
-      try { process.kill(-proc.pid!, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
+      if (proc.pid) {
+        try { process.kill(-proc.pid, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
+      } else {
+        proc.kill('SIGTERM');
+      }
       state.killTimer = setTimeout(() => {
-        try { process.kill(-proc.pid!, 'SIGKILL'); } catch (err) {
-          getAppLogger().warn('CursorAgentLib', `SIGKILL failed for pid ${proc.pid}`, { error: err instanceof Error ? err.message : String(err) });
+        if (proc.pid) {
+          try { process.kill(-proc.pid, 'SIGKILL'); } catch (err) {
+            getAppLogger().warn('CursorAgentLib', `SIGKILL failed for pid ${proc.pid}`, { error: err instanceof Error ? err.message : String(err) });
+          }
         }
       }, 5000);
     }, options.timeoutMs);
@@ -168,8 +175,12 @@ export class CursorAgentLib implements IAgentLib {
         }
       });
 
+      const STDERR_MAX = 64 * 1024;
       proc.stderr?.on('data', (data: Buffer) => {
-        stderrOutput += data.toString();
+        if (stderrOutput.length < STDERR_MAX) {
+          stderrOutput += data.toString();
+          if (stderrOutput.length > STDERR_MAX) stderrOutput = stderrOutput.slice(0, STDERR_MAX);
+        }
       });
 
       proc.on('close', (code, signal) => {
@@ -214,9 +225,9 @@ export class CursorAgentLib implements IAgentLib {
         this.stoppedReasons.delete(runId);
 
         if (resultRef.structuredOutput) structuredOutput = resultRef.structuredOutput;
-        if (resultRef.isError && !isError) {
+        if (resultRef.isError) {
           isError = true;
-          errorMessage = resultRef.errorMessage;
+          if (!errorMessage) errorMessage = resultRef.errorMessage;
         }
 
         costInputTokens = state.accumulatedInputTokens > 0 ? state.accumulatedInputTokens : costInputTokens;
@@ -266,13 +277,19 @@ export class CursorAgentLib implements IAgentLib {
       return;
     }
     this.stoppedReasons.set(runId, 'stopped');
-    try { process.kill(-state.process.pid!, 'SIGTERM'); } catch { state.process.kill('SIGTERM'); }
+    const pid = state.process.pid;
+    if (pid) {
+      try { process.kill(-pid, 'SIGTERM'); } catch { state.process.kill('SIGTERM'); }
+    } else {
+      state.process.kill('SIGTERM');
+    }
     state.killTimer = setTimeout(() => {
-      try { process.kill(-state.process.pid!, 'SIGKILL'); } catch (err) {
-        getAppLogger().warn('CursorAgentLib', `SIGKILL failed for pid ${state.process.pid}`, { error: err instanceof Error ? err.message : String(err) });
+      if (pid) {
+        try { process.kill(-pid, 'SIGKILL'); } catch (err) {
+          getAppLogger().warn('CursorAgentLib', `SIGKILL failed for pid ${pid}`, { error: err instanceof Error ? err.message : String(err) });
+        }
       }
     }, 5000);
-    this.runningStates.delete(runId);
   }
 
   /**
