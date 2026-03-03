@@ -15,7 +15,7 @@ type SdkContentBlock = SdkTextBlock | SdkThinkingBlock | SdkToolUseBlock;
 
 interface SdkAssistantMessage {
   type: 'assistant';
-  message: { content: SdkContentBlock[]; usage?: { input_tokens: number; output_tokens: number } };
+  message: { id?: string; content: SdkContentBlock[]; usage?: { input_tokens: number; output_tokens: number } };
 }
 interface SdkResultMessage {
   type: 'result';
@@ -23,6 +23,8 @@ interface SdkResultMessage {
   errors?: string[];
   structured_output?: Record<string, unknown>;
   usage?: { input_tokens: number; output_tokens: number };
+  total_cost_usd?: number;
+  modelUsage?: Record<string, { input_tokens: number; output_tokens: number }>;
 }
 interface SdkOtherMessage {
   type: string;
@@ -36,6 +38,7 @@ interface RunState {
   abortController: AbortController;
   accumulatedInputTokens: number;
   accumulatedOutputTokens: number;
+  seenMessageIds: Set<string>;
   messageCount: number;
   timeout: number;
   maxTurns: number;
@@ -90,6 +93,7 @@ export class ClaudeCodeLib implements IAgentLib {
       abortController,
       accumulatedInputTokens: 0,
       accumulatedOutputTokens: 0,
+      seenMessageIds: new Set(),
       messageCount: 0,
       timeout: options.timeoutMs,
       maxTurns: options.maxTurns,
@@ -157,8 +161,14 @@ export class ClaudeCodeLib implements IAgentLib {
         if (message.type === 'assistant') {
           const assistantMsg = message as SdkAssistantMessage;
           if (assistantMsg.message.usage) {
-            state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens;
-            state.accumulatedOutputTokens += assistantMsg.message.usage.output_tokens;
+            const msgId = assistantMsg.message.id;
+            // Deduplicate: parallel tool calls emit multiple assistant messages with the same id and identical usage.
+            // Only accumulate once per unique message id. Still emit the usage callback for UI progress regardless.
+            if (!msgId || !state.seenMessageIds.has(msgId)) {
+              if (msgId) state.seenMessageIds.add(msgId);
+              state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens;
+              state.accumulatedOutputTokens += assistantMsg.message.usage.output_tokens;
+            }
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
           }
           for (const block of assistantMsg.message.content) {
@@ -182,14 +192,12 @@ export class ClaudeCodeLib implements IAgentLib {
           if (resultMsg.structured_output) {
             structuredOutput = resultMsg.structured_output;
           }
-          // Prefer accumulated token counts (summed across all API round-trips).
-          // Fall back to result message values when accumulated is zero (e.g. no assistant messages preceded the result).
-          costInputTokens = state.accumulatedInputTokens > 0
-            ? state.accumulatedInputTokens
-            : resultMsg.usage?.input_tokens;
-          costOutputTokens = state.accumulatedOutputTokens > 0
-            ? state.accumulatedOutputTokens
-            : resultMsg.usage?.output_tokens;
+          // Prefer the result message's authoritative cumulative totals.
+          // Fall back to accumulated counts only when the result has no usage data.
+          costInputTokens = resultMsg.usage?.input_tokens
+            ?? (state.accumulatedInputTokens > 0 ? state.accumulatedInputTokens : undefined);
+          costOutputTokens = resultMsg.usage?.output_tokens
+            ?? (state.accumulatedOutputTokens > 0 ? state.accumulatedOutputTokens : undefined);
           if (costInputTokens != null || costOutputTokens != null) {
             onMessage?.({ type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, timestamp: Date.now() } as AgentChatMessage);
           }

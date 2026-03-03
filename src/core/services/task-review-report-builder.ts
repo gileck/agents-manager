@@ -58,6 +58,19 @@ export class TaskReviewReportBuilder {
     lines.push(`Total Token Cost: ${totalInputTokens} input / ${totalOutputTokens} output`);
     lines.push(`Retries: ${retries}`);
     lines.push(`Failures: ${failures}`);
+
+    // Warn about runs whose token counts look suspiciously low relative to message count
+    const suspectRuns = agentRuns.filter(r =>
+      (r.costInputTokens ?? 0) < 100 && (r.messageCount ?? 0) > 10
+    );
+    if (suspectRuns.length > 0) {
+      lines.push(``);
+      lines.push(`⚠ Token undercount warning: ${suspectRuns.length} run(s) report very low token counts relative to their message count.`);
+      for (const r of suspectRuns) {
+        lines.push(`  - Run ${r.id} (${r.agentType}): tokens_in=${r.costInputTokens ?? 0}, messages=${r.messageCount ?? 0}`);
+      }
+    }
+
     lines.push(``);
     lines.push(`Timeline:`);
     for (const t of transitions) {

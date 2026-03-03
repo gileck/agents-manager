@@ -203,7 +203,7 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     expect(callArgs.options.abortController).toBeInstanceOf(AbortController);
   });
 
-  it('should use accumulated tokens across multiple assistant messages instead of result-message tokens', async () => {
+  it('should prefer authoritative result-message tokens over accumulated totals', async () => {
     const messages = [
       {
         type: 'assistant',
@@ -230,8 +230,8 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
         type: 'result',
         subtype: 'success',
         result: 'Done',
-        // Result message reports only the last call's tokens (much lower)
-        usage: { input_tokens: 30, output_tokens: 15 },
+        // Result message carries the authoritative cumulative total
+        usage: { input_tokens: 4500, output_tokens: 1000 },
       },
     ];
 
@@ -239,11 +239,46 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
 
     const result = await agent.execute(createContext(), {});
 
-    // Should use accumulated totals (1000+2000+1500=4500 in, 200+500+300=1000 out)
-    // NOT the result message's 30/15
+    // Should use the result message's authoritative totals
     expect(result.costInputTokens).toBe(4500);
     expect(result.costOutputTokens).toBe(1000);
     expect(result.exitCode).toBe(0);
+  });
+
+  it('should deduplicate assistant messages with the same id', async () => {
+    const messages = [
+      {
+        type: 'assistant',
+        message: {
+          id: 'msg_001',
+          content: [{ type: 'text', text: 'Step 1' }],
+          usage: { input_tokens: 1000, output_tokens: 200 },
+        },
+      },
+      {
+        // Duplicate from parallel tool call — same id, same usage
+        type: 'assistant',
+        message: {
+          id: 'msg_001',
+          content: [{ type: 'tool_use', name: 'bash', input: {} }],
+          usage: { input_tokens: 1000, output_tokens: 200 },
+        },
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        // No usage on result — forces fallback to accumulated
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    // Should count msg_001 only once: 1000 in, 200 out (not 2000/400)
+    expect(result.costInputTokens).toBe(1000);
+    expect(result.costOutputTokens).toBe(200);
   });
 
   it('should fall back to result-message tokens when no assistant messages have usage', async () => {
