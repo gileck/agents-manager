@@ -64,7 +64,7 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
   app.use(gitRoutes(services));
   app.use(promptRoutes(services));
   app.use(artifactRoutes(services));
-  app.use(automatedAgentRoutes(services));
+  app.use(automatedAgentRoutes(services, wsHolder));
 
   // Error handler must be registered last
   app.use(errorHandler);

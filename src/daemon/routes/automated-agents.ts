@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
 import type { AutomatedAgentCreateInput, AutomatedAgentUpdateInput } from '../../shared/types';
+import type { WsHolder } from '../server';
+import { WS_CHANNELS } from '../ws/channels';
 import { AUTOMATED_AGENT_TEMPLATES } from '../../core/data/automated-agent-templates';
 
-export function automatedAgentRoutes(services: AppServices): Router {
+export function automatedAgentRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
 
   // Templates
@@ -66,7 +68,13 @@ export function automatedAgentRoutes(services: AppServices): Router {
     try {
       const agent = await services.automatedAgentStore.getAgent(req.params.id);
       if (!agent) { res.status(404).json({ error: 'Automated agent not found' }); return; }
-      const run = await services.scheduledAgentService.triggerRun(agent, 'manual');
+      const ws = wsHolder.server;
+      const taskId = `__auto__:${agent.id}`;
+      const run = await services.scheduledAgentService.triggerRun(
+        agent, 'manual',
+        (chunk) => ws?.broadcast(WS_CHANNELS.AGENT_OUTPUT, taskId, chunk),
+        (msg) => ws?.broadcast(WS_CHANNELS.AGENT_MESSAGE, taskId, msg),
+      );
       res.json(run);
     } catch (err) { next(err); }
   });
