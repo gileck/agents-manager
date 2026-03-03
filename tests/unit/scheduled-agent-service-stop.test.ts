@@ -98,11 +98,9 @@ describe('ScheduledAgentService.stop()', () => {
     // Since we cannot easily call triggerRun (it needs a real project/agent/etc.),
     // we access the private maps directly for test purposes using type assertion.
     const svc = service as unknown as {
-      activeRunIds: Set<string>;
       activeRunLibs: Map<string, string>;
     };
 
-    svc.activeRunIds.add('run-123');
     svc.activeRunLibs.set('run-123', 'claude-code');
 
     await service.stop('run-123');
@@ -114,7 +112,6 @@ describe('ScheduledAgentService.stop()', () => {
     }));
 
     // Should have been cleaned up from internal tracking
-    expect(svc.activeRunIds.has('run-123')).toBe(false);
     expect(svc.activeRunLibs.has('run-123')).toBe(false);
   });
 
@@ -127,13 +124,10 @@ describe('ScheduledAgentService.stop()', () => {
 
   it('calls lib.stop() with the correct runId when multiple runs are active', async () => {
     const svc = service as unknown as {
-      activeRunIds: Set<string>;
       activeRunLibs: Map<string, string>;
     };
 
-    svc.activeRunIds.add('run-A');
     svc.activeRunLibs.set('run-A', 'claude-code');
-    svc.activeRunIds.add('run-B');
     svc.activeRunLibs.set('run-B', 'claude-code');
 
     await service.stop('run-A');
@@ -142,7 +136,6 @@ describe('ScheduledAgentService.stop()', () => {
     expect(lib.stop).toHaveBeenCalledWith('run-A');
 
     // run-B should still be tracked
-    expect(svc.activeRunIds.has('run-B')).toBe(true);
     expect(svc.activeRunLibs.has('run-B')).toBe(true);
   });
 });
