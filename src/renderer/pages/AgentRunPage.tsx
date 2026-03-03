@@ -37,8 +37,10 @@ export function AgentRunPage() {
   );
 
   // --- Task polling (for live subtask updates) ---
+  // Skip task lookup for automated agent runs which use synthetic __auto__: IDs
+  const isRealTask = run?.taskId && !run.taskId.startsWith('__auto__:');
   const { data: task, refetch: refetchTask } = useIpc<Task | null>(
-    () => run?.taskId ? window.api.tasks.get(run.taskId) : Promise.resolve(null),
+    () => isRealTask ? window.api.tasks.get(run!.taskId) : Promise.resolve(null),
     [run?.taskId]
   );
 

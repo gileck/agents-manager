@@ -11,6 +11,7 @@ import { getAppLogger } from './app-logger';
 
 export class ScheduledAgentService {
   private activeRuns = new Map<string, Promise<void>>();
+  private activeRunIds = new Set<string>();
 
   constructor(
     private automatedAgentStore: IAutomatedAgentStore,
@@ -25,6 +26,10 @@ export class ScheduledAgentService {
     if (this.activeRuns.has(automatedAgentId)) return true;
     const activeRun = await this.agentRunStore.getActiveRunForAutomatedAgent(automatedAgentId);
     return activeRun !== null;
+  }
+
+  getActiveRunIds(): string[] {
+    return Array.from(this.activeRunIds);
   }
 
   async triggerRun(
@@ -58,6 +63,7 @@ export class ScheduledAgentService {
       await this.agentRunStore.updateRun(run.id, { prompt });
 
       const lib = this.agentLibRegistry.getLib('claude-code');
+      this.activeRunIds.add(run.id);
       const runPromise = this.executeInBackground(run, agent, project, prompt, lib, triggeredBy, onOutput, onMessage);
       runPromise.catch(err => getAppLogger().logError('ScheduledAgentService', `Unhandled error in background execution for "${agent.name}"`, err));
       this.activeRuns.set(agent.id, runPromise);
@@ -199,6 +205,7 @@ export class ScheduledAgentService {
         getAppLogger().logError('ScheduledAgentService', `Failed to record failure for agent "${agent.name}"`, cleanupErr);
       }
     } finally {
+      this.activeRunIds.delete(run.id);
       this.activeRuns.delete(agent.id);
     }
   }

@@ -57,6 +57,8 @@ function AppRoutes() {
   useEffect(() => {
     const unsubscribe = window.api?.on?.agentStatus?.(async (taskId: string, status: string) => {
       if (status === 'failed' || status === 'timed_out') {
+        // Skip automated agent runs — they use synthetic task IDs
+        if (taskId.startsWith('__auto__:')) return;
         try {
           // Fetch the latest runs for this task to get the error
           const runs = await window.api.agents.runs(taskId);

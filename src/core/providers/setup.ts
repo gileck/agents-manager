@@ -245,11 +245,20 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskEventLog, activityLog, agentRunStore,
   );
 
+  // Automated agent stores and services (must be before AgentSupervisor which needs scheduledAgentService)
+  const automatedAgentStore = new SqliteAutomatedAgentStore(db);
+  const scheduledAgentService = new ScheduledAgentService(
+    automatedAgentStore, agentRunStore, projectStore, taskStore,
+    agentLibRegistry, notificationRouter,
+  );
+  const schedulerSupervisor = new SchedulerSupervisor(automatedAgentStore, scheduledAgentService);
+
   // Supervisor for detecting ghost/timed-out agent runs + stall recovery
   const agentSupervisor = new AgentSupervisor(
     agentRunStore, agentService, taskEventLog,
     undefined, undefined, // use default pollIntervalMs and defaultTimeoutMs
     taskStore, pipelineStore, pipelineInspectionService,
+    scheduledAgentService,
   );
 
   // Supervisor for automatic workflow reviews of completed tasks
@@ -257,14 +266,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskStore, taskContextStore, pipelineStore,
     workflowService, agentRunStore, taskEventLog,
   );
-
-  // Automated agent stores and services
-  const automatedAgentStore = new SqliteAutomatedAgentStore(db);
-  const scheduledAgentService = new ScheduledAgentService(
-    automatedAgentStore, agentRunStore, projectStore, taskStore,
-    agentLibRegistry, notificationRouter,
-  );
-  const schedulerSupervisor = new SchedulerSupervisor(automatedAgentStore, scheduledAgentService);
 
   // Chat agent service (unified: handles both project and task scopes)
   const getDefaultAgentLib = () => {

@@ -4,6 +4,7 @@ import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineInspectionService } from '../interfaces/pipeline-inspection-service';
+import type { ScheduledAgentService } from './scheduled-agent-service';
 import type { AgentChatMessage } from '../../shared/types';
 import { now } from '../stores/utils';
 import { getAppLogger } from './app-logger';
@@ -33,6 +34,7 @@ export class AgentSupervisor {
     private taskStore?: ITaskStore,
     private pipelineStore?: IPipelineStore,
     private pipelineInspectionService?: IPipelineInspectionService,
+    private scheduledAgentService?: ScheduledAgentService,
   ) {}
 
   start(): void {
@@ -51,7 +53,10 @@ export class AgentSupervisor {
     const activeRuns = await this.agentRunStore.getActiveRuns();
 
     if (activeRuns.length > 0) {
-      const activeRunIds = new Set(this.agentService.getActiveRunIds());
+      const activeRunIds = new Set([
+        ...this.agentService.getActiveRunIds(),
+        ...(this.scheduledAgentService?.getActiveRunIds() ?? []),
+      ]);
 
       for (const run of activeRuns) {
         // Ghost run: in DB as running but not tracked in memory
