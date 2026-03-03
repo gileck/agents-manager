@@ -24,17 +24,26 @@ export class CursorAgentLib implements IAgentLib {
     return { images: false, hooks: false, thinking: true };
   }
 
-  getDefaultModel(): string { return 'claude-4.6-opus'; }
+  getDefaultModel(): string { return 'opus-4.6-thinking'; }
 
   getSupportedModels(): AgentLibModelOption[] {
     return [
-      { value: 'claude-4.6-sonnet', label: 'Claude 4.6 Sonnet' },
-      { value: 'claude-4.6-opus', label: 'Claude 4.6 Opus' },
-      { value: 'claude-4.5-sonnet', label: 'Claude 4.5 Sonnet' },
+      { value: 'opus-4.6-thinking', label: 'Claude 4.6 Opus (Thinking)' },
+      { value: 'opus-4.6', label: 'Claude 4.6 Opus' },
+      { value: 'opus-4.5', label: 'Claude 4.5 Opus' },
+      { value: 'opus-4.5-thinking', label: 'Claude 4.5 Opus (Thinking)' },
+      { value: 'sonnet-4.6', label: 'Claude 4.6 Sonnet' },
+      { value: 'sonnet-4.6-thinking', label: 'Claude 4.6 Sonnet (Thinking)' },
+      { value: 'sonnet-4.5', label: 'Claude 4.5 Sonnet' },
+      { value: 'sonnet-4.5-thinking', label: 'Claude 4.5 Sonnet (Thinking)' },
+      { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
+      { value: 'gpt-5.3-codex-high', label: 'GPT-5.3 Codex High' },
       { value: 'gpt-5.2', label: 'GPT-5.2' },
-      { value: 'gpt-5', label: 'GPT-5' },
-      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-      { value: 'composer-1.5', label: 'Composer 1.5' },
+      { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex' },
+      { value: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max' },
+      { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
+      { value: 'gemini-3-pro', label: 'Gemini 3 Pro' },
+      { value: 'gemini-3-flash', label: 'Gemini 3 Flash' },
     ];
   }
 
