@@ -10,6 +10,7 @@ export interface AppConfig {
 }
 
 let updateInterval: NodeJS.Timeout | null = null;
+let isInitialized = false;
 
 export function initializeApp(config: AppConfig = {}): void {
   const {
@@ -55,6 +56,8 @@ export function initializeApp(config: AppConfig = {}): void {
       await onReady();
     }
 
+    isInitialized = true;
+
     // Create the window
     createWindow();
 
@@ -70,6 +73,7 @@ export function initializeApp(config: AppConfig = {}): void {
 
   // macOS: Show window when clicking dock icon
   app.on('activate', () => {
+    if (!isInitialized) return;
     const window = getWindow();
     if (window) {
       showWindow();
