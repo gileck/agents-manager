@@ -18,6 +18,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       scopeId: input.scopeId,
       name: input.name,
       agentLib: input.agentLib ?? null,
+      model: input.model ?? null,
       source,
       createdAt: now(),
       updatedAt: now(),
@@ -25,11 +26,11 @@ export class SqliteChatSessionStore implements IChatSessionStore {
 
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO chat_sessions (id, project_id, scope_type, scope_id, name, agent_lib, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO chat_sessions (id, project_id, scope_type, scope_id, name, agent_lib, model, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run(session.id, session.projectId, session.scopeType, session.scopeId, session.name, session.agentLib, session.source, session.createdAt, session.updatedAt);
+      stmt.run(session.id, session.projectId, session.scopeType, session.scopeId, session.name, session.agentLib, session.model, session.source, session.createdAt, session.updatedAt);
       return session;
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'createSession failed', error);
@@ -40,7 +41,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
   async getSession(id: string): Promise<ChatSession | null> {
     try {
       const stmt = this.db.prepare(`
-        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, source, created_at as createdAt, updated_at as updatedAt
+        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, model, source, created_at as createdAt, updated_at as updatedAt
         FROM chat_sessions
         WHERE id = ?
       `);
@@ -57,7 +58,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     try {
       const params: unknown[] = [scopeType, scopeId];
       let sql = `
-        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, source, created_at as createdAt, updated_at as updatedAt
+        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, model, source, created_at as createdAt, updated_at as updatedAt
         FROM chat_sessions
         WHERE scope_type = ? AND scope_id = ?`;
 
@@ -83,7 +84,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       const params: unknown[] = [projectId];
       let sql = `
         SELECT cs.id, cs.project_id as projectId, cs.scope_type as scopeType, cs.scope_id as scopeId,
-               cs.name, cs.agent_lib as agentLib, cs.source, cs.created_at as createdAt, cs.updated_at as updatedAt,
+               cs.name, cs.agent_lib as agentLib, cs.model, cs.source, cs.created_at as createdAt, cs.updated_at as updatedAt,
                t.title as taskTitle, t.status as taskStatus
         FROM chat_sessions cs
         JOIN tasks t ON cs.scope_id = t.id
@@ -119,6 +120,10 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       if (input.agentLib !== undefined) {
         setClauses.push('agent_lib = ?');
         params.push(input.agentLib);
+      }
+      if (input.model !== undefined) {
+        setClauses.push('model = ?');
+        params.push(input.model);
       }
 
       if (setClauses.length === 0) {

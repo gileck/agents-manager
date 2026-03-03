@@ -6,11 +6,14 @@ interface ContextSidebarProps {
   messages: AgentChatMessage[];
   run?: AgentRun | null;
   tokenUsage?: { inputTokens: number; outputTokens: number };
+  agentLib?: string;
+  model?: string;
+  modelLabel?: string;
 }
 
 const CONTEXT_WINDOW = 200_000;
 
-export function ContextSidebar({ messages, run, tokenUsage }: ContextSidebarProps) {
+export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, modelLabel }: ContextSidebarProps) {
   // Use the latest usage message (SDK reports cumulative totals)
   let totalInput = 0;
   let totalOutput = 0;
@@ -44,6 +47,24 @@ export function ContextSidebar({ messages, run, tokenUsage }: ContextSidebarProp
 
   return (
     <div className="p-4 space-y-4 border-b border-border">
+      {/* Agent Config section */}
+      {agentLib && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">Agent Config</h3>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Engine</span>
+            <span className="font-mono text-xs">{agentLib}</span>
+          </div>
+          {model && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Model</span>
+              <span className="font-mono text-xs">{modelLabel || model}</span>
+            </div>
+          )}
+          <hr className="border-border" />
+        </div>
+      )}
+
       <h3 className="text-sm font-semibold text-foreground">Token Usage</h3>
 
       <div className="space-y-3">

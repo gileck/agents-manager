@@ -988,6 +988,7 @@ export interface ChatSession {
   scopeId: string;
   name: string;
   agentLib: string | null;
+  model: string | null;
   source: ChatSessionSource;
   createdAt: number;
   updatedAt: number;
@@ -998,6 +999,7 @@ export interface ChatSessionCreateInput {
   scopeId: string;
   name: string;
   agentLib?: string;
+  model?: string;
   source?: ChatSessionSource;
   /** The project this session belongs to. For project-scoped sessions this equals scopeId; for task-scoped sessions it is the task's projectId. */
   projectId: string;
@@ -1023,6 +1025,7 @@ export interface ChatSendResult {
 export interface ChatSessionUpdateInput {
   name?: string;
   agentLib?: string | null;
+  model?: string | null;
 }
 
 export interface TaskChatSessionWithTitle extends ChatSession {

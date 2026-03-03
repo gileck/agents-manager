@@ -170,7 +170,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   router.patch('/api/chat/sessions/:id', async (req, res, next) => {
     try {
       const sessionId = req.params.id;
-      const input = req.body as { name?: string; agentLib?: string | null };
+      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null };
       if (!input || typeof input !== 'object') {
         res.status(400).json({ error: 'Invalid input: expected object' });
         return;
@@ -195,7 +195,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(404).json({ error: 'Session not found' });
         return;
       }
-      const updateInput: { name?: string; agentLib?: string | null } = {};
+      const updateInput: { name?: string; agentLib?: string | null; model?: string | null } = {};
       if (input.name !== undefined) updateInput.name = input.name.trim();
       if (input.agentLib !== undefined) {
         if (input.agentLib !== null) {
@@ -206,6 +206,22 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
           }
         }
         updateInput.agentLib = input.agentLib;
+      }
+      if (input.model !== undefined) {
+        if (input.model !== null && typeof input.model !== 'string') {
+          res.status(400).json({ error: 'Model must be a string or null' });
+          return;
+        }
+        if (input.model !== null) {
+          // Validate model against the session's engine
+          const engineName = input.agentLib ?? session.agentLib ?? 'claude-code';
+          const validModels = services.agentLibRegistry.getModelsForLib(engineName);
+          if (!validModels.some(m => m.value === input.model)) {
+            res.status(400).json({ error: `Unknown model "${input.model}" for engine "${engineName}". Available: ${validModels.map(m => m.value).join(', ')}` });
+            return;
+          }
+        }
+        updateInput.model = input.model;
       }
       const updated = await services.chatSessionStore.updateSession(sessionId, updateInput);
       res.json(updated);

@@ -52,11 +52,15 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
+  const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
 
-  // Load available agent libs once
+  // Load available agent libs and models once
   useEffect(() => {
     window.api.agentLibs.list().then(setAgentLibs).catch((err) => {
       reportError(err, 'ChatPanel: load agent libs');
+    });
+    window.api.agentLibs.listModels().then(setAgentLibModels).catch((err) => {
+      reportError(err, 'ChatPanel: load agent models');
     });
   }, []);
 
@@ -66,16 +70,33 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     [agents, scope.type, scope.id],
   );
 
+  const selectedAgentLib = currentSession?.agentLib || 'claude-code';
+  const currentModels = agentLibModels[selectedAgentLib]?.models ?? [];
+  const defaultModel = agentLibModels[selectedAgentLib]?.defaultModel ?? '';
+  const selectedModel = currentSession?.model || defaultModel;
+
   const handleAgentLibChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (!currentSessionId) return;
     try {
-      await updateSession(currentSessionId, { agentLib: e.target.value || null });
+      // Reset model to null when engine changes (will use engine's default)
+      await updateSession(currentSessionId, { agentLib: e.target.value || null, model: null });
     } catch (err) {
       reportError(err, 'ChatPanel: update agent lib');
     }
   }, [currentSessionId, updateSession]);
 
-  const selectedAgentLib = currentSession?.agentLib || 'claude-code';
+  const handleModelChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!currentSessionId) return;
+    try {
+      const value = e.target.value;
+      // If the selected value is the default, store null
+      const engineData = agentLibModels[selectedAgentLib];
+      const model = (engineData && value === engineData.defaultModel) ? null : (value || null);
+      await updateSession(currentSessionId, { model });
+    } catch (err) {
+      reportError(err, 'ChatPanel: update model');
+    }
+  }, [currentSessionId, updateSession, agentLibModels, selectedAgentLib]);
 
   const estimatedCost = (tokenUsage.inputTokens / 1_000_000) * 3.0 + (tokenUsage.outputTokens / 1_000_000) * 15.0;
 
@@ -105,6 +126,22 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
                   </option>
                 ))}
               </select>
+              {/* Model selector */}
+              {currentModels.length > 0 && (
+                <select
+                  value={selectedModel}
+                  onChange={handleModelChange}
+                  disabled={isStreaming}
+                  className="text-xs font-medium rounded-md bg-muted text-muted-foreground border-0 px-2 py-1.5 cursor-pointer hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+                  title="Select model"
+                >
+                  {currentModels.map(m => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
           {/* Compact token cost display */}
@@ -206,7 +243,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
           <div className="w-72 border-l border-border bg-card flex flex-col overflow-y-auto">
             {/* Token Usage section */}
             {messages.length > 0 && (
-              <ContextSidebar messages={messages} tokenUsage={tokenUsage} />
+              <ContextSidebar messages={messages} tokenUsage={tokenUsage} agentLib={selectedAgentLib} model={selectedModel} modelLabel={currentModels.find(m => m.value === selectedModel)?.label} />
             )}
             {/* Active Agents section */}
             {scopeAgents.length > 0 && (

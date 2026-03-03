@@ -322,6 +322,9 @@ export class ChatAgentService {
       agentLibName = DEFAULT_AGENT_LIB;
     }
 
+    // Resolve model: session > engine default
+    const sessionModel = session.model || undefined;
+
     // Track running agent
     this.runningAgents.set(sessionId, {
       sessionId,
@@ -380,7 +383,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -550,6 +553,7 @@ export class ChatAgentService {
     agentLibName: string,
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
+    model?: string,
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -596,7 +600,7 @@ export class ChatAgentService {
         abortController.signal.addEventListener('abort', () => {
           lib.stop(sessionId).catch(err => getAppLogger().warn('ChatAgentService', 'Failed to stop agent lib', { error: err instanceof Error ? err.message : String(err) }));
         });
-        const agentLibCosts = await this.runViaAgentLib(lib, sessionId, projectPath, systemPrompt, prompt, emitEvent, emitMessage);
+        const agentLibCosts = await this.runViaAgentLib(lib, sessionId, projectPath, systemPrompt, prompt, emitEvent, emitMessage, model);
         costInputTokens = agentLibCosts.costInputTokens;
         costOutputTokens = agentLibCosts.costOutputTokens;
       } else {
@@ -604,7 +608,7 @@ export class ChatAgentService {
         await this.runViaDirectSdk(sessionId, projectPath, systemPrompt, prompt, abortController, sandboxGuard, emitEvent, emitMessage, (input, output) => {
           costInputTokens = input;
           costOutputTokens = output;
-        }, images);
+        }, images, model);
       }
 
       // Mark as completed successfully
@@ -669,6 +673,7 @@ export class ChatAgentService {
     prompt: string,
     emitEvent: (event: ChatAgentEvent) => void,
     emitMessage: (msg: AgentChatMessage) => void,
+    model?: string,
   ): Promise<{ costInputTokens?: number; costOutputTokens?: number }> {
 
     const callbacks: AgentLibCallbacks = {
@@ -684,6 +689,7 @@ export class ChatAgentService {
     const result = await lib.execute(sessionId, {
       prompt: `${systemPrompt}\n\n${prompt}`,
       cwd: projectPath,
+      model,
       maxTurns: 50,
       timeoutMs: 300000,
       allowedPaths: [],
@@ -719,6 +725,7 @@ export class ChatAgentService {
     emitMessage: (msg: AgentChatMessage) => void,
     onCost: (input: number | undefined, output: number | undefined) => void,
     images?: ChatImage[],
+    model?: string,
   ): Promise<void> {
     const fullPromptText = `${systemPrompt}\n\n${prompt}`;
 
@@ -751,6 +758,7 @@ export class ChatAgentService {
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         maxTurns: 50,
+        ...(model ? { model } : {}),
         hooks: {
           preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
             // Hard-block write tools

@@ -40,5 +40,9 @@ export function getMigrations(): Migration[] {
       name: '093_add_engine_to_agent_runs',
       sql: `ALTER TABLE agent_runs ADD COLUMN engine TEXT`,
     },
+    {
+      name: '094_add_model_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN model TEXT`,
+    },
   ];
 }
