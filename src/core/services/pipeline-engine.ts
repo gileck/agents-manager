@@ -33,6 +33,8 @@ interface TaskRow {
   title: string;
   description: string | null;
   type: string;
+  size: string | null;
+  complexity: string | null;
   status: string;
   priority: number;
   tags: string;
@@ -61,6 +63,8 @@ function rowToTask(row: TaskRow): Task {
     title: row.title,
     description: row.description,
     type: (row.type || 'feature') as Task['type'],
+    size: (row.size ?? null) as Task['size'],
+    complexity: (row.complexity ?? null) as Task['complexity'],
     status: row.status,
     priority: row.priority,
     tags: parseJson<string[]>(row.tags, []),

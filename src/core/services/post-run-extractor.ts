@@ -1,8 +1,14 @@
+import {
+  VALID_TASK_SIZES,
+  VALID_TASK_COMPLEXITIES,
+} from '../../shared/types';
 import type {
   AgentRunResult,
   ImplementationPhase,
   RevisionReason,
   Subtask,
+  TaskComplexity,
+  TaskSize,
   TaskUpdateInput,
 } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
@@ -135,6 +141,40 @@ export class PostRunExtractor {
   }
 
   /**
+   * Extract size/complexity estimates from a successful planner/designer/investigator run.
+   */
+  async extractTaskEstimates(
+    taskId: string,
+    result: AgentRunResult,
+    agentType: string,
+    onLog: OnLog,
+  ): Promise<void> {
+    const estimatingAgents = ['planner', 'designer', 'investigator'];
+    if (result.exitCode !== 0 || !estimatingAgents.includes(agentType)) return;
+
+    const so = result.structuredOutput as { size?: string; complexity?: string } | undefined;
+    if (!so) return;
+
+    try {
+      const updates: TaskUpdateInput = {};
+      if (so.size && (VALID_TASK_SIZES as readonly string[]).includes(so.size)) {
+        updates.size = so.size as TaskSize;
+      }
+      if (so.complexity && (VALID_TASK_COMPLEXITIES as readonly string[]).includes(so.complexity)) {
+        updates.complexity = so.complexity as TaskComplexity;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        onLog(`Extracting task estimates: size=${updates.size ?? 'none'}, complexity=${updates.complexity ?? 'none'}`);
+        await this.taskStore.updateTask(taskId, updates);
+      }
+    } catch (err) {
+      // Non-fatal — don't block pipeline on estimate extraction failure
+      onLog(`Warning: failed to extract task estimates: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /**
    * Save a context entry for a successful run, capturing summary and metadata.
    */
   async saveContextEntry(
@@ -228,7 +268,7 @@ export class PostRunExtractor {
     if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) return;
 
     const wso = result.structuredOutput as {
-      suggestedTasks?: Array<{ title: string; description: string; type?: string; debugInfo?: string; priority?: number }>;
+      suggestedTasks?: Array<{ title: string; description: string; type?: string; debugInfo?: string; priority?: number; size?: string; complexity?: string }>;
     } | undefined;
 
     const tasks = wso?.suggestedTasks;
@@ -249,12 +289,18 @@ export class PostRunExtractor {
         const taskType = suggested.type && validTypes.includes(suggested.type)
           ? suggested.type as 'bug' | 'feature' | 'improvement'
           : 'improvement';
+        const taskSize = suggested.size && (VALID_TASK_SIZES as readonly string[]).includes(suggested.size)
+          ? suggested.size as TaskSize : undefined;
+        const taskComplexity = suggested.complexity && (VALID_TASK_COMPLEXITIES as readonly string[]).includes(suggested.complexity)
+          ? suggested.complexity as TaskComplexity : undefined;
         await this.taskStore.createTask({
           projectId: reviewedTask.projectId,
           pipelineId: AGENT_PIPELINE_ID,
           title: suggested.title,
           description: suggested.description,
           type: taskType,
+          size: taskSize,
+          complexity: taskComplexity,
           debugInfo: suggested.debugInfo || undefined,
           priority,
           tags: ['workflow-review'],

@@ -209,7 +209,8 @@ export class TaskReviewReportBuilder {
       lines.push(`No open tasks.`);
     } else {
       for (const t of openTasks) {
-        lines.push(`- [${t.id}] (${t.type}) ${t.title}`);
+        const meta = [t.type, t.size, t.complexity].filter(Boolean).join(', ');
+        lines.push(`- [${t.id}] (${meta}) ${t.title}`);
       }
     }
     lines.push(`[[ OPEN_TASKS:END ]]`);

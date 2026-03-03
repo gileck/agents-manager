@@ -256,6 +256,12 @@ export interface PlanComment {
 // Task types
 export type TaskType = 'bug' | 'feature' | 'improvement';
 
+export const VALID_TASK_SIZES = ['xs', 'sm', 'md', 'lg', 'xl'] as const;
+export type TaskSize = typeof VALID_TASK_SIZES[number];
+
+export const VALID_TASK_COMPLEXITIES = ['low', 'medium', 'high'] as const;
+export type TaskComplexity = typeof VALID_TASK_COMPLEXITIES[number];
+
 export interface Task {
   id: string;
   projectId: string;
@@ -263,6 +269,8 @@ export interface Task {
   title: string;
   description: string | null;
   type: TaskType;
+  size: TaskSize | null;
+  complexity: TaskComplexity | null;
   status: string;
   priority: number;
   tags: string[];
@@ -291,6 +299,8 @@ export interface TaskCreateInput {
   title: string;
   description?: string;
   type?: TaskType;
+  size?: TaskSize;
+  complexity?: TaskComplexity;
   status?: string;
   priority?: number;
   tags?: string[];
@@ -309,6 +319,8 @@ export interface TaskUpdateInput {
   title?: string;
   description?: string;
   type?: TaskType;
+  size?: TaskSize | null;
+  complexity?: TaskComplexity | null;
   status?: string;
   priority?: number;
   tags?: string[];
@@ -335,6 +347,8 @@ export interface TaskFilter {
   pipelineId?: string;
   status?: string;
   type?: TaskType;
+  size?: TaskSize;
+  complexity?: TaskComplexity;
   priority?: number;
   assignee?: string;
   parentTaskId?: string | null;

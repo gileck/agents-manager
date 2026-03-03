@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import type { ApiClient } from '../../client/api-client';
-import type { Subtask, SubtaskStatus, TaskType } from '../../shared/types';
+import type { Subtask, SubtaskStatus, TaskType, TaskSize, TaskComplexity } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject } from '../context';
 import { readStdinOrValue } from '../stdin';
@@ -15,6 +15,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .description('List tasks')
     .option('--status <status>', 'Filter by status')
     .option('--type <type>', 'Filter by type (bug|feature|improvement)')
+    .option('--size <size>', 'Filter by size (xs|sm|md|lg|xl)')
+    .option('--complexity <complexity>', 'Filter by complexity (low|medium|high)')
     .option('--priority <n>', 'Filter by priority', parseInt)
     .option('--assignee <name>', 'Filter by assignee')
     .option('--feature <id>', 'Filter by feature ID')
@@ -24,6 +26,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (cmdOpts: {
       status?: string;
       type?: string;
+      size?: string;
+      complexity?: string;
       priority?: number;
       assignee?: string;
       feature?: string;
@@ -38,6 +42,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           projectId: project.id,
           status: cmdOpts.status,
           type: cmdOpts.type as TaskType | undefined,
+          size: cmdOpts.size as TaskSize | undefined,
+          complexity: cmdOpts.complexity as TaskComplexity | undefined,
           priority: cmdOpts.priority,
           assignee: cmdOpts.assignee,
           featureId: cmdOpts.feature,
@@ -51,6 +57,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           return {
             status: t.status,
             type: t.type,
+            size: t.size ?? '',
+            complexity: t.complexity ?? '',
             priority: t.priority,
             title: t.title,
             id: t.id,
@@ -76,8 +84,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         if (cmdOpts.field) {
           const validFields = [
             'plan', 'technicalDesign', 'debugInfo', 'phases', 'subtasks',
-            'metadata', 'prLink', 'branchName', 'description', 'type', 'tags',
-            'assignee', 'featureId', 'parentTaskId',
+            'metadata', 'prLink', 'branchName', 'description', 'type', 'size',
+            'complexity', 'tags', 'assignee', 'featureId', 'parentTaskId',
           ];
           if (!validFields.includes(cmdOpts.field)) {
             console.error(`Invalid field: ${cmdOpts.field}\nValid fields: ${validFields.join(', ')}`);
@@ -118,6 +126,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .requiredOption('--title <title>', 'Task title')
     .option('--description <desc>', 'Task description')
     .option('--type <type>', 'Task type (bug|feature|improvement)', 'feature')
+    .option('--size <size>', 'Task size (xs|sm|md|lg|xl)')
+    .option('--complexity <complexity>', 'Task complexity (low|medium|high)')
     .option('--pipeline <id>', 'Pipeline ID')
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
@@ -132,6 +142,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       title: string;
       description?: string;
       type?: string;
+      size?: string;
+      complexity?: string;
       pipeline?: string;
       priority?: number;
       assignee?: string;
@@ -175,6 +187,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           title: cmdOpts.title,
           description: cmdOpts.description,
           type: cmdOpts.type as TaskType | undefined,
+          size: cmdOpts.size as TaskSize | undefined,
+          complexity: cmdOpts.complexity as TaskComplexity | undefined,
           debugInfo: cmdOpts.debugInfo,
           priority: cmdOpts.priority,
           assignee: cmdOpts.assignee,
@@ -197,6 +211,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .option('--title <title>', 'Task title')
     .option('--description <desc>', 'Task description')
     .option('--type <type>', 'Task type (bug|feature|improvement)')
+    .option('--size <size>', 'Task size (xs|sm|md|lg|xl, use "" to clear)')
+    .option('--complexity <complexity>', 'Task complexity (low|medium|high, use "" to clear)')
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
     .option('--tags <tags>', 'Comma-separated tags')
@@ -214,6 +230,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       title?: string;
       description?: string;
       type?: string;
+      size?: string;
+      complexity?: string;
       priority?: number;
       assignee?: string;
       tags?: string;
@@ -237,6 +255,8 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         if (cmdOpts.title !== undefined) updateInput.title = cmdOpts.title;
         if (cmdOpts.description !== undefined) updateInput.description = cmdOpts.description;
         if (cmdOpts.type !== undefined) updateInput.type = cmdOpts.type;
+        if (cmdOpts.size !== undefined) updateInput.size = cmdOpts.size || null;
+        if (cmdOpts.complexity !== undefined) updateInput.complexity = cmdOpts.complexity || null;
         if (cmdOpts.debugInfo !== undefined) updateInput.debugInfo = cmdOpts.debugInfo;
         if (cmdOpts.priority !== undefined) updateInput.priority = cmdOpts.priority;
         if (cmdOpts.assignee !== undefined) updateInput.assignee = cmdOpts.assignee || null;

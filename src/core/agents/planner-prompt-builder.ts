@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions, getTaskEstimationFields, getTaskEstimationInstructions } from './prompt-utils';
 
 export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'planner';
@@ -46,6 +46,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
               required: ['name', 'subtasks'],
             },
           },
+          ...getTaskEstimationFields(),
           ...getInteractiveFields(),
         },
         required: ['plan', 'planSummary', 'subtasks'],
@@ -145,6 +146,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       '- **Extra-Large**: 10+ files, architectural changes, high risk, multiple phases likely needed',
     ].join('\n');
 
+    prompt += getTaskEstimationInstructions();
     prompt += getInteractiveInstructions(this.type);
 
     if (context.validationErrors) {

@@ -18,5 +18,13 @@ export function getMigrations(): Migration[] {
       name: '089_add_type_to_tasks',
       sql: `ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'feature' CHECK(type IN ('bug','feature','improvement'))`,
     },
+    {
+      name: '090_add_size_to_tasks',
+      sql: `ALTER TABLE tasks ADD COLUMN size TEXT DEFAULT NULL CHECK(size IS NULL OR size IN ('xs','sm','md','lg','xl'))`,
+    },
+    {
+      name: '091_add_complexity_to_tasks',
+      sql: `ALTER TABLE tasks ADD COLUMN complexity TEXT DEFAULT NULL CHECK(complexity IS NULL OR complexity IN ('low','medium','high'))`,
+    },
   ];
 }

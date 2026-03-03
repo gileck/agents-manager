@@ -1,3 +1,4 @@
+import { VALID_TASK_SIZES, VALID_TASK_COMPLEXITIES } from '../../shared/types';
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 
@@ -71,6 +72,8 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
                 description: { type: 'string', description: 'Markdown-formatted description covering: **Where** (source files and functions), **Problem** (what is wrong and why), **Consequences** (what happens if not fixed — wasted tokens, blocked tasks, etc.), **Fix** (what to change and expected improvement), **Complexity** (small/medium/large), **ROI** (impact vs effort). Must include enough context for an agent to implement without additional investigation. Do NOT put debug logs in the description — use the debugInfo field instead.' },
                 debugInfo: { type: 'string', description: 'Raw debug logs, timeline entries, or event data relevant to bug-related tasks. This field is only consumed by the investigator agent and keeps downstream agent prompts clean. Omit if not applicable.' },
                 priority: { type: 'number', enum: [0, 1, 2, 3], description: 'Priority: 0=P0 Critical, 1=P1 High, 2=P2 Medium, 3=P3 Low' },
+                size: { type: 'string', enum: [...VALID_TASK_SIZES], description: 'Estimated task size: xs=trivial, sm=small, md=medium, lg=large, xl=extra-large' },
+                complexity: { type: 'string', enum: [...VALID_TASK_COMPLEXITIES], description: 'Estimated complexity: low=straightforward, medium=some nuance, high=many unknowns' },
               },
               required: ['title', 'type', 'description', 'priority'],
             },
@@ -159,6 +162,7 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '    - **ROI**: impact vs effort assessment (e.g. "high impact, small fix" or "minor improvement, large refactor")',
       '  Set priority based on impact: 0=Critical (data loss, blocking), 1=High (significant waste),',
       '  2=Medium (minor inefficiency), 3=Low (nice-to-have improvement).',
+      '  Optionally estimate `size` (xs/sm/md/lg/xl) and `complexity` (low/medium/high) for each task.',
       '  TASK TYPE: Each suggested task MUST have a `type` field:',
       '  - **bug**: Something is broken. A code defect causing incorrect behavior, wasted resources,',
       '    or silent failures. When type is "bug":',

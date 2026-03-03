@@ -1,3 +1,4 @@
+import { VALID_TASK_SIZES, VALID_TASK_COMPLEXITIES } from '../../shared/types';
 import type { PlanComment, TaskContextEntry } from '../../shared/types';
 
 /**
@@ -107,6 +108,34 @@ export function getInteractiveFields(): Record<string, object> {
       },
     },
   };
+}
+
+/** Shared schema fields for task size and complexity estimation. */
+export function getTaskEstimationFields(): Record<string, object> {
+  return {
+    size: {
+      type: 'string',
+      enum: [...VALID_TASK_SIZES],
+      description: 'Estimated task size (effort): xs=trivial, sm=small, md=medium, lg=large, xl=extra-large',
+    },
+    complexity: {
+      type: 'string',
+      enum: [...VALID_TASK_COMPLEXITIES],
+      description: 'Estimated task complexity: low=straightforward, medium=some nuance, high=many moving parts or unknowns',
+    },
+  };
+}
+
+/** Prompt section instructing agents to estimate task size and complexity. */
+export function getTaskEstimationInstructions(): string {
+  return [
+    '',
+    '## Task Estimation',
+    'If you can assess the size and complexity of this task based on your analysis, include them in your output:',
+    '- **size**: xs (trivial, <1 file), sm (small, 1-2 files), md (medium, 3-5 files), lg (large, 6-10 files), xl (extra-large, 10+ files)',
+    '- **complexity**: low (straightforward, clear path), medium (some decisions or cross-cutting concerns), high (many unknowns, architectural impact)',
+    'These are optional — only set them if you have enough information to make a reasonable estimate.',
+  ].join('\n');
 }
 
 /** Prompt section telling agents they can ask interactive questions. */

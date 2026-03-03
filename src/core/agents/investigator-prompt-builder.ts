@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { getInteractiveFields, getInteractiveInstructions, getTaskEstimationFields, getTaskEstimationInstructions } from './prompt-utils';
 
 export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'investigator';
@@ -30,6 +30,7 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
             items: { type: 'string' },
             description: 'Concrete fix steps that break down the suggested fix',
           },
+          ...getTaskEstimationFields(),
           ...getInteractiveFields(),
         },
         required: ['plan', 'investigationSummary', 'subtasks'],
@@ -115,6 +116,7 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
       prompt = invLines.join('\n');
     }
 
+    prompt += getTaskEstimationInstructions();
     prompt += getInteractiveInstructions(this.type);
 
     if (context.validationErrors) {

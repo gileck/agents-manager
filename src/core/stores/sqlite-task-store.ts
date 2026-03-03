@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Task, TaskType, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, ImplementationPhase, PlanComment } from '../../shared/types';
+import type { Task, TaskType, TaskSize, TaskComplexity, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, ImplementationPhase, PlanComment } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import { generateId, now, parseJson } from './utils';
@@ -12,6 +12,8 @@ interface TaskRow {
   title: string;
   description: string | null;
   type: string;
+  size: string | null;
+  complexity: string | null;
   status: string;
   priority: number;
   tags: string;
@@ -40,6 +42,8 @@ function rowToTask(row: TaskRow): Task {
     title: row.title,
     description: row.description,
     type: (row.type || 'feature') as TaskType,
+    size: (row.size as TaskSize) ?? null,
+    complexity: (row.complexity as TaskComplexity) ?? null,
     status: row.status,
     priority: row.priority,
     tags: parseJson<string[]>(row.tags, []),
@@ -97,6 +101,14 @@ export class SqliteTaskStore implements ITaskStore {
       if (filter?.type) {
         conditions.push('type = ?');
         values.push(filter.type);
+      }
+      if (filter?.size) {
+        conditions.push('size = ?');
+        values.push(filter.size);
+      }
+      if (filter?.complexity) {
+        conditions.push('complexity = ?');
+        values.push(filter.complexity);
       }
       if (filter?.priority !== undefined) {
         conditions.push('priority = ?');
@@ -158,8 +170,8 @@ export class SqliteTaskStore implements ITaskStore {
       }
 
       this.db.prepare(`
-        INSERT INTO tasks (id, project_id, pipeline_id, title, description, type, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, debug_info, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, project_id, pipeline_id, title, description, type, size, complexity, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, debug_info, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         input.projectId,
@@ -167,6 +179,8 @@ export class SqliteTaskStore implements ITaskStore {
         input.title,
         input.description ?? null,
         input.type ?? 'feature',
+        input.size ?? null,
+        input.complexity ?? null,
         status,
         input.priority ?? 0,
         JSON.stringify(input.tags ?? []),
@@ -213,6 +227,14 @@ export class SqliteTaskStore implements ITaskStore {
       if (input.type !== undefined) {
         updates.push('type = ?');
         values.push(input.type);
+      }
+      if (input.size !== undefined) {
+        updates.push('size = ?');
+        values.push(input.size);
+      }
+      if (input.complexity !== undefined) {
+        updates.push('complexity = ?');
+        values.push(input.complexity);
       }
       if (input.status !== undefined) {
         updates.push('status = ?');

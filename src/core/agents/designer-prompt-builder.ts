@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions, getTaskEstimationFields, getTaskEstimationInstructions } from './prompt-utils';
 
 export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'designer';
@@ -25,6 +25,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
         properties: {
           technicalDesign: { type: 'string', description: 'The full technical design document as markdown' },
           designSummary: { type: 'string', description: 'A short 2-3 sentence summary of the technical design' },
+          ...getTaskEstimationFields(),
           ...getInteractiveFields(),
         },
         required: ['technicalDesign', 'designSummary'],
@@ -124,6 +125,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
       prompt = tdLines.join('\n');
     }
 
+    prompt += getTaskEstimationInstructions();
     prompt += getInteractiveInstructions(this.type);
 
     if (context.validationErrors) {

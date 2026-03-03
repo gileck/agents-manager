@@ -62,15 +62,15 @@ npx agents-manager projects delete <id>                      # Delete project
 #### Core CRUD
 
 ```bash
-npx agents-manager tasks list|ls [--status] [--priority] [--assignee] [--feature <id>] [--parent <id>] [--tag <tag>] [--search <text>]
+npx agents-manager tasks list|ls [--status] [--type] [--size] [--complexity] [--priority] [--assignee] [--feature <id>] [--parent <id>] [--tag <tag>] [--search <text>]
 npx agents-manager tasks get|show <id> [--field <name>]      # Get task details (optionally extract single field)
-npx agents-manager tasks create --title <t> [--desc] [--pipeline] [--priority] [--assignee] [--tags] [--debug-info] [--feature <id>] [--parent-task <id>] [--pr-link] [--branch-name] [--metadata <json>]
-npx agents-manager tasks update <id> [--title] [--desc] [--priority] [--assignee] [--tags] [--pipeline] [--debug-info] [--plan <text>] [--technical-design <text>] [--pr-link] [--branch-name] [--feature <id>] [--parent-task <id>] [--metadata <json>] [--phases <json>]
+npx agents-manager tasks create --title <t> [--desc] [--type] [--size] [--complexity] [--pipeline] [--priority] [--assignee] [--tags] [--debug-info] [--feature <id>] [--parent-task <id>] [--pr-link] [--branch-name] [--metadata <json>]
+npx agents-manager tasks update <id> [--title] [--desc] [--type] [--size] [--complexity] [--priority] [--assignee] [--tags] [--pipeline] [--debug-info] [--plan <text>] [--technical-design <text>] [--pr-link] [--branch-name] [--feature <id>] [--parent-task <id>] [--metadata <json>] [--phases <json>]
 npx agents-manager tasks delete <id>
 npx agents-manager tasks reset <id> [--pipeline <id>]
 ```
 
-**`--field` option on `tasks get`:** Extracts a single field value in raw format (no table formatting). String fields output as plain text; object/array fields output as JSON. Valid fields: `plan`, `technicalDesign`, `debugInfo`, `phases`, `subtasks`, `metadata`, `prLink`, `branchName`, `description`, `tags`, `assignee`, `featureId`, `parentTaskId`.
+**`--field` option on `tasks get`:** Extracts a single field value in raw format (no table formatting). String fields output as plain text; object/array fields output as JSON. Valid fields: `plan`, `technicalDesign`, `debugInfo`, `phases`, `subtasks`, `metadata`, `prLink`, `branchName`, `description`, `type`, `size`, `complexity`, `tags`, `assignee`, `featureId`, `parentTaskId`.
 
 **Stdin support for content fields:** Pass `-` as the value to read from stdin:
 ```bash
