@@ -267,6 +267,21 @@ export class AgentService implements IAgentService {
       });
     }
 
+    // Ensure node_modules symlink is intact (git clean or a prior agent run may
+    // have replaced it with a real directory or removed it entirely).
+    try {
+      await worktreeManager.ensureNodeModules(taskId);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'error',
+        message: `ensureNodeModules failed — agent may encounter missing module errors: ${errorMsg}`,
+        data: { taskId, error: errorMsg },
+      });
+    }
+
     // Build review report file in the worktree for the workflow reviewer
     if (agentType === 'task-workflow-reviewer' && this.taskReviewReportBuilder) {
       try {

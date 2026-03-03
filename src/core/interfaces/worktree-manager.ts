@@ -8,4 +8,6 @@ export interface IWorktreeManager {
   unlock(taskId: string): Promise<void>;
   delete(taskId: string): Promise<void>;
   cleanup(activeTaskIds?: string[]): Promise<void>;
+  /** Ensure node_modules symlink exists in the worktree (restores if missing or replaced). */
+  ensureNodeModules(taskId: string): Promise<void>;
 }

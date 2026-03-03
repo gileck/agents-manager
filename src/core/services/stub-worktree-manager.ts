@@ -47,6 +47,10 @@ export class StubWorktreeManager implements IWorktreeManager {
     this.worktrees.delete(taskId);
   }
 
+  async ensureNodeModules(_taskId: string): Promise<void> {
+    // No-op in stub
+  }
+
   async cleanup(activeTaskIds?: string[]): Promise<void> {
     if (activeTaskIds) {
       const activeSet = new Set(activeTaskIds);

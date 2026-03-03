@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, readFileSync, writeFileSync, openSync, closeSync, symlinkSync, constants as fsConstants } from 'fs';
+import { existsSync, readFileSync, writeFileSync, openSync, closeSync, symlinkSync, lstatSync, rmSync, constants as fsConstants } from 'fs';
 import { join } from 'path';
 import type { Worktree } from '../../shared/types';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
@@ -68,17 +68,7 @@ export class LocalWorktreeManager implements IWorktreeManager {
       await this.git(['worktree', 'add', wtPath, branch]);
     }
 
-    // Symlink node_modules from the main project so native modules (e.g.
-    // better-sqlite3) resolve correctly inside the worktree.
-    const wtNodeModules = join(wtPath, 'node_modules');
-    const srcNodeModules = join(this.projectPath, 'node_modules');
-    if (!existsSync(wtNodeModules) && existsSync(srcNodeModules)) {
-      try {
-        symlinkSync(srcNodeModules, wtNodeModules, 'junction');
-      } catch {
-        // Non-fatal — agent may still work if it doesn't need native modules
-      }
-    }
+    await this.ensureNodeModules(taskId);
 
     return { path: wtPath, branch, taskId, locked: false };
   }
@@ -128,6 +118,30 @@ export class LocalWorktreeManager implements IWorktreeManager {
       }
       throw err;
     }
+  }
+
+  async ensureNodeModules(taskId: string): Promise<void> {
+    const wtPath = this.worktreePath(taskId);
+    const wtNodeModules = join(wtPath, 'node_modules');
+    const srcNodeModules = join(this.projectPath, 'node_modules');
+    if (!existsSync(srcNodeModules)) return;
+
+    // Check if node_modules already exists in the worktree
+    let stat: import('fs').Stats | null = null;
+    try {
+      stat = lstatSync(wtNodeModules);
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      // Path doesn't exist — will create symlink below
+    }
+
+    if (stat) {
+      if (stat.isSymbolicLink()) return; // Already a symlink — nothing to do
+      // It's a real directory (e.g. agent ran yarn install) — remove and re-symlink
+      rmSync(wtNodeModules, { recursive: true, force: true });
+    }
+
+    symlinkSync(srcNodeModules, wtNodeModules, 'junction');
   }
 
   async cleanup(activeTaskIds?: string[]): Promise<void> {
