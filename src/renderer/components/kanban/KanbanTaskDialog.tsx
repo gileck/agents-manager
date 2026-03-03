@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { PipelineBadge } from '../pipeline/PipelineBadge';
+import { PipelineProgress } from '../pipeline/PipelineProgress';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { usePipeline } from '../../hooks/usePipelines';
 import { getTagColor } from '../../utils/kanban-colors';
@@ -34,47 +35,6 @@ function formatDate(timestamp: number): string {
   });
 }
 
-function PipelineProgress({ pipeline, currentStatus }: { pipeline: { statuses: { name: string; label: string; color?: string }[] }; currentStatus: string }) {
-  const statuses = pipeline.statuses;
-  const currentIndex = statuses.findIndex(s => s.name === currentStatus);
-
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {statuses.map((s, i) => {
-        const isPast = i < currentIndex;
-        const isCurrent = i === currentIndex;
-        return (
-          <div key={s.name} className="flex items-center gap-1">
-            <div
-              title={s.label}
-              className="rounded-full transition-all"
-              style={{
-                width: isCurrent ? '10px' : '8px',
-                height: isCurrent ? '10px' : '8px',
-                backgroundColor: isCurrent
-                  ? (s.color ?? '#3b82f6')
-                  : isPast
-                    ? '#22c55e'
-                    : '#d1d5db',
-                boxShadow: isCurrent ? `0 0 0 2px ${(s.color ?? '#3b82f6')}40` : undefined,
-              }}
-            />
-            {i < statuses.length - 1 && (
-              <div
-                style={{
-                  width: '12px',
-                  height: '2px',
-                  backgroundColor: isPast ? '#22c55e' : '#d1d5db',
-                }}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export function KanbanTaskDialog({ task, onClose, onTaskMoved }: KanbanTaskDialogProps) {
   const navigate = useNavigate();
   const { pipeline } = usePipeline(task?.pipelineId);
@@ -91,7 +51,8 @@ export function KanbanTaskDialog({ task, onClose, onTaskMoved }: KanbanTaskDialo
     let cancelled = false;
     window.api.tasks.transitions(task.id).then((result) => {
       if (!cancelled) setTransitions(result);
-    }).catch(() => {
+    }).catch((err) => {
+      reportError(err, 'KanbanTaskDialog: fetch transitions');
       if (!cancelled) setTransitions([]);
     });
     return () => { cancelled = true; };
@@ -228,7 +189,7 @@ export function KanbanTaskDialog({ task, onClose, onTaskMoved }: KanbanTaskDialo
           {pipeline && (
             <div className="space-y-1">
               <span className="text-xs text-muted-foreground font-medium">Pipeline Progress</span>
-              <PipelineProgress pipeline={pipeline} currentStatus={task.status} />
+              <PipelineProgress pipeline={pipeline} currentStatus={task.status} transitionEntries={[]} agentRuns={null} />
             </div>
           )}
 
