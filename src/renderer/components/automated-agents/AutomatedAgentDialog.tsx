@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { reportError } from '../../lib/error-handler';
-import { useAutomatedAgentTemplates } from '../../hooks/useAutomatedAgents';
 import type {
   AutomatedAgent,
   AutomatedAgentCreateInput,
@@ -10,11 +9,13 @@ import type {
   AutomatedAgentSchedule,
   AutomatedAgentScheduleType,
   AutomatedAgentCapabilities,
+  AutomatedAgentTemplate,
 } from '../../../shared/types';
 
 interface AutomatedAgentDialogProps {
   projectId: string;
   agent: AutomatedAgent | null; // null = create mode
+  template?: AutomatedAgentTemplate | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -27,61 +28,63 @@ const DEFAULT_CAPABILITIES: AutomatedAgentCapabilities = {
   maxActions: 50,
 };
 
-export function AutomatedAgentDialog({ projectId, agent, onClose, onSaved }: AutomatedAgentDialogProps) {
-  const { templates, error: templatesError } = useAutomatedAgentTemplates();
+function initScheduleFields(s: AutomatedAgentSchedule) {
+  let intervalValue = '60';
+  let intervalUnit: 'minutes' | 'hours' | 'days' = 'minutes';
+  let dailyTime = '09:00';
+  let cronExpr = '0 * * * *';
+
+  if (s.type === 'interval') {
+    const ms = parseInt(s.value, 10);
+    if (ms >= 86400000) { intervalValue = String(Math.round(ms / 86400000)); intervalUnit = 'days'; }
+    else if (ms >= 3600000) { intervalValue = String(Math.round(ms / 3600000)); intervalUnit = 'hours'; }
+    else { intervalValue = String(Math.round(ms / 60000)); intervalUnit = 'minutes'; }
+  } else if (s.type === 'daily-at') {
+    dailyTime = s.value;
+  } else if (s.type === 'cron') {
+    cronExpr = s.value;
+  }
+
+  return { intervalValue, intervalUnit, dailyTime, cronExpr };
+}
+
+export function AutomatedAgentDialog({ projectId, agent, template, onClose, onSaved }: AutomatedAgentDialogProps) {
   const isEdit = agent !== null;
 
-  const [name, setName] = useState(agent?.name ?? '');
-  const [description, setDescription] = useState(agent?.description ?? '');
-  const [promptInstructions, setPromptInstructions] = useState(agent?.promptInstructions ?? '');
-  const [scheduleType, setScheduleType] = useState<AutomatedAgentScheduleType>(agent?.schedule?.type ?? 'manual');
-  const [intervalValue, setIntervalValue] = useState('60');
-  const [intervalUnit, setIntervalUnit] = useState<'minutes' | 'hours' | 'days'>('minutes');
-  const [dailyTime, setDailyTime] = useState('09:00');
-  const [cronExpr, setCronExpr] = useState('0 * * * *');
-  const [capabilities, setCapabilities] = useState<AutomatedAgentCapabilities>(agent?.capabilities ?? DEFAULT_CAPABILITIES);
-  const [maxRunDuration, setMaxRunDuration] = useState(Math.round((agent?.maxRunDurationMs ?? 600000) / 60000));
-  const [templateId, setTemplateId] = useState<string>(agent?.templateId ?? '');
+  // Resolve initial values from agent (edit) or template (create from template) or defaults (create blank)
+  const source = agent ?? template;
+  const initialSchedule = source
+    ? ('schedule' in source ? source.schedule : source.defaultSchedule)
+    : { type: 'manual' as const, value: '' };
+  const initialCaps = source
+    ? ('capabilities' in source ? source.capabilities : source.defaultCapabilities)
+    : DEFAULT_CAPABILITIES;
+  const initialMaxDuration = source
+    ? ('maxRunDurationMs' in source ? source.maxRunDurationMs : source.defaultMaxRunDurationMs)
+    : 600000;
+  const initialScheduleFields = initScheduleFields(initialSchedule);
+
+  const [name, setName] = useState(source?.name ?? '');
+  const [description, setDescription] = useState(source?.description ?? '');
+  const [promptInstructions, setPromptInstructions] = useState(source?.promptInstructions ?? '');
+  const [scheduleType, setScheduleType] = useState<AutomatedAgentScheduleType>(initialSchedule.type);
+  const [intervalValue, setIntervalValue] = useState(initialScheduleFields.intervalValue);
+  const [intervalUnit, setIntervalUnit] = useState(initialScheduleFields.intervalUnit);
+  const [dailyTime, setDailyTime] = useState(initialScheduleFields.dailyTime);
+  const [cronExpr, setCronExpr] = useState(initialScheduleFields.cronExpr);
+  const [capabilities, setCapabilities] = useState<AutomatedAgentCapabilities>(initialCaps);
+  const [maxRunDuration, setMaxRunDuration] = useState(Math.round(initialMaxDuration / 60000));
   const [saving, setSaving] = useState(false);
 
-  // Initialize schedule fields from existing agent
+  // Re-init schedule fields when editing an existing agent
   useEffect(() => {
     if (!agent) return;
-    const s = agent.schedule;
-    if (s.type === 'interval') {
-      const ms = parseInt(s.value, 10);
-      if (ms >= 86400000) { setIntervalValue(String(Math.round(ms / 86400000))); setIntervalUnit('days'); }
-      else if (ms >= 3600000) { setIntervalValue(String(Math.round(ms / 3600000))); setIntervalUnit('hours'); }
-      else { setIntervalValue(String(Math.round(ms / 60000))); setIntervalUnit('minutes'); }
-    } else if (s.type === 'daily-at') {
-      setDailyTime(s.value);
-    } else if (s.type === 'cron') {
-      setCronExpr(s.value);
-    }
+    const fields = initScheduleFields(agent.schedule);
+    setIntervalValue(fields.intervalValue);
+    setIntervalUnit(fields.intervalUnit);
+    setDailyTime(fields.dailyTime);
+    setCronExpr(fields.cronExpr);
   }, [agent]);
-
-  const handleTemplateChange = (id: string) => {
-    setTemplateId(id);
-    const template = templates.find(t => t.id === id);
-    if (!template) return;
-    setName(template.name);
-    setDescription(template.description);
-    setPromptInstructions(template.promptInstructions);
-    setCapabilities(template.defaultCapabilities);
-    setMaxRunDuration(Math.round(template.defaultMaxRunDurationMs / 60000));
-    const s = template.defaultSchedule;
-    setScheduleType(s.type);
-    if (s.type === 'interval') {
-      const ms = parseInt(s.value, 10);
-      if (ms >= 86400000) { setIntervalValue(String(Math.round(ms / 86400000))); setIntervalUnit('days'); }
-      else if (ms >= 3600000) { setIntervalValue(String(Math.round(ms / 3600000))); setIntervalUnit('hours'); }
-      else { setIntervalValue(String(Math.round(ms / 60000))); setIntervalUnit('minutes'); }
-    } else if (s.type === 'daily-at') {
-      setDailyTime(s.value);
-    } else if (s.type === 'cron') {
-      setCronExpr(s.value);
-    }
-  };
 
   const buildSchedule = (): AutomatedAgentSchedule => {
     switch (scheduleType) {
@@ -120,7 +123,7 @@ export function AutomatedAgentDialog({ projectId, agent, onClose, onSaved }: Aut
           capabilities,
           schedule: buildSchedule(),
           maxRunDurationMs: maxRunDuration * 60000,
-          templateId: templateId || undefined,
+          templateId: template?.id,
         };
         await window.api.automatedAgents.create(input);
         toast.success('Agent created');
@@ -136,136 +139,131 @@ export function AutomatedAgentDialog({ projectId, agent, onClose, onSaved }: Aut
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-border">
+      <div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <h2 className="font-semibold text-sm">{isEdit ? 'Edit Agent' : 'New Automated Agent'}</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="h-4 w-4" /></button>
         </div>
 
-        <div className="p-4 space-y-4">
-          {/* Template picker (create only) */}
-          {!isEdit && (
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Name & Description row */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium mb-1">Template</label>
-              {templatesError ? (
-                <p className="text-xs text-red-500">Failed to load templates: {templatesError}</p>
-              ) : (
-                <select
-                  value={templateId}
-                  onChange={e => handleTemplateChange(e.target.value)}
-                  className="w-full text-sm px-2 py-1.5 rounded border border-input bg-background"
-                >
-                  <option value="">Custom (blank)</option>
-                  {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              )}
+              <label className="block text-xs font-medium mb-1">Name *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full text-sm px-3 py-2 rounded border border-input bg-background"
+                placeholder="My Agent"
+              />
             </div>
-          )}
-
-          {/* Name */}
-          <div>
-            <label className="block text-xs font-medium mb-1">Name *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full text-sm px-2 py-1.5 rounded border border-input bg-background"
-              placeholder="My Agent"
-            />
+            <div>
+              <label className="block text-xs font-medium mb-1">Description</label>
+              <input
+                type="text"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                className="w-full text-sm px-3 py-2 rounded border border-input bg-background"
+                placeholder="What does this agent do?"
+              />
+            </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-medium mb-1">Description</label>
-            <input
-              type="text"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              className="w-full text-sm px-2 py-1.5 rounded border border-input bg-background"
-              placeholder="What does this agent do?"
-            />
-          </div>
-
-          {/* Prompt instructions */}
+          {/* Prompt instructions — large */}
           <div>
             <label className="block text-xs font-medium mb-1">Prompt Instructions</label>
             <textarea
               value={promptInstructions}
               onChange={e => setPromptInstructions(e.target.value)}
-              rows={8}
-              className="w-full text-sm px-2 py-1.5 rounded border border-input bg-background font-mono"
+              rows={14}
+              className="w-full text-sm px-3 py-2 rounded border border-input bg-background font-mono resize-y"
               placeholder="Instructions for the agent..."
             />
           </div>
 
-          {/* Schedule */}
-          <div>
-            <label className="block text-xs font-medium mb-1">Schedule</label>
-            <div className="space-y-2">
-              <select
-                value={scheduleType}
-                onChange={e => setScheduleType(e.target.value as AutomatedAgentScheduleType)}
-                className="w-full text-sm px-2 py-1.5 rounded border border-input bg-background"
-              >
-                <option value="manual">Manual only</option>
-                <option value="interval">Interval</option>
-                <option value="daily-at">Daily at time</option>
-                <option value="cron">Cron expression</option>
-              </select>
+          {/* Schedule & Duration row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium mb-1">Schedule</label>
+              <div className="space-y-2">
+                <select
+                  value={scheduleType}
+                  onChange={e => setScheduleType(e.target.value as AutomatedAgentScheduleType)}
+                  className="w-full text-sm px-3 py-2 rounded border border-input bg-background"
+                >
+                  <option value="manual">Manual only</option>
+                  <option value="interval">Interval</option>
+                  <option value="daily-at">Daily at time</option>
+                  <option value="cron">Cron expression</option>
+                </select>
 
-              {scheduleType === 'interval' && (
-                <div className="flex gap-2">
+                {scheduleType === 'interval' && (
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={intervalValue}
+                      onChange={e => setIntervalValue(e.target.value)}
+                      min={1}
+                      className="w-24 text-sm px-3 py-2 rounded border border-input bg-background"
+                    />
+                    <select
+                      value={intervalUnit}
+                      onChange={e => setIntervalUnit(e.target.value as 'minutes' | 'hours' | 'days')}
+                      className="text-sm px-3 py-2 rounded border border-input bg-background"
+                    >
+                      <option value="minutes">Minutes</option>
+                      <option value="hours">Hours</option>
+                      <option value="days">Days</option>
+                    </select>
+                  </div>
+                )}
+
+                {scheduleType === 'daily-at' && (
                   <input
-                    type="number"
-                    value={intervalValue}
-                    onChange={e => setIntervalValue(e.target.value)}
-                    min={1}
-                    className="w-24 text-sm px-2 py-1.5 rounded border border-input bg-background"
+                    type="time"
+                    value={dailyTime}
+                    onChange={e => setDailyTime(e.target.value)}
+                    className="text-sm px-3 py-2 rounded border border-input bg-background"
                   />
-                  <select
-                    value={intervalUnit}
-                    onChange={e => setIntervalUnit(e.target.value as 'minutes' | 'hours' | 'days')}
-                    className="text-sm px-2 py-1.5 rounded border border-input bg-background"
-                  >
-                    <option value="minutes">Minutes</option>
-                    <option value="hours">Hours</option>
-                    <option value="days">Days</option>
-                  </select>
-                </div>
-              )}
+                )}
 
-              {scheduleType === 'daily-at' && (
-                <input
-                  type="time"
-                  value={dailyTime}
-                  onChange={e => setDailyTime(e.target.value)}
-                  className="text-sm px-2 py-1.5 rounded border border-input bg-background"
-                />
-              )}
+                {scheduleType === 'cron' && (
+                  <input
+                    type="text"
+                    value={cronExpr}
+                    onChange={e => setCronExpr(e.target.value)}
+                    className="w-full text-sm px-3 py-2 rounded border border-input bg-background font-mono"
+                    placeholder="0 * * * *"
+                  />
+                )}
+              </div>
+            </div>
 
-              {scheduleType === 'cron' && (
-                <input
-                  type="text"
-                  value={cronExpr}
-                  onChange={e => setCronExpr(e.target.value)}
-                  className="w-full text-sm px-2 py-1.5 rounded border border-input bg-background font-mono"
-                  placeholder="0 * * * *"
-                />
-              )}
+            <div>
+              <label className="block text-xs font-medium mb-1">Max Run Duration (minutes)</label>
+              <input
+                type="number"
+                value={maxRunDuration}
+                onChange={e => setMaxRunDuration(parseInt(e.target.value, 10) || 10)}
+                min={1}
+                max={120}
+                className="w-24 text-sm px-3 py-2 rounded border border-input bg-background"
+              />
             </div>
           </div>
 
           {/* Capabilities */}
           <div>
             <label className="block text-xs font-medium mb-1">Capabilities</label>
-            <div className="space-y-1.5">
+            <div className="flex flex-wrap gap-x-6 gap-y-1.5">
               <label className="flex items-center gap-2 text-xs">
                 <input
                   type="checkbox"
                   checked={capabilities.readOnly}
                   onChange={e => setCapabilities({ ...capabilities, readOnly: e.target.checked })}
                 />
-                Read only (no file modifications)
+                Read only
               </label>
               <label className="flex items-center gap-2 text-xs">
                 <input
@@ -273,7 +271,7 @@ export function AutomatedAgentDialog({ projectId, agent, onClose, onSaved }: Aut
                   checked={capabilities.canCreateTasks}
                   onChange={e => setCapabilities({ ...capabilities, canCreateTasks: e.target.checked })}
                 />
-                Can create tasks
+                Create tasks
               </label>
               <label className="flex items-center gap-2 text-xs">
                 <input
@@ -281,7 +279,7 @@ export function AutomatedAgentDialog({ projectId, agent, onClose, onSaved }: Aut
                   checked={capabilities.canModifyTasks}
                   onChange={e => setCapabilities({ ...capabilities, canModifyTasks: e.target.checked })}
                 />
-                Can modify tasks
+                Modify tasks
               </label>
               <label className="flex items-center gap-2 text-xs">
                 <input
@@ -289,7 +287,7 @@ export function AutomatedAgentDialog({ projectId, agent, onClose, onSaved }: Aut
                   checked={capabilities.dryRun}
                   onChange={e => setCapabilities({ ...capabilities, dryRun: e.target.checked })}
                 />
-                Dry run (report only, no actions)
+                Dry run
               </label>
               <div className="flex items-center gap-2">
                 <label className="text-xs">Max actions:</label>
@@ -304,27 +302,14 @@ export function AutomatedAgentDialog({ projectId, agent, onClose, onSaved }: Aut
               </div>
             </div>
           </div>
-
-          {/* Max run duration */}
-          <div>
-            <label className="block text-xs font-medium mb-1">Max Run Duration (minutes)</label>
-            <input
-              type="number"
-              value={maxRunDuration}
-              onChange={e => setMaxRunDuration(parseInt(e.target.value, 10) || 10)}
-              min={1}
-              max={120}
-              className="w-24 text-sm px-2 py-1.5 rounded border border-input bg-background"
-            />
-          </div>
         </div>
 
-        <div className="flex justify-end gap-2 p-4 border-t border-border">
-          <button onClick={onClose} className="px-3 py-1.5 text-sm rounded border border-input hover:bg-muted transition-colors">Cancel</button>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-border shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded border border-input hover:bg-muted transition-colors">Cancel</button>
           <button
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            className="px-3 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="px-4 py-2 text-sm rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {saving ? 'Saving...' : isEdit ? 'Update' : 'Create'}
           </button>
