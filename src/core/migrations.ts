@@ -933,6 +933,55 @@ export function getMigrations(): Migration[] {
         CREATE INDEX IF NOT EXISTS idx_agent_runs_auto_agent ON agent_runs(automated_agent_id)
       `,
     },
+    {
+      name: '087_drop_agent_runs_task_fk',
+      sql: `
+        CREATE TABLE task_phases_tmp AS SELECT * FROM task_phases;
+        DROP TABLE task_phases;
+        CREATE TABLE pending_prompts_tmp AS SELECT * FROM pending_prompts;
+        DROP TABLE pending_prompts;
+
+        CREATE TABLE agent_runs_new (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          agent_type TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('running','completed','failed','timed_out','cancelled')),
+          output TEXT,
+          outcome TEXT,
+          payload TEXT,
+          prompt TEXT,
+          exit_code INTEGER,
+          started_at INTEGER NOT NULL,
+          completed_at INTEGER,
+          cost_input_tokens INTEGER,
+          cost_output_tokens INTEGER,
+          error TEXT,
+          timeout_ms INTEGER,
+          max_turns INTEGER,
+          message_count INTEGER,
+          messages TEXT,
+          automated_agent_id TEXT
+        );
+        INSERT INTO agent_runs_new SELECT id, task_id, agent_type, mode, status, output, outcome, payload, prompt, exit_code, started_at, completed_at, cost_input_tokens, cost_output_tokens, error, timeout_ms, max_turns, message_count, messages, automated_agent_id FROM agent_runs;
+        DROP TABLE agent_runs;
+        ALTER TABLE agent_runs_new RENAME TO agent_runs;
+
+        CREATE TABLE task_phases (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, phase TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','active','completed','failed')), agent_run_id TEXT, started_at INTEGER, completed_at INTEGER, FOREIGN KEY(task_id) REFERENCES tasks(id), FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id));
+        INSERT INTO task_phases SELECT * FROM task_phases_tmp;
+        DROP TABLE task_phases_tmp;
+        CREATE TABLE pending_prompts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, agent_run_id TEXT NOT NULL, prompt_type TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}', response TEXT, status TEXT NOT NULL CHECK(status IN ('pending','answered','expired')), created_at INTEGER NOT NULL, answered_at INTEGER, resume_outcome TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id), FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id));
+        INSERT INTO pending_prompts SELECT * FROM pending_prompts_tmp;
+        DROP TABLE pending_prompts_tmp;
+
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_task_id ON agent_runs(task_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_auto_agent ON agent_runs(automated_agent_id);
+        CREATE INDEX IF NOT EXISTS idx_task_phases_task_id ON task_phases(task_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_prompts_task_id ON pending_prompts(task_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_prompts_status ON pending_prompts(status)
+      `,
+    },
   ];
 }
 
