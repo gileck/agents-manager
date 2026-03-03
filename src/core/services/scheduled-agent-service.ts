@@ -12,6 +12,8 @@ import { getAppLogger } from './app-logger';
 export class ScheduledAgentService {
   private activeRuns = new Map<string, Promise<void>>();
   private activeRunIds = new Set<string>();
+  /** Maps runId → lib name so stop() can target the correct lib. */
+  private activeRunLibs = new Map<string, string>();
 
   constructor(
     private automatedAgentStore: IAutomatedAgentStore,
@@ -64,6 +66,7 @@ export class ScheduledAgentService {
 
       const lib = this.agentLibRegistry.getLib('claude-code');
       this.activeRunIds.add(run.id);
+      this.activeRunLibs.set(run.id, lib.name);
       const runPromise = this.executeInBackground(run, agent, project, prompt, lib, triggeredBy, onOutput, onMessage);
       runPromise.catch(err => getAppLogger().logError('ScheduledAgentService', `Unhandled error in background execution for "${agent.name}"`, err));
       this.activeRuns.set(agent.id, runPromise);
@@ -206,7 +209,28 @@ export class ScheduledAgentService {
       }
     } finally {
       this.activeRunIds.delete(run.id);
+      this.activeRunLibs.delete(run.id);
       this.activeRuns.delete(agent.id);
     }
+  }
+
+  async stop(runId: string): Promise<void> {
+    const libName = this.activeRunLibs.get(runId);
+    if (!libName) {
+      // Run not tracked — already completed or unknown
+      getAppLogger().warn('ScheduledAgentService', `stop() called for run ${runId} which is not active — ignoring`);
+      return;
+    }
+
+    const lib = this.agentLibRegistry.getLib(libName);
+    await lib.stop(runId);
+
+    this.activeRunIds.delete(runId);
+    this.activeRunLibs.delete(runId);
+
+    await this.agentRunStore.updateRun(runId, {
+      status: 'cancelled',
+      completedAt: Date.now(),
+    });
   }
 }

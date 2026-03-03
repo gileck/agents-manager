@@ -22,6 +22,7 @@ import type { TaskReviewReportBuilder } from './task-review-report-builder';
 import type { IAgent } from '../interfaces/agent';
 import { ValidationRunner } from './validation-runner';
 import type { OutcomeResolver } from './outcome-resolver';
+import type { ScheduledAgentService } from './scheduled-agent-service';
 import * as path from 'path';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
@@ -58,6 +59,7 @@ export class AgentService implements IAgentService {
     private notificationRouter: INotificationRouter,
     private validationRunner: ValidationRunner,
     private outcomeResolver: OutcomeResolver,
+    private scheduledAgentService?: ScheduledAgentService,
   ) {
     this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog);
   }
@@ -752,6 +754,12 @@ export class AgentService implements IAgentService {
   async stop(runId: string): Promise<void> {
     const run = await this.agentRunStore.getRun(runId);
     if (!run) throw new Error(`Agent run not found: ${runId}`);
+
+    // Automated agent runs are managed by ScheduledAgentService — delegate to it
+    if (run.automatedAgentId && this.scheduledAgentService) {
+      await this.scheduledAgentService.stop(runId);
+      return;
+    }
 
     // Use the tracked running agent instance, falling back to framework
     const agent = this.runningAgents.get(run.taskId) ?? this.agentFramework.getAgent(run.agentType);

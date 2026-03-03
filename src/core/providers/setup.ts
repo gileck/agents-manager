@@ -221,6 +221,14 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskPhaseStore, taskArtifactStore, taskEventLog,
   );
 
+  // Automated agent stores and services (created before AgentService so it can be passed in for stop delegation)
+  const automatedAgentStore = new SqliteAutomatedAgentStore(db);
+  const scheduledAgentService = new ScheduledAgentService(
+    automatedAgentStore, agentRunStore, projectStore, taskStore,
+    agentLibRegistry, notificationRouter,
+  );
+  const schedulerSupervisor = new SchedulerSupervisor(automatedAgentStore, scheduledAgentService);
+
   // Agent service
   const agentService = new AgentService(
     agentFramework, agentRunStore, createWorktreeManager,
@@ -229,6 +237,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     createGitOps, taskContextStore, agentDefinitionStore,
     taskReviewReportBuilder, notificationRouter,
     validationRunner, outcomeResolver,
+    scheduledAgentService,
   );
 
   // Workflow service
@@ -244,14 +253,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskStore, pipelineEngine, pipelineStore,
     taskEventLog, activityLog, agentRunStore,
   );
-
-  // Automated agent stores and services (must be before AgentSupervisor which needs scheduledAgentService)
-  const automatedAgentStore = new SqliteAutomatedAgentStore(db);
-  const scheduledAgentService = new ScheduledAgentService(
-    automatedAgentStore, agentRunStore, projectStore, taskStore,
-    agentLibRegistry, notificationRouter,
-  );
-  const schedulerSupervisor = new SchedulerSupervisor(automatedAgentStore, scheduledAgentService);
 
   // Supervisor for detecting ghost/timed-out agent runs + stall recovery
   const agentSupervisor = new AgentSupervisor(
