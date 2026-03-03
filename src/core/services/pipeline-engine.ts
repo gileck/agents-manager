@@ -32,6 +32,7 @@ interface TaskRow {
   pipeline_id: string;
   title: string;
   description: string | null;
+  type: string;
   status: string;
   priority: number;
   tags: string;
@@ -59,6 +60,7 @@ function rowToTask(row: TaskRow): Task {
     pipelineId: row.pipeline_id,
     title: row.title,
     description: row.description,
+    type: (row.type || 'feature') as Task['type'],
     status: row.status,
     priority: row.priority,
     tags: parseJson<string[]>(row.tags, []),

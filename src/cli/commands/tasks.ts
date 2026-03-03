@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import type { ApiClient } from '../../client/api-client';
-import type { Subtask, SubtaskStatus } from '../../shared/types';
+import type { Subtask, SubtaskStatus, TaskType } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject } from '../context';
 import { readStdinOrValue } from '../stdin';
@@ -14,6 +14,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .alias('ls')
     .description('List tasks')
     .option('--status <status>', 'Filter by status')
+    .option('--type <type>', 'Filter by type (bug|feature|improvement)')
     .option('--priority <n>', 'Filter by priority', parseInt)
     .option('--assignee <name>', 'Filter by assignee')
     .option('--feature <id>', 'Filter by feature ID')
@@ -22,6 +23,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .option('--search <text>', 'Free-text search')
     .action(async (cmdOpts: {
       status?: string;
+      type?: string;
       priority?: number;
       assignee?: string;
       feature?: string;
@@ -35,6 +37,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         const list = await api.tasks.list({
           projectId: project.id,
           status: cmdOpts.status,
+          type: cmdOpts.type as TaskType | undefined,
           priority: cmdOpts.priority,
           assignee: cmdOpts.assignee,
           featureId: cmdOpts.feature,
@@ -47,6 +50,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           const total = t.subtasks.length;
           return {
             status: t.status,
+            type: t.type,
             priority: t.priority,
             title: t.title,
             id: t.id,
@@ -72,7 +76,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         if (cmdOpts.field) {
           const validFields = [
             'plan', 'technicalDesign', 'debugInfo', 'phases', 'subtasks',
-            'metadata', 'prLink', 'branchName', 'description', 'tags',
+            'metadata', 'prLink', 'branchName', 'description', 'type', 'tags',
             'assignee', 'featureId', 'parentTaskId',
           ];
           if (!validFields.includes(cmdOpts.field)) {
@@ -113,6 +117,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .description('Create a new task')
     .requiredOption('--title <title>', 'Task title')
     .option('--description <desc>', 'Task description')
+    .option('--type <type>', 'Task type (bug|feature|improvement)', 'feature')
     .option('--pipeline <id>', 'Pipeline ID')
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
@@ -126,6 +131,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (cmdOpts: {
       title: string;
       description?: string;
+      type?: string;
       pipeline?: string;
       priority?: number;
       assignee?: string;
@@ -168,6 +174,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           pipelineId,
           title: cmdOpts.title,
           description: cmdOpts.description,
+          type: cmdOpts.type as TaskType | undefined,
           debugInfo: cmdOpts.debugInfo,
           priority: cmdOpts.priority,
           assignee: cmdOpts.assignee,
@@ -189,6 +196,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .description('Update a task')
     .option('--title <title>', 'Task title')
     .option('--description <desc>', 'Task description')
+    .option('--type <type>', 'Task type (bug|feature|improvement)')
     .option('--priority <n>', 'Task priority', parseInt)
     .option('--assignee <name>', 'Assignee')
     .option('--tags <tags>', 'Comma-separated tags')
@@ -205,6 +213,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, cmdOpts: {
       title?: string;
       description?: string;
+      type?: string;
       priority?: number;
       assignee?: string;
       tags?: string;
@@ -227,6 +236,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         const updateInput: Record<string, unknown> = {};
         if (cmdOpts.title !== undefined) updateInput.title = cmdOpts.title;
         if (cmdOpts.description !== undefined) updateInput.description = cmdOpts.description;
+        if (cmdOpts.type !== undefined) updateInput.type = cmdOpts.type;
         if (cmdOpts.debugInfo !== undefined) updateInput.debugInfo = cmdOpts.debugInfo;
         if (cmdOpts.priority !== undefined) updateInput.priority = cmdOpts.priority;
         if (cmdOpts.assignee !== undefined) updateInput.assignee = cmdOpts.assignee || null;

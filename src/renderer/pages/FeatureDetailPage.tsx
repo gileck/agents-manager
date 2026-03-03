@@ -20,7 +20,7 @@ import { PipelineBadge } from '../components/pipeline/PipelineBadge';
 import {
   buildPipelineMap, computeFeatureStatus, computeDependencyLayers, formatRelativeTimestamp,
 } from '../components/tasks/task-helpers';
-import type { Task, FeatureStatus, FeatureUpdateInput, TaskCreateInput, AppSettings } from '../../shared/types';
+import type { Task, TaskType, FeatureStatus, FeatureUpdateInput, TaskCreateInput, AppSettings } from '../../shared/types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 const STATUS_COLORS: Record<FeatureStatus, { bg: string; text: string; label: string }> = {
@@ -55,7 +55,7 @@ export function FeatureDetailPage() {
 
   // Create task dialog
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [taskForm, setTaskForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '' });
+  const [taskForm, setTaskForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '', type: 'feature' });
   const [taskDeps, setTaskDeps] = useState<string[]>([]);
   const [creatingTask, setCreatingTask] = useState(false);
 
@@ -128,7 +128,7 @@ export function FeatureDetailPage() {
     const settings: AppSettings = await window.api.settings.get();
     const prefill = (settings.defaultPipelineId && pipelines.some((p) => p.id === settings.defaultPipelineId))
       ? settings.defaultPipelineId : '';
-    setTaskForm({ pipelineId: prefill, title: '', description: '', featureId: id });
+    setTaskForm({ pipelineId: prefill, title: '', description: '', type: 'feature', featureId: id });
     setTaskDeps([]);
     setTaskDialogOpen(true);
   };
@@ -410,6 +410,19 @@ export function FeatureDetailPage() {
                   {pipelines.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={taskForm.type ?? 'feature'} onValueChange={(v) => setTaskForm({ ...taskForm, type: v as TaskType })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="feature">Feature</SelectItem>
+                  <SelectItem value="bug">Bug</SelectItem>
+                  <SelectItem value="improvement">Improvement</SelectItem>
                 </SelectContent>
               </Select>
             </div>

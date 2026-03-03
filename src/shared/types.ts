@@ -254,12 +254,15 @@ export interface PlanComment {
 }
 
 // Task types
+export type TaskType = 'bug' | 'feature' | 'improvement';
+
 export interface Task {
   id: string;
   projectId: string;
   pipelineId: string;
   title: string;
   description: string | null;
+  type: TaskType;
   status: string;
   priority: number;
   tags: string[];
@@ -287,6 +290,7 @@ export interface TaskCreateInput {
   pipelineId: string;
   title: string;
   description?: string;
+  type?: TaskType;
   status?: string;
   priority?: number;
   tags?: string[];
@@ -304,6 +308,7 @@ export interface TaskCreateInput {
 export interface TaskUpdateInput {
   title?: string;
   description?: string;
+  type?: TaskType;
   status?: string;
   priority?: number;
   tags?: string[];
@@ -329,6 +334,7 @@ export interface TaskFilter {
   projectId?: string;
   pipelineId?: string;
   status?: string;
+  type?: TaskType;
   priority?: number;
   assignee?: string;
   parentTaskId?: string | null;

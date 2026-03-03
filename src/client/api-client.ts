@@ -296,6 +296,7 @@ export function createApiClient(baseUrl: string): ApiClient {
           if (filter.projectId) q.projectId = filter.projectId;
           if (filter.pipelineId) q.pipelineId = filter.pipelineId;
           if (filter.status) q.status = filter.status;
+          if (filter.type) q.type = filter.type;
           if (filter.priority !== undefined) q.priority = filter.priority;
           if (filter.assignee) q.assignee = filter.assignee;
           if (filter.parentTaskId !== undefined) q.parentTaskId = filter.parentTaskId ?? '';

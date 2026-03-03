@@ -14,5 +14,9 @@ export function getMigrations(): Migration[] {
       name: '088_add_model_to_agent_runs',
       sql: `ALTER TABLE agent_runs ADD COLUMN model TEXT`,
     },
+    {
+      name: '089_add_type_to_tasks',
+      sql: `ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'feature' CHECK(type IN ('bug','feature','improvement'))`,
+    },
   ];
 }

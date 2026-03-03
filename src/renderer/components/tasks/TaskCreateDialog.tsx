@@ -9,7 +9,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../ui/dialog';
-import type { Pipeline, Feature, TaskCreateInput } from '../../../shared/types';
+import type { Pipeline, Feature, TaskCreateInput, TaskType } from '../../../shared/types';
 
 interface TaskCreateDialogProps {
   open: boolean;
@@ -49,6 +49,19 @@ export function TaskCreateDialog({
                 {pipelines.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Type</Label>
+            <Select value={form.type ?? 'feature'} onValueChange={(v) => onFormChange({ ...form, type: v as TaskType })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="feature">Feature</SelectItem>
+                <SelectItem value="bug">Bug</SelectItem>
+                <SelectItem value="improvement">Improvement</SelectItem>
               </SelectContent>
             </Select>
           </div>

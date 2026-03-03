@@ -90,7 +90,7 @@ export function TaskListPage() {
   // Create dialog
   const [defaultPipelineId, setDefaultPipelineId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '' });
+  const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '', type: 'feature' });
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export function TaskListPage() {
   const openCreateDialog = () => {
     const prefill = (defaultPipelineId && pipelines.some((p) => p.id === defaultPipelineId))
       ? defaultPipelineId : '';
-    setForm({ pipelineId: prefill, title: '', description: '' });
+    setForm({ pipelineId: prefill, title: '', description: '', type: 'feature' });
     setDialogOpen(true);
   };
 
@@ -111,7 +111,7 @@ export function TaskListPage() {
     try {
       const task = await window.api.tasks.create({ ...form, projectId: currentProjectId });
       setDialogOpen(false);
-      setForm({ pipelineId: '', title: '', description: '' });
+      setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
       await refetch();
       navigate(`/tasks/${task.id}`);
     } finally {

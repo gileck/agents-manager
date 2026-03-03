@@ -15,6 +15,7 @@ export function taskRoutes(services: AppServices): Router {
       if (req.query.projectId) filter.projectId = req.query.projectId as string;
       if (req.query.pipelineId) filter.pipelineId = req.query.pipelineId as string;
       if (req.query.status) filter.status = req.query.status as string;
+      if (req.query.type) filter.type = req.query.type as TaskFilter['type'];
       if (req.query.priority) filter.priority = Number(req.query.priority);
       if (req.query.assignee) filter.assignee = req.query.assignee as string;
       if (req.query.parentTaskId !== undefined) filter.parentTaskId = (req.query.parentTaskId as string) || null;

@@ -228,7 +228,7 @@ export class PostRunExtractor {
     if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) return;
 
     const wso = result.structuredOutput as {
-      suggestedTasks?: Array<{ title: string; description: string; debugInfo?: string; priority?: number }>;
+      suggestedTasks?: Array<{ title: string; description: string; type?: string; debugInfo?: string; priority?: number }>;
     } | undefined;
 
     const tasks = wso?.suggestedTasks;
@@ -245,11 +245,16 @@ export class PostRunExtractor {
         if (!suggested.title) continue;
         const priority = typeof suggested.priority === 'number' && suggested.priority >= 0 && suggested.priority <= 3
           ? suggested.priority : 2; // default to P2 Medium if not provided or invalid
+        const validTypes = ['bug', 'feature', 'improvement'];
+        const taskType = suggested.type && validTypes.includes(suggested.type)
+          ? suggested.type as 'bug' | 'feature' | 'improvement'
+          : 'improvement';
         await this.taskStore.createTask({
           projectId: reviewedTask.projectId,
           pipelineId: AGENT_PIPELINE_ID,
           title: suggested.title,
           description: suggested.description,
+          type: taskType,
           debugInfo: suggested.debugInfo || undefined,
           priority,
           tags: ['workflow-review'],
