@@ -231,12 +231,18 @@ export class OutcomeResolver {
         throw new Error(`Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? result.guardFailures?.map((g) => g.reason).join(', ')}`);
       }
     } else {
-      this.taskEventLog.log({
+      await this.taskEventLog.log({
         taskId,
-        category: 'agent_debug',
-        severity: 'debug',
-        message: `No matching transition found for outcome=${outcome} from status=${task.status}`,
-      }).catch(() => {});
+        category: 'agent',
+        severity: 'warning',
+        message: `No matching transition found for outcome="${outcome}" from status="${task.status}" — agent result discarded`,
+        data: {
+          outcome,
+          taskStatus: task.status,
+          availableTransitions: transitions.map(t => ({ to: t.to, agentOutcome: t.agentOutcome })),
+          ...(data?.agentRunId ? { agentRunId: data.agentRunId } : {}),
+        },
+      });
     }
   }
 }
