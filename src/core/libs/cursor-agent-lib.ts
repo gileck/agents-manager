@@ -5,6 +5,8 @@ import { getAppLogger } from '../services/app-logger';
 
 interface RunState {
   process: ChildProcess;
+  accumulatedInputTokens: number;
+  accumulatedOutputTokens: number;
   messageCount: number;
   timeout: number;
   maxTurns: number;
@@ -19,7 +21,7 @@ export class CursorAgentLib implements IAgentLib {
   private stoppedReasons = new Map<string, string>();
 
   supportedFeatures(): AgentLibFeatures {
-    return { images: false, hooks: false, thinking: false };
+    return { images: false, hooks: false, thinking: true };
   }
 
   getDefaultModel(): string { return 'claude-4.6-opus'; }
@@ -54,8 +56,8 @@ export class CursorAgentLib implements IAgentLib {
     const state = this.runningStates.get(runId);
     if (!state) return null;
     return {
-      accumulatedInputTokens: 0,
-      accumulatedOutputTokens: 0,
+      accumulatedInputTokens: state.accumulatedInputTokens,
+      accumulatedOutputTokens: state.accumulatedOutputTokens,
       messageCount: state.messageCount,
       timeout: state.timeout,
       maxTurns: state.maxTurns,
@@ -63,40 +65,50 @@ export class CursorAgentLib implements IAgentLib {
   }
 
   async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
-    const { onOutput, onLog, onMessage } = callbacks;
+    const { onOutput, onLog, onMessage, onUserToolResult } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
-    const args = [options.prompt, '-p', '--output-format', 'stream-json', '--stream-partial-output'];
+    const args = [JSON.stringify(options.prompt), '-p', '--output-format', 'stream-json', '--force'];
     if (options.readOnly) {
       args.push('--mode=plan');
-    } else {
-      args.push('--force');
     }
     if (options.model) {
       args.push('--model', options.model);
     }
 
-    log(`Spawning cursor-agent`, { args: args.slice(0, 4), cwd: options.cwd });
+    log(`Spawning cursor-agent`, { args: args.slice(0, 6), cwd: options.cwd, timeout: options.timeoutMs, maxTurns: options.maxTurns });
 
     const env = getShellEnv();
     const proc = spawn('cursor-agent', args, { cwd: options.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
 
-    // Close stdin immediately — cursor-agent doesn't need input in print mode
-    proc.stdin?.end();
-
-    const state: RunState = { process: proc, messageCount: 0, timeout: options.timeoutMs, maxTurns: options.maxTurns };
+    const state: RunState = {
+      process: proc,
+      accumulatedInputTokens: 0,
+      accumulatedOutputTokens: 0,
+      messageCount: 0,
+      timeout: options.timeoutMs,
+      maxTurns: options.maxTurns,
+    };
     this.runningStates.set(runId, state);
 
     let resultText = '';
     let isError = false;
     let errorMessage: string | undefined;
+    let costInputTokens: number | undefined;
+    let costOutputTokens: number | undefined;
+    let structuredOutput: Record<string, unknown> | undefined;
+    const resultRef = { structuredOutput: undefined as Record<string, unknown> | undefined, isError: false, errorMessage: undefined as string | undefined };
 
+    /** Appended to resultText AND streamed to onOutput for real-time display */
     const emit = (chunk: string) => {
       resultText += chunk;
       onOutput?.(chunk);
     };
+    /** Stream-only: sent to onOutput for real-time display but NOT stored in resultText */
+    const stream = (chunk: string) => {
+      onOutput?.(chunk);
+    };
 
-    // Timeout handling
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -111,39 +123,38 @@ export class CursorAgentLib implements IAgentLib {
 
     return new Promise<AgentLibResult>((resolve) => {
       let stderrOutput = '';
+      let stdoutBuffer = '';
 
       proc.stdout?.on('data', (data: Buffer) => {
-        const lines = data.toString().split('\n').filter(Boolean);
+        stdoutBuffer += data.toString();
+        const lines = stdoutBuffer.split('\n');
+        // Keep the last (possibly incomplete) chunk in the buffer
+        stdoutBuffer = lines.pop() ?? '';
+
         for (const line of lines) {
+          if (!line) continue;
           state.messageCount++;
+
+          if (state.messageCount % 25 === 0) {
+            log(`Message loop heartbeat: ${state.messageCount} messages processed`, {
+              inputTokens: state.accumulatedInputTokens,
+              outputTokens: state.accumulatedOutputTokens,
+            });
+          }
+
           let msg: Record<string, unknown> | null = null;
           try { msg = JSON.parse(line); } catch { /* not JSON */ }
 
           if (!msg) {
             emit(line + '\n');
-          } else {
-            try {
-              if (msg.type === 'text' || msg.type === 'message') {
-                const text = (msg.text ?? msg.content ?? '') as string;
-                emit(text + '\n');
-                onMessage?.({ type: 'assistant_text', text, timestamp: Date.now() });
-              } else if (msg.type === 'tool_use' || msg.type === 'tool_call') {
-                const toolName = (msg.name ?? msg.tool ?? 'unknown') as string;
-                const input = JSON.stringify(msg.input ?? msg.arguments ?? {});
-                emit(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}\n`);
-                onMessage?.({ type: 'tool_use', toolName, input: input.slice(0, 2000), timestamp: Date.now() });
-              } else if (msg.type === 'tool_result') {
-                const result = typeof msg.result === 'string' ? msg.result : JSON.stringify(msg.result ?? '');
-                onMessage?.({ type: 'tool_result', result: result.slice(0, 2000), timestamp: Date.now() });
-              } else if (msg.type === 'error') {
-                isError = true;
-                errorMessage = (msg.message ?? msg.error ?? 'Unknown error') as string;
-                emit(`[error] ${errorMessage}\n`);
-              }
-            } catch (err) {
-              log(`Error processing message: ${err instanceof Error ? err.message : String(err)}`);
-              emit(line + '\n');
-            }
+            continue;
+          }
+
+          try {
+            this.processMessage(msg, state, resultRef, { emit, stream, onMessage, onUserToolResult, log });
+          } catch (err) {
+            log(`Error processing message: ${err instanceof Error ? err.message : String(err)}`);
+            emit(line + '\n');
           }
         }
       });
@@ -153,11 +164,24 @@ export class CursorAgentLib implements IAgentLib {
       });
 
       proc.on('close', (code, signal) => {
+        // Flush any remaining buffered stdout
+        if (stdoutBuffer.trim()) {
+          state.messageCount++;
+          let msg: Record<string, unknown> | null = null;
+          try { msg = JSON.parse(stdoutBuffer); } catch { /* not JSON */ }
+          if (msg) {
+            try {
+              this.processMessage(msg, state, resultRef, { emit, stream, onMessage, onUserToolResult, log });
+            } catch { emit(stdoutBuffer + '\n'); }
+          } else {
+            emit(stdoutBuffer + '\n');
+          }
+        }
+
         clearTimeout(timer);
         if (state.killTimer) clearTimeout(state.killTimer);
         this.runningStates.delete(runId);
 
-        // Determine kill reason for signal-related exits
         let killReason: string | undefined;
         const rawExitCode = code ?? (signal === 'SIGTERM' ? 143 : signal === 'SIGKILL' ? 137 : undefined);
         const isSignalExit = rawExitCode === 143 || rawExitCode === 137 || signal != null;
@@ -180,13 +204,29 @@ export class CursorAgentLib implements IAgentLib {
 
         this.stoppedReasons.delete(runId);
 
-        log(`cursor-agent completed: exitCode=${code}, messages=${state.messageCount}`);
+        if (resultRef.structuredOutput) structuredOutput = resultRef.structuredOutput;
+        if (resultRef.isError && !isError) {
+          isError = true;
+          errorMessage = resultRef.errorMessage;
+        }
+
+        costInputTokens = state.accumulatedInputTokens > 0 ? state.accumulatedInputTokens : costInputTokens;
+        costOutputTokens = state.accumulatedOutputTokens > 0 ? state.accumulatedOutputTokens : costOutputTokens;
+
+        log(`cursor-agent completed: exitCode=${code}, messages=${state.messageCount}`, {
+          inputTokens: costInputTokens,
+          outputTokens: costOutputTokens,
+          hasStructuredOutput: !!structuredOutput,
+        });
 
         resolve({
           exitCode: isError ? 1 : 0,
           output: resultText || errorMessage || '',
           error: isError ? errorMessage : undefined,
+          costInputTokens,
+          costOutputTokens,
           model: options.model ?? this.getDefaultModel(),
+          structuredOutput,
           killReason,
           rawExitCode: rawExitCode ?? undefined,
         });
@@ -224,5 +264,126 @@ export class CursorAgentLib implements IAgentLib {
       }
     }, 5000);
     this.runningStates.delete(runId);
+  }
+
+  /**
+   * Processes a single parsed JSON message from the cursor-agent stream.
+   * Extracted to keep the stdout handler readable and testable.
+   */
+  private processMessage(
+    msg: Record<string, unknown>,
+    state: RunState,
+    resultRef: { structuredOutput?: Record<string, unknown>; isError: boolean; errorMessage?: string },
+    ctx: {
+      emit: (chunk: string) => void;
+      stream: (chunk: string) => void;
+      onMessage?: AgentLibCallbacks['onMessage'];
+      onUserToolResult?: AgentLibCallbacks['onUserToolResult'];
+      log: (msg: string, data?: Record<string, unknown>) => void;
+    },
+  ): void {
+    const { emit, stream, onMessage, onUserToolResult, log } = ctx;
+
+    switch (msg.type) {
+      case 'assistant': {
+        const assistantMsg = msg.message as { content?: Array<{ type: string; text?: string; thinking?: string; name?: string; input?: unknown; id?: string }> } | undefined;
+        if (!assistantMsg?.content) break;
+        for (const block of assistantMsg.content) {
+          if (block.type === 'text' && block.text) {
+            emit(block.text + '\n');
+            onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
+          } else if (block.type === 'thinking' && block.thinking) {
+            onMessage?.({ type: 'thinking', text: block.thinking, timestamp: Date.now() });
+          } else if (block.type === 'tool_use') {
+            const toolName = block.name ?? 'unknown';
+            const input = JSON.stringify(block.input ?? {});
+            stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
+            onMessage?.({ type: 'tool_use', toolName, toolId: block.id, input: input.slice(0, 2000), timestamp: Date.now() });
+          }
+        }
+        break;
+      }
+
+      case 'text':
+      case 'message': {
+        const text = (msg.text ?? msg.content ?? '') as string;
+        emit(text + '\n');
+        onMessage?.({ type: 'assistant_text', text, timestamp: Date.now() });
+        break;
+      }
+
+      case 'thinking': {
+        const thinking = (msg.thinking ?? msg.text ?? '') as string;
+        if (thinking) {
+          onMessage?.({ type: 'thinking', text: thinking, timestamp: Date.now() });
+        }
+        break;
+      }
+
+      case 'tool_use':
+      case 'tool_call': {
+        const toolName = (msg.name ?? msg.tool ?? 'unknown') as string;
+        const input = JSON.stringify(msg.input ?? msg.arguments ?? {});
+        const toolId = msg.id as string | undefined;
+        stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
+        onMessage?.({ type: 'tool_use', toolName, toolId, input: input.slice(0, 2000), timestamp: Date.now() });
+        break;
+      }
+
+      case 'tool_result': {
+        const toolId = (msg.tool_use_id ?? msg.id) as string | undefined;
+        const result = typeof msg.result === 'string' ? msg.result : JSON.stringify(msg.result ?? '');
+        onMessage?.({ type: 'tool_result', toolId, result: result.slice(0, 2000), timestamp: Date.now() });
+        if (toolId) {
+          onUserToolResult?.(toolId, result.slice(0, 2000));
+        }
+        break;
+      }
+
+      case 'usage': {
+        const inputTokens = ((msg.input_tokens ?? msg.inputTokens) ?? 0) as number;
+        const outputTokens = ((msg.output_tokens ?? msg.outputTokens) ?? 0) as number;
+        state.accumulatedInputTokens += inputTokens;
+        state.accumulatedOutputTokens += outputTokens;
+        onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
+        break;
+      }
+
+      case 'result': {
+        if (msg.structured_output) {
+          resultRef.structuredOutput = msg.structured_output as Record<string, unknown>;
+        }
+        if (msg.usage) {
+          const usage = msg.usage as { input_tokens?: number; output_tokens?: number; inputTokens?: number; outputTokens?: number };
+          const inTok = usage.input_tokens ?? usage.inputTokens;
+          const outTok = usage.output_tokens ?? usage.outputTokens;
+          if (inTok) state.accumulatedInputTokens = inTok;
+          if (outTok) state.accumulatedOutputTokens = outTok;
+          onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
+        }
+        if (msg.subtype !== 'success' && msg.errors) {
+          const errors = msg.errors as string[];
+          resultRef.isError = true;
+          resultRef.errorMessage = errors.join('\n');
+          log(`cursor-agent result errors: ${errors.join('; ')}`);
+        }
+        break;
+      }
+
+      case 'error': {
+        const errorMsg = (msg.message ?? msg.error ?? 'Unknown error') as string;
+        resultRef.isError = true;
+        resultRef.errorMessage = errorMsg;
+        emit(`[error] ${errorMsg}\n`);
+        break;
+      }
+
+      case 'system':
+      case 'user':
+        break;
+
+      default:
+        break;
+    }
   }
 }
