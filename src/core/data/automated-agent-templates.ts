@@ -120,6 +120,7 @@ export const AUTOMATED_AGENT_TEMPLATES: AutomatedAgentTemplate[] = [
       '   - medium complexity + md size → planning',
       '   - medium complexity + sm/xs size → implementing',
       '   - low complexity (any size) → implementing',
+      '   - If type is bug and the root cause is unclear or needs investigation → investigating',
       '   - If the description is too vague to assess → complexity=medium, route to planning',
       '',
       '4. Use the CLI to apply changes:',
