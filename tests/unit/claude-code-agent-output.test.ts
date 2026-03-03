@@ -158,11 +158,13 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     const chunks: string[] = [];
     const result = await agent.execute(createContext(), {}, (chunk) => chunks.push(chunk));
 
+    // Streaming chunks include both assistant text and tool calls
     expect(chunks[0]).toContain('I will read the file');
     expect(chunks.some(c => c.includes('Tool: Read'))).toBe(true);
     expect(chunks.some(c => c.includes('Done reading'))).toBe(true);
+    // Stored output only includes assistant text, not tool call details
     expect(result.output).toContain('I will read the file');
-    expect(result.output).toContain('Tool: Read');
+    expect(result.output).not.toContain('Tool: Read');
     expect(result.output).toContain('Done reading');
   });
 

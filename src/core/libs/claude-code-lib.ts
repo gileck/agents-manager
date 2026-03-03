@@ -115,6 +115,10 @@ export class ClaudeCodeLib implements IAgentLib {
       resultText += chunk;
       onOutput?.(chunk);
     };
+    /** Stream-only: sent to onOutput for real-time display but NOT stored in resultText */
+    const stream = (chunk: string) => {
+      onOutput?.(chunk);
+    };
 
     log(`Starting agent run: cwd=${options.cwd}, timeout=${options.timeoutMs}ms, model=${options.model ?? 'default'}`);
 
@@ -179,7 +183,7 @@ export class ClaudeCodeLib implements IAgentLib {
               onMessage?.({ type: 'thinking', text: block.thinking, timestamp: Date.now() });
             } else if (block.type === 'tool_use') {
               const input = JSON.stringify(block.input ?? {});
-              emit(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
+              stream(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
               onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input: input.slice(0, 2000), timestamp: Date.now() });
             }
           }
@@ -206,13 +210,13 @@ export class ClaudeCodeLib implements IAgentLib {
           if (otherMsg.message?.content) {
             for (const block of otherMsg.message.content) {
               if (block.type === 'text') {
-                emit(`[${message.type}] ${block.text}\n`);
+                stream(`[${message.type}] ${block.text}\n`);
               }
             }
           } else if (typeof otherMsg.summary === 'string') {
-            emit(`[${message.type}] ${otherMsg.summary}\n`);
+            stream(`[${message.type}] ${otherMsg.summary}\n`);
           } else if (typeof otherMsg.result === 'string') {
-            emit(`[${message.type}] ${otherMsg.result}\n`);
+            stream(`[${message.type}] ${otherMsg.result}\n`);
             if (message.type === 'tool') {
               onMessage?.({ type: 'tool_result', toolId: (otherMsg as unknown as { tool_use_id?: string }).tool_use_id, result: otherMsg.result, timestamp: Date.now() });
             }
