@@ -13,6 +13,7 @@ import {
 } from '@template/renderer/components/ui/select';
 import { Button } from '@template/renderer/components/ui/button';
 import { FolderOpen, Sun, Moon, Send } from 'lucide-react';
+import { reportError } from '../../lib/error-handler';
 
 type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
 
@@ -34,7 +35,8 @@ export function TopMenu() {
       // Only update from poll if we don't already have a more specific status
       // (e.g. 'failed' from an auto-start event that arrived before the poll)
       setTelegramStatus(prev => prev === 'failed' ? prev : running ? 'running' : 'stopped');
-    }).catch(() => {
+    }).catch((err) => {
+      reportError(err, 'Telegram bot status');
       setTelegramStatus('unknown');
     });
 

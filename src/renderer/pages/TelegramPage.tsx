@@ -39,7 +39,7 @@ export function TelegramPage() {
     window.api.telegram.botStatus(id).then((status) => {
       setRunning(status.running);
     }).catch((err: unknown) => {
-      console.error('[TelegramPage] Failed to check bot status:', err);
+      reportError(err, 'Check bot status');
     });
 
     const unsub = window.api.on.telegramBotStatusChanged((projectId, status) => {
@@ -55,7 +55,7 @@ export function TelegramPage() {
 
     // Initial fetch
     window.api.telegram.botSession(id).then(setSessionId).catch((err: unknown) => {
-      console.error('[TelegramPage] Failed to fetch session:', err);
+      reportError(err, 'Fetch bot session');
     });
 
     const interval = setInterval(() => {
@@ -65,7 +65,7 @@ export function TelegramPage() {
           clearInterval(interval);
         }
       }).catch((err: unknown) => {
-        console.error('[TelegramPage] Failed to poll session:', err);
+        reportError(err, 'Poll bot session');
       });
     }, SESSION_POLL_MS);
 

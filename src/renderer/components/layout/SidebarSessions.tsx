@@ -57,7 +57,7 @@ export function SidebarSessions() {
     const name = `Session ${maxNum + 1}`;
     createSession(name)
       .then(() => navigate('/chat'))
-      .catch(() => { /* error already set in hook state */ });
+      .catch((err) => reportError(err, 'Create session'));
   };
 
   const handleClick = (sessionId: string) => {

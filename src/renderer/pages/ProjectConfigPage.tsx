@@ -46,7 +46,7 @@ export function ProjectConfigPage() {
 
   // Fetch supported models for all engines
   useEffect(() => {
-    window.api.agentLibs.listModels().then(setAgentLibData).catch(() => {});
+    window.api.agentLibs.listModels().then(setAgentLibData).catch((err) => reportError(err, 'Load agent models'));
   }, []);
 
   useEffect(() => {

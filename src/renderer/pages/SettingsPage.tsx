@@ -4,6 +4,7 @@ import { Label } from '@template/renderer/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@template/renderer/components/ui/select';
 import { Switch } from '@template/renderer/components/ui/switch';
 import { useTheme } from '../hooks/useTheme';
+import { reportError } from '../lib/error-handler';
 import type { AppSettings } from '../../shared/types';
 
 export function SettingsPage() {
@@ -13,11 +14,9 @@ export function SettingsPage() {
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
 
   useEffect(() => {
-    window.api.settings.get().then(setSettings);
-    window.api.app.getVersion().then(setVersion);
-    window.api.agentLibs.list().then(setAgentLibs).catch((err) => {
-      console.error('[SettingsPage] Failed to load agent libs:', err);
-    });
+    window.api.settings.get().then(setSettings).catch((err) => reportError(err, 'Load settings'));
+    window.api.app.getVersion().then(setVersion).catch((err) => reportError(err, 'App version'));
+    window.api.agentLibs.list().then(setAgentLibs).catch((err) => reportError(err, 'Load agent libs'));
   }, []);
 
   const handleThemeChange = async (newTheme: 'light' | 'dark' | 'system') => {
@@ -36,7 +35,7 @@ export function SettingsPage() {
       const updated = await window.api.settings.update({ chatDefaultAgentLib: value });
       setSettings(updated);
     } catch (err) {
-      console.error('[SettingsPage] Failed to update chat default agent lib:', err);
+      reportError(err, 'Update default engine');
     }
   };
 

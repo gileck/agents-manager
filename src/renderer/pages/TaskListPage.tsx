@@ -74,10 +74,13 @@ export function TaskListPage() {
   const [activeTaskIds, setActiveTaskIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     let mounted = true;
+    let errorReported = false;
     const fetchActive = () => {
       window.api.agents.activeTaskIds().then((ids: string[]) => {
-        if (mounted) setActiveTaskIds(new Set(ids));
-      }).catch(() => {});
+        if (mounted) { setActiveTaskIds(new Set(ids)); errorReported = false; }
+      }).catch((err) => {
+        if (!errorReported) { reportError(err, 'Fetch active agents'); errorReported = true; }
+      });
     };
     fetchActive();
     const interval = setInterval(fetchActive, 5000);
@@ -91,7 +94,8 @@ export function TaskListPage() {
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    window.api.settings.get().then((s: AppSettings) => setDefaultPipelineId(s.defaultPipelineId));
+    window.api.settings.get().then((s: AppSettings) => setDefaultPipelineId(s.defaultPipelineId))
+      .catch((err) => reportError(err, 'Load default pipeline'));
   }, []);
 
   const openCreateDialog = () => {

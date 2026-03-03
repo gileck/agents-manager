@@ -26,6 +26,8 @@ export function useActiveAgentRuns() {
       }
     } catch (err) {
       console.debug('useActiveAgentRuns: fetchTaskTitle failed:', err);
+      taskTitleCache.current.set(taskId, 'Unknown task');
+      setTaskTitles(new Map(taskTitleCache.current));
     }
   }, []);
 

@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { InlineError } from '../InlineError';
 import type { PipelineStatus, GuardCheckResult } from '../../../shared/types';
+import { reportError } from '../../lib/error-handler';
 
 interface ForceTransitionDialogProps {
   open: boolean;
@@ -56,7 +57,7 @@ export function ForceTransitionDialog({
         if (!cancelled) {
           setGuardCheck(null);
           setGuardCheckError(true);
-          console.error('Guard check failed:', err);
+          reportError(err, 'Guard check');
         }
       })
       .finally(() => {

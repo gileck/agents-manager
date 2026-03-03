@@ -3,6 +3,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import type { AppDebugLogEntry, AppDebugLogFilter, AppLogLevel } from '../../shared/types';
 import { RefreshCw, Trash2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import { reportError } from '../lib/error-handler';
 
 const LEVEL_COLORS: Record<AppLogLevel, string> = {
   debug: 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
@@ -63,7 +64,7 @@ export function DebugLogsPage() {
       const result = await window.api.debugLogs.list(filter);
       setEntries(result);
     } catch (err) {
-      console.error('Failed to fetch debug logs:', err);
+      reportError(err, 'Fetch debug logs');
       setError('Failed to fetch debug logs. Is the daemon running?');
     } finally {
       setLoading(false);
@@ -89,7 +90,7 @@ export function DebugLogsPage() {
       setEntries([]);
       setError(null);
     } catch (err) {
-      console.error('Failed to clear debug logs:', err);
+      reportError(err, 'Clear debug logs');
       setError('Failed to clear debug logs.');
     }
   };
@@ -99,13 +100,13 @@ export function DebugLogsPage() {
       `[${new Date(e.createdAt).toISOString()}] [${e.level}] [${e.source}] ${e.message}${Object.keys(e.data).length > 0 ? ' ' + JSON.stringify(e.data) : ''}`
     ).join('\n');
     navigator.clipboard.writeText(text).catch(err =>
-      console.error('Failed to copy to clipboard:', err));
+      reportError(err, 'Copy to clipboard'));
   };
 
   const handleCopyRow = (entry: AppDebugLogEntry) => {
     const text = `[${new Date(entry.createdAt).toISOString()}] [${entry.level}] [${entry.source}] ${entry.message}${Object.keys(entry.data).length > 0 ? ' ' + JSON.stringify(entry.data) : ''}`;
     navigator.clipboard.writeText(text).catch(err =>
-      console.error('Failed to copy to clipboard:', err));
+      reportError(err, 'Copy to clipboard'));
   };
 
   return (

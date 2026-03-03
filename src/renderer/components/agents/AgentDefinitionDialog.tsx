@@ -9,6 +9,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Badge } from '../ui/badge';
 import { InlineError } from '../InlineError';
 import { Plus, X } from 'lucide-react';
+import { reportError } from '../../lib/error-handler';
 
 interface AgentDefinitionDialogProps {
   open: boolean;
@@ -36,7 +37,7 @@ export function AgentDefinitionDialog({ open, onOpenChange, definition, onSave }
   const [agentLibData, setAgentLibData] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
 
   useEffect(() => {
-    window.api.agentLibs.listModels().then(setAgentLibData).catch(() => {});
+    window.api.agentLibs.listModels().then(setAgentLibData).catch((err) => reportError(err, 'Load agent models'));
   }, []);
 
   useEffect(() => {
