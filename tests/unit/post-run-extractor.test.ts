@@ -3,6 +3,7 @@ import { PostRunExtractor } from '../../src/core/services/post-run-extractor';
 import type { ITaskStore } from '../../src/core/interfaces/task-store';
 import type { ITaskContextStore } from '../../src/core/interfaces/task-context-store';
 import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
+import type { INotificationRouter } from '../../src/core/interfaces/notification-router';
 import type { Task, AgentRunResult, TaskCreateInput } from '../../src/shared/types';
 
 function createMockTask(overrides: Partial<Task> = {}): Task {
@@ -34,13 +35,18 @@ function createMockTask(overrides: Partial<Task> = {}): Task {
   };
 }
 
+let taskCounter = 0;
+
 function createMockStores() {
+  taskCounter = 0;
+
   const taskStore: ITaskStore = {
     getTask: vi.fn().mockResolvedValue(createMockTask()),
     listTasks: vi.fn().mockResolvedValue([]),
-    createTask: vi.fn().mockImplementation(async (input: TaskCreateInput) =>
-      createMockTask({ ...input, id: 'new-task', debugInfo: input.debugInfo ?? null }),
-    ),
+    createTask: vi.fn().mockImplementation(async (input: TaskCreateInput) => {
+      taskCounter++;
+      return createMockTask({ ...input, id: `new-task-${taskCounter}`, debugInfo: input.debugInfo ?? null });
+    }),
     updateTask: vi.fn().mockResolvedValue(createMockTask()),
     deleteTask: vi.fn().mockResolvedValue(true),
     resetTask: vi.fn().mockResolvedValue(createMockTask()),
@@ -62,7 +68,11 @@ function createMockStores() {
     getEvents: vi.fn().mockResolvedValue([]),
   };
 
-  return { taskStore, taskContextStore, taskEventLog };
+  const notificationRouter: INotificationRouter = {
+    send: vi.fn().mockResolvedValue(undefined),
+  };
+
+  return { taskStore, taskContextStore, taskEventLog, notificationRouter };
 }
 
 describe('PostRunExtractor.createSuggestedTasks', () => {
@@ -72,7 +82,7 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
 
   beforeEach(() => {
     stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog);
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter);
     onLog.mockClear();
   });
 
@@ -168,5 +178,108 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
 
     await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
     expect(stores.taskStore.createTask).not.toHaveBeenCalled();
+  });
+
+  it('should send notification with correct phase button based on startPhase', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'review output',
+      outcome: 'review_complete',
+      structuredOutput: {
+        overallVerdict: 'needs_improvement',
+        executionSummary: 'Found issues',
+        findings: [],
+        promptImprovements: [],
+        processImprovements: [],
+        tokenCostAnalysis: 'ok',
+        suggestedTasks: [
+          {
+            title: 'Add guard for duplicate spawns',
+            description: 'Needs architectural design work',
+            priority: 1,
+            startPhase: 'designing',
+          },
+        ],
+      },
+    };
+
+    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
+
+    expect(stores.notificationRouter.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Workflow Review: New Task',
+        body: expect.stringContaining('Add guard for duplicate spawns'),
+        actions: expect.arrayContaining([
+          expect.objectContaining({ label: '\u{1F3A8} Design', callbackData: expect.stringContaining('|designing') }),
+          expect.objectContaining({ label: '\u274C Close' }),
+          expect.objectContaining({ label: '\u{1F441}\u{FE0F} View' }),
+        ]),
+      }),
+    );
+  });
+
+  it('should default to investigating when startPhase is missing', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'review output',
+      outcome: 'review_complete',
+      structuredOutput: {
+        overallVerdict: 'needs_improvement',
+        executionSummary: 'Found issues',
+        findings: [],
+        promptImprovements: [],
+        processImprovements: [],
+        tokenCostAnalysis: 'ok',
+        suggestedTasks: [
+          {
+            title: 'Fix race condition',
+            description: 'Unclear root cause',
+            priority: 0,
+          },
+        ],
+      },
+    };
+
+    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
+
+    expect(stores.notificationRouter.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actions: expect.arrayContaining([
+          expect.objectContaining({ label: '\u{1F50D} Investigate', callbackData: expect.stringContaining('|investigating') }),
+        ]),
+      }),
+    );
+  });
+
+  it('should create task even when notification throws', async () => {
+    (stores.notificationRouter.send as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Telegram unavailable'));
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'review output',
+      outcome: 'review_complete',
+      structuredOutput: {
+        overallVerdict: 'needs_improvement',
+        executionSummary: 'Found issues',
+        findings: [],
+        promptImprovements: [],
+        processImprovements: [],
+        tokenCostAnalysis: 'ok',
+        suggestedTasks: [
+          {
+            title: 'Improve timeout handling',
+            description: 'Timeout too short',
+            priority: 2,
+          },
+        ],
+      },
+    };
+
+    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
+
+    // Task was still created
+    expect(stores.taskStore.createTask).toHaveBeenCalledTimes(1);
+    // Warning was logged
+    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('notification failed'));
   });
 });

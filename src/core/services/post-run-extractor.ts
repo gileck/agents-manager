@@ -14,9 +14,17 @@ import type {
 import type { ITaskStore } from '../interfaces/task-store';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
+import type { INotificationRouter } from '../interfaces/notification-router';
 import { getAppLogger } from './app-logger';
 
 type OnLog = (message: string) => void;
+
+const PHASE_LABELS: Record<string, string> = {
+  investigating: '\u{1F50D} Investigate',
+  designing: '\u{1F3A8} Design',
+  planning: '\u{1F4CB} Plan',
+  implementing: '\u{1F6E0}\u{FE0F} Implement',
+};
 
 /**
  * Handles post-agent-run data extraction: plan extraction, technical design
@@ -29,6 +37,7 @@ export class PostRunExtractor {
     private taskStore: ITaskStore,
     private taskContextStore: ITaskContextStore,
     private taskEventLog: ITaskEventLog,
+    private notificationRouter: INotificationRouter,
   ) {}
 
   /**
@@ -268,7 +277,7 @@ export class PostRunExtractor {
     if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) return;
 
     const wso = result.structuredOutput as {
-      suggestedTasks?: Array<{ title: string; description: string; type?: string; debugInfo?: string; priority?: number; size?: string; complexity?: string }>;
+      suggestedTasks?: Array<{ title: string; description: string; type?: string; debugInfo?: string; priority?: number; size?: string; complexity?: string; startPhase?: string }>;
     } | undefined;
 
     const tasks = wso?.suggestedTasks;
@@ -293,7 +302,7 @@ export class PostRunExtractor {
           ? suggested.size as TaskSize : undefined;
         const taskComplexity = suggested.complexity && (VALID_TASK_COMPLEXITIES as readonly string[]).includes(suggested.complexity)
           ? suggested.complexity as TaskComplexity : undefined;
-        await this.taskStore.createTask({
+        const createdTask = await this.taskStore.createTask({
           projectId: reviewedTask.projectId,
           pipelineId: AGENT_PIPELINE_ID,
           title: suggested.title,
@@ -306,6 +315,29 @@ export class PostRunExtractor {
           tags: ['workflow-review'],
         });
         created++;
+
+        // Send Telegram notification with action buttons
+        try {
+          const phase = suggested.startPhase && PHASE_LABELS[suggested.startPhase]
+            ? suggested.startPhase : 'investigating';
+          const phaseLabel = PHASE_LABELS[phase];
+          const truncatedDesc = suggested.description.length > 200
+            ? suggested.description.slice(0, 200) + '...' : suggested.description;
+          await this.notificationRouter.send({
+            taskId: createdTask.id,
+            title: 'Workflow Review: New Task',
+            body: `${suggested.title}\n\n${truncatedDesc}`,
+            channel: `workflow-review-${createdTask.id}`,
+            actions: [
+              { label: phaseLabel, callbackData: `t|${createdTask.id}|${phase}` },
+              { label: '\u274C Close', callbackData: `t|${createdTask.id}|closed` },
+              { label: '\u{1F441}\u{FE0F} View', callbackData: `v|${createdTask.id}` },
+            ],
+          });
+        } catch (notifErr) {
+          // Non-fatal — task was already created successfully
+          onLog(`Warning: notification failed for suggested task ${createdTask.id}: ${notifErr instanceof Error ? notifErr.message : String(notifErr)}`);
+        }
       }
 
       if (created > 0) {

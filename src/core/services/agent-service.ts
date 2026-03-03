@@ -58,7 +58,7 @@ export class AgentService implements IAgentService {
     private outcomeResolver: OutcomeResolver,
     private scheduledAgentService?: ScheduledAgentService,
   ) {
-    this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog);
+    this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter);
   }
 
   async recoverOrphanedRuns(): Promise<AgentRun[]> {
