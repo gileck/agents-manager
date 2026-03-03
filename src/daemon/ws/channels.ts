@@ -8,6 +8,6 @@ export const WS_CHANNELS = {
   TASK_CHAT_OUTPUT: 'task-chat:output',
   TASK_CHAT_MESSAGE: 'task-chat:message',
   TELEGRAM_BOT_LOG: 'telegram:bot-log',
-  TELEGRAM_BOT_STATUS: 'telegram:bot-status-changed',
+  TELEGRAM_BOT_STATUS_CHANGED: 'telegram:bot-status-changed',
   NAVIGATE: 'navigate',
 } as const;

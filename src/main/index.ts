@@ -7,6 +7,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels';
 import { createApiClient, createWsClient } from '../client';
 import { ensureDaemon } from './daemon-launcher';
 import { initShellEnv } from '../shared/shell-env';
+import { WS_CHANNELS } from '../daemon/ws/channels';
 import type { WsClient } from '../client';
 
 // Keep a global reference to prevent garbage collection
@@ -38,27 +39,27 @@ initializeApp({
       wsClient = createWsClient(daemonWsUrl, { reconnect: true });
 
       // Forward daemon WS events to the Electron renderer
-      wsClient.subscribeGlobal('agent:output', (taskId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.AGENT_OUTPUT, (taskId, data) =>
         sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, data));
-      wsClient.subscribeGlobal('agent:message', (taskId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.AGENT_MESSAGE, (taskId, data) =>
         sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, data));
-      wsClient.subscribeGlobal('agent:status', (taskId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.AGENT_STATUS, (taskId, data) =>
         sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, data));
-      wsClient.subscribeGlobal('agent:interrupted-runs', (_id, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, (_id, data) =>
         sendToRenderer(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, data));
-      wsClient.subscribeGlobal('chat:output', (sessionId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.CHAT_OUTPUT, (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, data));
-      wsClient.subscribeGlobal('chat:message', (sessionId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.CHAT_MESSAGE, (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, data));
-      wsClient.subscribeGlobal('task-chat:output', (sessionId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.TASK_CHAT_OUTPUT, (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.TASK_CHAT_OUTPUT, sessionId, data));
-      wsClient.subscribeGlobal('task-chat:message', (sessionId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.TASK_CHAT_MESSAGE, (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.TASK_CHAT_MESSAGE, sessionId, data));
-      wsClient.subscribeGlobal('telegram:bot-log', (projectId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.TELEGRAM_BOT_LOG, (projectId, data) =>
         sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_LOG, projectId, data));
-      wsClient.subscribeGlobal('telegram:bot-status-changed', (projectId, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, (projectId, data) =>
         sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, data));
-      wsClient.subscribeGlobal('navigate', (_id, data) =>
+      wsClient.subscribeGlobal(WS_CHANNELS.NAVIGATE, (_id, data) =>
         sendToRenderer(IPC_CHANNELS.NAVIGATE, data));
 
       // Create the tray icon with a simple menu

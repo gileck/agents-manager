@@ -68,7 +68,7 @@ export async function startBotForProject(
   services.notificationRouter.addRouter(telegramRouter);
 
   activeBots.set(projectId, { botService, notificationRouter: telegramRouter });
-  ws?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS, projectId, 'running');
+  ws?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, 'running');
 }
 
 /**
@@ -92,7 +92,7 @@ export async function autoStartTelegramBots(
       started++;
     } catch (err) {
       getAppLogger().logError('telegram', `Failed to auto-start bot for project "${project.name}"`, err);
-      wsHolder.server?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS, project.id, 'failed');
+      wsHolder.server?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, project.id, 'failed');
     }
   }
 
@@ -141,7 +141,7 @@ export function telegramRoutes(services: AppServices, wsHolder: WsHolder): Route
       await entry.botService.stop();
       activeBots.delete(projectId);
       const ws = wsHolder.server;
-      ws?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS, projectId, 'stopped');
+      ws?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, 'stopped');
       res.json({ ok: true });
     } catch (err) { next(err); }
   });

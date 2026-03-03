@@ -35,7 +35,6 @@ class ApiError extends Error {
 
 function buildRequest<T>(
   baseUrl: string,
-  token: string | undefined,
   method: string,
   path: string,
   body?: unknown,
@@ -43,7 +42,6 @@ function buildRequest<T>(
   return async () => {
     const url = `${baseUrl}${path}`;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(url, {
       method,
       headers,
@@ -261,9 +259,9 @@ export interface ApiClient {
 // Factory
 // ---------------------------------------------------------------------------
 
-export function createApiClient(baseUrl: string, token?: string): ApiClient {
+export function createApiClient(baseUrl: string): ApiClient {
   function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-    return buildRequest<T>(baseUrl, token, method, path, body)();
+    return buildRequest<T>(baseUrl, method, path, body)();
   }
 
   function qs(params: Record<string, string | number | boolean | null | undefined>): string {

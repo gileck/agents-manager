@@ -157,7 +157,7 @@ Built-in guards are registered via `registerCoreGuards(engine, db)` in `src/core
 
 ### Hooks
 
-Hooks run **asynchronously** after the transaction commits. A hook failure does not roll back the transition — it is logged as a warning.
+Hooks run **asynchronously** after the transaction commits. Behavior on failure depends on the hook's execution policy: `required` hooks roll back the transition on failure, `best_effort` hooks log a warning, and `fire_and_forget` hooks are not awaited. See [pipeline-engine.md](./pipeline-engine.md) for details.
 
 ```typescript
 engine.registerHook('hook_name', async (task, transition, context) => {

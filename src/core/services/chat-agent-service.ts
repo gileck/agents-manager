@@ -137,6 +137,88 @@ export class ChatAgentService {
   }
 
   /**
+   * Validates inputs and creates a new chat session.
+   * Centralises scope verification, projectId derivation, and agentLib validation
+   * that previously lived in the route handler.
+   */
+  async createSession(input: {
+    scopeType: string;
+    scopeId: string;
+    name: string;
+    agentLib?: string;
+  }): Promise<import('../../shared/types').ChatSession> {
+    const { scopeType, scopeId, name, agentLib } = input;
+
+    if (!scopeType || (scopeType !== 'project' && scopeType !== 'task')) {
+      throw Object.assign(new Error('scopeType must be "project" or "task"'), { status: 400 });
+    }
+    if (!scopeId) {
+      throw Object.assign(new Error('scopeId is required'), { status: 400 });
+    }
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      throw Object.assign(new Error('name is required and must be a non-empty string'), { status: 400 });
+    }
+    if (name.length > 100) {
+      throw Object.assign(new Error('Session name must be 100 characters or less'), { status: 400 });
+    }
+
+    // Verify scope target exists and derive projectId
+    let projectId: string;
+    if (scopeType === 'project') {
+      const project = await this.projectStore.getProject(scopeId);
+      if (!project) {
+        throw Object.assign(new Error('Project not found'), { status: 404 });
+      }
+      projectId = project.id;
+    } else {
+      const task = await this.taskStore.getTask(scopeId);
+      if (!task) {
+        throw Object.assign(new Error('Task not found'), { status: 404 });
+      }
+      projectId = task.projectId;
+    }
+
+    // Validate agentLib if provided
+    if (agentLib) {
+      const validLibs = this.agentLibRegistry.listNames();
+      if (!validLibs.includes(agentLib)) {
+        throw Object.assign(
+          new Error(`Unknown agent lib: ${agentLib}. Available: ${validLibs.join(', ')}`),
+          { status: 400 },
+        );
+      }
+    }
+
+    return this.chatSessionStore.createSession({
+      scopeType: scopeType as 'project' | 'task',
+      scopeId,
+      name: name.trim(),
+      agentLib,
+      projectId,
+    });
+  }
+
+  /**
+   * Returns the session ID for a task's default chat session,
+   * creating one if none exists.
+   */
+  async getOrCreateTaskSession(taskId: string): Promise<string> {
+    const sessions = await this.chatSessionStore.listSessionsForScope('task', taskId);
+    if (sessions.length > 0) {
+      return sessions[0].id;
+    }
+    const task = await this.taskStore.getTask(taskId);
+    if (!task) throw Object.assign(new Error('Task not found'), { status: 404 });
+    const session = await this.chatSessionStore.createSession({
+      scopeType: 'task',
+      scopeId: taskId,
+      name: 'Task Chat',
+      projectId: task.projectId,
+    });
+    return session.id;
+  }
+
+  /**
    * Returns scope information for a session so consumers can build
    * their own system prompt via chat-prompt-parts builders.
    */

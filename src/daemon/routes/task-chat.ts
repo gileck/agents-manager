@@ -7,28 +7,6 @@ import { WS_CHANNELS } from '../ws/channels';
 export function taskChatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
 
-  /**
-   * Helper: find or create the default chat session for a task.
-   * Lists existing task-scoped sessions and returns the first one,
-   * or creates a new session if none exists.
-   */
-  async function getOrCreateTaskSession(taskId: string): Promise<string> {
-    const sessions = await services.chatSessionStore.listSessionsForScope('task', taskId);
-    if (sessions.length > 0) {
-      return sessions[0].id;
-    }
-    // Derive projectId from the task
-    const task = await services.taskStore.getTask(taskId);
-    if (!task) throw new Error('Task not found');
-    const session = await services.chatSessionStore.createSession({
-      scopeType: 'task',
-      scopeId: taskId,
-      name: 'Task Chat',
-      projectId: task.projectId,
-    });
-    return session.id;
-  }
-
   // POST /api/tasks/:taskId/chat/send — send message
   router.post('/api/tasks/:taskId/chat/send', async (req, res, next) => {
     try {
@@ -50,7 +28,7 @@ export function taskChatRoutes(services: AppServices, wsHolder: WsHolder): Route
         return;
       }
 
-      const sessionId = explicitSessionId || await getOrCreateTaskSession(taskId);
+      const sessionId = explicitSessionId || await services.chatAgentService.getOrCreateTaskSession(taskId);
       const scope = await services.chatAgentService.getSessionScope(sessionId);
       const systemPrompt = buildDesktopSystemPrompt(scope);
 
@@ -75,7 +53,7 @@ export function taskChatRoutes(services: AppServices, wsHolder: WsHolder): Route
   router.post('/api/tasks/:taskId/chat/stop', async (req, res, next) => {
     try {
       const { sessionId } = req.body as { sessionId?: string };
-      const resolvedSessionId = sessionId || await getOrCreateTaskSession(req.params.taskId);
+      const resolvedSessionId = sessionId || await services.chatAgentService.getOrCreateTaskSession(req.params.taskId);
       services.chatAgentService.stop(resolvedSessionId);
       res.json({ ok: true });
     } catch (err) { next(err); }
@@ -85,7 +63,7 @@ export function taskChatRoutes(services: AppServices, wsHolder: WsHolder): Route
   router.get('/api/tasks/:taskId/chat/messages', async (req, res, next) => {
     try {
       const { sessionId } = req.query as { sessionId?: string };
-      const resolvedSessionId = sessionId || await getOrCreateTaskSession(req.params.taskId);
+      const resolvedSessionId = sessionId || await services.chatAgentService.getOrCreateTaskSession(req.params.taskId);
       const messages = await services.chatAgentService.getMessages(resolvedSessionId);
       res.json(messages);
     } catch (err) { next(err); }

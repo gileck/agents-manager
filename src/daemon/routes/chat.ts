@@ -28,63 +28,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   // POST /api/chat/sessions — create session
   router.post('/api/chat/sessions', async (req, res, next) => {
     try {
-      const { scopeType, scopeId, name, agentLib } = req.body as {
-        scopeType: string;
-        scopeId: string;
-        name: string;
-        agentLib?: string;
-      };
-      if (!scopeType || (scopeType !== 'project' && scopeType !== 'task')) {
-        res.status(400).json({ error: 'scopeType must be "project" or "task"' });
-        return;
-      }
-      if (!scopeId) {
-        res.status(400).json({ error: 'scopeId is required' });
-        return;
-      }
-      if (!name || typeof name !== 'string' || name.trim().length === 0) {
-        res.status(400).json({ error: 'name is required and must be a non-empty string' });
-        return;
-      }
-      if (name.length > 100) {
-        res.status(400).json({ error: 'Session name must be 100 characters or less' });
-        return;
-      }
-
-      // Verify the scope target exists and derive projectId
-      let projectId: string;
-      if (scopeType === 'project') {
-        const project = await services.projectStore.getProject(scopeId);
-        if (!project) {
-          res.status(404).json({ error: 'Project not found' });
-          return;
-        }
-        projectId = project.id;
-      } else {
-        const task = await services.taskStore.getTask(scopeId);
-        if (!task) {
-          res.status(404).json({ error: 'Task not found' });
-          return;
-        }
-        projectId = task.projectId;
-      }
-
-      // Validate agentLib if provided
-      if (agentLib) {
-        const validLibs = services.agentLibRegistry.listNames();
-        if (!validLibs.includes(agentLib)) {
-          res.status(400).json({ error: `Unknown agent lib: ${agentLib}. Available: ${validLibs.join(', ')}` });
-          return;
-        }
-      }
-
-      const session = await services.chatSessionStore.createSession({
-        scopeType: scopeType as 'project' | 'task',
-        scopeId,
-        name: name.trim(),
-        agentLib,
-        projectId,
-      });
+      const session = await services.chatAgentService.createSession(req.body);
       res.status(201).json(session);
     } catch (err) { next(err); }
   });
