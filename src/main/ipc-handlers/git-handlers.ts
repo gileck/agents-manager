@@ -8,7 +8,8 @@ export function registerGitHandlers(api: ApiClient): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.GIT_DIFF, async (_, taskId: string) => {
-    return api.git.getDiff(taskId);
+    const result = await api.git.getDiff(taskId);
+    return result?.diff ?? null;
   });
 
   registerIpcHandler(IPC_CHANNELS.GIT_STAT, async (_, taskId: string) => {
@@ -16,11 +17,13 @@ export function registerGitHandlers(api: ApiClient): void {
   });
 
   registerIpcHandler(IPC_CHANNELS.GIT_WORKING_DIFF, async (_, taskId: string) => {
-    return api.git.getWorkingDiff(taskId);
+    const result = await api.git.getWorkingDiff(taskId);
+    return result?.diff ?? null;
   });
 
   registerIpcHandler(IPC_CHANNELS.GIT_STATUS, async (_, taskId: string) => {
-    return api.git.getStatus(taskId);
+    const result = await api.git.getStatus(taskId);
+    return result?.status ?? null;
   });
 
   registerIpcHandler(IPC_CHANNELS.GIT_RESET_FILE, async (_, taskId: string, filepath: string) => {

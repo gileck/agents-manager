@@ -10,8 +10,8 @@ interface StatusEntry {
   filepath: string;
 }
 
-function parseStatus(raw: string): StatusEntry[] {
-  if (!raw.trim()) return [];
+function parseStatus(raw: unknown): StatusEntry[] {
+  if (typeof raw !== 'string' || !raw.trim()) return [];
   return raw.split('\n').filter(Boolean).map((line) => {
     const status = line.substring(0, 2).trim();
     const filepath = line.substring(3);

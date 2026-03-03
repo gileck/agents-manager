@@ -26,7 +26,8 @@ export function GitChangesPanel({ diff, stat, onRefresh, loading }: GitChangesPa
     );
   }
 
-  const lines = (diff || '').split('\n');
+  const safeDiff = typeof diff === 'string' ? diff : '';
+  const lines = safeDiff.split('\n');
   const truncated = !showAll && lines.length > MAX_LINES;
   const displayLines = truncated ? lines.slice(0, MAX_LINES) : lines;
 

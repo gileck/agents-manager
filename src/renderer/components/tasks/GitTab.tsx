@@ -14,8 +14,8 @@ interface StatusEntry {
   filepath: string;
 }
 
-function parseStatus(raw: string): StatusEntry[] {
-  if (!raw.trim()) return [];
+function parseStatus(raw: unknown): StatusEntry[] {
+  if (typeof raw !== 'string' || !raw.trim()) return [];
   return raw.split('\n').filter(Boolean).map((line) => {
     const status = line.substring(0, 2).trim();
     const filepath = line.substring(3);
@@ -43,7 +43,8 @@ const MAX_DIFF_LINES = 500;
 
 function DiffBlock({ diff, maxLines }: { diff: string; maxLines?: number }) {
   const [showAll, setShowAll] = useState(false);
-  const lines = diff.split('\n');
+  const safeDiff = typeof diff === 'string' ? diff : '';
+  const lines = safeDiff.split('\n');
   const limit = maxLines ?? MAX_DIFF_LINES;
   const truncated = !showAll && lines.length > limit;
   const displayLines = truncated ? lines.slice(0, limit) : lines;
