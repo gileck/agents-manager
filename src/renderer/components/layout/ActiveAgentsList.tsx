@@ -65,7 +65,7 @@ export function ActiveAgentsEntries({
       {entries.map(({ run, taskTitle }) => (
         <NavLink
           key={run.id}
-          to={`/agents/${run.id}`}
+          to={run.automatedAgentId ? `/automated-agents/runs/${run.id}` : `/agents/${run.id}`}
           className={({ isActive }) =>
             cn(
               'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors mb-0.5',

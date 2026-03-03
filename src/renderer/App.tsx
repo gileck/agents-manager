@@ -24,6 +24,7 @@ import { SourceControlPage } from './pages/SourceControlPage';
 import { KanbanBoardPage } from './pages/KanbanBoardPage';
 import { DebugLogsPage } from './pages/DebugLogsPage';
 import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
+import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
 import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useRouteRestore } from './hooks/useRouteRestore';
@@ -127,6 +128,7 @@ function AppRoutes() {
         <Route path="features/:id" element={<FeatureDetailPage />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="automated-agents" element={<AutomatedAgentsPage />} />
+        <Route path="automated-agents/runs/:runId" element={<AutomatedAgentRunPage />} />
         <Route path="cost" element={<CostPage />} />
         <Route path="source-control" element={<SourceControlPage />} />
         <Route path="debug-logs" element={<DebugLogsPage />} />

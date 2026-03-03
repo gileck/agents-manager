@@ -23,7 +23,7 @@ export function AutomatedAgentRunHistory({ agentId }: AutomatedAgentRunHistoryPr
         return (
           <button
             key={run.id}
-            onClick={() => navigate(`/agents/${run.id}`)}
+            onClick={() => navigate(`/automated-agents/runs/${run.id}`)}
             className="w-full flex items-center justify-between px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left"
           >
             <div className="flex items-center gap-2">

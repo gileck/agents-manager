@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { InlineError } from '../components/InlineError';
+import { reportError } from '../lib/error-handler';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -9,25 +10,14 @@ import { useIpc } from '@template/renderer/hooks/useIpc';
 import { OutputPanel } from '../components/agent-run/OutputPanel';
 import type { OutputMode } from '../components/agent-run/OutputToolbar';
 import { PromptPanel } from '../components/agent-run/PromptPanel';
-import { SubtasksPanel } from '../components/agent-run/SubtasksPanel';
-import { GitChangesPanel } from '../components/agent-run/GitChangesPanel';
-import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
-import { AgentDetailsPanel } from '../components/agent-run/AgentDetailsPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
-import type { AgentRun, Task, AgentChatMessage } from '../../shared/types';
+import type { AgentRun, AutomatedAgent, AgentChatMessage } from '../../shared/types';
 import { messagesToRawText } from '../../shared/agent-message-utils';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
-const OUTCOME_MESSAGES: Record<string, string> = {
-  plan_complete: 'Plan is ready for review. Go to task to review and approve.',
-  pr_ready: 'PR has been created.',
-  needs_info: 'Agent needs more information.',
-  failed: 'Agent run failed. Go to task for recovery options.',
-};
-
-export function AgentRunPage() {
+export function AutomatedAgentRunPage() {
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
 
@@ -37,44 +27,33 @@ export function AgentRunPage() {
     [runId]
   );
 
-  // --- Redirect automated agent runs to dedicated page ---
-  useEffect(() => {
-    if (run?.automatedAgentId && runId) {
-      navigate(`/automated-agents/runs/${runId}`, { replace: true });
-    }
-  }, [run?.automatedAgentId, runId, navigate]);
-
-  // --- Task polling (for live subtask updates) ---
-  // Skip task lookup for automated agent runs which use synthetic __auto__: IDs
-  const isRealTask = run?.taskId && !run.taskId.startsWith('__auto__:');
-  const { data: task, refetch: refetchTask } = useIpc<Task | null>(
-    () => isRealTask ? window.api.tasks.get(run!.taskId) : Promise.resolve(null),
-    [run?.taskId]
+  // --- Fetch automated agent definition ---
+  const { data: automatedAgent } = useIpc<AutomatedAgent | null>(
+    () => run?.automatedAgentId
+      ? window.api.automatedAgents.get(run.automatedAgentId)
+      : Promise.resolve(null),
+    [run?.automatedAgentId]
   );
 
-  const taskId = run?.taskId;
-
-  // --- Streaming messages (structured AgentChatMessage[] from the agent run) ---
+  // --- Streaming messages ---
   const [streamMessages, setStreamMessages] = useState<AgentChatMessage[]>([]);
 
   useEffect(() => {
     if (!run) return;
 
-    // Initialize from DB messages if reconnecting to a running agent
     if (run.status === 'running' && run.messages && run.messages.length > 0) {
       setStreamMessages(run.messages);
     } else {
       setStreamMessages([]);
     }
 
-    // Subscribe to live messages
     const unsubMessage = window.api.on.agentMessage((tid: string, msg: AgentChatMessage) => {
       if (tid === run.taskId) {
         setStreamMessages((prev) => [...prev, msg]);
       }
     });
     return () => { unsubMessage(); };
-  }, [run?.taskId]);
+  }, [run?.taskId, run?.status]);
 
   // --- Poll agent run (2s while running) ---
   useEffect(() => {
@@ -83,90 +62,56 @@ export function AgentRunPage() {
     return () => clearInterval(id);
   }, [run?.status, refetch]);
 
-  // --- Poll task (3s while running) ---
-  useEffect(() => {
-    if (!run || run.status !== 'running') return;
-    const id = setInterval(refetchTask, 3000);
-    return () => clearInterval(id);
-  }, [run?.status, refetchTask]);
-
   // --- Subscribe to status changes for refetch ---
   useEffect(() => {
-    if (!taskId) return;
+    if (!run?.taskId) return;
     const unsub = window.api?.on?.agentStatus?.((tid: string) => {
-      if (tid === taskId) {
+      if (tid === run.taskId) {
         refetch();
       }
     });
     return () => { unsub?.(); };
-  }, [taskId, refetch]);
-
-  // --- Git diff/stat polling (10s while running) ---
-  const [gitDiff, setGitDiff] = useState<string | null>(null);
-  const [gitStat, setGitStat] = useState<string | null>(null);
-  const [gitLoading, setGitLoading] = useState(false);
-
-  const fetchGit = useCallback(async () => {
-    if (!run?.taskId) return;
-    setGitLoading(true);
-    try {
-      const [d, s] = await Promise.all([
-        window.api.git.diff(run.taskId),
-        window.api.git.stat(run.taskId),
-      ]);
-      setGitDiff(d);
-      setGitStat(s);
-    } catch {
-      // worktree may not exist yet
-    } finally {
-      setGitLoading(false);
-    }
-  }, [run?.taskId]);
-
-  useEffect(() => {
-    if (!run?.taskId) return;
-    fetchGit();
-  }, [run?.taskId, fetchGit]);
-
-  useEffect(() => {
-    if (!run || run.status !== 'running') return;
-    const id = setInterval(fetchGit, 10000);
-    return () => clearInterval(id);
-  }, [run?.status, fetchGit]);
+  }, [run?.taskId, refetch]);
 
   // --- Tab state ---
-  const [activeTab, setActiveTab] = useLocalStorage('agentRun.activeTab', 'output');
+  const [activeTab, setActiveTab] = useLocalStorage('autoAgentRun.activeTab', 'output');
 
   // --- Section visibility ---
-  const [metadataCollapsed, setMetadataCollapsed] = useLocalStorage('agentRun.metadataCollapsed', false);
+  const [metadataCollapsed, setMetadataCollapsed] = useLocalStorage('autoAgentRun.metadataCollapsed', false);
 
-  // --- Sidebar toggle (default open so users see live token usage) ---
-  const [showSidebar, setShowSidebar] = useLocalStorage('agentRun.showSidebar', true);
+  // --- Sidebar toggle ---
+  const [showSidebar, setShowSidebar] = useLocalStorage('autoAgentRun.showSidebar', true);
 
   // --- Output mode (raw vs rendered) ---
-  const [outputMode, setOutputMode] = useLocalStorage<OutputMode>('agentRun.outputMode', 'raw');
+  const [outputMode, setOutputMode] = useLocalStorage<OutputMode>('autoAgentRun.outputMode', 'raw');
 
   // --- Actions ---
   const [restarting, setRestarting] = useState(false);
 
   const handleStop = async () => {
     if (!runId) return;
-    await window.api.agents.stop(runId);
-    await refetch();
+    try {
+      await window.api.agents.stop(runId);
+      await refetch();
+    } catch (err) {
+      reportError(err, 'Stop automated agent');
+    }
   };
 
   const handleRestart = async () => {
-    if (!run) return;
+    if (!run?.automatedAgentId) return;
     setRestarting(true);
     try {
-      const newRun = await window.api.agents.start(run.taskId, run.mode, run.agentType);
-      navigate(`/agents/${newRun.id}`, { replace: true });
+      await window.api.automatedAgents.trigger(run.automatedAgentId);
+      navigate('/automated-agents');
+    } catch (err) {
+      reportError(err, 'Restart automated agent');
     } finally {
       setRestarting(false);
     }
   };
 
-  // --- Loading / error states (only on initial load, not during refetches) ---
+  // --- Loading / error states ---
   if (loading && !run) {
     return (
       <div className="p-8">
@@ -178,7 +123,7 @@ export function AgentRunPage() {
   if (!loading && (error || !run)) {
     return (
       <div className="p-8">
-        <InlineError message={error || 'Agent run not found'} context="Agent run" />
+        <InlineError message={error || 'Agent run not found'} context="Automated agent run" />
       </div>
     );
   }
@@ -188,9 +133,7 @@ export function AgentRunPage() {
   const isRunning = run.status === 'running';
   const displayMessages = isRunning ? streamMessages : (run?.messages ?? streamMessages);
   const displayOutput = displayMessages.length > 0 ? messagesToRawText(displayMessages) : (run.output || '');
-  const outcomeMessage = run.outcome ? OUTCOME_MESSAGES[run.outcome] : null;
-  const subtasks = task?.subtasks ?? [];
-  const doneCount = subtasks.filter((s) => s.status === 'done').length;
+  const agentName = automatedAgent?.name || 'Automated Agent';
 
   return (
     <div className="flex flex-col h-full">
@@ -199,13 +142,7 @@ export function AgentRunPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => {
-            if (task) {
-              navigate(`/tasks/${task.id}`);
-            } else {
-              (navigate as (delta: number) => void)(-1);
-            }
-          }}
+          onClick={() => navigate('/automated-agents')}
         >
           &larr; Back
         </Button>
@@ -213,7 +150,7 @@ export function AgentRunPage() {
           {run.status}
         </Badge>
         <h1 className="text-lg font-semibold truncate">
-          {task ? task.title : 'Agent Run'}
+          {agentName}
         </h1>
         <span className="text-sm text-muted-foreground">{run.mode} / {run.agentType}</span>
         <div className="ml-auto flex gap-2">
@@ -252,7 +189,6 @@ export function AgentRunPage() {
           </button>
           <span>Started: {new Date(run.startedAt).toLocaleString()}</span>
           {run.completedAt && <span>Completed: {new Date(run.completedAt).toLocaleString()}</span>}
-          {run.outcome && <span>Outcome: <Badge variant="outline" className="text-xs ml-1">{run.outcome}</Badge></span>}
           {(run.costInputTokens != null || run.costOutputTokens != null) && (
             <span>Tokens: {(run.costInputTokens ?? 0).toLocaleString()} in / {(run.costOutputTokens ?? 0).toLocaleString()} out</span>
           )}
@@ -279,21 +215,8 @@ export function AgentRunPage() {
         </div>
       )}
 
-      {/* Outcome banner */}
-      {!isRunning && outcomeMessage && !metadataCollapsed && (
-        <div className="mx-6 mt-2 rounded-md border px-4 py-2 flex items-center gap-3">
-          <span className="text-sm">{outcomeMessage}</span>
-          {task && (
-            <Button size="sm" variant="outline" onClick={() => navigate(`/tasks/${task.id}`)}>
-              Go to Task
-            </Button>
-          )}
-        </div>
-      )}
-
       {/* Main content — tabs + optional sidebar */}
       <div className="flex flex-1 min-h-0">
-        {/* Main tabs — fill remaining space */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 px-6 pt-3">
           <TabsList>
             <TabsTrigger value="output">
@@ -301,12 +224,6 @@ export function AgentRunPage() {
               {isRunning && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block animate-pulse" />}
             </TabsTrigger>
             <TabsTrigger value="prompt">Prompt</TabsTrigger>
-            <TabsTrigger value="subtasks">
-              Subtasks{subtasks.length > 0 && ` (${doneCount}/${subtasks.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="git">Git</TabsTrigger>
-            <TabsTrigger value="task">Task Details</TabsTrigger>
-            <TabsTrigger value="agent-details">Agent Details</TabsTrigger>
             <TabsTrigger value="cost">Cost</TabsTrigger>
             <TabsTrigger value="json">JSON Output</TabsTrigger>
           </TabsList>
@@ -327,31 +244,6 @@ export function AgentRunPage() {
 
           <TabsContent value="prompt" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
             <PromptPanel prompt={run.prompt} />
-          </TabsContent>
-
-          <TabsContent value="subtasks" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-            <SubtasksPanel subtasks={subtasks} phases={task?.phases} />
-          </TabsContent>
-
-          <TabsContent value="git" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-            <GitChangesPanel
-              diff={gitDiff}
-              stat={gitStat}
-              onRefresh={fetchGit}
-              loading={gitLoading}
-            />
-          </TabsContent>
-
-          <TabsContent value="task" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-            {task ? (
-              <TaskInfoPanel task={task} run={run} />
-            ) : (
-              <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
-            )}
-          </TabsContent>
-
-          <TabsContent value="agent-details" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
-            <AgentDetailsPanel run={run} />
           </TabsContent>
 
           <TabsContent value="cost" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
