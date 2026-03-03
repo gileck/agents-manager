@@ -17,15 +17,13 @@ export function TaskCostPanel({ runs }: TaskCostPanelProps) {
   const totals = useMemo(() => {
     let inputTokens = 0;
     let outputTokens = 0;
+    let cost = 0;
     for (const run of runs) {
       inputTokens += Number(run.costInputTokens) || 0;
       outputTokens += Number(run.costOutputTokens) || 0;
+      cost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
     }
-    return {
-      inputTokens,
-      outputTokens,
-      cost: calculateCost(inputTokens, outputTokens),
-    };
+    return { inputTokens, outputTokens, cost };
   }, [runs]);
 
   const sortedRuns = useMemo(() => {
@@ -35,8 +33,8 @@ export function TaskCostPanel({ runs }: TaskCostPanelProps) {
       let vb: number;
       switch (sortField) {
         case 'cost':
-          va = calculateCost(a.costInputTokens, a.costOutputTokens);
-          vb = calculateCost(b.costInputTokens, b.costOutputTokens);
+          va = calculateCost(a.costInputTokens, a.costOutputTokens, a.model ?? undefined);
+          vb = calculateCost(b.costInputTokens, b.costOutputTokens, b.model ?? undefined);
           break;
         case 'inputTokens':
           va = Number(a.costInputTokens) || 0;
@@ -143,7 +141,7 @@ export function TaskCostPanel({ runs }: TaskCostPanelProps) {
             </thead>
             <tbody>
               {sortedRuns.map((run) => {
-                const cost = calculateCost(run.costInputTokens, run.costOutputTokens);
+                const cost = calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
                 const duration = run.completedAt && run.startedAt
                   ? Math.round((run.completedAt - run.startedAt) / 1000)
                   : null;

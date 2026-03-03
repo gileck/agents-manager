@@ -590,7 +590,9 @@ export class ChatAgentService {
         abortController.signal.addEventListener('abort', () => {
           lib.stop(sessionId).catch(err => getAppLogger().warn('ChatAgentService', 'Failed to stop agent lib', { error: err instanceof Error ? err.message : String(err) }));
         });
-        await this.runViaAgentLib(lib, sessionId, projectPath, systemPrompt, prompt, emitEvent, emitMessage);
+        const agentLibCosts = await this.runViaAgentLib(lib, sessionId, projectPath, systemPrompt, prompt, emitEvent, emitMessage);
+        costInputTokens = agentLibCosts.costInputTokens;
+        costOutputTokens = agentLibCosts.costOutputTokens;
       } else {
         // Use direct SDK for claude-code (preserves existing rich streaming behavior)
         await this.runViaDirectSdk(sessionId, projectPath, systemPrompt, prompt, abortController, sandboxGuard, emitEvent, emitMessage, (input, output) => {
@@ -642,7 +644,7 @@ export class ChatAgentService {
     prompt: string,
     emitEvent: (event: ChatAgentEvent) => void,
     emitMessage: (msg: AgentChatMessage) => void,
-  ): Promise<void> {
+  ): Promise<{ costInputTokens?: number; costOutputTokens?: number }> {
 
     const callbacks: AgentLibCallbacks = {
       onOutput: (chunk: string) => {
@@ -677,6 +679,8 @@ export class ChatAgentService {
       emitEvent({ type: 'text', text: `\n[Agent error: ${result.error}]\n` });
       emitMessage({ type: 'assistant_text', text: `\n[Agent error: ${result.error}]\n`, timestamp: Date.now() });
     }
+
+    return { costInputTokens: result.costInputTokens, costOutputTokens: result.costOutputTokens };
   }
 
   private async runViaDirectSdk(

@@ -116,6 +116,7 @@ export abstract class BaseAgentPromptBuilder {
       error: libResult.error,
       costInputTokens: libResult.costInputTokens,
       costOutputTokens: libResult.costOutputTokens,
+      model: libResult.model,
       structuredOutput: libResult.structuredOutput,
       prompt,
       killReason: libResult.killReason,

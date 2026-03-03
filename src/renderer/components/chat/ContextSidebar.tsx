@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AgentChatMessage, AgentRun } from '../../../shared/types';
+import { calculateCost } from '../../../shared/cost-utils';
 
 interface ContextSidebarProps {
   messages: AgentChatMessage[];
@@ -7,9 +8,6 @@ interface ContextSidebarProps {
   tokenUsage?: { inputTokens: number; outputTokens: number };
 }
 
-// Claude pricing per million tokens (approximate)
-const INPUT_COST_PER_MILLION = 3.0;
-const OUTPUT_COST_PER_MILLION = 15.0;
 const CONTEXT_WINDOW = 200_000;
 
 export function ContextSidebar({ messages, run, tokenUsage }: ContextSidebarProps) {
@@ -35,7 +33,7 @@ export function ContextSidebar({ messages, run, tokenUsage }: ContextSidebarProp
   if (run?.costOutputTokens) totalOutput = Math.max(totalOutput, run.costOutputTokens);
 
   const totalTokens = totalInput + totalOutput;
-  const estimatedCost = (totalInput / 1_000_000) * INPUT_COST_PER_MILLION + (totalOutput / 1_000_000) * OUTPUT_COST_PER_MILLION;
+  const estimatedCost = calculateCost(totalInput, totalOutput, run?.model ?? undefined);
   const contextUsagePercent = Math.min((totalInput / CONTEXT_WINDOW) * 100, 100);
 
   const formatNumber = (n: number) => {

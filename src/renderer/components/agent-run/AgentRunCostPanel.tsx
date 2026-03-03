@@ -12,8 +12,9 @@ export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
   const outputTokens = Number(run.costOutputTokens) || 0;
   const totalTokens = inputTokens + outputTokens;
 
-  const inputCost = calculateCost(inputTokens, 0);
-  const outputCost = calculateCost(0, outputTokens);
+  const model = run.model ?? undefined;
+  const inputCost = calculateCost(inputTokens, 0, model);
+  const outputCost = calculateCost(0, outputTokens, model);
   const totalCost = inputCost + outputCost;
 
   const isRunning = run.status === 'running';
@@ -129,7 +130,7 @@ export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Cost estimates use default Sonnet 4 pricing ($3/$15 per MTok input/output).
+        Cost estimates use model-specific pricing when available, defaulting to Sonnet 4 ($3/$15 per MTok).
       </p>
     </div>
   );

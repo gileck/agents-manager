@@ -552,6 +552,7 @@ export class AgentService implements IAgentService {
         error: result.error,
         messageCount: finalMessageCount,
         messages: flusher.getBufferedMessages(),
+        model: result.model,
       });
       this.taskEventLog.log({
         taskId,
@@ -777,6 +778,12 @@ export class AgentService implements IAgentService {
 
     // Use the tracked running agent instance, falling back to framework
     const agent = this.runningAgents.get(run.taskId) ?? this.agentFramework.getAgent(run.agentType);
+
+    // Capture accumulated tokens BEFORE stop() wipes telemetry
+    const agentInstance = agent as { accumulatedInputTokens?: number; accumulatedOutputTokens?: number };
+    const costInputTokens = agentInstance.accumulatedInputTokens ?? undefined;
+    const costOutputTokens = agentInstance.accumulatedOutputTokens ?? undefined;
+
     await agent.stop(run.taskId);
     this.runningAgents.delete(run.taskId);
 
@@ -787,6 +794,8 @@ export class AgentService implements IAgentService {
     await this.agentRunStore.updateRun(runId, {
       status: 'cancelled',
       completedAt: now(),
+      costInputTokens,
+      costOutputTokens,
     });
 
     await this.pendingPromptStore.expirePromptsForRun(runId);

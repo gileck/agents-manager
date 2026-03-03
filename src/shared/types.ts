@@ -474,6 +474,7 @@ export interface AgentRun {
   messageCount: number | null;
   messages: AgentChatMessage[] | null;
   automatedAgentId: string | null;
+  model: string | null;
 }
 
 export interface AgentRunCreateInput {
@@ -498,6 +499,7 @@ export interface AgentRunUpdateInput {
   maxTurns?: number;
   messageCount?: number;
   messages?: AgentChatMessage[];
+  model?: string;
 }
 
 export type ArtifactType = 'branch' | 'pr' | 'commit' | 'diff' | 'document';
@@ -684,6 +686,7 @@ export interface AgentRunResult {
   costInputTokens?: number;
   costOutputTokens?: number;
   prompt?: string;
+  model?: string;
   /** Why the process was killed: 'timeout', 'stopped', or 'external_signal'. */
   killReason?: string;
   /** Original OS exit code (e.g. 143 for SIGTERM, 137 for SIGKILL). */

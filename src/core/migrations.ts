@@ -9,5 +9,10 @@ export interface Migration {
  * New migrations start at 088 and are appended here.
  */
 export function getMigrations(): Migration[] {
-  return [];
+  return [
+    {
+      name: '088_add_model_to_agent_runs',
+      sql: `ALTER TABLE agent_runs ADD COLUMN model TEXT`,
+    },
+  ];
 }

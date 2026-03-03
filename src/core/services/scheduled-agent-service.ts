@@ -173,8 +173,8 @@ export class ScheduledAgentService {
         exitCode: result.exitCode,
         completedAt: Date.now(),
         error: result.error,
-        costInputTokens: result.costInputTokens ?? telemetry?.accumulatedInputTokens,
-        costOutputTokens: result.costOutputTokens ?? telemetry?.accumulatedOutputTokens,
+        costInputTokens: result.costInputTokens,
+        costOutputTokens: result.costOutputTokens,
         messageCount: telemetry?.messageCount,
       });
 

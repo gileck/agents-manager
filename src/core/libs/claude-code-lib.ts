@@ -255,6 +255,7 @@ export class ClaudeCodeLib implements IAgentLib {
       error: isError ? errorMessage : undefined,
       costInputTokens,
       costOutputTokens,
+      model: options.model ?? this.getDefaultModel(),
       structuredOutput,
       killReason,
       rawExitCode: exitCode,

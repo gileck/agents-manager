@@ -25,6 +25,7 @@ interface AgentRunRow {
   message_count: number | null;
   messages: string | null;
   automated_agent_id: string | null;
+  model: string | null;
 }
 
 function rowToRun(row: AgentRunRow): AgentRun {
@@ -49,6 +50,7 @@ function rowToRun(row: AgentRunRow): AgentRun {
     messageCount: row.message_count ?? null,
     messages: parseJson<AgentChatMessage[] | null>(row.messages, null),
     automatedAgentId: row.automated_agent_id ?? null,
+    model: row.model ?? null,
   };
 }
 
@@ -143,6 +145,10 @@ export class SqliteAgentRunStore implements IAgentRunStore {
         updates.push('messages = ?');
         values.push(JSON.stringify(input.messages));
       }
+      if (input.model !== undefined) {
+        updates.push('model = ?');
+        values.push(input.model);
+      }
 
       if (updates.length === 0) return existing;
 
@@ -185,9 +191,12 @@ export class SqliteAgentRunStore implements IAgentRunStore {
     }
   }
 
-  async getAllRuns(limit: number = 1000): Promise<AgentRun[]> {
+  async getAllRuns(limit?: number): Promise<AgentRun[]> {
     try {
-      const rows = this.db.prepare('SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT ?').all(limit) as AgentRunRow[];
+      const sql = limit
+        ? 'SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT ?'
+        : 'SELECT * FROM agent_runs ORDER BY started_at DESC';
+      const rows = (limit ? this.db.prepare(sql).all(limit) : this.db.prepare(sql).all()) as AgentRunRow[];
       return rows.map(rowToRun);
     } catch (err) {
       getAppLogger().logError('AgentRunStore', 'getAllRuns failed', err);

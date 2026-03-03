@@ -28,6 +28,7 @@ export interface AgentLibResult {
   error?: string;
   costInputTokens?: number;
   costOutputTokens?: number;
+  model?: string;
   structuredOutput?: Record<string, unknown>;
   /** Why the process was killed: 'timeout', 'stopped' (user/supervisor), or 'external_signal'. */
   killReason?: string;

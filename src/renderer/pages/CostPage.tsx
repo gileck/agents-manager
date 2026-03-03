@@ -60,34 +60,39 @@ export function CostPage() {
   const summary = useMemo(() => {
     let agentInputTokens = 0;
     let agentOutputTokens = 0;
+    let agentCost = 0;
     for (const run of runs) {
       agentInputTokens += Number(run.costInputTokens) || 0;
       agentOutputTokens += Number(run.costOutputTokens) || 0;
+      agentCost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
     }
     const chatInput = chatCosts?.inputTokens ?? 0;
     const chatOutput = chatCosts?.outputTokens ?? 0;
     const inputTokens = agentInputTokens + chatInput;
     const outputTokens = agentOutputTokens + chatOutput;
+    // Chat costs use default pricing (no per-message model tracking)
+    const chatCost = calculateCost(chatInput, chatOutput);
     return {
       inputTokens,
       outputTokens,
-      totalCost: calculateCost(inputTokens, outputTokens),
+      totalCost: agentCost + chatCost,
       totalRuns: runs.length,
       chatInputTokens: chatInput,
       chatOutputTokens: chatOutput,
-      chatCost: calculateCost(chatInput, chatOutput),
+      chatCost,
     };
   }, [runs, chatCosts]);
 
   // Time aggregation
   const timePeriods = useMemo(() => {
-    const periodMap = new Map<string, { inputTokens: number; outputTokens: number; runs: number }>();
+    const periodMap = new Map<string, { inputTokens: number; outputTokens: number; runs: number; cost: number }>();
     for (const run of runs) {
       const date = new Date(run.startedAt);
       const key = formatPeriodKey(date, timeGranularity);
-      const existing = periodMap.get(key) ?? { inputTokens: 0, outputTokens: 0, runs: 0 };
+      const existing = periodMap.get(key) ?? { inputTokens: 0, outputTokens: 0, runs: 0, cost: 0 };
       existing.inputTokens += Number(run.costInputTokens) || 0;
       existing.outputTokens += Number(run.costOutputTokens) || 0;
+      existing.cost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
       existing.runs += 1;
       periodMap.set(key, existing);
     }
@@ -97,17 +102,17 @@ export function CostPage() {
       .map(([period, data]) => ({
         period,
         ...data,
-        cost: calculateCost(data.inputTokens, data.outputTokens),
       }));
   }, [runs, timeGranularity]);
 
   // Per-task aggregation
   const taskCosts = useMemo(() => {
-    const taskMap = new Map<string, { inputTokens: number; outputTokens: number; runs: number }>();
+    const taskMap = new Map<string, { inputTokens: number; outputTokens: number; runs: number; cost: number }>();
     for (const run of runs) {
-      const existing = taskMap.get(run.taskId) ?? { inputTokens: 0, outputTokens: 0, runs: 0 };
+      const existing = taskMap.get(run.taskId) ?? { inputTokens: 0, outputTokens: 0, runs: 0, cost: 0 };
       existing.inputTokens += Number(run.costInputTokens) || 0;
       existing.outputTokens += Number(run.costOutputTokens) || 0;
+      existing.cost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
       existing.runs += 1;
       taskMap.set(run.taskId, existing);
     }
@@ -121,7 +126,6 @@ export function CostPage() {
       taskId,
       title: taskNameMap.get(taskId) ?? taskId,
       ...data,
-      cost: calculateCost(data.inputTokens, data.outputTokens),
     }));
 
     arr.sort((a, b) => {
@@ -306,7 +310,7 @@ export function CostPage() {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Cost estimates use default Sonnet 4 pricing ($3/$15 per MTok input/output).
+        Cost estimates use model-specific pricing when available, defaulting to Sonnet 4 ($3/$15 per MTok).
       </p>
     </div>
   );

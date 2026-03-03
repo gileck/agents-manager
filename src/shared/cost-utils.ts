@@ -1,6 +1,4 @@
 // Token-to-cost utility functions
-// Default pricing: Sonnet 4 rates ($3/$15 per MTok input/output)
-// since the specific model is not stored per-run.
 
 export interface ModelPricing {
   inputPerMTok: number;
@@ -15,14 +13,42 @@ export interface ModelPricing {
  * overlap is possible.
  */
 export const MODEL_PRICING_TABLE: Array<{ pattern: string; pricing: ModelPricing }> = [
-  // Versioned entries (more-specific, evaluated first)
-  { pattern: 'claude-3-5-sonnet', pricing: { inputPerMTok: 3,    outputPerMTok: 15 } },
-  { pattern: 'claude-3-5-haiku',  pricing: { inputPerMTok: 0.80, outputPerMTok: 4 } },
+  // ── Claude (versioned, most-specific first) ──
   { pattern: 'claude-3-haiku',    pricing: { inputPerMTok: 0.25, outputPerMTok: 1.25 } },
-  // Generic family patterns (fallback)
-  { pattern: 'opus',   pricing: { inputPerMTok: 15,   outputPerMTok: 75 } },
-  { pattern: 'sonnet', pricing: { inputPerMTok: 3,    outputPerMTok: 15 } },
-  { pattern: 'haiku',  pricing: { inputPerMTok: 0.25, outputPerMTok: 1.25 } },
+  { pattern: 'claude-3-5-haiku',  pricing: { inputPerMTok: 0.80, outputPerMTok: 4 } },
+  { pattern: 'claude-3-5-sonnet', pricing: { inputPerMTok: 3,    outputPerMTok: 15 } },
+  { pattern: 'haiku-4-5',         pricing: { inputPerMTok: 1,    outputPerMTok: 5 } },
+  { pattern: 'haiku-3-5',         pricing: { inputPerMTok: 0.80, outputPerMTok: 4 } },
+  // Opus 4/4.1/3 = $15/$75; Opus 4.5/4.6 = $5/$25
+  { pattern: 'opus-4-6',          pricing: { inputPerMTok: 5,    outputPerMTok: 25 } },
+  { pattern: 'opus-4-5',          pricing: { inputPerMTok: 5,    outputPerMTok: 25 } },
+  { pattern: 'opus-4-1',          pricing: { inputPerMTok: 15,   outputPerMTok: 75 } },
+  { pattern: 'opus-4-0',          pricing: { inputPerMTok: 15,   outputPerMTok: 75 } },
+  { pattern: 'opus-3',            pricing: { inputPerMTok: 15,   outputPerMTok: 75 } },
+  { pattern: '4.6-opus',          pricing: { inputPerMTok: 5,    outputPerMTok: 25 } },
+  { pattern: '4.5-opus',          pricing: { inputPerMTok: 5,    outputPerMTok: 25 } },
+  // ── Claude generic family (fallback for current-gen models) ──
+  { pattern: 'opus',              pricing: { inputPerMTok: 5,    outputPerMTok: 25 } },
+  { pattern: 'sonnet',            pricing: { inputPerMTok: 3,    outputPerMTok: 15 } },
+  { pattern: 'haiku',             pricing: { inputPerMTok: 1,    outputPerMTok: 5 } },
+
+  // ── OpenAI Codex / GPT ──
+  { pattern: 'codex-mini',        pricing: { inputPerMTok: 1.50, outputPerMTok: 6 } },
+  { pattern: 'gpt-5.3-codex',     pricing: { inputPerMTok: 1.75, outputPerMTok: 14 } },
+  { pattern: 'gpt-5.2-codex',     pricing: { inputPerMTok: 1.75, outputPerMTok: 14 } },
+  { pattern: 'gpt-5.1-codex',     pricing: { inputPerMTok: 1.25, outputPerMTok: 10 } },
+  { pattern: 'gpt-5-codex',       pricing: { inputPerMTok: 1.25, outputPerMTok: 10 } },
+  { pattern: 'gpt-5.3',           pricing: { inputPerMTok: 1.75, outputPerMTok: 14 } },
+  { pattern: 'gpt-5.2',           pricing: { inputPerMTok: 1.75, outputPerMTok: 14 } },
+  { pattern: 'gpt-5.1',           pricing: { inputPerMTok: 1.25, outputPerMTok: 10 } },
+  { pattern: 'gpt-5',             pricing: { inputPerMTok: 1.25, outputPerMTok: 10 } },
+
+  // ── Google Gemini ──
+  { pattern: 'gemini-2.5-flash',  pricing: { inputPerMTok: 0.30, outputPerMTok: 2.50 } },
+  { pattern: 'gemini-2.5-pro',    pricing: { inputPerMTok: 1.25, outputPerMTok: 10 } },
+
+  // ── Cursor ──
+  { pattern: 'composer',          pricing: { inputPerMTok: 1.25, outputPerMTok: 10 } },
 ];
 
 const DEFAULT_PRICING: ModelPricing = MODEL_PRICING_TABLE.find(e => e.pattern === 'sonnet')!.pricing;

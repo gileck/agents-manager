@@ -175,6 +175,7 @@ export class CodexCliLib implements IAgentLib {
           exitCode: isError ? 1 : 0,
           output: resultText || errorMessage || '',
           error: isError ? errorMessage : undefined,
+          model: options.model ?? this.getDefaultModel(),
           structuredOutput,
           killReason,
           rawExitCode: rawExitCode ?? undefined,
@@ -193,6 +194,7 @@ export class CodexCliLib implements IAgentLib {
           exitCode: 1,
           output: resultText || errorMessage,
           error: errorMessage,
+          model: options.model ?? this.getDefaultModel(),
         });
       });
     });

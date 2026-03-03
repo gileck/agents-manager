@@ -12,16 +12,13 @@ export function MetricsCard({ agentRuns }: MetricsCardProps) {
     const runs = agentRuns ?? [];
     let inputTokens = 0;
     let outputTokens = 0;
+    let cost = 0;
     for (const run of runs) {
       inputTokens += Number(run.costInputTokens) || 0;
       outputTokens += Number(run.costOutputTokens) || 0;
+      cost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
     }
-    return {
-      inputTokens,
-      outputTokens,
-      cost: calculateCost(inputTokens, outputTokens),
-      runCount: runs.length,
-    };
+    return { inputTokens, outputTokens, cost, runCount: runs.length };
   }, [agentRuns]);
 
   return (
