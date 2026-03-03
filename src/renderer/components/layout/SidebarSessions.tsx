@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, MoreVertical } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
@@ -20,6 +20,8 @@ export function SidebarSessions() {
     switchSession,
   } = useProjectChatSessions();
   const navigate = useNavigate();
+  const location = useLocation();
+  const onChatPage = location.pathname === '/chat';
 
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
@@ -97,7 +99,7 @@ export function SidebarSessions() {
       ) : (
         <div className="px-2">
           {sessions.map((session) => {
-            const isActive = session.id === currentSessionId;
+            const isActive = onChatPage && session.id === currentSessionId;
 
             return (
               <div
