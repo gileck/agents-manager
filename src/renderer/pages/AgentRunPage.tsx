@@ -14,6 +14,7 @@ import { GitChangesPanel } from '../components/agent-run/GitChangesPanel';
 import { TaskInfoPanel } from '../components/agent-run/TaskInfoPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
+import { AgentDetailsPanel } from '../components/agent-run/AgentDetailsPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
 import type { AgentRun, Task, AgentChatMessage } from '../../shared/types';
 import { messagesToRawText } from '../../shared/agent-message-utils';
@@ -298,6 +299,7 @@ export function AgentRunPage() {
             </TabsTrigger>
             <TabsTrigger value="git">Git</TabsTrigger>
             <TabsTrigger value="task">Task Details</TabsTrigger>
+            <TabsTrigger value="agent-details">Agent Details</TabsTrigger>
             <TabsTrigger value="cost">Cost</TabsTrigger>
             <TabsTrigger value="json">JSON Output</TabsTrigger>
           </TabsList>
@@ -339,6 +341,10 @@ export function AgentRunPage() {
             ) : (
               <p className="p-4 text-sm text-muted-foreground">Loading task info...</p>
             )}
+          </TabsContent>
+
+          <TabsContent value="agent-details" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+            <AgentDetailsPanel run={run} />
           </TabsContent>
 
           <TabsContent value="cost" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
