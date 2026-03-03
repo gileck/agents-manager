@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
-import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 import { getAppLogger } from '../services/app-logger';
 
@@ -17,6 +17,10 @@ export class CursorAgentLib implements IAgentLib {
   private runningStates = new Map<string, RunState>();
   /** Tracks why a process was killed, survives the stop() → close gap. */
   private stoppedReasons = new Map<string, string>();
+
+  supportedFeatures(): AgentLibFeatures {
+    return { images: false, hooks: false, thinking: false };
+  }
 
   getDefaultModel(): string { return 'claude-4.6-opus'; }
 
@@ -62,7 +66,7 @@ export class CursorAgentLib implements IAgentLib {
     const { onOutput, onLog, onMessage } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
-    const args = [JSON.stringify(options.prompt), '-p', '--output-format', 'stream-json'];
+    const args = [options.prompt, '-p', '--output-format', 'stream-json', '--stream-partial-output'];
     if (options.readOnly) {
       args.push('--mode=plan');
     } else {
@@ -76,6 +80,9 @@ export class CursorAgentLib implements IAgentLib {
 
     const env = getShellEnv();
     const proc = spawn('cursor-agent', args, { cwd: options.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+
+    // Close stdin immediately — cursor-agent doesn't need input in print mode
+    proc.stdin?.end();
 
     const state: RunState = { process: proc, messageCount: 0, timeout: options.timeoutMs, maxTurns: options.maxTurns };
     this.runningStates.set(runId, state);
@@ -95,7 +102,11 @@ export class CursorAgentLib implements IAgentLib {
       timedOut = true;
       this.stoppedReasons.set(runId, 'timeout');
       try { process.kill(-proc.pid!, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
-      state.killTimer = setTimeout(() => { try { process.kill(-proc.pid!, 'SIGKILL'); } catch { /* process already exited */ } }, 5000);
+      state.killTimer = setTimeout(() => {
+        try { process.kill(-proc.pid!, 'SIGKILL'); } catch (err) {
+          getAppLogger().warn('CursorAgentLib', `SIGKILL failed for pid ${proc.pid}`, { error: err instanceof Error ? err.message : String(err) });
+        }
+      }, 5000);
     }, options.timeoutMs);
 
     return new Promise<AgentLibResult>((resolve) => {
@@ -207,7 +218,11 @@ export class CursorAgentLib implements IAgentLib {
     }
     this.stoppedReasons.set(runId, 'stopped');
     try { process.kill(-state.process.pid!, 'SIGTERM'); } catch { state.process.kill('SIGTERM'); }
-    state.killTimer = setTimeout(() => { try { process.kill(-state.process.pid!, 'SIGKILL'); } catch { /* process already exited */ } }, 5000);
+    state.killTimer = setTimeout(() => {
+      try { process.kill(-state.process.pid!, 'SIGKILL'); } catch (err) {
+        getAppLogger().warn('CursorAgentLib', `SIGKILL failed for pid ${state.process.pid}`, { error: err instanceof Error ? err.message : String(err) });
+      }
+    }, 5000);
     this.runningStates.delete(runId);
   }
 }

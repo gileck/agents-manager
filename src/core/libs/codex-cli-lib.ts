@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
-import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 import { getAppLogger } from '../services/app-logger';
 
@@ -17,6 +17,10 @@ export class CodexCliLib implements IAgentLib {
   private runningStates = new Map<string, RunState>();
   /** Tracks why a process was killed, survives the stop() → close gap. */
   private stoppedReasons = new Map<string, string>();
+
+  supportedFeatures(): AgentLibFeatures {
+    return { images: false, hooks: false, thinking: false };
+  }
 
   getDefaultModel(): string { return 'gpt-5.3-codex'; }
 
@@ -62,7 +66,7 @@ export class CodexCliLib implements IAgentLib {
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
     const sandboxMode = options.readOnly ? 'read-only' : 'workspace-write';
-    const args = ['exec', JSON.stringify(options.prompt), '--json', '--sandbox', sandboxMode];
+    const args = ['exec', options.prompt, '--json', '--sandbox', sandboxMode];
     if (options.model) {
       args.push('--model', options.model);
     }
@@ -91,7 +95,11 @@ export class CodexCliLib implements IAgentLib {
       timedOut = true;
       this.stoppedReasons.set(runId, 'timeout');
       try { process.kill(-proc.pid!, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
-      state.killTimer = setTimeout(() => { try { process.kill(-proc.pid!, 'SIGKILL'); } catch { /* process already exited */ } }, 5000);
+      state.killTimer = setTimeout(() => {
+        try { process.kill(-proc.pid!, 'SIGKILL'); } catch (err) {
+          getAppLogger().warn('CodexCliLib', `SIGKILL failed for pid ${proc.pid}`, { error: err instanceof Error ? err.message : String(err) });
+        }
+      }, 5000);
     }, options.timeoutMs);
 
     return new Promise<AgentLibResult>((resolve) => {
@@ -208,7 +216,11 @@ export class CodexCliLib implements IAgentLib {
     }
     this.stoppedReasons.set(runId, 'stopped');
     try { process.kill(-state.process.pid!, 'SIGTERM'); } catch { state.process.kill('SIGTERM'); }
-    state.killTimer = setTimeout(() => { try { process.kill(-state.process.pid!, 'SIGKILL'); } catch { /* process already exited */ } }, 5000);
+    state.killTimer = setTimeout(() => {
+      try { process.kill(-state.process.pid!, 'SIGKILL'); } catch (err) {
+        getAppLogger().warn('CodexCliLib', `SIGKILL failed for pid ${state.process.pid}`, { error: err instanceof Error ? err.message : String(err) });
+      }
+    }, 5000);
     this.runningStates.delete(runId);
   }
 }

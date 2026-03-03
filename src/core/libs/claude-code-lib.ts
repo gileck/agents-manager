@@ -1,5 +1,5 @@
 import type { AgentChatMessage } from '../../shared/types';
-import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { SandboxGuard } from '../services/sandbox-guard';
 import { getAppLogger } from '../services/app-logger';
 
@@ -26,13 +26,19 @@ interface SdkResultMessage {
   total_cost_usd?: number;
   modelUsage?: Record<string, { input_tokens: number; output_tokens: number }>;
 }
+interface SdkUserMessage {
+  type: 'user';
+  message: { role: string; content: unknown };
+  parent_tool_use_id: string | null;
+  session_id: string;
+}
 interface SdkOtherMessage {
   type: string;
   message?: { content?: SdkContentBlock[] };
   summary?: string;
   result?: string;
 }
-type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkOtherMessage;
+type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkUserMessage | SdkOtherMessage;
 
 interface RunState {
   abortController: AbortController;
@@ -50,6 +56,10 @@ export class ClaudeCodeLib implements IAgentLib {
   readonly name = 'claude-code';
 
   private runningStates = new Map<string, RunState>();
+
+  supportedFeatures(): AgentLibFeatures {
+    return { images: true, hooks: true, thinking: true };
+  }
 
   getDefaultModel(): string { return 'claude-opus-4-6'; }
 
@@ -83,7 +93,7 @@ export class ClaudeCodeLib implements IAgentLib {
   }
 
   async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
-    const { onOutput, onLog, onMessage } = callbacks;
+    const { onOutput, onLog, onMessage, onUserToolResult } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
     const query = await this.loadQuery();
@@ -125,18 +135,64 @@ export class ClaudeCodeLib implements IAgentLib {
     // Set up sandbox guard
     const sandboxGuard = new SandboxGuard(options.allowedPaths, options.readOnlyPaths);
 
+    // Build merged preToolUse hook: caller's hook runs first, then sandbox guard
+    const callerPreToolUse = options.hooks?.preToolUse;
+    const mergedPreToolUse = (toolName: string, toolInput: Record<string, unknown>) => {
+      if (callerPreToolUse) {
+        try {
+          const callerResult = callerPreToolUse(toolName, toolInput);
+          if (callerResult?.decision === 'block') {
+            log(`Caller hook blocked ${toolName}: ${callerResult.reason}`);
+            return callerResult;
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          log(`Caller preToolUse hook threw for ${toolName}, blocking tool call: ${errMsg}`);
+          return { decision: 'block' as const, reason: `Hook error: ${errMsg}` };
+        }
+      }
+      const result = sandboxGuard.evaluateToolCall(toolName, toolInput);
+      if (!result.allow) {
+        log(`Sandbox guard blocked ${toolName}: ${result.reason}`);
+        return { decision: 'block' as const, reason: result.reason };
+      }
+      return undefined;
+    };
+
+    // Build SDK prompt: multimodal when images are present, otherwise plain string
+    let sdkPrompt: string | AsyncIterable<SdkUserMessage>;
+    if (options.images && options.images.length > 0) {
+      const contentBlocks = [
+        { type: 'text' as const, text: options.prompt },
+        ...options.images.map((img) => ({
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
+        })),
+      ];
+      const userMessage: SdkUserMessage = {
+        type: 'user',
+        message: { role: 'user', content: contentBlocks },
+        parent_tool_use_id: null,
+        session_id: runId,
+      };
+      sdkPrompt = (async function* () { yield userMessage; })();
+    } else {
+      sdkPrompt = options.prompt;
+    }
+
     log(`Entering SDK message loop`, {
       promptLength: options.prompt.length,
       model: options.model ?? 'default',
       maxTurns: options.maxTurns,
       hasOutputFormat: !!options.outputFormat,
+      hasImages: !!(options.images?.length),
     });
 
     const startTime = Date.now();
 
     try {
       for await (const message of query({
-        prompt: options.prompt,
+        prompt: sdkPrompt,
         options: {
           cwd: options.cwd,
           abortController,
@@ -145,16 +201,7 @@ export class ClaudeCodeLib implements IAgentLib {
           model: options.model,
           maxTurns: options.maxTurns,
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
-          hooks: {
-            preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
-              const result = sandboxGuard.evaluateToolCall(toolName, toolInput);
-              if (!result.allow) {
-                log(`Sandbox guard blocked ${toolName}: ${result.reason}`);
-                return { decision: 'block', reason: result.reason };
-              }
-              return undefined;
-            },
-          },
+          hooks: { preToolUse: mergedPreToolUse },
         },
       }) as AsyncIterable<SdkStreamMessage>) {
         state.messageCount++;
@@ -204,6 +251,20 @@ export class ClaudeCodeLib implements IAgentLib {
             ?? (state.accumulatedOutputTokens > 0 ? state.accumulatedOutputTokens : undefined);
           if (costInputTokens != null || costOutputTokens != null) {
             onMessage?.({ type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, timestamp: Date.now() } as AgentChatMessage);
+          }
+        } else if (message.type === 'user') {
+          // SDK emits tool results as user messages with tool_result content blocks
+          const userMsg = message as SdkUserMessage;
+          const content = userMsg.message?.content;
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              const b = block as { type: string; tool_use_id?: string; content?: unknown };
+              if (b.type === 'tool_result' && b.tool_use_id) {
+                const resultContent = typeof b.content === 'string' ? b.content
+                  : (Array.isArray(b.content) ? b.content.map((c: { text?: string }) => c.text || '').join('') : '(no output)');
+                onUserToolResult?.(b.tool_use_id, resultContent);
+              }
+            }
           }
         } else {
           const otherMsg = message as SdkOtherMessage;
@@ -277,8 +338,8 @@ export class ClaudeCodeLib implements IAgentLib {
     this.runningStates.delete(runId);
   }
 
-  private async loadQuery(): Promise<(opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
+  private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<SdkUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {
     const mod = await importESM('@anthropic-ai/claude-agent-sdk');
-    return mod.query as (opts: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>;
+    return mod.query as (opts: { prompt: string | AsyncIterable<SdkUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>;
   }
 }

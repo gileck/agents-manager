@@ -12,9 +12,7 @@ import type {
   SDKResultMessage,
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { MessageParam } from '@anthropic-ai/sdk/resources';
 import type { SessionScope } from './chat-prompt-parts';
-import { SandboxGuard } from './sandbox-guard';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -23,7 +21,7 @@ import { getAppLogger } from './app-logger';
 
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
-/** Callbacks from runSdkQuery for each message type. */
+/** Callbacks from runSdkQuery (used for summarization). */
 interface SdkQueryCallbacks {
   onText?: (text: string) => void;
   onThinking?: (text: string) => void;
@@ -318,6 +316,7 @@ export class ChatAgentService {
     // Validate the resolved agent lib exists; fall back with a warning if not
     const availableLibs = this.agentLibRegistry.listNames();
     if (!availableLibs.includes(agentLibName)) {
+      getAppLogger().warn('ChatAgentService', `Agent lib "${agentLibName}" not found in registry, falling back to "${DEFAULT_AGENT_LIB}"`);
       emitEvent({ type: 'text', text: `\n[Warning: Agent engine "${agentLibName}" is not available. Falling back to "${DEFAULT_AGENT_LIB}".]\n` });
       agentLibName = DEFAULT_AGENT_LIB;
     }
@@ -557,12 +556,7 @@ export class ChatAgentService {
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
-    // Determine whether to use the AgentLib abstraction or the direct SDK
-    const useAgentLib = agentLibName !== DEFAULT_AGENT_LIB;
-
-    // Set up sandbox: read-only access to project path + image storage dir, block write tools
     const imageDir = this.imageStorageDir;
-    const sandboxGuard = new SandboxGuard([], [projectPath, imageDir]);
 
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
@@ -589,26 +583,82 @@ export class ChatAgentService {
     };
 
     try {
-      if (useAgentLib) {
-        // Use AgentLib abstraction for non-claude-code engines
-        if (images && images.length > 0) {
-          const warning = `\n[Note: Images are sent as file paths with the ${agentLibName} engine. The agent will use the Read tool to view them.]\n`;
-          emitText(warning);
-        }
-        // Wire abort signal to AgentLib.stop() so the Stop button works
-        const lib = this.agentLibRegistry.getLib(agentLibName);
-        abortController.signal.addEventListener('abort', () => {
-          lib.stop(sessionId).catch(err => getAppLogger().warn('ChatAgentService', 'Failed to stop agent lib', { error: err instanceof Error ? err.message : String(err) }));
+      const lib = this.agentLibRegistry.getLib(agentLibName);
+      const features = lib.supportedFeatures();
+
+      // Warn if engine doesn't support native images (file paths are still in the prompt)
+      if (images && images.length > 0 && !features.images) {
+        const warning = `\n[Note: Images are sent as file paths with the ${agentLibName} engine. The agent will use the Read tool to view them.]\n`;
+        emitText(warning);
+      }
+
+      // Wire abort signal to AgentLib.stop() so the Stop button works
+      abortController.signal.addEventListener('abort', () => {
+        lib.stop(sessionId).catch(err => getAppLogger().warn('ChatAgentService', 'Failed to stop agent lib', { error: err instanceof Error ? err.message : String(err) }));
+      });
+
+      // Build preToolUse hook that hard-blocks write tools
+      const preToolUse = features.hooks
+        ? (toolName: string, _toolInput: Record<string, unknown>) => {
+            if (WRITE_TOOL_NAMES.has(toolName)) {
+              return { decision: 'block' as const, reason: 'Chat agent has read-only access. File modifications are not allowed.' };
+            }
+            return undefined;
+          }
+        : undefined;
+
+      // Build callbacks
+      const callbacks: AgentLibCallbacks = {
+        onOutput: (chunk: string) => {
+          emitEvent({ type: 'text', text: chunk });
+          emitMessage({ type: 'assistant_text', text: chunk, timestamp: Date.now() });
+        },
+        onMessage: (msg: AgentChatMessage) => {
+          emitMessage(msg);
+        },
+        onUserToolResult: (toolUseId: string, content: string) => {
+          emitMessage({
+            type: 'tool_result',
+            toolId: toolUseId,
+            result: content,
+            timestamp: Date.now(),
+          });
+        },
+      };
+
+      // Build images array for libs that support native images
+      const libImages = (features.images && images && images.length > 0)
+        ? images.map((img) => ({ base64: img.base64, mediaType: img.mediaType }))
+        : undefined;
+
+      const result = await lib.execute(sessionId, {
+        prompt: `${systemPrompt}\n\n${prompt}`,
+        cwd: projectPath,
+        model,
+        maxTurns: 50,
+        timeoutMs: 300000,
+        allowedPaths: [],
+        readOnlyPaths: [projectPath, imageDir],
+        readOnly: true,
+        ...(preToolUse ? { hooks: { preToolUse } } : {}),
+        ...(libImages ? { images: libImages } : {}),
+      }, callbacks);
+
+      if (result.costInputTokens != null || result.costOutputTokens != null) {
+        emitMessage({
+          type: 'usage',
+          inputTokens: result.costInputTokens ?? 0,
+          outputTokens: result.costOutputTokens ?? 0,
+          timestamp: Date.now(),
         });
-        const agentLibCosts = await this.runViaAgentLib(lib, sessionId, projectPath, systemPrompt, prompt, emitEvent, emitMessage, model);
-        costInputTokens = agentLibCosts.costInputTokens;
-        costOutputTokens = agentLibCosts.costOutputTokens;
-      } else {
-        // Use direct SDK for claude-code (preserves existing rich streaming behavior)
-        await this.runViaDirectSdk(sessionId, projectPath, systemPrompt, prompt, abortController, sandboxGuard, emitEvent, emitMessage, (input, output) => {
-          costInputTokens = input;
-          costOutputTokens = output;
-        }, images, model);
+      }
+
+      costInputTokens = result.costInputTokens;
+      costOutputTokens = result.costOutputTokens;
+
+      if (result.error) {
+        emitEvent({ type: 'text', text: `\n[Agent error: ${result.error}]\n` });
+        emitMessage({ type: 'assistant_text', text: `\n[Agent error: ${result.error}]\n`, timestamp: Date.now() });
       }
 
       // Mark as completed successfully
@@ -665,169 +715,10 @@ export class ChatAgentService {
     }
   }
 
-  private async runViaAgentLib(
-    lib: import('../interfaces/agent-lib').IAgentLib,
-    sessionId: string,
-    projectPath: string,
-    systemPrompt: string,
-    prompt: string,
-    emitEvent: (event: ChatAgentEvent) => void,
-    emitMessage: (msg: AgentChatMessage) => void,
-    model?: string,
-  ): Promise<{ costInputTokens?: number; costOutputTokens?: number }> {
-
-    const callbacks: AgentLibCallbacks = {
-      onOutput: (chunk: string) => {
-        emitEvent({ type: 'text', text: chunk });
-        emitMessage({ type: 'assistant_text', text: chunk, timestamp: Date.now() });
-      },
-      onMessage: (msg: AgentChatMessage) => {
-        emitMessage(msg);
-      },
-    };
-
-    const result = await lib.execute(sessionId, {
-      prompt: `${systemPrompt}\n\n${prompt}`,
-      cwd: projectPath,
-      model,
-      maxTurns: 50,
-      timeoutMs: 300000,
-      allowedPaths: [],
-      readOnlyPaths: [projectPath],
-      readOnly: true,
-    }, callbacks);
-
-    if (result.costInputTokens != null && result.costOutputTokens != null) {
-      emitMessage({
-        type: 'usage',
-        inputTokens: result.costInputTokens,
-        outputTokens: result.costOutputTokens,
-        timestamp: Date.now(),
-      });
-    }
-
-    if (result.error) {
-      emitEvent({ type: 'text', text: `\n[Agent error: ${result.error}]\n` });
-      emitMessage({ type: 'assistant_text', text: `\n[Agent error: ${result.error}]\n`, timestamp: Date.now() });
-    }
-
-    return { costInputTokens: result.costInputTokens, costOutputTokens: result.costOutputTokens };
-  }
-
-  private async runViaDirectSdk(
-    sessionId: string,
-    projectPath: string,
-    systemPrompt: string,
-    prompt: string,
-    abortController: AbortController,
-    sandboxGuard: SandboxGuard,
-    emitEvent: (event: ChatAgentEvent) => void,
-    emitMessage: (msg: AgentChatMessage) => void,
-    onCost: (input: number | undefined, output: number | undefined) => void,
-    images?: ChatImage[],
-    model?: string,
-  ): Promise<void> {
-    const fullPromptText = `${systemPrompt}\n\n${prompt}`;
-
-    // Build multimodal prompt when images are present, otherwise use string
-    let sdkPrompt: string | AsyncIterable<SDKUserMessage>;
-    if (images && images.length > 0) {
-      const contentBlocks = [
-        { type: 'text' as const, text: fullPromptText },
-        ...images.map((img) => ({
-          type: 'image' as const,
-          source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
-        })),
-      ];
-      const userMessage: SDKUserMessage = {
-        type: 'user',
-        message: { role: 'user', content: contentBlocks } as MessageParam,
-        parent_tool_use_id: null,
-        session_id: sessionId,
-      };
-      sdkPrompt = (async function* () { yield userMessage; })();
-    } else {
-      sdkPrompt = fullPromptText;
-    }
-
-    await this.runSdkQuery(
-      sdkPrompt,
-      {
-        cwd: projectPath,
-        abortController,
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
-        maxTurns: 50,
-        ...(model ? { model } : {}),
-        hooks: {
-          preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
-            // Hard-block write tools
-            if (WRITE_TOOL_NAMES.has(toolName)) {
-              return { decision: 'block', reason: 'Chat agent has read-only access. File modifications are not allowed.' };
-            }
-            const result = sandboxGuard.evaluateToolCall(toolName, toolInput);
-            if (!result.allow) {
-              return { decision: 'block', reason: result.reason };
-            }
-            return undefined;
-          },
-        },
-      },
-      {
-        onText: (text) => {
-          emitEvent({ type: 'text', text });
-          emitMessage({ type: 'assistant_text', text, timestamp: Date.now() });
-        },
-        onThinking: (text) => {
-          emitMessage({ type: 'thinking', text, timestamp: Date.now() });
-        },
-        onToolUse: (block) => {
-          const toolSummary = `\n> Tool: ${block.name}\n`;
-          emitEvent({ type: 'text', text: toolSummary });
-          emitMessage({
-            type: 'tool_use',
-            toolName: block.name,
-            toolId: block.id,
-            input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? {}, null, 2),
-            timestamp: Date.now(),
-          });
-        },
-        onResult: (resultMsg) => {
-          if (resultMsg.subtype !== 'success') {
-            const errorText = `\n[Agent errors: ${resultMsg.errors.join('; ')}]\n`;
-            emitEvent({ type: 'text', text: errorText });
-            emitMessage({ type: 'assistant_text', text: errorText, timestamp: Date.now() });
-          }
-          const costIn = resultMsg.usage?.input_tokens;
-          const costOut = resultMsg.usage?.output_tokens;
-          onCost(costIn, costOut);
-          if (costIn != null && costOut != null) {
-            emitMessage({
-              type: 'usage',
-              inputTokens: costIn,
-              outputTokens: costOut,
-              timestamp: Date.now(),
-            });
-          }
-        },
-        onUserToolResult: (toolUseId, content) => {
-          emitMessage({
-            type: 'tool_result',
-            toolId: toolUseId,
-            result: content,
-            timestamp: Date.now(),
-          });
-        },
-      },
-    );
-  }
-
   /**
-   * Shared helper that loads the SDK `query()` function, iterates over
-   * the resulting async stream, and dispatches events to the provided
-   * callbacks. Used by both `runViaDirectSdk` (chat) and
-   * `summarizeMessages` (one-shot summarization) to avoid duplicating
-   * the SDK message loop.
+   * Loads the SDK `query()` function, iterates over the resulting async
+   * stream, and dispatches events to the provided callbacks.
+   * Used by `summarizeMessages` for one-shot summarization queries.
    */
   private async runSdkQuery(
     prompt: string | AsyncIterable<SDKUserMessage>,

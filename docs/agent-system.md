@@ -97,14 +97,26 @@ export interface IAgent {
 ### IAgentLib Interface
 
 ```typescript
+export interface AgentLibFeatures {
+  images: boolean;   // supports base64 image content blocks
+  hooks: boolean;    // supports preToolUse hook interception
+  thinking: boolean; // supports thinking/reasoning blocks
+}
+
 export interface IAgentLib {
   readonly name: string;
+  supportedFeatures(): AgentLibFeatures;
   execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult>;
   stop(runId: string): Promise<void>;
   isAvailable(): Promise<boolean>;
   getTelemetry(runId: string): AgentLibTelemetry | null;
 }
 ```
+
+Feature support by lib:
+- `ClaudeCodeLib`: `{ images: true, hooks: true, thinking: true }`
+- `CursorAgentLib`: `{ images: false, hooks: false, thinking: false }`
+- `CodexCliLib`: `{ images: false, hooks: false, thinking: false }`
 
 ### BaseAgentPromptBuilder
 
@@ -563,7 +575,7 @@ Ghost runs (DB says running but no in-memory tracking) are prevented at the sour
 
 **File:** `src/core/services/sandbox-guard.ts`
 
-`SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by both `ClaudeCodeLib` (task agents) and `ChatAgentService` (chat agents) as a `preToolUse` hook.
+`SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by `ClaudeCodeLib` as a `preToolUse` hook for both task agents and chat agents. `ChatAgentService` passes write-tool blocking via the `hooks.preToolUse` option on `AgentLibRunOptions`, which `ClaudeCodeLib` merges with the SandboxGuard hook.
 
 ### Configuration
 
@@ -594,11 +606,13 @@ Any error during guard evaluation results in the tool call being blocked (not al
 
 `ChatAgentService` handles interactive chat sessions with AI agents, supporting both project-scoped and task-scoped conversations.
 
-### Two Execution Paths
+### Unified AgentLib Execution
 
-1. **Direct SDK** (`runViaDirectSdk`) — Used when the agent lib is `claude-code` (the default). Imports the Claude Agent SDK directly via dynamic ESM import and streams messages through the `query()` API. Provides rich streaming with `assistant`, `user` (tool results), and `result` message types. Applies a `SandboxGuard` as a `preToolUse` hook and hard-blocks write tools.
+All chat agent execution goes through the `IAgentLib` abstraction via `AgentLibRegistry`. The service resolves the lib by name, then calls `lib.execute()` with `AgentLibRunOptions` and `AgentLibCallbacks`. Feature detection via `lib.supportedFeatures()` adapts behavior per engine:
 
-2. **AgentLib abstraction** (`runViaAgentLib`) — Used for non-default engines (`cursor-agent`, `codex-cli`). Routes through the `IAgentLib` interface from `AgentLibRegistry`. Wires the abort signal to `lib.stop()` for stop support.
+- **Hooks** — When the lib supports hooks, the service passes a `preToolUse` hook that hard-blocks write tools (Edit, Write, Bash write commands). The lib merges this with its own `SandboxGuard` hook.
+- **Images** — When the lib supports images, base64 image data is passed via `options.images`. For non-image-supporting engines, image file paths are embedded in the prompt text instead.
+- **Tool results** — The `onUserToolResult` callback streams tool result content back for real-time display.
 
 ### Agent Lib Resolution Order
 

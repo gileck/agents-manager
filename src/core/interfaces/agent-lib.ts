@@ -4,6 +4,12 @@ import type { AgentChatMessage } from '../../shared/types';
 // Agent Lib — Low-level engine interface
 // ============================================
 
+export interface AgentLibFeatures {
+  images: boolean;
+  hooks: boolean;
+  thinking: boolean;
+}
+
 export interface AgentLibRunOptions {
   prompt: string;
   cwd: string;
@@ -14,12 +20,18 @@ export interface AgentLibRunOptions {
   allowedPaths: string[];
   readOnlyPaths: string[];
   readOnly: boolean;
+  hooks?: {
+    preToolUse?: (toolName: string, toolInput: Record<string, unknown>) =>
+      { decision: 'block' | 'allow'; reason?: string } | undefined;
+  };
+  images?: Array<{ base64: string; mediaType: string }>;
 }
 
 export interface AgentLibCallbacks {
   onOutput?: (chunk: string) => void;
   onLog?: (message: string, data?: Record<string, unknown>) => void;
   onMessage?: (msg: AgentChatMessage) => void;
+  onUserToolResult?: (toolUseId: string, content: string) => void;
 }
 
 export interface AgentLibResult {
@@ -51,6 +63,7 @@ export interface AgentLibModelOption {
 
 export interface IAgentLib {
   readonly name: string;
+  supportedFeatures(): AgentLibFeatures;
   getDefaultModel(): string;
   getSupportedModels(): AgentLibModelOption[];
   execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult>;

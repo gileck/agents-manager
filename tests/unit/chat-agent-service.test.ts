@@ -6,17 +6,18 @@ import type { IProjectStore } from '../../src/core/interfaces/project-store';
 import type { ITaskStore } from '../../src/core/interfaces/task-store';
 import type { IPipelineStore } from '../../src/core/interfaces/pipeline-store';
 import type { AgentLibRegistry } from '../../src/core/services/agent-lib-registry';
+import type { IAgentLib } from '../../src/core/interfaces/agent-lib';
 import type { ChatSession } from '../../src/core/interfaces/chat-session-store';
 import type { Project } from '../../src/shared/types';
 
-// Mock the ESM import function
+// Mock the ESM import function (still needed for summarizeMessages which uses SDK directly)
 vi.mock('../../src/core/services/chat-agent-service', async (importOriginal) => {
   const mod = await importOriginal() as Record<string, unknown>;
   return {
     ...mod,
     ChatAgentService: class extends (mod.ChatAgentService as typeof ChatAgentService) {
       protected async loadQuery() {
-        // Return a mock query function
+        // Return a mock query function for summarizeMessages
         return async function* () {
           yield {
             type: 'assistant',
@@ -32,6 +33,38 @@ vi.mock('../../src/core/services/chat-agent-service', async (importOriginal) => 
     },
   };
 });
+
+/**
+ * Creates a mock IAgentLib that resolves after a short timer delay.
+ * The delay is needed because tests use fake timers — the agent stays
+ * "running" until timers are advanced, matching the real async behavior.
+ */
+function createMockAgentLib(): IAgentLib {
+  return {
+    name: 'claude-code',
+    supportedFeatures: () => ({ images: true, hooks: true, thinking: true }),
+    getDefaultModel: () => 'claude-opus-4-6',
+    getSupportedModels: () => [{ value: 'claude-opus-4-6', label: 'Claude Opus 4.6' }],
+    execute: vi.fn().mockImplementation((_runId, _options, callbacks) => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          callbacks.onOutput?.('Test response\n');
+          callbacks.onMessage?.({ type: 'assistant_text', text: 'Test response', timestamp: Date.now() });
+          resolve({
+            exitCode: 0,
+            output: 'Test response',
+            costInputTokens: 10,
+            costOutputTokens: 20,
+            model: 'claude-opus-4-6',
+          });
+        }, 100);
+      });
+    }),
+    stop: vi.fn().mockResolvedValue(undefined),
+    isAvailable: vi.fn().mockResolvedValue(true),
+    getTelemetry: vi.fn().mockReturnValue(null),
+  };
+}
 
 describe('ChatAgentService', () => {
   let service: ChatAgentService;
@@ -96,7 +129,7 @@ describe('ChatAgentService', () => {
 
     mockAgentLibRegistry = {
       listNames: vi.fn().mockReturnValue(['claude-code']),
-      getLib: vi.fn(),
+      getLib: vi.fn().mockReturnValue(createMockAgentLib()),
     } as unknown as AgentLibRegistry;
 
     service = new ChatAgentService(
@@ -111,10 +144,9 @@ describe('ChatAgentService', () => {
 
   describe('send', () => {
     it('should send a message with valid session ID', async () => {
-      const onOutput = vi.fn();
-      const onMessage = vi.fn();
+      const onEvent = vi.fn();
 
-      const result = await service.send('session-1', 'Test message', onOutput, onMessage);
+      const result = await service.send('session-1', 'Test message', { systemPrompt: '', onEvent });
 
       expect(result.userMessage).toBeDefined();
       expect(result.sessionId).toBe('session-1');
@@ -125,19 +157,16 @@ describe('ChatAgentService', () => {
     it('should throw error for non-existent session', async () => {
       mockSessionStore.getSession = vi.fn().mockResolvedValue(null);
 
-      const onOutput = vi.fn();
-      await expect(service.send('invalid-session', 'Test message', onOutput))
+      await expect(service.send('invalid-session', 'Test message', { systemPrompt: '' }))
         .rejects.toThrow('Session not found');
     });
 
     it('should throw error if agent already running for session', async () => {
-      const onOutput = vi.fn();
-
       // Start first agent
-      await service.send('session-1', 'First message', onOutput);
+      await service.send('session-1', 'First message', { systemPrompt: '' });
 
       // Try to start another for same session
-      await expect(service.send('session-1', 'Second message', onOutput))
+      await expect(service.send('session-1', 'Second message', { systemPrompt: '' }))
         .rejects.toThrow('An agent is already running for this session');
     });
 
@@ -158,12 +187,9 @@ describe('ChatAgentService', () => {
           id === 'session-1' ? mockSession : id === 'session-2' ? mockSession2 : null
         ));
 
-      const onOutput1 = vi.fn();
-      const onOutput2 = vi.fn();
-
       // Start agents for two different sessions
-      const result1 = await service.send('session-1', 'Message 1', onOutput1);
-      const result2 = await service.send('session-2', 'Message 2', onOutput2);
+      const result1 = await service.send('session-1', 'Message 1', { systemPrompt: '' });
+      const result2 = await service.send('session-2', 'Message 2', { systemPrompt: '' });
 
       expect(result1.sessionId).toBe('session-1');
       expect(result2.sessionId).toBe('session-2');
@@ -172,10 +198,8 @@ describe('ChatAgentService', () => {
 
   describe('getRunningAgents', () => {
     it('should return list of running agents', async () => {
-      const onOutput = vi.fn();
-
       // Start an agent
-      await service.send('session-1', 'Test message', onOutput);
+      await service.send('session-1', 'Test message', { systemPrompt: '' });
 
       const agents = await service.getRunningAgents();
       expect(agents).toHaveLength(1);
@@ -189,10 +213,8 @@ describe('ChatAgentService', () => {
     });
 
     it('should clean up stale completed agents', async () => {
-      const onOutput = vi.fn();
-
       // Start an agent
-      await service.send('session-1', 'Test message', onOutput);
+      await service.send('session-1', 'Test message', { systemPrompt: '' });
 
       // Wait for it to complete
       await vi.runAllTimersAsync();
@@ -212,23 +234,21 @@ describe('ChatAgentService', () => {
     });
 
     it('should automatically clean up completed agents after delay', async () => {
-      const onOutput = vi.fn();
-
       // Start an agent
-      await service.send('session-1', 'Test message', onOutput);
+      await service.send('session-1', 'Test message', { systemPrompt: '' });
 
       let agents = await service.getRunningAgents();
       expect(agents).toHaveLength(1);
       expect(agents[0].status).toBe('running');
 
-      // Let the agent complete (flush microtasks without advancing timers)
-      await vi.advanceTimersByTimeAsync(0);
+      // Let the agent execute complete (mock takes 100ms)
+      await vi.advanceTimersByTimeAsync(100);
 
       // Check agents immediately - should still be there as completed
       agents = await service.getRunningAgents();
       expect(agents).toHaveLength(1);
 
-      // Advance time by 5 seconds (cleanup delay)
+      // Advance time by 5 seconds (cleanup delay set after execute finishes)
       await vi.advanceTimersByTimeAsync(5000);
 
       // Now it should be cleaned up
@@ -239,9 +259,7 @@ describe('ChatAgentService', () => {
 
   describe('stop', () => {
     it('should stop running agent for session', async () => {
-      const onOutput = vi.fn();
-
-      await service.send('session-1', 'Test message', onOutput);
+      await service.send('session-1', 'Test message', { systemPrompt: '' });
 
       let agents = await service.getRunningAgents();
       expect(agents[0].status).toBe('running');
@@ -260,9 +278,7 @@ describe('ChatAgentService', () => {
 
   describe('clearMessages', () => {
     it('should stop agent and clear messages for session', async () => {
-      const onOutput = vi.fn();
-
-      await service.send('session-1', 'Test message', onOutput);
+      await service.send('session-1', 'Test message', { systemPrompt: '' });
       await service.clearMessages('session-1');
 
       expect(mockMessageStore.clearMessages).toHaveBeenCalledWith('session-1');
@@ -280,8 +296,7 @@ describe('ChatAgentService', () => {
         { id: '2', sessionId: 'session-1', role: 'assistant', content: 'Hi there', createdAt: 2 },
       ]);
 
-      const onOutput = vi.fn();
-      await service.send('session-1', 'Test', onOutput);
+      await service.send('session-1', 'Test', { systemPrompt: '' });
 
       const summary = await service.summarizeMessages('session-1');
 
