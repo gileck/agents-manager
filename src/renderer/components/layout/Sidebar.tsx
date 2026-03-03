@@ -6,6 +6,7 @@ import { ActiveAgentsEntries } from './ActiveAgentsList';
 import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
 import { SidebarSection } from './SidebarSection';
 import { SidebarSessions } from './SidebarSessions';
+import { SidebarAutomatedAgents } from './SidebarAutomatedAgents';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -75,6 +76,9 @@ export function Sidebar({ onReportBug }: SidebarProps) {
 
         {/* Sessions */}
         <SidebarSessions />
+
+        {/* Automated Agents */}
+        <SidebarAutomatedAgents />
 
         {/* Active Agents */}
         <SidebarSection

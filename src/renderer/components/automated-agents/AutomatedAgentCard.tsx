@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, Pencil, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { reportError } from '../../lib/error-handler';
@@ -14,6 +15,7 @@ interface AutomatedAgentCardProps {
 }
 
 export function AutomatedAgentCard({ agent, onEdit, onDelete, onRefresh }: AutomatedAgentCardProps) {
+  const navigate = useNavigate();
   const [triggering, setTriggering] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -49,7 +51,10 @@ export function AutomatedAgentCard({ agent, onEdit, onDelete, onRefresh }: Autom
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-medium text-sm truncate">{agent.name}</h3>
+            <h3
+              className="font-medium text-sm truncate cursor-pointer hover:underline"
+              onClick={() => navigate(`/automated-agents/${agent.id}`)}
+            >{agent.name}</h3>
             {agent.templateId && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{agent.templateId}</span>
             )}

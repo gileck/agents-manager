@@ -131,6 +131,23 @@ export class ScheduledAgentService {
     // Agent instructions
     sections.push('## Instructions');
     sections.push(agent.promptInstructions);
+    sections.push('');
+
+    // Structured output instructions
+    sections.push('## Output Format');
+    sections.push('');
+    sections.push('You MUST end your response with a structured report in the following markdown format:');
+    sections.push('');
+    sections.push('## Report');
+    sections.push('');
+    sections.push('### Summary');
+    sections.push('<2-3 sentence overview of what you found/did>');
+    sections.push('');
+    sections.push('### Findings');
+    sections.push('<Bullet list of key findings, observations, or completed actions>');
+    sections.push('');
+    sections.push('### Recommendations');
+    sections.push('<Bullet list of suggested next steps or improvements>');
 
     return sections.join('\n');
   }
