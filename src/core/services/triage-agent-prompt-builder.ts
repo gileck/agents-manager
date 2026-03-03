@@ -56,4 +56,23 @@ export class TriageAgentPromptBuilder implements IAutomatedAgentPromptBuilder {
 
     return lines.join('\n');
   }
+
+  getOutputFormat(): object {
+    return {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'The task ID that was triaged' },
+          type: { type: 'string', enum: ['bug', 'feature', 'chore', 'refactor', 'docs', 'test'] },
+          size: { type: 'string', enum: ['xs', 'sm', 'md', 'lg', 'xl'] },
+          complexity: { type: 'string', enum: ['low', 'medium', 'high'] },
+          route: { type: 'string', description: 'Target pipeline stage (e.g. investigating, designing, planning, implementing)' },
+          summary: { type: 'string', description: 'One-line triage summary' },
+          skipped: { type: 'boolean', description: 'True if no untriaged tasks were found' },
+        },
+        required: ['summary', 'skipped'],
+      },
+    };
+  }
 }

@@ -10,6 +10,19 @@ import type { IAgentLib, AgentLibCallbacks } from '../interfaces/agent-lib';
 import { computeNextRunAt } from './automated-agent-schedule';
 import { getAppLogger } from './app-logger';
 
+const DEFAULT_REPORT_OUTPUT_FORMAT = {
+  type: 'json_schema',
+  schema: {
+    type: 'object',
+    properties: {
+      summary: { type: 'string', description: '2-3 sentence overview of what you found/did' },
+      findings: { type: 'array', items: { type: 'string' }, description: 'Key findings, observations, or completed actions' },
+      recommendations: { type: 'array', items: { type: 'string' }, description: 'Suggested next steps or improvements' },
+    },
+    required: ['summary', 'findings', 'recommendations'],
+  },
+};
+
 export class ScheduledAgentService {
   private activeRuns = new Map<string, Promise<void>>();
   /** Maps runId → lib name so stop() can target the correct lib. */
@@ -57,14 +70,14 @@ export class ScheduledAgentService {
         automatedAgentId: agent.id,
       });
 
-      const prompt = await this.buildPrompt(agent, project);
+      const { prompt, outputFormat } = await this.buildPrompt(agent, project);
 
       // Store prompt on run
       await this.agentRunStore.updateRun(run.id, { prompt });
 
       const lib = this.agentLibRegistry.getLib('claude-code');
       this.activeRunLibs.set(run.id, lib.name);
-      const runPromise = this.executeInBackground(run, agent, project, prompt, lib, triggeredBy, onOutput, onMessage);
+      const runPromise = this.executeInBackground(run, agent, project, prompt, outputFormat, lib, triggeredBy, onOutput, onMessage);
       runPromise.catch(err => getAppLogger().logError('ScheduledAgentService', `Unhandled error in background execution for "${agent.name}"`, err));
       this.activeRuns.set(agent.id, runPromise);
 
@@ -83,7 +96,7 @@ export class ScheduledAgentService {
     }
   }
 
-  private async buildPrompt(agent: AutomatedAgent, project: Project): Promise<string> {
+  private async buildPrompt(agent: AutomatedAgent, project: Project): Promise<{ prompt: string; outputFormat?: object }> {
     const sections: string[] = [];
 
     sections.push(`# Automated Agent: ${agent.name}`);
@@ -123,23 +136,15 @@ export class ScheduledAgentService {
     sections.push(agent.promptInstructions);
     sections.push('');
 
-    // Structured output instructions
+    // Output format — custom builder may provide a JSON schema, otherwise use default report schema
+    const outputFormat = customBuilder?.getOutputFormat?.() ?? DEFAULT_REPORT_OUTPUT_FORMAT;
+
+    // Tell the agent about the expected output structure
     sections.push('## Output Format');
     sections.push('');
-    sections.push('You MUST end your response with a structured report in the following markdown format:');
-    sections.push('');
-    sections.push('## Report');
-    sections.push('');
-    sections.push('### Summary');
-    sections.push('<2-3 sentence overview of what you found/did>');
-    sections.push('');
-    sections.push('### Findings');
-    sections.push('<Bullet list of key findings, observations, or completed actions>');
-    sections.push('');
-    sections.push('### Recommendations');
-    sections.push('<Bullet list of suggested next steps or improvements>');
+    sections.push('Your final response MUST be valid JSON matching the required schema. The system will parse it automatically.');
 
-    return sections.join('\n');
+    return { prompt: sections.join('\n'), outputFormat };
   }
 
   private async appendDefaultTaskContext(sections: string[], project: Project): Promise<void> {
@@ -177,6 +182,7 @@ export class ScheduledAgentService {
     agent: AutomatedAgent,
     project: Project,
     prompt: string,
+    outputFormat: object | undefined,
     lib: IAgentLib,
     triggeredBy: 'scheduler' | 'manual',
     onOutput?: (chunk: string) => void,
@@ -199,6 +205,7 @@ export class ScheduledAgentService {
         readOnly: agent.capabilities.readOnly,
         allowedPaths: [project.path!],
         readOnlyPaths: agent.capabilities.readOnly ? [project.path!] : [],
+        outputFormat,
       }, callbacks);
 
       const telemetry = lib.getTelemetry(run.id);
@@ -213,6 +220,7 @@ export class ScheduledAgentService {
         costInputTokens: result.costInputTokens,
         costOutputTokens: result.costOutputTokens,
         messageCount: telemetry?.messageCount,
+        payload: result.structuredOutput ?? undefined,
       });
 
       const nextRunAt = computeNextRunAt(agent.schedule, Date.now());
