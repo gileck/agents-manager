@@ -424,36 +424,50 @@ export class PipelineEngine implements IPipelineEngine {
 
     const ctx: TransitionContext = context ?? { trigger: 'manual' };
     const hookDef = transition.hooks?.find((h) => h.name === hookName);
+    const retryEventBase = {
+      hookName,
+      transition: { from: transition.from, to: transition.to },
+      params: hookDef?.params,
+    };
+
+    // Log retry started
+    await this.taskEventLog.log({
+      taskId: task.id,
+      category: 'hook_execution',
+      severity: 'info',
+      message: `Hook retry "${hookName}" starting`,
+      data: { ...retryEventBase, result: 'retry_started' },
+    });
 
     try {
       const result = await hookFn(task, transition, ctx, hookDef?.params);
       if (result && !result.success) {
         await this.taskEventLog.log({
           taskId: task.id,
-          category: 'system',
+          category: 'hook_execution',
           severity: 'warning',
           message: `Hook retry "${hookName}" failed: ${result.error ?? 'unknown'}`,
-          data: { hookName, error: result.error },
+          data: { ...retryEventBase, result: 'retry_failure', error: result.error },
         });
         return { success: false, hookName, error: result.error ?? 'Hook returned failure' };
       }
 
       await this.taskEventLog.log({
         taskId: task.id,
-        category: 'system',
+        category: 'hook_execution',
         severity: 'info',
         message: `Hook retry "${hookName}" succeeded`,
-        data: { hookName },
+        data: { ...retryEventBase, result: 'retry_success' },
       });
       return { success: true, hookName };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await this.taskEventLog.log({
         taskId: task.id,
-        category: 'system',
+        category: 'hook_execution',
         severity: 'error',
         message: `Hook retry "${hookName}" threw: ${message}`,
-        data: { hookName, error: message },
+        data: { ...retryEventBase, result: 'retry_failure', error: message },
       });
       return { success: false, hookName, error: message };
     }
@@ -544,16 +558,25 @@ export class PipelineEngine implements IPipelineEngine {
       }
 
       if (policy === 'fire_and_forget') {
-        // Log immediately — async, no duration available
+        // Log started event
         this.taskEventLog.log({
           taskId,
           category: 'hook_execution',
           severity: 'info',
-          message: `Hook "${hook.name}" fired (fire_and_forget)`,
-          data: { ...hookEventBase, result: 'fired' },
+          message: `Hook "${hook.name}" starting (fire_and_forget)`,
+          data: { ...hookEventBase, result: 'started' },
         }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
 
-        hookFn(updatedTask, transition, ctx, hook.params).catch((err) => {
+        hookFn(updatedTask, transition, ctx, hook.params).then(() => {
+          // Log hook_execution event for fire_and_forget success
+          this.taskEventLog.log({
+            taskId,
+            category: 'hook_execution',
+            severity: 'info',
+            message: `Hook "${hook.name}" succeeded (fire_and_forget)`,
+            data: { ...hookEventBase, result: 'success' },
+          }).catch((logErr) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', logErr));
+        }).catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
           this.taskEventLog.log({
             taskId,
@@ -561,7 +584,7 @@ export class PipelineEngine implements IPipelineEngine {
             severity: 'error',
             message: `Hook "${hook.name}" failed (fire_and_forget${forced ? ', forced' : ''}): ${message}`,
             data: { hookName: hook.name, error: message, ...(forced ? { forced: true } : {}) },
-          });
+          }).catch((logErr) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', logErr));
           // Log hook_execution event for fire_and_forget failure
           this.taskEventLog.log({
             taskId,
@@ -575,6 +598,14 @@ export class PipelineEngine implements IPipelineEngine {
       }
 
       // required or best_effort: await the hook
+      // Log started event
+      await this.taskEventLog.log({
+        taskId,
+        category: 'hook_execution',
+        severity: 'info',
+        message: `Hook "${hook.name}" starting (${policy})`,
+        data: { ...hookEventBase, result: 'started' },
+      });
       const hookStart = Date.now();
       try {
         const result = await hookFn(updatedTask, transition, ctx, hook.params);

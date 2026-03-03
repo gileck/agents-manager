@@ -6,7 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
-import type { IPipelineInspectionService } from '../interfaces/pipeline-inspection-service';
+import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { TaskUpdateInput, TelegramBotLogEntry, ChatSession, AgentChatMessage } from '../../shared/types';
 import type { ChatAgentService } from './chat-agent-service';
 import { buildTelegramSystemPrompt } from './chat-prompt-parts';
@@ -47,7 +47,7 @@ interface BotDeps {
   workflowService: IWorkflowService;
   chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
-  pipelineInspectionService: IPipelineInspectionService;
+  agentRunStore: IAgentRunStore;
   defaultPipelineId?: string;
 }
 
@@ -457,13 +457,20 @@ export class TelegramAgentBotService implements ITelegramBotService {
   private async handleRestartAgent(chatId: number, taskId: string): Promise<void> {
     try {
       await this.send(chatId, `Restarting agent for task \`${esc(taskId)}\`\\.\\.\\.`, { parse_mode: 'MarkdownV2' });
-      const result = await this.deps.pipelineInspectionService.retryHook(taskId, 'start_agent');
-      if (result.success) {
-        await this.send(chatId, `Agent restart triggered for task \`${esc(taskId)}\``, { parse_mode: 'MarkdownV2' });
-      } else {
-        await this.send(chatId, `Agent restart failed: ${esc(result.error ?? 'Unknown error')}`, { parse_mode: 'MarkdownV2' });
+
+      // Look up the latest run to determine correct agent type and mode
+      const runs = await this.deps.agentRunStore.getRunsForTask(taskId);
+      const latestRun = runs[0]; // ordered by started_at DESC
+      if (!latestRun) {
+        getAppLogger().warn('TelegramAgentBot', 'Agent restart skipped: no previous runs', { taskId });
+        await this.send(chatId, `Agent restart failed: no previous agent runs found for task \`${esc(taskId)}\``, { parse_mode: 'MarkdownV2' });
+        return;
       }
+
+      await this.deps.workflowService.startAgent(taskId, latestRun.mode, latestRun.agentType);
+      await this.send(chatId, `Agent restart triggered for task \`${esc(taskId)}\` \\(${esc(latestRun.agentType)}\\)`, { parse_mode: 'MarkdownV2' });
     } catch (err) {
+      getAppLogger().logError('TelegramAgentBot', `Agent restart failed for task ${taskId}`, err);
       const errMsg = err instanceof Error ? err.message : String(err);
       await this.send(chatId, `Agent restart failed: ${esc(errMsg)}`, { parse_mode: 'MarkdownV2' });
     }

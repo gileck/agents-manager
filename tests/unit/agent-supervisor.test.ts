@@ -5,7 +5,7 @@ import type { IAgentService } from '../../src/core/interfaces/agent-service';
 import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
 import type { ITaskStore } from '../../src/core/interfaces/task-store';
 import type { IPipelineStore } from '../../src/core/interfaces/pipeline-store';
-import type { IPipelineInspectionService } from '../../src/core/interfaces/pipeline-inspection-service';
+import type { IWorkflowService } from '../../src/core/interfaces/workflow-service';
 import type { AgentRun, Task, Pipeline } from '../../src/shared/types';
 
 // Mock the `now()` utility so we can control time
@@ -342,10 +342,8 @@ describe('AgentSupervisor — stall detection', () => {
     deletePipeline: ReturnType<typeof vi.fn>;
     getPipelineForTaskType: ReturnType<typeof vi.fn>;
   };
-  let pipelineInspectionService: {
-    getPipelineDiagnostics: ReturnType<typeof vi.fn>;
-    retryHook: ReturnType<typeof vi.fn>;
-    advancePhase: ReturnType<typeof vi.fn>;
+  let workflowService: {
+    startAgent: ReturnType<typeof vi.fn>;
   };
   let supervisor: AgentSupervisor;
 
@@ -399,10 +397,8 @@ describe('AgentSupervisor — stall detection', () => {
       getPipelineForTaskType: vi.fn(),
     };
 
-    pipelineInspectionService = {
-      getPipelineDiagnostics: vi.fn(),
-      retryHook: vi.fn().mockResolvedValue({ success: true, hookName: 'start_agent' }),
-      advancePhase: vi.fn(),
+    workflowService = {
+      startAgent: vi.fn().mockResolvedValue(makeRun()),
     };
 
     supervisor = new AgentSupervisor(
@@ -413,7 +409,7 @@ describe('AgentSupervisor — stall detection', () => {
       5000,   // defaultTimeoutMs
       taskStore as unknown as ITaskStore,
       pipelineStore as unknown as IPipelineStore,
-      pipelineInspectionService as unknown as IPipelineInspectionService,
+      workflowService as unknown as IWorkflowService,
     );
   });
 
@@ -422,28 +418,29 @@ describe('AgentSupervisor — stall detection', () => {
     vi.useRealTimers();
   });
 
-  it('triggers retryHook for a stalled task in agent_running status with no running agent', async () => {
+  it('calls workflowService.startAgent with correct agentType from latest run for a stalled task', async () => {
     const pipeline = makePipeline();
     pipelineStore.listPipelines.mockResolvedValue([pipeline]);
 
     const task = makeTask({ updatedAt: 1000 }); // updated long ago
     taskStore.listTasks.mockResolvedValue([task]);
 
-    // No running agents for this task, no recent completions
-    agentRunStore.getRunsForTask.mockResolvedValue([]);
+    // Previous run exists with agentType 'implementor'
+    const previousRun = makeRun({ id: 'run-prev', status: 'completed', completedAt: 1000, agentType: 'implementor', mode: 'new' });
+    agentRunStore.getRunsForTask.mockResolvedValue([previousRun]);
 
-    // now() > task.updatedAt + 60s grace
+    // now() > task.updatedAt + 60s grace AND > completedAt + 60s grace
     mockedNow.mockReturnValue(200_000);
 
     supervisor.start();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(pipelineInspectionService.retryHook).toHaveBeenCalledWith('task-stall-1', 'start_agent');
+    expect(workflowService.startAgent).toHaveBeenCalledWith('task-stall-1', 'new', 'implementor');
     expect(taskEventLog.log).toHaveBeenCalledWith(expect.objectContaining({
       taskId: 'task-stall-1',
       category: 'system',
       severity: 'warning',
-      message: expect.stringContaining('Stall detected'),
+      message: expect.stringContaining('restarting implementor'),
     }));
   });
 
@@ -456,7 +453,7 @@ describe('AgentSupervisor — stall detection', () => {
     supervisor.start();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(pipelineInspectionService.retryHook).not.toHaveBeenCalled();
+    expect(workflowService.startAgent).not.toHaveBeenCalled();
   });
 
   it('respects grace period — does not recover recently completed agents', async () => {
@@ -472,7 +469,7 @@ describe('AgentSupervisor — stall detection', () => {
     supervisor.start();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(pipelineInspectionService.retryHook).not.toHaveBeenCalled();
+    expect(workflowService.startAgent).not.toHaveBeenCalled();
   });
 
   it('respects grace period — does not recover recently updated tasks', async () => {
@@ -488,28 +485,29 @@ describe('AgentSupervisor — stall detection', () => {
     supervisor.start();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(pipelineInspectionService.retryHook).not.toHaveBeenCalled();
+    expect(workflowService.startAgent).not.toHaveBeenCalled();
   });
 
   it('caps recovery attempts at max (2 by default)', async () => {
     pipelineStore.listPipelines.mockResolvedValue([makePipeline()]);
     taskStore.listTasks.mockResolvedValue([makeTask({ updatedAt: 1000 })]);
-    agentRunStore.getRunsForTask.mockResolvedValue([]);
+    const previousRun = makeRun({ id: 'run-prev', status: 'completed', completedAt: 1000 });
+    agentRunStore.getRunsForTask.mockResolvedValue([previousRun]);
     mockedNow.mockReturnValue(200_000);
 
     supervisor.start();
 
     // First poll — attempt 1
     await vi.advanceTimersByTimeAsync(1000);
-    expect(pipelineInspectionService.retryHook).toHaveBeenCalledTimes(1);
+    expect(workflowService.startAgent).toHaveBeenCalledTimes(1);
 
     // Second poll — attempt 2
     await vi.advanceTimersByTimeAsync(1000);
-    expect(pipelineInspectionService.retryHook).toHaveBeenCalledTimes(2);
+    expect(workflowService.startAgent).toHaveBeenCalledTimes(2);
 
     // Third poll — should be capped, no more retries
     await vi.advanceTimersByTimeAsync(1000);
-    expect(pipelineInspectionService.retryHook).toHaveBeenCalledTimes(2);
+    expect(workflowService.startAgent).toHaveBeenCalledTimes(2);
   });
 
   it('ignores tasks not in agent_running status category', async () => {
@@ -527,7 +525,7 @@ describe('AgentSupervisor — stall detection', () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(taskStore.listTasks).not.toHaveBeenCalled();
-    expect(pipelineInspectionService.retryHook).not.toHaveBeenCalled();
+    expect(workflowService.startAgent).not.toHaveBeenCalled();
   });
 
   it('skips stall detection when optional deps are not provided', async () => {
@@ -553,17 +551,47 @@ describe('AgentSupervisor — stall detection', () => {
     basicSupervisor.stop();
   });
 
-  it('logs error when retryHook fails', async () => {
+  it('logs warning and skips when no previous runs exist, without consuming recovery slot', async () => {
     pipelineStore.listPipelines.mockResolvedValue([makePipeline()]);
     taskStore.listTasks.mockResolvedValue([makeTask({ updatedAt: 1000 })]);
-    agentRunStore.getRunsForTask.mockResolvedValue([]);
+    agentRunStore.getRunsForTask.mockResolvedValue([]); // no previous runs
     mockedNow.mockReturnValue(200_000);
 
-    pipelineInspectionService.retryHook.mockResolvedValue({
-      success: false,
-      hookName: 'start_agent',
-      error: 'No transition found',
-    });
+    supervisor.start();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(workflowService.startAgent).not.toHaveBeenCalled();
+    expect(taskEventLog.log).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: 'task-stall-1',
+      category: 'system',
+      severity: 'warning',
+      message: expect.stringContaining('no previous agent runs found'),
+    }));
+  });
+
+  it('uses correct agentType from latest run when task has agentType implementor', async () => {
+    pipelineStore.listPipelines.mockResolvedValue([makePipeline()]);
+    taskStore.listTasks.mockResolvedValue([makeTask({ updatedAt: 1000 })]);
+
+    const latestRun = makeRun({ id: 'run-impl', status: 'completed', completedAt: 1000, agentType: 'implementor', mode: 'revision' });
+    agentRunStore.getRunsForTask.mockResolvedValue([latestRun]);
+    mockedNow.mockReturnValue(200_000);
+
+    supervisor.start();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(workflowService.startAgent).toHaveBeenCalledWith('task-stall-1', 'revision', 'implementor');
+  });
+
+  it('logs error when startAgent throws', async () => {
+    pipelineStore.listPipelines.mockResolvedValue([makePipeline()]);
+    taskStore.listTasks.mockResolvedValue([makeTask({ updatedAt: 1000 })]);
+
+    const latestRun = makeRun({ id: 'run-prev', status: 'completed', completedAt: 1000 });
+    agentRunStore.getRunsForTask.mockResolvedValue([latestRun]);
+    mockedNow.mockReturnValue(200_000);
+
+    workflowService.startAgent.mockRejectedValue(new Error('Agent start failed'));
 
     supervisor.start();
     await vi.advanceTimersByTimeAsync(1000);
@@ -572,7 +600,7 @@ describe('AgentSupervisor — stall detection', () => {
       taskId: 'task-stall-1',
       category: 'system',
       severity: 'error',
-      message: expect.stringContaining('retryHook failed'),
+      message: expect.stringContaining('Stall recovery threw'),
     }));
   });
 });

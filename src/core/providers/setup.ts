@@ -258,7 +258,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const agentSupervisor = new AgentSupervisor(
     agentRunStore, agentService, taskEventLog,
     undefined, undefined, // use default pollIntervalMs and defaultTimeoutMs
-    taskStore, pipelineStore, pipelineInspectionService,
+    taskStore, pipelineStore, workflowService,
   );
 
   // Supervisor for automatic workflow reviews of completed tasks

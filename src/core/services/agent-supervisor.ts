@@ -3,7 +3,7 @@ import type { IAgentService } from '../interfaces/agent-service';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
-import type { IPipelineInspectionService } from '../interfaces/pipeline-inspection-service';
+import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { AgentChatMessage } from '../../shared/types';
 import { now } from '../stores/utils';
 import { getAppLogger } from './app-logger';
@@ -32,7 +32,7 @@ export class AgentSupervisor {
     /** Optional deps for stall detection — when absent, stall sweep is skipped. */
     private taskStore?: ITaskStore,
     private pipelineStore?: IPipelineStore,
-    private pipelineInspectionService?: IPipelineInspectionService,
+    private workflowService?: IWorkflowService,
   ) {}
 
   start(): void {
@@ -91,7 +91,7 @@ export class AgentSupervisor {
    * recently completed agent, then retries the `start_agent` hook (capped).
    */
   private async detectStalledTasks(): Promise<void> {
-    if (!this.taskStore || !this.pipelineStore || !this.pipelineInspectionService) return;
+    if (!this.taskStore || !this.pipelineStore || !this.workflowService) return;
 
     const pipelines = await this.pipelineStore.listPipelines();
 
@@ -129,32 +129,43 @@ export class AgentSupervisor {
             continue;
           }
 
+          // Use the latest run to determine which agent type to restart
+          const latestRun = runs[0]; // runs are ordered by started_at DESC
+          if (!latestRun) {
+            await this.taskEventLog.log({
+              taskId: task.id,
+              category: 'system',
+              severity: 'warning',
+              message: `Stall detected for task ${task.id} in "${status}" but no previous agent runs found — skipping recovery`,
+              data: { status },
+            });
+            continue;
+          }
+
           // Check recovery cap
           const attempts = this.recoveryAttempts.get(task.id) ?? 0;
           if (attempts >= MAX_STALL_RECOVERY_ATTEMPTS) continue;
 
-          // Attempt recovery
+          // Increment counter only when a real recovery attempt is being made
           this.recoveryAttempts.set(task.id, attempts + 1);
 
           await this.taskEventLog.log({
             taskId: task.id,
             category: 'system',
             severity: 'warning',
-            message: `Stall detected: task ${task.id} in "${status}" with no running agent — retrying start_agent (attempt ${attempts + 1}/${MAX_STALL_RECOVERY_ATTEMPTS})`,
-            data: { status, recoveryAttempt: attempts + 1, maxAttempts: MAX_STALL_RECOVERY_ATTEMPTS },
+            message: `Stall detected: task ${task.id} in "${status}" with no running agent — restarting ${latestRun.agentType} (attempt ${attempts + 1}/${MAX_STALL_RECOVERY_ATTEMPTS})`,
+            data: { status, agentType: latestRun.agentType, mode: latestRun.mode, recoveryAttempt: attempts + 1, maxAttempts: MAX_STALL_RECOVERY_ATTEMPTS },
           });
 
           try {
-            const result = await this.pipelineInspectionService.retryHook(task.id, 'start_agent');
-            if (!result.success) {
-              await this.taskEventLog.log({
-                taskId: task.id,
-                category: 'system',
-                severity: 'error',
-                message: `Stall recovery retryHook failed for task ${task.id}: ${result.error}`,
-                data: { error: result.error, recoveryAttempt: attempts + 1 },
-              });
-            }
+            await this.workflowService.startAgent(task.id, latestRun.mode, latestRun.agentType);
+            await this.taskEventLog.log({
+              taskId: task.id,
+              category: 'system',
+              severity: 'info',
+              message: `Stall recovery succeeded for task ${task.id}: restarted ${latestRun.agentType}`,
+              data: { agentType: latestRun.agentType, mode: latestRun.mode, recoveryAttempt: attempts + 1 },
+            });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             try {
@@ -165,7 +176,9 @@ export class AgentSupervisor {
                 message: `Stall recovery threw for task ${task.id}: ${msg}`,
                 data: { error: msg, recoveryAttempt: attempts + 1 },
               });
-            } catch { /* db may be closed */ }
+            } catch (logErr) {
+              getAppLogger().logError('AgentSupervisor', `Stall recovery error (task ${task.id}): ${msg}`, logErr);
+            }
           }
         }
       }
