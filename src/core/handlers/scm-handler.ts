@@ -89,8 +89,13 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     if (project.config?.pullMainAfterMerge) {
       try {
         const gitOps = deps.createGitOps(project.path);
-        await gitOps.fetch('origin', 'main:main');
-        await ghLog('Fetched origin/main to local main');
+        const currentBranch = await gitOps.getCurrentBranch();
+        if (currentBranch === 'main') {
+          await ghLog('Skipping local main update — main is checked out in the primary worktree');
+        } else {
+          await gitOps.fetch('origin', 'main:main');
+          await ghLog('Fetched origin/main to local main');
+        }
       } catch (err) {
         await ghLog(`Failed to fetch main after merge (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
       }
