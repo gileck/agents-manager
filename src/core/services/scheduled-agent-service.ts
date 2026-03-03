@@ -4,6 +4,7 @@ import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { INotificationRouter } from '../interfaces/notification-router';
+import type { IAutomatedAgentPromptBuilder } from '../interfaces/automated-agent-prompt-builder';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { IAgentLib, AgentLibCallbacks } from '../interfaces/agent-lib';
 import { computeNextRunAt } from './automated-agent-schedule';
@@ -21,6 +22,7 @@ export class ScheduledAgentService {
     private taskStore: ITaskStore,
     private agentLibRegistry: AgentLibRegistry,
     private notificationRouter: INotificationRouter,
+    private promptBuilders: Map<string, IAutomatedAgentPromptBuilder> = new Map(),
   ) {}
 
   async isRunning(automatedAgentId: string): Promise<boolean> {
@@ -89,33 +91,21 @@ export class ScheduledAgentService {
     sections.push(`Project path: ${project.path}`);
     sections.push('');
 
-    // Task summary
-    try {
-      const tasks = await this.taskStore.listTasks({ projectId: project.id });
-      const byStatus: Record<string, number> = {};
-      for (const t of tasks) {
-        byStatus[t.status] = (byStatus[t.status] || 0) + 1;
-      }
-      sections.push('## Current Tasks Summary');
-      sections.push(`Total tasks: ${tasks.length}`);
-      for (const [status, count] of Object.entries(byStatus)) {
-        sections.push(`- ${status}: ${count}`);
-      }
-      sections.push('');
-
-      // Top 50 open tasks
-      const openTasks = tasks.filter(t => !['done', 'completed', 'cancelled'].includes(t.status)).slice(0, 50);
-      if (openTasks.length > 0) {
-        sections.push('## Open Tasks');
-        for (const t of openTasks) {
-          sections.push(`- [${t.id}] ${t.title} (status: ${t.status}, priority: ${t.priority})`);
-        }
+    // Task context — use custom builder if registered for this template, otherwise default listing
+    const customBuilder = agent.templateId
+      ? this.promptBuilders.get(agent.templateId)
+      : undefined;
+    if (customBuilder) {
+      try {
+        const customContext = await customBuilder.buildContext(agent, project);
+        sections.push(customContext);
         sections.push('');
+      } catch (err) {
+        getAppLogger().logError('ScheduledAgentService', `Custom prompt builder for "${agent.templateId}" failed`, err);
+        throw new Error(`Prompt builder for template "${agent.templateId}" failed: ${err instanceof Error ? err.message : String(err)}`);
       }
-    } catch (err) {
-      getAppLogger().warn('ScheduledAgentService', 'Failed to load tasks for prompt', { error: err instanceof Error ? err.message : String(err) });
-      sections.push('## Tasks: Unable to load task summary');
-      sections.push('');
+    } else {
+      await this.appendDefaultTaskContext(sections, project);
     }
 
     // Capabilities
@@ -150,6 +140,36 @@ export class ScheduledAgentService {
     sections.push('<Bullet list of suggested next steps or improvements>');
 
     return sections.join('\n');
+  }
+
+  private async appendDefaultTaskContext(sections: string[], project: Project): Promise<void> {
+    try {
+      const tasks = await this.taskStore.listTasks({ projectId: project.id });
+      const byStatus: Record<string, number> = {};
+      for (const t of tasks) {
+        byStatus[t.status] = (byStatus[t.status] || 0) + 1;
+      }
+      sections.push('## Current Tasks Summary');
+      sections.push(`Total tasks: ${tasks.length}`);
+      for (const [status, count] of Object.entries(byStatus)) {
+        sections.push(`- ${status}: ${count}`);
+      }
+      sections.push('');
+
+      // Top 50 open tasks
+      const openTasks = tasks.filter(t => !['done', 'completed', 'cancelled'].includes(t.status)).slice(0, 50);
+      if (openTasks.length > 0) {
+        sections.push('## Open Tasks');
+        for (const t of openTasks) {
+          sections.push(`- [${t.id}] ${t.title} (status: ${t.status}, priority: ${t.priority})`);
+        }
+        sections.push('');
+      }
+    } catch (err) {
+      getAppLogger().warn('ScheduledAgentService', 'Failed to load tasks for prompt', { error: err instanceof Error ? err.message : String(err) });
+      sections.push('## Tasks: Unable to load task summary');
+      sections.push('');
+    }
   }
 
   private async executeInBackground(

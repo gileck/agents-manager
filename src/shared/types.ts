@@ -613,6 +613,8 @@ export const FEEDBACK_ENTRY_TYPES = [
   'plan_feedback', 'design_feedback', 'implementation_feedback',
 ] as const;
 
+export const TRIAGE_ENTRY_TYPE = 'triage_summary' as const;
+
 export interface AgentContext {
   task: Task;
   project: Project;

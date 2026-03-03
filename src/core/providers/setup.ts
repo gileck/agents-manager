@@ -89,6 +89,7 @@ import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
 import { ScheduledAgentService } from '../services/scheduled-agent-service';
 import { SchedulerSupervisor } from '../services/scheduler-supervisor';
+import { TriageAgentPromptBuilder } from '../services/triage-agent-prompt-builder';
 
 export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
@@ -223,9 +224,11 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
 
   // Automated agent stores and services (created before AgentService so it can be passed in for stop delegation)
   const automatedAgentStore = new SqliteAutomatedAgentStore(db);
+  const triageBuilder = new TriageAgentPromptBuilder(taskStore, taskContextStore);
+  const promptBuilders = new Map([[triageBuilder.templateId, triageBuilder]]);
   const scheduledAgentService = new ScheduledAgentService(
     automatedAgentStore, agentRunStore, projectStore, taskStore,
-    agentLibRegistry, notificationRouter,
+    agentLibRegistry, notificationRouter, promptBuilders,
   );
   const schedulerSupervisor = new SchedulerSupervisor(automatedAgentStore, scheduledAgentService);
 
