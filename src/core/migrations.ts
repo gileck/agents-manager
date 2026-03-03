@@ -36,5 +36,9 @@ export function getMigrations(): Migration[] {
       name: '092_reseed_pipelines_close_reopen',
       sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}', transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
     },
+    {
+      name: '093_add_engine_to_agent_runs',
+      sql: `ALTER TABLE agent_runs ADD COLUMN engine TEXT`,
+    },
   ];
 }

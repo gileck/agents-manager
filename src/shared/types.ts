@@ -495,6 +495,7 @@ export interface AgentRun {
   messages: AgentChatMessage[] | null;
   automatedAgentId: string | null;
   model: string | null;
+  engine: string | null;
 }
 
 export interface AgentRunCreateInput {
@@ -520,6 +521,7 @@ export interface AgentRunUpdateInput {
   messageCount?: number;
   messages?: AgentChatMessage[];
   model?: string;
+  engine?: string;
 }
 
 export type ArtifactType = 'branch' | 'pr' | 'commit' | 'diff' | 'document';

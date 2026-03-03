@@ -26,6 +26,7 @@ interface AgentRunRow {
   messages: string | null;
   automated_agent_id: string | null;
   model: string | null;
+  engine: string | null;
 }
 
 function rowToRun(row: AgentRunRow): AgentRun {
@@ -51,6 +52,7 @@ function rowToRun(row: AgentRunRow): AgentRun {
     messages: parseJson<AgentChatMessage[] | null>(row.messages, null),
     automatedAgentId: row.automated_agent_id ?? null,
     model: row.model ?? null,
+    engine: row.engine ?? null,
   };
 }
 
@@ -148,6 +150,10 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       if (input.model !== undefined) {
         updates.push('model = ?');
         values.push(input.model);
+      }
+      if (input.engine !== undefined) {
+        updates.push('engine = ?');
+        values.push(input.engine);
       }
 
       if (updates.length === 0) return existing;
