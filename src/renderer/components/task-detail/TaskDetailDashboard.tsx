@@ -13,6 +13,7 @@ import { PhasedSubtasksSection } from './PhasedSubtasksSection';
 import { SubtasksSection } from './SubtasksSection';
 import { DependenciesSection } from './DependenciesSection';
 import { PlanMarkdown } from './PlanMarkdown';
+import { TaskCommentsCard } from './TaskCommentsCard';
 import { QuestionForm } from '../prompts/QuestionForm';
 import type {
   Task, AgentRun, TaskArtifact, PendingPrompt, DebugTimelineEntry,
@@ -37,6 +38,7 @@ interface TaskDetailDashboardProps {
   onTransition: (toStatus: string) => Promise<void> | void;
   onPromptRespond: (promptId: string, responses: QuestionResponse[]) => Promise<void>;
   onRefetch: () => Promise<void> | void;
+  onContextRefetch: () => void;
 }
 
 export function TaskDetailDashboard({
@@ -54,6 +56,7 @@ export function TaskDetailDashboard({
   onTransition,
   onPromptRespond,
   onRefetch,
+  onContextRefetch,
 }: TaskDetailDashboardProps) {
   const navigate = useNavigate();
   const { features } = useFeatures(task ? { projectId: task.projectId } : undefined);
@@ -221,6 +224,9 @@ export function TaskDetailDashboard({
 
         {/* Dependencies */}
         <DependenciesSection taskId={taskId} projectId={task.projectId} />
+
+        {/* Comments */}
+        <TaskCommentsCard taskId={taskId} contextEntries={contextEntries ?? []} onCommentAdded={onContextRefetch} />
 
         {/* Pending Prompts */}
         {pendingPrompts && pendingPrompts.some(p => p.status === 'pending') && (

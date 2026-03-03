@@ -678,6 +678,7 @@ export function TaskDetailPage() {
             onTransition={handleTransition}
             onPromptRespond={handleStructuredPromptRespond}
             onRefetch={refetch}
+            onContextRefetch={refetchContext}
           />
         </TabsContent>
 
