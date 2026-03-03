@@ -1,25 +1,102 @@
-import { spawn, type ChildProcess } from 'child_process';
-import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
+import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 import { getAppLogger } from '../services/app-logger';
 
+// Use Function constructor to preserve dynamic import() at runtime.
+// TypeScript compiles `await import(...)` to `require()` under CommonJS,
+// but the SDK is ESM-only. This bypasses that transformation.
+const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
+
+type SandboxMode = 'read-only' | 'workspace-write';
+type CodexInput = string | CodexUserInput[];
+type CodexUserInput = { type: 'text'; text: string } | { type: 'local_image'; path: string };
+
+interface CodexThreadLike {
+  runStreamed(input: CodexInput, options?: { outputSchema?: unknown; signal?: AbortSignal }): Promise<{ events: AsyncIterable<CodexThreadEvent> }>;
+}
+
+interface CodexLike {
+  startThread(options?: {
+    model?: string;
+    sandboxMode?: SandboxMode;
+    workingDirectory?: string;
+    skipGitRepoCheck?: boolean;
+    approvalPolicy?: 'never' | 'on-request' | 'on-failure' | 'untrusted';
+    additionalDirectories?: string[];
+  }): CodexThreadLike;
+}
+
+type CodexConstructor = new (options?: {
+  env?: Record<string, string>;
+}) => CodexLike;
+
+interface CodexThreadTurnCompletedEvent {
+  type: 'turn.completed';
+  usage: {
+    input_tokens: number;
+    cached_input_tokens: number;
+    output_tokens: number;
+  };
+}
+
+interface CodexThreadTurnFailedEvent {
+  type: 'turn.failed';
+  error: { message: string };
+}
+
+interface CodexThreadErrorEvent {
+  type: 'error';
+  message: string;
+}
+
+interface CodexThreadItemEvent {
+  type: 'item.started' | 'item.updated' | 'item.completed';
+  item: CodexThreadItem;
+}
+
+type CodexThreadEvent =
+  | CodexThreadTurnCompletedEvent
+  | CodexThreadTurnFailedEvent
+  | CodexThreadErrorEvent
+  | CodexThreadItemEvent
+  | { type: string };
+
+type CodexThreadItem =
+  | { id: string; type: 'agent_message'; text: string }
+  | { id: string; type: 'reasoning'; text: string }
+  | { id: string; type: 'command_execution'; command: string; aggregated_output: string; status: 'in_progress' | 'completed' | 'failed'; exit_code?: number }
+  | { id: string; type: 'mcp_tool_call'; server: string; tool: string; arguments: unknown; status: 'in_progress' | 'completed' | 'failed'; result?: { content?: unknown[]; structured_content?: unknown }; error?: { message: string } }
+  | { id: string; type: 'web_search'; query: string }
+  | { id: string; type: 'todo_list'; items: Array<{ text: string; completed: boolean }> }
+  | { id: string; type: 'file_change'; changes: Array<{ path: string; kind: 'add' | 'delete' | 'update' }>; status: 'completed' | 'failed' }
+  | { id: string; type: 'error'; message: string };
+
 interface RunState {
-  process: ChildProcess;
+  abortController: AbortController;
   messageCount: number;
+  accumulatedInputTokens: number;
+  accumulatedOutputTokens: number;
   timeout: number;
   maxTurns: number;
-  killTimer?: ReturnType<typeof setTimeout>;
+  stoppedReason?: string;
 }
 
 export class CodexCliLib implements IAgentLib {
   readonly name = 'codex-cli';
 
   private runningStates = new Map<string, RunState>();
-  /** Tracks why a process was killed, survives the stop() → close gap. */
+  /** Tracks why a run was stopped, survives the stop() -> completion gap. */
   private stoppedReasons = new Map<string, string>();
 
-  supportedFeatures(): AgentLibFeatures {
-    return { images: false, hooks: false, thinking: false };
+  supportedFeatures() {
+    return {
+      images: true,
+      hooks: false,
+      thinking: true,
+    };
   }
 
   getDefaultModel(): string { return 'gpt-5.3-codex'; }
@@ -36,25 +113,16 @@ export class CodexCliLib implements IAgentLib {
   }
 
   async isAvailable(): Promise<boolean> {
-    try {
-      const env = getShellEnv();
-      return new Promise((resolve) => {
-        const proc = spawn('codex', ['--version'], { env, stdio: 'pipe' });
-        const timer = setTimeout(() => { proc.kill(); resolve(false); }, 5000);
-        proc.on('error', () => { clearTimeout(timer); resolve(false); });
-        proc.on('close', (code) => { clearTimeout(timer); resolve(code === 0); });
-      });
-    } catch {
-      return false;
-    }
+    const Codex = await this.tryLoadCodexConstructor();
+    return !!Codex;
   }
 
   getTelemetry(runId: string): AgentLibTelemetry | null {
     const state = this.runningStates.get(runId);
     if (!state) return null;
     return {
-      accumulatedInputTokens: 0,
-      accumulatedOutputTokens: 0,
+      accumulatedInputTokens: state.accumulatedInputTokens,
+      accumulatedOutputTokens: state.accumulatedOutputTokens,
       messageCount: state.messageCount,
       timeout: state.timeout,
       maxTurns: state.maxTurns,
@@ -62,150 +130,22 @@ export class CodexCliLib implements IAgentLib {
   }
 
   async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
-    const { onOutput, onLog, onMessage } = callbacks;
+    const { onLog } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
-    const sandboxMode = options.readOnly ? 'read-only' : 'workspace-write';
-    const args = ['exec', options.prompt, '--json', '--sandbox', sandboxMode];
-    if (options.model) {
-      args.push('--model', options.model);
+    const Codex = await this.tryLoadCodexConstructor();
+    if (Codex) {
+      return this.executeWithSdk(Codex, runId, options, callbacks);
     }
 
-    log(`Spawning codex`, { args: args.slice(0, 5), cwd: options.cwd });
-
-    const env = getShellEnv();
-    const proc = spawn('codex', args, { cwd: options.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
-
-    const state: RunState = { process: proc, messageCount: 0, timeout: options.timeoutMs, maxTurns: options.maxTurns };
-    this.runningStates.set(runId, state);
-
-    let resultText = '';
-    let isError = false;
-    let errorMessage: string | undefined;
-    let structuredOutput: Record<string, unknown> | undefined;
-
-    const emit = (chunk: string) => {
-      resultText += chunk;
-      onOutput?.(chunk);
+    const sdkError = 'Codex SDK not available. Install @openai/codex-sdk.';
+    log(sdkError);
+    return {
+      exitCode: 1,
+      output: sdkError,
+      error: sdkError,
+      model: options.model ?? this.getDefaultModel(),
     };
-
-    // Timeout handling
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      this.stoppedReasons.set(runId, 'timeout');
-      try { process.kill(-proc.pid!, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
-      state.killTimer = setTimeout(() => {
-        try { process.kill(-proc.pid!, 'SIGKILL'); } catch (err) {
-          getAppLogger().warn('CodexCliLib', `SIGKILL failed for pid ${proc.pid}`, { error: err instanceof Error ? err.message : String(err) });
-        }
-      }, 5000);
-    }, options.timeoutMs);
-
-    return new Promise<AgentLibResult>((resolve) => {
-      let stderrOutput = '';
-
-      proc.stdout?.on('data', (data: Buffer) => {
-        const lines = data.toString().split('\n').filter(Boolean);
-        for (const line of lines) {
-          state.messageCount++;
-          let msg: Record<string, unknown> | null = null;
-          try { msg = JSON.parse(line); } catch { /* not JSON */ }
-
-          if (!msg) {
-            emit(line + '\n');
-          } else {
-            try {
-              if (msg.type === 'message' || msg.type === 'text') {
-                const text = (msg.content ?? msg.text ?? '') as string;
-                emit(text + '\n');
-                onMessage?.({ type: 'assistant_text', text, timestamp: Date.now() });
-              } else if (msg.type === 'function_call' || msg.type === 'tool_use') {
-                const toolName = (msg.name ?? msg.function ?? 'unknown') as string;
-                const input = JSON.stringify(msg.arguments ?? msg.input ?? {});
-                emit(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}\n`);
-                onMessage?.({ type: 'tool_use', toolName, input: input.slice(0, 2000), timestamp: Date.now() });
-              } else if (msg.type === 'function_call_output' || msg.type === 'tool_result') {
-                const result = typeof msg.output === 'string' ? msg.output : JSON.stringify(msg.output ?? msg.result ?? '');
-                onMessage?.({ type: 'tool_result', result: result.slice(0, 2000), timestamp: Date.now() });
-              } else if (msg.type === 'error') {
-                isError = true;
-                errorMessage = (msg.message ?? msg.error ?? 'Unknown error') as string;
-                emit(`[error] ${errorMessage}\n`);
-              } else if (msg.type === 'result') {
-                if (msg.structured_output) {
-                  structuredOutput = msg.structured_output as Record<string, unknown>;
-                }
-              }
-            } catch (err) {
-              log(`Error processing message: ${err instanceof Error ? err.message : String(err)}`);
-              emit(line + '\n');
-            }
-          }
-        }
-      });
-
-      proc.stderr?.on('data', (data: Buffer) => {
-        stderrOutput += data.toString();
-      });
-
-      proc.on('close', (code, signal) => {
-        clearTimeout(timer);
-        if (state.killTimer) clearTimeout(state.killTimer);
-        this.runningStates.delete(runId);
-
-        // Determine kill reason for signal-related exits
-        let killReason: string | undefined;
-        const rawExitCode = code ?? (signal === 'SIGTERM' ? 143 : signal === 'SIGKILL' ? 137 : undefined);
-        const isSignalExit = rawExitCode === 143 || rawExitCode === 137 || signal != null;
-
-        if (timedOut) {
-          isError = true;
-          killReason = 'timeout';
-          errorMessage = `codex timed out after ${Math.round(options.timeoutMs / 1000)}s`;
-          log(errorMessage);
-        } else if (isSignalExit) {
-          killReason = this.stoppedReasons.get(runId) ?? 'external_signal';
-          isError = true;
-          errorMessage = stderrOutput || `codex exited with code ${rawExitCode} [kill_reason=${killReason}]`;
-          log(`codex killed: ${errorMessage}`);
-        } else if (code !== 0 && !isError) {
-          isError = true;
-          errorMessage = stderrOutput || `codex exited with code ${code}`;
-          log(`codex failed: ${errorMessage}`);
-        }
-
-        this.stoppedReasons.delete(runId);
-
-        log(`codex completed: exitCode=${code}, messages=${state.messageCount}`);
-
-        resolve({
-          exitCode: isError ? 1 : 0,
-          output: resultText || errorMessage || '',
-          error: isError ? errorMessage : undefined,
-          model: options.model ?? this.getDefaultModel(),
-          structuredOutput,
-          killReason,
-          rawExitCode: rawExitCode ?? undefined,
-        });
-      });
-
-      proc.on('error', (err) => {
-        clearTimeout(timer);
-        if (state.killTimer) clearTimeout(state.killTimer);
-        this.runningStates.delete(runId);
-        this.stoppedReasons.delete(runId);
-        isError = true;
-        errorMessage = `Failed to spawn codex: ${err.message}`;
-        log(errorMessage);
-        resolve({
-          exitCode: 1,
-          output: resultText || errorMessage,
-          error: errorMessage,
-          model: options.model ?? this.getDefaultModel(),
-        });
-      });
-    });
   }
 
   async stop(runId: string): Promise<void> {
@@ -214,13 +154,391 @@ export class CodexCliLib implements IAgentLib {
       getAppLogger().warn('CodexCliLib', `stop called for unknown runId: ${runId}`);
       return;
     }
+
     this.stoppedReasons.set(runId, 'stopped');
-    try { process.kill(-state.process.pid!, 'SIGTERM'); } catch { state.process.kill('SIGTERM'); }
-    state.killTimer = setTimeout(() => {
-      try { process.kill(-state.process.pid!, 'SIGKILL'); } catch (err) {
-        getAppLogger().warn('CodexCliLib', `SIGKILL failed for pid ${state.process.pid}`, { error: err instanceof Error ? err.message : String(err) });
+    state.stoppedReason = 'stopped';
+
+    state.abortController.abort();
+  }
+
+  private async executeWithSdk(
+    Codex: CodexConstructor,
+    runId: string,
+    options: AgentLibRunOptions,
+    callbacks: AgentLibCallbacks,
+  ): Promise<AgentLibResult> {
+    const { onOutput, onLog, onMessage } = callbacks;
+    const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
+
+    const abortController = new AbortController();
+    const state: RunState = {
+      abortController,
+      messageCount: 0,
+      accumulatedInputTokens: 0,
+      accumulatedOutputTokens: 0,
+      timeout: options.timeoutMs,
+      maxTurns: options.maxTurns,
+    };
+    this.runningStates.set(runId, state);
+
+    const shellEnv = getShellEnv();
+    const env = Object.fromEntries(
+      Object.entries(shellEnv).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    );
+    const sandboxMode: SandboxMode = options.readOnly ? 'read-only' : 'workspace-write';
+    const { input: sdkInput, imageTempDir } = await this.buildSdkInput(runId, options.prompt, options.images);
+    const additionalDirectories = Array.from(new Set([
+      ...options.allowedPaths.filter(Boolean),
+      ...(imageTempDir ? [imageTempDir] : []),
+    ]));
+
+    const codex = new Codex({ env });
+    const thread = codex.startThread({
+      model: options.model,
+      sandboxMode,
+      workingDirectory: options.cwd,
+      skipGitRepoCheck: true,
+      approvalPolicy: 'never',
+      ...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
+    });
+
+    log('Starting Codex SDK run', {
+      cwd: options.cwd,
+      model: options.model ?? this.getDefaultModel(),
+      timeoutMs: options.timeoutMs,
+      maxTurns: options.maxTurns,
+      sandboxMode,
+      hasOutputSchema: !!options.outputFormat,
+    });
+
+    let resultText = '';
+    let finalAssistantText = '';
+    let structuredOutput: Record<string, unknown> | undefined;
+    let isError = false;
+    let errorMessage: string | undefined;
+    let killReason: string | undefined;
+
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      this.stoppedReasons.set(runId, 'timeout');
+      state.stoppedReason = 'timeout';
+      abortController.abort();
+    }, options.timeoutMs);
+
+    const assistantSnapshots = new Map<string, string>();
+    const commandOutputOffsets = new Map<string, number>();
+    const emittedToolUse = new Set<string>();
+
+    const appendPersistentOutput = (chunk: string): void => {
+      if (!chunk) return;
+      resultText += chunk;
+      onOutput?.(chunk);
+    };
+
+    const emitStreamOnly = (chunk: string): void => {
+      if (!chunk) return;
+      onOutput?.(chunk);
+    };
+
+    const parseStructuredOutput = (text: string): Record<string, unknown> | undefined => {
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed as Record<string, unknown>;
+        }
+      } catch {
+        // Best effort parse only
       }
-    }, 5000);
-    this.runningStates.delete(runId);
+      return undefined;
+    };
+
+    const textFromMcpResult = (content?: unknown[]): string => {
+      if (!Array.isArray(content)) return '';
+      const chunks: string[] = [];
+      for (const part of content) {
+        if (!part || typeof part !== 'object') continue;
+        const asText = part as { type?: string; text?: unknown };
+        if (asText.type === 'text' && typeof asText.text === 'string') {
+          chunks.push(asText.text);
+        }
+      }
+      return chunks.join('\n');
+    };
+
+    try {
+      const { events } = await thread.runStreamed(
+        sdkInput,
+        {
+          ...(options.outputFormat ? { outputSchema: options.outputFormat } : {}),
+          signal: abortController.signal,
+        },
+      );
+
+      for await (const event of events) {
+        state.messageCount++;
+
+        if (event.type === 'turn.completed') {
+          const usage = (event as CodexThreadTurnCompletedEvent).usage;
+          state.accumulatedInputTokens = usage.input_tokens;
+          state.accumulatedOutputTokens = usage.output_tokens;
+          onMessage?.({
+            type: 'usage',
+            inputTokens: usage.input_tokens,
+            outputTokens: usage.output_tokens,
+            timestamp: Date.now(),
+          });
+          continue;
+        }
+
+        if (event.type === 'turn.failed') {
+          const fail = event as CodexThreadTurnFailedEvent;
+          isError = true;
+          errorMessage = fail.error?.message ?? 'Codex turn failed';
+          continue;
+        }
+
+        if (event.type === 'error') {
+          const errEvent = event as CodexThreadErrorEvent;
+          isError = true;
+          errorMessage = errEvent.message;
+          continue;
+        }
+
+        if (event.type !== 'item.started' && event.type !== 'item.updated' && event.type !== 'item.completed') {
+          continue;
+        }
+
+        const item = (event as CodexThreadItemEvent).item;
+        switch (item.type) {
+          case 'agent_message': {
+            const prevText = assistantSnapshots.get(item.id) ?? '';
+            const nextText = item.text ?? '';
+            const delta = nextText.startsWith(prevText) ? nextText.slice(prevText.length) : nextText;
+            if (delta) {
+              appendPersistentOutput(delta);
+              onMessage?.({ type: 'assistant_text', text: delta, timestamp: Date.now() });
+            }
+            assistantSnapshots.set(item.id, nextText);
+            finalAssistantText = nextText;
+            break;
+          }
+          case 'reasoning': {
+            onMessage?.({ type: 'thinking', text: item.text, timestamp: Date.now() });
+            break;
+          }
+          case 'command_execution': {
+            if (!emittedToolUse.has(item.id)) {
+              emittedToolUse.add(item.id);
+              onMessage?.({
+                type: 'tool_use',
+                toolName: 'bash',
+                toolId: item.id,
+                input: item.command.slice(0, 2000),
+                timestamp: Date.now(),
+              });
+              emitStreamOnly(`\n> Tool: bash\n> Input: ${item.command}\n`);
+            }
+
+            const previousOffset = commandOutputOffsets.get(item.id) ?? 0;
+            const currentOutput = item.aggregated_output ?? '';
+            if (currentOutput.length > previousOffset) {
+              const diff = currentOutput.slice(previousOffset);
+              emitStreamOnly(diff);
+              commandOutputOffsets.set(item.id, currentOutput.length);
+            }
+
+            if (event.type === 'item.completed') {
+              onMessage?.({
+                type: 'tool_result',
+                toolId: item.id,
+                result: (item.aggregated_output ?? '').slice(0, 2000),
+                timestamp: Date.now(),
+              });
+            }
+            break;
+          }
+          case 'mcp_tool_call': {
+            if (!emittedToolUse.has(item.id)) {
+              emittedToolUse.add(item.id);
+              onMessage?.({
+                type: 'tool_use',
+                toolName: `${item.server}.${item.tool}`,
+                toolId: item.id,
+                input: JSON.stringify(item.arguments ?? {}).slice(0, 2000),
+                timestamp: Date.now(),
+              });
+              emitStreamOnly(`\n> Tool: ${item.server}.${item.tool}\n`);
+            }
+
+            if (event.type === 'item.completed') {
+              if (item.status === 'failed') {
+                const msg = item.error?.message ?? 'MCP tool call failed';
+                isError = true;
+                errorMessage = errorMessage ?? msg;
+                onMessage?.({ type: 'tool_result', toolId: item.id, result: msg.slice(0, 2000), timestamp: Date.now() });
+              } else {
+                const resultTextValue = textFromMcpResult(item.result?.content)
+                  || (item.result?.structured_content != null ? JSON.stringify(item.result.structured_content) : '');
+                onMessage?.({
+                  type: 'tool_result',
+                  toolId: item.id,
+                  result: resultTextValue.slice(0, 2000),
+                  timestamp: Date.now(),
+                });
+              }
+            }
+            break;
+          }
+          case 'web_search': {
+            if (!emittedToolUse.has(item.id)) {
+              emittedToolUse.add(item.id);
+              onMessage?.({
+                type: 'tool_use',
+                toolName: 'web_search',
+                toolId: item.id,
+                input: item.query.slice(0, 2000),
+                timestamp: Date.now(),
+              });
+            }
+            break;
+          }
+          case 'todo_list': {
+            if (event.type === 'item.completed') {
+              const total = item.items.length;
+              const done = item.items.filter((entry) => entry.completed).length;
+              emitStreamOnly(`\n> Todo: ${done}/${total} completed\n`);
+            }
+            break;
+          }
+          case 'file_change': {
+            if (event.type === 'item.completed') {
+              const summary = item.changes.map((change) => `${change.kind}:${change.path}`).join(', ');
+              emitStreamOnly(`\n> File changes: ${summary}\n`);
+            }
+            break;
+          }
+          case 'error': {
+            isError = true;
+            errorMessage = item.message;
+            appendPersistentOutput(`[error] ${item.message}\n`);
+            break;
+          }
+          default: {
+            break;
+          }
+        }
+      }
+
+      if (options.outputFormat) {
+        structuredOutput = parseStructuredOutput(finalAssistantText);
+      }
+    } catch (err) {
+      isError = true;
+      const baseMessage = err instanceof Error ? err.message : String(err);
+      if (timedOut) {
+        killReason = 'timeout';
+        errorMessage = `codex-sdk timed out after ${Math.round(options.timeoutMs / 1000)}s`;
+      } else if (abortController.signal.aborted) {
+        killReason = this.stoppedReasons.get(runId) ?? state.stoppedReason ?? 'stopped';
+        errorMessage = `codex-sdk run aborted [kill_reason=${killReason}]`;
+      } else {
+        errorMessage = baseMessage;
+      }
+      log(`Codex SDK run failed: ${errorMessage}`, { sdkError: baseMessage });
+    } finally {
+      clearTimeout(timer);
+      this.runningStates.delete(runId);
+      this.stoppedReasons.delete(runId);
+      if (imageTempDir) {
+        try {
+          await fs.rm(imageTempDir, { recursive: true, force: true });
+        } catch {
+          // Best-effort cleanup only.
+        }
+      }
+    }
+
+    const output = resultText || finalAssistantText || errorMessage || '';
+    const exitCode = isError ? 1 : 0;
+    return {
+      exitCode,
+      output,
+      error: isError ? errorMessage : undefined,
+      costInputTokens: state.accumulatedInputTokens || undefined,
+      costOutputTokens: state.accumulatedOutputTokens || undefined,
+      model: options.model ?? this.getDefaultModel(),
+      structuredOutput,
+      killReason,
+      rawExitCode: exitCode,
+    };
+  }
+
+  private async tryLoadCodexConstructor(): Promise<CodexConstructor | null> {
+    // Try native dynamic import first. In vitest/Vite this is usually supported,
+    // while production CommonJS builds may rewrite it to require().
+    try {
+      const mod = await import('@openai/codex-sdk');
+      if (typeof mod.Codex === 'function') {
+        return mod.Codex as CodexConstructor;
+      }
+    } catch {
+      // Fall through to importESM below.
+    }
+
+    // Fallback for CommonJS builds: preserve true dynamic import at runtime.
+    try {
+      const mod = await importESM('@openai/codex-sdk');
+      if (typeof mod.Codex !== 'function') return null;
+      return mod.Codex as CodexConstructor;
+    } catch {
+      return null;
+    }
+  }
+
+  private mediaTypeToExtension(mediaType: string): string {
+    switch (mediaType) {
+      case 'image/png':
+        return 'png';
+      case 'image/jpeg':
+        return 'jpg';
+      case 'image/gif':
+        return 'gif';
+      case 'image/webp':
+        return 'webp';
+      default:
+        return 'img';
+    }
+  }
+
+  private normalizeBase64(base64: string): string {
+    const marker = 'base64,';
+    const idx = base64.indexOf(marker);
+    return idx >= 0 ? base64.slice(idx + marker.length) : base64;
+  }
+
+  private async buildSdkInput(
+    runId: string,
+    prompt: string,
+    images?: Array<{ base64: string; mediaType: string }>,
+  ): Promise<{ input: CodexInput; imageTempDir?: string }> {
+    if (!images || images.length === 0) {
+      return { input: prompt };
+    }
+
+    const imageTempDir = await fs.mkdtemp(path.join(os.tmpdir(), `agents-manager-codex-${runId}-`));
+    const input: CodexUserInput[] = [{ type: 'text', text: prompt }];
+
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      const ext = this.mediaTypeToExtension(img.mediaType);
+      const filePath = path.join(imageTempDir, `image-${i + 1}.${ext}`);
+      const normalized = this.normalizeBase64(img.base64);
+      const bytes = Buffer.from(normalized, 'base64');
+      await fs.writeFile(filePath, bytes);
+      input.push({ type: 'local_image', path: filePath });
+    }
+
+    return { input, imageTempDir };
   }
 }

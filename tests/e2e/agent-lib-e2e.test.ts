@@ -67,6 +67,15 @@ async function isClaudeSdkAvailable(): Promise<boolean> {
   }
 }
 
+async function isCodexSdkAvailable(): Promise<boolean> {
+  try {
+    const mod = await import('@openai/codex-sdk');
+    return typeof mod.Codex === 'function';
+  } catch {
+    return false;
+  }
+}
+
 type AvailabilityCheck = (() => boolean) | (() => Promise<boolean>);
 
 interface LibEntry {
@@ -82,7 +91,7 @@ interface LibEntry {
 const LIBS: LibEntry[] = [
   { name: 'ClaudeCodeLib', lib: new ClaudeCodeLib(), model: 'claude-haiku-4-5-20251001', supportsStructuredOutput: true, checkAvailable: isClaudeSdkAvailable },
   { name: 'CursorAgentLib', lib: new CursorAgentLib(), supportsStructuredOutput: false, checkAvailable: () => isBinaryAvailable('cursor-agent') },
-  { name: 'CodexCliLib', lib: new CodexCliLib(), supportsStructuredOutput: false, checkAvailable: () => isBinaryAvailable('codex') },
+  { name: 'CodexCliLib', lib: new CodexCliLib(), supportsStructuredOutput: false, checkAvailable: isCodexSdkAvailable },
 ];
 
 describe.each(LIBS)('$name e2e', ({ name, lib, model, supportsStructuredOutput, checkAvailable }) => {
