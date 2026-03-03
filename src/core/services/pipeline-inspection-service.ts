@@ -145,8 +145,12 @@ export class PipelineInspectionService implements IPipelineInspectionService {
       );
     }
     if (!transition) {
-      // Fallback: search all transitions for this hook
+      // Fallback: prefer a transition whose `from` matches the task's current status,
+      // so stall-recovery retries spawn the correct agent type (e.g. implementor for
+      // 'implementing', not the first investigator transition in the list).
       transition = pipeline.transitions.find(
+        (t) => t.from === task.status && t.hooks?.some((h) => h.name === hookName),
+      ) ?? pipeline.transitions.find(
         (t) => t.hooks?.some((h) => h.name === hookName),
       );
     }
