@@ -39,9 +39,9 @@ let _instance: AppLogger | null = null;
 // debug is intentionally silent — debug-level noise before logger init is dropped.
 const _fallback = {
   debug: (_s: string, _m: string, _d?: Record<string, unknown>) => {},
-  info: (s: string, m: string, d?: Record<string, unknown>) => console.log(`[${s}] ${m}`, d ?? ''),
-  warn: (s: string, m: string, d?: Record<string, unknown>) => console.warn(`[${s}] ${m}`, d ?? ''),
-  error: (s: string, m: string, d?: Record<string, unknown>) => console.error(`[${s}] ${m}`, d ?? ''),
+  info: (s: string, m: string, d?: Record<string, unknown>) => d ? console.log(`[${s}] ${m}`, d) : console.log(`[${s}] ${m}`),
+  warn: (s: string, m: string, d?: Record<string, unknown>) => d ? console.warn(`[${s}] ${m}`, d) : console.warn(`[${s}] ${m}`),
+  error: (s: string, m: string, d?: Record<string, unknown>) => d ? console.error(`[${s}] ${m}`, d) : console.error(`[${s}] ${m}`),
   logError: (s: string, m: string, err: unknown) => console.error(`[${s}] ${m}`, err),
 } as AppLogger;
 
