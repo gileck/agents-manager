@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, MoreVertical } from 'lucide-react';
+import { Plus, MoreVertical, CheckSquare } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import { Input } from '../ui/input';
 import { SidebarSection } from './SidebarSection';
+import { reportError } from '../../lib/error-handler';
+import type { TaskChatSessionWithTitle } from '../../../shared/types';
 
 export function SidebarSessions() {
   const { currentProjectId } = useCurrentProject();
@@ -23,11 +25,19 @@ export function SidebarSessions() {
   const location = useLocation();
   const onChatPage = location.pathname === '/chat';
 
+  const [taskSessions, setTaskSessions] = useState<TaskChatSessionWithTitle[]>([]);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
   const [menuSessionId, setMenuSessionId] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!currentProjectId) return;
+    window.api.chatSession.listTaskSessions(currentProjectId)
+      .then(setTaskSessions)
+      .catch((err) => reportError(err, 'Load task sessions'));
+  }, [currentProjectId, sessions]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -72,6 +82,15 @@ export function SidebarSessions() {
   const handleDelete = (sessionId: string) => {
     deleteSession(sessionId);
     setMenuSessionId(null);
+  };
+
+  const handleTaskSessionClick = (taskSession: TaskChatSessionWithTitle) => {
+    try {
+      localStorage.setItem(`taskDetail.tab.${taskSession.scopeId}`, 'chat');
+    } catch {
+      // Non-critical: tab preference won't be pre-set
+    }
+    navigate(`/tasks/${taskSession.scopeId}`);
   };
 
   const createButton = (
@@ -168,6 +187,46 @@ export function SidebarSessions() {
             );
           })}
         </div>
+      )}
+
+      {taskSessions.length > 0 && (
+        <>
+          <div className="px-3 pt-3 pb-1">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Task Sessions
+            </span>
+          </div>
+          <div className="px-2">
+            {taskSessions.map((ts) => {
+              const isActive = location.pathname === `/tasks/${ts.scopeId}`;
+              return (
+                <div
+                  key={ts.id}
+                  onClick={() => handleTaskSessionClick(ts)}
+                  className={cn(
+                    'group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors mb-0.5',
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}
+                >
+                  <CheckSquare className="h-3.5 w-3.5 shrink-0" />
+                  <span className="flex-1 min-w-0 truncate text-xs">
+                    {ts.taskTitle}
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[10px] shrink-0',
+                      isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                    )}
+                  >
+                    {formatRelativeTimestamp(ts.updatedAt)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {menuSessionId &&

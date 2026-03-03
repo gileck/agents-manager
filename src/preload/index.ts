@@ -22,6 +22,7 @@ import type {
   ChatImage,
   AgentChatMessage,
   ChatSession,
+  TaskChatSessionWithTitle,
   RunningAgent,
   TelegramBotLogEntry,
   AllTransitionsResult,
@@ -144,6 +145,7 @@ const IPC_CHANNELS = {
   CHAT_COSTS: 'chat:costs',
   CHAT_SESSION_CREATE: 'chat:session:create',
   CHAT_SESSION_LIST: 'chat:session:list',
+  CHAT_SESSION_LIST_TASK_SESSIONS: 'chat:session:list-task-sessions',
   CHAT_SESSION_UPDATE: 'chat:session:update',
   CHAT_SESSION_DELETE: 'chat:session:delete',
   CHAT_AGENTS_LIST: 'chat:agents:list',
@@ -453,6 +455,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_CREATE, { scopeType, scopeId, name, agentLib }),
     list: (scopeType: 'project' | 'task', scopeId: string): Promise<ChatSession[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST, scopeType, scopeId),
+    listTaskSessions: (projectId: string): Promise<TaskChatSessionWithTitle[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_TASK_SESSIONS, projectId),
     update: (sessionId: string, input: { name?: string; agentLib?: string | null }): Promise<ChatSession | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>

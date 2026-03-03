@@ -20,6 +20,7 @@ import type {
   PRChecksResult,
   AutomatedAgent, AutomatedAgentCreateInput, AutomatedAgentUpdateInput, AutomatedAgentTemplate,
   AgentRun,
+  TaskChatSessionWithTitle,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -188,6 +189,7 @@ export interface ApiClient {
   chat: {
     createSession(input: { scopeType: string; scopeId: string; name: string; agentLib?: string }): Promise<unknown>;
     listSessions(scopeType: string, scopeId: string): Promise<unknown[]>;
+    listTaskSessionsForProject(projectId: string): Promise<TaskChatSessionWithTitle[]>;
     getSession(id: string): Promise<unknown>;
     deleteSession(id: string): Promise<unknown>;
     updateSession(id: string, input: { name?: string; agentLib?: string | null }): Promise<unknown>;
@@ -458,6 +460,8 @@ export function createApiClient(baseUrl: string): ApiClient {
       createSession: (input) => req('POST', '/api/chat/sessions', input),
       listSessions: (scopeType, scopeId) =>
         req('GET', `/api/chat/sessions${qs({ scopeType, scopeId })}`),
+      listTaskSessionsForProject: (projectId) =>
+        req('GET', `/api/chat/sessions${qs({ scopeType: 'task', projectId })}`),
       getSession: (id) => req('GET', `/api/chat/sessions/${id}`),
       deleteSession: (id) => req('DELETE', `/api/chat/sessions/${id}`),
       updateSession: (id, input) => req('PATCH', `/api/chat/sessions/${id}`, input),

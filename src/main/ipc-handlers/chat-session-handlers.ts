@@ -45,6 +45,10 @@ export function registerChatSessionHandlers(api: ApiClient): void {
     return api.chat.listSessions(scopeType, scopeId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_LIST_TASK_SESSIONS, async (_, projectId: string) => {
+    return api.chat.listTaskSessionsForProject(projectId);
+  });
+
   registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name?: string; agentLib?: string | null }) => {
     return api.chat.updateSession(sessionId, input);
   });

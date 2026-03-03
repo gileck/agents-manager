@@ -1001,6 +1001,12 @@ export interface ChatSessionUpdateInput {
   agentLib?: string | null;
 }
 
+export interface TaskChatSessionWithTitle extends ChatSession {
+  scopeType: 'task';
+  taskTitle: string;
+  taskStatus: string;
+}
+
 export interface RunningAgent {
   sessionId: string;
   sessionName: string;

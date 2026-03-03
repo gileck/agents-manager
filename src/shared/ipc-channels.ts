@@ -158,6 +158,7 @@ export const IPC_CHANNELS = {
   // Chat sessions
   CHAT_SESSION_CREATE: 'chat:session:create',
   CHAT_SESSION_LIST: 'chat:session:list',
+  CHAT_SESSION_LIST_TASK_SESSIONS: 'chat:session:list-task-sessions',
   CHAT_SESSION_UPDATE: 'chat:session:update',
   CHAT_SESSION_DELETE: 'chat:session:delete',
   CHAT_AGENTS_LIST: 'chat:agents:list',

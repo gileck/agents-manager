@@ -36,9 +36,18 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   // GET /api/chat/sessions — list sessions for scope
   router.get('/api/chat/sessions', async (req, res, next) => {
     try {
-      const { scopeType, scopeId } = req.query as { scopeType?: string; scopeId?: string };
+      const { scopeType, scopeId, projectId } = req.query as { scopeType?: string; scopeId?: string; projectId?: string };
       if (!scopeType || (scopeType !== 'project' && scopeType !== 'task')) {
         res.status(400).json({ error: 'scopeType query param must be "project" or "task"' });
+        return;
+      }
+      // Task sessions for a project (no scopeId): return all task-scoped sessions with task metadata
+      if (scopeType === 'task' && !scopeId && projectId) {
+        const sessions = await services.chatSessionStore.listTaskSessionsForProject(
+          projectId,
+          { excludeSources: ['telegram'] },
+        );
+        res.json(sessions);
         return;
       }
       if (!scopeId) {
