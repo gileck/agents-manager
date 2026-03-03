@@ -191,11 +191,11 @@ The agents-manager command-line tool, commands, and project context
 
 SQLite schema, stores, and migrations
 
-**Summary:** better-sqlite3 with WAL mode. Daemon is the sole DB owner via src/core/db.ts. DB path resolves from AM_DB_PATH env or ~/Library/Application Support/agents-manager/agents-manager.db. Migrations run at daemon startup via src/core/migrations.ts.
+**Summary:** better-sqlite3 with WAL mode. Daemon is the sole DB owner via src/core/db.ts. DB path resolves from AM_DB_PATH env or ~/Library/Application Support/agents-manager/agents-manager.db. Fresh databases apply baseline schema from src/core/schema.ts; existing databases run incremental migrations from src/core/migrations.ts.
 
 **Key Points:**
 - All stores are in src/core/stores/ — task-store, project-store, pipeline-store, etc.
-- Migrations: src/core/migrations.ts — additive only, never destructive
+- Baseline schema: src/core/schema.ts — applied to fresh databases. Incremental migrations: src/core/migrations.ts
 - Cast db.prepare().all() results: as { field: type }[]
 - PRAGMA foreign_keys = ON — all FK constraints are enforced. Synthetic/virtual IDs will fail on FK-constrained columns. Check the FK table in data-layer.md before inserting into any table with foreign keys.
 

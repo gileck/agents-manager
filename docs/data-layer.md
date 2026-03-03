@@ -1,11 +1,11 @@
 ---
 title: Data Layer
 description: SQLite schema, stores, and migrations
-summary: "better-sqlite3 with WAL mode. Daemon is the sole DB owner via src/core/db.ts. DB path resolves from AM_DB_PATH env or ~/Library/Application Support/agents-manager/agents-manager.db. Migrations run at daemon startup via src/core/migrations.ts."
+summary: "better-sqlite3 with WAL mode. Daemon is the sole DB owner via src/core/db.ts. DB path resolves from AM_DB_PATH env or ~/Library/Application Support/agents-manager/agents-manager.db. Fresh databases apply baseline schema from src/core/schema.ts; existing databases run incremental migrations from src/core/migrations.ts."
 priority: 3
 key_points:
   - "All stores are in src/core/stores/ — task-store, project-store, pipeline-store, etc."
-  - "Migrations: src/core/migrations.ts — additive only, never destructive"
+  - "Baseline schema: src/core/schema.ts — applied to fresh databases. Incremental migrations: src/core/migrations.ts"
   - "Cast db.prepare().all() results: as { field: type }[]"
   - "PRAGMA foreign_keys = ON — all FK constraints are enforced. Synthetic/virtual IDs will fail on FK-constrained columns. Check the FK table in data-layer.md before inserting into any table with foreign keys."
 ---
@@ -31,7 +31,7 @@ The daemon is the sole database owner. WAL mode is still enabled for safe concur
 
 ## Table Inventory
 
-**File:** `src/core/migrations.ts` — 73 sequential migrations
+**File:** `src/core/schema.ts` — baseline schema for all tables
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
@@ -46,16 +46,16 @@ The daemon is the sole database owner. WAL mode is still enabled for safe concur
 | `task_artifacts` | Artifact storage | id, taskId, type (CHECK), data (JSON) |
 | `task_phases` | Phase tracking | id, taskId, phase, status, agentRunId (FK) |
 | `pending_prompts` | Human interaction queue | id, taskId, agentRunId (FK), promptType, payload (JSON), response (JSON), resumeOutcome, status |
-| `task_context_entries` | Accumulated agent knowledge | id, taskId, agentRunId, source, entryType, summary, data (JSON) |
+| `task_context_entries` | Accumulated agent knowledge | id, taskId, agentRunId, source, entryType, summary, data (JSON), addressed |
 | `features` | Feature/epic grouping | id, projectId (FK), title, description |
-| `agent_definitions` | Agent configurations | id, name, engine, model, modes (JSON), systemPrompt, timeout, isBuiltIn |
+| `agent_definitions` | Agent configurations | id, name, engine, model, modes (JSON), systemPrompt, timeout, isBuiltIn, skills (JSON) |
 | `settings` | Key-value settings | key (PK), value |
-| `users` | User profiles | id, name, email, role |
+| `users` | User profiles | id, username, role |
 | `kanban_boards` | Kanban board configurations | id, projectId (FK), name, columns (JSON) |
-| `project_chat_sessions` | Chat sessions (project or task scoped) | id, projectId, scopeType, scopeId, name, agentLib |
-| `chat_messages` | Chat messages per session | id, sessionId (FK), role, content, tokens, cost |
-| `items` | Legacy template items (unused) | id, name, description |
-| `logs` | Legacy log records (unused) | id, runId, timestamp, level, message |
+| `chat_sessions` | Chat sessions (project or task scoped) | id, projectId, scopeType, scopeId, name, agentLib, source |
+| `chat_messages` | Chat messages per session | id, sessionId, role, content, costInputTokens, costOutputTokens |
+| `app_debug_log` | Application debug log | id, level, source, message, data (JSON) |
+| `automated_agents` | Automated agent configurations | id, projectId (FK), name, promptInstructions, capabilities (JSON), schedule (JSON), enabled |
 
 ## Store Pattern
 
@@ -89,7 +89,7 @@ Each table has a corresponding store class following a consistent pattern:
 | `sqlite-agent-definition-store.ts` | `IAgentDefinitionStore` | agent_definitions |
 | `sqlite-kanban-board-store.ts` | `IKanbanBoardStore` | kanban_boards |
 | `sqlite-user-store.ts` | `IUserStore` | users |
-| `sqlite-chat-session-store.ts` | `IChatSessionStore` | project_chat_sessions |
+| `sqlite-chat-session-store.ts` | `IChatSessionStore` | chat_sessions |
 | `sqlite-chat-message-store.ts` | `IChatMessageStore` | chat_messages |
 
 ### Selective Updates
@@ -98,12 +98,23 @@ Stores like `sqlite-task-store.ts` and `sqlite-project-store.ts` use selective U
 
 ## Migration System
 
-Migrations are defined as an array of `{ name, sql }` objects in `src/core/migrations.ts`. They run sequentially on startup.
+The schema uses a **baseline + incremental** approach:
 
-**Execution:**
-1. Create `migrations` table if not exists (name TEXT UNIQUE)
-2. Query already-applied migrations
-3. For each unapplied migration: execute SQL in a transaction, record the migration name
+- **Fresh database** (no `migrations` table): applies the baseline schema from `src/core/schema.ts`, then records all baseline migration names as applied, then runs any post-baseline incremental migrations from `src/core/migrations.ts`.
+- **Existing database** (has `migrations` table): runs only pending incremental migrations from `src/core/migrations.ts`.
+
+Detection logic lives in `src/core/db.ts` → `runMigrations()`.
+
+### Adding New Migrations
+
+Append new migration entries to the `getMigrations()` array in `src/core/migrations.ts`. Number them starting from 088. Each migration is a `{ name, sql }` object that runs sequentially on startup.
+
+### Folding Migrations into the Baseline
+
+Periodically, incremental migrations can be folded into the baseline:
+1. Update `src/core/schema.ts` — modify `getBaselineSchema()` to reflect the new final state
+2. Add the migration names to `BASELINE_MIGRATION_NAMES`
+3. Remove the folded entries from `getMigrations()` in `src/core/migrations.ts`
 
 ### Schema Evolution Patterns
 
@@ -124,21 +135,6 @@ ALTER TABLE activity_log ADD COLUMN project_id TEXT;
 7. Recreate indexes
 
 This pattern is used when adding new enum values (e.g., widening the agent_runs.mode CHECK constraint to accept `'new'` and `'revision'`).
-
-### Key Indexes
-
-**Phase 1 (migration 012) — 13 indexes:**
-- `tasks`: projectId, pipelineId, status, parentTaskId
-- `task_events`: taskId + createdAt, category
-- `transition_history`: taskId + createdAt
-- `activity_log`: entityType + entityId, action + createdAt
-- `tasks.featureId` added later in migration 027
-
-**Phase 2 (migration 017) — 6 indexes:**
-- `agent_runs`: taskId, status (separate single-column indexes)
-- `task_artifacts`: taskId
-- `task_phases`: taskId
-- `pending_prompts`: taskId, status (separate single-column indexes)
 
 ## JSON Storage Convention
 
@@ -178,37 +174,41 @@ All JSON fields are serialized with `JSON.stringify()` on write and parsed with 
 
 ## Seeded Data
 
-### Pipelines (migration 011)
+### Pipeline
 
-Source: `src/core/data/seeded-pipelines.ts` — `SEEDED_PIPELINES` array
+Source: `src/core/data/seeded-pipelines.ts` — `SEEDED_PIPELINES` array. Seeded via `src/core/schema.ts`.
 
-Uses `INSERT OR IGNORE` to seed 5 pipelines:
-- `pipeline-simple` (task type: `simple`)
-- `pipeline-feature` (task type: `feature`)
-- `pipeline-bug` (task type: `bug`)
-- `pipeline-agent` (task type: `agent`)
-- `pipeline-bug-agent` (task type: `bug-agent`)
+One pipeline:
+- `pipeline-agent` (task type: `agent`) — Agent-driven workflow with investigation, design, plan, implement, and review phases
 
-See [pipeline-engine.md](./pipeline-engine.md) for full pipeline definitions.
+See [pipeline-engine.md](./pipeline-engine.md) for full pipeline definition.
 
-### Agent Definitions (migration 028+077+078)
+### Agent Definitions
 
-Seeds built-in agent definitions:
-- `agent-def-planner` — Planner agent configuration
-- `agent-def-designer` — Designer agent configuration
-- `agent-def-implementor` — Implementor agent configuration
-- `agent-def-investigator` — Investigator agent configuration
-- `agent-def-reviewer` — PR reviewer agent configuration
-- `agent-def-task-workflow-reviewer` — Task workflow reviewer configuration
+Seeded via `src/core/schema.ts`. Built-in agent definitions (`is_built_in = 1`, prevents deletion):
+- `agent-def-planner` — Planner agent
+- `agent-def-designer` — Designer agent
+- `agent-def-implementor` — Implementor agent
+- `agent-def-investigator` — Investigator agent
+- `agent-def-reviewer` — PR reviewer agent
+- `agent-def-task-workflow-reviewer` — Task workflow reviewer
 
-Each has `is_built_in = 1` (prevents deletion).
+External agent definitions (`is_built_in = 0`):
+- `agent-def-cursor-agent` — Cursor CLI agent
+- `agent-def-codex-cli` — OpenAI Codex CLI agent
 
-### Settings (migration 035)
+### Settings
 
-Seeds default settings:
+Seeded via `src/core/schema.ts`:
 - `theme: 'system'`
 - `notifications_enabled: 'true'`
-- `bug_pipeline_id: 'pipeline-bug-agent'`
+- `default_pipeline_id: 'pipeline-agent'`
+- `chat_default_agent_lib: 'claude-code'`
+
+### Users
+
+Seeded via `src/core/schema.ts`:
+- `user-admin` — default admin user (role: `admin`)
 
 ## Foreign Key Constraints
 
@@ -218,25 +218,32 @@ Seeds default settings:
 
 | Child Table | Column | References | ON DELETE |
 |---|---|---|---|
+| `tasks` | `project_id` | `projects(id)` | — |
+| `tasks` | `pipeline_id` | `pipelines(id)` | — |
+| `tasks` | `parent_task_id` | `tasks(id)` | — |
+| `tasks` | `feature_id` | `features(id)` | — |
 | `task_dependencies` | `task_id` | `tasks(id)` | — |
 | `task_dependencies` | `depends_on_task_id` | `tasks(id)` | — |
+| `task_events` | `task_id` | `tasks(id)` | — |
+| `transition_history` | `task_id` | `tasks(id)` | — |
+| `task_artifacts` | `task_id` | `tasks(id)` | — |
 | `task_phases` | `task_id` | `tasks(id)` | — |
 | `task_phases` | `agent_run_id` | `agent_runs(id)` | — |
 | `pending_prompts` | `task_id` | `tasks(id)` | — |
 | `pending_prompts` | `agent_run_id` | `agent_runs(id)` | — |
+| `task_context_entries` | `task_id` | `tasks(id)` | — |
 | `features` | `project_id` | `projects(id)` | — |
-| `kanban_boards` | `project_id` | `projects(id)` | — |
+| `kanban_boards` | `project_id` | `projects(id)` | CASCADE |
 | `automated_agents` | `project_id` | `projects(id)` | CASCADE |
-| `chat_messages` | `session_id` | `project_chat_sessions(id)` | CASCADE |
 
-**Notable:** `agent_runs.task_id` does **not** have a FK constraint (dropped in migration 087) to allow automated agent runs with synthetic task IDs.
+**Notable:** `agent_runs.task_id` does **not** have a FK constraint — intentionally dropped to allow automated agent runs with synthetic task IDs. `chat_messages.session_id` also has no FK constraint.
 
 ## Edge Cases
 
 - **Sync transactions** protect against TOCTOU: the pipeline engine re-fetches the task inside a `db.transaction()` callback before checking guards and updating status.
-- **CHECK constraint widening** requires full table rebuilds because SQLite doesn't support modifying CHECK constraints in place. Three migrations (023, 030, 037) use this pattern.
+- **CHECK constraint widening** requires full table rebuilds because SQLite doesn't support modifying CHECK constraints in place.
 - **The daemon is the sole DB owner** — Electron and CLI connect via HTTP, not direct DB access.
-- **DB is opened via `src/core/db.ts`** which handles path resolution, pragma setup, and migration execution.
+- **DB is opened via `src/core/db.ts`** which handles path resolution, pragma setup, and baseline/migration execution.
 - **`parseJson()` never throws** — it catches parse errors and returns the fallback value. This makes JSON column reads safe even with corrupted data.
-- **Migration idempotency** — the `migrations` table with UNIQUE name constraint prevents re-running applied migrations.
+- **Migration idempotency** — the `migrations` table with UNIQUE name constraint prevents re-running applied migrations. Fresh databases record all baseline migration names to prevent incremental migrations from re-applying.
 - **Foreign keys** are enabled via pragma. Cascade behavior varies: some tables use ON DELETE CASCADE, others handle cascades in application code (e.g., `resetTask` manually deletes related rows).

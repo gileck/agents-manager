@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { getMigrations } from './migrations';
+import { getBaselineSchema, BASELINE_MIGRATION_NAMES } from './schema';
 
 const DEFAULT_DB_PATH = path.join(
   os.homedir(),
@@ -57,24 +58,55 @@ function resolveNativeBinding(): string | undefined {
 }
 
 /**
- * Runs all pending migrations on the database.
+ * Detects whether the migrations table exists (i.e. this is an existing DB).
+ */
+function hasMigrationsTable(db: Database.Database): boolean {
+  const row = db.prepare(
+    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='migrations'",
+  ).get() as { cnt: number };
+  return row.cnt > 0;
+}
+
+/**
+ * Runs schema setup on the database.
+ * - Fresh DB (no migrations table): applies baseline schema, marks all baseline
+ *   migration names as applied, then runs any post-baseline incremental migrations.
+ * - Existing DB (has migrations table): runs only pending incremental migrations.
  */
 function runMigrations(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS migrations (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
+  const isExisting = hasMigrationsTable(db);
 
-  const applied = (db
-    .prepare('SELECT name FROM migrations')
-    .all() as { name: string }[])
-    .map((row) => row.name);
+  if (!isExisting) {
+    // Fresh database — apply baseline schema atomically so a partial failure
+    // doesn't leave the DB in an unrecoverable half-created state.
+    const applyBaseline = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS migrations (
+          id INTEGER PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+
+      db.exec(getBaselineSchema());
+
+      // Record all baseline migration names as applied
+      const insertMigration = db.prepare('INSERT INTO migrations (name) VALUES (?)');
+      for (const name of BASELINE_MIGRATION_NAMES) {
+        insertMigration.run(name);
+      }
+    });
+    applyBaseline();
+  }
+
+  // Run any pending incremental migrations (post-baseline)
+  const applied = new Set(
+    (db.prepare('SELECT name FROM migrations').all() as { name: string }[])
+      .map((row) => row.name),
+  );
 
   for (const migration of getMigrations()) {
-    if (!applied.includes(migration.name)) {
+    if (!applied.has(migration.name)) {
       const transaction = db.transaction(() => {
         db.exec(migration.sql);
         db.prepare('INSERT INTO migrations (name) VALUES (?)').run(migration.name);

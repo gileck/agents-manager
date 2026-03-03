@@ -43,6 +43,7 @@ import { registerPromptHandler } from '../../src/core/handlers/prompt-handler';
 import { registerNotificationHandler } from '../../src/core/handlers/notification-handler';
 import { registerPhaseHandler } from '../../src/core/handlers/phase-handler';
 import { ScriptedAgent, happyPlan } from '../../src/core/agents/scripted-agent';
+import { getBaselineSchema, BASELINE_MIGRATION_NAMES } from '../../src/core/schema';
 import { getMigrations } from '../../src/core/migrations';
 import { resetCounters, createTaskInput } from './factories';
 import type { Task, TaskCreateInput, Transition } from '../../src/shared/types';
@@ -101,10 +102,15 @@ function applyMigrations(db: Database.Database): void {
     )
   `);
 
-  // Run all production migrations in order
-  const migrations = getMigrations();
-  for (const m of migrations) {
+  // Apply baseline schema and record migration names (mirrors production db.ts)
+  db.exec(getBaselineSchema());
+  const insertMigration = db.prepare('INSERT INTO migrations (name) VALUES (?)');
+  for (const name of BASELINE_MIGRATION_NAMES) {
+    insertMigration.run(name);
+  }
+  for (const m of getMigrations()) {
     db.exec(m.sql);
+    insertMigration.run(m.name);
   }
 }
 
