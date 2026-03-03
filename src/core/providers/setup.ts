@@ -254,12 +254,11 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskEventLog, activityLog, agentRunStore,
   );
 
-  // Supervisor for detecting ghost/timed-out agent runs + stall recovery
+  // Supervisor for detecting timed-out agent runs + stall recovery
   const agentSupervisor = new AgentSupervisor(
     agentRunStore, agentService, taskEventLog,
     undefined, undefined, // use default pollIntervalMs and defaultTimeoutMs
     taskStore, pipelineStore, pipelineInspectionService,
-    scheduledAgentService,
   );
 
   // Supervisor for automatic workflow reviews of completed tasks

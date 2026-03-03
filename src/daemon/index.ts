@@ -38,22 +38,24 @@ async function main() {
   const wsServer = new DaemonWsServer(httpServer);
   wsHolder.server = wsServer;
 
+  // Recover orphaned agent runs from previous daemon session (before starting supervisors
+  // to eliminate the race where the supervisor's first poll sees orphaned runs from a prior crash)
+  try {
+    const interrupted = await services.agentService.recoverOrphanedRuns();
+    if (interrupted.length > 0) {
+      services.appLogger.info('daemon', `Recovered ${interrupted.length} orphaned agent run(s)`);
+      wsServer.broadcast(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, undefined, interrupted);
+    }
+  } catch (err) {
+    services.appLogger.logError('daemon', 'Failed to recover orphaned runs', err);
+  }
+
   // Start background supervisors
   startSupervisors(services);
 
   // Auto-start Telegram bots for projects with config
   autoStartTelegramBots(services, wsHolder).catch(err => {
     services.appLogger.logError('daemon', 'Failed to auto-start Telegram bots', err);
-  });
-
-  // Recover orphaned agent runs from previous daemon session
-  services.agentService.recoverOrphanedRuns().then((interrupted) => {
-    if (interrupted.length > 0) {
-      services.appLogger.info('daemon', `Recovered ${interrupted.length} orphaned agent run(s)`);
-      wsServer.broadcast(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, undefined, interrupted);
-    }
-  }).catch((err) => {
-    services.appLogger.logError('daemon', 'Failed to recover orphaned runs', err);
   });
 
   // Start listening — dual-output so operators can see daemon lifecycle on stdout/stderr

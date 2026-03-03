@@ -549,8 +549,10 @@ The `AgentSupervisor` is a background watchdog that periodically polls for agent
 
 On each poll, the supervisor iterates all active runs from the database:
 
-1. **Ghost run detection:** If a run is marked `running` in the DB but is not tracked in `AgentService.getActiveRunIds()` (in-memory map), it is a ghost run. The supervisor marks it `failed` with outcome `interrupted` and logs a warning.
-2. **Timeout detection:** If a run has been active longer than its effective timeout (`run.timeoutMs + 5min grace`, or the default 35 minutes), the supervisor calls `agentService.stop()` to abort the agent, then marks the run `timed_out`.
+1. **Timeout detection:** If a run has been active longer than its effective timeout (`run.timeoutMs + 5min grace`, or the default 35 minutes), the supervisor calls `agentService.stop()` to abort the agent, then marks the run `timed_out`.
+2. **Stall detection:** Scans tasks in `agent_running` statuses with no running agent and no recently completed agent, then retries the `start_agent` hook (capped at 2 attempts per task).
+
+Ghost runs (DB says running but no in-memory tracking) are prevented at the source: `AgentService.execute()` marks the DB run as `failed` if setup throws before the agent starts, and `recoverOrphanedRuns()` cleans up runs orphaned by daemon crashes at startup.
 
 ### Lifecycle
 

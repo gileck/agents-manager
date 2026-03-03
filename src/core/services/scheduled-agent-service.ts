@@ -11,7 +11,6 @@ import { getAppLogger } from './app-logger';
 
 export class ScheduledAgentService {
   private activeRuns = new Map<string, Promise<void>>();
-  private activeRunIds = new Set<string>();
   /** Maps runId → lib name so stop() can target the correct lib. */
   private activeRunLibs = new Map<string, string>();
 
@@ -30,10 +29,6 @@ export class ScheduledAgentService {
     return activeRun !== null;
   }
 
-  getActiveRunIds(): string[] {
-    return Array.from(this.activeRunIds);
-  }
-
   async triggerRun(
     agent: AutomatedAgent,
     triggeredBy: 'scheduler' | 'manual',
@@ -47,12 +42,13 @@ export class ScheduledAgentService {
     // Claim the slot synchronously to prevent TOCTOU race between isRunning and executeInBackground
     this.activeRuns.set(agent.id, Promise.resolve());
 
+    let run: AgentRun | undefined;
     try {
       const project = await this.projectStore.getProject(agent.projectId);
       if (!project) throw new Error(`Project ${agent.projectId} not found`);
       if (!project.path) throw new Error(`Project ${project.name} has no path configured`);
 
-      const run = await this.agentRunStore.createRun({
+      run = await this.agentRunStore.createRun({
         taskId: `__auto__:${agent.id}`,
         agentType: 'automated-agent',
         mode: 'new',
@@ -65,7 +61,6 @@ export class ScheduledAgentService {
       await this.agentRunStore.updateRun(run.id, { prompt });
 
       const lib = this.agentLibRegistry.getLib('claude-code');
-      this.activeRunIds.add(run.id);
       this.activeRunLibs.set(run.id, lib.name);
       const runPromise = this.executeInBackground(run, agent, project, prompt, lib, triggeredBy, onOutput, onMessage);
       runPromise.catch(err => getAppLogger().logError('ScheduledAgentService', `Unhandled error in background execution for "${agent.name}"`, err));
@@ -74,6 +69,14 @@ export class ScheduledAgentService {
       return run;
     } catch (err) {
       this.activeRuns.delete(agent.id);
+      // If run was created, mark it as failed in DB
+      if (run) {
+        await this.agentRunStore.updateRun(run.id, {
+          status: 'failed',
+          error: `Setup failed: ${err instanceof Error ? err.message : String(err)}`,
+          completedAt: Date.now(),
+        }).catch((updateErr) => getAppLogger().logError('ScheduledAgentService', `Failed to mark run ${run!.id} as failed after setup error`, updateErr));
+      }
       throw err;
     }
   }
@@ -208,7 +211,6 @@ export class ScheduledAgentService {
         getAppLogger().logError('ScheduledAgentService', `Failed to record failure for agent "${agent.name}"`, cleanupErr);
       }
     } finally {
-      this.activeRunIds.delete(run.id);
       this.activeRunLibs.delete(run.id);
       this.activeRuns.delete(agent.id);
     }
@@ -225,7 +227,6 @@ export class ScheduledAgentService {
     const lib = this.agentLibRegistry.getLib(libName);
     await lib.stop(runId);
 
-    this.activeRunIds.delete(runId);
     this.activeRunLibs.delete(runId);
 
     await this.agentRunStore.updateRun(runId, {

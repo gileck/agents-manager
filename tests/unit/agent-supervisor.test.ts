@@ -105,76 +105,10 @@ describe('AgentSupervisor', () => {
     vi.useRealTimers();
   });
 
-  describe('ghost run detection', () => {
-    it('marks a run as failed when it is in DB but not in agentService active IDs', async () => {
-      const ghostRun = makeRun({ id: 'ghost-1', taskId: 'task-1' });
-      agentRunStore.getActiveRuns.mockResolvedValue([ghostRun]);
-      agentService.getActiveRunIds.mockReturnValue([]); // not active in memory
-      mockedNow.mockReturnValue(2000);
-
-      supervisor.start();
-      await vi.advanceTimersByTimeAsync(1000);
-
-      expect(agentRunStore.updateRun).toHaveBeenCalledWith('ghost-1', expect.objectContaining({
-        status: 'failed',
-        outcome: 'interrupted',
-        completedAt: 2000,
-      }));
-
-      expect(taskEventLog.log).toHaveBeenCalledWith(expect.objectContaining({
-        taskId: 'task-1',
-        category: 'agent',
-        severity: 'warning',
-        message: expect.stringContaining('Ghost run detected'),
-      }));
-    });
-
-    it('includes elapsed time and memory diagnostics in ghost run log', async () => {
-      const ghostRun = makeRun({ id: 'ghost-diag', taskId: 'task-1', startedAt: 1000, agentType: 'implementor' });
-      agentRunStore.getActiveRuns.mockResolvedValue([ghostRun]);
-      agentService.getActiveRunIds.mockReturnValue(['other-run']); // one other run active in memory
-      mockedNow.mockReturnValue(61000); // 60s elapsed
-
-      supervisor.start();
-      await vi.advanceTimersByTimeAsync(1000);
-
-      expect(taskEventLog.log).toHaveBeenCalledWith(expect.objectContaining({
-        taskId: 'task-1',
-        category: 'agent',
-        severity: 'warning',
-        message: expect.stringContaining('running for 60s'),
-        data: expect.objectContaining({
-          agentRunId: 'ghost-diag',
-          agentType: 'implementor',
-          mode: 'new',
-          elapsedMs: 60000,
-          startedAt: 1000,
-          activeInMemoryCount: 1,
-          activeInMemoryIds: ['other-run'],
-        }),
-      }));
-    });
-
-    it('appends ghost run message to existing output', async () => {
-      const ghostRun = makeRun({ id: 'ghost-2', output: 'partial work' });
-      agentRunStore.getActiveRuns.mockResolvedValue([ghostRun]);
-      agentService.getActiveRunIds.mockReturnValue([]);
-      mockedNow.mockReturnValue(3000);
-
-      supervisor.start();
-      await vi.advanceTimersByTimeAsync(1000);
-
-      expect(agentRunStore.updateRun).toHaveBeenCalledWith('ghost-2', expect.objectContaining({
-        output: 'partial work\n[Detected as ghost run by supervisor]',
-      }));
-    });
-  });
-
   describe('timeout detection', () => {
     it('marks a run as timed_out when elapsed exceeds defaultTimeoutMs + grace period', async () => {
       const longRun = makeRun({ id: 'timeout-1', taskId: 'task-2', startedAt: 1000 });
       agentRunStore.getActiveRuns.mockResolvedValue([longRun]);
-      agentService.getActiveRunIds.mockReturnValue(['timeout-1']); // active in memory
       // defaultTimeoutMs=5000 + 5min grace=300000 → effective=305000; elapsed=306000 > 305000
       mockedNow.mockReturnValue(307000);
 
@@ -197,7 +131,6 @@ describe('AgentSupervisor', () => {
     it('does not mark a run as timed_out if elapsed is within timeout + grace', async () => {
       const recentRun = makeRun({ id: 'ok-1', startedAt: 1000 });
       agentRunStore.getActiveRuns.mockResolvedValue([recentRun]);
-      agentService.getActiveRunIds.mockReturnValue(['ok-1']);
       mockedNow.mockReturnValue(3000); // elapsed = 2000 < 305000 (5000 + 300000)
 
       supervisor.start();
@@ -210,7 +143,6 @@ describe('AgentSupervisor', () => {
     it('handles agentService.stop() throwing when agent already completed', async () => {
       const longRun = makeRun({ id: 'timeout-err', startedAt: 0 });
       agentRunStore.getActiveRuns.mockResolvedValue([longRun]);
-      agentService.getActiveRunIds.mockReturnValue(['timeout-err']);
       agentService.stop.mockRejectedValue(new Error('agent already done'));
       // Must exceed defaultTimeoutMs(5000) + grace(300000) = 305000
       mockedNow.mockReturnValue(310000);
@@ -228,7 +160,6 @@ describe('AgentSupervisor', () => {
       // run.timeoutMs = 2000, grace = 300000. Effective = 302000
       const longRun = makeRun({ id: 'per-run-1', taskId: 'task-3', startedAt: 1000, timeoutMs: 2000 });
       agentRunStore.getActiveRuns.mockResolvedValue([longRun]);
-      agentService.getActiveRunIds.mockReturnValue(['per-run-1']);
       // elapsed = 303001 > 302000
       mockedNow.mockReturnValue(303002);
 
@@ -245,7 +176,6 @@ describe('AgentSupervisor', () => {
       // run.timeoutMs = 2000, grace = 300000. Effective = 302000
       const run = makeRun({ id: 'per-run-ok', startedAt: 1000, timeoutMs: 2000 });
       agentRunStore.getActiveRuns.mockResolvedValue([run]);
-      agentService.getActiveRunIds.mockReturnValue(['per-run-ok']);
       // elapsed = 4000 < 302000
       mockedNow.mockReturnValue(5000);
 
@@ -290,14 +220,14 @@ describe('AgentSupervisor', () => {
   });
 
   describe('no active runs', () => {
-    it('exits early when getActiveRuns returns empty array', async () => {
+    it('does nothing when getActiveRuns returns empty array', async () => {
       agentRunStore.getActiveRuns.mockResolvedValue([]);
 
       supervisor.start();
       await vi.advanceTimersByTimeAsync(1000);
 
-      expect(agentService.getActiveRunIds).not.toHaveBeenCalled();
       expect(agentRunStore.updateRun).not.toHaveBeenCalled();
+      expect(agentService.stop).not.toHaveBeenCalled();
     });
   });
 
