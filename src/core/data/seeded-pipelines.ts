@@ -27,6 +27,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { name: 'ready_to_merge', label: 'Ready to Merge', category: 'human_review', position: 9 },
     { name: 'needs_info', label: 'Needs Info', category: 'waiting_for_input', position: 10 },
     { name: 'done', label: 'Done', isFinal: true, category: 'terminal', position: 11 },
+    { name: 'closed', label: 'Closed', isFinal: true, category: 'terminal', position: 12 },
   ],
   transitions: [
     // === Manual transitions from open ===
@@ -191,6 +192,11 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'design_review', trigger: 'manual', label: 'Back to Design Review' },
     { from: 'implementing', to: 'investigation_review', trigger: 'manual', label: 'Back to Investigation Review' },
     { from: 'design_review', to: 'open', trigger: 'manual', label: 'Cancel Design Review' },
+
+    // === Close / Reopen ===
+    { from: '*', to: 'closed', trigger: 'manual', label: 'Close Task',
+      guards: [{ name: 'no_running_agent' }] },
+    { from: 'closed', to: 'open', trigger: 'manual', label: 'Reopen' },
 
     // === Workflow review acknowledgment (no-op self-transition) ===
     { from: 'done', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },

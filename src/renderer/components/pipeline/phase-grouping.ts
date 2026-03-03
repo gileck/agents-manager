@@ -16,7 +16,7 @@ export const PHASE_PAIRS = [
   { work: 'implementing', review: 'pr_review', label: 'Implementation' },
 ] as const;
 
-export const EXCLUDED_STATUSES = new Set(['needs_info']);
+export const EXCLUDED_STATUSES = new Set(['needs_info', 'closed']);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

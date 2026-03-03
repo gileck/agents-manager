@@ -1,6 +1,12 @@
+import { AGENT_PIPELINE } from './data/seeded-pipelines';
+
 export interface Migration {
   name: string;
   sql: string;
+}
+
+function escSql(s: string): string {
+  return s.replace(/'/g, "''");
 }
 
 /**
@@ -25,6 +31,10 @@ export function getMigrations(): Migration[] {
     {
       name: '091_add_complexity_to_tasks',
       sql: `ALTER TABLE tasks ADD COLUMN complexity TEXT DEFAULT NULL CHECK(complexity IS NULL OR complexity IN ('low','medium','high'))`,
+    },
+    {
+      name: '092_reseed_pipelines_close_reopen',
+      sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}', transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
     },
   ];
 }

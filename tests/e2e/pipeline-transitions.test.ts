@@ -80,20 +80,21 @@ describe('Pipeline Transitions', () => {
     const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     const transitions = await ctx.pipelineEngine.getValidTransitions(task);
-    // open has 4 manual transitions: investigating, designing, planning, implementing
-    expect(transitions.length).toBe(4);
+    // open has 5 manual transitions: investigating, designing, planning, implementing, closed (wildcard)
+    expect(transitions.length).toBe(5);
     const targets = transitions.map((t) => t.to);
     expect(targets).toContain('investigating');
     expect(targets).toContain('designing');
     expect(targets).toContain('planning');
     expect(targets).toContain('implementing');
+    expect(targets).toContain('closed');
   });
 
   it('should return valid transitions filtered by trigger', async () => {
     const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
     const manualTransitions = await ctx.pipelineEngine.getValidTransitions(task, 'manual');
-    expect(manualTransitions.length).toBe(4);
+    expect(manualTransitions.length).toBe(5);
 
     const automaticTransitions = await ctx.pipelineEngine.getValidTransitions(task, 'automatic');
     expect(automaticTransitions).toHaveLength(0);

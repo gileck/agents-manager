@@ -236,8 +236,28 @@ export function StatusActionBar({
     );
   }
 
-  // Terminal (done, resolved, etc.) — enhanced with phase awareness
+  // Terminal (done, closed, etc.) — enhanced with phase awareness
   if (statusMeta.isTerminal) {
+    // Closed — neutral banner with reopen button
+    if (status === 'closed') {
+      return (
+        <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#f3f4f6', border: '1px solid #d1d5db' }}>
+          <span className="text-sm font-medium" style={{ color: '#6b7280' }}>Task closed</span>
+          {primaryTransitions.filter((t) => t.to !== 'closed').map((t) => (
+            <Button
+              key={t.to}
+              variant="outline"
+              size="sm"
+              onClick={() => onTransition(t.to)}
+              disabled={transitioning !== null}
+            >
+              {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+            </Button>
+          ))}
+        </div>
+      );
+    }
+
     // Done with pending phases — phase advance happening or failed
     if (hasPendingPhases && phases) {
       const completedCount = phases.filter((p) => p.status === 'completed').length;
