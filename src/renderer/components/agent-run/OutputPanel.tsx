@@ -135,7 +135,7 @@ export function OutputPanel({ output, messages = [], startedAt, isRunning, timeo
         showTimestamps={showTimestamps}
         onShowTimestampsToggle={() => setShowTimestamps((s) => !s)}
       />
-      {outputMode === 'rendered' && hasOutput ? (
+      {outputMode === 'rendered' && messages.length > 0 ? (
         <RenderedOutputPanel messages={messages} isRunning={isRunning} startedAt={startedAt} showTimestamps={showTimestamps} />
       ) : (
         <pre
