@@ -352,7 +352,7 @@ describe('registerScmHandler', () => {
       expect(mockScmPlatform.mergePR).toHaveBeenCalledWith('https://github.com/owner/repo/pull/42');
     });
 
-    it('fetches main when pullMainAfterMerge is enabled', async () => {
+    it('fetches main when pullMainAfterMerge is enabled and main is not checked out', async () => {
       (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
         makeArtifact(),
       ]);
@@ -365,11 +365,38 @@ describe('registerScmHandler', () => {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       } satisfies Project);
+      (mockGitOps.getCurrentBranch as ReturnType<typeof vi.fn>).mockResolvedValue('some-feature');
 
       const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
 
       expect(result.success).toBe(true);
       expect(mockGitOps.fetch).toHaveBeenCalledWith('origin', 'main:main');
+    });
+
+    it('skips local main update when main is checked out', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockProjectStore.getProject as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'proj-1',
+        name: 'Test Project',
+        description: null,
+        path: '/home/test/project',
+        config: { pullMainAfterMerge: true },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } satisfies Project);
+      (mockGitOps.getCurrentBranch as ReturnType<typeof vi.fn>).mockResolvedValue('main');
+
+      const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(result.success).toBe(true);
+      expect(mockGitOps.fetch).not.toHaveBeenCalledWith('origin', 'main:main');
+      expect(mockTaskEventLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Skipping local main update'),
+        }),
+      );
     });
 
     it('succeeds when PR is already merged (isPRMergeable returns true)', async () => {
