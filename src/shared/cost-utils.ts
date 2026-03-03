@@ -28,6 +28,7 @@ export const MODEL_PRICING_TABLE: Array<{ pattern: string; pricing: ModelPricing
   { pattern: '4.6-opus',          pricing: { inputPerMTok: 5,    outputPerMTok: 25 } },
   { pattern: '4.5-opus',          pricing: { inputPerMTok: 5,    outputPerMTok: 25 } },
   // ── Claude generic family (fallback for current-gen models) ──
+  { pattern: 'opus-4',            pricing: { inputPerMTok: 15,   outputPerMTok: 75 } },
   { pattern: 'opus',              pricing: { inputPerMTok: 5,    outputPerMTok: 25 } },
   { pattern: 'sonnet',            pricing: { inputPerMTok: 3,    outputPerMTok: 15 } },
   { pattern: 'haiku',             pricing: { inputPerMTok: 1,    outputPerMTok: 5 } },
