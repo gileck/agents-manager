@@ -210,11 +210,11 @@ export interface ApiClient {
   // Git
   git: {
     // Task-scoped git operations
-    getDiff(taskId: string): Promise<unknown>;
+    getDiff(taskId: string): Promise<{ diff: string } | null>;
     getLog(taskId: string): Promise<unknown>;
-    getStatus(taskId: string): Promise<unknown>;
+    getStatus(taskId: string): Promise<{ status: string } | null>;
     getStat(taskId: string): Promise<unknown>;
-    getWorkingDiff(taskId: string): Promise<unknown>;
+    getWorkingDiff(taskId: string): Promise<{ diff: string } | null>;
     resetFile(taskId: string, filepath: string): Promise<unknown>;
     clean(taskId: string): Promise<unknown>;
     pull(taskId: string, branch?: string): Promise<unknown>;
