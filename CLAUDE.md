@@ -197,6 +197,7 @@ SQLite schema, stores, and migrations
 - All stores are in src/core/stores/ — task-store, project-store, pipeline-store, etc.
 - Migrations: src/core/migrations.ts — additive only, never destructive
 - Cast db.prepare().all() results: as { field: type }[]
+- PRAGMA foreign_keys = ON — all FK constraints are enforced. Synthetic/virtual IDs will fail on FK-constrained columns. Check the FK table in data-layer.md before inserting into any table with foreign keys.
 
 **Docs:** [data-layer.md](docs/data-layer.md)
 

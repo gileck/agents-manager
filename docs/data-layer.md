@@ -7,6 +7,7 @@ key_points:
   - "All stores are in src/core/stores/ — task-store, project-store, pipeline-store, etc."
   - "Migrations: src/core/migrations.ts — additive only, never destructive"
   - "Cast db.prepare().all() results: as { field: type }[]"
+  - "PRAGMA foreign_keys = ON — all FK constraints are enforced. Synthetic/virtual IDs will fail on FK-constrained columns. Check the FK table in data-layer.md before inserting into any table with foreign keys."
 ---
 # Data Layer
 
@@ -208,6 +209,27 @@ Seeds default settings:
 - `theme: 'system'`
 - `notifications_enabled: 'true'`
 - `bug_pipeline_id: 'pipeline-bug-agent'`
+
+## Foreign Key Constraints
+
+`PRAGMA foreign_keys = ON` is set at connection time — all FK constraints are **enforced at runtime**. Any INSERT or UPDATE that references a non-existent parent row will throw `FOREIGN KEY constraint failed`.
+
+**When adding new features that insert into FK-constrained tables, verify the referenced row exists or the FK has been removed.** Synthetic/virtual IDs (e.g., `__auto__:xyz`) will fail if the column has a FK constraint to another table.
+
+| Child Table | Column | References | ON DELETE |
+|---|---|---|---|
+| `task_dependencies` | `task_id` | `tasks(id)` | — |
+| `task_dependencies` | `depends_on_task_id` | `tasks(id)` | — |
+| `task_phases` | `task_id` | `tasks(id)` | — |
+| `task_phases` | `agent_run_id` | `agent_runs(id)` | — |
+| `pending_prompts` | `task_id` | `tasks(id)` | — |
+| `pending_prompts` | `agent_run_id` | `agent_runs(id)` | — |
+| `features` | `project_id` | `projects(id)` | — |
+| `kanban_boards` | `project_id` | `projects(id)` | — |
+| `automated_agents` | `project_id` | `projects(id)` | CASCADE |
+| `chat_messages` | `session_id` | `project_chat_sessions(id)` | CASCADE |
+
+**Notable:** `agent_runs.task_id` does **not** have a FK constraint (dropped in migration 087) to allow automated agent runs with synthetic task IDs.
 
 ## Edge Cases
 
