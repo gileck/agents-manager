@@ -527,6 +527,7 @@ export class AgentService implements IAgentService {
           agent, context, config, run, taskId,
           validationCommands, maxRetries: maxValidationRetries,
           initialResult: result,
+          projectPath: context.project.path ?? undefined,
           wrappedOnOutput, onLog, onPromptBuilt, wrappedOnMessage,
         });
       }
