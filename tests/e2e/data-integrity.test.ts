@@ -32,14 +32,15 @@ describe('Data Integrity', () => {
     ).rejects.toThrow();
   });
 
-  it('should throw when creating an agent run with non-existent taskId', async () => {
-    await expect(
-      ctx.agentRunStore.createRun({
-        taskId: 'non-existent-task',
-        agentType: 'scripted',
-        mode: 'new',
-      }),
-    ).rejects.toThrow();
+  it('should allow creating an agent run with non-existent taskId (no FK constraint)', async () => {
+    // Migration 087_drop_agent_runs_task_fk intentionally removed the FK constraint
+    // on agent_runs.task_id to allow agent runs for tasks that may be deleted.
+    const run = await ctx.agentRunStore.createRun({
+      taskId: 'non-existent-task',
+      agentType: 'scripted',
+      mode: 'new',
+    });
+    expect(run.taskId).toBe('non-existent-task');
   });
 
   it('should throw when creating an artifact with non-existent taskId', async () => {
