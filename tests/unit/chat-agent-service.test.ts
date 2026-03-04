@@ -42,7 +42,7 @@ vi.mock('../../src/core/services/chat-agent-service', async (importOriginal) => 
 function createMockAgentLib(): IAgentLib {
   return {
     name: 'claude-code',
-    supportedFeatures: () => ({ images: true, hooks: true, thinking: true }),
+    supportedFeatures: () => ({ images: true, hooks: true, thinking: true, nativeResume: true }),
     getDefaultModel: () => 'claude-opus-4-6',
     getSupportedModels: () => [{ value: 'claude-opus-4-6', label: 'Claude Opus 4.6' }],
     execute: vi.fn().mockImplementation((_runId, _options, callbacks) => {

@@ -46,11 +46,17 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
 
     if (mode === 'revision' && revisionReason === 'info_provided') {
       // Investigation resume (was: investigate_resume)
-      const ivrLines = [
-        `Continue investigating this bug using the user's decisions.`,
-        ``,
-        `Bug: ${task.title}.${desc}`,
-      ];
+      const ivrLines = context.sessionId
+        ? [
+            `Continue investigating using the user's decisions below.`,
+            ``,
+            `Bug: ${task.title}.${desc}`,
+          ]
+        : [
+            `Continue investigating this bug using the user's decisions.`,
+            ``,
+            `Bug: ${task.title}.${desc}`,
+          ];
       if (task.subtasks && task.subtasks.length > 0) {
         ivrLines.push('', '## Subtasks');
         for (const st of task.subtasks) {

@@ -85,6 +85,10 @@ export class Agent implements IAgent {
         allowedPaths,
         readOnlyPaths,
         readOnly: execConfig.readOnly,
+        sessionId: context.sessionId,
+        resumeSession: context.mode === 'revision',
+        taskId: context.task.id,
+        agentType: this.type,
       }, {
         onOutput,
         onLog,

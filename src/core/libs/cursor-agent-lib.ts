@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
+import type { ISessionHistoryProvider } from '../interfaces/session-history-provider';
+import { SessionHistoryFormatter } from '../services/session-history-formatter';
 import { getShellEnv } from '../services/shell-env';
 import { getAppLogger } from '../services/app-logger';
 
@@ -21,8 +23,10 @@ export class CursorAgentLib implements IAgentLib {
   /** Tracks why a process was killed, survives the stop() → close gap. */
   private stoppedReasons = new Map<string, string>();
 
+  constructor(private sessionHistoryProvider?: ISessionHistoryProvider) {}
+
   supportedFeatures(): AgentLibFeatures {
-    return { images: false, hooks: false, thinking: true };
+    return { images: false, hooks: false, thinking: true, nativeResume: false };
   }
 
   getDefaultModel(): string { return 'opus-4.6-thinking'; }
@@ -78,7 +82,22 @@ export class CursorAgentLib implements IAgentLib {
     const { onOutput, onLog, onMessage, onUserToolResult } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
-    const args = [options.prompt, '-p', '--output-format', 'stream-json', '--force'];
+    // Session resume: prepend prior session history to the prompt
+    let effectivePrompt = options.prompt;
+    if (options.resumeSession && this.sessionHistoryProvider && options.taskId && options.agentType) {
+      try {
+        const prevMessages = await this.sessionHistoryProvider.getPreviousMessages(options.taskId, options.agentType);
+        if (prevMessages && prevMessages.length > 0) {
+          const history = SessionHistoryFormatter.format(prevMessages);
+          effectivePrompt = history + '\n\n---\n\n' + options.prompt;
+          log('Session history prepended to prompt', { messageCount: prevMessages.length, historyLength: history.length });
+        }
+      } catch (err) {
+        log(`Failed to load session history (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    const args = [effectivePrompt, '-p', '--output-format', 'stream-json', '--force'];
     if (options.readOnly) {
       args.push('--mode=plan');
     }

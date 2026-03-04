@@ -2,6 +2,8 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
+import type { ISessionHistoryProvider } from '../interfaces/session-history-provider';
+import { SessionHistoryFormatter } from '../services/session-history-formatter';
 import { getShellEnv } from '../services/shell-env';
 import { getAppLogger } from '../services/app-logger';
 
@@ -91,11 +93,14 @@ export class CodexCliLib implements IAgentLib {
   /** Tracks why a run was stopped, survives the stop() -> completion gap. */
   private stoppedReasons = new Map<string, string>();
 
+  constructor(private sessionHistoryProvider?: ISessionHistoryProvider) {}
+
   supportedFeatures() {
     return {
       images: true,
       hooks: false,
       thinking: true,
+      nativeResume: false,
     };
   }
 
@@ -132,6 +137,20 @@ export class CodexCliLib implements IAgentLib {
   async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
     const { onLog } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
+
+    // Session resume: prepend prior session history to the prompt
+    if (options.resumeSession && this.sessionHistoryProvider && options.taskId && options.agentType) {
+      try {
+        const prevMessages = await this.sessionHistoryProvider.getPreviousMessages(options.taskId, options.agentType);
+        if (prevMessages && prevMessages.length > 0) {
+          const history = SessionHistoryFormatter.format(prevMessages);
+          options = { ...options, prompt: history + '\n\n---\n\n' + options.prompt };
+          log('Session history prepended to prompt', { messageCount: prevMessages.length, historyLength: history.length });
+        }
+      } catch (err) {
+        log(`Failed to load session history (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
 
     const Codex = await this.tryLoadCodexConstructor();
     if (Codex) {

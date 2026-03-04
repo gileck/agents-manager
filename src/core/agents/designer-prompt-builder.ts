@@ -41,16 +41,25 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
 
     if (mode === 'revision' && revisionReason === 'changes_requested') {
       // Technical design revision (was: technical_design_revision)
-      const tdrLines = [
-        `The admin has reviewed the current technical design and requested changes. Revise the design based on their feedback.`,
-        ``,
-        `Task: ${task.title}.${desc}`,
-      ];
-      if (task.plan) {
-        tdrLines.push('', '## Plan', task.plan);
-      }
-      if (task.technicalDesign) {
-        tdrLines.push('', '## Current Technical Design', task.technicalDesign);
+      const tdrLines: string[] = [];
+      if (context.sessionId) {
+        tdrLines.push(
+          `Revise the design based on the feedback below.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        );
+      } else {
+        tdrLines.push(
+          `The admin has reviewed the current technical design and requested changes. Revise the design based on their feedback.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        );
+        if (task.plan) {
+          tdrLines.push('', '## Plan', task.plan);
+        }
+        if (task.technicalDesign) {
+          tdrLines.push('', '## Current Technical Design', task.technicalDesign);
+        }
       }
       tdrLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Admin Feedback on Design'));
       tdrLines.push(
@@ -65,16 +74,25 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
       prompt = tdrLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
       // Technical design resume (was: technical_design_resume)
-      const tdrLines = [
-        `You are a software architect. Continue the technical design for this task using the user's decisions.`,
-        ``,
-        `Task: ${task.title}.${desc}`,
-      ];
-      if (task.plan) {
-        tdrLines.push('', '## Plan', task.plan);
-      }
-      if (task.technicalDesign) {
-        tdrLines.push('', '## Previous Technical Design', task.technicalDesign);
+      const tdrLines: string[] = [];
+      if (context.sessionId) {
+        tdrLines.push(
+          `Continue the technical design using the user's decisions below.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        );
+      } else {
+        tdrLines.push(
+          `You are a software architect. Continue the technical design for this task using the user's decisions.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        );
+        if (task.plan) {
+          tdrLines.push('', '## Plan', task.plan);
+        }
+        if (task.technicalDesign) {
+          tdrLines.push('', '## Previous Technical Design', task.technicalDesign);
+        }
       }
       tdrLines.push(
         '',

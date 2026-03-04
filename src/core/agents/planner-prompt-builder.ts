@@ -62,13 +62,22 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
 
     if (mode === 'revision' && revisionReason === 'changes_requested') {
       // Plan revision (was: plan_revision)
-      const prLines = [
-        `The admin has reviewed the current plan and requested changes. Revise the plan based on their feedback.`,
-        ``,
-        `Task: ${task.title}.${desc}`,
-      ];
-      if (task.plan) {
-        prLines.push('', '## Current Plan', task.plan);
+      const prLines: string[] = [];
+      if (context.sessionId) {
+        prLines.push(
+          `Revise the plan based on the feedback below.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        );
+      } else {
+        prLines.push(
+          `The admin has reviewed the current plan and requested changes. Revise the plan based on their feedback.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        );
+        if (task.plan) {
+          prLines.push('', '## Current Plan', task.plan);
+        }
       }
       prLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Admin Feedback'));
       prLines.push(
@@ -83,11 +92,17 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       prompt = prLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
       // Plan resume (was: plan_resume)
-      const prLines = [
-        `You are a senior software engineer. Continue creating the implementation plan for this task using the user's decisions.`,
-        ``,
-        `Task: ${task.title}.${desc}`,
-      ];
+      const prLines = context.sessionId
+        ? [
+            `Continue creating the plan using the user's decisions below.`,
+            ``,
+            `Task: ${task.title}.${desc}`,
+          ]
+        : [
+            `You are a senior software engineer. Continue creating the implementation plan for this task using the user's decisions.`,
+            ``,
+            `Task: ${task.title}.${desc}`,
+          ];
       prLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Admin Feedback'));
       prLines.push(
         '',

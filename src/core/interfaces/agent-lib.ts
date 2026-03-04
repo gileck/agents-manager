@@ -8,6 +8,7 @@ export interface AgentLibFeatures {
   images: boolean;
   hooks: boolean;
   thinking: boolean;
+  nativeResume: boolean;
 }
 
 export interface AgentLibRunOptions {
@@ -25,6 +26,10 @@ export interface AgentLibRunOptions {
       { decision: 'block' | 'allow'; reason?: string } | undefined;
   };
   images?: Array<{ base64: string; mediaType: string }>;
+  sessionId?: string;
+  resumeSession?: boolean;
+  taskId?: string;
+  agentType?: string;
 }
 
 export interface AgentLibCallbacks {

@@ -66,6 +66,7 @@ import { ClaudeCodeLib } from '../libs/claude-code-lib';
 import { CursorAgentLib } from '../libs/cursor-agent-lib';
 import { CodexCliLib } from '../libs/codex-cli-lib';
 import { AgentLibRegistry } from '../services/agent-lib-registry';
+import { AgentRunHistoryProvider } from '../services/agent-run-history-provider';
 import { AgentSupervisor } from '../services/agent-supervisor';
 import { TaskReviewReportBuilder } from '../services/task-review-report-builder';
 import { ValidationRunner } from '../services/validation-runner';
@@ -195,10 +196,11 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   ]);
 
   // Agent lib registry — engines that execute prompts
+  const historyProvider = new AgentRunHistoryProvider(agentRunStore);
   const agentLibRegistry = new AgentLibRegistry();
   agentLibRegistry.register(new ClaudeCodeLib());
-  agentLibRegistry.register(new CursorAgentLib());
-  agentLibRegistry.register(new CodexCliLib());
+  agentLibRegistry.register(new CursorAgentLib(historyProvider));
+  agentLibRegistry.register(new CodexCliLib(historyProvider));
 
   // Agent framework — each Agent combines a prompt builder with the lib registry
   const agentFramework = new AgentFrameworkImpl();

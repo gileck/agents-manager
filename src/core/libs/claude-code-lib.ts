@@ -58,7 +58,7 @@ export class ClaudeCodeLib implements IAgentLib {
   private runningStates = new Map<string, RunState>();
 
   supportedFeatures(): AgentLibFeatures {
-    return { images: true, hooks: true, thinking: true };
+    return { images: true, hooks: true, thinking: true, nativeResume: true };
   }
 
   getDefaultModel(): string { return 'claude-opus-4-6'; }
@@ -190,6 +190,14 @@ export class ClaudeCodeLib implements IAgentLib {
 
     const startTime = Date.now();
 
+    // Session management (native SDK resume)
+    const sessionOptions: Record<string, unknown> = {};
+    if (options.resumeSession && options.sessionId) {
+      sessionOptions.resume = options.sessionId;
+    } else if (options.sessionId) {
+      sessionOptions.sessionId = options.sessionId;
+    }
+
     try {
       for await (const message of query({
         prompt: sdkPrompt,
@@ -203,8 +211,14 @@ export class ClaudeCodeLib implements IAgentLib {
           thinking: { type: 'adaptive' },
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           hooks: { preToolUse: mergedPreToolUse },
+          ...sessionOptions,
         },
       }) as AsyncIterable<SdkStreamMessage>) {
+        // Skip replayed messages during session resume to avoid duplicate callbacks/tokens
+        if ('isReplay' in message && (message as Record<string, unknown>).isReplay) {
+          continue;
+        }
+
         state.messageCount++;
         if (state.messageCount % 25 === 0) {
           log(`SDK message loop heartbeat: ${state.messageCount} messages processed`);

@@ -75,12 +75,24 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
 
     if (mode === 'revision' && revisionReason === 'changes_requested') {
       // request_changes
-      const rcLines = [
-        `Changes have been requested on this branch.`,
-        `You MUST address ALL feedback from the Task Context above.`,
-        ``,
-        `Task: ${task.title}.${desc}`,
-      ];
+      const rcLines: string[] = [];
+
+      if (context.sessionId) {
+        // Minimal prompt — session history provides full prior context
+        rcLines.push(
+          `Address ALL feedback below.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        );
+      } else {
+        // Fallback: verbose prompt for sessions without history
+        rcLines.push(
+          `Changes have been requested on this branch.`,
+          `You MUST address ALL feedback from the Task Context above.`,
+          ``,
+          `Task: ${task.title}.${desc}`,
+        );
+      }
 
       // Surface user change_request entries prominently so they aren't buried in the Task Context
       const userChangeRequests = (context.taskContext ?? []).filter(
@@ -95,15 +107,24 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         rcLines.push('');
       }
 
-      if (task.plan) {
-        rcLines.push('', '## Plan', task.plan);
+      if (!context.sessionId) {
+        // Only include full plan/design in verbose fallback mode
+        if (task.plan) {
+          rcLines.push('', '## Plan', task.plan);
+        }
+        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
+        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['implementation_feedback'], 'Implementation Feedback'));
+        if (task.technicalDesign) {
+          rcLines.push('', '## Technical Design', task.technicalDesign);
+        }
+        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Design Feedback'));
+      } else {
+        // In session-resume mode, still include all unaddressed feedback
+        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
+        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['implementation_feedback'], 'Implementation Feedback'));
+        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Design Feedback'));
       }
-      rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
-      rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['implementation_feedback'], 'Implementation Feedback'));
-      if (task.technicalDesign) {
-        rcLines.push('', '## Technical Design', task.technicalDesign);
-      }
-      rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Design Feedback'));
+
       rcLines.push(
         ``,
         `## Instructions`,
@@ -135,9 +156,15 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       prompt = conflictLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
       // implement_resume
-      const irLines = [
-        `Continue implementing the changes for this task using the user's decisions. Task: ${task.title}.${desc}`,
-      ];
+      const irLines = context.sessionId
+        ? [
+            `Continue implementing using the user's decisions below.`,
+            ``,
+            `Task: ${task.title}.${desc}`,
+          ]
+        : [
+            `Continue implementing the changes for this task using the user's decisions. Task: ${task.title}.${desc}`,
+          ];
       // Phase-aware subtask display
       const irActivePhase = getActivePhase(task.phases);
       if (isMultiPhase(task) && irActivePhase) {
@@ -167,11 +194,13 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         }
         irLines.push('');
       }
-      if (task.plan) {
-        irLines.push('', '## Plan', task.plan);
-      }
-      if (task.technicalDesign) {
-        irLines.push('', '## Technical Design', task.technicalDesign);
+      if (!context.sessionId) {
+        if (task.plan) {
+          irLines.push('', '## Plan', task.plan);
+        }
+        if (task.technicalDesign) {
+          irLines.push('', '## Technical Design', task.technicalDesign);
+        }
       }
       irLines.push(
         '',

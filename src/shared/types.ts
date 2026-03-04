@@ -629,6 +629,7 @@ export interface AgentContext {
   modeConfig?: AgentModeConfig;
   skills?: string[];
   customPrompt?: string;
+  sessionId?: string;
 }
 
 // ============================================
