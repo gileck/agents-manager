@@ -4,6 +4,20 @@ import { Image, Square, ChevronDown, Cpu } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import type { ChatImage } from '../../../shared/types';
 
+function mergeRefs<T>(
+  ...refs: Array<React.Ref<T> | undefined>
+): React.RefCallback<T> {
+  return (value: T | null) => {
+    for (const ref of refs) {
+      if (typeof ref === 'function') {
+        ref(value);
+      } else if (ref != null) {
+        (ref as React.MutableRefObject<T | null>).current = value;
+      }
+    }
+  };
+}
+
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MAX_IMAGES = 5;
 
@@ -39,7 +53,7 @@ interface ChatInputProps {
   onModelChange?: (model: string) => void;
 }
 
-export function ChatInput({
+export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
   onSend,
   onStop,
   isRunning,
@@ -51,7 +65,7 @@ export function ChatInput({
   models,
   selectedModel,
   onModelChange,
-}: ChatInputProps) {
+}: ChatInputProps, forwardedRef) {
   const [value, setValue] = useState('');
   const [images, setImages] = useState<ChatImage[]>([]);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -249,7 +263,7 @@ export function ChatInput({
         )}
 
         <textarea
-          ref={textareaRef}
+          ref={mergeRefs(textareaRef, forwardedRef)}
           className="w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm min-h-[44px] max-h-[240px] overflow-y-auto focus:outline-none placeholder:text-muted-foreground/60"
           placeholder={isRunning ? 'Type a message (will be queued)...' : 'Type a message...'}
           value={value}
@@ -364,7 +378,9 @@ export function ChatInput({
       </form>
     </div>
   );
-}
+});
+
+ChatInput.displayName = 'ChatInput';
 
 function isStreaming(isRunning: boolean): boolean {
   return isRunning;

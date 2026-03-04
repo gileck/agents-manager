@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Trash2, FileText, PanelRightClose, PanelRightOpen, MoreHorizontal, MessageSquare } from 'lucide-react';
 import { InlineError } from '../InlineError';
 import { reportError } from '../../lib/error-handler';
 import { useChat } from '../../hooks/useChat';
 import { useChatSessions, ChatScope } from '../../hooks/useChatSessions';
+import { useChatKeyboardShortcuts } from '../../hooks/useChatKeyboardShortcuts';
 import { useActiveAgents } from '../../hooks/useActiveAgents';
 import { AgentChat } from './AgentChat';
 import { ContextSidebar } from './ContextSidebar';
@@ -54,6 +55,18 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   const [showActions, setShowActions] = useState(false);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
+
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useChatKeyboardShortcuts({
+    sessions,
+    currentSessionId,
+    switchSession,
+    createSession,
+    deleteSession,
+    clearChat,
+    focusInput: () => inputRef.current?.focus(),
+  });
 
   useEffect(() => {
     window.api.agentLibs.list().then(setAgentLibs).catch((err) => {
@@ -193,6 +206,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               isQueued={isQueued}
               onSend={sendMessage}
               onStop={stopChat}
+              inputRef={inputRef}
               tokenUsage={tokenUsage}
               agentLibs={agentLibs.length > 0 && currentSessionId ? agentLibs : undefined}
               selectedAgentLib={selectedAgentLib}
