@@ -611,7 +611,6 @@ export class ChatAgentService {
       const callbacks: AgentLibCallbacks = {
         onOutput: (chunk: string) => {
           emitEvent({ type: 'text', text: chunk });
-          emitMessage({ type: 'assistant_text', text: chunk, timestamp: Date.now() });
         },
         onMessage: (msg: AgentChatMessage) => {
           emitMessage(msg);

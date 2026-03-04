@@ -109,13 +109,13 @@ export class CursorAgentLib implements IAgentLib {
     let structuredOutput: Record<string, unknown> | undefined;
     const resultRef = { structuredOutput: undefined as Record<string, unknown> | undefined, isError: false, errorMessage: undefined as string | undefined };
 
-    /** Appends to resultText only — onMessage handles structured display to avoid duplicates in the chat UI */
-    const collect = (chunk: string) => {
-      resultText += chunk;
-    };
-    /** Appended to resultText AND streamed to onOutput (for non-JSON lines that have no onMessage equivalent) */
+    /** Appended to resultText AND streamed to onOutput for real-time display */
     const emit = (chunk: string) => {
       resultText += chunk;
+      onOutput?.(chunk);
+    };
+    /** Stream-only: sent to onOutput for real-time display but NOT stored in resultText */
+    const stream = (chunk: string) => {
       onOutput?.(chunk);
     };
 
@@ -167,7 +167,7 @@ export class CursorAgentLib implements IAgentLib {
           }
 
           try {
-            this.processMessage(msg, state, resultRef, { collect, emit, onMessage, onUserToolResult, log });
+            this.processMessage(msg, state, resultRef, { emit, stream, onMessage, onUserToolResult, log });
           } catch (err) {
             log(`Error processing message: ${err instanceof Error ? err.message : String(err)}`);
             emit(line + '\n');
@@ -191,7 +191,7 @@ export class CursorAgentLib implements IAgentLib {
           try { msg = JSON.parse(stdoutBuffer); } catch { /* not JSON */ }
           if (msg) {
             try {
-              this.processMessage(msg, state, resultRef, { collect, emit, onMessage, onUserToolResult, log });
+              this.processMessage(msg, state, resultRef, { emit, stream, onMessage, onUserToolResult, log });
             } catch { emit(stdoutBuffer + '\n'); }
           } else {
             emit(stdoutBuffer + '\n');
@@ -301,14 +301,14 @@ export class CursorAgentLib implements IAgentLib {
     state: RunState,
     resultRef: { structuredOutput?: Record<string, unknown>; isError: boolean; errorMessage?: string },
     ctx: {
-      collect: (chunk: string) => void;
       emit: (chunk: string) => void;
+      stream: (chunk: string) => void;
       onMessage?: AgentLibCallbacks['onMessage'];
       onUserToolResult?: AgentLibCallbacks['onUserToolResult'];
       log: (msg: string, data?: Record<string, unknown>) => void;
     },
   ): void {
-    const { collect, emit, onMessage, onUserToolResult, log } = ctx;
+    const { emit, stream, onMessage, onUserToolResult, log } = ctx;
 
     switch (msg.type) {
       case 'assistant': {
@@ -316,13 +316,14 @@ export class CursorAgentLib implements IAgentLib {
         if (!assistantMsg?.content) break;
         for (const block of assistantMsg.content) {
           if (block.type === 'text' && block.text) {
-            collect(block.text + '\n');
+            emit(block.text + '\n');
             onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
           } else if (block.type === 'thinking' && block.thinking) {
             onMessage?.({ type: 'thinking', text: block.thinking, timestamp: Date.now() });
           } else if (block.type === 'tool_use') {
             const toolName = block.name ?? 'unknown';
             const input = JSON.stringify(block.input ?? {});
+            stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
             onMessage?.({ type: 'tool_use', toolName, toolId: block.id, input: input.slice(0, 2000), timestamp: Date.now() });
           }
         }
@@ -332,7 +333,7 @@ export class CursorAgentLib implements IAgentLib {
       case 'text':
       case 'message': {
         const text = (msg.text ?? msg.content ?? '') as string;
-        collect(text + '\n');
+        emit(text + '\n');
         onMessage?.({ type: 'assistant_text', text, timestamp: Date.now() });
         break;
       }
@@ -349,6 +350,7 @@ export class CursorAgentLib implements IAgentLib {
         const toolName = (msg.name ?? msg.tool ?? 'unknown') as string;
         const input = JSON.stringify(msg.input ?? msg.arguments ?? {});
         const toolId = msg.id as string | undefined;
+        stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
         onMessage?.({ type: 'tool_use', toolName, toolId, input: input.slice(0, 2000), timestamp: Date.now() });
         break;
       }
@@ -367,6 +369,7 @@ export class CursorAgentLib implements IAgentLib {
         if (msg.subtype === 'started') {
           const cleanArgs = CursorAgentLib.extractCleanArgs(toolName, toolData.args);
           const input = JSON.stringify(cleanArgs);
+          stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
           onMessage?.({ type: 'tool_use', toolName, toolId: callId, input: input.slice(0, 2000), timestamp: Date.now() });
         } else if (msg.subtype === 'completed') {
           const cleanResult = CursorAgentLib.extractCleanResult(toolName, toolData.result);
