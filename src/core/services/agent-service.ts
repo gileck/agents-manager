@@ -23,6 +23,7 @@ import type { IAgent } from '../interfaces/agent';
 import { ValidationRunner } from './validation-runner';
 import type { OutcomeResolver } from './outcome-resolver';
 import type { ScheduledAgentService } from './scheduled-agent-service';
+import type { AgentLibRegistry } from './agent-lib-registry';
 import * as path from 'path';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
@@ -57,6 +58,7 @@ export class AgentService implements IAgentService {
     private validationRunner: ValidationRunner,
     private outcomeResolver: OutcomeResolver,
     private scheduledAgentService?: ScheduledAgentService,
+    private agentLibRegistry?: AgentLibRegistry,
   ) {
     this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter);
   }
@@ -357,8 +359,13 @@ export class AgentService implements IAgentService {
       engine: agentDefEngine,
     };
 
-    // Store the resolved engine and model on the run record so it's visible in the UI
-    await this.agentRunStore.updateRun(run.id, { engine: agentDefEngine, ...(config.model ? { model: config.model } : {}) });
+    // Store the resolved engine and effective model on the run record so it's visible in the UI
+    const resolvedEngine = agentDefEngine ?? 'claude-code';
+    let effectiveModel = config.model;
+    if (!effectiveModel && this.agentLibRegistry) {
+      try { effectiveModel = this.agentLibRegistry.getLib(resolvedEngine).getDefaultModel(); } catch { /* ignore */ }
+    }
+    await this.agentRunStore.updateRun(run.id, { engine: agentDefEngine, ...(effectiveModel ? { model: effectiveModel } : {}) });
 
     // 7. Store active callbacks for this task
     this.activeCallbacks.set(taskId, { onOutput, onMessage, onStatusChange });

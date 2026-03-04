@@ -240,7 +240,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     createGitOps, taskContextStore, agentDefinitionStore,
     taskReviewReportBuilder, notificationRouter,
     validationRunner, outcomeResolver,
-    scheduledAgentService,
+    scheduledAgentService, agentLibRegistry,
   );
 
   // Workflow service
