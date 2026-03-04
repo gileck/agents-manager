@@ -11,6 +11,7 @@ interface RunState {
   timeout: number;
   maxTurns: number;
   killTimer?: ReturnType<typeof setTimeout>;
+  thinkingBuffer: string;
 }
 
 export class CursorAgentLib implements IAgentLib {
@@ -98,6 +99,7 @@ export class CursorAgentLib implements IAgentLib {
       messageCount: 0,
       timeout: options.timeoutMs,
       maxTurns: options.maxTurns,
+      thinkingBuffer: '',
     };
     this.runningStates.set(runId, state);
 
@@ -340,7 +342,15 @@ export class CursorAgentLib implements IAgentLib {
 
       case 'thinking': {
         const thinking = (msg.thinking ?? msg.text ?? '') as string;
-        if (thinking) {
+        if (msg.subtype === 'delta') {
+          state.thinkingBuffer += thinking;
+        } else if (msg.subtype === 'completed') {
+          const full = state.thinkingBuffer || thinking;
+          state.thinkingBuffer = '';
+          if (full) {
+            onMessage?.({ type: 'thinking', text: full, timestamp: Date.now() });
+          }
+        } else if (thinking) {
           onMessage?.({ type: 'thinking', text: thinking, timestamp: Date.now() });
         }
         break;
