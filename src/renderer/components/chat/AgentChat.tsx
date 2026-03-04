@@ -20,6 +20,7 @@ interface AgentChatProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  inputRef?: React.Ref<HTMLTextAreaElement>;
 }
 
 export function AgentChat({
@@ -38,6 +39,7 @@ export function AgentChat({
   models,
   selectedModel,
   onModelChange,
+  inputRef,
 }: AgentChatProps) {
   return (
     <div className="flex-1 min-h-0 flex">
@@ -50,6 +52,7 @@ export function AgentChat({
           <ChatMessageList messages={messages} isRunning={isRunning} />
         )}
         <ChatInput
+          ref={inputRef}
           onSend={onSend}
           onStop={onStop}
           isRunning={isRunning}
