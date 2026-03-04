@@ -359,7 +359,7 @@ export class CursorAgentLib implements IAgentLib {
         // cursor-agent format: { type: "tool_call", subtype: "started"|"completed",
         //   call_id: "...", tool_call: { readToolCall: { args: {...}, result?: {...} } } }
         const callId = msg.call_id as string | undefined;
-        const toolCallObj = msg.tool_call as Record<string, { args?: unknown; result?: unknown }> | undefined;
+        const toolCallObj = msg.tool_call as Record<string, { args?: Record<string, unknown>; result?: unknown }> | undefined;
         if (!toolCallObj) break;
         const toolKey = Object.keys(toolCallObj)[0];
         if (!toolKey) break;
@@ -367,14 +367,15 @@ export class CursorAgentLib implements IAgentLib {
         const toolData = toolCallObj[toolKey];
 
         if (msg.subtype === 'started') {
-          const input = JSON.stringify(toolData.args ?? {});
+          const cleanArgs = CursorAgentLib.extractCleanArgs(toolName, toolData.args);
+          const input = JSON.stringify(cleanArgs);
           stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
           onMessage?.({ type: 'tool_use', toolName, toolId: callId, input: input.slice(0, 2000), timestamp: Date.now() });
         } else if (msg.subtype === 'completed') {
-          const result = JSON.stringify(toolData.result ?? '');
-          onMessage?.({ type: 'tool_result', toolId: callId, result: result.slice(0, 2000), timestamp: Date.now() });
+          const cleanResult = CursorAgentLib.extractCleanResult(toolName, toolData.result);
+          onMessage?.({ type: 'tool_result', toolId: callId, result: cleanResult.slice(0, 2000), timestamp: Date.now() });
           if (callId) {
-            onUserToolResult?.(callId, result.slice(0, 2000));
+            onUserToolResult?.(callId, cleanResult.slice(0, 2000));
           }
         }
         break;
@@ -435,5 +436,61 @@ export class CursorAgentLib implements IAgentLib {
       default:
         break;
     }
+  }
+
+  /** Keys that are cursor-agent internal metadata, not meaningful tool input. */
+  private static readonly METADATA_KEYS = new Set([
+    'toolCallId', 'timeout', 'workingDirectory', 'hasInputRedirect',
+    'hasOutputRedirect', 'parsingResult', 'executableCommands',
+    'hasRedirects', 'hasCommandSubstitution', 'fileOutputThresholdBytes',
+    'isBackground', 'skipConfirmation', 'readRange', 'relatedCursorRulePaths',
+    'relatedCursorRules', 'isEmpty', 'exceededLimit', 'totalLines', 'fileSize',
+  ]);
+
+  /**
+   * Extract only the user-facing fields from cursor-agent tool args,
+   * dropping internal metadata that clutters the display.
+   */
+  private static extractCleanArgs(toolName: string, args?: Record<string, unknown>): Record<string, unknown> {
+    if (!args) return {};
+    // For well-known tools, pick only the primary field
+    switch (toolName) {
+      case 'shell': return { command: args.command ?? args.fullText };
+      case 'read': return { path: args.path };
+      case 'write': return { path: args.path };
+      case 'edit': return { path: args.path };
+      case 'glob':
+      case 'list': return { pattern: args.pattern ?? args.path };
+      case 'grep':
+      case 'search': return { pattern: args.pattern ?? args.query, path: args.path };
+    }
+    // For unknown tools, drop metadata keys
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(args)) {
+      if (!CursorAgentLib.METADATA_KEYS.has(k)) clean[k] = v;
+    }
+    return clean;
+  }
+
+  /**
+   * Extract a readable result string from cursor-agent tool_call completed payload.
+   * The result is deeply nested: { success: { content, ... } } or { error: { ... } }
+   */
+  private static extractCleanResult(_toolName: string, result?: unknown): string {
+    if (!result || typeof result !== 'object') return typeof result === 'string' ? result : JSON.stringify(result ?? '');
+    const r = result as Record<string, unknown>;
+    if (r.success && typeof r.success === 'object') {
+      const s = r.success as Record<string, unknown>;
+      if (typeof s.content === 'string') return s.content;
+      if (typeof s.output === 'string') return s.output;
+      return JSON.stringify(s);
+    }
+    if (r.error && typeof r.error === 'object') {
+      const e = r.error as Record<string, unknown>;
+      return typeof e.message === 'string' ? e.message : JSON.stringify(e);
+    }
+    if (typeof r.content === 'string') return r.content;
+    if (typeof r.output === 'string') return r.output;
+    return JSON.stringify(result);
   }
 }
