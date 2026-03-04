@@ -74,130 +74,118 @@ export function SessionTabs({
   };
 
   return (
-    <div className="border-b border-border bg-card">
-      <div className="flex items-center gap-1 px-4 py-1 overflow-x-auto scrollbar-thin">
-        {sessions.map((session) => {
-          const { runningCount, completedCount } = getSessionAgentStatus(session.id);
-          const isActive = session.id === currentSessionId;
+    <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-thin">
+      {sessions.map((session) => {
+        const { runningCount, completedCount } = getSessionAgentStatus(session.id);
+        const isActive = session.id === currentSessionId;
 
-          return (
-            <div
-              key={session.id}
-              className={cn(
-                'relative group flex items-center gap-2 px-3 py-1.5 rounded-t-lg cursor-pointer transition-colors',
-                isActive
-                  ? 'bg-background border-t border-l border-r border-border'
-                  : 'hover:bg-muted/50'
-              )}
-              onClick={() => onSessionChange(session.id)}
-            >
-              <div className="flex items-center gap-2">
-                {/* Running agent indicator */}
-                {runningCount > 0 && (
-                  <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                )}
+        return (
+          <div
+            key={session.id}
+            className={cn(
+              'relative group flex items-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer transition-all text-sm',
+              isActive
+                ? 'bg-muted text-foreground font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+            )}
+            onClick={() => onSessionChange(session.id)}
+          >
+            {runningCount > 0 && (
+              <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+            )}
 
-                {/* Completed agent badge */}
-                {completedCount > 0 && runningCount === 0 && (
-                  <div className="flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white">
-                    <Check className="h-2.5 w-2.5" />
-                  </div>
-                )}
-
-                {/* Session name */}
-                {renameSessionId === session.id ? (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleRename();
-                    }}
-                    className="flex items-center gap-1"
-                  >
-                    <Input
-                      value={renameSessionName}
-                      onChange={(e) => setRenameSessionName(e.target.value)}
-                      onBlur={handleRename}
-                      className="h-6 px-2 py-1 text-sm"
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </form>
-                ) : (
-                  <span
-                    className="text-sm font-medium"
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      handleStartRename(session.id, session.name);
-                    }}
-                  >
-                    {session.name}
-                  </span>
-                )}
-
-                {/* Agent count badge */}
-                {(runningCount > 0 || completedCount > 0) && (
-                  <span className="text-xs text-muted-foreground">
-                    ({runningCount > 0 ? runningCount : completedCount})
-                  </span>
-                )}
+            {completedCount > 0 && runningCount === 0 && (
+              <div className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-500/80 text-white shrink-0">
+                <Check className="h-2 w-2" />
               </div>
+            )}
 
-              {/* Close button */}
-              {sessions.length > 1 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(session.id);
-                  }}
-                  className={cn(
-                    'ml-2 p-0.5 rounded hover:bg-muted transition-opacity',
-                    'opacity-0 group-hover:opacity-100'
-                  )}
-                  title="Close session"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
+            {renameSessionId === session.id ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleRename();
+                }}
+                className="flex items-center"
+              >
+                <Input
+                  value={renameSessionName}
+                  onChange={(e) => setRenameSessionName(e.target.value)}
+                  onBlur={handleRename}
+                  className="h-5 px-1.5 py-0.5 text-xs w-24"
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </form>
+            ) : (
+              <span
+                className="truncate max-w-[120px]"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  handleStartRename(session.id, session.name);
+                }}
+              >
+                {session.name}
+              </span>
+            )}
 
-              {/* Context menu button */}
+            {(runningCount > 0 || completedCount > 0) && (
+              <span className="text-[10px] text-muted-foreground/70">
+                {runningCount > 0 ? runningCount : completedCount}
+              </span>
+            )}
+
+            {sessions.length > 1 && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (contextMenuSession === session.id) {
-                    setContextMenuSession(null);
-                    return;
-                  }
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  setMenuPosition({ top: rect.bottom + 4, left: rect.left });
-                  setContextMenuSession(session.id);
+                  handleDelete(session.id);
                 }}
                 className={cn(
-                  'ml-1 p-0.5 rounded hover:bg-muted transition-opacity',
+                  'p-0.5 rounded hover:bg-foreground/10 transition-opacity shrink-0',
                   'opacity-0 group-hover:opacity-100'
                 )}
-                title="More options"
+                title="Close session"
               >
-                <MoreVertical className="h-3 w-3" />
+                <X className="h-3 w-3" />
               </button>
-            </div>
-          );
-        })}
+            )}
 
-        {/* New session button */}
-        <button
-          onClick={handleNewSession}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 rounded-lg transition-colors"
-          title="New session"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (contextMenuSession === session.id) {
+                  setContextMenuSession(null);
+                  return;
+                }
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                setMenuPosition({ top: rect.bottom + 4, left: rect.left });
+                setContextMenuSession(session.id);
+              }}
+              className={cn(
+                'p-0.5 rounded hover:bg-foreground/10 transition-opacity shrink-0',
+                'opacity-0 group-hover:opacity-100'
+              )}
+              title="More options"
+            >
+              <MoreVertical className="h-3 w-3" />
+            </button>
+          </div>
+        );
+      })}
 
-      {/* Context menu portal */}
+      <button
+        onClick={handleNewSession}
+        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-md transition-colors shrink-0"
+        title="New session"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+
       {contextMenuSession && createPortal(
         <div
           ref={contextMenuRef}
-          className="fixed bg-card border border-border rounded-md shadow-lg z-50 py-1"
+          className="fixed bg-card border border-border rounded-lg shadow-lg z-50 py-1 min-w-[140px]"
           style={{ top: menuPosition.top, left: menuPosition.left }}
           onClick={(e) => e.stopPropagation()}
         >

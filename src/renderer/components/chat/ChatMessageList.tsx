@@ -42,7 +42,7 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
 
       if (msg.type === 'assistant_text') {
         nodes.push(
-          <div key={i} className="py-2">
+          <div key={i} className="py-2 max-w-none prose-sm">
             <MarkdownContent content={msg.text} />
           </div>
         );
@@ -74,8 +74,8 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
       } else if (msg.type === 'user') {
         nodes.push(
           <div key={i} className="flex justify-end py-2">
-            <div className="bg-primary text-primary-foreground rounded-lg px-4 py-2 max-w-[80%]">
-              <p className="text-sm">{msg.text}</p>
+            <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5 max-w-[80%] shadow-sm">
+              <p className="text-sm leading-relaxed">{msg.text}</p>
               {msg.images && msg.images.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {msg.images.map((img, j) => (
@@ -107,8 +107,8 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
         );
       } else if (msg.type === 'status') {
         nodes.push(
-          <div key={i} className="text-center py-2">
-            <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
+          <div key={i} className="text-center py-3">
+            <span className="text-xs text-muted-foreground/80 bg-muted/50 px-3 py-1 rounded-full">
               {msg.message}
             </span>
           </div>
@@ -120,17 +120,23 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
   }, [messages, expandedTools, toggleTool]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-2">
+    <div className="flex-1 overflow-y-auto px-6 py-4">
       {rendered.length === 0 && isRunning && (
-        <div className="text-center py-8 text-muted-foreground text-sm">
-          Waiting for agent output...
+        <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
+          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
         </div>
       )}
       {rendered}
       {isRunning && rendered.length > 0 && (
-        <div className="flex items-center gap-2 py-2 text-muted-foreground text-sm">
-          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-          Agent is thinking...
+        <div className="flex items-center gap-2 py-3 text-muted-foreground text-sm">
+          <div className="flex gap-1">
+            <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" />
+            <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+            <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+          </div>
+          <span className="text-xs">Thinking...</span>
         </div>
       )}
       <div ref={endRef} />

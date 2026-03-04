@@ -1,7 +1,7 @@
 import React from 'react';
 import type { AgentChatMessage, AgentRun, ChatImage } from '../../../shared/types';
 import { ChatMessageList } from './ChatMessageList';
-import { ChatInput } from './ChatInput';
+import { ChatInput, AgentLibOption, ModelOption } from './ChatInput';
 import { ContextSidebar } from './ContextSidebar';
 
 interface AgentChatProps {
@@ -14,6 +14,12 @@ interface AgentChatProps {
   run?: AgentRun | null;
   emptyState?: React.ReactNode;
   tokenUsage?: { inputTokens: number; outputTokens: number };
+  agentLibs?: AgentLibOption[];
+  selectedAgentLib?: string;
+  onAgentLibChange?: (lib: string) => void;
+  models?: ModelOption[];
+  selectedModel?: string;
+  onModelChange?: (model: string) => void;
 }
 
 export function AgentChat({
@@ -26,6 +32,12 @@ export function AgentChat({
   run,
   emptyState,
   tokenUsage,
+  agentLibs,
+  selectedAgentLib,
+  onAgentLibChange,
+  models,
+  selectedModel,
+  onModelChange,
 }: AgentChatProps) {
   return (
     <div className="flex-1 min-h-0 flex">
@@ -43,6 +55,12 @@ export function AgentChat({
           isRunning={isRunning}
           isQueued={isQueued}
           tokenUsage={tokenUsage}
+          agentLibs={agentLibs}
+          selectedAgentLib={selectedAgentLib}
+          onAgentLibChange={onAgentLibChange}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={onModelChange}
         />
       </div>
       {showSidebar && (

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Trash2, FileText, MessageSquare, PanelRightClose, PanelRightOpen, Cpu } from 'lucide-react';
+import { Trash2, FileText, PanelRightClose, PanelRightOpen, MoreHorizontal, MessageSquare } from 'lucide-react';
 import { InlineError } from '../InlineError';
 import { reportError } from '../../lib/error-handler';
 import { useChat } from '../../hooks/useChat';
@@ -51,10 +51,10 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   } = useChat(currentSessionId);
 
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showActions, setShowActions] = useState(false);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
 
-  // Load available agent libs and models once
   useEffect(() => {
     window.api.agentLibs.list().then(setAgentLibs).catch((err) => {
       reportError(err, 'ChatPanel: load agent libs');
@@ -64,7 +64,6 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     });
   }, []);
 
-  // Filter agents to current scope only
   const scopeAgents = useMemo(
     () => agents.filter(a => a.scopeType === scope.type && a.scopeId === scope.id),
     [agents, scope.type, scope.id],
@@ -75,21 +74,18 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   const defaultModel = agentLibModels[selectedAgentLib]?.defaultModel ?? '';
   const selectedModel = currentSession?.model || defaultModel;
 
-  const handleAgentLibChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleAgentLibChange = useCallback(async (lib: string) => {
     if (!currentSessionId) return;
     try {
-      // Reset model to null when engine changes (will use engine's default)
-      await updateSession(currentSessionId, { agentLib: e.target.value || null, model: null });
+      await updateSession(currentSessionId, { agentLib: lib || null, model: null });
     } catch (err) {
       reportError(err, 'ChatPanel: update agent lib');
     }
   }, [currentSessionId, updateSession]);
 
-  const handleModelChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleModelChange = useCallback(async (value: string) => {
     if (!currentSessionId) return;
     try {
-      const value = e.target.value;
-      // If the selected value is the default, store null
       const engineData = agentLibModels[selectedAgentLib];
       const model = (engineData && value === engineData.defaultModel) ? null : (value || null);
       await updateSession(currentSessionId, { model });
@@ -101,53 +97,27 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   const estimatedCost = (tokenUsage.inputTokens / 1_000_000) * 3.0 + (tokenUsage.outputTokens / 1_000_000) * 15.0;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card">
-        <div className="flex items-center gap-3">
-          <MessageSquare className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-semibold">Chat</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Agent lib selector */}
-          {agentLibs.length > 0 && currentSessionId && (
-            <div className="flex items-center gap-1.5">
-              <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
-              <select
-                value={selectedAgentLib}
-                onChange={handleAgentLibChange}
-                disabled={isStreaming}
-                className="text-xs font-medium rounded-md bg-muted text-muted-foreground border-0 px-2 py-1.5 cursor-pointer hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
-                title="Select agent engine"
-              >
-                {agentLibs.map(lib => (
-                  <option key={lib.name} value={lib.name} disabled={!lib.available}>
-                    {lib.name}{!lib.available ? ' (unavailable)' : ''}
-                  </option>
-                ))}
-              </select>
-              {/* Model selector */}
-              {currentModels.length > 0 && (
-                <select
-                  value={selectedModel}
-                  onChange={handleModelChange}
-                  disabled={isStreaming}
-                  className="text-xs font-medium rounded-md bg-muted text-muted-foreground border-0 px-2 py-1.5 cursor-pointer hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
-                  title="Select model"
-                >
-                  {currentModels.map(m => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+    <div className="flex flex-col h-full bg-background">
+      {/* Minimal header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border/50">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Session tabs inline */}
+          {!sessionsLoading && (
+            <SessionTabs
+              sessions={sessions}
+              currentSessionId={currentSessionId}
+              activeAgents={scopeAgents}
+              onSessionChange={switchSession}
+              onSessionCreate={createSession}
+              onSessionRename={renameSession}
+              onSessionDelete={deleteSession}
+            />
           )}
-          {/* Compact token cost display */}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
           {estimatedCost > 0 && (
             <span
-              className="text-xs text-muted-foreground font-mono px-1"
+              className="text-xs text-muted-foreground font-mono px-2 py-1"
               title={`Input: ${tokenUsage.inputTokens.toLocaleString()} tokens | Output: ${tokenUsage.outputTokens.toLocaleString()} tokens`}
             >
               ${estimatedCost.toFixed(4)}
@@ -155,54 +125,54 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
           )}
           <button
             onClick={() => setShowSidebar(!showSidebar)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             title="Toggle sidebar"
           >
-            {showSidebar ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
-            Sidebar
+            {showSidebar ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
           </button>
-          <button
-            onClick={summarizeChat}
-            disabled={loading || isStreaming || messages.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors"
-            title="Summarize conversation"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Summarize
-          </button>
-          <button
-            onClick={clearChat}
-            disabled={loading || isStreaming || messages.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-muted-foreground hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors"
-            title="Clear conversation"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Clear
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowActions(!showActions)}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              title="More actions"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {showActions && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowActions(false)} />
+                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 py-1 min-w-[160px]">
+                  <button
+                    onClick={() => { summarizeChat(); setShowActions(false); }}
+                    disabled={loading || isStreaming || messages.length === 0}
+                    className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Summarize
+                  </button>
+                  <button
+                    onClick={() => { clearChat(); setShowActions(false); }}
+                    disabled={loading || isStreaming || messages.length === 0}
+                    className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Clear conversation
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Session tabs */}
-      {!sessionsLoading && (
-        <SessionTabs
-          sessions={sessions}
-          currentSessionId={currentSessionId}
-          activeAgents={scopeAgents}
-          onSessionChange={switchSession}
-          onSessionCreate={createSession}
-          onSessionRename={renameSession}
-          onSessionDelete={deleteSession}
-        />
-      )}
-
       {sessionsError && (
-        <div className="py-2 px-6">
+        <div className="py-2 px-4">
           <InlineError message={sessionsError} context="Sessions" onDismiss={clearSessionsError} />
         </div>
       )}
 
       {error && (
-        <div className="py-2 px-6">
+        <div className="py-2 px-4">
           <InlineError message={error} context="Chat" onDismiss={clearError} />
         </div>
       )}
@@ -211,7 +181,10 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
         <div className="flex-1 flex flex-col min-w-0">
           {loading && messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
-              Loading messages...
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-5 h-5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                <span className="text-sm">Loading messages...</span>
+              </div>
             </div>
           ) : (
             <AgentChat
@@ -221,15 +194,23 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               onSend={sendMessage}
               onStop={stopChat}
               tokenUsage={tokenUsage}
+              agentLibs={agentLibs.length > 0 && currentSessionId ? agentLibs : undefined}
+              selectedAgentLib={selectedAgentLib}
+              onAgentLibChange={handleAgentLibChange}
+              models={currentModels.length > 0 ? currentModels : undefined}
+              selectedModel={selectedModel}
+              onModelChange={handleModelChange}
               emptyState={
-                <div className="text-center text-muted-foreground py-16">
-                  <MessageSquare className="h-8 w-8 mx-auto mb-3 opacity-40" />
-                  <p className="text-sm">
+                <div className="text-center text-muted-foreground/80 py-20">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-muted/50 mb-4">
+                    <MessageSquare className="h-7 w-7 opacity-50" />
+                  </div>
+                  <p className="text-base font-medium text-foreground/70">
                     {scope.type === 'task'
                       ? 'Ask questions about this task'
                       : 'Start a conversation about your project'}
                   </p>
-                  <p className="text-xs mt-1 opacity-70">
+                  <p className="text-sm mt-2 max-w-xs mx-auto">
                     {scope.type === 'task'
                       ? 'The assistant can read files and manage this task via the CLI'
                       : 'Ask about code, manage tasks, or explore the codebase'}
@@ -240,12 +221,10 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
           )}
         </div>
         {showSidebar && (
-          <div className="w-72 border-l border-border bg-card flex flex-col overflow-y-auto">
-            {/* Token Usage section */}
+          <div className="w-72 border-l border-border/50 bg-card/50 flex flex-col overflow-y-auto">
             {messages.length > 0 && (
               <ContextSidebar messages={messages} tokenUsage={tokenUsage} agentLib={selectedAgentLib} model={selectedModel} modelLabel={currentModels.find(m => m.value === selectedModel)?.label} />
             )}
-            {/* Active Agents section */}
             {scopeAgents.length > 0 && (
               <ActiveAgentsPanel
                 agents={scopeAgents}
