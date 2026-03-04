@@ -200,6 +200,7 @@ export class ClaudeCodeLib implements IAgentLib {
           allowDangerouslySkipPermissions: true,
           model: options.model,
           maxTurns: options.maxTurns,
+          thinking: { type: 'adaptive' },
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           hooks: { preToolUse: mergedPreToolUse },
         },
