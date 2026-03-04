@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, MoreVertical, CheckSquare } from 'lucide-react';
+import { Plus, MoreVertical, CheckSquare, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
@@ -19,6 +19,7 @@ export function SidebarSessions() {
     createSession,
     renameSession,
     deleteSession,
+    clearAllSessions,
     switchSession,
   } = useProjectChatSessions();
   const navigate = useNavigate();
@@ -93,14 +94,46 @@ export function SidebarSessions() {
     navigate(`/tasks/${taskSession.scopeId}`);
   };
 
-  const createButton = (
-    <button
-      onClick={handleCreate}
-      className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-      title="New session"
-    >
-      <Plus className="h-3.5 w-3.5" />
-    </button>
+  const handleDeleteTaskSession = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    try {
+      await window.api.chatSession.delete(sessionId);
+      setTaskSessions((prev) => prev.filter((ts) => ts.id !== sessionId));
+    } catch (err) {
+      reportError(err, 'Delete task session');
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm('Delete all sessions? This cannot be undone.')) return;
+    try {
+      await Promise.all([
+        clearAllSessions(),
+        ...taskSessions.map((ts) => window.api.chatSession.delete(ts.id)),
+      ]);
+      setTaskSessions([]);
+    } catch (err) {
+      reportError(err, 'Clear all sessions');
+    }
+  };
+
+  const headerButtons = (
+    <div className="flex items-center gap-0.5">
+      <button
+        onClick={handleClearAll}
+        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        title="Clear all sessions"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={handleCreate}
+        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        title="New session"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 
   if (!currentProjectId) {
@@ -112,7 +145,7 @@ export function SidebarSessions() {
   }
 
   return (
-    <SidebarSection title="Sessions" storageKey="sessions" trailing={createButton}>
+    <SidebarSection title="Sessions" storageKey="sessions" trailing={headerButtons}>
       {sessions.length === 0 ? (
         <p className="px-3 py-2 text-xs text-muted-foreground">No sessions</p>
       ) : (
@@ -222,6 +255,17 @@ export function SidebarSessions() {
                   >
                     {formatRelativeTimestamp(ts.updatedAt)}
                   </span>
+                  <button
+                    onClick={(e) => handleDeleteTaskSession(e, ts.id)}
+                    className={cn(
+                      'p-0.5 rounded hover:bg-muted/50 transition-opacity shrink-0',
+                      'opacity-0 group-hover:opacity-100',
+                      isActive && 'hover:bg-primary-foreground/20'
+                    )}
+                    title="Delete session"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
                 </div>
               );
             })}

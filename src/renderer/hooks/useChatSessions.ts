@@ -147,6 +147,25 @@ export function useChatSessions(scope: ChatScope | null) {
     if (currentScope) localStorage.setItem(storageKey(currentScope), sessionId);
   }, []);
 
+  const clearAllSessions = useCallback(async () => {
+    const currentScope = scopeRef.current;
+    if (!currentScope) return;
+
+    try {
+      await Promise.all(sessions.map((s) => window.api.chatSession.delete(s.id)));
+      setSessions([]);
+      setCurrentSessionId(null);
+
+      const newSession = await window.api.chatSession.create(currentScope.type, currentScope.id, 'General');
+      setSessions([newSession]);
+      setCurrentSessionId(newSession.id);
+      localStorage.setItem(storageKey(currentScope), newSession.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }, [sessions]);
+
   const clearError = useCallback(() => setError(null), []);
 
   return {
@@ -160,6 +179,7 @@ export function useChatSessions(scope: ChatScope | null) {
     renameSession,
     updateSession,
     deleteSession,
+    clearAllSessions,
     switchSession,
   };
 }
