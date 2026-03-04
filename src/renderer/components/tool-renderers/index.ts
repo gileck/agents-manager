@@ -15,6 +15,12 @@ const TOOL_RENDERERS: Record<string, React.ComponentType<ToolRendererProps>> = {
   Edit: EditRenderer,
   Write: WriteRenderer,
   TodoWrite: TodoWriteRenderer,
+  // cursor-agent uses lowercase tool names (from shellToolCall, readToolCall, etc.)
+  shell: BashRenderer,
+  read: ReadRenderer,
+  grep: GrepRenderer,
+  edit: EditRenderer,
+  write: WriteRenderer,
 };
 
 export function getToolRenderer(toolName: string): React.ComponentType<ToolRendererProps> {
