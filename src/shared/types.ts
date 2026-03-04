@@ -979,7 +979,10 @@ export interface ChatMessageCreateInput {
 export type ChatScopeType = 'project' | 'task';
 
 // Chat session source
-export type ChatSessionSource = 'desktop' | 'telegram' | 'cli';
+export type ChatSessionSource = 'desktop' | 'telegram' | 'cli' | 'agent-chat';
+
+// Agent chat message mode
+export type AgentChatMode = 'question' | 'changes';
 
 // Chat Session types
 export interface ChatSession {
@@ -991,6 +994,7 @@ export interface ChatSession {
   agentLib: string | null;
   model: string | null;
   source: ChatSessionSource;
+  agentRole: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -1002,6 +1006,7 @@ export interface ChatSessionCreateInput {
   agentLib?: string;
   model?: string;
   source?: ChatSessionSource;
+  agentRole?: string;
   /** The project this session belongs to. For project-scoped sessions this equals scopeId; for task-scoped sessions it is the task's projectId. */
   projectId: string;
 }
@@ -1015,6 +1020,9 @@ export interface ChatSendOptions {
   systemPrompt: string;
   onEvent?: (event: ChatAgentEvent) => void;
   images?: ChatImage[];
+  pipelineSessionId?: string;
+  resumeSession?: boolean;
+  mode?: AgentChatMode;
 }
 
 export interface ChatSendResult {

@@ -193,7 +193,8 @@ export interface ApiClient {
     getSession(id: string): Promise<unknown>;
     deleteSession(id: string): Promise<unknown>;
     updateSession(id: string, input: { name?: string; agentLib?: string | null }): Promise<unknown>;
-    sendMessage(sessionId: string, message: string, images?: unknown[]): Promise<unknown>;
+    getAgentChatSession(taskId: string, agentRole: string): Promise<unknown>;
+    sendMessage(sessionId: string, message: string, images?: unknown[], mode?: string): Promise<unknown>;
     stopGeneration(sessionId: string): Promise<unknown>;
     getMessages(sessionId: string): Promise<unknown[]>;
     clearMessages(sessionId: string): Promise<unknown>;
@@ -468,8 +469,10 @@ export function createApiClient(baseUrl: string): ApiClient {
       getSession: (id) => req('GET', `/api/chat/sessions/${id}`),
       deleteSession: (id) => req('DELETE', `/api/chat/sessions/${id}`),
       updateSession: (id, input) => req('PATCH', `/api/chat/sessions/${id}`, input),
-      sendMessage: (sessionId, message, images?) =>
-        req('POST', `/api/chat/sessions/${sessionId}/send`, { message, images }),
+      getAgentChatSession: (taskId, agentRole) =>
+        req('GET', `/api/chat/agent-session${qs({ taskId, agentRole })}`),
+      sendMessage: (sessionId, message, images?, mode?) =>
+        req('POST', `/api/chat/sessions/${sessionId}/send`, { message, images, mode }),
       stopGeneration: (sessionId) =>
         req('POST', `/api/chat/sessions/${sessionId}/stop`),
       getMessages: (sessionId) =>

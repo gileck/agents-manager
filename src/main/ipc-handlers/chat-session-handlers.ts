@@ -9,8 +9,8 @@ export function registerChatSessionHandlers(api: ApiClient): void {
 
   // Streaming (CHAT_OUTPUT, CHAT_MESSAGE) is now delivered via WebSocket,
   // not via IPC callbacks. The REST endpoint returns when the send completes.
-  registerIpcHandler(IPC_CHANNELS.CHAT_SEND, async (_, sessionId: string, message: string, images?: unknown) => {
-    return api.chat.sendMessage(sessionId, message, images as unknown[] | undefined);
+  registerIpcHandler(IPC_CHANNELS.CHAT_SEND, async (_, sessionId: string, message: string, images?: unknown, mode?: string) => {
+    return api.chat.sendMessage(sessionId, message, images as unknown[] | undefined, mode);
   });
 
   registerIpcHandler(IPC_CHANNELS.CHAT_STOP, async (_, sessionId: string) => {
@@ -55,6 +55,10 @@ export function registerChatSessionHandlers(api: ApiClient): void {
 
   registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_DELETE, async (_, sessionId: string) => {
     return api.chat.deleteSession(sessionId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_AGENT_SESSION, async (_, taskId: string, agentRole: string) => {
+    return api.chat.getAgentChatSession(taskId, agentRole);
   });
 
   registerIpcHandler(IPC_CHANNELS.CHAT_AGENTS_LIST, async () => {

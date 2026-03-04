@@ -3,7 +3,7 @@ import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
-import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, AgentChatMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks } from '../interfaces/agent-lib';
 import type {
@@ -13,6 +13,8 @@ import type {
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionScope } from './chat-prompt-parts';
+import { buildAgentChatSystemPrompt, buildDesktopSystemPrompt } from './chat-prompt-parts';
+import { deriveSessionId } from './session-history-formatter';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -218,6 +220,29 @@ export class ChatAgentService {
   }
 
   /**
+   * Returns (or creates) the agent-chat session for a given task + agentRole.
+   * There is at most one agent-chat session per task/role pair.
+   */
+  async getOrCreateAgentChatSession(taskId: string, agentRole: string): Promise<import('../../shared/types').ChatSession> {
+    const sessions = await this.chatSessionStore.listSessionsForScope('task', taskId);
+    const existing = sessions.find(s => s.source === 'agent-chat' && s.agentRole === agentRole);
+    if (existing) return existing;
+
+    const task = await this.taskStore.getTask(taskId);
+    if (!task) throw Object.assign(new Error('Task not found'), { status: 404 });
+
+    const roleName = agentRole.charAt(0).toUpperCase() + agentRole.slice(1);
+    return this.chatSessionStore.createSession({
+      scopeType: 'task',
+      scopeId: taskId,
+      name: `Chat with ${roleName}`,
+      source: 'agent-chat',
+      agentRole,
+      projectId: task.projectId,
+    });
+  }
+
+  /**
    * Returns scope information for a session so consumers can build
    * their own system prompt via chat-prompt-parts builders.
    */
@@ -262,12 +287,41 @@ export class ChatAgentService {
     };
   }
 
+  /**
+   * Builds a system prompt and resume options for a session.
+   * Agent-chat sessions get mode-aware prompts and pipeline session resume;
+   * regular sessions get the standard desktop prompt.
+   */
+  async buildSendContext(sessionId: string, mode?: AgentChatMode): Promise<{
+    systemPrompt: string;
+    pipelineSessionId?: string;
+    resumeSession?: boolean;
+    mode?: AgentChatMode;
+  }> {
+    const session = await this.chatSessionStore.getSession(sessionId);
+    if (!session) throw new Error('Session not found');
+
+    const scope = await this.getSessionScope(sessionId);
+
+    if (session.source === 'agent-chat' && session.agentRole) {
+      const effectiveMode = mode ?? 'question';
+      return {
+        systemPrompt: buildAgentChatSystemPrompt(scope, session.agentRole, effectiveMode),
+        pipelineSessionId: deriveSessionId(session.scopeId, session.agentRole),
+        resumeSession: true,
+        mode: effectiveMode,
+      };
+    }
+
+    return { systemPrompt: buildDesktopSystemPrompt(scope) };
+  }
+
   async send(
     sessionId: string,
     message: string,
     options: ChatSendOptions,
   ): Promise<ChatSendResult> {
-    const { systemPrompt, onEvent, images } = options;
+    const { systemPrompt, onEvent, images, pipelineSessionId, resumeSession, mode } = options;
 
     getAppLogger().info('ChatAgentService', `send() called for session ${sessionId}`, { messageLength: message.length, hasImages: !!(images?.length) });
 
@@ -382,7 +436,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, mode }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -553,6 +607,7 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; mode?: AgentChatMode },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -630,7 +685,10 @@ export class ChatAgentService {
         ? images.map((img) => ({ base64: img.base64, mediaType: img.mediaType }))
         : undefined;
 
-      const result = await lib.execute(sessionId, {
+      // When resuming a pipeline agent session, use its sessionId for the execute call
+      const executeSessionId = extra?.pipelineSessionId ?? sessionId;
+
+      const result = await lib.execute(executeSessionId, {
         prompt: `${systemPrompt}\n\n${prompt}`,
         cwd: projectPath,
         model,
@@ -639,6 +697,7 @@ export class ChatAgentService {
         allowedPaths: [],
         readOnlyPaths: [projectPath, imageDir],
         readOnly: true,
+        ...(extra?.resumeSession ? { resumeSession: true } : {}),
         ...(preToolUse ? { hooks: { preToolUse } } : {}),
         ...(libImages ? { images: libImages } : {}),
       }, callbacks);
@@ -705,6 +764,45 @@ export class ChatAgentService {
         } catch (persistErr) {
           getAppLogger().logError('ChatAgentService', 'Failed to persist assistant response', persistErr);
           try { emitEvent({ type: 'text', text: '\n[Warning: Failed to save this response. It may not appear after refresh.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'persist-warning delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
+        }
+
+        // Post-process "changes" mode: extract revised plan/design from JSON response
+        if (extra?.mode === 'changes') {
+          const fullText = turnMessages
+            .filter(m => m.type === 'assistant_text')
+            .map(m => m.text)
+            .join('');
+
+          let parsed: Record<string, unknown> | null = null;
+          try {
+            parsed = JSON.parse(fullText);
+          } catch (parseErr) {
+            getAppLogger().warn('ChatAgentService', 'Failed to parse changes-mode JSON response; plan not updated', { error: parseErr instanceof Error ? parseErr.message : String(parseErr) });
+          }
+
+          if (parsed) {
+            try {
+              const session = await this.chatSessionStore.getSession(sessionId);
+              if (!session?.agentRole) {
+                getAppLogger().warn('ChatAgentService', `changes-mode: session ${sessionId} has no agentRole; cannot update task`);
+              } else {
+                const field = session.agentRole === 'designer' ? 'technicalDesign' : 'plan';
+                const revisedContent = parsed.revisedDesign ?? parsed.revisedPlan;
+                if (!revisedContent || typeof revisedContent !== 'string') {
+                  getAppLogger().warn('ChatAgentService', `changes-mode: agent response missing or non-string revisedDesign/revisedPlan for session ${sessionId}`);
+                  try { emitEvent({ type: 'text', text: '\n[Warning: Agent response did not contain a valid revised plan/design. No update was made.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
+                } else if (session.scopeType !== 'task') {
+                  getAppLogger().warn('ChatAgentService', `changes-mode: session ${sessionId} scopeType is '${session.scopeType}', not 'task'; skipping update`);
+                } else {
+                  await this.taskStore.updateTask(session.scopeId, { [field]: revisedContent } as import('../../shared/types').TaskUpdateInput);
+                  getAppLogger().info('ChatAgentService', `Updated task ${session.scopeId} ${field} via agent-chat changes mode`);
+                }
+              }
+            } catch (dbErr) {
+              getAppLogger().logError('ChatAgentService', `Failed to persist revised content for session ${sessionId}`, dbErr);
+              try { emitEvent({ type: 'text', text: '\n[Warning: The revised content was generated but could not be saved to the task.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
+            }
+          }
         }
       }
 

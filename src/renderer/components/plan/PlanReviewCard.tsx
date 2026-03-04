@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { CommentThread } from './CommentThread';
 import { CommentInput } from './CommentInput';
+import { AgentChatPanel } from './AgentChatPanel';
 import type { TaskContextEntry, Transition } from '../../../shared/types';
 
 interface PlanReviewCardProps {
@@ -17,6 +18,8 @@ interface PlanReviewCardProps {
   reviseToStatus?: string;
   onAction: (toStatus: string, comment: string) => Promise<void>;
   renderContent?: (content: string) => React.ReactNode;
+  taskId?: string;
+  agentRole?: string;
 }
 
 export function PlanReviewCard({
@@ -32,6 +35,8 @@ export function PlanReviewCard({
   reviseToStatus,
   onAction,
   renderContent,
+  taskId,
+  agentRole,
 }: PlanReviewCardProps) {
   const approveTransition = transitions.find((t) => t.to === approveToStatus);
   const reviseTransition = reviseToStatus ? transitions.find((t) => t.to === reviseToStatus) : undefined;
@@ -50,6 +55,15 @@ export function PlanReviewCard({
             <p className="text-sm text-muted-foreground">{emptyContentMessage}</p>
           )}
         </div>
+
+        {/* Agent Chat Panel — inline chat with the agent */}
+        {taskId && agentRole && (
+          <AgentChatPanel
+            taskId={taskId}
+            agentRole={agentRole}
+            hasContent={!!content}
+          />
+        )}
 
         {/* Comments Section - Always visible */}
         {(entries.length > 0 || isReviewStatus) && (

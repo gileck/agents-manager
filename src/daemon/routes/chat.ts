@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
-import { buildDesktopSystemPrompt } from '../../core/services/chat-prompt-parts';
+import type { AgentChatMode } from '../../shared/types';
 import type { WsHolder } from '../server';
 import { WS_CHANNELS } from '../ws/channels';
 import type { ChatImage } from '../../shared/types';
@@ -26,6 +26,24 @@ function validateImages(images: unknown): ChatImage[] | undefined {
 export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
 
+  // GET /api/chat/agent-session — get or create agent-chat session for a task+role
+  router.get('/api/chat/agent-session', async (req, res, next) => {
+    try {
+      const { taskId, agentRole } = req.query as { taskId?: string; agentRole?: string };
+      if (!taskId || !agentRole) {
+        res.status(400).json({ error: 'taskId and agentRole query params are required' });
+        return;
+      }
+      const VALID_AGENT_ROLES = ['planner', 'designer', 'implementor', 'investigator', 'reviewer'];
+      if (!VALID_AGENT_ROLES.includes(agentRole)) {
+        res.status(400).json({ error: `Invalid agentRole: ${agentRole}. Must be one of: ${VALID_AGENT_ROLES.join(', ')}` });
+        return;
+      }
+      const session = await services.chatAgentService.getOrCreateAgentChatSession(taskId, agentRole);
+      res.json(session);
+    } catch (err) { next(err); }
+  });
+
   // POST /api/chat/sessions — create session
   router.post('/api/chat/sessions', async (req, res, next) => {
     try {
@@ -46,7 +64,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
       if (scopeType === 'task' && !scopeId && projectId) {
         const sessions = await services.chatSessionStore.listTaskSessionsForProject(
           projectId,
-          { excludeSources: ['telegram'] },
+          { excludeSources: ['telegram', 'agent-chat'] },
         );
         res.json(sessions);
         return;
@@ -58,7 +76,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
       const sessions = await services.chatSessionStore.listSessionsForScope(
         scopeType as 'project' | 'task',
         scopeId,
-        { excludeSources: ['telegram'] },
+        { excludeSources: ['telegram', 'agent-chat'] },
       );
       res.json(sessions);
     } catch (err) { next(err); }
@@ -95,7 +113,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   router.post('/api/chat/sessions/:id/send', async (req, res, next) => {
     try {
       const sessionId = req.params.id;
-      const { message, images } = req.body as { message: string; images?: unknown };
+      const { message, images, mode: rawMode } = req.body as { message: string; images?: unknown; mode?: string };
       if (!message || typeof message !== 'string') {
         res.status(400).json({ error: 'message is required and must be a string' });
         return;
@@ -109,18 +127,22 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(400).json({ error: 'Message is too long (max 10000 characters)' });
         return;
       }
+      const mode: AgentChatMode = rawMode === 'changes' ? 'changes' : 'question';
+      if (rawMode && rawMode !== 'question' && rawMode !== 'changes') {
+        getAppLogger().warn('ChatRoute', `Unrecognized mode '${rawMode}' for session ${sessionId}; defaulting to 'question'`);
+      }
 
-      getAppLogger().info('ChatRoute', `POST /send for session ${sessionId}`, { messageLength: message.length });
+      getAppLogger().info('ChatRoute', `POST /send for session ${sessionId}`, { messageLength: message.length, mode });
 
-      const scope = await services.chatAgentService.getSessionScope(sessionId);
-      const systemPrompt = buildDesktopSystemPrompt(scope);
+      // Build prompt + resume options via service (keeps business logic out of routes)
+      const sendCtx = await services.chatAgentService.buildSendContext(sessionId, mode);
 
       const ws = wsHolder.server;
       const { userMessage } = await services.chatAgentService.send(
         sessionId,
         message,
         {
-          systemPrompt,
+          ...sendCtx,
           onEvent: (event) => {
             if (event.type === 'text') ws?.broadcast(WS_CHANNELS.CHAT_OUTPUT, sessionId, event.text);
             else if (event.type === 'message') ws?.broadcast(WS_CHANNELS.CHAT_MESSAGE, sessionId, event.message);

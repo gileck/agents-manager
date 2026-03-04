@@ -696,6 +696,8 @@ export function TaskDetailPage() {
             reviseToStatus="planning"
             onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'plan_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
+            taskId={id}
+            agentRole="planner"
           />
         </TabsContent>
 
@@ -713,6 +715,8 @@ export function TaskDetailPage() {
             reviseToStatus="designing"
             onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'design_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
+            taskId={id}
+            agentRole="designer"
           />
         </TabsContent>
 

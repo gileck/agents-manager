@@ -148,6 +148,7 @@ const IPC_CHANNELS = {
   CHAT_SESSION_LIST_TASK_SESSIONS: 'chat:session:list-task-sessions',
   CHAT_SESSION_UPDATE: 'chat:session:update',
   CHAT_SESSION_DELETE: 'chat:session:delete',
+  CHAT_AGENT_SESSION: 'chat:agent-session',
   CHAT_AGENTS_LIST: 'chat:agents:list',
   AGENT_LIB_LIST: 'agent-lib:list',
   GIT_PROJECT_LOG: 'git:project-log',
@@ -435,8 +436,8 @@ const api = {
 
   // Chat operations
   chat: {
-    send: (sessionId: string, message: string, images?: ChatImage[]): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, sessionId, message, images),
+    send: (sessionId: string, message: string, images?: ChatImage[], mode?: string): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, sessionId, message, images, mode),
     stop: (sessionId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, sessionId),
     messages: (sessionId: string): Promise<ChatMessage[]> =>
@@ -461,6 +462,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
+    getAgentChatSession: (taskId: string, agentRole: string): Promise<ChatSession> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_AGENT_SESSION, taskId, agentRole),
     listAgents: (): Promise<RunningAgent[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_AGENTS_LIST),
   },
