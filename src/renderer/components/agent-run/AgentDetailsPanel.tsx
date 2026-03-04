@@ -41,6 +41,12 @@ export function AgentDetailsPanel({ run }: AgentDetailsPanelProps) {
                 <p className="text-sm">{run.engine}</p>
               </div>
             )}
+            {run.model && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Model</p>
+                <p className="text-sm">{run.model}</p>
+              </div>
+            )}
             {run.timeoutMs != null && (
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Timeout</p>

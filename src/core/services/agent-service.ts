@@ -357,8 +357,8 @@ export class AgentService implements IAgentService {
       engine: agentDefEngine,
     };
 
-    // Store the resolved engine on the run record so it's visible in the UI
-    await this.agentRunStore.updateRun(run.id, { engine: agentDefEngine });
+    // Store the resolved engine and model on the run record so it's visible in the UI
+    await this.agentRunStore.updateRun(run.id, { engine: agentDefEngine, ...(config.model ? { model: config.model } : {}) });
 
     // 7. Store active callbacks for this task
     this.activeCallbacks.set(taskId, { onOutput, onMessage, onStatusChange });
