@@ -346,8 +346,7 @@ export class CursorAgentLib implements IAgentLib {
         break;
       }
 
-      case 'tool_use':
-      case 'tool_call': {
+      case 'tool_use': {
         const toolName = (msg.name ?? msg.tool ?? 'unknown') as string;
         const input = JSON.stringify(msg.input ?? msg.arguments ?? {});
         const toolId = msg.id as string | undefined;
@@ -356,8 +355,33 @@ export class CursorAgentLib implements IAgentLib {
         break;
       }
 
+      case 'tool_call': {
+        // cursor-agent format: { type: "tool_call", subtype: "started"|"completed",
+        //   call_id: "...", tool_call: { readToolCall: { args: {...}, result?: {...} } } }
+        const callId = msg.call_id as string | undefined;
+        const toolCallObj = msg.tool_call as Record<string, { args?: unknown; result?: unknown }> | undefined;
+        if (!toolCallObj) break;
+        const toolKey = Object.keys(toolCallObj)[0];
+        if (!toolKey) break;
+        const toolName = toolKey.replace(/ToolCall$/, '');
+        const toolData = toolCallObj[toolKey];
+
+        if (msg.subtype === 'started') {
+          const input = JSON.stringify(toolData.args ?? {});
+          stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
+          onMessage?.({ type: 'tool_use', toolName, toolId: callId, input: input.slice(0, 2000), timestamp: Date.now() });
+        } else if (msg.subtype === 'completed') {
+          const result = JSON.stringify(toolData.result ?? '');
+          onMessage?.({ type: 'tool_result', toolId: callId, result: result.slice(0, 2000), timestamp: Date.now() });
+          if (callId) {
+            onUserToolResult?.(callId, result.slice(0, 2000));
+          }
+        }
+        break;
+      }
+
       case 'tool_result': {
-        const toolId = (msg.tool_use_id ?? msg.id) as string | undefined;
+        const toolId = (msg.tool_use_id ?? msg.call_id ?? msg.id) as string | undefined;
         const result = typeof msg.result === 'string' ? msg.result : JSON.stringify(msg.result ?? '');
         onMessage?.({ type: 'tool_result', toolId, result: result.slice(0, 2000), timestamp: Date.now() });
         if (toolId) {
