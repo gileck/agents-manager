@@ -71,7 +71,6 @@ import { AgentSupervisor } from '../services/agent-supervisor';
 import { TaskReviewReportBuilder } from '../services/task-review-report-builder';
 import { ValidationRunner } from '../services/validation-runner';
 import { OutcomeResolver } from '../services/outcome-resolver';
-import { WorkflowReviewSupervisor } from '../services/workflow-review-supervisor';
 import { TimelineService } from '../services/timeline/timeline-service';
 import { EventSource } from '../services/timeline/sources/event-source';
 import { ActivitySource } from '../services/timeline/sources/activity-source';
@@ -125,7 +124,6 @@ export interface AppServices {
   createGitOps: (cwd: string) => import('../interfaces/git-ops').IGitOps;
   agentSupervisor: AgentSupervisor;
   timelineService: TimelineService;
-  workflowReviewSupervisor: WorkflowReviewSupervisor;
   chatMessageStore: IChatMessageStore;
   chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
@@ -266,12 +264,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskStore, pipelineStore, workflowService,
   );
 
-  // Supervisor for automatic workflow reviews of completed tasks
-  const workflowReviewSupervisor = new WorkflowReviewSupervisor(
-    taskStore, taskContextStore, pipelineStore,
-    workflowService, agentRunStore, taskEventLog,
-  );
-
   // Chat agent service (unified: handles both project and task scopes)
   const getDefaultAgentLib = () => {
     try {
@@ -320,7 +312,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     createGitOps,
     agentSupervisor,
     timelineService,
-    workflowReviewSupervisor,
     chatMessageStore,
     chatSessionStore,
     chatAgentService,

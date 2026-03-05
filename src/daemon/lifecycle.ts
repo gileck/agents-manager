@@ -2,12 +2,10 @@ import type { AppServices } from '../core/providers/setup';
 
 export function startSupervisors(services: AppServices): void {
   services.agentSupervisor.start();
-  services.workflowReviewSupervisor.start(5 * 60 * 1000);
   services.schedulerSupervisor.start(60_000);
 }
 
 export function stopSupervisors(services: AppServices): void {
   services.agentSupervisor.stop();
-  services.workflowReviewSupervisor.stop();
   services.schedulerSupervisor.stop();
 }

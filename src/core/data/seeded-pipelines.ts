@@ -27,7 +27,8 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { name: 'ready_to_merge', label: 'Ready to Merge', category: 'human_review', position: 9 },
     { name: 'needs_info', label: 'Needs Info', category: 'waiting_for_input', position: 10 },
     { name: 'done', label: 'Done', isFinal: true, category: 'terminal', position: 11 },
-    { name: 'closed', label: 'Closed', isFinal: true, category: 'terminal', position: 12 },
+    { name: 'workflow_review', label: 'Workflow Review', category: 'agent_running', position: 12 },
+    { name: 'closed', label: 'Closed', isFinal: true, category: 'terminal', position: 13 },
   ],
   transitions: [
     // === Manual transitions from open ===
@@ -198,8 +199,12 @@ export const AGENT_PIPELINE: SeededPipeline = {
       guards: [{ name: 'no_running_agent' }] },
     { from: 'closed', to: 'open', trigger: 'manual', label: 'Reopen' },
 
-    // === Workflow review acknowledgment (no-op self-transition) ===
-    { from: 'done', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },
+    // === Workflow review (manual trigger from done) ===
+    { from: 'done', to: 'workflow_review', trigger: 'manual', label: 'Review Workflow',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'task-workflow-reviewer' }, policy: 'fire_and_forget' }] },
+    { from: 'workflow_review', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },
+    { from: 'workflow_review', to: 'done', trigger: 'agent', agentOutcome: 'failed' },
 
     // === Request changes from ready_to_merge ===
     { from: 'ready_to_merge', to: 'implementing', trigger: 'manual', label: 'Request Changes',
