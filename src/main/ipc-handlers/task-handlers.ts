@@ -17,7 +17,15 @@ export function registerTaskHandlers(api: ApiClient): void {
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_GET, async (_, id: string) => {
-    return api.tasks.get(id);
+    try {
+      return await api.tasks.get(id);
+    } catch (err) {
+      // Return null for 404s instead of throwing — avoids noisy Electron IPC error logs
+      if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 404) {
+        return null;
+      }
+      throw err;
+    }
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_CREATE, async (_, input: unknown) => {
