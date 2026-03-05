@@ -93,7 +93,7 @@ export function FullscreenReviewOverlay({
   if (!appRoot) return null;
 
   return createPortal(
-    <div className="absolute inset-0 z-50" style={{ backgroundColor: 'var(--background, #fff)' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, backgroundColor: 'var(--background, #fff)' }}>
       {/* Top bar */}
       <div
         style={{
