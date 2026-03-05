@@ -188,10 +188,12 @@ export function ImplementationTab({
       {completedPhases.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Merged PRs</h3>
-          {completedPhases.map((p, i) => (
+          {completedPhases.map((p) => {
+            const phaseNum = phases!.indexOf(p) + 1;
+            return (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <span style={{ fontSize: 12, color: '#16a34a' }}>✓</span>
-              <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>Phase {i + 1}:</span>
+              <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>Phase {phaseNum}:</span>
               <button
                 onClick={() => window.api.shell.openInChrome(p.prLink!)}
                 style={{ fontSize: 12, color: '#58a6ff', cursor: 'pointer', background: 'none', border: 'none', textAlign: 'left' }}
@@ -200,7 +202,8 @@ export function ImplementationTab({
                 {p.prLink}
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -52,5 +52,9 @@ export function getMigrations(): Migration[] {
       name: '096_add_agent_run_id_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN agent_run_id TEXT`,
     },
+    {
+      name: '097_reseed_pipelines_phase_auto_merge',
+      sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}', transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
+    },
   ];
 }
