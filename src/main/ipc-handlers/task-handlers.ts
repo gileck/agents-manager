@@ -21,7 +21,11 @@ export function registerTaskHandlers(api: ApiClient): void {
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_CREATE, async (_, input: unknown) => {
-    return api.tasks.create(input as Parameters<typeof api.tasks.create>[0]);
+    const createInput = input as Parameters<typeof api.tasks.create>[0];
+    if (!createInput.createdBy) {
+      createInput.createdBy = 'user';
+    }
+    return api.tasks.create(createInput);
   });
 
   registerIpcHandler(IPC_CHANNELS.TASK_UPDATE, async (_, id: string, input: unknown) => {

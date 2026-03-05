@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Task, TaskType, TaskSize, TaskComplexity, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, ImplementationPhase, PlanComment } from '../../shared/types';
+import type { Task, TaskType, TaskSize, TaskComplexity, TaskCreatedBy, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, ImplementationPhase, PlanComment } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import { generateId, now, parseJson } from './utils';
@@ -32,6 +32,7 @@ interface TaskRow {
   metadata: string;
   created_at: number;
   updated_at: number;
+  created_by: string | null;
 }
 
 function rowToTask(row: TaskRow): Task {
@@ -62,6 +63,7 @@ function rowToTask(row: TaskRow): Task {
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    createdBy: (row.created_by as TaskCreatedBy) ?? null,
   };
 }
 
@@ -143,6 +145,10 @@ export class SqliteTaskStore implements ITaskStore {
         const pattern = `%${filter.search}%`;
         values.push(pattern, pattern);
       }
+      if (filter?.createdBy) {
+        conditions.push('created_by = ?');
+        values.push(filter.createdBy);
+      }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
       const rows = this.db.prepare(`SELECT * FROM tasks ${where} ORDER BY created_at DESC`).all(...values) as TaskRow[];
@@ -170,8 +176,8 @@ export class SqliteTaskStore implements ITaskStore {
       }
 
       this.db.prepare(`
-        INSERT INTO tasks (id, project_id, pipeline_id, title, description, type, size, complexity, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, debug_info, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, project_id, pipeline_id, title, description, type, size, complexity, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, debug_info, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         input.projectId,
@@ -199,6 +205,7 @@ export class SqliteTaskStore implements ITaskStore {
         JSON.stringify(input.metadata ?? {}),
         timestamp,
         timestamp,
+        input.createdBy ?? null,
       );
 
       return (await this.getTask(id))!;

@@ -262,6 +262,8 @@ export type TaskSize = typeof VALID_TASK_SIZES[number];
 export const VALID_TASK_COMPLEXITIES = ['low', 'medium', 'high'] as const;
 export type TaskComplexity = typeof VALID_TASK_COMPLEXITIES[number];
 
+export type TaskCreatedBy = 'user' | 'workflow-reviewer' | 'session-agent';
+
 export interface Task {
   id: string;
   projectId: string;
@@ -291,6 +293,7 @@ export interface Task {
   metadata: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
+  createdBy: TaskCreatedBy | null;
 }
 
 export interface TaskCreateInput {
@@ -313,6 +316,7 @@ export interface TaskCreateInput {
   subtasks?: Subtask[];
   phases?: ImplementationPhase[] | null;
   metadata?: Record<string, unknown>;
+  createdBy?: TaskCreatedBy;
 }
 
 export interface TaskUpdateInput {
@@ -356,6 +360,7 @@ export interface TaskFilter {
   tag?: string;
   /** Free-text search across title and description (case-insensitive substring match) */
   search?: string;
+  createdBy?: TaskCreatedBy;
 }
 
 // Task dependency
