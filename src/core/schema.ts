@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   technical_design_comments TEXT NOT NULL DEFAULT '[]',
   phases TEXT,
   debug_info TEXT,
+  created_by TEXT,
   FOREIGN KEY (project_id) REFERENCES projects(id),
   FOREIGN KEY (pipeline_id) REFERENCES pipelines(id),
   FOREIGN KEY (parent_task_id) REFERENCES tasks(id)

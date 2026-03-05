@@ -44,5 +44,9 @@ export function getMigrations(): Migration[] {
       name: '094_add_model_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN model TEXT`,
     },
+    {
+      name: '095_add_created_by_to_tasks',
+      sql: `ALTER TABLE tasks ADD COLUMN created_by TEXT`,
+    },
   ];
 }

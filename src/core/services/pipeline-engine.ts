@@ -53,6 +53,7 @@ interface TaskRow {
   metadata: string;
   created_at: number;
   updated_at: number;
+  created_by: string | null;
 }
 
 function rowToTask(row: TaskRow): Task {
@@ -83,6 +84,7 @@ function rowToTask(row: TaskRow): Task {
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    createdBy: (row.created_by as Task['createdBy']) ?? null,
   };
 }
 
