@@ -162,10 +162,16 @@ export function TaskDetailDashboard({
         </Card>
 
         {/* Extra metadata */}
-        {(task.featureId || task.prLink || task.branchName || task.tags.length > 0 || task.assignee) && (
+        {(task.featureId || task.prLink || task.branchName || task.tags.length > 0 || task.assignee || task.createdBy) && (
           <Card>
             <CardContent className="py-4">
               <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: '0.625rem', alignItems: 'start' }}>
+                {task.createdBy && (
+                  <>
+                    <span className="text-sm text-muted-foreground">Created by</span>
+                    <span className="text-sm">{task.createdBy}</span>
+                  </>
+                )}
                 {task.assignee && (
                   <>
                     <span className="text-sm text-muted-foreground">Assignee</span>

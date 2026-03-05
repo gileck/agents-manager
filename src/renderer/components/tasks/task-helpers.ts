@@ -9,7 +9,7 @@ export const PRIORITY_LABELS: Record<number, string> = {
 
 export type SortField = 'created' | 'updated' | 'priority' | 'status' | 'title';
 export type SortDirection = 'asc' | 'desc';
-export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline' | 'feature';
+export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline' | 'feature' | 'createdBy';
 
 export function sortTasks(tasks: Task[], field: SortField, direction: SortDirection): Task[] {
   const sorted = [...tasks].sort((a, b) => {
@@ -65,6 +65,9 @@ export function groupTasks(
           ? (featureMap?.get(task.featureId)?.title ?? task.featureId)
           : 'No Feature';
         break;
+      case 'createdBy':
+        key = task.createdBy ?? 'unknown';
+        break;
       default:
         key = 'all';
     }
@@ -96,6 +99,7 @@ export function countActiveFilters(filters: {
   assignee?: string;
   tag?: string;
   featureId?: string;
+  createdBy?: string;
 }): number {
   let count = 0;
   if (filters.search) count++;
@@ -105,6 +109,7 @@ export function countActiveFilters(filters: {
   if (filters.assignee) count++;
   if (filters.tag) count++;
   if (filters.featureId) count++;
+  if (filters.createdBy) count++;
   return count;
 }
 
