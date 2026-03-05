@@ -166,7 +166,7 @@ export function AgentRunsListPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{ minWidth: '1200px' }}>
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="px-4 py-2 font-medium">Status</th>
@@ -199,14 +199,14 @@ export function AgentRunsListPage() {
                       <td className="px-4 py-2">
                         <StatusBadge status={run.status} />
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs">{run.agentType}</td>
-                      <td className="px-4 py-2 max-w-[250px] truncate" title={task?.title || run.taskId}>
+                      <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{run.agentType}</td>
+                      <td className="px-4 py-2 max-w-[300px] truncate whitespace-nowrap" title={task?.title || run.taskId}>
                         {task?.title || <span className="text-muted-foreground">{run.taskId.slice(0, 8)}...</span>}
                       </td>
-                      <td className="px-4 py-2 text-xs">{run.mode}</td>
+                      <td className="px-4 py-2 text-xs whitespace-nowrap">{run.mode}</td>
                       <td className="px-4 py-2 text-xs whitespace-nowrap">{formatTime(run.startedAt)}</td>
                       <td className="px-4 py-2 text-xs whitespace-nowrap">{formatDuration(run.startedAt, run.completedAt)}</td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground">{run.model || '-'}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">{run.model || '-'}</td>
                       <td className="px-4 py-2 max-w-[300px]">
                         {run.error ? (
                           <span className="text-xs text-red-600 dark:text-red-400 truncate block" title={run.error}>
