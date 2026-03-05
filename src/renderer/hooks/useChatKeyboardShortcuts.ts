@@ -1,5 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import type { ChatSession } from '../../shared/types';
+import { useKeyboardShortcutsConfig } from './useKeyboardShortcutsConfig';
+import { matchesKeyEvent } from '../lib/keyboardShortcuts';
 
 interface UseChatKeyboardShortcutsOptions {
   sessions: ChatSession[];
@@ -34,73 +36,67 @@ export function useChatKeyboardShortcuts({
   focusInput,
   enabled = true,
 }: UseChatKeyboardShortcutsOptions) {
+  const { getCombo } = useKeyboardShortcutsConfig();
+
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!enabled) return;
-    if (!event.metaKey && !event.ctrlKey) return;
 
     const currentIndex = sessions.findIndex(s => s.id === currentSessionId);
 
-    switch (event.key) {
-      case 'n':
-      case 'N': {
-        event.preventDefault();
-        createSession('New Session');
-        break;
-      }
+    if (matchesKeyEvent(getCombo('chat.newSession'), event)) {
+      event.preventDefault();
+      createSession('New Session');
+      return;
+    }
 
-      case 'w':
-      case 'W': {
-        if (sessions.length > 1 && currentSessionId) {
+    if (matchesKeyEvent(getCombo('chat.closeSession'), event)) {
+      if (sessions.length > 1 && currentSessionId) {
+        event.preventDefault();
+        deleteSession(currentSessionId);
+      }
+      return;
+    }
+
+    if (matchesKeyEvent(getCombo('chat.prevSession'), event)) {
+      event.preventDefault();
+      if (currentIndex > 0) {
+        switchSession(sessions[currentIndex - 1].id);
+      }
+      return;
+    }
+
+    if (matchesKeyEvent(getCombo('chat.nextSession'), event)) {
+      event.preventDefault();
+      if (currentIndex >= 0 && currentIndex < sessions.length - 1) {
+        switchSession(sessions[currentIndex + 1].id);
+      }
+      return;
+    }
+
+    if (matchesKeyEvent(getCombo('chat.focusInput'), event)) {
+      event.preventDefault();
+      focusInput();
+      return;
+    }
+
+    if (matchesKeyEvent(getCombo('chat.clearChat'), event)) {
+      event.preventDefault();
+      clearChat();
+      return;
+    }
+
+    // Cmd+1 through Cmd+9 (non-customizable range)
+    if (event.metaKey || event.ctrlKey) {
+      const digit = parseInt(event.key, 10);
+      if (digit >= 1 && digit <= 9) {
+        const target = sessions[digit - 1];
+        if (target) {
           event.preventDefault();
-          deleteSession(currentSessionId);
+          switchSession(target.id);
         }
-        break;
-      }
-
-      case '[': {
-        event.preventDefault();
-        if (currentIndex > 0) {
-          switchSession(sessions[currentIndex - 1].id);
-        }
-        break;
-      }
-
-      case ']': {
-        event.preventDefault();
-        if (currentIndex >= 0 && currentIndex < sessions.length - 1) {
-          switchSession(sessions[currentIndex + 1].id);
-        }
-        break;
-      }
-
-      case 'l':
-      case 'L': {
-        event.preventDefault();
-        focusInput();
-        break;
-      }
-
-      case 'k':
-      case 'K': {
-        event.preventDefault();
-        clearChat();
-        break;
-      }
-
-      default: {
-        // Cmd+1 through Cmd+9
-        const digit = parseInt(event.key, 10);
-        if (digit >= 1 && digit <= 9) {
-          const target = sessions[digit - 1];
-          if (target) {
-            event.preventDefault();
-            switchSession(target.id);
-          }
-        }
-        break;
       }
     }
-  }, [enabled, sessions, currentSessionId, switchSession, createSession, deleteSession, clearChat, focusInput]);
+  }, [enabled, sessions, currentSessionId, switchSession, createSession, deleteSession, clearChat, focusInput, getCombo]);
 
   useEffect(() => {
     if (enabled) {
