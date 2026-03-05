@@ -264,6 +264,7 @@ function renderMergedNode(
         {implPhases && implPhases.length > 1 && phase.workStatus === 'implementing' && (() => {
           const activeIdx = implPhases.findIndex(p => p.status === 'in_progress');
           const completedCount = implPhases.filter(p => p.status === 'completed').length;
+          if (activeIdx < 0 && completedCount === implPhases.length) return null;
           const phaseNum = activeIdx >= 0 ? activeIdx + 1 : completedCount + 1;
           return (
             <span style={{ fontSize: 9, color: labelColor, opacity: 0.8 }}>

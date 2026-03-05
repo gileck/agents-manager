@@ -126,20 +126,15 @@ export function ImplementationTab({
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Parse diffs from all diff artifacts (one per phase)
+  // Parse diffs from all diff artifacts (one per phase).
+  // Each phase's diff is against origin/main (with prior phases already merged),
+  // so diffs are complementary — show all without dedup.
   const fileDiffs = useMemo(() => {
     const diffArtifacts = artifacts?.filter((a) => a.type === 'diff') ?? [];
     const allDiffs: FileDiff[] = [];
-    const seenFiles = new Set<string>();
-    // Process in reverse so latest diff wins for duplicate filenames
-    for (let i = diffArtifacts.length - 1; i >= 0; i--) {
-      const raw = (diffArtifacts[i].data as { diff?: string } | undefined)?.diff ?? '';
-      for (const f of parseDiff(raw)) {
-        if (!seenFiles.has(f.filename)) {
-          seenFiles.add(f.filename);
-          allDiffs.push(f);
-        }
-      }
+    for (const artifact of diffArtifacts) {
+      const raw = (artifact.data as { diff?: string } | undefined)?.diff ?? '';
+      allDiffs.push(...parseDiff(raw));
     }
     return allDiffs;
   }, [artifacts]);
