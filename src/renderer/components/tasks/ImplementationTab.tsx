@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import type { TaskArtifact, Transition, TaskContextEntry } from '../../../shared/types';
+import { ImplementationReviewSection } from '../task-detail/ImplementationReviewSection';
 
 // ---------------------------------------------------------------------------
 // Diff parsing helpers
@@ -197,6 +198,9 @@ export function ImplementationTab({
           No implementation data yet. Diffs and PR link will appear after the implementor agent completes.
         </div>
       )}
+
+      {/* Implementation review output from reviewer agent */}
+      <ImplementationReviewSection contextEntries={contextEntries} />
 
       {/* Previous change request comments */}
       {changeRequests.length > 0 && (
