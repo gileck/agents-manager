@@ -549,9 +549,9 @@ describe('Phase Cycling E2E', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test: Agent approval path (pr_review -> done via agent outcome approved)
+  // Test: Agent approval auto-merges and cycles for multi-phase tasks
   // -------------------------------------------------------------------------
-  it('should handle phase cycling via agent approval (not just manual)', async () => {
+  it('should auto-merge and cycle when agent approves a multi-phase task with pending phases', async () => {
     let task = await createThreePhaseTask();
 
     task = await ctx.transitionTo(task.id, 'implementing');
@@ -564,27 +564,114 @@ describe('Phase Cycling E2E', () => {
       data: { outcome: 'pr_ready', branch: 'branch-p1' },
     });
 
-    // Approve via agent outcome (simulates PR reviewer agent approving)
-    // Agent 'approved' outcome goes pr_review -> ready_to_merge
+    // Approve via agent outcome — should auto-merge and cycle (pr_review → done → implementing)
     task = (await ctx.taskStore.getTask(task.id))!;
-    const agentApprovalResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', {
+    expect(task.status).toBe('pr_review');
+    const agentApprovalResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
       trigger: 'agent',
       data: { outcome: 'approved' },
     });
     expect(agentApprovalResult.success).toBe(true);
 
-    // Then merge: ready_to_merge -> done (manual with admin)
-    task = (await ctx.taskStore.getTask(task.id))!;
-    const mergeResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
-      trigger: 'manual',
-      actor: 'admin',
-    });
-    expect(mergeResult.success).toBe(true);
-
-    // advance_phase should have cycled the task back
+    // advance_phase should have cycled the task back to implementing
     task = (await ctx.taskStore.getTask(task.id))!;
     expect(task.status).toBe('implementing');
     expect(task.phases![0].status).toBe('completed');
     expect(task.phases![1].status).toBe('in_progress');
+  });
+
+  // -------------------------------------------------------------------------
+  // Test: Agent approval goes to ready_to_merge for single-phase / final phase
+  // -------------------------------------------------------------------------
+  it('should go to ready_to_merge when agent approves a task without pending phases', async () => {
+    // Create task WITHOUT phases
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+
+    let current = await ctx.transitionTo(task.id, 'implementing');
+
+    await createPrArtifact(task.id, 'branch-single');
+    current = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(current, 'pr_review', {
+      trigger: 'agent',
+      data: { outcome: 'pr_ready', branch: 'branch-single' },
+    });
+
+    // Approve via agent outcome — should go to ready_to_merge (no phases)
+    current = (await ctx.taskStore.getTask(task.id))!;
+    const result = await ctx.pipelineEngine.executeTransition(current, 'ready_to_merge', {
+      trigger: 'agent',
+      data: { outcome: 'approved' },
+    });
+    expect(result.success).toBe(true);
+
+    current = (await ctx.taskStore.getTask(task.id))!;
+    expect(current.status).toBe('ready_to_merge');
+  });
+
+  // -------------------------------------------------------------------------
+  // Test: tryOutcomeTransition auto-merges multi-phase tasks (regression test)
+  // This test would have FAILED before the fix — the task would end up at
+  // ready_to_merge instead of cycling back to implementing.
+  // -------------------------------------------------------------------------
+  it('should auto-merge and cycle via tryOutcomeTransition for multi-phase tasks', async () => {
+    let task = await createThreePhaseTask();
+
+    task = await ctx.transitionTo(task.id, 'implementing');
+
+    // Phase 1: Create PR and get to pr_review
+    await createPrArtifact(task.id, 'branch-p1', 'Phase 1/3');
+    task = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
+      trigger: 'agent',
+      data: { outcome: 'pr_ready', branch: 'branch-p1' },
+    });
+
+    // Simulate what the outcome resolver does when the reviewer agent approves
+    task = (await ctx.taskStore.getTask(task.id))!;
+    expect(task.status).toBe('pr_review');
+    expect(task.phases![0].status).toBe('in_progress');
+
+    await ctx.outcomeResolver.tryOutcomeTransition(task.id, 'approved');
+
+    // Before the fix: task would be stuck at ready_to_merge
+    // After the fix: task auto-merges and cycles back to implementing for phase 2
+    task = (await ctx.taskStore.getTask(task.id))!;
+    expect(task.status).toBe('implementing');
+    expect(task.phases![0].status).toBe('completed');
+    expect(task.phases![1].status).toBe('in_progress');
+    expect(task.phases![2].status).toBe('pending');
+  });
+
+  // -------------------------------------------------------------------------
+  // Test: tryOutcomeTransition falls through on guard failure
+  // -------------------------------------------------------------------------
+  it('should fall through to ready_to_merge when has_pending_phases guard blocks auto-merge', async () => {
+    // Create task with all phases completed
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
+    const allDonePhases: ImplementationPhase[] = [
+      { id: 'phase-1', name: 'Phase 1', status: 'completed', subtasks: [] },
+      { id: 'phase-2', name: 'Phase 2', status: 'completed', subtasks: [] },
+    ];
+    await ctx.taskStore.updateTask(task.id, { phases: allDonePhases });
+
+    let current = await ctx.transitionTo(task.id, 'implementing');
+
+    await createPrArtifact(task.id, 'branch-final');
+    current = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(current, 'pr_review', {
+      trigger: 'agent',
+      data: { outcome: 'pr_ready', branch: 'branch-final' },
+    });
+
+    // Use OutcomeResolver.tryOutcomeTransition to test the fallthrough logic
+    current = (await ctx.taskStore.getTask(task.id))!;
+    expect(current.status).toBe('pr_review');
+
+    // The guarded pr_review → done transition should fail (no pending phases),
+    // then fall through to pr_review → ready_to_merge
+    await ctx.outcomeResolver.tryOutcomeTransition(task.id, 'approved');
+
+    current = (await ctx.taskStore.getTask(task.id))!;
+    expect(current.status).toBe('ready_to_merge');
   });
 });

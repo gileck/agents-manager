@@ -187,24 +187,16 @@ export class OutcomeResolver {
 
     const transitions = await this.pipelineEngine.getValidTransitions(task, 'agent');
     const candidates = transitions.filter((t) => t.agentOutcome === outcome);
-    if (candidates.length > 1) {
-      const resumeTo = data?.resumeToStatus as string | undefined;
-      if (!resumeTo) {
-        this.taskEventLog.log({
-          taskId,
-          category: 'system',
-          severity: 'warning',
-          message: `Multiple transitions match outcome "${outcome}" from "${task.status}" but no resumeToStatus provided — using first match (${candidates[0].to})`,
-          data: { outcome, candidates: candidates.map(c => c.to) },
-        }).catch(() => {});
-      }
-    }
+
+    // Order candidates: if resumeToStatus is set, put that candidate first
     const resumeTo = data?.resumeToStatus as string | undefined;
-    const match = (resumeTo
-      ? candidates.find((t) => t.to === resumeTo)
-      : undefined)
-      ?? candidates[0];
-    if (match) {
+    const ordered = resumeTo
+      ? [...candidates.filter(t => t.to === resumeTo), ...candidates.filter(t => t.to !== resumeTo)]
+      : candidates;
+
+    // Try each candidate in order — fall through on guard failures to support
+    // guarded transitions (e.g. multi-phase auto-merge) with ungarded fallbacks.
+    for (const match of ordered) {
       this.taskEventLog.log({
         taskId,
         category: 'agent_debug',
@@ -220,16 +212,41 @@ export class OutcomeResolver {
           severity: 'debug',
           message: `Outcome transition succeeded: ${task.status} → ${match.to}`,
         }).catch(() => {});
-      } else {
-        await this.taskEventLog.log({
-          taskId,
-          category: 'system',
-          severity: 'warning',
-          message: `Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? result.guardFailures?.map((g) => g.reason).join(', ')}`,
-          data: { outcome, toStatus: match.to, error: result.error, guardFailures: result.guardFailures },
-        });
-        throw new Error(`Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? result.guardFailures?.map((g) => g.reason).join(', ')}`);
+        return;
       }
+
+      // Guard failure — try next candidate
+      if (result.guardFailures && result.guardFailures.length > 0) {
+        this.taskEventLog.log({
+          taskId,
+          category: 'agent_debug',
+          severity: 'debug',
+          message: `Outcome transition "${outcome}" to "${match.to}" blocked by guards (${result.guardFailures.map(g => g.reason).join(', ')}) — trying next candidate`,
+          data: { outcome, toStatus: match.to, guardFailures: result.guardFailures },
+        }).catch(() => {});
+        continue;
+      }
+
+      // Non-guard failure — this is an error, throw
+      await this.taskEventLog.log({
+        taskId,
+        category: 'system',
+        severity: 'warning',
+        message: `Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? 'unknown'}`,
+        data: { outcome, toStatus: match.to, error: result.error },
+      });
+      throw new Error(`Outcome transition "${outcome}" to "${match.to}" failed: ${result.error ?? 'unknown'}`);
+    }
+
+    // No candidate succeeded
+    if (ordered.length > 0) {
+      await this.taskEventLog.log({
+        taskId,
+        category: 'agent',
+        severity: 'warning',
+        message: `All ${ordered.length} candidate transitions for outcome="${outcome}" from status="${task.status}" were blocked by guards`,
+        data: { outcome, taskStatus: task.status, candidates: ordered.map(t => t.to) },
+      });
     } else {
       await this.taskEventLog.log({
         taskId,

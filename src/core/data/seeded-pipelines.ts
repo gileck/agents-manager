@@ -151,6 +151,14 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
 
     // === PR review agent outcomes ===
+    // Multi-phase auto-merge: when phases remain, merge immediately and cycle back
+    { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
+      guards: [{ name: 'has_pending_phases' }],
+      hooks: [
+        { name: 'merge_pr', policy: 'required' },
+        { name: 'advance_phase', policy: 'best_effort' },
+      ] },
+    // Single-phase or final phase: go to ready_to_merge for manual merge
     { from: 'pr_review', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'approved',
       hooks: [{ name: 'notify', params: { titleTemplate: 'PR approved', bodyTemplate: 'PR approved: {taskTitle}' }, policy: 'best_effort' }] },
     { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
