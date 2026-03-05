@@ -559,7 +559,7 @@ export function TaskDetailPage() {
 
       {/* 3. PIPELINE BAR */}
       {pipeline && (
-        <div style={{ borderBottom: '1px solid var(--border)', flexShrink: 0, overflowX: 'auto', background: 'var(--card)' }}>
+        <div style={{ borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
           <PipelineProgress
             pipeline={pipeline}
             currentStatus={task.status}
