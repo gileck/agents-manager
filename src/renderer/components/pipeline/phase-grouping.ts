@@ -121,6 +121,7 @@ export function groupIntoPhases(
     }
 
     // Standalone node
+    consumed.add(statusName);
     phases.push({
       kind: 'standalone',
       statusName,
