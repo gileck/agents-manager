@@ -116,12 +116,12 @@ export function getTaskEstimationFields(): Record<string, object> {
     size: {
       type: 'string',
       enum: [...VALID_TASK_SIZES],
-      description: 'Estimated task size (effort): xs=trivial, sm=small, md=medium, lg=large, xl=extra-large',
+      description: 'Estimated effort size (breadth of changes): xs=trivial (<1 file), sm=1-2 files, md=3-5 files, lg=6-10 files, xl=10+ files — measures scale of changes, not difficulty',
     },
     complexity: {
       type: 'string',
       enum: [...VALID_TASK_COMPLEXITIES],
-      description: 'Estimated task complexity: low=straightforward, medium=some nuance, high=many moving parts or unknowns',
+      description: 'Estimated code complexity (algorithmic/architectural difficulty): low=straightforward copy-paste or config, medium=some decisions or tricky logic, high=architectural impact or many unknowns — measures difficulty, not number of files',
     },
   };
 }
@@ -132,8 +132,9 @@ export function getTaskEstimationInstructions(): string {
     '',
     '## Task Estimation',
     'If you can assess the size and complexity of this task based on your analysis, include them in your output:',
-    '- **size**: xs (trivial, <1 file), sm (small, 1-2 files), md (medium, 3-5 files), lg (large, 6-10 files), xl (extra-large, 10+ files)',
-    '- **complexity**: low (straightforward, clear path), medium (some decisions or cross-cutting concerns), high (many unknowns, architectural impact)',
+    '- **size** (effort/breadth): xs (<1 file, trivial), sm (1-2 files), md (3-5 files), lg (6-10 files), xl (10+ files) — measures scale of changes, not difficulty',
+    '- **complexity** (code difficulty): low (straightforward, copy-paste or config), medium (some decisions or tricky logic), high (architectural impact or many unknowns) — measures algorithmic/architectural difficulty, not number of files',
+    'These are orthogonal: adding a field across 12 files is `xl` size but `low` complexity.',
     'These are optional — only set them if you have enough information to make a reasonable estimate.',
   ].join('\n');
 }
