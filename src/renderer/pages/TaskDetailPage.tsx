@@ -717,6 +717,7 @@ export function TaskDetailPage() {
             approveToStatus="implementing"
             onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'plan_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
+            reviewPath={`/tasks/${id}/plan`}
           />
         </TabsContent>
 
@@ -737,6 +738,7 @@ export function TaskDetailPage() {
             approveToStatus="implementing"
             onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'design_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
+            reviewPath={`/tasks/${id}/design`}
           />
         </TabsContent>
 

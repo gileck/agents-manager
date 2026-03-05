@@ -21,6 +21,8 @@ export function useReviewConversation(
   const sessionPromiseRef = useRef<Promise<ChatSession | null> | null>(null);
   const onEntriesChangedRef = useRef(onEntriesChanged);
   onEntriesChangedRef.current = onEntriesChanged;
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   // Lazy session init: get/create agent-chat session on first sendMessage.
   // Uses a promise ref to deduplicate concurrent calls.
@@ -77,6 +79,7 @@ export function useReviewConversation(
                 entryType,
                 content: responseText.trim(),
                 source: agentRole,
+                agentRunId: sessionRef.current?.agentRunId ?? undefined,
               }).then(() => {
                 onEntriesChangedRef.current();
               }).catch((err: unknown) => {

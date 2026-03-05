@@ -33,6 +33,9 @@ export abstract class BaseAgentPromptBuilder {
     return config.timeout || 10 * 60 * 1000;
   }
 
+  /** Feedback types the subclass handles in its own prompt (excluded from base Unaddressed Feedback). */
+  protected getExcludedFeedbackTypes(): string[] { return []; }
+
   buildExecutionConfig(context: AgentContext, config: AgentConfig): AgentExecutionConfig {
     let prompt: string;
     if (context.modeConfig?.promptTemplate) {
@@ -52,8 +55,9 @@ export abstract class BaseAgentPromptBuilder {
 
       const sections: string[] = [];
 
-      // Unaddressed feedback — shown prominently
-      const unaddressed = feedbackEntries.filter(e => !e.addressed);
+      // Unaddressed feedback — shown prominently (excluding types handled by subclass)
+      const excludedTypes = new Set(this.getExcludedFeedbackTypes());
+      const unaddressed = feedbackEntries.filter(e => !e.addressed && !excludedTypes.has(e.entryType));
       if (unaddressed.length > 0) {
         const block = unaddressed.map(e => {
           const ts = new Date(e.createdAt).toISOString();

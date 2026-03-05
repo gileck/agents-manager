@@ -72,6 +72,29 @@ export function formatFeedbackForPrompt(
   return lines;
 }
 
+/**
+ * Format context entries as read-only informational context (not actionable feedback).
+ * Shows ALL entries (both addressed and unaddressed) with a note that they are for reference only.
+ */
+export function formatFeedbackAsContext(
+  entries: TaskContextEntry[] | undefined,
+  feedbackTypes: string[],
+  sectionTitle: string,
+): string[] {
+  if (!entries || entries.length === 0) return [];
+
+  const matching = entries.filter(e => feedbackTypes.includes(e.entryType));
+  if (matching.length === 0) return [];
+
+  const lines: string[] = ['', `## ${sectionTitle} (Context Only)`];
+  lines.push('*These comments are from a prior review phase — provided for reference only.*');
+  for (const entry of matching) {
+    const time = new Date(entry.createdAt).toLocaleString();
+    lines.push(`- **${entry.source}** (${time}): ${entry.summary}`);
+  }
+  return lines;
+}
+
 /** Shared schema fields that let any agent ask interactive questions. */
 export function getInteractiveFields(): Record<string, object> {
   return {

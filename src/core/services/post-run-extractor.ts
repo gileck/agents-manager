@@ -95,16 +95,12 @@ export class PostRunExtractor {
       }
     }
 
-    // After a successful revision, mark all existing plan feedback as addressed
-    if (revisionReason === 'changes_requested') {
-      if (!agentRunId) {
-        onLog('Warning: agentRunId is required to mark plan_feedback as addressed but was not provided');
-      } else {
-        try {
-          await this.markFeedbackAsAddressed(taskId, ['plan_feedback'], agentRunId, onLog);
-        } catch (err) {
-          onLog(`Warning: failed to mark plan_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
-        }
+    // After any successful planner run, mark all existing plan feedback as addressed
+    if (agentRunId && agentType === 'planner') {
+      try {
+        await this.markFeedbackAsAddressed(taskId, ['plan_feedback'], agentRunId, onLog);
+      } catch (err) {
+        onLog(`Warning: failed to mark plan_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   }
@@ -135,16 +131,12 @@ export class PostRunExtractor {
       }
     }
 
-    // After a successful revision, mark all existing design feedback as addressed
-    if (revisionReason === 'changes_requested') {
-      if (!agentRunId) {
-        onLog('Warning: agentRunId is required to mark design_feedback as addressed but was not provided');
-      } else {
-        try {
-          await this.markFeedbackAsAddressed(taskId, ['design_feedback'], agentRunId, onLog);
-        } catch (err) {
-          onLog(`Warning: failed to mark design_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
-        }
+    // After any successful designer run, mark all existing design feedback as addressed
+    if (agentRunId) {
+      try {
+        await this.markFeedbackAsAddressed(taskId, ['design_feedback'], agentRunId, onLog);
+      } catch (err) {
+        onLog(`Warning: failed to mark design_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   }

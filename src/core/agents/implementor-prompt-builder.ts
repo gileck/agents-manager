@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
+import { formatFeedbackForPrompt, formatFeedbackAsContext, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 
 export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
@@ -8,6 +8,10 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
 
   protected isReadOnly(): boolean {
     return false;
+  }
+
+  protected getExcludedFeedbackTypes(): string[] {
+    return ['plan_feedback', 'design_feedback'];
   }
 
   protected getMaxTurns(context: AgentContext): number {
@@ -112,17 +116,17 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         if (task.plan) {
           rcLines.push('', '## Plan', task.plan);
         }
-        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
+        rcLines.push(...formatFeedbackAsContext(context.taskContext, ['plan_feedback'], 'Plan Review Comments'));
         rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['implementation_feedback'], 'Implementation Feedback'));
         if (task.technicalDesign) {
           rcLines.push('', '## Technical Design', task.technicalDesign);
         }
-        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Design Feedback'));
+        rcLines.push(...formatFeedbackAsContext(context.taskContext, ['design_feedback'], 'Design Review Comments'));
       } else {
         // In session-resume mode, still include all unaddressed feedback
-        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
+        rcLines.push(...formatFeedbackAsContext(context.taskContext, ['plan_feedback'], 'Plan Review Comments'));
         rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['implementation_feedback'], 'Implementation Feedback'));
-        rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Design Feedback'));
+        rcLines.push(...formatFeedbackAsContext(context.taskContext, ['design_feedback'], 'Design Review Comments'));
       }
 
       rcLines.push(
@@ -268,11 +272,11 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       if (task.plan) {
         lines.push('', '## Plan', task.plan);
       }
-      lines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
+      lines.push(...formatFeedbackAsContext(context.taskContext, ['plan_feedback'], 'Plan Review Comments'));
       if (task.technicalDesign) {
         lines.push('', '## Technical Design', task.technicalDesign);
       }
-      lines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Design Feedback'));
+      lines.push(...formatFeedbackAsContext(context.taskContext, ['design_feedback'], 'Design Review Comments'));
       prompt = lines.join('\n');
     }
 

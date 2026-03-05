@@ -848,6 +848,7 @@ export class ChatAgentService {
               costInputTokens: (existingRun.costInputTokens ?? 0) + (costInputTokens ?? 0),
               costOutputTokens: (existingRun.costOutputTokens ?? 0) + (costOutputTokens ?? 0),
               messages: [...(existingRun.messages ?? []), ...turnMessages],
+              prompt: existingRun.prompt ? existingRun.prompt : `${systemPrompt}\n\n${prompt}`,
             });
           } else {
             getAppLogger().warn('ChatAgentService', `AgentRun ${agentRunId} not found in DB; skipping update`);

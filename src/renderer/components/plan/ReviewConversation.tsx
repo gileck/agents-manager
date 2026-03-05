@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { TaskContextEntry, AgentChatMessage } from '../../../shared/types';
 import { ChatMessageList } from '../chat/ChatMessageList';
 import { MarkdownContent } from '../chat/MarkdownContent';
@@ -24,6 +25,7 @@ export function ReviewConversation({
   onStop,
   placeholder,
 }: ReviewConversationProps) {
+  const navigate = useNavigate();
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -85,8 +87,17 @@ export function ReviewConversation({
                     </div>
                   )}
                 </div>
-                <div className={`text-xs mt-1 ${isUser ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
-                  {new Date(entry.createdAt).toLocaleString()}
+                <div className={`text-xs mt-1 flex items-center gap-2 ${isUser ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                  <span>{new Date(entry.createdAt).toLocaleString()}</span>
+                  {!isUser && entry.agentRunId && (
+                    <button
+                      className="underline hover:no-underline text-xs"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'inherit' }}
+                      onClick={() => navigate(`/agents/${entry.agentRunId}`)}
+                    >
+                      View Run
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

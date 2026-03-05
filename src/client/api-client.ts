@@ -98,7 +98,7 @@ export interface ApiClient {
     getPrompts(id: string): Promise<unknown[]>;
     getContext(id: string): Promise<unknown[]>;
     addContext(id: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<unknown>;
-    addFeedback(id: string, input: { entryType: string; content: string; source?: string }): Promise<unknown>;
+    addFeedback(id: string, input: { entryType: string; content: string; source?: string; agentRunId?: string }): Promise<unknown>;
     getWorktree(id: string): Promise<unknown>;
     getArtifacts(id: string): Promise<unknown[]>;
     getTimeline(id: string): Promise<unknown>;

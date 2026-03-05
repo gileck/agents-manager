@@ -26,5 +26,5 @@ export interface IWorkflowService {
   mergePR(taskId: string): Promise<TransitionResult>;
   getDashboardStats(now?: number): Promise<DashboardStats>;
   addContextEntry(taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry>;
-  addTaskFeedback(taskId: string, entryType: string, content: string, source?: string): Promise<TaskContextEntry>;
+  addTaskFeedback(taskId: string, entryType: string, content: string, source?: string, agentRunId?: string): Promise<TaskContextEntry>;
 }

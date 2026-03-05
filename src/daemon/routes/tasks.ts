@@ -245,12 +245,12 @@ export function taskRoutes(services: AppServices): Router {
 
   router.post('/api/tasks/:id/feedback', async (req, res, next) => {
     try {
-      const { entryType, content, source } = req.body as { entryType?: string; content?: string; source?: string };
+      const { entryType, content, source, agentRunId } = req.body as { entryType?: string; content?: string; source?: string; agentRunId?: string };
       if (!entryType || !content) {
         res.status(400).json({ error: 'entryType and content are required' });
         return;
       }
-      const entry = await services.workflowService.addTaskFeedback(req.params.id, entryType, content, source);
+      const entry = await services.workflowService.addTaskFeedback(req.params.id, entryType, content, source, agentRunId);
       res.status(201).json(entry);
     } catch (err) { next(err); }
   });
