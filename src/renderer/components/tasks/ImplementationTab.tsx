@@ -126,10 +126,23 @@ export function ImplementationTab({
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Parse diff from artifacts
-  const diffArtifact = artifacts?.find((a) => a.type === 'diff');
-  const diffRaw = (diffArtifact?.data as { diff?: string } | undefined)?.diff ?? '';
-  const fileDiffs = useMemo(() => parseDiff(diffRaw), [diffRaw]);
+  // Parse diffs from all diff artifacts (one per phase)
+  const fileDiffs = useMemo(() => {
+    const diffArtifacts = artifacts?.filter((a) => a.type === 'diff') ?? [];
+    const allDiffs: FileDiff[] = [];
+    const seenFiles = new Set<string>();
+    // Process in reverse so latest diff wins for duplicate filenames
+    for (let i = diffArtifacts.length - 1; i >= 0; i--) {
+      const raw = (diffArtifacts[i].data as { diff?: string } | undefined)?.diff ?? '';
+      for (const f of parseDiff(raw)) {
+        if (!seenFiles.has(f.filename)) {
+          seenFiles.add(f.filename);
+          allDiffs.push(f);
+        }
+      }
+    }
+    return allDiffs;
+  }, [artifacts]);
 
   // Filter existing change request comments
   const changeRequests = useMemo(
@@ -211,7 +224,7 @@ export function ImplementationTab({
       {task.prLink && (
         <div style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-            {isMultiPhase ? 'Current Pull Request' : 'Pull Request'}
+            {isMultiPhase && activePhaseIdx >= 0 ? 'Current Pull Request' : 'Pull Request'}
           </h3>
           <button
             onClick={() => window.api.shell.openInChrome(task.prLink!)}
@@ -227,7 +240,7 @@ export function ImplementationTab({
       {fileDiffs.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-            Changes ({fileDiffs.length} file{fileDiffs.length !== 1 ? 's' : ''})
+            {isMultiPhase ? 'All Changes' : 'Changes'} ({fileDiffs.length} file{fileDiffs.length !== 1 ? 's' : ''})
           </h3>
           {fileDiffs.map((f, i) => (
             <FileDiffCard key={i} file={f} />
