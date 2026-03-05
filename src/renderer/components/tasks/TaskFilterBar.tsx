@@ -17,6 +17,7 @@ export interface FilterState {
   assignee: string;
   tag: string;
   featureId: string;
+  createdBy: string;
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -27,6 +28,7 @@ export const EMPTY_FILTERS: FilterState = {
   assignee: '',
   tag: '',
   featureId: '',
+  createdBy: '',
 };
 
 interface TaskFilterBarProps {
@@ -87,6 +89,7 @@ export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, t
       : (features?.find((f) => f.id === filters.featureId)?.title ?? filters.featureId);
     activeChips.push({ key: 'featureId', label: `feature: ${fLabel}` });
   }
+  if (filters.createdBy) activeChips.push({ key: 'createdBy', label: `created by: ${filters.createdBy}` });
 
   return (
     <div className="space-y-2">
@@ -174,6 +177,17 @@ export function TaskFilterBar({ filters, onFiltersChange, statuses, pipelines, t
             </SelectContent>
           </Select>
         )}
+        <Select value={filters.createdBy} onValueChange={(v) => update({ createdBy: v === '__all__' ? '' : v })}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Created by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All creators</SelectItem>
+            <SelectItem value="user">User</SelectItem>
+            <SelectItem value="workflow-reviewer">Workflow</SelectItem>
+            <SelectItem value="session-agent">Agent</SelectItem>
+          </SelectContent>
+        </Select>
         {activeCount > 0 && (
           <Button
             variant="ghost"

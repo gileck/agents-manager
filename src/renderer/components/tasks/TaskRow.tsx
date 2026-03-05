@@ -76,6 +76,11 @@ export function TaskRow({
               {task.tags.length > 3 && (
                 <span className="text-[10px] text-muted-foreground">+{task.tags.length - 3}</span>
               )}
+              {task.createdBy && task.createdBy !== 'user' && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 text-purple-500 border-purple-500/40">
+                  {task.createdBy === 'workflow-reviewer' ? 'workflow' : 'agent'}
+                </Badge>
+              )}
             </div>
             {task.description && (
               <p className="text-xs text-muted-foreground truncate mt-0.5">
