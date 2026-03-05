@@ -356,6 +356,13 @@ export class AgentService implements IAgentService {
       const runs = await this.agentRunStore.getRunsForTask(taskId);
       const lastCompleted = runs.find(r => r.agentType === agentType && r.status === 'completed' && r.id !== run!.id);
       context.sessionId = lastCompleted?.id;
+      if (lastCompleted) {
+        getAppLogger().debug(`Agent:${agentType}`, `Revision will resume session from run ${lastCompleted.id}`, { taskId, resumeRunId: lastCompleted.id });
+      } else {
+        const msg = `No prior completed ${agentType} run found — revision will use full prompt instead of session resume`;
+        getAppLogger().warn(`Agent:${agentType}`, msg, { taskId });
+        await this.taskEventLog.log({ taskId, category: 'agent', severity: 'warning', message: msg, data: { agentType, mode } });
+      }
     } else {
       context.sessionId = run.id;
     }

@@ -310,6 +310,9 @@ export class ChatAgentService {
       // Look up the last completed agent run for this task+agent to resume its session
       const runs = await this.agentRunStore.getRunsForTask(session.scopeId);
       const lastCompleted = runs.find(r => r.agentType === session.agentRole && r.status === 'completed');
+      if (!lastCompleted) {
+        getAppLogger().warn('ChatAgentService', `No prior completed ${session.agentRole} run found for task ${session.scopeId} — agent chat will not resume session`);
+      }
       return {
         systemPrompt: buildAgentChatSystemPrompt(scope, session.agentRole, effectiveMode),
         pipelineSessionId: lastCompleted?.id,
