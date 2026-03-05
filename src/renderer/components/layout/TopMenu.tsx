@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTheme } from '../../hooks/useTheme';
-import type { TelegramBotLogEntry } from '../../../shared/types';
+import { usePipelines } from '../../hooks/usePipelines';
+import type { TelegramBotLogEntry, TaskCreateInput } from '../../../shared/types';
 import {
   Select,
   SelectTrigger,
@@ -12,8 +13,9 @@ import {
   SelectItem,
 } from '@template/renderer/components/ui/select';
 import { Button } from '@template/renderer/components/ui/button';
-import { FolderOpen, Sun, Moon, Send, DollarSign, GitBranch, ScrollText } from 'lucide-react';
+import { FolderOpen, Sun, Moon, Send, DollarSign, GitBranch, ScrollText, Plus } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
+import { TaskCreateDialog } from '../tasks/TaskCreateDialog';
 
 type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
 
@@ -22,10 +24,36 @@ export function TopMenu() {
     useCurrentProject();
   const { projects } = useProjects();
   const { resolvedTheme, setTheme } = useTheme();
+  const { pipelines } = usePipelines();
   const navigate = useNavigate();
   const location = useLocation();
   const [telegramStatus, setTelegramStatus] = useState<TelegramBotStatus>('unknown');
   const [recentLogs, setRecentLogs] = useState<TelegramBotLogEntry[]>([]);
+
+  // Create task dialog state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '', type: 'feature' });
+  const [creating, setCreating] = useState(false);
+
+  const openCreateDialog = () => {
+    setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
+    setCreateDialogOpen(true);
+  };
+
+  const handleCreate = async () => {
+    if (!form.title.trim() || !currentProjectId || !form.pipelineId) return;
+    setCreating(true);
+    try {
+      const task = await window.api.tasks.create({ ...form, projectId: currentProjectId });
+      setCreateDialogOpen(false);
+      setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
+      navigate(`/tasks/${task.id}`);
+    } catch (err) {
+      reportError(err, 'Create task');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentProjectId) {
@@ -134,6 +162,16 @@ export function TopMenu() {
         >
           <ScrollText className="h-4 w-4 text-muted-foreground" />
         </Button>
+        {currentProjectId && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={openCreateDialog}
+            title="Create new task"
+          >
+            <Plus className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        )}
         <div className="w-px h-5 bg-border mx-1" />
         {currentProjectId && (
           <Button
@@ -161,6 +199,16 @@ export function TopMenu() {
           )}
         </Button>
       </div>
+
+      <TaskCreateDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        pipelines={pipelines}
+        form={form}
+        onFormChange={setForm}
+        onCreate={handleCreate}
+        creating={creating}
+      />
     </div>
   );
 }
