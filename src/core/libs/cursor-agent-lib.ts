@@ -231,16 +231,41 @@ export class CursorAgentLib implements IAgentLib {
           isError = true;
           killReason = 'timeout';
           errorMessage = `cursor-agent timed out after ${Math.round(options.timeoutMs / 1000)}s`;
-          log(errorMessage);
         } else if (isSignalExit) {
           killReason = this.stoppedReasons.get(runId) ?? 'external_signal';
           isError = true;
           errorMessage = stderrOutput || `cursor-agent exited with code ${rawExitCode} [kill_reason=${killReason}]`;
-          log(`cursor-agent killed: ${errorMessage}`);
         } else if (code !== 0 && !isError) {
           isError = true;
-          errorMessage = stderrOutput || `cursor-agent exited with code ${code}`;
-          log(`cursor-agent failed: ${errorMessage}`);
+          const baseError = stderrOutput || `cursor-agent exited with code ${code}`;
+          // Include diagnostics for unexpected failures
+          const diagnostics = [
+            `error: ${baseError}`,
+            ...(stderrOutput ? [`stderr: ${stderrOutput}`] : []),
+            `exit_code: ${code}`,
+            `messages_processed: ${state.messageCount}`,
+            `cwd: ${options.cwd}`,
+            `model: ${options.model ?? 'default'}`,
+            `max_turns: ${options.maxTurns}`,
+            `timeout: ${Math.round(options.timeoutMs / 1000)}s`,
+            `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
+            `result_text_length: ${resultText.length}`,
+          ].join('\n');
+          errorMessage = `${baseError}\n\n--- Diagnostics ---\n${diagnostics}`;
+        }
+
+        if (isError) {
+          log(`cursor-agent failed`, {
+            error: errorMessage,
+            stderr: stderrOutput || undefined,
+            exitCode: code,
+            signal,
+            killReason,
+            messagesProcessed: state.messageCount,
+            cwd: options.cwd,
+            model: options.model,
+            resultTextLength: resultText.length,
+          });
         }
 
         this.stoppedReasons.delete(runId);
@@ -279,8 +304,13 @@ export class CursorAgentLib implements IAgentLib {
         this.runningStates.delete(runId);
         this.stoppedReasons.delete(runId);
         isError = true;
-        errorMessage = `Failed to spawn cursor-agent: ${err.message}`;
-        log(errorMessage);
+        errorMessage = `Failed to spawn cursor-agent: ${err.message}\n\n--- Diagnostics ---\nspawn_error: ${err.message}\ncwd: ${options.cwd}\nmodel: ${options.model ?? 'default'}\nPATH: ${(env.PATH ?? '').split(':').slice(0, 5).join(':')}...`;
+        log(`cursor-agent spawn error`, {
+          error: err.message,
+          stack: err.stack,
+          cwd: options.cwd,
+          model: options.model,
+        });
         resolve({
           exitCode: 1,
           output: resultText || errorMessage,

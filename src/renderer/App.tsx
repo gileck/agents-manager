@@ -23,6 +23,7 @@ import { CostPage } from './pages/CostPage';
 import { SourceControlPage } from './pages/SourceControlPage';
 import { KanbanBoardPage } from './pages/KanbanBoardPage';
 import { DebugLogsPage } from './pages/DebugLogsPage';
+import { AgentRunsListPage } from './pages/AgentRunsListPage';
 import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
 import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
 import { AutomatedAgentDetailPage } from './pages/AutomatedAgentDetailPage';
@@ -62,12 +63,21 @@ function AppRoutes() {
         // Skip automated agent runs — they use synthetic task IDs
         if (taskId.startsWith('__auto__:')) return;
         try {
-          // Fetch the latest runs for this task to get the error
-          const runs = await window.api.agents.runs(taskId);
+          // Fetch the latest runs for this task to get the error and context
+          const [runs, task] = await Promise.all([
+            window.api.agents.runs(taskId),
+            window.api.tasks.get(taskId).catch(() => null),
+          ]);
           const failedRun = runs?.find((r: { status: string }) => r.status === status);
           const errorMsg = failedRun?.error || `Agent ${status.replace('_', ' ')}`;
+          const agentType = (failedRun as { agentType?: string })?.agentType;
+          const toastTitle = [
+            agentType ? `${agentType} agent failed` : 'Agent failed',
+            task?.title ? `— ${task.title}` : '',
+          ].filter(Boolean).join(' ');
           if (failedRun) {
-            toast.error(errorMsg, {
+            toast.error(toastTitle, {
+              description: errorMsg,
               duration: 15000,
               action: {
                 label: 'View Run',
@@ -124,6 +134,7 @@ function AppRoutes() {
         <Route path="tasks" element={<TaskListPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
         <Route path="kanban" element={<KanbanBoardPage />} />
+        <Route path="agent-runs" element={<AgentRunsListPage />} />
         <Route path="agents/:runId" element={<AgentRunPage />} />
         <Route path="features" element={<FeatureListPage />} />
         <Route path="features/:id" element={<FeatureDetailPage />} />

@@ -121,6 +121,17 @@ export class ClaudeCodeLib implements IAgentLib {
     let errorMessage: string | undefined;
     let killReason: string | undefined;
 
+    // Capture stderr from the Claude Code process for diagnostics
+    const stderrChunks: string[] = [];
+    const STDERR_MAX = 64 * 1024;
+    let stderrLen = 0;
+    const onStderr = (chunk: string) => {
+      if (stderrLen < STDERR_MAX) {
+        stderrChunks.push(chunk);
+        stderrLen += chunk.length;
+      }
+    };
+
     const emit = (chunk: string) => {
       resultText += chunk;
       onOutput?.(chunk);
@@ -198,6 +209,11 @@ export class ClaudeCodeLib implements IAgentLib {
       sessionOptions.sessionId = options.sessionId;
     }
 
+    // Build a clean env: remove CLAUDECODE to prevent "nested session" rejection
+    // when the daemon itself runs inside a Claude Code session.
+    const cleanEnv = { ...process.env };
+    delete cleanEnv.CLAUDECODE;
+
     try {
       for await (const message of query({
         prompt: sdkPrompt,
@@ -209,6 +225,8 @@ export class ClaudeCodeLib implements IAgentLib {
           model: options.model,
           maxTurns: options.maxTurns,
           thinking: { type: 'adaptive' },
+          env: cleanEnv,
+          stderr: onStderr,
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           hooks: { preToolUse: mergedPreToolUse },
           ...sessionOptions,
@@ -308,20 +326,58 @@ export class ClaudeCodeLib implements IAgentLib {
     } catch (err) {
       isError = true;
       const sdkError = err instanceof Error ? err.message : String(err);
+      const sdkStack = err instanceof Error ? err.stack : undefined;
+      const elapsed = Date.now() - startTime;
       errorMessage = sdkError;
+
+      // Collect stderr output from the Claude Code process
+      const stderrOutput = stderrChunks.join('').trim();
+
+      // Build diagnostic context that will be included in the error for debugging
+      const diagnostics = [
+        `sdk_error: ${sdkError}`,
+        ...(stderrOutput ? [`stderr: ${stderrOutput}`] : []),
+        ...(sdkStack ? [`stack: ${sdkStack}`] : []),
+        `elapsed: ${Math.round(elapsed / 1000)}s`,
+        `messages_processed: ${state.messageCount}`,
+        `cwd: ${options.cwd}`,
+        `model: ${options.model ?? 'default'}`,
+        `max_turns: ${options.maxTurns}`,
+        `timeout: ${Math.round(options.timeoutMs / 1000)}s`,
+        ...(options.resumeSession ? [`resume_session: ${options.sessionId}`] : []),
+        `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
+        `result_text_length: ${resultText.length}`,
+      ].join('\n');
+
       if (timedOut) {
         killReason = 'timeout';
-        const elapsed = Date.now() - startTime;
         errorMessage = `Agent timed out after ${Math.round(elapsed / 1000)}s (timeout=${Math.round(options.timeoutMs / 1000)}s, ${state.messageCount} messages processed)`;
-        log(`${errorMessage} [sdk: ${sdkError}]`);
       } else if (abortController.signal.aborted) {
         killReason = state.stoppedReason ?? 'stopped';
-        const elapsed = Date.now() - startTime;
         errorMessage = `Agent aborted after ${Math.round(elapsed / 1000)}s (${state.messageCount} messages processed) [kill_reason=${killReason}]`;
-        log(`${errorMessage} [sdk: ${sdkError}]`);
       } else {
-        log(`Agent execution error: ${errorMessage}`);
+        // For unexpected errors (like "process exited with code 1"), include diagnostics in the error message
+        errorMessage = `${sdkError}\n\n--- Diagnostics ---\n${diagnostics}`;
       }
+      log(`Agent execution error`, {
+        error: sdkError,
+        ...(stderrOutput ? { stderr: stderrOutput } : {}),
+        stack: sdkStack,
+        elapsed,
+        messagesProcessed: state.messageCount,
+        cwd: options.cwd,
+        model: options.model,
+        maxTurns: options.maxTurns,
+        timeout: options.timeoutMs,
+        resumeSession: options.resumeSession,
+        sessionId: options.sessionId,
+        accumulatedInputTokens: state.accumulatedInputTokens,
+        accumulatedOutputTokens: state.accumulatedOutputTokens,
+        resultTextLength: resultText.length,
+        timedOut,
+        aborted: abortController.signal.aborted,
+        killReason,
+      });
     } finally {
       clearTimeout(timer);
       this.runningStates.delete(runId);

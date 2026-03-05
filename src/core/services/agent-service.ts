@@ -25,6 +25,7 @@ import type { OutcomeResolver } from './outcome-resolver';
 import type { ScheduledAgentService } from './scheduled-agent-service';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import * as path from 'path';
+import * as fs from 'fs';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
 import { now } from '../stores/utils';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
@@ -201,6 +202,23 @@ export class AgentService implements IAgentService {
         data: { path: worktree.path },
       });
     }
+
+    // Pre-check: verify worktree path actually exists on disk before proceeding
+    if (!fs.existsSync(worktree.path)) {
+      const msg = `Worktree path does not exist on disk: ${worktree.path}. Recreating worktree.`;
+      getAppLogger().warn(`Agent:${agentType}`, msg, { taskId, path: worktree.path });
+      await this.taskEventLog.log({ taskId, category: 'worktree', severity: 'warning', message: msg });
+      // Remove stale worktree record and recreate
+      await worktreeManager.delete(taskId);
+      let branch = `task/${taskId}/${agentType}`;
+      if (isMultiPhase(task)) {
+        const phaseIdx = getActivePhaseIndex(task.phases);
+        if (phaseIdx >= 0) branch = `task/${taskId}/${agentType}/phase-${phaseIdx + 1}`;
+      }
+      worktree = await worktreeManager.create(branch, taskId);
+      getAppLogger().info(`Agent:${agentType}`, `Worktree recreated at ${worktree.path}`, { taskId });
+    }
+
     await worktreeManager.lock(taskId);
     await this.taskEventLog.log({
       taskId,
@@ -312,6 +330,10 @@ export class AgentService implements IAgentService {
       message: `Agent ${agentType} started in ${mode} mode`,
       data: { agentRunId: run.id, agentType, mode },
     });
+    getAppLogger().info(`Agent:${agentType}`, `Agent started for task "${task.title}"`, {
+      taskId, agentRunId: run.id, mode,
+      worktreePath: worktree.path, branch: worktree.branch,
+    });
 
     // 6. Build context — agent runs in the worktree, not the main checkout
     // Consume any queued message as customPrompt
@@ -418,6 +440,7 @@ export class AgentService implements IAgentService {
   ): Promise<void> {
     const taskId = task.id;
     const onLog = (message: string, data?: Record<string, unknown>) => {
+      // Write to task-level event log (per-task timeline)
       this.taskEventLog.log({
         taskId,
         category: 'agent_debug',
@@ -425,6 +448,10 @@ export class AgentService implements IAgentService {
         message,
         data,
       }).catch(() => {}); // fire-and-forget
+
+      // Also write to the app-level debug log so agent logs appear in the main Debug Logs page
+      const logLevel = data?.error || data?.stack ? 'error' : 'debug';
+      getAppLogger()[logLevel](`Agent:${agentType}`, message, { taskId, agentRunId: run.id, ...data });
     };
 
     // --- Output flusher: buffers output/messages and flushes to DB periodically ---
@@ -474,6 +501,7 @@ export class AgentService implements IAgentService {
       } catch (err) {
         flusher.stop();
         const errorMsg = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : undefined;
         const completedAt = now();
         // Recover partial cost data from agent telemetry if available
         const partialInputTokens = 'accumulatedInputTokens' in agent ? (agent as { accumulatedInputTokens?: number }).accumulatedInputTokens : undefined;
@@ -496,6 +524,24 @@ export class AgentService implements IAgentService {
         const killReason = killReasonMatch?.[1];
         const exitCodeMatch = errorMsg.match(/exited with code (\d+)/);
         const rawExitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : undefined;
+
+        // Log to app debug log with full diagnostic context
+        getAppLogger().error(`Agent:${agentType}`, `Agent failed for task "${task.title}"`, {
+          taskId,
+          agentRunId: run.id,
+          error: errorMsg,
+          ...(errorStack ? { stack: errorStack } : {}),
+          ...(killReason ? { killReason } : {}),
+          ...(rawExitCode != null ? { rawExitCode } : {}),
+          cwd: context.workdir ?? context.project.path,
+          model: config.model,
+          mode: run.mode,
+          engine: config.engine,
+          partialInputTokens,
+          partialOutputTokens,
+          partialMessageCount,
+        });
+
         await this.taskEventLog.log({
           taskId,
           category: 'agent',
@@ -520,6 +566,10 @@ export class AgentService implements IAgentService {
         } catch {
           // Worktree may have been deleted by a transition hook — safe to ignore
         }
+
+        // Emit status change so the UI shows the failure toast
+        onStatusChange?.('failed');
+        onMessage?.({ type: 'status', status: 'failed', message: `Agent failed: ${errorMsg}`, timestamp: Date.now() });
 
         // Attempt failure transition (pipeline may retry via hooks)
         await this.outcomeResolver.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
@@ -624,22 +674,26 @@ export class AgentService implements IAgentService {
       });
 
       // Log completion event
+      const completionLevel = result.exitCode === 0 ? 'info' : 'error';
+      const completionMsg = `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}${result.killReason ? ` [kill_reason=${result.killReason}]` : ''}`;
+      const completionData = {
+        agentRunId: run.id,
+        exitCode: result.exitCode,
+        outcome: result.outcome,
+        ...(result.error ? { error: result.error } : {}),
+        ...(result.killReason ? { killReason: result.killReason } : {}),
+        ...(result.rawExitCode != null ? { rawExitCode: result.rawExitCode } : {}),
+        costInputTokens: result.costInputTokens,
+        costOutputTokens: result.costOutputTokens,
+      };
       await this.taskEventLog.log({
         taskId,
         category: 'agent',
-        severity: result.exitCode === 0 ? 'info' : 'error',
-        message: `Agent ${agentType} completed with outcome: ${result.outcome ?? 'none'}${result.killReason ? ` [kill_reason=${result.killReason}]` : ''}`,
-        data: {
-          agentRunId: run.id,
-          exitCode: result.exitCode,
-          outcome: result.outcome,
-          ...(result.error ? { error: result.error } : {}),
-          ...(result.killReason ? { killReason: result.killReason } : {}),
-          ...(result.rawExitCode != null ? { rawExitCode: result.rawExitCode } : {}),
-          costInputTokens: result.costInputTokens,
-          costOutputTokens: result.costOutputTokens,
-        },
+        severity: completionLevel,
+        message: completionMsg,
+        data: completionData,
       });
+      getAppLogger()[completionLevel](`Agent:${agentType}`, `${completionMsg} for task "${task.title}"`, { taskId, ...completionData });
 
       // Emit status change
       const finalStatus = result.exitCode === 0 ? 'completed' : 'failed';

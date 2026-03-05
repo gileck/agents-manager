@@ -455,6 +455,7 @@ export class CodexCliLib implements IAgentLib {
     } catch (err) {
       isError = true;
       const baseMessage = err instanceof Error ? err.message : String(err);
+      const errorStack = err instanceof Error ? err.stack : undefined;
       if (timedOut) {
         killReason = 'timeout';
         errorMessage = `codex-sdk timed out after ${Math.round(options.timeoutMs / 1000)}s`;
@@ -462,9 +463,35 @@ export class CodexCliLib implements IAgentLib {
         killReason = this.stoppedReasons.get(runId) ?? state.stoppedReason ?? 'stopped';
         errorMessage = `codex-sdk run aborted [kill_reason=${killReason}]`;
       } else {
-        errorMessage = baseMessage;
+        // Include diagnostics for unexpected failures
+        const diagnostics = [
+          `sdk_error: ${baseMessage}`,
+          ...(errorStack ? [`stack: ${errorStack}`] : []),
+          `messages_processed: ${state.messageCount}`,
+          `cwd: ${options.cwd}`,
+          `model: ${options.model ?? 'default'}`,
+          `max_turns: ${options.maxTurns}`,
+          `timeout: ${Math.round(options.timeoutMs / 1000)}s`,
+          `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
+          `result_text_length: ${resultText.length}`,
+        ].join('\n');
+        errorMessage = `${baseMessage}\n\n--- Diagnostics ---\n${diagnostics}`;
       }
-      log(`Codex SDK run failed: ${errorMessage}`, { sdkError: baseMessage });
+      log(`Codex SDK run failed`, {
+        error: baseMessage,
+        stack: errorStack,
+        messagesProcessed: state.messageCount,
+        cwd: options.cwd,
+        model: options.model,
+        maxTurns: options.maxTurns,
+        timeout: options.timeoutMs,
+        accumulatedInputTokens: state.accumulatedInputTokens,
+        accumulatedOutputTokens: state.accumulatedOutputTokens,
+        resultTextLength: resultText.length,
+        timedOut,
+        aborted: abortController.signal.aborted,
+        killReason,
+      });
     } finally {
       clearTimeout(timer);
       this.runningStates.delete(runId);

@@ -12,7 +12,7 @@ import {
   SelectItem,
 } from '@template/renderer/components/ui/select';
 import { Button } from '@template/renderer/components/ui/button';
-import { FolderOpen, Sun, Moon, Send, DollarSign, GitBranch, ScrollText } from 'lucide-react';
+import { FolderOpen, Sun, Moon, Send, DollarSign, GitBranch, ScrollText, Play } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 
 type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
@@ -125,6 +125,14 @@ export function TopMenu() {
           title="Source Control"
         >
           <GitBranch className="h-4 w-4 text-muted-foreground" />
+        </Button>
+        <Button
+          variant={location.pathname === '/agent-runs' ? 'secondary' : 'ghost'}
+          size="icon"
+          onClick={() => navigate('/agent-runs')}
+          title="Agent Runs"
+        >
+          <Play className="h-4 w-4 text-muted-foreground" />
         </Button>
         <Button
           variant={location.pathname === '/debug-logs' ? 'secondary' : 'ghost'}
