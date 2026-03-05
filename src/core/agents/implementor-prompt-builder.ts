@@ -219,7 +219,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         `Implement the changes for this task. Task: ${task.title}.${desc}`,
         ``,
         `## Instructions`,
-        `1. **Read the files you will modify first.** Understand existing patterns, naming conventions, and code style before writing anything.`,
+        `1. **Read the files you will modify first.** If the task description names a specific file path and function/method, open those files directly — do not spawn an Explore subagent. If you do delegate to an Explore subagent, wait for its result before issuing any further search or read calls — do not search in parallel. Understand existing patterns, naming conventions, and code style before writing anything.`,
         `2. Follow existing patterns — match the style of surrounding code.`,
         `3. Make focused changes — only modify what is necessary for this task.`,
         `4. After making all changes, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass. Fix any errors before committing.`,
