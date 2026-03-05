@@ -114,14 +114,16 @@ export function TaskDetailPage() {
     : 'details';
   const [tab, setTab] = useLocalStorage(`taskDetail.tab.${id}`, initialTab);
 
-  // Auto-navigate to review sub-page when status *transitions into* a review state.
-  // Uses a ref to track previous status so we only navigate once (on the transition),
-  // not on every render — this prevents a redirect loop when the user navigates back.
-  const prevStatusRef = useRef(task?.status);
+  // Auto-navigate to review sub-page when the status *transitions* into a review state
+  // while the user is already viewing the task. We skip the initial load (prev === undefined)
+  // to avoid redirecting when the user intentionally opens a task that's already in review.
+  const prevStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     const prev = prevStatusRef.current;
     prevStatusRef.current = task?.status;
-    if (prev === task?.status) return;
+
+    // Skip initial load and no-change cases
+    if (!prev || prev === task?.status) return;
 
     if (task?.status === 'plan_review') {
       navigate(`/tasks/${id}/plan`);
