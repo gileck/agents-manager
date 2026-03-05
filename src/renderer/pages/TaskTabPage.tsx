@@ -205,6 +205,7 @@ function ImplementationContent({ id }: { id: string }) {
         contextEntries={contextEntries ?? null}
         onTransition={handleTransition}
         onContextAdded={refetchContext}
+        phases={task.phases}
       />
     </div>
   );

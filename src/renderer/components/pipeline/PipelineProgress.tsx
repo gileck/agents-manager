@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Pipeline, DebugTimelineEntry, AgentRun } from '../../../shared/types';
+import type { Pipeline, DebugTimelineEntry, AgentRun, ImplementationPhase } from '../../../shared/types';
 import {
   computeAgenticStatuses,
   computeStatusToModes,
@@ -204,6 +204,7 @@ function renderMergedNode(
   statusToModes: Map<string, string[]>,
   agentRuns: AgentRun[] | null | undefined,
   onNavigateToRun: ((runId: string) => void) | undefined,
+  implPhases?: ImplementationPhase[] | null,
 ) {
   const visualState = computeMergedPhaseState(phase, currentStatus, agentState, currentPhaseIndex, phaseIdx);
   const circleColor = circleColorForState(visualState);
@@ -236,28 +237,40 @@ function renderMergedNode(
       >
         {circleContentForState(visualState, circleColor)}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-        <span
-          style={{
-            fontSize: 10, fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap',
-            color: labelColor,
-            ...(nodeClickable ? { borderBottom: '1px dotted currentColor' } : {}),
-          }}
-        >
-          {phase.label}
-        </span>
-        {phase.cycleCount > 1 && (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <span
             style={{
-              fontSize: 9, fontWeight: 700,
+              fontSize: 10, fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap',
               color: labelColor,
-              backgroundColor: `${circleColor}20`,
-              borderRadius: 99, padding: '0 4px', lineHeight: '16px',
+              ...(nodeClickable ? { borderBottom: '1px dotted currentColor' } : {}),
             }}
           >
-            x{phase.cycleCount}
+            {phase.label}
           </span>
-        )}
+          {phase.cycleCount > 1 && (
+            <span
+              style={{
+                fontSize: 9, fontWeight: 700,
+                color: labelColor,
+                backgroundColor: `${circleColor}20`,
+                borderRadius: 99, padding: '0 4px', lineHeight: '16px',
+              }}
+            >
+              x{phase.cycleCount}
+            </span>
+          )}
+        </div>
+        {implPhases && implPhases.length > 1 && phase.workStatus === 'implementing' && (() => {
+          const activeIdx = implPhases.findIndex(p => p.status === 'in_progress');
+          const completedCount = implPhases.filter(p => p.status === 'completed').length;
+          const phaseNum = activeIdx >= 0 ? activeIdx + 1 : completedCount + 1;
+          return (
+            <span style={{ fontSize: 9, color: labelColor, opacity: 0.8 }}>
+              Phase {phaseNum}/{implPhases.length}
+            </span>
+          );
+        })()}
       </div>
     </div>
   );
@@ -273,6 +286,7 @@ export function PipelineProgress({
   agentState = 'idle',
   agentRuns,
   onNavigateToRun,
+  implPhases,
 }: {
   pipeline: Pipeline;
   currentStatus: string;
@@ -280,6 +294,7 @@ export function PipelineProgress({
   agentState?: 'idle' | 'running' | 'failed';
   agentRuns?: AgentRun[] | null;
   onNavigateToRun?: (runId: string) => void;
+  implPhases?: ImplementationPhase[] | null;
 }) {
   const statusLabelMap = new Map(pipeline.statuses.map((s) => [s.name, s.label]));
   const agenticStatuses = computeAgenticStatuses(pipeline);
@@ -306,6 +321,7 @@ export function PipelineProgress({
                 : renderMergedNode(
                     phase, phaseIdx, currentPhaseIndex, currentStatus,
                     agentState, agenticStatuses, statusToModes, agentRuns, onNavigateToRun,
+                    implPhases,
                   )
               }
             </React.Fragment>

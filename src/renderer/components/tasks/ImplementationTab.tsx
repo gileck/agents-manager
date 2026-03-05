@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
-import type { TaskArtifact, Transition, TaskContextEntry } from '../../../shared/types';
+import type { TaskArtifact, Transition, TaskContextEntry, ImplementationPhase } from '../../../shared/types';
 
 // ---------------------------------------------------------------------------
 // Diff parsing helpers
@@ -111,6 +111,7 @@ export function ImplementationTab({
   contextEntries,
   onTransition,
   onContextAdded,
+  phases,
 }: {
   taskId: string;
   task: { status: string; prLink?: string | null };
@@ -120,6 +121,7 @@ export function ImplementationTab({
   contextEntries: TaskContextEntry[] | null;
   onTransition: (toStatus: string) => void;
   onContextAdded: () => void;
+  phases?: ImplementationPhase[] | null;
 }) {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -164,12 +166,50 @@ export function ImplementationTab({
   const mergeTransition = transitions.find((t) => t.label?.toLowerCase().includes('merge') && !t.label?.toLowerCase().includes('failed'));
   const approveTransition = transitions.find((t) => t.label?.toLowerCase().includes('approve'));
 
+  const isMultiPhase = phases && phases.length > 1;
+  const activePhaseIdx = phases?.findIndex(p => p.status === 'in_progress') ?? -1;
+  const completedPhases = phases?.filter(p => p.status === 'completed' && p.prLink) ?? [];
+
   return (
     <div style={{ padding: '20px 24px', overflowY: 'auto' }}>
-      {/* PR Link */}
+      {/* Phase indicator for multi-phase tasks */}
+      {isMultiPhase && activePhaseIdx >= 0 && (
+        <div style={{
+          marginBottom: 16, padding: '8px 12px', borderRadius: 6,
+          backgroundColor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
+          fontSize: 13,
+        }}>
+          <span style={{ fontWeight: 600 }}>Phase {activePhaseIdx + 1}/{phases!.length}</span>
+          <span style={{ color: 'var(--muted-foreground)', marginLeft: 8 }}>{phases![activePhaseIdx].name}</span>
+        </div>
+      )}
+
+      {/* Completed phase PRs */}
+      {completedPhases.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Merged PRs</h3>
+          {completedPhases.map((p, i) => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: '#16a34a' }}>✓</span>
+              <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>Phase {i + 1}:</span>
+              <button
+                onClick={() => window.api.shell.openInChrome(p.prLink!)}
+                style={{ fontSize: 12, color: '#58a6ff', cursor: 'pointer', background: 'none', border: 'none', textAlign: 'left' }}
+                className="hover:underline"
+              >
+                {p.prLink}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Current PR Link */}
       {task.prLink && (
         <div style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Pull Request</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+            {isMultiPhase ? 'Current Pull Request' : 'Pull Request'}
+          </h3>
           <button
             onClick={() => window.api.shell.openInChrome(task.prLink!)}
             style={{ fontSize: 13, color: '#58a6ff', cursor: 'pointer', background: 'none', border: 'none', textAlign: 'left' }}

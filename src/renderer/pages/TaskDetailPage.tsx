@@ -580,6 +580,7 @@ export function TaskDetailPage() {
             agentState={hasRunningAgent ? 'running' : isStuck ? 'failed' : 'idle'}
             agentRuns={agentRuns}
             onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
+            implPhases={task.phases}
           />
         </div>
       )}
@@ -757,6 +758,7 @@ export function TaskDetailPage() {
             contextEntries={contextEntries ?? null}
             onTransition={handleTransition}
             onContextAdded={refetchContext}
+            phases={task.phases}
           />
         </TabsContent>
 
