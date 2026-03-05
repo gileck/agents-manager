@@ -50,14 +50,20 @@ const STATUS_NAME_FALLBACK: Record<string, BadgeVariant> = {
   planning: 'warning',
   implementing: 'default',
   in_progress: 'default',
-  pr_review: 'warning',
+  investigation_review: 'review',
+  design_review: 'review',
+  plan_review: 'review',
+  pr_review: 'review',
   pr_ready: 'warning',
   failed: 'destructive',
   blocked: 'destructive',
 };
 
 function statusNameToVariant(name: string): BadgeVariant {
-  return STATUS_NAME_FALLBACK[name.toLowerCase()] ?? 'outline';
+  const lower = name.toLowerCase();
+  if (lower in STATUS_NAME_FALLBACK) return STATUS_NAME_FALLBACK[lower];
+  if (lower.endsWith('_review')) return 'review';
+  return 'outline';
 }
 
 export function PipelineBadge({ status, pipeline }: PipelineBadgeProps) {

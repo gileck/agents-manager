@@ -1,7 +1,7 @@
 import React from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+import { Eye, GripVertical } from 'lucide-react';
 import { Card } from '../ui/card';
 import { getTagColor, rgba } from '../../utils/kanban-colors';
 import type { Task } from '../../../shared/types';
@@ -46,7 +46,8 @@ export const KanbanCard = React.memo(function KanbanCard({ task, onClick, isSele
 
   const priorityDot = PRIORITY_COLORS[task.priority];
   const hasTags = task.tags && task.tags.length > 0;
-  const hasBottomRow = hasTags || task.assignee;
+  const isReview = task.status.endsWith('_review');
+  const hasBottomRow = hasTags || task.assignee || isReview;
 
   return (
     <Card
@@ -85,6 +86,15 @@ export const KanbanCard = React.memo(function KanbanCard({ task, onClick, isSele
           </div>
           {hasBottomRow && (
             <div className="flex items-center gap-1 mt-1">
+              {isReview && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[10px] font-medium text-violet-500"
+                  title={task.status}
+                >
+                  <Eye className="w-3 h-3" />
+                  Review
+                </span>
+              )}
               {hasTags && task.tags.map((tag) => {
                 const tagColor = getTagColor(tag);
                 return (
