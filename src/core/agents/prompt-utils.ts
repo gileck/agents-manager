@@ -74,7 +74,8 @@ export function formatFeedbackForPrompt(
 
 /**
  * Format context entries as read-only informational context (not actionable feedback).
- * Shows ALL entries (both addressed and unaddressed) with a note that they are for reference only.
+ * Only shows unaddressed entries — resolved Q&A (addressed entries) are omitted to save tokens.
+ * If all entries are addressed, the section is skipped entirely.
  */
 export function formatFeedbackAsContext(
   entries: TaskContextEntry[] | undefined,
@@ -83,12 +84,12 @@ export function formatFeedbackAsContext(
 ): string[] {
   if (!entries || entries.length === 0) return [];
 
-  const matching = entries.filter(e => feedbackTypes.includes(e.entryType));
-  if (matching.length === 0) return [];
+  const unaddressed = entries.filter(e => feedbackTypes.includes(e.entryType) && !e.addressed);
+  if (unaddressed.length === 0) return [];
 
   const lines: string[] = ['', `## ${sectionTitle} (Context Only)`];
   lines.push('*These comments are from a prior review phase — provided for reference only.*');
-  for (const entry of matching) {
+  for (const entry of unaddressed) {
     const time = new Date(entry.createdAt).toLocaleString();
     lines.push(`- **${entry.source}** (${time}): ${entry.summary}`);
   }
