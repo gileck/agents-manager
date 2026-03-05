@@ -1,5 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import type { Task, KanbanColumn } from '../../shared/types';
+import { useKeyboardShortcutsConfig } from './useKeyboardShortcutsConfig';
+import { matchesKeyEvent } from '../lib/keyboardShortcuts';
 
 interface UseKanbanKeyboardShortcutsOptions {
   columns: KanbanColumn[];
@@ -26,6 +28,8 @@ export function useKanbanKeyboardShortcuts({
   onCreateTask,
   enabled = true,
 }: UseKanbanKeyboardShortcutsOptions) {
+  const { getCombo } = useKeyboardShortcutsConfig();
+
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!enabled) return;
 
@@ -39,112 +43,101 @@ export function useKanbanKeyboardShortcuts({
       return;
     }
 
+    // Escape is non-customizable — always clears selection
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      clearSelection();
+      return;
+    }
+
     // Get current selection from data attributes
     const selectedCard = document.querySelector('[data-kanban-selected="true"]');
     const selectedColumn = selectedCard?.closest('[data-kanban-column]');
 
     const sortedColumns = [...columns].sort((a, b) => a.order - b.order);
 
-    switch (event.key) {
-      case 'ArrowLeft': {
-        event.preventDefault();
-        if (!selectedColumn) {
-          // Select first card in first column
-          selectFirstCard(sortedColumns, tasksByColumn);
-        } else {
-          // Move to previous column
-          const currentColumnId = selectedColumn.getAttribute('data-kanban-column');
-          const currentIndex = sortedColumns.findIndex(col => col.id === currentColumnId);
-          if (currentIndex > 0) {
-            selectFirstCard(sortedColumns.slice(currentIndex - 1, currentIndex), tasksByColumn);
-          }
+    if (matchesKeyEvent(getCombo('kanban.navLeft'), event)) {
+      event.preventDefault();
+      if (!selectedColumn) {
+        selectFirstCard(sortedColumns, tasksByColumn);
+      } else {
+        const currentColumnId = selectedColumn.getAttribute('data-kanban-column');
+        const currentIndex = sortedColumns.findIndex(col => col.id === currentColumnId);
+        if (currentIndex > 0) {
+          selectFirstCard(sortedColumns.slice(currentIndex - 1, currentIndex), tasksByColumn);
         }
-        break;
       }
-
-      case 'ArrowRight': {
-        event.preventDefault();
-        if (!selectedColumn) {
-          // Select first card in first column
-          selectFirstCard(sortedColumns, tasksByColumn);
-        } else {
-          // Move to next column
-          const currentColumnId = selectedColumn.getAttribute('data-kanban-column');
-          const currentIndex = sortedColumns.findIndex(col => col.id === currentColumnId);
-          if (currentIndex < sortedColumns.length - 1) {
-            selectFirstCard(sortedColumns.slice(currentIndex + 1, currentIndex + 2), tasksByColumn);
-          }
-        }
-        break;
-      }
-
-      case 'ArrowUp': {
-        event.preventDefault();
-        if (!selectedCard || !selectedColumn) {
-          selectFirstCard(sortedColumns, tasksByColumn);
-        } else {
-          const columnId = selectedColumn.getAttribute('data-kanban-column');
-          const tasks = columnId ? tasksByColumn.get(columnId) || [] : [];
-          const currentTaskId = selectedCard.getAttribute('data-task-id');
-          const currentIndex = tasks.findIndex(t => t.id === currentTaskId);
-
-          if (currentIndex > 0) {
-            selectCard(tasks[currentIndex - 1].id);
-          }
-        }
-        break;
-      }
-
-      case 'ArrowDown': {
-        event.preventDefault();
-        if (!selectedCard || !selectedColumn) {
-          selectFirstCard(sortedColumns, tasksByColumn);
-        } else {
-          const columnId = selectedColumn.getAttribute('data-kanban-column');
-          const tasks = columnId ? tasksByColumn.get(columnId) || [] : [];
-          const currentTaskId = selectedCard.getAttribute('data-task-id');
-          const currentIndex = tasks.findIndex(t => t.id === currentTaskId);
-
-          if (currentIndex < tasks.length - 1) {
-            selectCard(tasks[currentIndex + 1].id);
-          }
-        }
-        break;
-      }
-
-      case 'Enter': {
-        event.preventDefault();
-        if (selectedCard) {
-          const taskId = selectedCard.getAttribute('data-task-id');
-          const columnId = selectedColumn?.getAttribute('data-kanban-column');
-          if (taskId && columnId) {
-            const tasks = tasksByColumn.get(columnId) || [];
-            const task = tasks.find(t => t.id === taskId);
-            if (task) {
-              onCardClick(task);
-            }
-          }
-        }
-        break;
-      }
-
-      case 'n':
-      case 'N': {
-        // Only trigger if not in an input field
-        if (!event.ctrlKey && !event.metaKey) {
-          event.preventDefault();
-          onCreateTask();
-        }
-        break;
-      }
-
-      case 'Escape': {
-        event.preventDefault();
-        clearSelection();
-        break;
-      }
+      return;
     }
-  }, [enabled, columns, tasksByColumn, onCardClick, onCreateTask]);
+
+    if (matchesKeyEvent(getCombo('kanban.navRight'), event)) {
+      event.preventDefault();
+      if (!selectedColumn) {
+        selectFirstCard(sortedColumns, tasksByColumn);
+      } else {
+        const currentColumnId = selectedColumn.getAttribute('data-kanban-column');
+        const currentIndex = sortedColumns.findIndex(col => col.id === currentColumnId);
+        if (currentIndex < sortedColumns.length - 1) {
+          selectFirstCard(sortedColumns.slice(currentIndex + 1, currentIndex + 2), tasksByColumn);
+        }
+      }
+      return;
+    }
+
+    if (matchesKeyEvent(getCombo('kanban.navUp'), event)) {
+      event.preventDefault();
+      if (!selectedCard || !selectedColumn) {
+        selectFirstCard(sortedColumns, tasksByColumn);
+      } else {
+        const columnId = selectedColumn.getAttribute('data-kanban-column');
+        const tasks = columnId ? tasksByColumn.get(columnId) || [] : [];
+        const currentTaskId = selectedCard.getAttribute('data-task-id');
+        const currentIndex = tasks.findIndex(t => t.id === currentTaskId);
+        if (currentIndex > 0) {
+          selectCard(tasks[currentIndex - 1].id);
+        }
+      }
+      return;
+    }
+
+    if (matchesKeyEvent(getCombo('kanban.navDown'), event)) {
+      event.preventDefault();
+      if (!selectedCard || !selectedColumn) {
+        selectFirstCard(sortedColumns, tasksByColumn);
+      } else {
+        const columnId = selectedColumn.getAttribute('data-kanban-column');
+        const tasks = columnId ? tasksByColumn.get(columnId) || [] : [];
+        const currentTaskId = selectedCard.getAttribute('data-task-id');
+        const currentIndex = tasks.findIndex(t => t.id === currentTaskId);
+        if (currentIndex < tasks.length - 1) {
+          selectCard(tasks[currentIndex + 1].id);
+        }
+      }
+      return;
+    }
+
+    if (matchesKeyEvent(getCombo('kanban.openCard'), event)) {
+      event.preventDefault();
+      if (selectedCard) {
+        const taskId = selectedCard.getAttribute('data-task-id');
+        const columnId = selectedColumn?.getAttribute('data-kanban-column');
+        if (taskId && columnId) {
+          const tasks = tasksByColumn.get(columnId) || [];
+          const task = tasks.find(t => t.id === taskId);
+          if (task) {
+            onCardClick(task);
+          }
+        }
+      }
+      return;
+    }
+
+    if (matchesKeyEvent(getCombo('kanban.newTask'), event)) {
+      event.preventDefault();
+      onCreateTask();
+      return;
+    }
+  }, [enabled, columns, tasksByColumn, onCardClick, onCreateTask, getCombo]);
 
   useEffect(() => {
     if (enabled) {
