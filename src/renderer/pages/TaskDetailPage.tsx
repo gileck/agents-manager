@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import itermIcon from '../assets/iterm-icon.png';
 import vscodeIcon from '../assets/vscode-icon.png';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -114,12 +114,23 @@ export function TaskDetailPage() {
     : 'details';
   const [tab, setTab] = useLocalStorage(`taskDetail.tab.${id}`, initialTab);
 
-  // Auto-switch to relevant tab when entering review statuses
+  // Auto-navigate to review sub-page when status *transitions into* a review state.
+  // Uses a ref to track previous status so we only navigate once (on the transition),
+  // not on every render — this prevents a redirect loop when the user navigates back.
+  const prevStatusRef = useRef(task?.status);
   useEffect(() => {
-    if (task?.status === 'plan_review') setTab('plan');
-    else if (task?.status === 'design_review') setTab('design');
-    else if (task?.status === 'pr_review' || task?.status === 'ready_to_merge') setTab('implementation');
-  }, [task?.status]);
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = task?.status;
+    if (prev === task?.status) return;
+
+    if (task?.status === 'plan_review') {
+      navigate(`/tasks/${id}/plan`);
+    } else if (task?.status === 'design_review') {
+      navigate(`/tasks/${id}/design`);
+    } else if (task?.status === 'pr_review' || task?.status === 'ready_to_merge') {
+      setTab('implementation');
+    }
+  }, [task?.status, id, navigate, setTab]);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<TaskUpdateInput>({});
@@ -663,6 +674,11 @@ export function TaskDetailPage() {
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         <TabsContent value="details" style={{ padding: '20px 24px', overflowY: 'auto' }}>
+          <div className="flex justify-end mb-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/details`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
+              &#x26F6;
+            </Button>
+          </div>
           <TaskDetailDashboard
             task={task}
             taskId={id!}
@@ -683,6 +699,11 @@ export function TaskDetailPage() {
         </TabsContent>
 
         <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto' }}>
+          <div className="flex justify-end mb-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/plan`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
+              &#x26F6;
+            </Button>
+          </div>
           <PlanReviewCard
             title="Plan"
             content={task.plan}
@@ -691,19 +712,18 @@ export function TaskDetailPage() {
             isReviewStatus={task.status === 'plan_review'}
             transitions={transitions ?? []}
             transitioning={transitioning}
-
             approveToStatus="implementing"
-            reviseToStatus="planning"
             onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'plan_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
-            taskId={id}
-            agentRole="planner"
-            entryType="plan_feedback"
-            onEntriesChanged={refetchContext}
           />
         </TabsContent>
 
         <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto' }}>
+          <div className="flex justify-end mb-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/design`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
+              &#x26F6;
+            </Button>
+          </div>
           <PlanReviewCard
             title="Technical Design"
             content={task.technicalDesign}
@@ -712,19 +732,18 @@ export function TaskDetailPage() {
             isReviewStatus={task.status === 'design_review'}
             transitions={transitions ?? []}
             transitioning={transitioning}
-
             approveToStatus="implementing"
-            reviseToStatus="designing"
             onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'design_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
-            taskId={id}
-            agentRole="designer"
-            entryType="design_feedback"
-            onEntriesChanged={refetchContext}
           />
         </TabsContent>
 
         <TabsContent value="implementation" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <div className="flex justify-end px-6 pt-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/impl`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
+              &#x26F6;
+            </Button>
+          </div>
           <ImplementationTab
             taskId={id!}
             task={task}
@@ -738,10 +757,20 @@ export function TaskDetailPage() {
         </TabsContent>
 
         <TabsContent value="chat" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="flex justify-end px-6 pt-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/chat`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
+              &#x26F6;
+            </Button>
+          </div>
           <ChatPanel scope={{ type: 'task', id: id! }} />
         </TabsContent>
 
         <TabsContent value="review" style={{ padding: '20px 24px', overflowY: 'auto' }}>
+          <div className="flex justify-end mb-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/review`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
+              &#x26F6;
+            </Button>
+          </div>
           <WorkflowReviewTab
             taskId={id!}
             contextEntries={contextEntries ?? null}

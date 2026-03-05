@@ -9,6 +9,8 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectConfigPage } from './pages/ProjectConfigPage';
 import { TaskListPage } from './pages/TaskListPage';
 import { TaskDetailPage } from './pages/TaskDetailPage';
+import { PlanReviewPage } from './pages/PlanReviewPage';
+import { TaskTabPage } from './pages/TaskTabPage';
 import { AgentRunPage } from './pages/AgentRunPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ThemePage } from './pages/ThemePage';
@@ -133,6 +135,9 @@ function AppRoutes() {
         <Route path="projects/:id/telegram" element={<TelegramPage />} />
         <Route path="tasks" element={<TaskListPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
+        <Route path="tasks/:id/plan" element={<PlanReviewPage reviewType="plan" />} />
+        <Route path="tasks/:id/design" element={<PlanReviewPage reviewType="design" />} />
+        <Route path="tasks/:id/:tab" element={<TaskTabPage />} />
         <Route path="kanban" element={<KanbanBoardPage />} />
         <Route path="agent-runs" element={<AgentRunsListPage />} />
         <Route path="agents/:runId" element={<AgentRunPage />} />

@@ -68,9 +68,8 @@ export function useReviewConversation(
                   .map((m: AgentChatMessage) => (m as { text: string }).text)
                   .join('\n');
               }
-            } catch (parseErr) {
-              // Expected for plain text content — log for traceability
-              reportError(parseErr instanceof Error ? parseErr : new Error(String(parseErr)), 'Parse agent response content');
+            } catch {
+              // Expected for plain text content — responseText remains as the raw string.
             }
 
             if (responseText.trim()) {
