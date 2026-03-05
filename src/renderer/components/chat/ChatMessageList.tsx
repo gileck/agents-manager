@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -11,6 +12,7 @@ interface ChatMessageListProps {
 
 export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
 
   const toggleTool = useCallback((index: number) => {
@@ -111,6 +113,17 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
             <span className="text-xs text-muted-foreground/80 bg-muted/50 px-3 py-1 rounded-full">
               {msg.message}
             </span>
+          </div>
+        );
+      } else if (msg.type === 'agent_run_info') {
+        nodes.push(
+          <div key={i} className="py-1">
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              onClick={() => navigate(`/agents/${msg.agentRunId}`)}
+            >
+              Agent Run &middot; View details &rarr;
+            </button>
           </div>
         );
       }

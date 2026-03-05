@@ -259,7 +259,7 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_CONTEXT_ENTRIES, taskId),
     addContextEntry: (taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_ADD_CONTEXT_ENTRY, taskId, input),
-    addFeedback: (taskId: string, input: { entryType: string; content: string }): Promise<TaskContextEntry> =>
+    addFeedback: (taskId: string, input: { entryType: string; content: string; source?: string }): Promise<TaskContextEntry> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_ADD_FEEDBACK, taskId, input),
     debugTimeline: (taskId: string): Promise<DebugTimelineEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEBUG_TIMELINE, taskId),

@@ -3,6 +3,7 @@ import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
+import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, AgentChatMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks } from '../interfaces/agent-lib';
@@ -130,6 +131,7 @@ export class ChatAgentService {
     private taskStore: ITaskStore,
     private pipelineStore: IPipelineStore,
     private agentLibRegistry: AgentLibRegistry,
+    private agentRunStore: IAgentRunStore,
     private getDefaultAgentLib: () => string = () => DEFAULT_AGENT_LIB,
     imageStorageDir?: string,
   ) {
@@ -432,11 +434,31 @@ export class ChatAgentService {
     }
     prompt += `${userPart}\n\nRespond to the latest user message.`;
 
+    // Create or reuse AgentRun for agent-chat sessions
+    let agentRunId: string | undefined;
+    if (session.source === 'agent-chat' && session.scopeType === 'task') {
+      try {
+        if (session.agentRunId) {
+          agentRunId = session.agentRunId;
+        } else {
+          const run = await this.agentRunStore.createRun({
+            taskId: session.scopeId,
+            agentType: session.agentRole ?? 'chat',
+            mode: 'revision',
+          });
+          agentRunId = run.id;
+          await this.chatSessionStore.updateSession(sessionId, { agentRunId: run.id });
+        }
+      } catch (err) {
+        getAppLogger().logError('ChatAgentService', 'Failed to create/reuse AgentRun for agent-chat', err);
+      }
+    }
+
     // Run agent in background, return completion promise
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, mode }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, mode, agentRunId }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -607,9 +629,11 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
-    extra?: { pipelineSessionId?: string; resumeSession?: boolean; mode?: AgentChatMode },
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; mode?: AgentChatMode; agentRunId?: string },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
+
+    const agentRunId = extra?.agentRunId;
 
     const imageDir = this.imageStorageDir;
 
@@ -638,6 +662,11 @@ export class ChatAgentService {
     };
 
     try {
+      // Emit agent run info link so UI can show it during streaming
+      if (agentRunId) {
+        emitMessage({ type: 'agent_run_info', agentRunId, timestamp: Date.now() });
+      }
+
       const lib = this.agentLibRegistry.getLib(agentLibName);
       const features = lib.supportedFeatures();
 
@@ -803,6 +832,28 @@ export class ChatAgentService {
               try { emitEvent({ type: 'text', text: '\n[Warning: The revised content was generated but could not be saved to the task.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
             }
           }
+        }
+      }
+
+      // Update AgentRun with accumulated costs and messages
+      if (agentRunId) {
+        try {
+          const existingRun = await this.agentRunStore.getRun(agentRunId);
+          if (existingRun) {
+            const agent = this.runningAgents.get(sessionId);
+            const agentStatus = agent?.status ?? 'failed';
+            await this.agentRunStore.updateRun(agentRunId, {
+              status: agentStatus === 'completed' ? 'completed' : 'failed',
+              completedAt: Date.now(),
+              costInputTokens: (existingRun.costInputTokens ?? 0) + (costInputTokens ?? 0),
+              costOutputTokens: (existingRun.costOutputTokens ?? 0) + (costOutputTokens ?? 0),
+              messages: [...(existingRun.messages ?? []), ...turnMessages],
+            });
+          } else {
+            getAppLogger().warn('ChatAgentService', `AgentRun ${agentRunId} not found in DB; skipping update`);
+          }
+        } catch (runErr) {
+          getAppLogger().logError('ChatAgentService', 'Failed to update AgentRun', runErr);
         }
       }
 

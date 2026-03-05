@@ -646,3 +646,26 @@ Conversation history is loaded from `ChatMessageStore` and prepended to the prom
 ### Running Agent Tracking
 
 Active chat agents are tracked in a `runningAgents` map keyed by session ID. Each entry stores: session info, scope, project, status, start time, last activity, and a message preview. Completed/failed agents are cleaned up after a 5-second delay. Stale entries (older than 1 hour) are cleaned up on `getRunningAgents()` calls.
+
+### Agent-Chat AgentRun Tracking
+
+Agent-chat sessions (source `'agent-chat'`) create persistent `AgentRun` records so that costs, messages, and execution history are visible in the Agent Runs tab alongside pipeline runs.
+
+**Lifecycle:**
+1. On the **first message** in an agent-chat session, `send()` creates a new `AgentRun` with `mode: 'revision'` and `agentType` matching the session's `agentRole` (e.g., `'planner'`). The run ID is stored on the session via `ChatSession.agentRunId`.
+2. On **subsequent messages**, the existing `agentRunId` is reused — no new run is created.
+3. In `runAgent()`'s `finally` block, the run is updated with accumulated `costInputTokens`, `costOutputTokens`, `messages`, and `status`.
+
+**Relationship to pipeline runs:** Agent-chat revision runs are **separate** from the original pipeline run that produced the plan/design. This keeps cost attribution clean and avoids mutating a completed pipeline run.
+
+```
+Task
+├── AgentRun (planner, mode='new')       ← original pipeline run that wrote the plan
+├── AgentRun (planner, mode='revision')  ← all chat messages with the planner
+├── AgentRun (designer, mode='new')      ← original pipeline run that wrote the design
+└── AgentRun (designer, mode='revision') ← all chat messages with the designer
+```
+
+Both run types appear in `getRunsForTask(taskId)` and are visible in the Agent Runs tab.
+
+**UI integration:** An `agent_run_info` message is emitted at the start of each `runAgent()` call when an `agentRunId` is available. The `ChatMessageList` component renders this as a small "Agent Run · View details →" link that navigates to `/agents/:runId`.

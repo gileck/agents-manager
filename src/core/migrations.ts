@@ -48,5 +48,9 @@ export function getMigrations(): Migration[] {
       name: '095_add_agent_role_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN agent_role TEXT`,
     },
+    {
+      name: '096_add_agent_run_id_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN agent_run_id TEXT`,
+    },
   ];
 }

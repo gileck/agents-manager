@@ -98,7 +98,7 @@ export interface ApiClient {
     getPrompts(id: string): Promise<unknown[]>;
     getContext(id: string): Promise<unknown[]>;
     addContext(id: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<unknown>;
-    addFeedback(id: string, input: { entryType: string; content: string }): Promise<unknown>;
+    addFeedback(id: string, input: { entryType: string; content: string; source?: string }): Promise<unknown>;
     getWorktree(id: string): Promise<unknown>;
     getArtifacts(id: string): Promise<unknown[]>;
     getTimeline(id: string): Promise<unknown>;
@@ -330,7 +330,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       getPrompts: (id) => req('GET', `/api/tasks/${id}/prompts`),
       getContext: (id) => req('GET', `/api/tasks/${id}/context`),
       addContext: (id, input) => req('POST', `/api/tasks/${id}/context`, input),
-      addFeedback: (id: string, input: { entryType: string; content: string }) => req('POST', `/api/tasks/${id}/feedback`, input),
+      addFeedback: (id: string, input: { entryType: string; content: string; source?: string }) => req('POST', `/api/tasks/${id}/feedback`, input),
       getWorktree: (id) => req('GET', `/api/tasks/${id}/worktree`),
       getArtifacts: (id) => req('GET', `/api/tasks/${id}/artifacts`),
       getTimeline: (id) => req('GET', `/api/tasks/${id}/timeline`),

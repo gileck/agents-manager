@@ -21,6 +21,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       model: input.model ?? null,
       source,
       agentRole: input.agentRole ?? null,
+      agentRunId: null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -42,7 +43,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
   async getSession(id: string): Promise<ChatSession | null> {
     try {
       const stmt = this.db.prepare(`
-        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, model, source, agent_role as agentRole, created_at as createdAt, updated_at as updatedAt
+        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, model, source, agent_role as agentRole, agent_run_id as agentRunId, created_at as createdAt, updated_at as updatedAt
         FROM chat_sessions
         WHERE id = ?
       `);
@@ -59,7 +60,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     try {
       const params: unknown[] = [scopeType, scopeId];
       let sql = `
-        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, model, source, agent_role as agentRole, created_at as createdAt, updated_at as updatedAt
+        SELECT id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, model, source, agent_role as agentRole, agent_run_id as agentRunId, created_at as createdAt, updated_at as updatedAt
         FROM chat_sessions
         WHERE scope_type = ? AND scope_id = ?`;
 
@@ -85,7 +86,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       const params: unknown[] = [projectId];
       let sql = `
         SELECT cs.id, cs.project_id as projectId, cs.scope_type as scopeType, cs.scope_id as scopeId,
-               cs.name, cs.agent_lib as agentLib, cs.model, cs.source, cs.agent_role as agentRole, cs.created_at as createdAt, cs.updated_at as updatedAt,
+               cs.name, cs.agent_lib as agentLib, cs.model, cs.source, cs.agent_role as agentRole, cs.agent_run_id as agentRunId, cs.created_at as createdAt, cs.updated_at as updatedAt,
                t.title as taskTitle, t.status as taskStatus
         FROM chat_sessions cs
         JOIN tasks t ON cs.scope_id = t.id
@@ -125,6 +126,10 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       if (input.model !== undefined) {
         setClauses.push('model = ?');
         params.push(input.model);
+      }
+      if (input.agentRunId !== undefined) {
+        setClauses.push('agent_run_id = ?');
+        params.push(input.agentRunId);
       }
 
       if (setClauses.length === 0) {

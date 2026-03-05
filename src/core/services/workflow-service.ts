@@ -380,7 +380,7 @@ export class WorkflowService implements IWorkflowService {
     };
   }
 
-  async addTaskFeedback(taskId: string, entryType: string, content: string): Promise<TaskContextEntry> {
+  async addTaskFeedback(taskId: string, entryType: string, content: string, source?: string): Promise<TaskContextEntry> {
     if (!(FEEDBACK_ENTRY_TYPES as readonly string[]).includes(entryType)) {
       throw new Error(`Invalid feedback entry type: ${entryType}. Must be one of: ${FEEDBACK_ENTRY_TYPES.join(', ')}`);
     }
@@ -389,7 +389,7 @@ export class WorkflowService implements IWorkflowService {
 
     const entry = await this.taskContextStore.addEntry({
       taskId,
-      source: 'admin',
+      source: source ?? 'admin',
       entryType,
       summary: content,
     });

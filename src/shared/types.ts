@@ -684,6 +684,12 @@ export interface AgentChatMessageThinking {
   timestamp: number;
 }
 
+export interface AgentChatMessageRunInfo {
+  type: 'agent_run_info';
+  agentRunId: string;
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
@@ -691,7 +697,8 @@ export type AgentChatMessage =
   | AgentChatMessageUser
   | AgentChatMessageStatus
   | AgentChatMessageUsage
-  | AgentChatMessageThinking;
+  | AgentChatMessageThinking
+  | AgentChatMessageRunInfo;
 
 export interface AgentConfig {
   model?: string;
@@ -995,6 +1002,7 @@ export interface ChatSession {
   model: string | null;
   source: ChatSessionSource;
   agentRole: string | null;
+  agentRunId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -1035,6 +1043,7 @@ export interface ChatSessionUpdateInput {
   name?: string;
   agentLib?: string | null;
   model?: string | null;
+  agentRunId?: string | null;
 }
 
 export interface TaskChatSessionWithTitle extends ChatSession {

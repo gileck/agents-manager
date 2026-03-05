@@ -140,7 +140,7 @@ export function registerTaskHandlers(api: ApiClient): void {
     return api.tasks.addContext(taskId, input);
   });
 
-  registerIpcHandler(IPC_CHANNELS.TASK_ADD_FEEDBACK, async (_, taskId: string, input: { entryType: string; content: string }) => {
+  registerIpcHandler(IPC_CHANNELS.TASK_ADD_FEEDBACK, async (_, taskId: string, input: { entryType: string; content: string; source?: string }) => {
     return api.tasks.addFeedback(taskId, input);
   });
 

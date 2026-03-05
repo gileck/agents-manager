@@ -273,7 +273,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
       return 'claude-code';
     }
   };
-  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, getDefaultAgentLib, config?.imageStorageDir);
+  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, agentRunStore, getDefaultAgentLib, config?.imageStorageDir);
 
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore, createStreamingCallbacks: config?.createStreamingCallbacks });

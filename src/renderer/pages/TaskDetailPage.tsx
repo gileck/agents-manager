@@ -691,13 +691,15 @@ export function TaskDetailPage() {
             isReviewStatus={task.status === 'plan_review'}
             transitions={transitions ?? []}
             transitioning={transitioning}
-            commentPlaceholder="Add feedback for the planning agent..."
+
             approveToStatus="implementing"
             reviseToStatus="planning"
             onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'plan_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
             taskId={id}
             agentRole="planner"
+            entryType="plan_feedback"
+            onEntriesChanged={refetchContext}
           />
         </TabsContent>
 
@@ -710,13 +712,15 @@ export function TaskDetailPage() {
             isReviewStatus={task.status === 'design_review'}
             transitions={transitions ?? []}
             transitioning={transitioning}
-            commentPlaceholder="Add feedback for the design agent..."
+
             approveToStatus="implementing"
             reviseToStatus="designing"
             onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'design_feedback')}
             renderContent={(content) => <PlanMarkdown content={content} />}
             taskId={id}
             agentRole="designer"
+            entryType="design_feedback"
+            onEntriesChanged={refetchContext}
           />
         </TabsContent>
 

@@ -52,7 +52,7 @@ The daemon is the sole database owner. WAL mode is still enabled for safe concur
 | `settings` | Key-value settings | key (PK), value |
 | `users` | User profiles | id, username, role |
 | `kanban_boards` | Kanban board configurations | id, projectId (FK), name, columns (JSON) |
-| `chat_sessions` | Chat sessions (project or task scoped) | id, projectId, scopeType, scopeId, name, agentLib, source |
+| `chat_sessions` | Chat sessions (project or task scoped) | id, projectId, scopeType, scopeId, name, agentLib, source, agentRunId |
 | `chat_messages` | Chat messages per session | id, sessionId, role, content, costInputTokens, costOutputTokens |
 | `app_debug_log` | Application debug log | id, level, source, message, data (JSON) |
 | `automated_agents` | Automated agent configurations | id, projectId (FK), name, promptInstructions, capabilities (JSON), schedule (JSON), enabled |

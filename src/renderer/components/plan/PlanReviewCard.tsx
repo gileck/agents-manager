@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { CommentThread } from './CommentThread';
-import { CommentInput } from './CommentInput';
-import { AgentChatPanel } from './AgentChatPanel';
+import { Button } from '../ui/button';
+import { FullscreenReviewOverlay } from './FullscreenReviewOverlay';
 import type { TaskContextEntry, Transition } from '../../../shared/types';
 
 interface PlanReviewCardProps {
@@ -13,13 +12,14 @@ interface PlanReviewCardProps {
   isReviewStatus: boolean;
   transitions: Transition[];
   transitioning: string | null;
-  commentPlaceholder: string;
   approveToStatus?: string;
   reviseToStatus?: string;
   onAction: (toStatus: string, comment: string) => Promise<void>;
   renderContent?: (content: string) => React.ReactNode;
   taskId?: string;
   agentRole?: string;
+  entryType?: string;
+  onEntriesChanged?: () => void;
 }
 
 export function PlanReviewCard({
@@ -30,69 +30,95 @@ export function PlanReviewCard({
   isReviewStatus,
   transitions,
   transitioning,
-  commentPlaceholder,
   approveToStatus = 'implementing',
   reviseToStatus,
   onAction,
   renderContent,
   taskId,
   agentRole,
+  entryType = 'plan_feedback',
+  onEntriesChanged,
 }: PlanReviewCardProps) {
+  const [overlayOpen, setOverlayOpen] = useState(false);
+
   const approveTransition = transitions.find((t) => t.to === approveToStatus);
-  const reviseTransition = reviseToStatus ? transitions.find((t) => t.to === reviseToStatus) : undefined;
+
+  const defaultRenderContent = (c: string) => <pre className="whitespace-pre-wrap text-sm">{c}</pre>;
+  const contentRenderer = renderContent || defaultRenderContent;
 
   return (
-    <Card className={`mt-4 ${isReviewStatus ? 'border-blue-400' : ''}`}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Content Section */}
-        <div className="mb-6">
-          {content ? (
-            renderContent ? renderContent(content) : <pre className="whitespace-pre-wrap text-sm">{content}</pre>
-          ) : (
-            <p className="text-sm text-muted-foreground">{emptyContentMessage}</p>
-          )}
-        </div>
-
-        {/* Agent Chat Panel — inline chat with the agent */}
-        {taskId && agentRole && (
-          <AgentChatPanel
-            taskId={taskId}
-            agentRole={agentRole}
-            hasContent={!!content}
-          />
-        )}
-
-        {/* Comments Section - Always visible */}
-        {(entries.length > 0 || isReviewStatus) && (
-          <div className="border-t pt-4 mt-6">
-            <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Review Comments</h4>
-
-            {/* Comment History */}
-            {entries.length > 0 && (
-              <div className="mb-4">
-                <CommentThread
-                  entries={entries}
-                  emptyMessage="No review comments yet."
-                />
-              </div>
-            )}
-
-            {/* Comment Input - Only during review */}
-            {isReviewStatus && (
-              <CommentInput
-                placeholder={commentPlaceholder}
-                approveTransition={approveTransition}
-                reviseTransition={reviseTransition}
-                transitioning={transitioning}
-                onAction={onAction}
-              />
+    <>
+      <Card className={`mt-4 ${isReviewStatus ? 'border-blue-400' : ''}`}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>{title}</CardTitle>
+            {content && (
+              <Button variant="outline" size="sm" onClick={() => setOverlayOpen(true)}>
+                Open Review
+              </Button>
             )}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent>
+          {/* Content Section */}
+          <div className="mb-4">
+            {content ? (
+              contentRenderer(content)
+            ) : (
+              <p className="text-sm text-muted-foreground">{emptyContentMessage}</p>
+            )}
+          </div>
+
+          {/* Condensed action buttons during review */}
+          {isReviewStatus && content && (
+            <div className="flex gap-2 pt-4 border-t">
+              {approveTransition && (
+                <Button
+                  onClick={() => onAction(approveTransition.to, '')}
+                  disabled={transitioning !== null}
+                >
+                  {transitioning === approveTransition.to ? 'Approving...' : approveTransition.label || 'Approve & Implement'}
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setOverlayOpen(true)}>
+                Review &amp; Comment
+              </Button>
+            </div>
+          )}
+
+          {/* Show entry count as hint */}
+          {entries.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-3">
+              {entries.length} review comment{entries.length !== 1 ? 's' : ''} —{' '}
+              <button
+                className="underline hover:text-foreground"
+                onClick={() => setOverlayOpen(true)}
+              >
+                view conversation
+              </button>
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <FullscreenReviewOverlay
+        open={overlayOpen}
+        onClose={() => setOverlayOpen(false)}
+        title={title}
+        content={content}
+        renderContent={contentRenderer}
+        entries={entries}
+        isReviewStatus={isReviewStatus}
+        transitions={transitions}
+        transitioning={transitioning}
+        approveToStatus={approveToStatus}
+        reviseToStatus={reviseToStatus}
+        onAction={onAction}
+        taskId={taskId}
+        agentRole={agentRole}
+        entryType={entryType}
+        onEntriesChanged={onEntriesChanged || (() => {})}
+      />
+    </>
   );
 }
