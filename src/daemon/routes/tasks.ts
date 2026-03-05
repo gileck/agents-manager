@@ -113,18 +113,23 @@ export function taskRoutes(services: AppServices): Router {
       // When multiple transitions share a label (e.g. guarded "Approve" → done
       // vs unguarded "Approve" → ready_to_merge), only show the first one whose
       // guards pass, so the UI renders a single button.
+      const labelCounts = new Map<string, number>();
+      for (const t of transitions) {
+        const key = t.label ?? t.to;
+        labelCounts.set(key, (labelCounts.get(key) ?? 0) + 1);
+      }
+
       const seenLabels = new Set<string>();
       const filtered = [];
       for (const t of transitions) {
         const key = t.label ?? t.to;
         if (seenLabels.has(key)) {
-          // A transition with this label already passed — skip this duplicate
           continue;
         }
-        if (t.guards && t.guards.length > 0) {
+        // Only pre-check guards when there are duplicate labels to resolve
+        if ((labelCounts.get(key) ?? 0) > 1 && t.guards && t.guards.length > 0) {
           const check = await services.pipelineEngine.checkGuards(task, t.to, 'manual');
           if (check && !check.canTransition) {
-            // Guards block this transition — skip it so the ungarded fallback can show
             continue;
           }
         }
