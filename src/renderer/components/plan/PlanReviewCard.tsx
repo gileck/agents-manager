@@ -69,19 +69,14 @@ export function PlanReviewCard({
             )}
           </div>
 
-          {/* Condensed action buttons during review */}
-          {isReviewStatus && content && (
+          {/* Quick approve button during review */}
+          {isReviewStatus && content && approveTransition && (
             <div className="flex gap-2 pt-4 border-t">
-              {approveTransition && (
-                <Button
-                  onClick={() => onAction(approveTransition.to, '')}
-                  disabled={transitioning !== null}
-                >
-                  {transitioning === approveTransition.to ? 'Approving...' : approveTransition.label || 'Approve & Implement'}
-                </Button>
-              )}
-              <Button variant="outline" onClick={() => setOverlayOpen(true)}>
-                Review &amp; Comment
+              <Button
+                onClick={() => onAction(approveTransition.to, '')}
+                disabled={transitioning !== null}
+              >
+                {transitioning === approveTransition.to ? 'Approving...' : approveTransition.label || 'Approve & Implement'}
               </Button>
             </div>
           )}

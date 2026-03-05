@@ -89,7 +89,7 @@ export function FullscreenReviewOverlay({
 
   if (!open) return null;
 
-  const appRoot = document.getElementById('app-root');
+  const appRoot = document.getElementById('root');
   if (!appRoot) return null;
 
   return createPortal(
