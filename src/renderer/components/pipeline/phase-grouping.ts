@@ -68,6 +68,12 @@ export function groupIntoPhases(
   const consumed = new Set<string>();
   let currentPhaseIndex = -1;
 
+  // Count occurrences of each status in displayPath for cycle detection
+  const statusCounts = new Map<string, number>();
+  for (const s of displayPath) {
+    statusCounts.set(s, (statusCounts.get(s) ?? 0) + 1);
+  }
+
   for (let i = 0; i < displayPath.length; i++) {
     const statusName = displayPath[i];
 
@@ -84,7 +90,9 @@ export function groupIntoPhases(
       const reviewInPath = displayPath.includes(pair.review) && !skippedStatuses.has(pair.review);
 
       if (workInPath || reviewInPath) {
-        const cycleCount = 1;
+        // Compute cycle count from repeated appearances of the work status
+        const workAppearances = statusCounts.get(pair.work) ?? 0;
+        const cycleCount = workAppearances >= 2 ? workAppearances : 1;
 
         phases.push({
           kind: 'merged',
