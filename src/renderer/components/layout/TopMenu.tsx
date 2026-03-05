@@ -48,6 +48,8 @@ export function TopMenu() {
       setCreateDialogOpen(false);
       setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
       navigate(`/tasks/${task.id}`);
+    } catch (err) {
+      reportError(err, 'Create task');
     } finally {
       setCreating(false);
     }
