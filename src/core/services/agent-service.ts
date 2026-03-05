@@ -33,7 +33,6 @@ import { SubtaskSyncInterceptor } from './subtask-sync-interceptor';
 import { AgentOutputFlusher } from './agent-output-flusher';
 import { PostRunExtractor } from './post-run-extractor';
 import { getAppLogger } from './app-logger';
-import { deriveSessionId } from './session-history-formatter';
 
 export class AgentService implements IAgentService {
   private backgroundPromises = new Map<string, Promise<void>>();
@@ -350,10 +349,16 @@ export class AgentService implements IAgentService {
       customPrompt,
     };
 
-    // Derive deterministic session ID for session tracking and resume.
-    // Always set so the first run tags itself with a known session ID,
-    // but prompt builders only use it for minimal prompts when mode='revision'.
-    context.sessionId = deriveSessionId(taskId, agentType);
+    // Session ID management:
+    // - mode='new': use the unique run ID so retries never collide with a prior session.
+    // - mode='revision': look up the last completed run for this task+agent to resume its session.
+    if (mode === 'revision') {
+      const runs = await this.agentRunStore.getRunsForTask(taskId);
+      const lastCompleted = runs.find(r => r.agentType === agentType && r.status === 'completed' && r.id !== run!.id);
+      context.sessionId = lastCompleted?.id;
+    } else {
+      context.sessionId = run.id;
+    }
 
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);

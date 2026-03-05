@@ -15,7 +15,7 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionScope } from './chat-prompt-parts';
 import { buildAgentChatSystemPrompt, buildDesktopSystemPrompt } from './chat-prompt-parts';
-import { deriveSessionId } from './session-history-formatter';
+
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -307,10 +307,13 @@ export class ChatAgentService {
 
     if (session.source === 'agent-chat' && session.agentRole) {
       const effectiveMode = mode ?? 'question';
+      // Look up the last completed agent run for this task+agent to resume its session
+      const runs = await this.agentRunStore.getRunsForTask(session.scopeId);
+      const lastCompleted = runs.find(r => r.agentType === session.agentRole && r.status === 'completed');
       return {
         systemPrompt: buildAgentChatSystemPrompt(scope, session.agentRole, effectiveMode),
-        pipelineSessionId: deriveSessionId(session.scopeId, session.agentRole),
-        resumeSession: true,
+        pipelineSessionId: lastCompleted?.id,
+        resumeSession: !!lastCompleted,
         mode: effectiveMode,
       };
     }
