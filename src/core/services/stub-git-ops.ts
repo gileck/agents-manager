@@ -46,7 +46,7 @@ export class StubGitOps implements IGitOps {
     this.throwIfConfigured('push');
   }
 
-  async pull(_branch: string): Promise<void> {
+  async pull(_branch: string, _options?: { ffOnly?: boolean }): Promise<void> {
     this.throwIfConfigured('pull');
   }
 

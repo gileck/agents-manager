@@ -10,4 +10,5 @@ export const WS_CHANNELS = {
   TELEGRAM_BOT_LOG: 'telegram:bot-log',
   TELEGRAM_BOT_STATUS_CHANGED: 'telegram:bot-status-changed',
   NAVIGATE: 'navigate',
+  MAIN_DIVERGED: 'git:main-diverged',
 } as const;

@@ -17,6 +17,7 @@ export interface ScmHandlerDeps {
   createWorktreeManager: (projectPath: string) => IWorktreeManager;
   createGitOps: (cwd: string) => IGitOps;
   createScmPlatform: (repoPath: string) => IScmPlatform;
+  onMainDiverged?: (projectId: string) => void;
 }
 
 export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps): void {
@@ -81,23 +82,28 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       throw err; // Let pipeline engine log the hook failure
     }
 
-    // Optionally fetch origin/main to update the local main ref so the
-    // user's checkout stays up-to-date with merged task branches.
-    // Uses `git fetch origin main:main` instead of `git pull` because the
-    // worktree is on a task branch, not main — pull would try to merge
-    // into the current branch and fail.
+    // Optionally update local main to stay current with merged task branches.
+    // When main is checked out: `git pull --ff-only` to update working tree.
+    // When on a task branch: `git fetch origin main:main` to fast-forward the ref.
+    // If ff-only fails (local has unpushed commits), notify the user instead.
     if (project.config?.pullMainAfterMerge) {
       try {
         const gitOps = deps.createGitOps(project.path);
         const currentBranch = await gitOps.getCurrentBranch();
         if (currentBranch === 'main') {
-          await ghLog('Skipping local main update — main is checked out in the primary worktree');
+          try {
+            await gitOps.pull('main', { ffOnly: true });
+            await ghLog('Pulled latest main into primary worktree');
+          } catch {
+            await ghLog('Local main has unpushed commits — notifying user', 'warning');
+            deps.onMainDiverged?.(project.id);
+          }
         } else {
           await gitOps.fetch('origin', 'main:main');
           await ghLog('Fetched origin/main to local main');
         }
       } catch (err) {
-        await ghLog(`Failed to fetch main after merge (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
+        await ghLog(`Failed to update main after merge (non-fatal): ${err instanceof Error ? err.message : String(err)}`, 'warning');
       }
     }
 

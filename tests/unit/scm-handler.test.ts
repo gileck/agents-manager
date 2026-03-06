@@ -373,7 +373,7 @@ describe('registerScmHandler', () => {
       expect(mockGitOps.fetch).toHaveBeenCalledWith('origin', 'main:main');
     });
 
-    it('skips local main update when main is checked out', async () => {
+    it('pulls main with ff-only when main is checked out in primary worktree', async () => {
       (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
         makeArtifact(),
       ]);
@@ -391,10 +391,40 @@ describe('registerScmHandler', () => {
       const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
 
       expect(result.success).toBe(true);
+      expect(mockGitOps.pull).toHaveBeenCalledWith('main', { ffOnly: true });
       expect(mockGitOps.fetch).not.toHaveBeenCalledWith('origin', 'main:main');
       expect(mockTaskEventLog.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('Skipping local main update'),
+          message: expect.stringContaining('Pulled latest main'),
+        }),
+      );
+    });
+
+    it('calls onMainDiverged when ff-only pull fails', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      const onMainDiverged = vi.fn();
+      deps.onMainDiverged = onMainDiverged;
+      (mockProjectStore.getProject as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'proj-1',
+        name: 'Test Project',
+        description: null,
+        path: '/home/test/project',
+        config: { pullMainAfterMerge: true },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } satisfies Project);
+      (mockGitOps.getCurrentBranch as ReturnType<typeof vi.fn>).mockResolvedValue('main');
+      (mockGitOps.pull as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not possible to fast-forward'));
+
+      const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(result.success).toBe(true);
+      expect(onMainDiverged).toHaveBeenCalledWith('proj-1');
+      expect(mockTaskEventLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('unpushed commits'),
         }),
       );
     });

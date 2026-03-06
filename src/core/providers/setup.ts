@@ -95,6 +95,7 @@ export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
   notificationRouters?: import('../interfaces/notification-router').INotificationRouter[];
   imageStorageDir?: string;
+  onMainDiverged?: (projectId: string) => void;
 }
 
 export interface AppServices {
@@ -282,6 +283,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   registerScmHandler(pipelineEngine, {
     projectStore, taskStore, taskArtifactStore, taskEventLog,
     createWorktreeManager, createGitOps, createScmPlatform,
+    onMainDiverged: config?.onMainDiverged,
   });
   registerPhaseHandler(pipelineEngine, {
     taskStore, taskEventLog, pipelineEngine,

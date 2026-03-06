@@ -41,8 +41,11 @@ export class LocalGitOps implements IGitOps {
     await this.git(args);
   }
 
-  async pull(branch: string): Promise<void> {
-    await this.git(['pull', 'origin', branch]);
+  async pull(branch: string, options?: { ffOnly?: boolean }): Promise<void> {
+    const args = ['pull'];
+    if (options?.ffOnly) args.push('--ff-only');
+    args.push('origin', branch);
+    await this.git(args);
   }
 
   async diff(fromRef: string, toRef?: string): Promise<string> {

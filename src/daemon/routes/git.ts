@@ -266,5 +266,25 @@ export function gitRoutes(services: AppServices): Router {
     } catch (err) { next(err); }
   });
 
+  // POST /api/projects/:projectId/git/sync-main — pull origin main and push
+  router.post('/api/projects/:projectId/git/sync-main', async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const project = await services.projectStore.getProject(projectId);
+      if (!project?.path) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+      const gitOps = services.createGitOps(project.path);
+      await gitOps.pull('main');
+      await gitOps.push('main');
+      res.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const hasConflicts = /conflict/i.test(message) || /CONFLICT/i.test(message);
+      res.status(409).json({ error: message, hasConflicts });
+    }
+  });
+
   return router;
 }

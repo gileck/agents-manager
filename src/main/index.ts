@@ -61,6 +61,8 @@ initializeApp({
         sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.NAVIGATE, (_id, data) =>
         sendToRenderer(IPC_CHANNELS.NAVIGATE, data));
+      wsClient.subscribeGlobal(WS_CHANNELS.MAIN_DIVERGED, (_id, data) =>
+        sendToRenderer(IPC_CHANNELS.MAIN_DIVERGED, data));
 
       // Create the tray icon with a simple menu
       tray = createTray({

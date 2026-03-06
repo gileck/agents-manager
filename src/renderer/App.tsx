@@ -126,6 +126,40 @@ function AppRoutes() {
     return () => { unsubscribe?.(); };
   }, []);
 
+  // Listen for local main divergence after PR merge
+  useEffect(() => {
+    const unsubscribe = window.api?.on?.mainDiverged?.(({ projectId }) => {
+      toast.warning('Local main has unpushed commits', {
+        description: 'Could not fast-forward main after PR merge.',
+        duration: 30000,
+        action: {
+          label: 'Pull & Push',
+          onClick: async () => {
+            try {
+              const result = await window.api.git.syncMain(projectId);
+              if ('ok' in result) {
+                toast.success('Main synced successfully');
+              } else if (result.hasConflicts) {
+                toast.error('Merge conflicts on main', {
+                  description: 'Resolve conflicts manually in your terminal.',
+                  duration: 15000,
+                });
+              } else {
+                toast.error('Failed to sync main', {
+                  description: result.error,
+                  duration: 15000,
+                });
+              }
+            } catch (err) {
+              reportError(err, 'Sync main');
+            }
+          },
+        },
+      });
+    });
+    return () => { unsubscribe?.(); };
+  }, []);
+
   return (
     <Routes>
       <Route path="/" element={<Layout />}>

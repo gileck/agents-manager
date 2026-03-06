@@ -228,6 +228,7 @@ export interface ApiClient {
     getProjectLog(projectId: string, count?: number): Promise<unknown[]>;
     getProjectBranch(projectId: string): Promise<{ branch: string }>;
     getProjectCommit(projectId: string, hash: string): Promise<unknown>;
+    syncMain(projectId: string): Promise<{ ok: boolean } | { error: string; hasConflicts: boolean }>;
   };
 
   // Debug Logs
@@ -520,6 +521,8 @@ export function createApiClient(baseUrl: string): ApiClient {
         req('GET', `/api/projects/${projectId}/git/branch`),
       getProjectCommit: (projectId, hash) =>
         req('GET', `/api/projects/${projectId}/git/commit/${hash}`),
+      syncMain: (projectId) =>
+        req('POST', `/api/projects/${projectId}/git/sync-main`),
     },
 
     // -- Debug Logs ----------------------------------------------------------

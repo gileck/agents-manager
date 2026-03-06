@@ -5,7 +5,7 @@ export interface IGitOps {
   checkout(branch: string): Promise<void>;
   fetch(remote?: string, refspec?: string): Promise<void>;
   push(branch: string, force?: boolean): Promise<void>;
-  pull(branch: string): Promise<void>;
+  pull(branch: string, options?: { ffOnly?: boolean }): Promise<void>;
   diff(fromRef: string, toRef?: string): Promise<string>;
   diffStat(fromRef: string, toRef?: string): Promise<string>;
   commit(message: string): Promise<string>;

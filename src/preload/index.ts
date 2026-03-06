@@ -121,6 +121,8 @@ const IPC_CHANNELS = {
   GIT_LOG: 'git:log',
   GIT_SHOW: 'git:show',
   GIT_PR_CHECKS: 'git:pr-checks',
+  GIT_SYNC_MAIN: 'git:sync-main',
+  MAIN_DIVERGED: 'git:main-diverged',
   TASK_WORKFLOW_REVIEW: 'task:workflow-review',
   DASHBOARD_STATS: 'dashboard:stats',
   TELEGRAM_TEST: 'telegram:test',
@@ -404,6 +406,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.GIT_BRANCH, projectId),
     commitDetail: (projectId: string, hash: string): Promise<GitCommitDetail> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_COMMIT_DETAIL, projectId, hash),
+    syncMain: (projectId: string): Promise<{ ok: boolean } | { error: string; hasConflicts: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_SYNC_MAIN, projectId),
   },
 
   // Dashboard operations
@@ -554,6 +558,11 @@ const api = {
       const listener = (_: IpcRendererEvent, projectId: string, status: string) => callback(projectId, status);
       ipcRenderer.on(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, listener);
+    },
+    mainDiverged: (callback: (data: { projectId: string }) => void) => {
+      const listener = (_: IpcRendererEvent, data: { projectId: string }) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.MAIN_DIVERGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.MAIN_DIVERGED, listener);
     },
   },
 };

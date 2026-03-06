@@ -67,4 +67,8 @@ export function registerGitHandlers(api: ApiClient): void {
   registerIpcHandler(IPC_CHANNELS.GIT_COMMIT_DETAIL, async (_, projectId: string, hash: string) => {
     return api.git.getProjectCommit(projectId, hash);
   });
+
+  registerIpcHandler(IPC_CHANNELS.GIT_SYNC_MAIN, async (_, projectId: string) => {
+    return api.git.syncMain(projectId);
+  });
 }

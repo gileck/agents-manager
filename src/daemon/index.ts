@@ -27,6 +27,9 @@ async function main() {
       }
       return wsHolder.server.createStreamingCallbacks(taskId);
     },
+    onMainDiverged: (projectId: string) => {
+      wsHolder.server?.broadcast(WS_CHANNELS.MAIN_DIVERGED, undefined, { projectId });
+    },
   });
 
   services.appLogger.info('daemon', 'Daemon starting');
