@@ -26,6 +26,7 @@ import { SourceControlPage } from './pages/SourceControlPage';
 import { KanbanBoardPage } from './pages/KanbanBoardPage';
 import { DebugLogsPage } from './pages/DebugLogsPage';
 import { AgentRunsListPage } from './pages/AgentRunsListPage';
+import { KeyboardShortcutsPage } from './pages/KeyboardShortcutsPage';
 import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
 import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
 import { AutomatedAgentDetailPage } from './pages/AutomatedAgentDetailPage';
@@ -156,6 +157,7 @@ function AppRoutes() {
           <Route path="theme" element={<ThemePage />} />
           <Route path="pipelines" element={<PipelinesPage />} />
           <Route path="agents" element={<AgentDefinitionsPage />} />
+          <Route path="keyboard" element={<KeyboardShortcutsPage />} />
           <Route path="project" element={<ProjectConfigPage />} />
         </Route>
       </Route>

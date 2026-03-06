@@ -22,7 +22,7 @@ import { sortTasks, collectTags, buildPipelineMap, buildFeatureMap } from '../co
 import type { FilterState } from '../components/tasks/TaskFilterBar';
 import type { SortField, SortDirection, GroupBy } from '../components/tasks/task-helpers';
 import { toast } from 'sonner';
-import type { Task, TaskFilter, TaskCreateInput, AppSettings } from '../../shared/types';
+import type { Task, TaskFilter, TaskCreateInput, AppSettings, TaskCreatedBy } from '../../shared/types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 export function TaskListPage() {
@@ -52,6 +52,7 @@ export function TaskListPage() {
       taskFilter.featureId = filters.featureId;
     }
   }
+  if (filters.createdBy) taskFilter.createdBy = filters.createdBy as TaskCreatedBy;
 
   const { tasks, loading, error, refetch } = useTasks(taskFilter);
   const { pipelines } = usePipelines();
@@ -241,6 +242,7 @@ export function TaskListPage() {
                 <SelectItem value="priority">Priority</SelectItem>
                 <SelectItem value="pipeline">Pipeline</SelectItem>
                 <SelectItem value="feature">Feature</SelectItem>
+                <SelectItem value="createdBy">Created By</SelectItem>
               </SelectContent>
             </Select>
           </div>

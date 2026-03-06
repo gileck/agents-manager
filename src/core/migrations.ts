@@ -56,5 +56,9 @@ export function getMigrations(): Migration[] {
       name: '097_reseed_pipelines_phase_auto_merge',
       sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}', transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
     },
+    {
+      name: '098_add_created_by_to_tasks',
+      sql: `ALTER TABLE tasks ADD COLUMN created_by TEXT`,
+    },
   ];
 }

@@ -17,7 +17,7 @@ export function makeEntry(
   data?: Record<string, unknown>,
 ): DebugTimelineEntry {
   return {
-    id: djb2(`${timestamp}-${source}-${title}`),
+    id: djb2(`${timestamp}-${source}-${(data?.category as string | undefined) ?? ''}-${title}`),
     timestamp,
     source,
     severity,

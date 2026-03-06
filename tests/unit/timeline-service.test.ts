@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TimelineService } from '../../src/core/services/timeline/timeline-service';
+import { makeEntry as makeEntryWithId } from '../../src/core/services/timeline/make-entry';
 import type { ITimelineSource } from '../../src/core/services/timeline/types';
 import type { DebugTimelineEntry } from '../../src/shared/types';
 
@@ -109,6 +110,25 @@ describe('TimelineService', () => {
       const result = service.getTimeline('task-1');
 
       expect(result).toHaveLength(2);
+    });
+
+    it('does not deduplicate entries with same timestamp/source/title but different data.category', () => {
+      // Simulates the push_and_create_pr bug: two events emitted at the same millisecond
+      // with the same message but different categories (system vs hook_execution).
+      const ts = 1772725882704;
+      const title = 'Hook "push_and_create_pr" succeeded (required)';
+      const systemEntry = makeEntryWithId(ts, 'event', 'info', title, { category: 'system' });
+      const hookEntry = makeEntryWithId(ts, 'event', 'info', title, { category: 'hook_execution' });
+
+      const source = createSource([systemEntry, hookEntry]);
+      const service = new TimelineService([source]);
+
+      const result = service.getTimeline('task-1');
+
+      expect(result).toHaveLength(2);
+      const categories = result.map(e => e.data?.category);
+      expect(categories).toContain('system');
+      expect(categories).toContain('hook_execution');
     });
   });
 

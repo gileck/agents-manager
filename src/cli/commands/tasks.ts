@@ -198,6 +198,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           prLink: cmdOpts.prLink,
           branchName: cmdOpts.branchName,
           metadata,
+          createdBy: 'user',
         });
         output(task, opts);
       } catch (err) {

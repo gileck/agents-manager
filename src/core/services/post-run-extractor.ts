@@ -305,6 +305,7 @@ export class PostRunExtractor {
           debugInfo: suggested.debugInfo || undefined,
           priority,
           tags: ['workflow-review'],
+          createdBy: 'workflow-reviewer',
         });
         created++;
 
