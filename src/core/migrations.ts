@@ -78,5 +78,9 @@ CREATE TABLE IF NOT EXISTS app_notifications (
 CREATE INDEX IF NOT EXISTS idx_app_notif_project ON app_notifications (project_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_app_notif_unread  ON app_notifications (read, created_at)`,
     },
+    {
+      name: '100_add_permission_mode_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN permission_mode TEXT DEFAULT NULL`,
+    },
   ];
 }

@@ -1022,6 +1022,9 @@ export type ChatScopeType = 'project' | 'task';
 // Chat session source
 export type ChatSessionSource = 'desktop' | 'telegram' | 'cli' | 'agent-chat';
 
+// Permission mode for agent-chat sessions
+export type PermissionMode = 'read_only' | 'read_write' | 'full_access';
+
 
 // Chat Session types
 export interface ChatSession {
@@ -1035,6 +1038,7 @@ export interface ChatSession {
   source: ChatSessionSource;
   agentRole: string | null;
   agentRunId: string | null;
+  permissionMode: PermissionMode | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -1047,6 +1051,7 @@ export interface ChatSessionCreateInput {
   model?: string;
   source?: ChatSessionSource;
   agentRole?: string;
+  permissionMode?: PermissionMode;
   /** The project this session belongs to. For project-scoped sessions this equals scopeId; for task-scoped sessions it is the task's projectId. */
   projectId: string;
 }
@@ -1076,6 +1081,7 @@ export interface ChatSessionUpdateInput {
   agentLib?: string | null;
   model?: string | null;
   agentRunId?: string | null;
+  permissionMode?: PermissionMode | null;
 }
 
 export interface TaskChatSessionWithTitle extends ChatSession {

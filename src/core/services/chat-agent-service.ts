@@ -4,7 +4,7 @@ import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
-import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks } from '../interfaces/agent-lib';
 import type {
@@ -102,6 +102,8 @@ async function saveImagesToDisk(sessionId: string, images: ChatImage[], imageSto
 const WRITE_TOOL_NAMES = new Set([
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
 ]);
+
+const BASH_TOOL_NAMES = new Set(['Bash']);
 
 function isDefaultSessionName(name: string): boolean {
   return name === 'General' || /^Session \d+$/.test(name);
@@ -237,6 +239,9 @@ export class ChatAgentService {
     const task = await this.taskStore.getTask(taskId);
     if (!task) throw Object.assign(new Error('Task not found'), { status: 404 });
 
+    const project = await this.projectStore.getProject(task.projectId);
+    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? undefined;
+
     const roleName = agentRole.charAt(0).toUpperCase() + agentRole.slice(1);
     return this.chatSessionStore.createSession({
       scopeType: 'task',
@@ -245,6 +250,7 @@ export class ChatAgentService {
       source: 'agent-chat',
       agentRole,
       projectId: task.projectId,
+      permissionMode: defaultPermissionMode,
     });
   }
 
@@ -467,7 +473,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId, permissionMode: session.permissionMode }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -675,7 +681,7 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
-    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string },
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -727,15 +733,36 @@ export class ChatAgentService {
         lib.stop(sessionId).catch(err => getAppLogger().warn('ChatAgentService', 'Failed to stop agent lib', { error: err instanceof Error ? err.message : String(err) }));
       });
 
-      // Build preToolUse hook that hard-blocks write tools
-      const preToolUse = features.hooks
-        ? (toolName: string, _toolInput: Record<string, unknown>) => {
+      // Determine readOnly and preToolUse based on permissionMode (null/undefined = read_only)
+      const effectiveMode = extra?.permissionMode ?? 'read_only';
+      let readOnly: boolean;
+      let preToolUse: ((toolName: string, _toolInput: Record<string, unknown>) => { decision: 'block'; reason: string } | undefined) | undefined;
+
+      if (effectiveMode === 'full_access') {
+        readOnly = false;
+        preToolUse = undefined;
+      } else if (effectiveMode === 'read_write') {
+        readOnly = false;
+        if (features.hooks) {
+          preToolUse = (toolName: string, _toolInput: Record<string, unknown>) => {
+            if (BASH_TOOL_NAMES.has(toolName)) {
+              return { decision: 'block' as const, reason: 'Chat agent in read-write mode: Bash execution is not allowed.' };
+            }
+            return undefined;
+          };
+        }
+      } else {
+        // read_only (default)
+        readOnly = true;
+        if (features.hooks) {
+          preToolUse = (toolName: string, _toolInput: Record<string, unknown>) => {
             if (WRITE_TOOL_NAMES.has(toolName)) {
               return { decision: 'block' as const, reason: 'Chat agent has read-only access. File modifications are not allowed.' };
             }
             return undefined;
-          }
-        : undefined;
+          };
+        }
+      }
 
       // Build callbacks
       const callbacks: AgentLibCallbacks = {
@@ -770,8 +797,8 @@ export class ChatAgentService {
         maxTurns: 50,
         timeoutMs: 300000,
         allowedPaths: [],
-        readOnlyPaths: [projectPath, imageDir],
-        readOnly: true,
+        readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
+        readOnly,
         ...(extra?.resumeSession ? { resumeSession: true } : {}),
         ...(preToolUse ? { hooks: { preToolUse } } : {}),
         ...(libImages ? { images: libImages } : {}),
