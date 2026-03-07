@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
-import type { AgentChatMode } from '../../shared/types';
 import type { WsHolder } from '../server';
 import { WS_CHANNELS } from '../ws/channels';
 import type { ChatImage } from '../../shared/types';
@@ -113,7 +112,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   router.post('/api/chat/sessions/:id/send', async (req, res, next) => {
     try {
       const sessionId = req.params.id;
-      const { message, images, mode: rawMode } = req.body as { message: string; images?: unknown; mode?: string };
+      const { message, images } = req.body as { message: string; images?: unknown };
       if (!message || typeof message !== 'string') {
         res.status(400).json({ error: 'message is required and must be a string' });
         return;
@@ -127,12 +126,8 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(400).json({ error: 'Message is too long (max 10000 characters)' });
         return;
       }
-      const mode: AgentChatMode = rawMode === 'changes' ? 'changes' : 'question';
-      if (rawMode && rawMode !== 'question' && rawMode !== 'changes') {
-        getAppLogger().warn('ChatRoute', `Unrecognized mode '${rawMode}' for session ${sessionId}; defaulting to 'question'`);
-      }
 
-      getAppLogger().info('ChatRoute', `POST /send for session ${sessionId}`, { messageLength: message.length, mode });
+      getAppLogger().info('ChatRoute', `POST /send for session ${sessionId}`, { messageLength: message.length });
 
       const ws = wsHolder.server;
 
@@ -152,7 +147,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
       }
 
       // Build prompt + resume options via service (keeps business logic out of routes)
-      const sendCtx = await services.chatAgentService.buildSendContext(sessionId, mode);
+      const sendCtx = await services.chatAgentService.buildSendContext(sessionId);
 
       const { userMessage } = await services.chatAgentService.send(
         sessionId,

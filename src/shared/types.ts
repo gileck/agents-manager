@@ -993,8 +993,6 @@ export type ChatScopeType = 'project' | 'task';
 // Chat session source
 export type ChatSessionSource = 'desktop' | 'telegram' | 'cli' | 'agent-chat';
 
-// Agent chat message mode
-export type AgentChatMode = 'question' | 'changes';
 
 // Chat Session types
 export interface ChatSession {
@@ -1035,7 +1033,7 @@ export interface ChatSendOptions {
   images?: ChatImage[];
   pipelineSessionId?: string;
   resumeSession?: boolean;
-  mode?: AgentChatMode;
+  isAgentChat?: boolean;
 }
 
 export interface ChatSendResult {

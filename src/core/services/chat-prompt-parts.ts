@@ -6,7 +6,6 @@
  * passes it into ChatAgentService.send().
  */
 
-import type { AgentChatMode } from '../../shared/types';
 
 export interface SessionScope {
   scopeType: 'project' | 'task';
@@ -177,42 +176,27 @@ export function buildDesktopSystemPrompt(scope: SessionScope): string {
 export function buildAgentChatSystemPrompt(
   scope: SessionScope,
   agentRole: string,
-  mode: AgentChatMode,
 ): string {
   const roleName = agentRole.charAt(0).toUpperCase() + agentRole.slice(1);
   const taskCtx = scope.task ? taskContextSection(scope.task) : '';
+  const planOrDesign = agentRole === 'designer' ? 'technical design' : 'plan';
+  const revisedField = agentRole === 'designer' ? 'revisedDesign' : 'revisedPlan';
 
-  if (mode === 'changes') {
-    return [
-      `You are the ${roleName} agent for task #${scope.task?.id ?? '?'}: "${scope.task?.title ?? 'Unknown'}".`,
-      taskCtx,
-      '',
-      `## Instructions`,
-      `The user has requested changes to your ${agentRole === 'planner' ? 'plan' : agentRole === 'designer' ? 'technical design' : 'work'}.`,
-      `Revise based on their feedback. Respond with a JSON object containing exactly two fields:`,
-      '```',
-      '{',
-      '  "message": "A brief explanation of what you changed and why",',
-      `  "revised${agentRole === 'designer' ? 'Design' : 'Plan'}": "The full updated ${agentRole === 'designer' ? 'technical design' : 'plan'} (complete text, not a diff)"`,
-      '}',
-      '```',
-      '',
-      'Your response must be valid JSON and nothing else. Do not include markdown code fences around the JSON.',
-      '',
-      rulesSection(),
-      '',
-      cliReferenceSection(scope.task?.id),
-    ].join('\n');
-  }
-
-  // Question mode (default)
   return [
     `You are the ${roleName} agent for task #${scope.task?.id ?? '?'}: "${scope.task?.title ?? 'Unknown'}".`,
     taskCtx,
     '',
     '## Instructions',
     'Answer the user\'s question about your work. Explain your rationale, discuss tradeoffs, suggest alternatives.',
-    `Do NOT modify the ${agentRole === 'designer' ? 'technical design' : 'plan'} or any files.`,
+    `If the user requests a change to the ${planOrDesign} — such as adding a requirement, changing an approach, or modifying content — apply the change by responding with a JSON object containing exactly two fields:`,
+    '```',
+    '{',
+    `  "message": "A brief explanation of what you changed and why",`,
+    `  "${revisedField}": "The full updated ${planOrDesign} (complete text, not a diff)"`,
+    '}',
+    '```',
+    'Your response must be valid JSON and nothing else when making a change. Do not include markdown code fences around the JSON.',
+    `If the message is a pure question with no implied change, respond conversationally in plain text instead.`,
     '',
     rulesSection(),
     '',

@@ -138,7 +138,7 @@ export function useReviewConversation(
     setIsStreaming(true);
 
     try {
-      await window.api.chat.send(s.id, text, undefined, 'question');
+      await window.api.chat.send(s.id, text);
     } catch (err) {
       setIsStreaming(false);
       streamingRef.current = false;

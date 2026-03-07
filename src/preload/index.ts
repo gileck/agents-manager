@@ -442,8 +442,8 @@ const api = {
 
   // Chat operations
   chat: {
-    send: (sessionId: string, message: string, images?: ChatImage[], mode?: string): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, sessionId, message, images, mode),
+    send: (sessionId: string, message: string, images?: ChatImage[]): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, sessionId, message, images),
     stop: (sessionId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, sessionId),
     messages: (sessionId: string): Promise<ChatMessage[]> =>

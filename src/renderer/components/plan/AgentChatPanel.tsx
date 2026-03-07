@@ -3,7 +3,7 @@ import { AgentChat } from '../chat/AgentChat';
 import { useChat } from '../../hooks/useChat';
 import { InlineError } from '../InlineError';
 import { reportError } from '../../lib/error-handler';
-import type { ChatSession, AgentChatMode, ChatImage } from '../../../shared/types';
+import type { ChatSession, ChatImage } from '../../../shared/types';
 import { Button } from '../ui/button';
 
 interface AgentChatPanelProps {
@@ -12,15 +12,9 @@ interface AgentChatPanelProps {
   hasContent: boolean;
 }
 
-const MODE_OPTIONS: { value: AgentChatMode; label: string }[] = [
-  { value: 'question', label: 'Question' },
-  { value: 'changes', label: 'Request Changes' },
-];
-
 export function AgentChatPanel({ taskId, agentRole, hasContent }: AgentChatPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [session, setSession] = useState<ChatSession | null>(null);
-  const [mode, setMode] = useState<AgentChatMode>('question');
   const [loadingSession, setLoadingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -42,8 +36,8 @@ export function AgentChatPanel({ taskId, agentRole, hasContent }: AgentChatPanel
   }, [expanded, session, taskId, agentRole]);
 
   const handleSend = useCallback((message: string, images?: ChatImage[]) => {
-    sendMessage(message, images, mode);
-  }, [sendMessage, mode]);
+    sendMessage(message, images);
+  }, [sendMessage]);
 
   // Don't show the chat button if there's no plan/design content yet
   if (!hasContent) return null;
@@ -64,24 +58,9 @@ export function AgentChatPanel({ taskId, agentRole, hasContent }: AgentChatPanel
 
   return (
     <div className="mt-4 border rounded-lg overflow-hidden" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
-      {/* Mode toggle */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
-        <span className="text-xs text-muted-foreground mr-2">Mode:</span>
-        {MODE_OPTIONS.map(opt => (
-          <button
-            key={opt.value}
-            className={`px-3 py-1 text-xs rounded-full transition-colors ${
-              mode === opt.value
-                ? opt.value === 'changes'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-            onClick={() => setMode(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
+      {/* Header */}
+      <div className="flex items-center px-3 py-2 border-b bg-muted/30">
+        <span className="text-xs text-muted-foreground">Chat with {roleName}</span>
         <div className="flex-1" />
         <button
           className="text-xs text-muted-foreground hover:text-foreground"
