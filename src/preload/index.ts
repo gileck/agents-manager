@@ -136,6 +136,7 @@ const IPC_CHANNELS = {
   OPEN_IN_ITERM: 'shell:open-in-iterm',
   OPEN_IN_VSCODE: 'shell:open-in-vscode',
   OPEN_FILE_IN_VSCODE: 'shell:open-file-in-vscode',
+  DIALOG_PICK_FOLDER: 'dialog:pick-folder',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
   CHAT_MESSAGES: 'chat:messages',
@@ -504,6 +505,12 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.OPEN_IN_VSCODE, dirPath),
     openFileInVscode: (filePath: string, line?: number): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.OPEN_FILE_IN_VSCODE, filePath, line),
+  },
+
+  // Dialog operations
+  dialog: {
+    pickFolder: (): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG_PICK_FOLDER),
   },
 
   // Event listeners (main -> renderer)

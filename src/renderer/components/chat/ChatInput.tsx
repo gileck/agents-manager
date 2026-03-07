@@ -184,7 +184,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   const canSubmit = value.trim().length > 0 || images.length > 0;
 
   return (
-    <div className="px-6 pb-5 pt-3">
+    <div className="px-4 pb-5 pt-3">
       <form
         onSubmit={handleSubmit}
         onDrop={handleDrop}

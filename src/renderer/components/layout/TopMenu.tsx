@@ -15,6 +15,7 @@ import {
 import { Button } from '../ui/button';
 import {
   FolderOpen,
+  FolderPlus,
   Sun,
   Moon,
   Send,
@@ -50,7 +51,7 @@ const utilityButtonClass =
 
 export function TopMenu() {
   const { currentProject, currentProjectId, setCurrentProjectId } = useCurrentProject();
-  const { projects } = useProjects();
+  const { projects, refetch: refetchProjects } = useProjects();
   const { resolvedTheme, setTheme } = useTheme();
   const { pipelines } = usePipelines();
   const navigate = useNavigate();
@@ -79,6 +80,19 @@ export function TopMenu() {
       reportError(err, 'Create task');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleAddProject = async () => {
+    try {
+      const folderPath = await window.api.dialog.pickFolder();
+      if (!folderPath) return;
+      const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop() ?? folderPath;
+      const project = await window.api.projects.create({ name: folderName, path: folderPath });
+      await refetchProjects();
+      setCurrentProjectId(project.id);
+    } catch (err) {
+      reportError(err, 'Add project');
     }
   };
 
@@ -152,7 +166,16 @@ export function TopMenu() {
       <div className="flex items-center gap-2 shrink-0">
         <div className="hidden xl:flex items-center gap-2">
           <FolderOpen className="h-4 w-4 text-muted-foreground" />
-          <Select value={currentProjectId || ''} onValueChange={(id) => setCurrentProjectId(id)}>
+          <Select
+            value={currentProjectId || ''}
+            onValueChange={(id) => {
+              if (id === '__add_project__') {
+                handleAddProject();
+              } else {
+                setCurrentProjectId(id);
+              }
+            }}
+          >
             <SelectTrigger className="w-56 h-9 rounded-full border-border/75 bg-card/65 text-sm font-medium shadow-none hover:bg-accent/55">
               <SelectValue placeholder="Select project">
                 {currentProject ? currentProject.name : undefined}
@@ -164,6 +187,13 @@ export function TopMenu() {
                   {project.name}
                 </SelectItem>
               ))}
+              <div className="h-px bg-border/60 my-1 -mx-1" />
+              <SelectItem value="__add_project__">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <FolderPlus className="h-4 w-4 shrink-0" />
+                  Add Project
+                </span>
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
