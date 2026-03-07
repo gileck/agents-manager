@@ -17,6 +17,7 @@ import { registerAgentDefHandlers } from './agent-def-handlers';
 import { registerPipelineHandlers } from './pipeline-handlers';
 import { registerDebugLogHandlers } from './debug-log-handlers';
 import { registerAutomatedAgentHandlers } from './automated-agent-handlers';
+import { registerNotificationHandlers } from './notification-handlers';
 
 export function registerIpcHandlers(api: ApiClient): void {
   // ============================================
@@ -73,5 +74,6 @@ export function registerIpcHandlers(api: ApiClient): void {
   registerChatSessionHandlers(api);
   registerDebugLogHandlers(api);
   registerAutomatedAgentHandlers(api);
+  registerNotificationHandlers(api);
   registerShellHandlers();
 }

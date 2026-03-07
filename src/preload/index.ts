@@ -40,6 +40,8 @@ import type {
   AutomatedAgentCreateInput,
   AutomatedAgentUpdateInput,
   AutomatedAgentTemplate,
+  InAppNotification,
+  InAppNotificationFilter,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -176,6 +178,11 @@ const IPC_CHANNELS = {
   AUTOMATED_AGENT_TRIGGER: 'automated-agent:trigger',
   AUTOMATED_AGENT_RUNS: 'automated-agent:runs',
   AUTOMATED_AGENT_TEMPLATES: 'automated-agent:templates',
+  NOTIFICATION_LIST: 'notification:list',
+  NOTIFICATION_MARK_READ: 'notification:mark-read',
+  NOTIFICATION_MARK_ALL_READ: 'notification:mark-all-read',
+  NOTIFICATION_UNREAD_COUNT: 'notification:unread-count',
+  NOTIFICATION_ADDED: 'notification:added',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -495,6 +502,18 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.AUTOMATED_AGENT_TEMPLATES),
   },
 
+  // In-app notification operations
+  notifications: {
+    list: (filter?: InAppNotificationFilter): Promise<InAppNotification[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.NOTIFICATION_LIST, filter),
+    markRead: (id: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.NOTIFICATION_MARK_READ, id),
+    markAllRead: (projectId?: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.NOTIFICATION_MARK_ALL_READ, projectId),
+    getUnreadCount: (projectId?: string): Promise<{ count: number }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.NOTIFICATION_UNREAD_COUNT, projectId),
+  },
+
   // Shell operations
   shell: {
     openInChrome: (url: string): Promise<void> =>
@@ -579,6 +598,11 @@ const api = {
       const listener = (_: IpcRendererEvent, sessionId: string, session: ChatSession) => callback(sessionId, session);
       ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_RENAMED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_SESSION_RENAMED, listener);
+    },
+    notificationAdded: (callback: (notification: InAppNotification) => void) => {
+      const listener = (_: IpcRendererEvent, notification: InAppNotification) => callback(notification);
+      ipcRenderer.on(IPC_CHANNELS.NOTIFICATION_ADDED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.NOTIFICATION_ADDED, listener);
     },
   },
 };

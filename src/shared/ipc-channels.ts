@@ -203,4 +203,12 @@ export const IPC_CHANNELS = {
   AUTOMATED_AGENT_TRIGGER: 'automated-agent:trigger',
   AUTOMATED_AGENT_RUNS: 'automated-agent:runs',
   AUTOMATED_AGENT_TEMPLATES: 'automated-agent:templates',
+
+  // In-app notifications
+  NOTIFICATION_LIST: 'notification:list',
+  NOTIFICATION_MARK_READ: 'notification:mark-read',
+  NOTIFICATION_MARK_ALL_READ: 'notification:mark-all-read',
+  NOTIFICATION_UNREAD_COUNT: 'notification:unread-count',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  NOTIFICATION_ADDED: 'notification:added',
 } as const;
