@@ -116,7 +116,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
 
   return (
     <div className="flex flex-col h-full bg-transparent">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-border/60 bg-card/40 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-card/40 backdrop-blur-sm">
         <div className="flex items-center gap-2 min-w-0">
           {showInlineTabs && !sessionsLoading ? (
             <SessionTabs

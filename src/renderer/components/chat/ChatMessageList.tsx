@@ -134,7 +134,7 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[980px] px-6 py-6">
+      <div className="mx-auto w-full max-w-[980px] px-4 py-6">
         {rendered.length === 0 && isRunning && (
           <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
             <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
