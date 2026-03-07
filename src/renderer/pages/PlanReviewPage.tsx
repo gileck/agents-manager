@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { MessageSquare, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { InlineError } from '../components/InlineError';
 import { TaskSubPageLayout } from '../components/task-detail/TaskSubPageLayout';
@@ -8,6 +9,7 @@ import { ReviewConversation } from '../components/plan/ReviewConversation';
 import { useReviewConversation } from '../hooks/useReviewConversation';
 import { useTask } from '../hooks/useTasks';
 import { useIpc } from '@template/renderer/hooks/useIpc';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import { reportError } from '../lib/error-handler';
 import type { Transition, TaskContextEntry } from '../../shared/types';
 
@@ -43,6 +45,7 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
   const navigate = useNavigate();
   const cfg = CONFIG[reviewType];
   const [transitioning, setTransitioning] = useState(false);
+  const [chatOpen, setChatOpen] = useLocalStorage('planReview.chatOpen', false);
 
   const { task, refetch } = useTask(id!);
 
@@ -102,6 +105,18 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
     await handleTransition(toStatus);
   }, [id, cfg.entryType, refetchContext, handleTransition]);
 
+  const chatToggleButton = (
+    <Button
+      variant={chatOpen ? 'secondary' : 'ghost'}
+      size="sm"
+      onClick={() => setChatOpen(!chatOpen)}
+      title="Toggle chat panel"
+    >
+      <MessageSquare size={16} />
+      Chat
+    </Button>
+  );
+
   const actionButtons = isReviewStatus ? (
     <>
       {approveTransition && (
@@ -114,8 +129,9 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
           {transitioning ? 'Submitting...' : reviseTransition.label || 'Request Changes'}
         </Button>
       )}
+      {chatToggleButton}
     </>
-  ) : undefined;
+  ) : chatToggleButton;
 
   return (
     <TaskSubPageLayout taskId={id!} tabLabel={`${cfg.label} Review`} tabKey={cfg.tabKey} actions={actionButtons}>
@@ -123,7 +139,13 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
       {entriesError && <InlineError message={entriesError} context="Loading review comments" />}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* Left panel — content */}
-        <div style={{ width: '60%', borderRight: '1px solid var(--border)', overflowY: 'auto', padding: '24px' }}>
+        <div style={{
+          width: chatOpen ? '60%' : '100%',
+          borderRight: chatOpen ? '1px solid var(--border)' : 'none',
+          overflowY: 'auto',
+          padding: '24px',
+          transition: 'width var(--motion-slow) var(--ease-standard)',
+        }}>
           {content ? (
             <PlanMarkdown content={content} />
           ) : (
@@ -132,7 +154,18 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
         </div>
 
         {/* Right panel — conversation */}
-        <div style={{ width: '40%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          width: chatOpen ? '40%' : '0',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          transition: 'width var(--motion-slow) var(--ease-standard)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 8px 0' }}>
+            <Button variant="ghost" size="sm" onClick={() => setChatOpen(false)} title="Close chat panel">
+              <X size={16} />
+            </Button>
+          </div>
           <ReviewConversation
             entries={entries}
             isReviewStatus={isReviewStatus}
