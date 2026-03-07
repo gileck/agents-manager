@@ -6,10 +6,11 @@ import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ColorPicker } from '../components/ColorPicker';
 import { useThemeConfig } from '../hooks/useThemeConfig';
-import { THEME_PRESETS, COLOR_GROUPS, COLOR_LABELS } from '../theme-presets';
+import { THEME_PRESETS, COLOR_GROUPS, COLOR_LABELS, COLOR_VAR_MAP } from '../theme-presets';
 import type { ThemeColors } from '../../shared/types';
 import { Check, RotateCcw } from 'lucide-react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { cn } from '../lib/utils';
 
 const RADIUS_OPTIONS = ['0rem', '0.25rem', '0.5rem', '0.75rem', '1rem'];
 
@@ -25,6 +26,14 @@ export function ThemePage() {
   const [colorMode, setColorMode] = useLocalStorage<'light' | 'dark'>('theme.colorMode', 'light');
 
   const currentColors = colorMode === 'light' ? themeConfig.colors : themeConfig.darkColors;
+  const previewStyle = React.useMemo(() => {
+    const vars: Record<string, string> = { '--radius': themeConfig.radius };
+    const keys = Object.keys(COLOR_VAR_MAP) as (keyof ThemeColors)[];
+    for (const key of keys) {
+      vars[COLOR_VAR_MAP[key]] = currentColors[key];
+    }
+    return vars as React.CSSProperties;
+  }, [currentColors, themeConfig.radius]);
 
   return (
     <div className="h-full overflow-auto">
@@ -50,6 +59,7 @@ export function ThemePage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {THEME_PRESETS.map((preset) => {
                 const isActive = themeConfig.name === preset.name;
+                const presetColors = colorMode === 'light' ? preset.colors : preset.darkColors;
                 return (
                   <button
                     key={preset.name}
@@ -69,22 +79,22 @@ export function ThemePage() {
                     <div className="flex gap-1 mb-2">
                       <div
                         className="w-6 h-6 rounded-full border border-border/50"
-                        style={{ backgroundColor: `hsl(${preset.colors.primary})` }}
+                        style={{ backgroundColor: `hsl(${presetColors.primary})` }}
                         title="Primary"
                       />
                       <div
                         className="w-6 h-6 rounded-full border border-border/50"
-                        style={{ backgroundColor: `hsl(${preset.colors.secondary})` }}
+                        style={{ backgroundColor: `hsl(${presetColors.secondary})` }}
                         title="Secondary"
                       />
                       <div
                         className="w-6 h-6 rounded-full border border-border/50"
-                        style={{ backgroundColor: `hsl(${preset.colors.accent})` }}
+                        style={{ backgroundColor: `hsl(${presetColors.accent})` }}
                         title="Accent"
                       />
                       <div
                         className="w-6 h-6 rounded-full border border-border/50"
-                        style={{ backgroundColor: `hsl(${preset.colors.background})` }}
+                        style={{ backgroundColor: `hsl(${presetColors.background})` }}
                         title="Background"
                       />
                     </div>
@@ -189,86 +199,94 @@ export function ThemePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Buttons */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Buttons</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm">Primary</Button>
-                    <Button size="sm" variant="secondary">Secondary</Button>
-                    <Button size="sm" variant="destructive">Destructive</Button>
-                    <Button size="sm" variant="outline">Outline</Button>
-                    <Button size="sm" variant="ghost">Ghost</Button>
-                    <Button size="sm" variant="success">Success</Button>
+                <div
+                  className={cn(
+                    'rounded-lg border p-4 space-y-4 bg-background text-foreground',
+                    colorMode === 'dark' && 'dark'
+                  )}
+                  style={previewStyle}
+                >
+                  {/* Buttons */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Buttons</h4>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm">Primary</Button>
+                      <Button size="sm" variant="secondary">Secondary</Button>
+                      <Button size="sm" variant="destructive">Destructive</Button>
+                      <Button size="sm" variant="outline">Outline</Button>
+                      <Button size="sm" variant="ghost">Ghost</Button>
+                      <Button size="sm" variant="success">Success</Button>
+                    </div>
                   </div>
-                </div>
 
-                {/* Badges */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Badges</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge>Default</Badge>
-                    <Badge variant="secondary">Secondary</Badge>
-                    <Badge variant="destructive">Destructive</Badge>
-                    <Badge variant="outline">Outline</Badge>
-                    <Badge variant="success">Success</Badge>
-                    <Badge variant="warning">Warning</Badge>
+                  {/* Badges */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Badges</h4>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge>Default</Badge>
+                      <Badge variant="secondary">Secondary</Badge>
+                      <Badge variant="destructive">Destructive</Badge>
+                      <Badge variant="outline">Outline</Badge>
+                      <Badge variant="success">Success</Badge>
+                      <Badge variant="warning">Warning</Badge>
+                    </div>
                   </div>
-                </div>
 
-                {/* Card preview */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Card</h4>
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm">Sample Card</CardTitle>
-                      <CardDescription className="text-xs">
-                        A preview of card styling.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                      <p className="text-xs text-foreground">
-                        This is content inside a card component with your current theme applied.
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Input */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Input</h4>
-                  <Input placeholder="Type something..." className="text-sm" />
-                </div>
-
-                {/* Color Swatches */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
-                    Color Palette
-                  </h4>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {(['primary', 'secondary', 'accent', 'muted', 'destructive', 'success', 'warning', 'background'] as (keyof ThemeColors)[]).map((key) => (
-                      <div key={key} className="text-center">
-                        <div
-                          className="w-full h-8 rounded border border-border/50"
-                          style={{ backgroundColor: `hsl(${currentColors[key]})` }}
-                        />
-                        <span className="text-[9px] text-muted-foreground capitalize mt-0.5 block">
-                          {key}
-                        </span>
-                      </div>
-                    ))}
+                  {/* Card preview */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Card</h4>
+                    <Card>
+                      <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-sm">Sample Card</CardTitle>
+                        <CardDescription className="text-xs">
+                          A preview of card styling.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <p className="text-xs text-foreground">
+                          This is content inside a card component with your current theme applied.
+                        </p>
+                      </CardContent>
+                    </Card>
                   </div>
-                </div>
 
-                {/* Text samples */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
-                    Typography
-                  </h4>
-                  <div className="space-y-1">
-                    <p className="text-sm text-foreground font-semibold">Foreground text</p>
-                    <p className="text-sm text-muted-foreground">Muted foreground text</p>
-                    <p className="text-sm text-primary">Primary text</p>
-                    <p className="text-sm text-destructive">Destructive text</p>
+                  {/* Input */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Input</h4>
+                    <Input placeholder="Type something..." className="text-sm" />
+                  </div>
+
+                  {/* Color Swatches */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
+                      Color Palette
+                    </h4>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {(['primary', 'secondary', 'accent', 'muted', 'destructive', 'success', 'warning', 'background'] as (keyof ThemeColors)[]).map((key) => (
+                        <div key={key} className="text-center">
+                          <div
+                            className="w-full h-8 rounded border border-border/50"
+                            style={{ backgroundColor: `hsl(${currentColors[key]})` }}
+                          />
+                          <span className="text-[9px] text-muted-foreground capitalize mt-0.5 block">
+                            {key}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Text samples */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
+                      Typography
+                    </h4>
+                    <div className="space-y-1">
+                      <p className="text-sm text-foreground font-semibold">Foreground text</p>
+                      <p className="text-sm text-muted-foreground">Muted foreground text</p>
+                      <p className="text-sm text-primary">Primary text</p>
+                      <p className="text-sm text-destructive">Destructive text</p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
