@@ -635,6 +635,8 @@ export interface AgentContext {
   skills?: string[];
   customPrompt?: string;
   sessionId?: string;
+  /** When true, the session should be resumed (not created fresh). Set by agent-service session management. */
+  resumeSession?: boolean;
 }
 
 // ============================================

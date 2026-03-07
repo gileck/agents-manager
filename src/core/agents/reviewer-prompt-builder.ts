@@ -59,7 +59,57 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
 
     const lines: string[] = [];
 
-    if (multiPhase && activePhase) {
+    // Session-aware preamble: when resuming the implementor's session,
+    // the reviewer already has full context — just provide directives.
+    if (context.resumeSession) {
+      if (hasPriorReview) {
+        lines.push(
+          'Now re-review the changes on this branch. The previous review issues should be fixed.',
+          'Verify ALL previously requested changes were addressed before approving.',
+        );
+      } else {
+        lines.push(
+          'Now review the changes you just saw being implemented on this branch.',
+        );
+      }
+      lines.push(
+        '',
+        `Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes.`,
+        '',
+      );
+
+      // Even with shared session, include phase scope constraints and subtask lists
+      // — these are review directives, not context the session provides.
+      if (multiPhase && activePhase) {
+        const phaseIdx = getActivePhaseIndex(task.phases);
+        const totalPhases = task.phases?.length ?? 0;
+        const pendingPhases = (task.phases ?? []).filter(p => p.status === 'pending');
+
+        lines.push(
+          `## ⚠️ SCOPE: Phase ${phaseIdx + 1} of ${totalPhases} only — "${activePhase.name}"`,
+          `This PR implements **only Phase ${phaseIdx + 1}**. Features belonging to later phases are intentionally absent.`,
+          `Do NOT flag missing functionality that belongs to a later phase.`,
+          '',
+          `### Phase ${phaseIdx + 1} Deliverables — the ONLY things to check for completeness:`,
+        );
+        for (const st of activePhase.subtasks) {
+          lines.push(`- ${st.name}`);
+        }
+        if (pendingPhases.length > 0) {
+          lines.push('', `### Later phases (NOT part of this PR — do not flag as missing):`);
+          for (const pp of pendingPhases) {
+            lines.push(`- ${pp.name}`);
+          }
+        }
+        lines.push('');
+      } else if (task.subtasks && task.subtasks.length > 0) {
+        lines.push('## Task Subtasks - ALL must be implemented:');
+        for (const st of task.subtasks) {
+          lines.push(`- ${st.name}`);
+        }
+        lines.push('');
+      }
+    } else if (multiPhase && activePhase) {
       const phaseIdx = getActivePhaseIndex(task.phases);
       const totalPhases = task.phases?.length ?? 0;
       const pendingPhases = (task.phases ?? []).filter(p => p.status === 'pending');
@@ -125,20 +175,35 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
       }
     }
 
-    lines.push(
-      '## Steps',
-      '1. Read CLAUDE.md or project conventions to understand project rules (package manager, restricted directories, code patterns).',
-      `2. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
-      '3. Review the diff using the criteria below.',
-    );
-
-    if ((multiPhase && activePhase) || (task.subtasks && task.subtasks.length > 0)) {
+    // Steps section — simplified when session provides context
+    if (context.resumeSession) {
       lines.push(
-        '4. Verify each subtask is implemented by finding corresponding code changes in the diff.',
-        '5. **Make every comment actionable** — say what to change, not just what is wrong.',
+        '## Steps',
+        `1. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
+        '2. Review the diff using the criteria below.',
       );
+      if ((multiPhase && activePhase) || (task.subtasks && task.subtasks.length > 0)) {
+        lines.push('3. Verify each subtask is implemented by finding corresponding code changes in the diff.');
+        lines.push('4. **Make every comment actionable** — say what to change, not just what is wrong.');
+      } else {
+        lines.push('3. **Make every comment actionable** — say what to change, not just what is wrong.');
+      }
     } else {
-      lines.push('4. **Make every comment actionable** — say what to change, not just what is wrong.');
+      lines.push(
+        '## Steps',
+        '1. Read CLAUDE.md or project conventions to understand project rules (package manager, restricted directories, code patterns).',
+        `2. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
+        '3. Review the diff using the criteria below.',
+      );
+
+      if ((multiPhase && activePhase) || (task.subtasks && task.subtasks.length > 0)) {
+        lines.push(
+          '4. Verify each subtask is implemented by finding corresponding code changes in the diff.',
+          '5. **Make every comment actionable** — say what to change, not just what is wrong.',
+        );
+      } else {
+        lines.push('4. **Make every comment actionable** — say what to change, not just what is wrong.');
+      }
     }
 
     lines.push(

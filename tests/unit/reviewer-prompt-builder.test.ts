@@ -115,6 +115,56 @@ describe('ReviewerPromptBuilder', () => {
       expect(prompt).not.toContain('Subtask Completeness');
       expect(prompt).toContain('Correctness — does the code do what the task requires?');
     });
+
+    it('uses simplified prompt when resumeSession is true', () => {
+      const ctx = createContext();
+      ctx.resumeSession = true;
+      const prompt = promptBuilder.buildPrompt(ctx);
+      expect(prompt).toContain('review the changes you just saw being implemented');
+      expect(prompt).toContain('git diff origin/main..HEAD');
+      // Should NOT include verbose task intro or CLAUDE.md step
+      expect(prompt).not.toContain('You are a code reviewer. Review the changes');
+      expect(prompt).not.toContain('Read CLAUDE.md');
+    });
+
+    it('uses re-review preamble when resumeSession is true and prior review exists', () => {
+      const ctx = createContext();
+      ctx.resumeSession = true;
+      ctx.taskContext = [
+        { source: 'agent', entryType: 'review_feedback', summary: 'needs changes', createdAt: Date.now() },
+      ] as AgentContext['taskContext'];
+      const prompt = promptBuilder.buildPrompt(ctx);
+      expect(prompt).toContain('re-review the changes');
+      expect(prompt).toContain('Verify ALL previously requested changes were addressed');
+      expect(prompt).not.toContain('You are a code reviewer. Review the changes');
+    });
+
+    it('preserves subtask review criteria when resumeSession is true', () => {
+      const ctx = createContext();
+      ctx.resumeSession = true;
+      ctx.task.subtasks = [
+        { name: 'Implement API endpoint', status: 'pending' },
+        { name: 'Add unit tests', status: 'pending' },
+      ];
+      const prompt = promptBuilder.buildPrompt(ctx);
+      // Should have simplified preamble
+      expect(prompt).toContain('review the changes you just saw being implemented');
+      expect(prompt).not.toContain('You are a code reviewer. Review the changes');
+      // But should still include subtask list and completeness criteria
+      expect(prompt).toContain('Task Subtasks - ALL must be implemented:');
+      expect(prompt).toContain('- Implement API endpoint');
+      expect(prompt).toContain('Subtask Completeness');
+      expect(prompt).toContain('ALL subtasks listed above have been implemented');
+    });
+
+    it('falls back to full prompt when resumeSession is false', () => {
+      const ctx = createContext();
+      ctx.resumeSession = false;
+      const prompt = promptBuilder.buildPrompt(ctx);
+      expect(prompt).toContain('You are a code reviewer');
+      expect(prompt).toContain('Read CLAUDE.md');
+      expect(prompt).not.toContain('you just saw being implemented');
+    });
   });
 
   describe('inferOutcome', () => {

@@ -350,14 +350,40 @@ export class AgentService implements IAgentService {
     };
 
     // Session ID management:
-    // - mode='new': use the unique run ID so retries never collide with a prior session.
-    // - mode='revision': look up the last completed run for this task+agent to resume its session.
-    if (mode === 'revision') {
+    // Sessions are identified by the run ID of the original creator (mode='new').
+    // All subsequent runs in the chain (revisions, reviewer) resume the same session.
+    //
+    // Implementor↔Reviewer shared session chain:
+    //   implementor (new) → creates session
+    //   reviewer (new)    → resumes implementor's session
+    //   implementor (rev) → resumes same session
+    //   reviewer (new)    → resumes same session
+    //   ...continues for multiple review cycles
+    //
+    // Other agents (planner, designer) maintain their own session chains.
+    if (agentType === 'reviewer' && mode === 'new') {
+      // Reviewer resumes the implementor's session for shared context
       const runs = await this.agentRunStore.getRunsForTask(taskId);
-      const lastCompleted = runs.find(r => r.agentType === agentType && r.status === 'completed' && r.id !== run!.id);
-      context.sessionId = lastCompleted?.id;
-      if (lastCompleted) {
-        getAppLogger().debug(`Agent:${agentType}`, `Revision will resume session from run ${lastCompleted.id}`, { taskId, resumeRunId: lastCompleted.id });
+      const origImplRun = this.findOriginalSessionRun(runs, 'implementor');
+      if (origImplRun) {
+        context.sessionId = origImplRun.id;
+        context.resumeSession = true;
+        getAppLogger().debug(`Agent:reviewer`, `Reviewer will resume implementor session from run ${origImplRun.id}`, { taskId, resumeRunId: origImplRun.id });
+      } else {
+        context.sessionId = run.id;
+        context.resumeSession = false;
+        getAppLogger().debug(`Agent:reviewer`, `No implementor session found — reviewer will create own session`, { taskId });
+      }
+    } else if (mode === 'revision') {
+      const runs = await this.agentRunStore.getRunsForTask(taskId);
+      // Find the original session creator (first mode='new' completed run).
+      // For implementor: always the original implementor run (shared with reviewer).
+      // For other agents: their own original run.
+      const origRun = this.findOriginalSessionRun(runs, agentType);
+      context.sessionId = origRun?.id;
+      context.resumeSession = !!context.sessionId;
+      if (origRun) {
+        getAppLogger().debug(`Agent:${agentType}`, `Revision will resume session from run ${origRun.id}`, { taskId, resumeRunId: origRun.id });
       } else {
         const msg = `No prior completed ${agentType} run found — revision will use full prompt instead of session resume`;
         getAppLogger().warn(`Agent:${agentType}`, msg, { taskId });
@@ -365,6 +391,7 @@ export class AgentService implements IAgentService {
       }
     } else {
       context.sessionId = run.id;
+      context.resumeSession = false;
     }
 
     // Load accumulated task context entries for the agent
@@ -896,6 +923,22 @@ export class AgentService implements IAgentService {
     } catch {
       // Worktree may not exist — safe to ignore
     }
+  }
+
+  /**
+   * Find the original session-creating run for a given agent type.
+   * Returns the first (oldest) completed mode='new' run, which is the session file owner.
+   * Runs are ordered newest-first, so we reverse-search.
+   */
+  private findOriginalSessionRun(runs: AgentRun[], agentType: string): AgentRun | undefined {
+    // Reverse to find oldest first (runs are newest-first from store)
+    for (let i = runs.length - 1; i >= 0; i--) {
+      const r = runs[i];
+      if (r.agentType === agentType && r.mode === 'new' && r.status === 'completed') {
+        return r;
+      }
+    }
+    return undefined;
   }
 
 }
