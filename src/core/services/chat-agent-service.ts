@@ -4,7 +4,7 @@ import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
-import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, AgentChatMode } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, AgentChatMode, ChatSession } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks } from '../interfaces/agent-lib';
 import type {
@@ -102,6 +102,10 @@ async function saveImagesToDisk(sessionId: string, images: ChatImage[], imageSto
 const WRITE_TOOL_NAMES = new Set([
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
 ]);
+
+function isDefaultSessionName(name: string): boolean {
+  return name === 'General' || /^Session \d+$/.test(name);
+}
 
 export interface RunningAgent {
   sessionId: string;
@@ -589,6 +593,43 @@ export class ChatAgentService {
       }
     }
     return Array.from(this.runningAgents.values());
+  }
+
+  /**
+   * Fire-and-forget: generates a short descriptive name for a session using Claude Haiku,
+   * then persists it and invokes onRenamed with the updated session.
+   * Silently does nothing if the session no longer has a default name or if anything fails.
+   */
+  async autoNameSession(sessionId: string, firstMessage: string, onRenamed: (session: ChatSession) => void): Promise<void> {
+    try {
+      const messageText = firstMessage.slice(0, 300);
+      getAppLogger().info('ChatAgent', `Running autoNameSession with "${messageText.slice(0, 100)}"`);
+
+      const prompt = `Generate a short, descriptive name (3-6 words) for a chat session based on this first message. Return ONLY the name, with no quotes, punctuation, or explanation.\n\nFirst message: ${messageText}`;
+
+      let generatedName = '';
+      const start = Date.now();
+      await this.runSdkQuery(prompt, { model: 'claude-haiku-4-5-20251001', maxTurns: 1 }, {
+        onText: (text) => { generatedName += text; },
+      });
+      const elapsed = Date.now() - start;
+
+      // Strip leading/trailing punctuation/whitespace; enforce 50-char max
+      const cleanedName = generatedName.trim().replace(/^[^\w]+|[^\w]+$/g, '').slice(0, 50);
+      if (!cleanedName) return;
+
+      // Re-fetch to guard against manual rename that happened during the async call
+      const session = await this.chatSessionStore.getSession(sessionId);
+      if (!session || !isDefaultSessionName(session.name)) return;
+
+      const updatedSession = await this.chatSessionStore.updateSession(sessionId, { name: cleanedName });
+      if (!updatedSession) return;
+
+      getAppLogger().info('ChatAgent', `Changed session name to "${cleanedName}" (runSdkQuery took ${elapsed}ms)`);
+      onRenamed(updatedSession);
+    } catch {
+      // Silent failure — session retains its default name
+    }
   }
 
   private async resolveScope(session: { scopeType: string; scopeId: string }): Promise<{

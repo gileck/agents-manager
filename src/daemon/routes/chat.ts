@@ -134,10 +134,26 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
 
       getAppLogger().info('ChatRoute', `POST /send for session ${sessionId}`, { messageLength: message.length, mode });
 
+      const ws = wsHolder.server;
+
+      // Auto-name session on first message if it still has a default name
+      const [existingMessages, currentSession] = await Promise.all([
+        services.chatAgentService.getMessages(sessionId),
+        services.chatSessionStore.getSession(sessionId),
+      ]);
+      if (
+        currentSession &&
+        existingMessages.length === 0 &&
+        (currentSession.name === 'General' || /^Session \d+$/.test(currentSession.name))
+      ) {
+        void services.chatAgentService.autoNameSession(sessionId, message, (updatedSession) => {
+          ws?.broadcast(WS_CHANNELS.CHAT_SESSION_RENAMED, sessionId, updatedSession);
+        });
+      }
+
       // Build prompt + resume options via service (keeps business logic out of routes)
       const sendCtx = await services.chatAgentService.buildSendContext(sessionId, mode);
 
-      const ws = wsHolder.server;
       const { userMessage } = await services.chatAgentService.send(
         sessionId,
         message,

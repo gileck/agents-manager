@@ -166,6 +166,8 @@ export const IPC_CHANNELS = {
   CHAT_SESSION_DELETE: 'chat:session:delete',
   CHAT_AGENT_SESSION: 'chat:agent-session',
   CHAT_AGENTS_LIST: 'chat:agents:list',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  CHAT_SESSION_RENAMED: 'chat:session:renamed',
 
   // Source Control (project-scoped)
   GIT_PROJECT_LOG: 'git:project-log',
