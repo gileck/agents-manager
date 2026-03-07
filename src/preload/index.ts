@@ -152,6 +152,7 @@ const IPC_CHANNELS = {
   CHAT_SESSION_DELETE: 'chat:session:delete',
   CHAT_AGENT_SESSION: 'chat:agent-session',
   CHAT_AGENTS_LIST: 'chat:agents:list',
+  CHAT_SESSION_RENAMED: 'chat:session:renamed',
   AGENT_LIB_LIST: 'agent-lib:list',
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
@@ -563,6 +564,11 @@ const api = {
       const listener = (_: IpcRendererEvent, data: { projectId: string }) => callback(data);
       ipcRenderer.on(IPC_CHANNELS.MAIN_DIVERGED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.MAIN_DIVERGED, listener);
+    },
+    chatSessionRenamed: (callback: (sessionId: string, session: ChatSession) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, session: ChatSession) => callback(sessionId, session);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_RENAMED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_SESSION_RENAMED, listener);
     },
   },
 };
