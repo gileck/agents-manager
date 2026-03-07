@@ -21,7 +21,7 @@ function Connector({ completed }: { completed: boolean }) {
   return (
     <div
       style={{
-        width: 32,
+        width: 20,
         height: 2,
         flexShrink: 0,
         backgroundColor: completed ? '#22c55e' : '#374151',
@@ -34,7 +34,7 @@ function Connector({ completed }: { completed: boolean }) {
 
 function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
       <path d="M3 7l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -42,7 +42,7 @@ function CheckIcon() {
 
 function XIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
       <path d="M4 4l6 6M10 4l-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
@@ -50,7 +50,7 @@ function XIcon() {
 
 function EyeIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
       <ellipse cx="7" cy="7" rx="5.5" ry="3.5" stroke="#fff" strokeWidth="1.5" />
       <circle cx="7" cy="7" r="1.8" fill="#fff" />
     </svg>
@@ -84,9 +84,9 @@ function labelColorForState(state: MergedPhaseVisualState): string {
 function circleContentForState(state: MergedPhaseVisualState, circleColor: string) {
   switch (state) {
     case 'future':
-      return <span style={{ borderRadius: '50%', width: 10, height: 10, backgroundColor: '#9ca3af' }} />;
+      return <span style={{ borderRadius: '50%', width: 8, height: 8, backgroundColor: '#9ca3af' }} />;
     case 'work_idle':
-      return <span style={{ display: 'inline-flex', borderRadius: '50%', width: 10, height: 10, backgroundColor: '#fff' }} />;
+      return <span style={{ display: 'inline-flex', borderRadius: '50%', width: 8, height: 8, backgroundColor: '#fff' }} />;
     case 'work_running':
       return (
         <>
@@ -98,7 +98,7 @@ function circleContentForState(state: MergedPhaseVisualState, circleColor: strin
               animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite',
             }}
           />
-          <span style={{ position: 'relative', display: 'inline-flex', borderRadius: '50%', width: 10, height: 10, backgroundColor: '#fff' }} />
+          <span style={{ position: 'relative', display: 'inline-flex', borderRadius: '50%', width: 8, height: 8, backgroundColor: '#fff' }} />
         </>
       );
     case 'work_failed':
@@ -142,7 +142,7 @@ function renderStandaloneNode(
   return (
     <div
       style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 64,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 56,
         ...(nodeClickable ? { cursor: 'pointer' } : {}),
       }}
       title={nodeClickable ? 'View agent run' : undefined}
@@ -152,7 +152,7 @@ function renderStandaloneNode(
         style={{
           position: 'relative',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          borderRadius: '50%', width: 28, height: 28,
+          borderRadius: '50%', width: 22, height: 22,
           backgroundColor: nodeColor,
           boxShadow: isAgentic ? agenticRing(nodeColor) : undefined,
         }}
@@ -168,20 +168,20 @@ function renderStandaloneNode(
                 animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite',
               }}
             />
-            <span style={{ position: 'relative', display: 'inline-flex', borderRadius: '50%', width: 10, height: 10, backgroundColor: '#fff' }} />
+            <span style={{ position: 'relative', display: 'inline-flex', borderRadius: '50%', width: 8, height: 8, backgroundColor: '#fff' }} />
           </>
         )}
         {isCurrent && !isFinalCurrent && agentState === 'idle' && (
-          <span style={{ display: 'inline-flex', borderRadius: '50%', width: 10, height: 10, backgroundColor: '#fff' }} />
+          <span style={{ display: 'inline-flex', borderRadius: '50%', width: 8, height: 8, backgroundColor: '#fff' }} />
         )}
         {isCurrent && !isFinalCurrent && agentState === 'failed' && <XIcon />}
         {isFuture && (
-          <span style={{ borderRadius: '50%', width: 10, height: 10, backgroundColor: '#9ca3af' }} />
+          <span style={{ borderRadius: '50%', width: 8, height: 8, backgroundColor: '#9ca3af' }} />
         )}
       </div>
       <span
         style={{
-          fontSize: 10, fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap',
+          fontSize: 9, fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap',
           color: isCompleted || isFinalCurrent ? '#16a34a'
             : isCurrent ? (agentState === 'failed' ? '#ef4444' : '#2563eb')
             : '#6b7280',
@@ -220,7 +220,7 @@ function renderMergedNode(
   return (
     <div
       style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 64,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 56,
         ...(nodeClickable ? { cursor: 'pointer' } : {}),
       }}
       title={nodeClickable ? 'View agent run' : undefined}
@@ -230,7 +230,7 @@ function renderMergedNode(
         style={{
           position: 'relative',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          borderRadius: '50%', width: 28, height: 28,
+          borderRadius: '50%', width: 22, height: 22,
           backgroundColor: circleColor,
           boxShadow: isAgentic ? agenticRing(circleColor) : undefined,
         }}
@@ -241,7 +241,7 @@ function renderMergedNode(
         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <span
             style={{
-              fontSize: 10, fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap',
+              fontSize: 9, fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap',
               color: labelColor,
               ...(nodeClickable ? { borderBottom: '1px dotted currentColor' } : {}),
             }}
@@ -254,7 +254,7 @@ function renderMergedNode(
                 fontSize: 9, fontWeight: 700,
                 color: labelColor,
                 backgroundColor: `${circleColor}20`,
-                borderRadius: 99, padding: '0 4px', lineHeight: '16px',
+                borderRadius: 99, padding: '0 3px', lineHeight: '14px',
               }}
             >
               x{phase.cycleCount}
@@ -305,7 +305,7 @@ export function PipelineProgress({
   const { phases, currentPhaseIndex } = groupIntoPhases(displayPath, currentIndex, skippedStatuses, statusLabelMap);
 
   return (
-    <div style={{ padding: '16px 24px' }}>
+    <div style={{ padding: '8px 24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 0, overflowX: 'auto' }}>
         {phases.map((phase, phaseIdx) => {
           const isFirst = phaseIdx === 0;

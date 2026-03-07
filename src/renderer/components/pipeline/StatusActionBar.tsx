@@ -46,7 +46,7 @@ export function StatusActionBar({
     // Fallback: render all transitions as standard buttons
     if (!primaryTransitions.length) return null;
     return (
-      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+      <div className="rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
         {primaryTransitions.map((t) => (
           <Button
             key={t.to}
@@ -66,7 +66,7 @@ export function StatusActionBar({
   if (statusMeta.isReady) {
     if (!primaryTransitions.length) return null;
     return (
-      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+      <div className="rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
         {primaryTransitions.map((t) => (
           <Button
             key={t.to}
@@ -83,7 +83,7 @@ export function StatusActionBar({
   // Agent running with active agent
   if (statusMeta.isAgentRunning && hasRunningAgent && activeRun) {
     return (
-      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#22c55e' }}>
+      <div className="rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#22c55e' }}>
         <span className="relative flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
@@ -109,7 +109,7 @@ export function StatusActionBar({
   // Agent running — agent just finished, post-completion work in progress
   if (statusMeta.isAgentRunning && isFinalizing) {
     return (
-      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#3b82f6' }}>
+      <div className="rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#3b82f6' }}>
         <span className="relative flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
@@ -133,7 +133,7 @@ export function StatusActionBar({
   if (statusMeta.isAgentRunning && isStuck) {
     const maxRetriesExhausted = totalFailedRuns !== undefined && totalFailedRuns > 3;
     return (
-      <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
+      <div className="rounded-md px-4 py-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
         <div className="flex-1 min-w-0">
           <span className="text-sm font-medium" style={{ color: '#dc2626' }}>
             {lastRun?.error || 'Agent failed or not running'}
@@ -183,7 +183,7 @@ export function StatusActionBar({
     // PR review has special handling for the PR link
     if (status === 'pr_review' || status === 'ready_to_merge') {
       return (
-        <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+        <div className="rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
           {task.prLink ? (
             <button
               onClick={() => window.api.shell.openInChrome(task.prLink!)}
@@ -209,7 +209,7 @@ export function StatusActionBar({
     }
     // Generic human review (plan_review, investigation_review, etc.)
     return (
-      <div className="mb-4 rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap" style={{ borderColor: '#3b82f6' }}>
+      <div className="rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap" style={{ borderColor: '#3b82f6' }}>
         <span className="text-sm">Review the output, then approve or request changes.</span>
         {primaryTransitions.map((t) => (
           <Button
@@ -227,7 +227,7 @@ export function StatusActionBar({
   // Waiting for input (needs_info, etc.)
   if (statusMeta.isWaitingForInput) {
     return (
-      <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#fffbeb', border: '1px solid #fbbf24' }}>
+      <div className="rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#fffbeb', border: '1px solid #fbbf24' }}>
         <span className="text-sm font-medium" style={{ color: '#d97706' }}>
           Agent needs more information
         </span>
@@ -241,7 +241,7 @@ export function StatusActionBar({
     // Closed — neutral banner with reopen button
     if (status === 'closed') {
       return (
-        <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#f3f4f6', border: '1px solid #d1d5db' }}>
+        <div className="rounded-md px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#f3f4f6', border: '1px solid #d1d5db' }}>
           <span className="text-sm font-medium" style={{ color: '#6b7280' }}>Task closed</span>
           {primaryTransitions.filter((t) => t.to !== 'closed').map((t) => (
             <Button
@@ -262,7 +262,7 @@ export function StatusActionBar({
     if (hasPendingPhases && phases) {
       const completedCount = phases.filter((p) => p.status === 'completed').length;
       return (
-        <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd' }}>
+        <div className="rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd' }}>
           <span className="relative flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
@@ -277,7 +277,7 @@ export function StatusActionBar({
     // All phases complete
     if (phases && phases.length > 1) {
       return (
-        <div className="mb-4 rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac' }}>
+        <div className="rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac' }}>
           <span style={{ color: '#16a34a' }}>&#10003;</span>
           <span className="text-sm font-medium" style={{ color: '#16a34a' }}>
             All {phases.length} phases complete

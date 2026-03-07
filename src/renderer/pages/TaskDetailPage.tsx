@@ -503,8 +503,8 @@ export function TaskDetailPage() {
       </div>
 
       {/* 2. HERO */}
-      <div style={{ padding: '18px 24px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{task.title}</h1>
+      <div style={{ padding: '8px 24px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>{task.title}</h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12, color: 'var(--muted-foreground)' }}>
           <PipelineBadge status={task.status} pipeline={pipeline} />
           {pipeline && <><span>·</span><span>{pipeline.name}</span></>}
@@ -522,7 +522,7 @@ export function TaskDetailPage() {
           )}
         </div>
         {/* Action strip */}
-        <div style={{ borderTop: '1px solid var(--border)', padding: '10px 0' }}>
+        <div style={{ borderTop: '1px solid var(--border)', padding: '6px 0' }}>
           {(!isAgentPipeline || agentRuns !== null) && (
             <PipelineControlPanel
               taskId={id!}
@@ -651,7 +651,15 @@ export function TaskDetailPage() {
 
       {/* 5. TAB BAR + SCROLLABLE CONTENT */}
       <Tabs value={tab} onValueChange={setTab} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-        <TabsList style={{ flexShrink: 0, borderBottom: '1px solid var(--border)', borderRadius: 0, padding: '0 24px', justifyContent: 'flex-start', height: 40 }}>
+        <TabsList style={{
+          flexShrink: 0,
+          borderBottom: '1px solid var(--border)',
+          borderRadius: 0,
+          padding: '0 24px',
+          justifyContent: 'flex-start',
+          height: 40,
+          background: 'hsl(var(--surface-1) / 0.9)',
+        }}>
           <TabsTrigger value="details">Task Details</TabsTrigger>
           <TabsTrigger value="plan" className={hasPlan ? '' : 'opacity-40'}>
             <span className="flex items-center gap-1.5">
@@ -674,9 +682,15 @@ export function TaskDetailPage() {
           <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="review" className={hasReview ? '' : 'opacity-40'}>Review</TabsTrigger>
         </TabsList>
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          flex: 1,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: 'hsl(var(--surface-2) / 0.38)',
+        }}>
 
-        <TabsContent value="details" style={{ padding: '20px 24px', overflowY: 'auto' }}>
+        <TabsContent value="details" style={{ padding: '20px 24px', overflowY: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
           <div className="flex justify-end mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/details`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -701,7 +715,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto' }}>
+        <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
           <div className="flex justify-end mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/plan`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -722,7 +736,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto' }}>
+        <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
           <div className="flex justify-end mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/design`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -743,7 +757,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="implementation" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <TabsContent value="implementation" style={{ flex: 1, minHeight: 0, overflow: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
           <div className="flex justify-end px-6 pt-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/impl`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -762,7 +776,14 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="chat" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <TabsContent value="chat" style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          backgroundColor: 'hsl(var(--surface-1) / 0.75)',
+        }}>
           <div className="flex justify-end px-6 pt-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/chat`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -771,7 +792,7 @@ export function TaskDetailPage() {
           <ChatPanel scope={{ type: 'task', id: id! }} />
         </TabsContent>
 
-        <TabsContent value="review" style={{ padding: '20px 24px', overflowY: 'auto' }}>
+        <TabsContent value="review" style={{ padding: '20px 24px', overflowY: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
           <div className="flex justify-end mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/review`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -933,4 +954,3 @@ export function TaskDetailPage() {
     </div>
   );
 }
-
