@@ -61,6 +61,14 @@ export function useChatSessions(scope: ChatScope | null) {
       .finally(() => setLoading(false));
   }, [scopeKey]);
 
+  // Patch sessions in real-time when the daemon auto-renames a session
+  useEffect(() => {
+    const unsubscribe = window.api.on.chatSessionRenamed((_sessionId, updatedSession) => {
+      setSessions((prev) => prev.map((s) => (s.id === updatedSession.id ? updatedSession : s)));
+    });
+    return () => { unsubscribe(); };
+  }, []);
+
   const createSession = useCallback(
     async (name: string) => {
       const currentScope = scopeRef.current;

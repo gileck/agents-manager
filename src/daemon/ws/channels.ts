@@ -11,4 +11,5 @@ export const WS_CHANNELS = {
   TELEGRAM_BOT_STATUS_CHANGED: 'telegram:bot-status-changed',
   NAVIGATE: 'navigate',
   MAIN_DIVERGED: 'git:main-diverged',
+  CHAT_SESSION_RENAMED: 'chat:session:renamed',
 } as const;
