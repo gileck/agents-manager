@@ -142,6 +142,9 @@ export const IPC_CHANNELS = {
   OPEN_IN_ITERM: 'shell:open-in-iterm',
   OPEN_IN_VSCODE: 'shell:open-in-vscode',
 
+  // Dialog
+  DIALOG_PICK_FOLDER: 'dialog:pick-folder',
+
   // Chat
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',

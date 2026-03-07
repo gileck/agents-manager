@@ -135,6 +135,7 @@ const IPC_CHANNELS = {
   OPEN_IN_CHROME: 'shell:open-in-chrome',
   OPEN_IN_ITERM: 'shell:open-in-iterm',
   OPEN_IN_VSCODE: 'shell:open-in-vscode',
+  DIALOG_PICK_FOLDER: 'dialog:pick-folder',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
   CHAT_MESSAGES: 'chat:messages',
@@ -501,6 +502,12 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.OPEN_IN_ITERM, dirPath),
     openInVscode: (dirPath: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.OPEN_IN_VSCODE, dirPath),
+  },
+
+  // Dialog operations
+  dialog: {
+    pickFolder: (): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG_PICK_FOLDER),
   },
 
   // Event listeners (main -> renderer)
