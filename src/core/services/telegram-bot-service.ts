@@ -131,6 +131,20 @@ export class TelegramBotService implements ITelegramBotService {
       this.send(msg.chat.id, 'Enter the task title:').catch(this.logError);
     });
 
+    bot.onText(/\/threadinfo$/, (msg) => {
+      if (!this.isAllowed(msg)) return;
+      this.log('in', msg.text ?? '/threadinfo');
+      const lines = [
+        `*Thread Info*`,
+        `Chat ID: \`${msg.chat.id}\``,
+        `Message Thread ID: \`${msg.message_thread_id ?? 'none'}\``,
+      ];
+      this.send(msg.chat.id, lines.join('\n'), {
+        parse_mode: 'MarkdownV2',
+        ...(msg.message_thread_id ? { message_thread_id: msg.message_thread_id } : {}),
+      }).catch(this.logError);
+    });
+
     bot.onText(/\/help$/, (msg) => {
       if (!this.isAllowed(msg)) return;
       this.log('in', msg.text ?? '/help');
@@ -139,12 +153,16 @@ export class TelegramBotService implements ITelegramBotService {
         '/tasks \\- List project tasks',
         '/task <id> \\- Show task details',
         '/create \\- Create a new task',
+        '/threadinfo \\- Show chat and thread IDs',
         '/help \\- Show this help',
       ].join('\n'), { parse_mode: 'MarkdownV2' }).catch(this.logError);
     });
 
     bot.on('message', (msg) => {
-      if (!this.isAllowed(msg)) return;
+      if (!this.isAllowed(msg)) {
+        getAppLogger().info('TelegramBotService', `Ignored message from chat ${msg.chat.id} (allowed: ${this.chatId}), thread: ${msg.message_thread_id ?? 'none'}`);
+        return;
+      }
       if (msg.text?.startsWith('/')) return;
 
       const text = msg.text ?? '';
