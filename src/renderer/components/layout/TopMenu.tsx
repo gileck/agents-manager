@@ -154,7 +154,7 @@ export function TopMenu() {
   const pageTitle = getPageTitle(location.pathname);
 
   return (
-    <div className="h-14 border-b border-border/70 bg-card/55 backdrop-blur-md flex items-center justify-between px-4 shrink-0">
+    <div className="relative z-50 h-14 border-b border-border/70 bg-card/55 backdrop-blur-md flex items-center justify-between px-4 shrink-0">
       <div className="flex items-center gap-3 min-w-0">
         <h1 className="text-lg font-semibold tracking-tight text-foreground truncate">{pageTitle}</h1>
         {currentProject && (
