@@ -38,6 +38,7 @@ export function ProjectConfigPage() {
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramStreamThinking, setTelegramStreamThinking] = useState(false);
   const [telegramAutoStart, setTelegramAutoStart] = useState(true);
+  const [telegramNotificationChatId, setTelegramNotificationChatId] = useState('');
   const [telegramTesting, setTelegramTesting] = useState(false);
 
   // Track whether we've loaded initial data (to skip auto-save on first populate)
@@ -70,6 +71,7 @@ export function ProjectConfigPage() {
     setTelegramEnabled(!!tg.enabled);
     setTelegramBotToken((tg.botToken as string) ?? '');
     setTelegramChatId((tg.chatId as string) ?? '');
+    setTelegramNotificationChatId((tg.notificationChatId as string) ?? '');
     setTelegramStreamThinking(!!tg.streamThinking);
     setTelegramAutoStart(tg.autoStart !== false);
     // Mark initialized after React processes the state batch
@@ -82,7 +84,7 @@ export function ProjectConfigPage() {
       defaultBranch: string; pullMainAfterMerge: boolean;
       validationCommands: Array<{ id: number; cmd: string }>;
       maxValidationRetries: string; telegramEnabled: boolean;
-      telegramBotToken: string; telegramChatId: string;
+      telegramBotToken: string; telegramChatId: string; telegramNotificationChatId: string;
       telegramStreamThinking: boolean; telegramAutoStart: boolean;
     }
   ) => {
@@ -100,6 +102,7 @@ export function ProjectConfigPage() {
         enabled: fields.telegramEnabled,
         botToken: fields.telegramBotToken || undefined,
         chatId: fields.telegramChatId || undefined,
+        notificationChatId: fields.telegramNotificationChatId || undefined,
         streamThinking: fields.telegramStreamThinking,
         autoStart: fields.telegramAutoStart,
       },
@@ -131,14 +134,14 @@ export function ProjectConfigPage() {
       saveConfig({
         defaultAgentLib, model, agentTimeout, maxConcurrentAgents, defaultBranch,
         pullMainAfterMerge, validationCommands, maxValidationRetries,
-        telegramEnabled, telegramBotToken, telegramChatId, telegramStreamThinking,
-        telegramAutoStart,
+        telegramEnabled, telegramBotToken, telegramChatId, telegramNotificationChatId,
+        telegramStreamThinking, telegramAutoStart,
       });
     }, 500);
     return () => clearTimeout(timerRef.current);
   }, [defaultAgentLib, model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
       validationCommands, maxValidationRetries, telegramEnabled, telegramBotToken, telegramChatId,
-      telegramStreamThinking, telegramAutoStart, saveConfig]);
+      telegramNotificationChatId, telegramStreamThinking, telegramAutoStart, saveConfig]);
 
   const addValidationCommand = () =>
     setValidationCommands(prev => [...prev, { id: nextCmdId++, cmd: '' }]);
@@ -352,13 +355,26 @@ export function ProjectConfigPage() {
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="telegramChatId">Chat ID</Label>
+                    <Label htmlFor="telegramChatId">Agent Chat ID</Label>
                     <Input
                       id="telegramChatId"
                       style={inputWidth}
                       placeholder="Chat ID"
                       value={telegramChatId}
                       onChange={(e) => setTelegramChatId(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="telegramNotificationChatId">Notification Chat ID</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">Optional. Defaults to Agent Chat ID.</p>
+                    </div>
+                    <Input
+                      id="telegramNotificationChatId"
+                      style={inputWidth}
+                      placeholder="Notification Chat ID"
+                      value={telegramNotificationChatId}
+                      onChange={(e) => setTelegramNotificationChatId(e.target.value)}
                     />
                   </div>
                   <div className="flex items-center justify-between">
@@ -393,7 +409,7 @@ export function ProjectConfigPage() {
                       onClick={async () => {
                         setTelegramTesting(true);
                         try {
-                          await window.api.telegram.test(telegramBotToken, telegramChatId);
+                          await window.api.telegram.test(telegramBotToken, telegramNotificationChatId || telegramChatId);
                           toast.success('Test message sent successfully');
                         } catch (err) {
                           reportError(err, 'Telegram test');

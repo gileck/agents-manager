@@ -38,9 +38,10 @@ export async function startBotForProject(
   if (!project) throw new Error(`Project not found: ${projectId}`);
 
   const tg = (project.config?.telegram as Record<string, unknown>) ?? {};
-  const { botToken, chatId } = validateTelegramConfig(
+  const { botToken, chatId, notificationChatId } = validateTelegramConfig(
     tg.botToken as string | undefined,
     tg.chatId as string | undefined,
+    tg.notificationChatId as string | undefined,
   );
 
   const botService = new TelegramAgentBotService({
@@ -64,7 +65,7 @@ export async function startBotForProject(
   await botService.start(projectId, botToken, chatId);
 
   const bot = botService.getBot()!;
-  const telegramRouter = new TelegramNotificationRouter(bot, chatId);
+  const telegramRouter = new TelegramNotificationRouter(bot, notificationChatId ?? chatId);
   services.notificationRouter.addRouter(telegramRouter);
 
   activeBots.set(projectId, { botService, notificationRouter: telegramRouter });
