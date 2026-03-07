@@ -77,7 +77,7 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
         nodes.push(
           <div key={i} className="flex justify-end py-2.5">
             <div className="bg-primary/90 text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5 max-w-[82%] shadow-[0_8px_18px_hsl(var(--primary)/0.24)]">
-              <p className="text-sm leading-relaxed">{msg.text}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
               {msg.images && msg.images.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {msg.images.map((img, j) => (
