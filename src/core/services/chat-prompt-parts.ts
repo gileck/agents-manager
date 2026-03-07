@@ -221,7 +221,7 @@ export function buildAgentChatSystemPrompt(
     `  "${revisedField}": "The full updated ${planOrDesign} (complete text, not a diff)"`,
     '}',
     '```',
-    'Your response must be valid JSON and nothing else when making a change. If the message is a pure question with no implied change, respond conversationally in plain text instead.',
+    'Your response must be valid JSON and nothing else when making a change. Do not include markdown code fences around the JSON. If the message is a pure question with no implied change, respond conversationally in plain text instead.',
     '',
     rulesSection(),
     '',
