@@ -1,4 +1,4 @@
-import { shell } from 'electron';
+import { shell, dialog } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
 
@@ -61,5 +61,10 @@ export function registerShellHandlers(): void {
     const execFileAsync = promisify(execFileCb);
     const env = (await import('../../shared/shell-env')).getShellEnv();
     await execFileAsync('code', [dirPath], { env });
+  });
+
+  registerIpcHandler(IPC_CHANNELS.DIALOG_PICK_FOLDER, async (): Promise<string | null> => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+    return result.canceled ? null : result.filePaths[0] ?? null;
   });
 }
