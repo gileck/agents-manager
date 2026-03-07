@@ -212,7 +212,7 @@ export function buildAgentChatSystemPrompt(
     '',
     '## Instructions',
     'Answer the user\'s question about your work. Explain your rationale, discuss tradeoffs, suggest alternatives.',
-    `Do NOT modify the ${agentRole === 'designer' ? 'technical design' : 'plan'} or any files.`,
+    `If the user's message implies adding a requirement, changing an approach, or modifying any ${agentRole === 'designer' ? 'technical design' : 'plan'} content, respond with your explanation AND immediately apply the change to the ${agentRole === 'designer' ? 'technical design' : 'plan'} document, then emit outcome=plan_complete. If the message is purely a question with no implied change, respond conversationally and emit outcome=none.`,
     '',
     rulesSection(),
     '',

@@ -442,7 +442,7 @@ export class ChatAgentService {
       }
       userPart += '\n\nIMPORTANT: The user attached image(s). Use the Read tool to view them at the paths above.';
     }
-    prompt += `${userPart}\n\nRespond to the latest user message.`;
+    prompt += `${userPart}\n\nRespond to the latest user message. If your response requires a plan change, apply it now and report outcome=plan_complete.`;
 
     // Create or reuse AgentRun for agent-chat sessions
     let agentRunId: string | undefined;
