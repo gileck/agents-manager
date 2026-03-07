@@ -2,10 +2,11 @@ import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
 import type { WsHolder } from '../server';
 import { WS_CHANNELS } from '../ws/channels';
-import type { ChatImage } from '../../shared/types';
+import type { ChatImage, PermissionMode } from '../../shared/types';
 import { getAppLogger } from '../../core/services/app-logger';
 
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const VALID_PERMISSION_MODES = new Set<PermissionMode>(['read_only', 'read_write', 'full_access']);
 const MAX_IMAGES_PER_MESSAGE = 5;
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // ~10MB base64
 
@@ -203,7 +204,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   router.patch('/api/chat/sessions/:id', async (req, res, next) => {
     try {
       const sessionId = req.params.id;
-      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null };
+      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: string | null };
       if (!input || typeof input !== 'object') {
         res.status(400).json({ error: 'Invalid input: expected object' });
         return;
@@ -228,7 +229,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(404).json({ error: 'Session not found' });
         return;
       }
-      const updateInput: { name?: string; agentLib?: string | null; model?: string | null } = {};
+      const updateInput: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null } = {};
       if (input.name !== undefined) updateInput.name = input.name.trim();
       if (input.agentLib !== undefined) {
         if (input.agentLib !== null) {
@@ -255,6 +256,13 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
           }
         }
         updateInput.model = input.model;
+      }
+      if (input.permissionMode !== undefined) {
+        if (input.permissionMode !== null && !VALID_PERMISSION_MODES.has(input.permissionMode as PermissionMode)) {
+          res.status(400).json({ error: `Invalid permissionMode: ${input.permissionMode}. Must be one of: ${[...VALID_PERMISSION_MODES].join(', ')}` });
+          return;
+        }
+        updateInput.permissionMode = input.permissionMode as PermissionMode | null;
       }
       const updated = await services.chatSessionStore.updateSession(sessionId, updateInput);
       res.json(updated);

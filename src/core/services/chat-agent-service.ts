@@ -309,6 +309,7 @@ export class ChatAgentService {
     pipelineSessionId?: string;
     resumeSession?: boolean;
     isAgentChat?: boolean;
+    permissionMode: PermissionMode | null;
   }> {
     const session = await this.chatSessionStore.getSession(sessionId);
     if (!session) throw new Error('Session not found');
@@ -327,10 +328,11 @@ export class ChatAgentService {
         pipelineSessionId: lastCompleted?.id,
         resumeSession: !!lastCompleted,
         isAgentChat: true,
+        permissionMode: session.permissionMode,
       };
     }
 
-    return { systemPrompt: buildDesktopSystemPrompt(scope) };
+    return { systemPrompt: buildDesktopSystemPrompt(scope), permissionMode: session.permissionMode };
   }
 
   async send(
@@ -338,7 +340,7 @@ export class ChatAgentService {
     message: string,
     options: ChatSendOptions,
   ): Promise<ChatSendResult> {
-    const { systemPrompt, onEvent, images, pipelineSessionId, resumeSession, isAgentChat } = options;
+    const { systemPrompt, onEvent, images, pipelineSessionId, resumeSession, isAgentChat, permissionMode } = options;
 
     getAppLogger().info('ChatAgentService', `send() called for session ${sessionId}`, { messageLength: message.length, hasImages: !!(images?.length) });
 
@@ -473,7 +475,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId, permissionMode: session.permissionMode }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId, permissionMode: permissionMode ?? null }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }

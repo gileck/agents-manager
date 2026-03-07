@@ -1068,6 +1068,7 @@ export interface ChatSendOptions {
   pipelineSessionId?: string;
   resumeSession?: boolean;
   isAgentChat?: boolean;
+  permissionMode?: PermissionMode | null;
 }
 
 export interface ChatSendResult {
