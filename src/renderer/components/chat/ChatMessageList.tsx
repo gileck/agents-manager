@@ -44,7 +44,7 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
 
       if (msg.type === 'assistant_text') {
         nodes.push(
-          <div key={i} className="py-2 max-w-none prose-sm">
+          <div key={i} className="py-2.5 max-w-none prose-sm text-[15px] leading-7 text-foreground/95">
             <MarkdownContent content={msg.text} />
           </div>
         );
@@ -75,8 +75,8 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
         );
       } else if (msg.type === 'user') {
         nodes.push(
-          <div key={i} className="flex justify-end py-2">
-            <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5 max-w-[80%] shadow-sm">
+          <div key={i} className="flex justify-end py-2.5">
+            <div className="bg-primary/90 text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5 max-w-[82%] shadow-[0_8px_18px_hsl(var(--primary)/0.24)]">
               <p className="text-sm leading-relaxed">{msg.text}</p>
               {msg.images && msg.images.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
@@ -110,16 +110,16 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
       } else if (msg.type === 'status') {
         nodes.push(
           <div key={i} className="text-center py-3">
-            <span className="text-xs text-muted-foreground/80 bg-muted/50 px-3 py-1 rounded-full">
+            <span className="text-xs text-muted-foreground/80 bg-muted/35 border border-border/60 px-3 py-1 rounded-full">
               {msg.message}
             </span>
           </div>
         );
       } else if (msg.type === 'agent_run_info') {
         nodes.push(
-          <div key={i} className="py-1">
+          <div key={i} className="py-1.5">
             <button
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/70 rounded-full px-2 py-1 hover:bg-accent/60"
               onClick={() => navigate(`/agents/${msg.agentRunId}`)}
             >
               Agent Run &middot; View details &rarr;
@@ -133,7 +133,7 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
   }, [messages, expandedTools, toggleTool]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4">
+    <div className="flex-1 overflow-y-auto px-8 py-6">
       {rendered.length === 0 && isRunning && (
         <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
           <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />

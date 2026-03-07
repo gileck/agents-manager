@@ -74,7 +74,7 @@ export function SessionTabs({
   };
 
   return (
-    <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-thin">
+    <div className="flex items-center gap-1 overflow-x-auto scrollbar-thin">
       {sessions.map((session) => {
         const { runningCount, completedCount } = getSessionAgentStatus(session.id);
         const isActive = session.id === currentSessionId;
@@ -83,10 +83,10 @@ export function SessionTabs({
           <div
             key={session.id}
             className={cn(
-              'relative group flex items-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer transition-all text-sm',
+              'relative group flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-sm border border-transparent',
               isActive
-                ? 'bg-muted text-foreground font-medium'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                ? 'bg-accent/80 text-foreground border-border/55 font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/45'
             )}
             onClick={() => onSessionChange(session.id)}
           >
@@ -176,7 +176,7 @@ export function SessionTabs({
 
       <button
         onClick={handleNewSession}
-        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-md transition-colors shrink-0"
+        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent/45 rounded-lg transition-colors shrink-0 border border-transparent hover:border-border/55"
         title="New session"
       >
         <Plus className="h-3.5 w-3.5" />
@@ -185,7 +185,7 @@ export function SessionTabs({
       {contextMenuSession && createPortal(
         <div
           ref={contextMenuRef}
-          className="fixed bg-card border border-border rounded-lg shadow-lg z-50 py-1 min-w-[140px]"
+          className="fixed bg-card/95 border border-border/80 rounded-xl shadow-[0_16px_30px_hsl(var(--background)/0.45)] z-50 py-1 min-w-[140px] backdrop-blur-md"
           style={{ top: menuPosition.top, left: menuPosition.left }}
           onClick={(e) => e.stopPropagation()}
         >

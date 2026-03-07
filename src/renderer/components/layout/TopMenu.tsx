@@ -11,17 +11,45 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
-} from '@template/renderer/components/ui/select';
-import { Button } from '@template/renderer/components/ui/button';
-import { FolderOpen, Sun, Moon, Send, DollarSign, GitBranch, ScrollText, Play, Plus } from 'lucide-react';
+} from '../ui/select';
+import { Button } from '../ui/button';
+import {
+  FolderOpen,
+  Sun,
+  Moon,
+  Send,
+  DollarSign,
+  GitBranch,
+  ScrollText,
+  Play,
+  Plus,
+} from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import { TaskCreateDialog } from '../tasks/TaskCreateDialog';
 
 type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
 
+function getPageTitle(pathname: string): string {
+  if (pathname === '/') return 'Dashboard';
+  if (pathname.startsWith('/projects')) return 'Projects';
+  if (pathname.startsWith('/tasks')) return 'Tasks';
+  if (pathname.startsWith('/kanban')) return 'Kanban';
+  if (pathname.startsWith('/chat')) return 'New thread';
+  if (pathname.startsWith('/automated-agents')) return 'Automations';
+  if (pathname.startsWith('/agent-runs') || pathname.startsWith('/agents/')) return 'Agent runs';
+  if (pathname.startsWith('/features')) return 'Features';
+  if (pathname.startsWith('/cost')) return 'Cost';
+  if (pathname.startsWith('/source-control')) return 'Source control';
+  if (pathname.startsWith('/debug-logs')) return 'Debug logs';
+  if (pathname.startsWith('/settings')) return 'Settings';
+  return 'Agents Manager';
+}
+
+const utilityButtonClass =
+  'h-9 rounded-full border border-border/70 bg-card/65 hover:bg-accent/70 text-muted-foreground hover:text-foreground';
+
 export function TopMenu() {
-  const { currentProject, currentProjectId, setCurrentProjectId } =
-    useCurrentProject();
+  const { currentProject, currentProjectId, setCurrentProjectId } = useCurrentProject();
   const { projects } = useProjects();
   const { resolvedTheme, setTheme } = useTheme();
   const { pipelines } = usePipelines();
@@ -30,7 +58,6 @@ export function TopMenu() {
   const [telegramStatus, setTelegramStatus] = useState<TelegramBotStatus>('unknown');
   const [recentLogs, setRecentLogs] = useState<TelegramBotLogEntry[]>([]);
 
-  // Create task dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '', type: 'feature' });
   const [creating, setCreating] = useState(false);
@@ -61,9 +88,7 @@ export function TopMenu() {
       return;
     }
     window.api.telegram.botStatus(currentProjectId).then(({ running }) => {
-      // Only update from poll if we don't already have a more specific status
-      // (e.g. 'failed' from an auto-start event that arrived before the poll)
-      setTelegramStatus(prev => prev === 'failed' ? prev : running ? 'running' : 'stopped');
+      setTelegramStatus((prev) => (prev === 'failed' ? prev : running ? 'running' : 'stopped'));
     }).catch((err) => {
       reportError(err, 'Telegram bot status');
       setTelegramStatus('unknown');
@@ -77,7 +102,6 @@ export function TopMenu() {
     return () => { unsub(); };
   }, [currentProjectId]);
 
-  // Subscribe to bot log events for tooltip
   useEffect(() => {
     if (!currentProjectId) {
       setRecentLogs([]);
@@ -85,7 +109,7 @@ export function TopMenu() {
     }
     const unsub = window.api.on.telegramBotLog((projectId, entry) => {
       if (projectId !== currentProjectId) return;
-      setRecentLogs(prev => [...prev, entry].slice(-5));
+      setRecentLogs((prev) => [...prev, entry].slice(-5));
     });
     return () => { unsub(); setRecentLogs([]); };
   }, [currentProjectId]);
@@ -103,7 +127,7 @@ export function TopMenu() {
   const telegramTooltip = (() => {
     const lines = [`Telegram bot: ${telegramStatus}`];
     if (recentLogs.length > 0) {
-      lines.push('─────');
+      lines.push('-----');
       for (const log of recentLogs) {
         const time = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         lines.push(`${time} ${log.message}`);
@@ -112,98 +136,117 @@ export function TopMenu() {
     return lines.join('\n');
   })();
 
+  const pageTitle = getPageTitle(location.pathname);
+
   return (
-    <div className="h-12 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
-      {/* Left: Project Selector */}
-      <div className="flex items-center gap-2">
-        <FolderOpen className="h-4 w-4 text-muted-foreground" />
-        <Select
-          value={currentProjectId || ''}
-          onValueChange={(id) => setCurrentProjectId(id)}
-        >
-          <SelectTrigger className="w-48 h-8 border-none bg-transparent shadow-none text-sm font-medium hover:bg-muted">
-            <SelectValue placeholder="Select a project">
-              {currentProject ? currentProject.name : undefined}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="h-14 border-b border-border/70 bg-card/55 backdrop-blur-md flex items-center justify-between px-4 shrink-0">
+      <div className="flex items-center gap-3 min-w-0">
+        <h1 className="text-lg font-semibold tracking-tight text-foreground truncate">{pageTitle}</h1>
+        {currentProject && (
+          <span className="hidden md:inline-flex items-center rounded-full border border-border/65 bg-muted/45 px-2.5 py-1 text-xs text-muted-foreground">
+            {currentProject.name}
+          </span>
+        )}
       </div>
 
-      {/* Right: Nav icons + Telegram Status + Theme Toggle */}
-      <div className="flex items-center gap-1">
-        <Button
-          variant={location.pathname === '/cost' ? 'secondary' : 'ghost'}
-          size="icon"
-          onClick={() => navigate('/cost')}
-          title="Cost"
-        >
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
-        </Button>
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="hidden xl:flex items-center gap-2">
+          <FolderOpen className="h-4 w-4 text-muted-foreground" />
+          <Select value={currentProjectId || ''} onValueChange={(id) => setCurrentProjectId(id)}>
+            <SelectTrigger className="w-56 h-9 rounded-full border-border/75 bg-card/65 text-sm font-medium shadow-none hover:bg-accent/55">
+              <SelectValue placeholder="Select project">
+                {currentProject ? currentProject.name : undefined}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {currentProjectId && (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={openCreateDialog}
+            className="rounded-full px-3"
+            title="Create new task"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            New task
+          </Button>
+        )}
+
         <Button
           variant={location.pathname === '/source-control' ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => navigate('/source-control')}
           title="Source Control"
+          className={utilityButtonClass}
         >
-          <GitBranch className="h-4 w-4 text-muted-foreground" />
+          <GitBranch className="h-4 w-4" />
         </Button>
+
         <Button
           variant={location.pathname === '/agent-runs' ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => navigate('/agent-runs')}
           title="Agent Runs"
+          className={utilityButtonClass}
         >
-          <Play className="h-4 w-4 text-muted-foreground" />
+          <Play className="h-4 w-4" />
         </Button>
+
+        <Button
+          variant={location.pathname === '/cost' ? 'secondary' : 'ghost'}
+          size="icon"
+          onClick={() => navigate('/cost')}
+          title="Cost"
+          className={utilityButtonClass}
+        >
+          <DollarSign className="h-4 w-4" />
+        </Button>
+
         <Button
           variant={location.pathname === '/debug-logs' ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => navigate('/debug-logs')}
           title="Debug Logs"
+          className={utilityButtonClass}
         >
-          <ScrollText className="h-4 w-4 text-muted-foreground" />
+          <ScrollText className="h-4 w-4" />
         </Button>
-        {currentProjectId && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={openCreateDialog}
-            title="Create new task"
-          >
-            <Plus className="h-4 w-4 text-muted-foreground" />
-          </Button>
-        )}
-        <div className="w-px h-5 bg-border mx-1" />
+
         {currentProjectId && (
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate(`/projects/${currentProjectId}/telegram`)}
             title={telegramTooltip}
+            className={utilityButtonClass}
           >
             <div className="relative">
-              <Send className="h-3.5 w-3.5 text-muted-foreground" />
+              <Send className="h-3.5 w-3.5" />
               <span className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ${dotColor}`} />
             </div>
           </Button>
         )}
+
         <Button
           variant="ghost"
           size="icon"
           onClick={toggleTheme}
           title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+          className={utilityButtonClass}
         >
           {resolvedTheme === 'dark' ? (
-            <Sun className="h-4 w-4 text-muted-foreground" />
+            <Sun className="h-4 w-4" />
           ) : (
-            <Moon className="h-4 w-4 text-muted-foreground" />
+            <Moon className="h-4 w-4" />
           )}
         </Button>
       </div>

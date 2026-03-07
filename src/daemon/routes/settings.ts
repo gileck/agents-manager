@@ -3,10 +3,10 @@ import type { AppServices } from '../../core/providers/setup';
 import type { AppSettings } from '../../shared/types';
 
 /** Read all current settings from the store into an AppSettings object. */
-function readCurrentSettings(services: AppServices): AppSettings {
+export function readCurrentSettings(services: AppServices): AppSettings {
   const { settingsStore } = services;
   return {
-    theme: settingsStore.get('theme', 'system') as 'light' | 'dark' | 'system',
+    theme: settingsStore.get('theme', 'dark') as 'light' | 'dark' | 'system',
     notificationsEnabled: settingsStore.get('notifications_enabled', 'true') === 'true',
     currentProjectId: settingsStore.get('current_project_id', '') || null,
     defaultPipelineId: settingsStore.get('default_pipeline_id', '') || null,

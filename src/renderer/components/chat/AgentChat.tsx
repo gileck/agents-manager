@@ -45,7 +45,7 @@ export function AgentChat({
     <div className="flex-1 min-h-0 flex">
       <div className="flex-1 min-h-0 flex flex-col">
         {messages.length === 0 && !isRunning && emptyState ? (
-          <div className="flex-1 flex items-center justify-center px-4 py-2">
+          <div className="flex-1 flex items-center justify-center px-6 py-4">
             {emptyState}
           </div>
         ) : (

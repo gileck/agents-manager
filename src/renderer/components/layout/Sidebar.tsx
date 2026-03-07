@@ -1,19 +1,32 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
-import { LayoutDashboard, FolderOpen, CheckSquare, Settings, Bug, MessageSquare, Trello, RefreshCw, Bot } from 'lucide-react';
+import {
+  Bot,
+  Bug,
+  CheckSquare,
+  FolderOpen,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Settings,
+  Trello,
+} from 'lucide-react';
 import { ActiveAgentsEntries } from './ActiveAgentsList';
 import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
 import { SidebarSection } from './SidebarSection';
 import { SidebarSessions } from './SidebarSessions';
 import { SidebarAutomatedAgents } from './SidebarAutomatedAgents';
+import { useCurrentProject } from '../../contexts/CurrentProjectContext';
+import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
+import { reportError } from '../../lib/error-handler';
 
 const navItems = [
-  { to: '/projects', icon: FolderOpen, label: 'Projects' },
+  { to: '/chat', icon: MessageSquare, label: 'New thread' },
   { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
   { to: '/kanban', icon: Trello, label: 'Kanban' },
-  { to: '/chat', icon: MessageSquare, label: 'Chat' },
-  { to: '/automated-agents', icon: Bot, label: 'Automated' },
+  { to: '/projects', icon: FolderOpen, label: 'Projects' },
+  { to: '/automated-agents', icon: Bot, label: 'Automations' },
 ];
 
 interface SidebarProps {
@@ -22,60 +35,77 @@ interface SidebarProps {
 
 export function Sidebar({ onReportBug }: SidebarProps) {
   const { entries, refresh } = useActiveAgentRuns();
+  const { currentProjectId } = useCurrentProject();
+  const { sessions, createSession } = useProjectChatSessions();
+  const navigate = useNavigate();
   const activeCount = entries.filter((e) => e.run.status === 'running').length;
+
+  const handleNewThread = async () => {
+    navigate('/chat');
+    if (!currentProjectId) return;
+
+    try {
+      const maxNum = sessions.reduce((max, s) => {
+        const match = s.name.match(/^Session (\d+)$/);
+        return match ? Math.max(max, Number(match[1])) : max;
+      }, 0);
+      await createSession(`Session ${maxNum + 1}`);
+    } catch (err) {
+      reportError(err, 'Create session');
+    }
+  };
 
   const refreshButton = entries.length > 0 ? (
     <button
       onClick={refresh}
-      className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+      className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
       title="Refresh"
     >
-      <RefreshCw className="h-3 w-3" />
+      <RefreshCw className="h-3.5 w-3.5" />
     </button>
   ) : null;
 
   return (
-    <aside className="w-56 border-r border-border bg-card flex flex-col">
-      {/* Logo */}
-      <div className="px-4 pt-5 pb-4 border-b border-border">
-        <div className="flex items-center">
-          <LayoutDashboard className="h-5 w-5 text-blue-500 mr-2" />
-          <span className="font-semibold text-sm">Agents Manager</span>
+    <aside className="w-72 border-r border-border/70 bg-card/50 backdrop-blur-md flex flex-col">
+      <div className="px-4 pt-4 pb-3 border-b border-border/60">
+        <div className="flex items-center justify-between">
+          <div className="inline-flex items-center rounded-full border border-border/75 bg-muted/45 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            Agents Manager
+          </div>
+          <button
+            onClick={handleNewThread}
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.3)] hover:bg-primary/90 transition-colors"
+            title="New thread"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New
+          </button>
         </div>
+
+        <nav className="mt-3 grid gap-1">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-accent/85 text-foreground border border-border/60'
+                    : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
+                )
+              }
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
       </div>
 
-      {/* Scrollable sections */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        {/* Pages */}
-        <SidebarSection title="Pages" storageKey="pages">
-          <nav className="px-2">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium mb-0.5 transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )
-                }
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-        </SidebarSection>
-
-        {/* Sessions */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
         <SidebarSessions />
-
-        {/* Automated Agents */}
         <SidebarAutomatedAgents />
-
-        {/* Active Agents */}
         <SidebarSection
           title={`Active Agents${activeCount > 0 ? ` (${activeCount})` : ''}`}
           storageKey="activeAgents"
@@ -89,16 +119,15 @@ export function Sidebar({ onReportBug }: SidebarProps) {
         </SidebarSection>
       </div>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-border">
+      <div className="p-3 border-t border-border/60 space-y-1">
         <NavLink
           to="/settings"
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors mb-0.5',
+              'flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors',
               isActive
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                ? 'bg-accent/85 text-foreground border border-border/60'
+                : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
             )
           }
         >
@@ -107,12 +136,12 @@ export function Sidebar({ onReportBug }: SidebarProps) {
         </NavLink>
         <button
           onClick={onReportBug}
-          className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/55 hover:text-foreground transition-colors"
         >
           <Bug className="h-4 w-4" />
           Report Bug
         </button>
-        <p className="text-xs text-muted-foreground mt-2 px-3">Agents Manager v1.0.0</p>
+        <p className="text-[11px] text-muted-foreground px-3 pt-1">Agents Manager v1.0.0</p>
       </div>
     </aside>
   );

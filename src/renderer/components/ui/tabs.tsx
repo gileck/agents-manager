@@ -46,7 +46,7 @@ function TabsList({ children, className, style }: TabsListProps) {
   return (
     <div
       className={cn(
-        'inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
+        'inline-flex h-10 items-center justify-center rounded-xl border border-border/70 bg-muted/55 p-1 text-muted-foreground backdrop-blur-sm',
         className
       )}
       style={style}
@@ -73,10 +73,10 @@ function TabsTrigger({ value, children, className, disabled }: TabsTriggerProps)
       disabled={disabled}
       onClick={() => onValueChange(value)}
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all duration-[var(--motion-fast)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
         isSelected
-          ? 'bg-background text-foreground shadow'
-          : 'hover:bg-background/50 hover:text-foreground',
+          ? 'bg-background/95 text-foreground shadow-sm'
+          : 'hover:bg-background/45 hover:text-foreground',
         className
       )}
     >

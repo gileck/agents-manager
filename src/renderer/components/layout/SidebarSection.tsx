@@ -29,14 +29,14 @@ export function SidebarSection({
   };
 
   return (
-    <div className="border-t border-border">
+    <div className="border-t border-border/55 first:border-t-0">
       <button
         onClick={toggle}
-        className="flex items-center w-full px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+        className="flex items-center w-full px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] hover:text-foreground transition-colors"
       >
         <ChevronRight
           className={cn(
-            'h-3 w-3 mr-1.5 transition-transform duration-200',
+            'h-3.5 w-3.5 mr-1.5 transition-transform duration-[var(--motion-base)] ease-[var(--ease-standard)]',
             open && 'rotate-90'
           )}
         />

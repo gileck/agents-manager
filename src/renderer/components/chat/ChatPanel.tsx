@@ -1,5 +1,12 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Trash2, FileText, PanelRightClose, PanelRightOpen, MoreHorizontal, MessageSquare } from 'lucide-react';
+import {
+  Trash2,
+  FileText,
+  PanelRightClose,
+  PanelRightOpen,
+  MoreHorizontal,
+  MessageSquare,
+} from 'lucide-react';
 import { InlineError } from '../InlineError';
 import { reportError } from '../../lib/error-handler';
 import { useChat } from '../../hooks/useChat';
@@ -32,10 +39,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     clearError: clearSessionsError,
   } = sessionsOverride ?? localSessions;
 
-  const {
-    agents,
-    stopAgent,
-  } = useActiveAgents();
+  const { agents, stopAgent } = useActiveAgents();
 
   const {
     messages,
@@ -78,7 +82,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   }, []);
 
   const scopeAgents = useMemo(
-    () => agents.filter(a => a.scopeType === scope.type && a.scopeId === scope.id),
+    () => agents.filter((a) => a.scopeType === scope.type && a.scopeId === scope.id),
     [agents, scope.type, scope.id],
   );
 
@@ -108,14 +112,13 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   }, [currentSessionId, updateSession, agentLibModels, selectedAgentLib]);
 
   const estimatedCost = (tokenUsage.inputTokens / 1_000_000) * 3.0 + (tokenUsage.outputTokens / 1_000_000) * 15.0;
+  const showInlineTabs = scope.type === 'task';
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Minimal header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border/50">
+    <div className="flex flex-col h-full bg-transparent">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border/60 bg-card/40 backdrop-blur-sm">
         <div className="flex items-center gap-2 min-w-0">
-          {/* Session tabs inline */}
-          {!sessionsLoading && (
+          {showInlineTabs && !sessionsLoading ? (
             <SessionTabs
               sessions={sessions}
               currentSessionId={currentSessionId}
@@ -125,28 +128,40 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               onSessionRename={renameSession}
               onSessionDelete={deleteSession}
             />
+          ) : (
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold tracking-tight truncate text-foreground">
+                {currentSession?.name || 'New thread'}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {scope.type === 'task' ? 'Task conversation' : 'Project conversation'}
+              </p>
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+
+        <div className="flex items-center gap-1.5 shrink-0">
           {estimatedCost > 0 && (
             <span
-              className="text-xs text-muted-foreground font-mono px-2 py-1"
+              className="text-xs text-muted-foreground font-mono px-2 py-1 rounded-full border border-border/70 bg-muted/35"
               title={`Input: ${tokenUsage.inputTokens.toLocaleString()} tokens | Output: ${tokenUsage.outputTokens.toLocaleString()} tokens`}
             >
               ${estimatedCost.toFixed(4)}
             </span>
           )}
+
           <button
             onClick={() => setShowSidebar(!showSidebar)}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            className="p-2 rounded-full border border-border/70 bg-card/65 text-muted-foreground hover:text-foreground hover:bg-accent/65 transition-colors"
             title="Toggle sidebar"
           >
             {showSidebar ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
           </button>
+
           <div className="relative">
             <button
               onClick={() => setShowActions(!showActions)}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              className="p-2 rounded-full border border-border/70 bg-card/65 text-muted-foreground hover:text-foreground hover:bg-accent/65 transition-colors"
               title="More actions"
             >
               <MoreHorizontal className="h-4 w-4" />
@@ -154,11 +169,11 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
             {showActions && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowActions(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 py-1 min-w-[160px]">
+                <div className="absolute right-0 top-full mt-1.5 bg-card/95 border border-border/75 rounded-xl shadow-[0_16px_30px_hsl(var(--background)/0.45)] z-50 py-1 min-w-[170px] backdrop-blur-md">
                   <button
                     onClick={() => { summarizeChat(); setShowActions(false); }}
                     disabled={loading || isStreaming || messages.length === 0}
-                    className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                    className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm hover:bg-accent/65 transition-colors disabled:opacity-40 disabled:pointer-events-none"
                   >
                     <FileText className="h-3.5 w-3.5" />
                     Summarize
@@ -166,7 +181,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
                   <button
                     onClick={() => { clearChat(); setShowActions(false); }}
                     disabled={loading || isStreaming || messages.length === 0}
-                    className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                    className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-destructive hover:bg-accent/65 transition-colors disabled:opacity-40 disabled:pointer-events-none"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Clear conversation
@@ -214,30 +229,35 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               models={currentModels.length > 0 ? currentModels : undefined}
               selectedModel={selectedModel}
               onModelChange={handleModelChange}
-              emptyState={
+              emptyState={(
                 <div className="text-center text-muted-foreground/80 py-20">
-                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-muted/50 mb-4">
-                    <MessageSquare className="h-7 w-7 opacity-50" />
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border border-border/70 bg-card/65 mb-5">
+                    <MessageSquare className="h-7 w-7 opacity-70" />
                   </div>
-                  <p className="text-base font-medium text-foreground/70">
-                    {scope.type === 'task'
-                      ? 'Ask questions about this task'
-                      : 'Start a conversation about your project'}
+                  <p className="text-4xl font-semibold tracking-tight text-foreground">
+                    Let's build
                   </p>
-                  <p className="text-sm mt-2 max-w-xs mx-auto">
-                    {scope.type === 'task'
-                      ? 'The assistant can read files and manage this task via the CLI'
-                      : 'Ask about code, manage tasks, or explore the codebase'}
+                  <p className="text-3xl text-muted-foreground mt-1">
+                    {scope.type === 'task' ? 'this task' : 'your next feature'}
+                  </p>
+                  <p className="text-sm mt-4 max-w-sm mx-auto">
+                    Ask about code, task status, implementation details, or execution plans.
                   </p>
                 </div>
-              }
+              )}
             />
           )}
         </div>
         {showSidebar && (
-          <div className="w-72 border-l border-border/50 bg-card/50 flex flex-col overflow-y-auto">
+          <div className="w-80 border-l border-border/60 bg-card/40 backdrop-blur-md flex flex-col overflow-y-auto">
             {messages.length > 0 && (
-              <ContextSidebar messages={messages} tokenUsage={tokenUsage} agentLib={selectedAgentLib} model={selectedModel} modelLabel={currentModels.find(m => m.value === selectedModel)?.label} />
+              <ContextSidebar
+                messages={messages}
+                tokenUsage={tokenUsage}
+                agentLib={selectedAgentLib}
+                model={selectedModel}
+                modelLabel={currentModels.find((m) => m.value === selectedModel)?.label}
+              />
             )}
             {scopeAgents.length > 0 && (
               <ActiveAgentsPanel

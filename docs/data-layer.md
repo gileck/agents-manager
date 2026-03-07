@@ -200,7 +200,7 @@ External agent definitions (`is_built_in = 0`):
 ### Settings
 
 Seeded via `src/core/schema.ts`:
-- `theme: 'system'`
+- `theme: 'dark'`
 - `notifications_enabled: 'true'`
 - `default_pipeline_id: 'pipeline-agent'`
 - `chat_default_agent_lib: 'claude-code'`

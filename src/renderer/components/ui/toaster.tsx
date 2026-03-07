@@ -10,9 +10,12 @@ export function Toaster() {
       position="bottom-right"
       closeButton
       richColors
+      expand
       toastOptions={{
         style: {
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontFamily: '"SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          borderRadius: '14px',
+          backdropFilter: 'blur(12px)',
         },
       }}
     />

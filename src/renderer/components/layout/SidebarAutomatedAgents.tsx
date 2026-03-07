@@ -18,7 +18,7 @@ export function SidebarAutomatedAgents() {
       {error ? (
         <p className="px-3 py-2 text-xs text-red-500" title={error}>Failed to load agents</p>
       ) : (
-      <div className="px-2">
+      <div className="px-1">
         {agents.map((agent) => {
           const isActive = location.pathname === `/automated-agents/${agent.id}`;
           return (
@@ -26,10 +26,10 @@ export function SidebarAutomatedAgents() {
               key={agent.id}
               to={`/automated-agents/${agent.id}`}
               className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs cursor-pointer transition-colors mb-0.5',
+                'flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs cursor-pointer transition-colors mb-1 border border-transparent',
                 isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'bg-accent/80 text-foreground border-border/55'
+                  : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
               )}
             >
               <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${

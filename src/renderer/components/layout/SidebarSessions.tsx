@@ -118,17 +118,17 @@ export function SidebarSessions() {
   };
 
   const headerButtons = (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-1">
       <button
         onClick={handleClearAll}
-        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
         title="Clear all sessions"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
       <button
         onClick={handleCreate}
-        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
         title="New session"
       >
         <Plus className="h-3.5 w-3.5" />
@@ -138,18 +138,18 @@ export function SidebarSessions() {
 
   if (!currentProjectId) {
     return (
-      <SidebarSection title="Sessions" storageKey="sessions" trailing={null}>
+      <SidebarSection title="Threads" storageKey="sessions" trailing={null}>
         <p className="px-3 py-2 text-xs text-muted-foreground">No project selected</p>
       </SidebarSection>
     );
   }
 
   return (
-    <SidebarSection title="Sessions" storageKey="sessions" trailing={headerButtons}>
+    <SidebarSection title="Threads" storageKey="sessions" trailing={headerButtons}>
       {sessions.length === 0 ? (
         <p className="px-3 py-2 text-xs text-muted-foreground">No sessions</p>
       ) : (
-        <div className="px-2">
+        <div className="px-1">
           {sessions.map((session) => {
             const isActive = onChatPage && session.id === currentSessionId;
 
@@ -158,10 +158,10 @@ export function SidebarSessions() {
                 key={session.id}
                 onClick={() => handleClick(session.id)}
                 className={cn(
-                  'group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors mb-0.5',
+                  'group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer transition-colors mb-1 border border-transparent',
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    ? 'bg-accent/80 text-foreground border-border/55'
+                    : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
                 )}
               >
                 {renameId === session.id ? (
@@ -177,19 +177,19 @@ export function SidebarSessions() {
                       value={renameName}
                       onChange={(e) => setRenameName(e.target.value)}
                       onBlur={handleRename}
-                      className="h-6 px-1 py-0 text-xs"
+                      className="h-7 px-2 py-0 text-xs"
                       autoFocus
                     />
                   </form>
                 ) : (
                   <>
-                    <span className="flex-1 min-w-0 truncate text-xs">
+                    <span className="flex-1 min-w-0 truncate text-xs font-medium">
                       {session.name}
                     </span>
                     <span
                       className={cn(
                         'text-[10px] shrink-0',
-                        isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                        isActive ? 'text-foreground/60' : 'text-muted-foreground'
                       )}
                     >
                       {formatRelativeTimestamp(session.updatedAt)}
@@ -206,9 +206,8 @@ export function SidebarSessions() {
                         setMenuSessionId(session.id);
                       }}
                       className={cn(
-                        'p-0.5 rounded hover:bg-muted/50 transition-opacity shrink-0',
-                        'opacity-0 group-hover:opacity-100',
-                        isActive && 'hover:bg-primary-foreground/20'
+                        'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
+                        'opacity-0 group-hover:opacity-100'
                       )}
                       title="More options"
                     >
@@ -225,11 +224,11 @@ export function SidebarSessions() {
       {taskSessions.length > 0 && (
         <>
           <div className="px-3 pt-3 pb-1">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Task Sessions
             </span>
           </div>
-          <div className="px-2">
+          <div className="px-1">
             {taskSessions.map((ts) => {
               const isActive = location.pathname === `/tasks/${ts.scopeId}`;
               return (
@@ -237,20 +236,20 @@ export function SidebarSessions() {
                   key={ts.id}
                   onClick={() => handleTaskSessionClick(ts)}
                   className={cn(
-                    'group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors mb-0.5',
+                    'group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer transition-colors mb-1 border border-transparent',
                     isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      ? 'bg-accent/80 text-foreground border-border/55'
+                      : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
                   )}
                 >
                   <CheckSquare className="h-3.5 w-3.5 shrink-0" />
-                  <span className="flex-1 min-w-0 truncate text-xs">
+                  <span className="flex-1 min-w-0 truncate text-xs font-medium">
                     {ts.taskTitle}
                   </span>
                   <span
                     className={cn(
                       'text-[10px] shrink-0',
-                      isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                      isActive ? 'text-foreground/60' : 'text-muted-foreground'
                     )}
                   >
                     {formatRelativeTimestamp(ts.updatedAt)}
@@ -258,9 +257,8 @@ export function SidebarSessions() {
                   <button
                     onClick={(e) => handleDeleteTaskSession(e, ts.id)}
                     className={cn(
-                      'p-0.5 rounded hover:bg-muted/50 transition-opacity shrink-0',
-                      'opacity-0 group-hover:opacity-100',
-                      isActive && 'hover:bg-primary-foreground/20'
+                      'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
+                      'opacity-0 group-hover:opacity-100'
                     )}
                     title="Delete session"
                   >
@@ -277,7 +275,7 @@ export function SidebarSessions() {
         createPortal(
           <div
             ref={menuRef}
-            className="fixed bg-card border border-border rounded-md shadow-lg z-50 py-1"
+            className="fixed bg-card border border-border/80 rounded-xl shadow-[0_16px_30px_hsl(var(--background)/0.45)] z-50 py-1 backdrop-blur-md"
             style={{ top: menuPosition.top, left: menuPosition.left }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -288,20 +286,20 @@ export function SidebarSessions() {
                   sessions.find((s) => s.id === menuSessionId)?.name || ''
                 )
               }
-              className="block w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors"
+              className="block w-full text-left px-3 py-1.5 text-sm hover:bg-accent/70 transition-colors"
             >
               Rename
             </button>
             {sessions.length > 1 && (
               <button
                 onClick={() => handleDelete(menuSessionId)}
-                className="block w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-muted transition-colors"
+                className="block w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-accent/70 transition-colors"
               >
                 Delete
               </button>
             )}
           </div>,
-          document.getElementById('app-root')!
+          document.body
         )}
     </SidebarSection>
   );

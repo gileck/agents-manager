@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Image, Square, ChevronDown, Cpu } from 'lucide-react';
+import { Image, Square, ChevronDown, Cpu, ArrowUp } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import type { ChatImage } from '../../../shared/types';
 
@@ -175,14 +175,15 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   const circleColor = getContextColor(contextPercent);
 
   const selectedModelLabel = models?.find(m => m.value === selectedModel)?.label ?? selectedModel;
+  const canSubmit = value.trim().length > 0 || images.length > 0;
 
   return (
-    <div className="px-4 py-3">
+    <div className="px-6 pb-5 pt-3">
       <form
         onSubmit={handleSubmit}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
-        className="rounded-xl border border-border bg-card shadow-sm overflow-hidden transition-shadow focus-within:shadow-md focus-within:border-ring/50"
+        className="rounded-[1.35rem] border border-border/75 bg-card/82 shadow-[0_16px_30px_hsl(var(--background)/0.42)] overflow-hidden transition-[border-color,box-shadow] duration-[var(--motion-base)] ease-[var(--ease-standard)] focus-within:shadow-[0_18px_36px_hsl(var(--background)/0.52)] focus-within:border-ring/60 backdrop-blur-lg"
       >
         {images.length > 0 && (
           <div className="flex gap-2 px-4 pt-3 flex-wrap">
@@ -264,7 +265,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
 
         <textarea
           ref={mergeRefs(textareaRef, forwardedRef)}
-          className="w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm min-h-[44px] max-h-[240px] overflow-y-auto focus:outline-none placeholder:text-muted-foreground/60"
+          className="w-full resize-none bg-transparent px-4 pt-3 pb-2.5 text-sm min-h-[52px] max-h-[240px] overflow-y-auto focus:outline-none placeholder:text-muted-foreground/70"
           placeholder={isRunning ? 'Type a message (will be queued)...' : 'Type a message...'}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -273,8 +274,8 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
           rows={1}
         />
 
-        <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-between px-3.5 pb-3 pt-0.5">
+          <div className="flex items-center gap-1.5 min-w-0">
             {agentLibs && agentLibs.length > 0 && onAgentLibChange && (
               <div className="relative inline-flex items-center">
                 <Cpu className="absolute left-2 h-3 w-3 text-muted-foreground pointer-events-none" />
@@ -282,7 +283,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
                   value={selectedAgentLib}
                   onChange={(e) => onAgentLibChange(e.target.value)}
                   disabled={isStreaming(isRunning)}
-                  className="appearance-none text-xs font-medium rounded-lg bg-muted/70 text-foreground pl-7 pr-6 py-1.5 cursor-pointer hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:pointer-events-none"
+                  className="appearance-none text-xs font-medium rounded-full border border-border/70 bg-muted/55 text-foreground pl-7 pr-6 py-1.5 cursor-pointer hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:pointer-events-none"
                   title="Select agent engine"
                 >
                   {agentLibs.map(lib => (
@@ -300,7 +301,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
                   value={selectedModel}
                   onChange={(e) => onModelChange(e.target.value)}
                   disabled={isStreaming(isRunning)}
-                  className="appearance-none text-xs text-muted-foreground rounded-lg bg-transparent hover:bg-muted/50 pl-2 pr-5 py-1.5 cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:pointer-events-none"
+                  className="appearance-none text-xs text-muted-foreground rounded-full border border-transparent bg-transparent hover:border-border/65 hover:bg-muted/45 pl-2 pr-5 py-1.5 cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:pointer-events-none"
                   title={`Model: ${selectedModelLabel}`}
                 >
                   {models.map(m => (
@@ -317,7 +318,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
             )}
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {tokenUsage !== undefined && contextPercent > 0 && (
               <svg
                 width="22" height="22"
@@ -342,7 +343,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/55 transition-colors"
               title="Attach image"
             >
               <Image className="h-4 w-4" />
@@ -367,12 +368,20 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
               <button
                 type="button"
                 onClick={onStop}
-                className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
+                className="p-2 rounded-full text-destructive hover:bg-destructive/10 transition-colors"
                 title="Stop"
               >
                 <Square className="h-4 w-4 fill-current" />
               </button>
             )}
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="p-2 rounded-full bg-primary text-primary-foreground disabled:opacity-45 disabled:cursor-not-allowed hover:bg-primary/92 transition-colors shadow-[0_8px_18px_hsl(var(--primary)/0.32)]"
+              title={isRunning ? 'Queue message' : 'Send message'}
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </form>

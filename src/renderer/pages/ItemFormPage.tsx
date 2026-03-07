@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button } from '@template/renderer/components/ui/button';
-import { Input } from '@template/renderer/components/ui/input';
-import { Label } from '@template/renderer/components/ui/label';
-import { Textarea } from '@template/renderer/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@template/renderer/components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import type { Item } from '../../shared/types';
 
 export function ItemFormPage() {

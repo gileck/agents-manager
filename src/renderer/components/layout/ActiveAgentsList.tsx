@@ -61,17 +61,17 @@ export function ActiveAgentsEntries({
   refresh: () => void;
 }) {
   return (
-    <div className="max-h-48 overflow-y-auto px-2">
+    <div className="max-h-48 overflow-y-auto px-1">
       {entries.map(({ run, taskTitle }) => (
         <NavLink
           key={run.id}
           to={run.automatedAgentId ? `/automated-agents/runs/${run.id}` : `/agents/${run.id}`}
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors mb-0.5',
+              'flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors mb-1 border border-transparent',
               isActive
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                ? 'bg-accent/80 text-foreground border-border/55'
+                : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
             )
           }
         >
@@ -93,7 +93,7 @@ export function ActiveAgentsEntries({
       {entries.length > 0 && (
         <button
           onClick={refresh}
-          className="flex items-center gap-1 w-full rounded-md px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+          className="flex items-center gap-1 w-full rounded-lg px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors mt-0.5"
           title="Clear completed"
         >
           <RefreshCw className="h-2.5 w-2.5" />
