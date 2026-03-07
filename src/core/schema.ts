@@ -1,12 +1,15 @@
 import { SEEDED_PIPELINES } from './data/seeded-pipelines';
 
 /**
- * Baseline schema representing the final database state after all legacy migrations (001–087).
- * Fresh databases apply this schema directly instead of running 87 incremental migrations.
+ * Baseline schema representing the database state after migrations 001–087 and 098.
+ * Fresh databases apply this schema directly instead of running incremental migrations.
  * Existing databases continue using incremental migrations from getMigrations().
+ *
+ * Note: 098 is included because its column (created_by) was added to the baseline DDL.
+ * Migrations 088–097 remain incremental and are applied after the baseline.
  */
 
-/** All 87 legacy migration names that are folded into this baseline. */
+/** Migration names folded into this baseline (001–087, 098). */
 export const BASELINE_MIGRATION_NAMES: string[] = [
   '001_create_items',
   '002_create_settings',
@@ -95,6 +98,7 @@ export const BASELINE_MIGRATION_NAMES: string[] = [
   '085_add_debug_info_column',
   '086_create_automated_agents',
   '087_drop_agent_runs_task_fk',
+  '098_add_created_by_to_tasks',
 ];
 
 function escSql(s: string): string {
@@ -157,7 +161,7 @@ export function getBaselineSchema(): string {
   const now = Date.now();
   return `
 -- =============================================
--- Baseline schema (replaces migrations 001–087)
+-- Baseline schema (replaces migrations 001–087, 098)
 -- =============================================
 
 -- ====== Core tables ======

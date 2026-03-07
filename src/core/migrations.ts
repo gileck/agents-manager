@@ -11,8 +11,10 @@ function escSql(s: string): string {
 
 /**
  * Returns incremental migrations to run AFTER the baseline schema.
- * The baseline (src/core/schema.ts) covers migrations 001–087.
- * New migrations start at 088 and are appended here.
+ * The baseline (src/core/schema.ts) covers migrations 001–087 and 098.
+ * Migrations whose names appear in BASELINE_MIGRATION_NAMES are skipped
+ * by the production db.ts runner (and test helpers) since they are already
+ * applied via the baseline DDL.
  */
 export function getMigrations(): Migration[] {
   return [

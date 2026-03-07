@@ -193,9 +193,9 @@ describe('schema-baseline', () => {
     db.close();
   });
 
-  it('should have 87 baseline migration names', () => {
-    expect(BASELINE_MIGRATION_NAMES.length).toBe(87);
+  it('should have 88 baseline migration names', () => {
+    expect(BASELINE_MIGRATION_NAMES.length).toBe(88);
     expect(BASELINE_MIGRATION_NAMES[0]).toBe('001_create_items');
-    expect(BASELINE_MIGRATION_NAMES[86]).toBe('087_drop_agent_runs_task_fk');
+    expect(BASELINE_MIGRATION_NAMES[87]).toBe('098_add_created_by_to_tasks');
   });
 });

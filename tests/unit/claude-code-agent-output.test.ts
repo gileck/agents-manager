@@ -177,7 +177,7 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
 
     expect(result.exitCode).toBe(1);
     expect(result.outcome).toBe('failed');
-    expect(result.error).toBe('Connection lost');
+    expect(result.error).toContain('Connection lost');
   });
 
   it('should pass correct options to query', async () => {

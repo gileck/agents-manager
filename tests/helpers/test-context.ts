@@ -92,7 +92,7 @@ export interface TestContext {
   cleanup: () => void;
 }
 
-function applyMigrations(db: Database.Database): void {
+export function applyMigrations(db: Database.Database): void {
   // Create migrations tracking table (same as production database.ts)
   db.exec(`
     CREATE TABLE IF NOT EXISTS migrations (
@@ -108,9 +108,14 @@ function applyMigrations(db: Database.Database): void {
   for (const name of BASELINE_MIGRATION_NAMES) {
     insertMigration.run(name);
   }
+  const applied = new Set(
+    (db.prepare('SELECT name FROM migrations').all() as { name: string }[]).map(r => r.name),
+  );
   for (const m of getMigrations()) {
-    db.exec(m.sql);
-    insertMigration.run(m.name);
+    if (!applied.has(m.name)) {
+      db.exec(m.sql);
+      insertMigration.run(m.name);
+    }
   }
 }
 

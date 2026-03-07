@@ -2,27 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { SqliteChatSessionStore } from '../../src/core/stores/sqlite-chat-session-store';
 import type { ChatSessionCreateInput } from '../../src/core/interfaces/chat-session-store';
-import { getBaselineSchema, BASELINE_MIGRATION_NAMES } from '../../src/core/schema';
-import { getMigrations } from '../../src/core/migrations';
-
-function applyMigrations(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS migrations (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-  db.exec(getBaselineSchema());
-  const insertMigration = db.prepare('INSERT INTO migrations (name) VALUES (?)');
-  for (const name of BASELINE_MIGRATION_NAMES) {
-    insertMigration.run(name);
-  }
-  for (const m of getMigrations()) {
-    db.exec(m.sql);
-    insertMigration.run(m.name);
-  }
-}
+import { applyMigrations } from '../helpers/test-context';
 
 describe('SqliteChatSessionStore', () => {
   let db: Database.Database;
