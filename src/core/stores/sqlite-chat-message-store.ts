@@ -38,6 +38,8 @@ export class SqliteChatMessageStore implements IChatMessageStore {
         'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
       ).run(id, input.sessionId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null);
 
+      this.db.prepare('UPDATE chat_sessions SET updated_at = ? WHERE id = ?').run(timestamp, input.sessionId);
+
       return {
         id,
         sessionId: input.sessionId,

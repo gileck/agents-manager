@@ -151,7 +151,7 @@ export function SidebarSessions() {
         <p className="px-3 py-2 text-xs text-muted-foreground">No sessions</p>
       ) : (
         <div className="px-1">
-          {sessions.map((session) => {
+          {[...sessions].sort((a, b) => b.updatedAt - a.updatedAt).map((session) => {
             const isActive = onChatPage && session.id === currentSessionId;
             const isRunning = agents.some(
               (a) => a.sessionId === session.id && a.status === 'running'
