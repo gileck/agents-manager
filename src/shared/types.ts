@@ -852,6 +852,7 @@ export type NotificationAction =
 
 export interface Notification {
   taskId: string;
+  projectId?: string;
   title: string;
   body: string;
   channel: string;

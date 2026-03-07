@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { InAppNotification } from '../../shared/types';
+import { reportError } from '../lib/error-handler';
 
 export function useNotifications(projectId?: string) {
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
@@ -10,8 +11,8 @@ export function useNotifications(projectId?: string) {
     try {
       const data = await window.api.notifications.list({ projectId, limit: 50 });
       setNotifications(data);
-    } catch {
-      // Ignore fetch errors silently
+    } catch (err) {
+      reportError(err, 'fetch notifications');
     }
   }, [projectId]);
 
@@ -27,8 +28,8 @@ export function useNotifications(projectId?: string) {
     try {
       await window.api.notifications.markRead(id);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    } catch {
-      // Ignore errors silently
+    } catch (err) {
+      reportError(err, 'mark notification read');
     }
   }, []);
 
@@ -36,8 +37,8 @@ export function useNotifications(projectId?: string) {
     try {
       await window.api.notifications.markAllRead(projectId);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    } catch {
-      // Ignore errors silently
+    } catch (err) {
+      reportError(err, 'mark all notifications read');
     }
   }, [projectId]);
 

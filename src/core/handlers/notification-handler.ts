@@ -107,6 +107,7 @@ export function registerNotificationHandler(
 
     await deps.notificationRouter.send({
       taskId: task.id,
+      projectId: effectiveTask.projectId,
       title: applyTemplate(titleTemplate),
       body: applyTemplate(bodyTemplate),
       channel: 'pipeline',

@@ -11,6 +11,7 @@ export class InAppNotificationRouter implements INotificationRouter {
   async send(notification: Notification): Promise<void> {
     const entry = await this.store.add({
       taskId: notification.taskId,
+      projectId: notification.projectId,
       title: notification.title,
       body: notification.body,
       navigationUrl: notification.navigationUrl ?? `/tasks/${notification.taskId}`,
