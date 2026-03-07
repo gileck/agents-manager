@@ -185,7 +185,9 @@ export function telegramRoutes(services: AppServices, wsHolder: WsHolder): Route
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error((body as Record<string, unknown>).description as string ?? `Telegram API error: ${response.status}`);
+        const errorMessage = (body as Record<string, unknown>).description as string ?? `Telegram API error: ${response.status}`;
+        res.json({ ok: false, error: errorMessage });
+        return;
       }
       res.json({ ok: true });
     } catch (err) { next(err); }
