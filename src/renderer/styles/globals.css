@@ -160,3 +160,12 @@
 .log-error {
   color: hsl(var(--destructive));
 }
+
+/* Diff view line hover */
+.diff-line-row:hover td {
+  filter: brightness(1.15);
+}
+.diff-line-row:hover td:first-child,
+.diff-line-row:hover td:nth-child(2) {
+  text-decoration: underline;
+}

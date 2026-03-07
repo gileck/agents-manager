@@ -135,6 +135,7 @@ const IPC_CHANNELS = {
   OPEN_IN_CHROME: 'shell:open-in-chrome',
   OPEN_IN_ITERM: 'shell:open-in-iterm',
   OPEN_IN_VSCODE: 'shell:open-in-vscode',
+  OPEN_FILE_IN_VSCODE: 'shell:open-file-in-vscode',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
   CHAT_MESSAGES: 'chat:messages',
@@ -501,6 +502,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.OPEN_IN_ITERM, dirPath),
     openInVscode: (dirPath: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.OPEN_IN_VSCODE, dirPath),
+    openFileInVscode: (filePath: string, line?: number): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.OPEN_FILE_IN_VSCODE, filePath, line),
   },
 
   // Event listeners (main -> renderer)

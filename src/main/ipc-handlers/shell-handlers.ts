@@ -62,4 +62,21 @@ export function registerShellHandlers(): void {
     const env = (await import('../../shared/shell-env')).getShellEnv();
     await execFileAsync('code', [dirPath], { env });
   });
+
+  registerIpcHandler(IPC_CHANNELS.OPEN_FILE_IN_VSCODE, async (_, filePath: string, line?: number) => {
+    if (!filePath || typeof filePath !== 'string') throw new Error('Invalid file path');
+    const { isAbsolute } = await import('path');
+    if (!isAbsolute(filePath)) throw new Error('Path must be absolute');
+    if (line !== undefined && (typeof line !== 'number' || !Number.isFinite(line) || line < 1)) {
+      throw new Error(`Invalid line number: ${line}`);
+    }
+    const { existsSync } = await import('fs');
+    if (!existsSync(filePath)) throw new Error(`File does not exist: ${filePath}`);
+    const { execFile: execFileCb } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFileCb);
+    const env = (await import('../../shared/shell-env')).getShellEnv();
+    const target = line ? `${filePath}:${line}` : filePath;
+    await execFileAsync('code', ['--goto', target], { env });
+  });
 }
