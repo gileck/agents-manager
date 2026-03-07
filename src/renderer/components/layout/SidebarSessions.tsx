@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, CheckSquare, Trash2 } from 'lucide-react';
+import { Plus, CheckSquare, Trash2, Loader2, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
@@ -8,7 +8,8 @@ import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import { Input } from '../ui/input';
 import { SidebarSection } from './SidebarSection';
 import { reportError } from '../../lib/error-handler';
-import type { TaskChatSessionWithTitle } from '../../../shared/types';
+import type { TaskChatSessionWithTitle, RunningAgent } from '../../../shared/types';
+import { useActiveAgents } from '../../hooks/useActiveAgents';
 
 export function SidebarSessions() {
   const { currentProjectId } = useCurrentProject();
@@ -27,6 +28,44 @@ export function SidebarSessions() {
   const [taskSessions, setTaskSessions] = useState<TaskChatSessionWithTitle[]>([]);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
+
+  const { agents } = useActiveAgents();
+  const [completedFlash, setCompletedFlash] = useState<Set<string>>(new Set());
+  const prevAgentsRef = useRef<RunningAgent[]>([]);
+  const flashTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    const prev = prevAgentsRef.current;
+    agents.forEach((agent) => {
+      if (agent.status === 'completed') {
+        const wasRunning = prev.some(
+          (a) => a.sessionId === agent.sessionId && a.status === 'running'
+        );
+        if (wasRunning) {
+          setCompletedFlash((s) => new Set(s).add(agent.sessionId));
+          if (flashTimersRef.current.has(agent.sessionId)) {
+            clearTimeout(flashTimersRef.current.get(agent.sessionId)!);
+          }
+          const timer = setTimeout(() => {
+            setCompletedFlash((s) => {
+              const next = new Set(s);
+              next.delete(agent.sessionId);
+              return next;
+            });
+            flashTimersRef.current.delete(agent.sessionId);
+          }, 3000);
+          flashTimersRef.current.set(agent.sessionId, timer);
+        }
+      }
+    });
+    prevAgentsRef.current = agents;
+  }, [agents]);
+
+  useEffect(() => {
+    return () => {
+      flashTimersRef.current.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentProjectId) return;
@@ -114,6 +153,10 @@ export function SidebarSessions() {
         <div className="px-1">
           {sessions.map((session) => {
             const isActive = onChatPage && session.id === currentSessionId;
+            const isRunning = agents.some(
+              (a) => a.sessionId === session.id && a.status === 'running'
+            );
+            const isDone = !isRunning && completedFlash.has(session.id);
 
             return (
               <div
@@ -155,14 +198,22 @@ export function SidebarSessions() {
                     <span className="flex-1 min-w-0 truncate text-xs font-medium">
                       {session.name}
                     </span>
-                    <span
-                      className={cn(
-                        'text-[10px] shrink-0',
-                        isActive ? 'text-foreground/60' : 'text-muted-foreground'
-                      )}
-                    >
-                      {formatRelativeTimestamp(session.updatedAt)}
-                    </span>
+                    {isRunning ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                    ) : isDone ? (
+                      <div className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-500/80 text-white shrink-0">
+                        <Check className="h-2 w-2" />
+                      </div>
+                    ) : (
+                      <span
+                        className={cn(
+                          'text-[10px] shrink-0',
+                          isActive ? 'text-foreground/60' : 'text-muted-foreground'
+                        )}
+                      >
+                        {formatRelativeTimestamp(session.updatedAt)}
+                      </span>
+                    )}
                     {sessions.length > 1 && (
                       <button
                         onClick={(e) => handleDelete(e, session.id)}
@@ -194,6 +245,10 @@ export function SidebarSessions() {
           <div className="px-1">
             {taskSessions.map((ts) => {
               const isActive = location.pathname === `/tasks/${ts.scopeId}`;
+              const isRunning = agents.some(
+                (a) => a.sessionId === ts.id && a.status === 'running'
+              );
+              const isDone = !isRunning && completedFlash.has(ts.id);
               return (
                 <div
                   key={ts.id}
@@ -209,14 +264,22 @@ export function SidebarSessions() {
                   <span className="flex-1 min-w-0 truncate text-xs font-medium">
                     {ts.taskTitle}
                   </span>
-                  <span
-                    className={cn(
-                      'text-[10px] shrink-0',
-                      isActive ? 'text-foreground/60' : 'text-muted-foreground'
-                    )}
-                  >
-                    {formatRelativeTimestamp(ts.updatedAt)}
-                  </span>
+                  {isRunning ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                  ) : isDone ? (
+                    <div className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-500/80 text-white shrink-0">
+                      <Check className="h-2 w-2" />
+                    </div>
+                  ) : (
+                    <span
+                      className={cn(
+                        'text-[10px] shrink-0',
+                        isActive ? 'text-foreground/60' : 'text-muted-foreground'
+                      )}
+                    >
+                      {formatRelativeTimestamp(ts.updatedAt)}
+                    </span>
+                  )}
                   <button
                     onClick={(e) => handleDeleteTaskSession(e, ts.id)}
                     className={cn(
