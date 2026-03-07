@@ -264,7 +264,7 @@ export interface ApiClient {
     list(filter?: InAppNotificationFilter): Promise<InAppNotification[]>;
     markRead(id: string): Promise<void>;
     markAllRead(projectId?: string): Promise<void>;
-    getUnreadCount(projectId?: string): Promise<number>;
+    getUnreadCount(projectId?: string): Promise<{ count: number }>;
   };
 }
 
