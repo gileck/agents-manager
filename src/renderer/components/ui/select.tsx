@@ -118,12 +118,16 @@ function SelectContent({ children, className }: SelectContentProps) {
       120,
       Math.min(preferredHeight, openUp ? spaceAbove - gap : spaceBelow - gap)
     );
-    const top = openUp ? rect.top - maxHeight - gap : rect.bottom + gap;
-    const maxWidth = Math.min(480, window.innerWidth - rect.left - viewportPadding);
+    const maxWidth = Math.min(480, window.innerWidth - viewportPadding * 2);
+    const clampedLeft = Math.min(
+      Math.max(viewportPadding, rect.left),
+      window.innerWidth - Math.min(rect.width, maxWidth) - viewportPadding
+    );
 
     setStyle({
-      top: Math.max(viewportPadding, top),
-      left: Math.max(viewportPadding, rect.left),
+      top: openUp ? 'auto' : Math.max(viewportPadding, rect.bottom + gap),
+      bottom: openUp ? Math.max(viewportPadding, window.innerHeight - rect.top + gap) : 'auto',
+      left: clampedLeft,
       minWidth: rect.width,
       maxWidth,
       maxHeight,

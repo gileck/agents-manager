@@ -133,26 +133,28 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
   }, [messages, expandedTools, toggleTool]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-6">
-      {rendered.length === 0 && isRunning && (
-        <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
-          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-        </div>
-      )}
-      {rendered}
-      {isRunning && rendered.length > 0 && (
-        <div className="flex items-center gap-2 py-3 text-muted-foreground text-sm">
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" />
-            <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-            <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-[980px] px-6 py-6">
+        {rendered.length === 0 && isRunning && (
+          <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
+            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
           </div>
-          <span className="text-xs">Thinking...</span>
-        </div>
-      )}
-      <div ref={endRef} />
+        )}
+        {rendered}
+        {isRunning && rendered.length > 0 && (
+          <div className="flex items-center gap-2 py-3 text-muted-foreground text-sm">
+            <div className="flex gap-1">
+              <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+              <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+            </div>
+            <span className="text-xs">Thinking...</span>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
     </div>
   );
 }
