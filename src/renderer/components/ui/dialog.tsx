@@ -89,11 +89,11 @@ function DialogContent({ children, className, style }: DialogContentProps) {
     <div className="fixed inset-0 z-50">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-[2px]"
+        className="fixed inset-0 bg-black/72"
         onClick={() => onOpenChange(false)}
       />
       {/* Content */}
-      <div className={cn("fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border border-border/75 bg-background/92 p-6 shadow-[0_20px_40px_hsl(var(--background)/0.6)] backdrop-blur-lg", className)} style={style}>
+      <div className={cn("fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border border-border bg-background p-6 shadow-[0_20px_40px_hsl(var(--background)/0.68)]", className)} style={style}>
         {children}
         <button
           type="button"

@@ -6,9 +6,8 @@ import {
   Bug,
   CheckSquare,
   FolderOpen,
-  MessageSquare,
-  Plus,
   RefreshCw,
+  SquarePen,
   Settings,
   Trello,
 } from 'lucide-react';
@@ -22,7 +21,6 @@ import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContex
 import { reportError } from '../../lib/error-handler';
 
 const navItems = [
-  { to: '/chat', icon: MessageSquare, label: 'New thread' },
   { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
   { to: '/kanban', icon: Trello, label: 'Kanban' },
   { to: '/projects', icon: FolderOpen, label: 'Projects' },
@@ -68,21 +66,22 @@ export function Sidebar({ onReportBug }: SidebarProps) {
   return (
     <aside className="w-72 border-r border-border/70 bg-card/50 backdrop-blur-md flex flex-col">
       <div className="px-4 pt-4 pb-3 border-b border-border/60">
-        <div className="flex items-center justify-between">
-          <div className="inline-flex items-center rounded-full border border-border/75 bg-muted/45 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-            Agents Manager
-          </div>
-          <button
-            onClick={handleNewThread}
-            className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.3)] hover:bg-primary/90 transition-colors"
-            title="New thread"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New
-          </button>
+        <div className="inline-flex items-center rounded-full border border-border/75 bg-muted/45 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          Agents Manager
         </div>
 
         <nav className="mt-3 grid gap-1">
+          <button
+            onClick={handleNewThread}
+            className={cn(
+              'flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors text-left',
+              'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
+            )}
+            title="New thread"
+          >
+            <SquarePen className="h-4 w-4" />
+            New thread
+          </button>
           {navItems.map((item) => (
             <NavLink
               key={item.to}

@@ -1,8 +1,15 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Image, Square, ChevronDown, Cpu, ArrowUp } from 'lucide-react';
+import { Image, Square, Cpu, ArrowUp } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import type { ChatImage } from '../../../shared/types';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '../ui/select';
 
 function mergeRefs<T>(
   ...refs: Array<React.Ref<T> | undefined>
@@ -174,7 +181,6 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   const circleOffset = circleCircumference * (1 - contextPercent / 100);
   const circleColor = getContextColor(contextPercent);
 
-  const selectedModelLabel = models?.find(m => m.value === selectedModel)?.label ?? selectedModel;
   const canSubmit = value.trim().length > 0 || images.length > 0;
 
   return (
@@ -277,41 +283,47 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
         <div className="flex items-center justify-between px-3.5 pb-3 pt-0.5">
           <div className="flex items-center gap-1.5 min-w-0">
             {agentLibs && agentLibs.length > 0 && onAgentLibChange && (
-              <div className="relative inline-flex items-center">
-                <Cpu className="absolute left-2 h-3 w-3 text-muted-foreground pointer-events-none" />
-                <select
-                  value={selectedAgentLib}
-                  onChange={(e) => onAgentLibChange(e.target.value)}
-                  disabled={isStreaming(isRunning)}
-                  className="appearance-none text-xs font-medium rounded-full border border-border/70 bg-muted/55 text-foreground pl-7 pr-6 py-1.5 cursor-pointer hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:pointer-events-none"
-                  title="Select agent engine"
-                >
-                  {agentLibs.map(lib => (
-                    <option key={lib.name} value={lib.name} disabled={!lib.available}>
+              <Select
+                value={selectedAgentLib || ''}
+                onValueChange={onAgentLibChange}
+                disabled={isStreaming(isRunning)}
+                className="min-w-[144px]"
+              >
+                <SelectTrigger className="h-8 rounded-full border-border/65 bg-muted/45 px-2.5 py-1 text-xs font-medium shadow-none">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <Cpu className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="Engine" />
+                  </span>
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {agentLibs.map((lib) => (
+                    <SelectItem key={lib.name} value={lib.name} disabled={!lib.available}>
                       {lib.name}{!lib.available ? ' (unavailable)' : ''}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-                <ChevronDown className="absolute right-1.5 h-3 w-3 text-muted-foreground pointer-events-none" />
-              </div>
+                </SelectContent>
+              </Select>
             )}
             {models && models.length > 0 && onModelChange && (
-              <div className="relative inline-flex items-center">
-                <select
-                  value={selectedModel}
-                  onChange={(e) => onModelChange(e.target.value)}
-                  disabled={isStreaming(isRunning)}
-                  className="appearance-none text-xs text-muted-foreground rounded-full border border-transparent bg-transparent hover:border-border/65 hover:bg-muted/45 pl-2 pr-5 py-1.5 cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:pointer-events-none"
-                  title={`Model: ${selectedModelLabel}`}
+              <Select
+                value={selectedModel || ''}
+                onValueChange={onModelChange}
+                disabled={isStreaming(isRunning)}
+                className="min-w-[140px]"
+              >
+                <SelectTrigger
+                  className="h-8 rounded-full border-transparent bg-transparent px-2 py-1 text-xs text-muted-foreground shadow-none hover:border-border/65 hover:bg-muted/45"
                 >
-                  {models.map(m => (
-                    <option key={m.value} value={m.value}>
+                  <SelectValue placeholder="Model" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {models.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
                       {m.label}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-                <ChevronDown className="absolute right-1 h-3 w-3 text-muted-foreground pointer-events-none" />
-              </div>
+                </SelectContent>
+              </Select>
             )}
             {isQueued && (
               <span className="text-xs text-amber-500 font-medium ml-1">Queued</span>

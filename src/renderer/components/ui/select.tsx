@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../../lib/utils';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 
 interface SelectProps {
   value: string;
@@ -16,6 +17,8 @@ interface SelectContextValue {
   onValueChange: (value: string) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
+  disabled: boolean;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
 
 const SelectContext = React.createContext<SelectContextValue | null>(null);
@@ -28,11 +31,18 @@ function useSelectContext() {
   return context;
 }
 
-function Select({ value, onValueChange, children, disabled: _disabled, className }: SelectProps) {
+function Select({ value, onValueChange, children, disabled = false, className }: SelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+
+  React.useEffect(() => {
+    if (disabled && isOpen) {
+      setIsOpen(false);
+    }
+  }, [disabled, isOpen]);
 
   return (
-    <SelectContext.Provider value={{ value, onValueChange, isOpen, setIsOpen }}>
+    <SelectContext.Provider value={{ value, onValueChange, isOpen, setIsOpen, disabled, triggerRef }}>
       <div className={cn('relative', className)}>{children}</div>
     </SelectContext.Provider>
   );
@@ -45,15 +55,22 @@ interface SelectTriggerProps {
 }
 
 function SelectTrigger({ children, className, id }: SelectTriggerProps) {
-  const { isOpen, setIsOpen } = useSelectContext();
+  const { isOpen, setIsOpen, disabled, triggerRef } = useSelectContext();
 
   return (
     <button
+      ref={triggerRef}
       type="button"
       id={id}
-      onClick={() => setIsOpen(!isOpen)}
+      disabled={disabled}
+      aria-expanded={isOpen}
+      aria-haspopup="listbox"
+      onClick={() => {
+        if (disabled) return;
+        setIsOpen(!isOpen);
+      }}
       className={cn(
-        'flex h-10 w-full items-center justify-between whitespace-nowrap rounded-xl border border-input/80 bg-background/55 px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground transition-[border-color,background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] focus:outline-none focus:ring-2 focus:ring-ring/65 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-9 w-full items-center justify-between whitespace-nowrap rounded-full border border-input/80 bg-background/70 px-3 py-1.5 text-sm text-foreground shadow-[0_0_0_1px_hsl(var(--border)/0.22)_inset] ring-offset-background placeholder:text-muted-foreground transition-[border-color,background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-muted/45 focus:outline-none focus:ring-2 focus:ring-ring/65 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
         className
       )}
     >
@@ -82,37 +99,84 @@ interface SelectContentProps {
 }
 
 function SelectContent({ children, className }: SelectContentProps) {
-  const { isOpen, setIsOpen } = useSelectContext();
+  const { isOpen, setIsOpen, triggerRef } = useSelectContext();
   const ref = React.useRef<HTMLDivElement>(null);
+  const [style, setStyle] = React.useState<React.CSSProperties>({});
+
+  const updatePosition = React.useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 8;
+    const gap = 6;
+    const preferredHeight = 320;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    const openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(
+      120,
+      Math.min(preferredHeight, openUp ? spaceAbove - gap : spaceBelow - gap)
+    );
+    const top = openUp ? rect.top - maxHeight - gap : rect.bottom + gap;
+    const maxWidth = Math.min(480, window.innerWidth - rect.left - viewportPadding);
+
+    setStyle({
+      top: Math.max(viewportPadding, top),
+      left: Math.max(viewportPadding, rect.left),
+      minWidth: rect.width,
+      maxWidth,
+      maxHeight,
+    });
+  }, [triggerRef]);
 
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const clickedTrigger = !!triggerRef.current && triggerRef.current.contains(target);
+      const clickedContent = !!ref.current && ref.current.contains(target);
+      if (!clickedTrigger && !clickedContent) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
         setIsOpen(false);
       }
     }
 
     if (isOpen) {
+      updatePosition();
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
     };
-  }, [isOpen, setIsOpen]);
+  }, [isOpen, setIsOpen, triggerRef, updatePosition]);
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
       ref={ref}
+      role="listbox"
+      style={style}
       className={cn(
-        'absolute z-50 mt-1.5 max-h-60 w-full overflow-auto rounded-xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-[0_16px_30px_hsl(var(--background)/0.45)] backdrop-blur-md',
+        'fixed z-[80] overflow-auto rounded-2xl border border-border/80 bg-popover p-1.5 text-popover-foreground shadow-[0_20px_40px_hsl(var(--background)/0.62)]',
         className
       )}
     >
       {children}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -120,26 +184,34 @@ interface SelectItemProps {
   value: string;
   children: React.ReactNode;
   className?: string;
+  disabled?: boolean;
 }
 
-function SelectItem({ value, children, className }: SelectItemProps) {
+function SelectItem({ value, children, className, disabled = false }: SelectItemProps) {
   const { value: selectedValue, onValueChange, setIsOpen } = useSelectContext();
   const isSelected = selectedValue === value;
 
   return (
-    <div
+    <button
+      type="button"
+      role="option"
+      aria-selected={isSelected}
+      disabled={disabled}
       onClick={() => {
+        if (disabled) return;
         onValueChange(value);
         setIsOpen(false);
       }}
       className={cn(
-        'relative flex w-full cursor-pointer select-none items-center rounded-lg px-2.5 py-2 text-sm outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-accent/75 hover:text-accent-foreground',
-        isSelected && 'bg-accent text-accent-foreground',
+        'relative flex w-full select-none items-center rounded-xl px-3 py-2 text-left text-sm outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+        isSelected ? 'bg-accent/80 text-accent-foreground' : 'text-foreground/90 hover:bg-accent/60',
+        disabled && 'cursor-not-allowed text-muted-foreground/60 hover:bg-transparent',
         className
       )}
     >
-      {children}
-    </div>
+      <span className="flex-1 min-w-0 truncate">{children}</span>
+      <Check className={cn('h-4 w-4 text-foreground/85', isSelected ? 'opacity-100' : 'opacity-0')} />
+    </button>
   );
 }
 
