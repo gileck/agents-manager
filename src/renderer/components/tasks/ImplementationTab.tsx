@@ -77,102 +77,93 @@ function parseDiff(raw: string): FileDiff[] {
 }
 
 // ---------------------------------------------------------------------------
-// Styles
+// Helpers
 // ---------------------------------------------------------------------------
 
-const colors = {
-  addBg: 'rgba(63, 185, 80, 0.15)',
-  addBorder: 'rgba(63, 185, 80, 0.3)',
-  addGutter: 'rgba(63, 185, 80, 0.25)',
-  addText: '#3fb950',
-  delBg: 'rgba(248, 81, 73, 0.15)',
-  delBorder: 'rgba(248, 81, 73, 0.3)',
-  delGutter: 'rgba(248, 81, 73, 0.25)',
-  delText: '#f85149',
-  hunkBg: 'rgba(56, 139, 253, 0.1)',
-  hunkText: '#8b949e',
-  vscodeBg: 'rgba(56, 139, 253, 0.1)',
-  vscodeHover: 'rgba(56, 139, 253, 0.2)',
-};
+/** Splits "src/core/services/chat-agent-service.ts" into ["src/core/services/", "chat-agent-service.ts"] */
+function splitPath(filepath: string): { dir: string; base: string } {
+  const idx = filepath.lastIndexOf('/');
+  return idx < 0
+    ? { dir: '', base: filepath }
+    : { dir: filepath.slice(0, idx + 1), base: filepath.slice(idx + 1) };
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function DiffProgressBar({ additions, deletions, width = 48 }: { additions: number; deletions: number; width?: number }) {
+  const total = additions + deletions;
+  if (total === 0) return null;
+  const addWidth = Math.round((additions / total) * width);
+  return (
+    <span style={{ display: 'inline-flex', height: 6, width, borderRadius: 3, overflow: 'hidden', flexShrink: 0, opacity: 0.85 }}>
+      <span style={{ width: addWidth, background: 'hsl(var(--success))' }} />
+      <span style={{ width: width - addWidth, background: 'hsl(var(--destructive))' }} />
+    </span>
+  );
+}
 
 function DiffSummaryBar({ files }: { files: FileDiff[] }) {
   const totalAdd = files.reduce((s, f) => s + f.additions, 0);
   const totalDel = files.reduce((s, f) => s + f.deletions, 0);
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '8px 0', fontSize: 13, color: 'var(--muted-foreground)',
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '10px 14px', fontSize: 12, color: 'var(--muted-foreground)',
+      background: 'hsl(var(--surface-2) / 0.5)', borderRadius: 8,
+      marginBottom: 12,
     }}>
-      <span style={{ fontWeight: 500, color: 'var(--foreground)' }}>
+      <span style={{ fontWeight: 600, color: 'var(--foreground)', fontSize: 13 }}>
         {files.length} file{files.length !== 1 ? 's' : ''} changed
       </span>
-      {totalAdd > 0 && <span style={{ color: colors.addText, fontWeight: 500 }}>+{totalAdd}</span>}
-      {totalDel > 0 && <span style={{ color: colors.delText, fontWeight: 500 }}>-{totalDel}</span>}
-      <DiffBar additions={totalAdd} deletions={totalDel} />
+      <span style={{ width: 1, height: 14, background: 'var(--border)', flexShrink: 0 }} />
+      {totalAdd > 0 && <span style={{ color: 'hsl(var(--success))', fontWeight: 600, fontSize: 12 }}>+{totalAdd}</span>}
+      {totalDel > 0 && <span style={{ color: 'hsl(var(--destructive))', fontWeight: 600, fontSize: 12 }}>-{totalDel}</span>}
+      <DiffProgressBar additions={totalAdd} deletions={totalDel} width={56} />
     </div>
-  );
-}
-
-function DiffBar({ additions, deletions }: { additions: number; deletions: number }) {
-  const total = additions + deletions;
-  if (total === 0) return null;
-  const blocks = 5;
-  const addBlocks = Math.round((additions / total) * blocks);
-  const delBlocks = blocks - addBlocks;
-  return (
-    <span style={{ display: 'inline-flex', gap: 1 }}>
-      {Array.from({ length: addBlocks }).map((_, i) => (
-        <span key={`a${i}`} style={{ width: 8, height: 8, borderRadius: 1, background: colors.addText }} />
-      ))}
-      {Array.from({ length: delBlocks }).map((_, i) => (
-        <span key={`d${i}`} style={{ width: 8, height: 8, borderRadius: 1, background: colors.delText }} />
-      ))}
-    </span>
   );
 }
 
 function FileNav({ files, onJump }: { files: FileDiff[]; onJump: (idx: number) => void }) {
   return (
     <div style={{
-      border: '1px solid var(--border)', borderRadius: 6,
+      borderRadius: 10,
       marginBottom: 16, overflow: 'hidden',
+      background: 'hsl(var(--card))',
+      boxShadow: '0 1px 3px hsl(var(--foreground) / 0.04), 0 0 0 1px hsl(var(--border))',
     }}>
-      {files.map((f, i) => (
-        <button
-          key={i}
-          onClick={() => onJump(i)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-            padding: '6px 12px', border: 'none', background: 'transparent',
-            cursor: 'pointer', fontSize: 13, textAlign: 'left',
-            borderBottom: i < files.length - 1 ? '1px solid var(--border)' : 'none',
-          }}
-          className="hover:bg-muted/50"
-        >
-          <span style={{ fontFamily: 'monospace', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--foreground)' }}>
-            {f.filename}
-          </span>
-          <span style={{ display: 'flex', gap: 6, fontSize: 12, flexShrink: 0 }}>
-            {f.additions > 0 && <span style={{ color: colors.addText }}>+{f.additions}</span>}
-            {f.deletions > 0 && <span style={{ color: colors.delText }}>-{f.deletions}</span>}
-          </span>
-          <DiffBar additions={f.additions} deletions={f.deletions} />
-        </button>
-      ))}
+      {files.map((f, i) => {
+        const { dir, base } = splitPath(f.filename);
+        return (
+          <button
+            key={i}
+            onClick={() => onJump(i)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+              padding: '7px 14px', border: 'none', background: 'transparent',
+              cursor: 'pointer', fontSize: 12, textAlign: 'left',
+              borderBottom: i < files.length - 1 ? '1px solid hsl(var(--border) / 0.6)' : 'none',
+              transition: 'background var(--motion-fast) var(--ease-standard)',
+            }}
+            className="hover:bg-accent/50"
+          >
+            <span style={{ color: 'hsl(var(--muted-foreground) / 0.6)', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>
+              &#x1F4C4;
+            </span>
+            <span style={{ fontFamily: 'monospace', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ color: 'var(--muted-foreground)' }}>{dir}</span>
+              <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{base}</span>
+            </span>
+            <span style={{ display: 'flex', gap: 6, fontSize: 11, flexShrink: 0, fontFamily: 'monospace' }}>
+              {f.additions > 0 && <span style={{ color: 'hsl(var(--success))', fontWeight: 600 }}>+{f.additions}</span>}
+              {f.deletions > 0 && <span style={{ color: 'hsl(var(--destructive))', fontWeight: 600 }}>-{f.deletions}</span>}
+            </span>
+            <DiffProgressBar additions={f.additions} deletions={f.deletions} width={40} />
+          </button>
+        );
+      })}
     </div>
-  );
-}
-
-function VscodeIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <path d="M11.5 1L5.5 7L2.5 4.5L1 5.5L5.5 9.5L13 2.5L11.5 1Z" fill="currentColor" opacity="0.8" />
-      <path d="M1 5.5V11.5L2.5 12.5L5.5 10L11.5 16L13 14.5V2.5L11.5 1L5.5 7L2.5 4.5L1 5.5Z" fill="currentColor" opacity="0.5" />
-    </svg>
   );
 }
 
@@ -188,6 +179,7 @@ function FileDiffCard({
   defaultExpanded: boolean;
 }) {
   const [open, setOpen] = useState(defaultExpanded);
+  const { dir, base } = splitPath(file.filename);
 
   const openInVscode = useCallback((line?: number) => {
     if (!projectPath) return;
@@ -198,69 +190,90 @@ function FileDiffCard({
   }, [projectPath, file.filename]);
 
   return (
-    <div ref={fileRef} style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 12, overflow: 'hidden' }}>
+    <div
+      ref={fileRef}
+      style={{
+        borderRadius: 10, marginBottom: 10, overflow: 'hidden',
+        background: 'hsl(var(--card))',
+        boxShadow: '0 1px 3px hsl(var(--foreground) / 0.04), 0 0 0 1px hsl(var(--border))',
+      }}
+    >
       {/* File header */}
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 12px', background: 'var(--muted)',
+          padding: '8px 14px',
+          background: 'hsl(var(--surface-2) / 0.6)',
           position: 'sticky', top: 0, zIndex: 2,
-          borderBottom: open ? '1px solid var(--border)' : 'none',
+          borderBottom: open ? '1px solid hsl(var(--border) / 0.6)' : 'none',
+          backdropFilter: 'blur(8px)',
         }}
       >
         <button
           onClick={() => setOpen(!open)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: 'var(--muted-foreground)', fontSize: 10 }}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+            display: 'flex', alignItems: 'center', color: 'var(--muted-foreground)',
+            fontSize: 9, transition: 'transform var(--motion-fast) var(--ease-standard)',
+            transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+          }}
         >
-          {open ? '▼' : '▶'}
+          ▼
         </button>
         <button
           onClick={() => openInVscode()}
           style={{
-            fontFamily: 'monospace', fontSize: 13, flex: 1,
+            fontFamily: "'SF Mono', 'JetBrains Mono', Menlo, monospace", fontSize: 12.5, flex: 1,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            background: 'none', border: 'none', cursor: 'pointer',
-            textAlign: 'left', color: 'var(--foreground)', padding: 0,
+            background: 'none', border: 'none', cursor: projectPath ? 'pointer' : 'default',
+            textAlign: 'left', padding: 0,
           }}
           title={projectPath ? `Open ${file.filename} in VS Code` : file.filename}
-          className="hover:underline"
+          className={projectPath ? 'hover:underline' : ''}
         >
-          {file.filename}
+          <span style={{ color: 'var(--muted-foreground)' }}>{dir}</span>
+          <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{base}</span>
         </button>
-        <span style={{ display: 'flex', gap: 6, fontSize: 12, flexShrink: 0 }}>
-          {file.additions > 0 && <span style={{ color: colors.addText, fontWeight: 500 }}>+{file.additions}</span>}
-          {file.deletions > 0 && <span style={{ color: colors.delText, fontWeight: 500 }}>-{file.deletions}</span>}
+        <span style={{ display: 'flex', gap: 6, fontSize: 11, flexShrink: 0, fontFamily: 'monospace' }}>
+          {file.additions > 0 && <span style={{ color: 'hsl(var(--success))', fontWeight: 600 }}>+{file.additions}</span>}
+          {file.deletions > 0 && <span style={{ color: 'hsl(var(--destructive))', fontWeight: 600 }}>-{file.deletions}</span>}
         </span>
         {projectPath && (
           <button
             onClick={() => openInVscode()}
             style={{
-              background: colors.vscodeBg, border: 'none', borderRadius: 4,
-              padding: '2px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-              fontSize: 11, color: '#58a6ff', flexShrink: 0,
+              background: 'hsl(var(--primary) / 0.08)', border: 'none', borderRadius: 5,
+              padding: '3px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+              fontSize: 10, color: 'hsl(var(--primary))', flexShrink: 0, fontWeight: 500,
+              transition: 'background var(--motion-fast) var(--ease-standard)',
+              letterSpacing: '0.3px',
             }}
             title="Open in VS Code"
-            className="hover:opacity-80"
+            className="hover:bg-primary/15"
           >
-            <VscodeIcon size={12} />
+            VS Code
           </button>
         )}
       </div>
 
       {/* Diff body */}
       {open && (
-        <div style={{ overflow: 'auto', maxHeight: 600, fontSize: 12, fontFamily: 'monospace', lineHeight: '20px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{
+          overflow: 'auto', maxHeight: 600,
+          fontSize: 12, fontFamily: "'SF Mono', 'JetBrains Mono', Menlo, monospace", lineHeight: '20px',
+        }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0 }}>
             <tbody>
               {file.lines.map((line, i) => {
                 if (line.type === 'hunk-header') {
                   return (
                     <tr key={i}>
                       <td colSpan={3} style={{
-                        padding: '4px 12px', background: colors.hunkBg,
-                        color: colors.hunkText, fontSize: 12,
-                        borderTop: i > 0 ? '1px solid var(--border)' : 'none',
-                        borderBottom: '1px solid var(--border)',
+                        padding: '6px 14px',
+                        background: 'hsl(var(--primary) / 0.04)',
+                        color: 'var(--muted-foreground)', fontSize: 11.5,
+                        borderTop: i > 0 ? '1px solid hsl(var(--border) / 0.5)' : 'none',
+                        borderBottom: '1px solid hsl(var(--border) / 0.5)',
                       }}>
                         {line.content}
                       </td>
@@ -270,53 +283,61 @@ function FileDiffCard({
 
                 const isAdd = line.type === 'addition';
                 const isDel = line.type === 'deletion';
-                const bg = isAdd ? colors.addBg : isDel ? colors.delBg : 'transparent';
-                const gutterBg = isAdd ? colors.addGutter : isDel ? colors.delGutter : 'transparent';
-                const lineNum = isAdd ? line.newLine : isDel ? line.oldLine : line.oldLine;
-                const canOpenVscode = projectPath && lineNum;
+                const bg = isAdd
+                  ? 'hsl(var(--success) / 0.06)'
+                  : isDel
+                    ? 'hsl(var(--destructive) / 0.06)'
+                    : 'transparent';
+                const gutterBg = isAdd
+                  ? 'hsl(var(--success) / 0.10)'
+                  : isDel
+                    ? 'hsl(var(--destructive) / 0.10)'
+                    : 'transparent';
+                const canOpenVscode = projectPath && (line.oldLine || line.newLine);
 
                 return (
-                  <tr
-                    key={i}
-                    style={{ background: bg }}
-                    className="diff-line-row"
-                  >
+                  <tr key={i} style={{ background: bg }} className="diff-line-row">
                     {/* Old line number */}
-                    <td style={{
-                      width: 40, minWidth: 40, textAlign: 'right',
-                      padding: '0 6px', color: 'var(--muted-foreground)',
-                      background: gutterBg, userSelect: 'none',
-                      fontSize: 11, verticalAlign: 'top', lineHeight: '20px',
-                      cursor: canOpenVscode ? 'pointer' : 'default',
-                      borderRight: '1px solid var(--border)',
-                    }}
-                    onClick={canOpenVscode ? () => openInVscode(line.oldLine ?? line.newLine) : undefined}
-                    title={canOpenVscode ? `Open line ${line.oldLine ?? line.newLine} in VS Code` : undefined}
+                    <td
+                      style={{
+                        width: 44, minWidth: 44, textAlign: 'right',
+                        padding: '0 8px', color: 'hsl(var(--muted-foreground) / 0.65)',
+                        background: gutterBg, userSelect: 'none',
+                        fontSize: 11, verticalAlign: 'top', lineHeight: '20px',
+                        cursor: canOpenVscode ? 'pointer' : 'default',
+                        borderRight: '1px solid hsl(var(--border) / 0.4)',
+                      }}
+                      onClick={canOpenVscode ? () => openInVscode(line.oldLine ?? line.newLine) : undefined}
+                      title={canOpenVscode ? `Open line ${line.oldLine ?? line.newLine} in VS Code` : undefined}
                     >
                       {isDel ? line.oldLine : line.type === 'context' ? line.oldLine : ''}
                     </td>
                     {/* New line number */}
-                    <td style={{
-                      width: 40, minWidth: 40, textAlign: 'right',
-                      padding: '0 6px', color: 'var(--muted-foreground)',
-                      background: gutterBg, userSelect: 'none',
-                      fontSize: 11, verticalAlign: 'top', lineHeight: '20px',
-                      cursor: canOpenVscode ? 'pointer' : 'default',
-                      borderRight: '1px solid var(--border)',
-                    }}
-                    onClick={canOpenVscode ? () => openInVscode(line.newLine ?? line.oldLine) : undefined}
-                    title={canOpenVscode ? `Open line ${line.newLine ?? line.oldLine} in VS Code` : undefined}
+                    <td
+                      style={{
+                        width: 44, minWidth: 44, textAlign: 'right',
+                        padding: '0 8px', color: 'hsl(var(--muted-foreground) / 0.65)',
+                        background: gutterBg, userSelect: 'none',
+                        fontSize: 11, verticalAlign: 'top', lineHeight: '20px',
+                        cursor: canOpenVscode ? 'pointer' : 'default',
+                        borderRight: '1px solid hsl(var(--border) / 0.4)',
+                      }}
+                      onClick={canOpenVscode ? () => openInVscode(line.newLine ?? line.oldLine) : undefined}
+                      title={canOpenVscode ? `Open line ${line.newLine ?? line.oldLine} in VS Code` : undefined}
                     >
                       {isAdd ? line.newLine : line.type === 'context' ? line.newLine : ''}
                     </td>
                     {/* Content */}
                     <td style={{
-                      padding: '0 12px', whiteSpace: 'pre',
-                      overflow: 'visible',
-                      color: isAdd ? colors.addText : isDel ? colors.delText : 'var(--foreground)',
+                      padding: '0 14px', whiteSpace: 'pre', overflow: 'visible',
+                      color: isAdd
+                        ? 'hsl(var(--success) / 0.9)'
+                        : isDel
+                          ? 'hsl(var(--destructive) / 0.9)'
+                          : 'var(--foreground)',
                     }}>
-                      <span style={{ userSelect: 'none', marginRight: 4, opacity: 0.6 }}>
-                        {isAdd ? '+' : isDel ? '-' : ' '}
+                      <span style={{ userSelect: 'none', display: 'inline-block', width: 14, opacity: 0.5, textAlign: 'center' }}>
+                        {isAdd ? '+' : isDel ? '\u2212' : ' '}
                       </span>
                       {line.content || '\u00A0'}
                     </td>
@@ -337,37 +358,47 @@ function FileDiffCard({
 
 function PrHeader({ prLink, branchName }: { prLink?: string | null; branchName?: string | null }) {
   if (!prLink) return null;
-  // Extract PR number from URL
   const prMatch = prLink.match(/\/pull\/(\d+)/);
   const prNumber = prMatch ? `#${prMatch[1]}` : '';
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '10px 14px', marginBottom: 16,
-      border: '1px solid var(--border)', borderRadius: 8,
-      background: 'var(--card)',
+      display: 'flex', alignItems: 'center', gap: 14,
+      padding: '12px 16px', marginBottom: 14,
+      borderRadius: 10,
+      background: 'hsl(var(--card))',
+      boxShadow: '0 1px 3px hsl(var(--foreground) / 0.04), 0 0 0 1px hsl(var(--border))',
     }}>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ color: '#8b949e', flexShrink: 0 }}>
-        <path fillRule="evenodd" d="M7.177 3.073L9.573.677A.25.25 0 0110 .854v4.792a.25.25 0 01-.427.177L7.177 3.427a.25.25 0 010-.354zM3.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122v5.256a2.251 2.251 0 11-1.5 0V5.372A2.25 2.25 0 011.5 3.25zM11 2.5h-1V4h1a1 1 0 011 1v5.628a2.251 2.251 0 101.5 0V5A2.5 2.5 0 0011 2.5zm1 10.25a.75.75 0 111.5 0 .75.75 0 01-1.5 0zM3.75 12a.75.75 0 100 1.5.75.75 0 000-1.5z" />
-      </svg>
+      {/* PR icon */}
+      <div style={{
+        width: 32, height: 32, borderRadius: 8,
+        background: 'hsl(var(--success) / 0.1)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ color: 'hsl(var(--success))' }}>
+          <path fillRule="evenodd" d="M7.177 3.073L9.573.677A.25.25 0 0110 .854v4.792a.25.25 0 01-.427.177L7.177 3.427a.25.25 0 010-.354zM3.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122v5.256a2.251 2.251 0 11-1.5 0V5.372A2.25 2.25 0 011.5 3.25zM11 2.5h-1V4h1a1 1 0 011 1v5.628a2.251 2.251 0 101.5 0V5A2.5 2.5 0 0011 2.5zm1 10.25a.75.75 0 111.5 0 .75.75 0 01-1.5 0zM3.75 12a.75.75 0 100 1.5.75.75 0 000-1.5z" />
+        </svg>
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <button
           onClick={() => window.api.shell.openInChrome(prLink).catch((err) => reportError(err, 'Open PR in browser'))}
           style={{
-            fontSize: 13, color: '#58a6ff', cursor: 'pointer',
+            fontSize: 14, color: 'hsl(var(--primary))', cursor: 'pointer',
             background: 'none', border: 'none', textAlign: 'left',
-            fontWeight: 500, padding: 0,
+            fontWeight: 600, padding: 0,
           }}
           className="hover:underline"
         >
           Pull Request {prNumber}
         </button>
         {branchName && (
-          <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 3 }}>
             <code style={{
-              padding: '1px 6px', borderRadius: 4,
-              background: 'rgba(56, 139, 253, 0.1)', fontSize: 11,
+              padding: '2px 8px', borderRadius: 5,
+              background: 'hsl(var(--primary) / 0.06)',
+              color: 'hsl(var(--primary) / 0.75)',
+              fontSize: 11, fontWeight: 500,
+              fontFamily: "'SF Mono', 'JetBrains Mono', Menlo, monospace",
             }}>
               {branchName}
             </code>
@@ -377,11 +408,12 @@ function PrHeader({ prLink, branchName }: { prLink?: string | null; branchName?:
       <button
         onClick={() => window.api.shell.openInChrome(prLink).catch((err) => reportError(err, 'Open PR in browser'))}
         style={{
-          fontSize: 11, padding: '4px 10px', borderRadius: 6,
-          background: 'rgba(56, 139, 253, 0.1)', border: '1px solid rgba(56, 139, 253, 0.3)',
-          color: '#58a6ff', cursor: 'pointer', flexShrink: 0, fontWeight: 500,
+          fontSize: 12, padding: '6px 14px', borderRadius: 7,
+          background: 'hsl(var(--primary) / 0.08)', border: '1px solid hsl(var(--primary) / 0.15)',
+          color: 'hsl(var(--primary))', cursor: 'pointer', flexShrink: 0, fontWeight: 500,
+          transition: 'all var(--motion-fast) var(--ease-standard)',
         }}
-        className="hover:opacity-80"
+        className="hover:bg-primary/15"
       >
         View on GitHub
       </button>
@@ -419,7 +451,6 @@ export function ImplementationTab({
   const { currentProject } = useCurrentProject();
   const projectPath = currentProject?.path ?? null;
 
-  // Parse diffs from all diff artifacts
   const fileDiffs = useMemo(() => {
     const diffArtifacts = artifacts?.filter((a) => a.type === 'diff') ?? [];
     const allDiffs: FileDiff[] = [];
@@ -430,7 +461,6 @@ export function ImplementationTab({
     return allDiffs;
   }, [artifacts]);
 
-  // Refs for scrolling to files
   const fileRefs = useMemo(
     () => fileDiffs.map(() => React.createRef<HTMLDivElement>()),
     [fileDiffs],
@@ -440,7 +470,6 @@ export function ImplementationTab({
     fileRefs[idx]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [fileRefs]);
 
-  // Filter existing change request comments
   const changeRequests = useMemo(
     () => (contextEntries ?? []).filter((e) => e.entryType === 'change_request'),
     [contextEntries],
@@ -481,32 +510,39 @@ export function ImplementationTab({
   const hasContent = hasChanges || task.prLink;
 
   return (
-    <div style={{ padding: '20px 24px', overflowY: 'auto' }}>
+    <div style={{ padding: '16px 20px', overflowY: 'auto' }}>
       {/* Phase indicator for multi-phase tasks */}
       {isMultiPhase && activePhaseIdx >= 0 && (
         <div style={{
-          marginBottom: 16, padding: '8px 12px', borderRadius: 6,
-          backgroundColor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
-          fontSize: 13,
+          marginBottom: 14, padding: '8px 14px', borderRadius: 8,
+          background: 'hsl(var(--primary) / 0.06)', border: '1px solid hsl(var(--primary) / 0.12)',
+          fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          <span style={{ fontWeight: 600 }}>Phase {activePhaseIdx + 1}/{phases!.length}</span>
-          <span style={{ color: 'var(--muted-foreground)', marginLeft: 8 }}>{phases![activePhaseIdx].name}</span>
+          <span style={{
+            fontWeight: 600, fontSize: 11, padding: '2px 8px', borderRadius: 5,
+            background: 'hsl(var(--primary) / 0.12)', color: 'hsl(var(--primary))',
+          }}>
+            Phase {activePhaseIdx + 1}/{phases!.length}
+          </span>
+          <span style={{ color: 'var(--muted-foreground)' }}>{phases![activePhaseIdx].name}</span>
         </div>
       )}
 
       {/* Completed phase PRs */}
       {completedPhases.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Merged PRs</h4>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+            Merged PRs
+          </div>
           {completedPhases.map((p) => {
             const phaseNum = phases!.indexOf(p) + 1;
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: '#16a34a' }}>✓</span>
+                <span style={{ fontSize: 12, color: 'hsl(var(--success))' }}>&#x2713;</span>
                 <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>Phase {phaseNum}:</span>
                 <button
                   onClick={() => window.api.shell.openInChrome(p.prLink!).catch((err) => reportError(err, 'Open PR in browser'))}
-                  style={{ fontSize: 12, color: '#58a6ff', cursor: 'pointer', background: 'none', border: 'none', textAlign: 'left' }}
+                  style={{ fontSize: 12, color: 'hsl(var(--primary))', cursor: 'pointer', background: 'none', border: 'none', textAlign: 'left' }}
                   className="hover:underline"
                 >
                   {p.prLink}
@@ -518,21 +554,13 @@ export function ImplementationTab({
       )}
 
       {/* PR Header */}
-      <PrHeader
-        prLink={task.prLink}
-        branchName={task.branchName}
-      />
+      <PrHeader prLink={task.prLink} branchName={task.branchName} />
 
       {/* Diff section */}
       {hasChanges && (
         <>
-          {/* Summary bar */}
           <DiffSummaryBar files={fileDiffs} />
-
-          {/* File navigation */}
           <FileNav files={fileDiffs} onJump={jumpToFile} />
-
-          {/* File diffs */}
           {fileDiffs.map((f, i) => (
             <FileDiffCard
               key={`${f.filename}-${i}`}
@@ -546,7 +574,10 @@ export function ImplementationTab({
       )}
 
       {!hasContent && (
-        <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
+        <div style={{
+          padding: 48, textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13,
+          background: 'hsl(var(--surface-2) / 0.3)', borderRadius: 12,
+        }}>
           No implementation data yet. Diffs and PR link will appear after the implementor agent completes.
         </div>
       )}
@@ -556,23 +587,25 @@ export function ImplementationTab({
 
       {/* Previous change request comments */}
       {changeRequests.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
             Change Requests
-          </h4>
+          </div>
           {changeRequests.map((entry) => (
             <div
               key={entry.id}
               style={{
-                border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px',
+                borderRadius: 10, padding: '10px 14px',
                 marginBottom: 8, fontSize: 13,
+                background: 'hsl(var(--card))',
+                boxShadow: '0 1px 3px hsl(var(--foreground) / 0.04), 0 0 0 1px hsl(var(--border))',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 11, color: 'var(--muted-foreground)' }}>
-                <span>{entry.source}</span>
+                <span style={{ fontWeight: 500 }}>{entry.source}</span>
                 <span>{new Date(entry.createdAt).toLocaleString()}</span>
               </div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{entry.summary}</div>
+              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{entry.summary}</div>
             </div>
           ))}
         </div>
@@ -580,16 +613,18 @@ export function ImplementationTab({
 
       {/* Comment input + actions */}
       {(canRequestChanges || mergeTransition || approveTransition) && (
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 8 }}>
-          <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <div style={{
+          borderTop: '1px solid hsl(var(--border) / 0.5)', paddingTop: 16, marginTop: 8,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
             Feedback
-          </h4>
+          </div>
           <Textarea
             placeholder="Describe the changes needed..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={4}
-            style={{ marginBottom: 10, fontFamily: 'monospace', fontSize: 13 }}
+            style={{ marginBottom: 10, fontFamily: "'SF Mono', 'JetBrains Mono', Menlo, monospace", fontSize: 13 }}
           />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {canRequestChanges && (

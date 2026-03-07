@@ -161,11 +161,14 @@
   color: hsl(var(--destructive));
 }
 
-/* Diff view line hover */
-.diff-line-row:hover td {
-  filter: brightness(1.15);
+/* Diff view */
+.diff-line-row {
+  transition: filter 80ms ease;
+}
+.diff-line-row:hover {
+  filter: brightness(1.08) saturate(1.1);
 }
 .diff-line-row:hover td:first-child,
 .diff-line-row:hover td:nth-child(2) {
-  text-decoration: underline;
+  color: hsl(var(--primary)) !important;
 }
