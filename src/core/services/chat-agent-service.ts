@@ -442,7 +442,7 @@ export class ChatAgentService {
       }
       userPart += '\n\nIMPORTANT: The user attached image(s). Use the Read tool to view them at the paths above.';
     }
-    prompt += `${userPart}\n\nRespond to the latest user message. If your response requires a plan change, apply it now and report outcome=plan_complete.`;
+    prompt += `${userPart}\n\nRespond to the latest user message. If your response requires a plan change, respond with the JSON format described in your instructions; otherwise respond in plain text.`;
 
     // Create or reuse AgentRun for agent-chat sessions
     let agentRunId: string | undefined;
@@ -842,8 +842,11 @@ export class ChatAgentService {
           try { emitEvent({ type: 'text', text: '\n[Warning: Failed to save this response. It may not appear after refresh.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'persist-warning delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
         }
 
-        // Post-process "changes" mode: extract revised plan/design from JSON response
-        if (extra?.mode === 'changes') {
+        // Post-process "changes" mode and intent-driven question-mode plan updates:
+        // extract revised plan/design from JSON response and persist to task.
+        // In question mode, plain-text responses (pure Q&A) are expected — a failed
+        // JSON parse is silently ignored; only changes-mode failures are warned about.
+        if (extra?.mode === 'changes' || extra?.mode === 'question') {
           const fullText = turnMessages
             .filter(m => m.type === 'assistant_text')
             .map(m => m.text)
@@ -853,25 +856,28 @@ export class ChatAgentService {
           try {
             parsed = JSON.parse(fullText);
           } catch (parseErr) {
-            getAppLogger().warn('ChatAgentService', 'Failed to parse changes-mode JSON response; plan not updated', { error: parseErr instanceof Error ? parseErr.message : String(parseErr) });
+            if (extra?.mode === 'changes') {
+              getAppLogger().warn('ChatAgentService', 'Failed to parse changes-mode JSON response; plan not updated', { error: parseErr instanceof Error ? parseErr.message : String(parseErr) });
+            }
+            // question mode: plain-text is a valid Q&A response — no warning needed
           }
 
           if (parsed) {
             try {
               const session = await this.chatSessionStore.getSession(sessionId);
               if (!session?.agentRole) {
-                getAppLogger().warn('ChatAgentService', `changes-mode: session ${sessionId} has no agentRole; cannot update task`);
+                getAppLogger().warn('ChatAgentService', `${extra.mode}-mode: session ${sessionId} has no agentRole; cannot update task`);
               } else {
                 const field = session.agentRole === 'designer' ? 'technicalDesign' : 'plan';
                 const revisedContent = parsed.revisedDesign ?? parsed.revisedPlan;
                 if (!revisedContent || typeof revisedContent !== 'string') {
-                  getAppLogger().warn('ChatAgentService', `changes-mode: agent response missing or non-string revisedDesign/revisedPlan for session ${sessionId}`);
+                  getAppLogger().warn('ChatAgentService', `${extra.mode}-mode: agent response missing or non-string revisedDesign/revisedPlan for session ${sessionId}`);
                   try { emitEvent({ type: 'text', text: '\n[Warning: Agent response did not contain a valid revised plan/design. No update was made.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
                 } else if (session.scopeType !== 'task') {
-                  getAppLogger().warn('ChatAgentService', `changes-mode: session ${sessionId} scopeType is '${session.scopeType}', not 'task'; skipping update`);
+                  getAppLogger().warn('ChatAgentService', `${extra.mode}-mode: session ${sessionId} scopeType is '${session.scopeType}', not 'task'; skipping update`);
                 } else {
                   await this.taskStore.updateTask(session.scopeId, { [field]: revisedContent } as import('../../shared/types').TaskUpdateInput);
-                  getAppLogger().info('ChatAgentService', `Updated task ${session.scopeId} ${field} via agent-chat changes mode`);
+                  getAppLogger().info('ChatAgentService', `Updated task ${session.scopeId} ${field} via agent-chat ${extra.mode} mode`);
                 }
               }
             } catch (dbErr) {

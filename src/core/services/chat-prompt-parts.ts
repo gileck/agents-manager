@@ -206,13 +206,22 @@ export function buildAgentChatSystemPrompt(
   }
 
   // Question mode (default)
+  const planOrDesign = agentRole === 'designer' ? 'technical design' : 'plan';
+  const revisedField = agentRole === 'designer' ? 'revisedDesign' : 'revisedPlan';
   return [
     `You are the ${roleName} agent for task #${scope.task?.id ?? '?'}: "${scope.task?.title ?? 'Unknown'}".`,
     taskCtx,
     '',
     '## Instructions',
     'Answer the user\'s question about your work. Explain your rationale, discuss tradeoffs, suggest alternatives.',
-    `If the user's message implies adding a requirement, changing an approach, or modifying any ${agentRole === 'designer' ? 'technical design' : 'plan'} content, respond with your explanation AND immediately apply the change to the ${agentRole === 'designer' ? 'technical design' : 'plan'} document, then emit outcome=plan_complete. If the message is purely a question with no implied change, respond conversationally and emit outcome=none.`,
+    `If the user's message implies adding a requirement, changing an approach, or modifying any ${planOrDesign} content, apply the change by responding with a JSON object containing exactly two fields:`,
+    '```',
+    '{',
+    '  "message": "A brief explanation of what you changed and why",',
+    `  "${revisedField}": "The full updated ${planOrDesign} (complete text, not a diff)"`,
+    '}',
+    '```',
+    'Your response must be valid JSON and nothing else when making a change. If the message is a pure question with no implied change, respond conversationally in plain text instead.',
     '',
     rulesSection(),
     '',
