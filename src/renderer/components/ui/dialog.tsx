@@ -3,6 +3,7 @@
  * Adds `style` prop to DialogContent for Electron-specific sizing needs.
  */
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../../lib/utils';
 import { X } from 'lucide-react';
 
@@ -85,15 +86,18 @@ function DialogContent({ children, className, style }: DialogContentProps) {
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50">
+  const portalTarget = document.getElementById('root');
+  if (!portalTarget) return null;
+
+  return createPortal(
+    <div className="absolute inset-0 z-50">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/52 dark:bg-black/72 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/52 dark:bg-black/72 backdrop-blur-[1px]"
         onClick={() => onOpenChange(false)}
       />
       {/* Content */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
         <div className={cn("relative grid w-full max-w-lg max-h-[85vh] gap-4 overflow-y-auto rounded-2xl border border-border/95 bg-card text-card-foreground p-6 shadow-[0_26px_60px_rgba(2,8,23,0.24)] dark:shadow-[0_30px_68px_rgba(0,0,0,0.62)]", className)} style={style}>
         {children}
         <button
@@ -106,7 +110,8 @@ function DialogContent({ children, className, style }: DialogContentProps) {
         </button>
         </div>
       </div>
-    </div>
+    </div>,
+    portalTarget,
   );
 }
 
