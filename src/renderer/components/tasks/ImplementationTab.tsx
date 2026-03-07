@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import type { TaskArtifact, Transition, TaskContextEntry, ImplementationPhase } from '../../../shared/types';
@@ -76,6 +76,34 @@ function parseDiff(raw: string): FileDiff[] {
   return files;
 }
 
+/** Merge FileDiffs that share the same filename into a single entry. */
+function mergeDiffsByFile(diffs: FileDiff[]): FileDiff[] {
+  const map = new Map<string, FileDiff>();
+  for (const d of diffs) {
+    const existing = map.get(d.filename);
+    if (existing) {
+      existing.additions += d.additions;
+      existing.deletions += d.deletions;
+      existing.lines.push(...d.lines);
+    } else {
+      map.set(d.filename, { ...d, lines: [...d.lines] });
+    }
+  }
+  return Array.from(map.values());
+}
+
+/** Reconstruct a copyable unified diff string from parsed lines. */
+function fileDiffToString(file: FileDiff): string {
+  const header = `--- a/${file.filename}\n+++ b/${file.filename}\n`;
+  const body = file.lines.map(l => {
+    if (l.type === 'hunk-header') return l.content;
+    if (l.type === 'addition') return `+${l.content}`;
+    if (l.type === 'deletion') return `-${l.content}`;
+    return ` ${l.content}`;
+  }).join('\n');
+  return header + body;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -83,6 +111,122 @@ function parseDiff(raw: string): FileDiff[] {
 function splitPath(filepath: string): { dir: string; base: string } {
   const idx = filepath.lastIndexOf('/');
   return idx < 0 ? { dir: '', base: filepath } : { dir: filepath.slice(0, idx + 1), base: filepath.slice(idx + 1) };
+}
+
+function CopyButton({ text, label }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch((err) => reportError(err, 'Copy to clipboard'));
+  };
+  return (
+    <span
+      onClick={handleCopy}
+      style={{
+        fontSize: 10, color: copied ? 'hsl(var(--success))' : 'hsl(var(--muted-foreground) / 0.6)',
+        fontWeight: 500, flexShrink: 0, padding: '2px 6px', borderRadius: 4,
+        cursor: 'pointer', transition: 'color 100ms ease', userSelect: 'none',
+      }}
+      className="hover:text-foreground"
+      title={label ?? 'Copy diff'}
+    >
+      {copied ? 'Copied!' : 'Copy'}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Line context menu
+// ---------------------------------------------------------------------------
+
+interface LineMenuData {
+  x: number;
+  y: number;
+  filename: string;
+  lineNum: number;
+  code: string;
+}
+
+function LineContextMenu({
+  data,
+  projectPath,
+  onQuote,
+  onClose,
+}: {
+  data: LineMenuData;
+  projectPath: string | null;
+  onQuote: (text: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handle = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', handle);
+    document.addEventListener('keydown', handleKey);
+    return () => { document.removeEventListener('mousedown', handle); document.removeEventListener('keydown', handleKey); };
+  }, [onClose]);
+
+  const handleOpenVscode = () => {
+    if (!projectPath) return;
+    window.api.shell.openFileInVscode(`${projectPath}/${data.filename}`, data.lineNum).catch((err) =>
+      reportError(err, `Open ${data.filename} in VS Code`),
+    );
+    onClose();
+  };
+
+  const handleQuote = () => {
+    const prefix = data.code.trim() ? `\`${data.filename}:${data.lineNum}\`\n\`\`\`\n${data.code}\n\`\`\`\n` : `\`${data.filename}:${data.lineNum}\`\n`;
+    onQuote(prefix);
+    onClose();
+  };
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: 'fixed', left: data.x, top: data.y, zIndex: 100,
+        background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))',
+        borderRadius: 8, padding: 4, minWidth: 170,
+        boxShadow: '0 4px 16px hsl(var(--foreground) / 0.12), 0 1px 4px hsl(var(--foreground) / 0.06)',
+      }}
+    >
+      {projectPath && (
+        <button
+          onClick={handleOpenVscode}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+            padding: '6px 10px', border: 'none', background: 'transparent',
+            cursor: 'pointer', fontSize: 12, borderRadius: 5, textAlign: 'left',
+            color: 'var(--foreground)', transition: 'background 80ms ease',
+          }}
+          className="hover:bg-accent"
+        >
+          <span style={{ fontSize: 13, width: 18, textAlign: 'center', opacity: 0.7 }}>&#x2197;</span>
+          Open in VS Code
+        </button>
+      )}
+      <button
+        onClick={handleQuote}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+          padding: '6px 10px', border: 'none', background: 'transparent',
+          cursor: 'pointer', fontSize: 12, borderRadius: 5, textAlign: 'left',
+          color: 'var(--foreground)', transition: 'background 80ms ease',
+        }}
+        className="hover:bg-accent"
+      >
+        <span style={{ fontSize: 13, width: 18, textAlign: 'center', opacity: 0.7 }}>&#x201C;</span>
+        Quote in Feedback
+      </button>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +245,17 @@ function DiffProgressBar({ additions, deletions, width = 40 }: { additions: numb
   );
 }
 
-function DiffSummaryBar({ files }: { files: FileDiff[] }) {
+function DiffSummaryBar({
+  files,
+  allExpanded,
+  onToggleAll,
+  fullDiffText,
+}: {
+  files: FileDiff[];
+  allExpanded: boolean;
+  onToggleAll: () => void;
+  fullDiffText: string;
+}) {
   const totalAdd = files.reduce((s, f) => s + f.additions, 0);
   const totalDel = files.reduce((s, f) => s + f.deletions, 0);
   return (
@@ -115,6 +269,20 @@ function DiffSummaryBar({ files }: { files: FileDiff[] }) {
       {totalAdd > 0 && <span style={{ color: 'hsl(var(--success))', fontWeight: 600 }}>+{totalAdd}</span>}
       {totalDel > 0 && <span style={{ color: 'hsl(var(--destructive))', fontWeight: 600 }}>-{totalDel}</span>}
       <DiffProgressBar additions={totalAdd} deletions={totalDel} width={56} />
+      <span style={{ flex: 1 }} />
+      <CopyButton text={fullDiffText} label="Copy all diffs" />
+      <span style={{ width: 1, height: 12, background: 'hsl(var(--border) / 0.5)' }} />
+      <button
+        onClick={onToggleAll}
+        style={{
+          fontSize: 11, color: 'hsl(var(--primary) / 0.8)', cursor: 'pointer',
+          background: 'none', border: 'none', fontWeight: 500,
+          transition: 'color 80ms ease',
+        }}
+        className="hover:text-primary"
+      >
+        {allExpanded ? 'Collapse all' : 'Expand all'}
+      </button>
     </div>
   );
 }
@@ -123,20 +291,22 @@ function FileDiffCard({
   file,
   fileRef,
   projectPath,
-  defaultExpanded,
+  open,
+  onToggle,
+  onLineClick,
 }: {
   file: FileDiff;
   fileRef: React.RefObject<HTMLDivElement | null>;
   projectPath: string | null;
-  defaultExpanded: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onLineClick: (e: React.MouseEvent, filename: string, lineNum: number, code: string) => void;
 }) {
-  const [open, setOpen] = useState(defaultExpanded);
   const { dir, base } = splitPath(file.filename);
 
-  const openInVscode = useCallback((line?: number) => {
+  const openInVscode = useCallback(() => {
     if (!projectPath) return;
-    const filePath = `${projectPath}/${file.filename}`;
-    window.api.shell.openFileInVscode(filePath, line).catch((err) =>
+    window.api.shell.openFileInVscode(`${projectPath}/${file.filename}`).catch((err) =>
       reportError(err, `Open ${file.filename} in VS Code`),
     );
   }, [projectPath, file.filename]);
@@ -149,9 +319,9 @@ function FileDiffCard({
         border: '1px solid hsl(var(--border) / 0.7)',
       }}
     >
-      {/* File header — acts as the file list row AND the diff toggle */}
+      {/* File header */}
       <button
-        onClick={() => setOpen(!open)}
+        onClick={onToggle}
         style={{
           display: 'flex', alignItems: 'center', gap: 8, width: '100%',
           padding: '7px 12px', border: 'none',
@@ -187,8 +357,7 @@ function FileDiffCard({
             onClick={(e) => { e.stopPropagation(); openInVscode(); }}
             style={{
               fontSize: 10, color: 'hsl(var(--primary) / 0.7)', fontWeight: 500, flexShrink: 0,
-              padding: '2px 6px', borderRadius: 4,
-              transition: 'color 100ms ease',
+              padding: '2px 6px', borderRadius: 4, transition: 'color 100ms ease',
             }}
             className="hover:text-primary"
             title="Open in VS Code"
@@ -196,6 +365,7 @@ function FileDiffCard({
             VS Code
           </span>
         )}
+        <CopyButton text={fileDiffToString(file)} label={`Copy diff for ${file.filename}`} />
       </button>
 
       {/* Diff body */}
@@ -235,7 +405,8 @@ function FileDiffCard({
                   : isDel
                     ? 'hsl(var(--destructive) / 0.09)'
                     : 'transparent';
-                const canOpenVscode = projectPath && (line.oldLine || line.newLine);
+                const lineNum = line.newLine ?? line.oldLine;
+                const hasLineNum = lineNum !== undefined;
 
                 return (
                   <tr key={i} style={{ background: bg }} className="diff-line-row">
@@ -245,11 +416,10 @@ function FileDiffCard({
                         padding: '0 8px', color: 'hsl(var(--muted-foreground) / 0.5)',
                         background: gutterBg, userSelect: 'none',
                         fontSize: 11, verticalAlign: 'top', lineHeight: '20px',
-                        cursor: canOpenVscode ? 'pointer' : 'default',
+                        cursor: hasLineNum ? 'pointer' : 'default',
                         borderRight: '1px solid hsl(var(--border) / 0.3)',
                       }}
-                      onClick={canOpenVscode ? () => openInVscode(line.oldLine ?? line.newLine) : undefined}
-                      title={canOpenVscode ? `Open line ${line.oldLine ?? line.newLine} in VS Code` : undefined}
+                      onClick={hasLineNum ? (e) => onLineClick(e, file.filename, line.oldLine ?? line.newLine!, line.content) : undefined}
                     >
                       {isDel ? line.oldLine : line.type === 'context' ? line.oldLine : ''}
                     </td>
@@ -259,11 +429,10 @@ function FileDiffCard({
                         padding: '0 8px', color: 'hsl(var(--muted-foreground) / 0.5)',
                         background: gutterBg, userSelect: 'none',
                         fontSize: 11, verticalAlign: 'top', lineHeight: '20px',
-                        cursor: canOpenVscode ? 'pointer' : 'default',
+                        cursor: hasLineNum ? 'pointer' : 'default',
                         borderRight: '1px solid hsl(var(--border) / 0.3)',
                       }}
-                      onClick={canOpenVscode ? () => openInVscode(line.newLine ?? line.oldLine) : undefined}
-                      title={canOpenVscode ? `Open line ${line.newLine ?? line.oldLine} in VS Code` : undefined}
+                      onClick={hasLineNum ? (e) => onLineClick(e, file.filename, line.newLine ?? line.oldLine!, line.content) : undefined}
                     >
                       {isAdd ? line.newLine : line.type === 'context' ? line.newLine : ''}
                     </td>
@@ -304,8 +473,7 @@ function PrHeader({ prLink, branchName }: { prLink?: string | null; branchName?:
     <div style={{
       display: 'flex', alignItems: 'center', gap: 14,
       padding: '12px 14px', marginBottom: 14,
-      borderRadius: 8,
-      border: '1px solid hsl(var(--border) / 0.7)',
+      borderRadius: 8, border: '1px solid hsl(var(--border) / 0.7)',
     }}>
       <div style={{
         width: 30, height: 30, borderRadius: 7,
@@ -387,6 +555,10 @@ export function ImplementationTab({
   const [submitting, setSubmitting] = useState(false);
   const { currentProject } = useCurrentProject();
   const projectPath = currentProject?.path ?? null;
+  const feedbackRef = useRef<HTMLTextAreaElement>(null);
+
+  // Context menu state
+  const [lineMenu, setLineMenu] = useState<LineMenuData | null>(null);
 
   const fileDiffs = useMemo(() => {
     const diffArtifacts = artifacts?.filter((a) => a.type === 'diff') ?? [];
@@ -395,13 +567,50 @@ export function ImplementationTab({
       const raw = (artifact.data as { diff?: string } | undefined)?.diff ?? '';
       allDiffs.push(...parseDiff(raw));
     }
-    return allDiffs;
+    return mergeDiffsByFile(allDiffs);
   }, [artifacts]);
+
+  // Expanded state per file — default all collapsed
+  const [expandedSet, setExpandedSet] = useState<Set<number>>(() => new Set());
+
+  // Reset expanded state when file list changes
+  useEffect(() => { setExpandedSet(new Set()); }, [fileDiffs]);
+
+  const allExpanded = fileDiffs.length > 0 && expandedSet.size === fileDiffs.length;
+
+  const toggleAll = useCallback(() => {
+    if (allExpanded) {
+      setExpandedSet(new Set());
+    } else {
+      setExpandedSet(new Set(fileDiffs.map((_, i) => i)));
+    }
+  }, [allExpanded, fileDiffs]);
+
+  const toggleFile = useCallback((idx: number) => {
+    setExpandedSet(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  }, []);
 
   const fileRefs = useMemo(
     () => fileDiffs.map(() => React.createRef<HTMLDivElement>()),
     [fileDiffs],
   );
+
+  const handleLineClick = useCallback((e: React.MouseEvent, filename: string, lineNum: number, code: string) => {
+    setLineMenu({ x: e.clientX, y: e.clientY, filename, lineNum, code });
+  }, []);
+
+  const handleQuote = useCallback((text: string) => {
+    setComment(prev => {
+      const separator = prev && !prev.endsWith('\n') ? '\n' : '';
+      return prev + separator + text;
+    });
+    // Focus the feedback textarea after quoting
+    setTimeout(() => feedbackRef.current?.focus(), 50);
+  }, []);
 
   const changeRequests = useMemo(
     () => (contextEntries ?? []).filter((e) => e.entryType === 'change_request'),
@@ -444,6 +653,16 @@ export function ImplementationTab({
 
   return (
     <div style={{ padding: '16px 20px', overflowY: 'auto' }}>
+      {/* Line context menu */}
+      {lineMenu && (
+        <LineContextMenu
+          data={lineMenu}
+          projectPath={projectPath}
+          onQuote={handleQuote}
+          onClose={() => setLineMenu(null)}
+        />
+      )}
+
       {/* Phase indicator */}
       {isMultiPhase && activePhaseIdx >= 0 && (
         <div style={{
@@ -492,7 +711,12 @@ export function ImplementationTab({
       {/* Unified file changes + diffs */}
       {hasChanges && (
         <div>
-          <DiffSummaryBar files={fileDiffs} />
+          <DiffSummaryBar
+            files={fileDiffs}
+            allExpanded={allExpanded}
+            onToggleAll={toggleAll}
+            fullDiffText={fileDiffs.map(f => fileDiffToString(f)).join('\n\n')}
+          />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {fileDiffs.map((f, i) => (
               <FileDiffCard
@@ -500,7 +724,9 @@ export function ImplementationTab({
                 file={f}
                 fileRef={fileRefs[i]}
                 projectPath={projectPath}
-                defaultExpanded={fileDiffs.length <= 6}
+                open={expandedSet.has(i)}
+                onToggle={() => toggleFile(i)}
+                onLineClick={handleLineClick}
               />
             ))}
           </div>
@@ -551,7 +777,8 @@ export function ImplementationTab({
             Feedback
           </div>
           <Textarea
-            placeholder="Describe the changes needed..."
+            ref={feedbackRef}
+            placeholder="Describe the changes needed... Click a line number to quote code."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={4}
