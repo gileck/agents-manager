@@ -57,6 +57,14 @@ function getActionsForStatus(task: Task, toStatus: string): NotificationAction[]
   }
 }
 
+function getNavigationUrlForStatus(taskId: string, toStatus: string): string {
+  switch (toStatus) {
+    case 'plan_review':          return `/tasks/${taskId}/plan`;
+    case 'design_review':        return `/tasks/${taskId}/design`;
+    default:                     return `/tasks/${taskId}`;
+  }
+}
+
 export function registerNotificationHandler(
   engine: IPipelineEngine,
   deps: { notificationRouter: INotificationRouter; taskStore: ITaskStore },
@@ -95,12 +103,14 @@ export function registerNotificationHandler(
       getAppLogger().warn('notification-handler', `Failed to re-read task ${task.id}: ${errMsg}. Using stale task data.`);
     }
     const actions = getActionsForStatus(effectiveTask, transition.to);
+    const navigationUrl = getNavigationUrlForStatus(task.id, transition.to);
 
     await deps.notificationRouter.send({
       taskId: task.id,
       title: applyTemplate(titleTemplate),
       body: applyTemplate(bodyTemplate),
       channel: 'pipeline',
+      navigationUrl,
       actions,
     });
 

@@ -65,6 +65,8 @@ initializeApp({
         sendToRenderer(IPC_CHANNELS.MAIN_DIVERGED, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_SESSION_RENAMED, (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.CHAT_SESSION_RENAMED, sessionId, data));
+      wsClient.subscribeGlobal(WS_CHANNELS.NOTIFICATION_ADDED, (_id, data) =>
+        sendToRenderer(IPC_CHANNELS.NOTIFICATION_ADDED, data));
 
       // Create the tray icon with a simple menu
       tray = createTray({

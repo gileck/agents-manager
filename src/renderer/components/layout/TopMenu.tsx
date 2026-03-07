@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import { TaskCreateDialog } from '../tasks/TaskCreateDialog';
+import { NotificationBell } from './NotificationBell';
 
 type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
 
@@ -265,6 +266,8 @@ export function TopMenu() {
             </div>
           </Button>
         )}
+
+        <NotificationBell />
 
         <Button
           variant="ghost"

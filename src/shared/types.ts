@@ -855,7 +855,33 @@ export interface Notification {
   title: string;
   body: string;
   channel: string;
+  navigationUrl?: string;
   actions?: NotificationAction[];
+}
+
+export interface InAppNotification {
+  id: string;
+  taskId: string;
+  projectId: string | null;
+  title: string;
+  body: string;
+  navigationUrl: string;
+  read: boolean;
+  createdAt: number;
+}
+
+export interface InAppNotificationCreateInput {
+  taskId: string;
+  projectId?: string;
+  title: string;
+  body: string;
+  navigationUrl: string;
+}
+
+export interface InAppNotificationFilter {
+  projectId?: string;
+  unreadOnly?: boolean;
+  limit?: number;
 }
 
 export interface TelegramBotLogEntry {
