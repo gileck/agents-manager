@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, MoreVertical, CheckSquare, Trash2 } from 'lucide-react';
+import { Plus, CheckSquare, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
@@ -19,7 +18,6 @@ export function SidebarSessions() {
     createSession,
     renameSession,
     deleteSession,
-    clearAllSessions,
     switchSession,
   } = useProjectChatSessions();
   const navigate = useNavigate();
@@ -29,9 +27,6 @@ export function SidebarSessions() {
   const [taskSessions, setTaskSessions] = useState<TaskChatSessionWithTitle[]>([]);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
-  const [menuSessionId, setMenuSessionId] = useState<string | null>(null);
-  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!currentProjectId) return;
@@ -39,16 +34,6 @@ export function SidebarSessions() {
       .then(setTaskSessions)
       .catch((err) => reportError(err, 'Load task sessions'));
   }, [currentProjectId, sessions]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuSessionId(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleCreate = () => {
     const maxNum = sessions.reduce((max, s) => {
@@ -69,7 +54,6 @@ export function SidebarSessions() {
   const handleStartRename = (sessionId: string, currentName: string) => {
     setRenameId(sessionId);
     setRenameName(currentName);
-    setMenuSessionId(null);
   };
 
   const handleRename = () => {
@@ -80,9 +64,9 @@ export function SidebarSessions() {
     setRenameName('');
   };
 
-  const handleDelete = (sessionId: string) => {
+  const handleDelete = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
     deleteSession(sessionId);
-    setMenuSessionId(null);
   };
 
   const handleTaskSessionClick = (taskSession: TaskChatSessionWithTitle) => {
@@ -104,36 +88,14 @@ export function SidebarSessions() {
     }
   };
 
-  const handleClearAll = async () => {
-    if (!window.confirm('Delete all sessions? This cannot be undone.')) return;
-    try {
-      await Promise.all([
-        clearAllSessions(),
-        ...taskSessions.map((ts) => window.api.chatSession.delete(ts.id)),
-      ]);
-      setTaskSessions([]);
-    } catch (err) {
-      reportError(err, 'Clear all sessions');
-    }
-  };
-
   const headerButtons = (
-    <div className="flex items-center gap-1">
-      <button
-        onClick={handleClearAll}
-        className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
-        title="Clear all sessions"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
-      <button
-        onClick={handleCreate}
-        className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
-        title="New session"
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
-    </div>
+    <button
+      onClick={handleCreate}
+      className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
+      title="New session"
+    >
+      <Plus className="h-3.5 w-3.5" />
+    </button>
   );
 
   if (!currentProjectId) {
@@ -157,6 +119,10 @@ export function SidebarSessions() {
               <div
                 key={session.id}
                 onClick={() => handleClick(session.id)}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  handleStartRename(session.id, session.name);
+                }}
                 className={cn(
                   'group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer transition-colors mb-1 border border-transparent',
                   isActive
@@ -177,6 +143,9 @@ export function SidebarSessions() {
                       value={renameName}
                       onChange={(e) => setRenameName(e.target.value)}
                       onBlur={handleRename}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setRenameId(null);
+                      }}
                       className="h-7 px-2 py-0 text-xs"
                       autoFocus
                     />
@@ -194,25 +163,19 @@ export function SidebarSessions() {
                     >
                       {formatRelativeTimestamp(session.updatedAt)}
                     </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (menuSessionId === session.id) {
-                          setMenuSessionId(null);
-                          return;
-                        }
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                        setMenuPosition({ top: rect.bottom + 4, left: rect.left });
-                        setMenuSessionId(session.id);
-                      }}
-                      className={cn(
-                        'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
-                        'opacity-0 group-hover:opacity-100'
-                      )}
-                      title="More options"
-                    >
-                      <MoreVertical className="h-3 w-3" />
-                    </button>
+                    {sessions.length > 1 && (
+                      <button
+                        onClick={(e) => handleDelete(e, session.id)}
+                        className={cn(
+                          'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
+                          'opacity-0 group-hover:opacity-100',
+                          isActive && 'hover:bg-primary-foreground/20'
+                        )}
+                        title="Delete session"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -270,37 +233,6 @@ export function SidebarSessions() {
           </div>
         </>
       )}
-
-      {menuSessionId &&
-        createPortal(
-          <div
-            ref={menuRef}
-            className="fixed bg-card border border-border/80 rounded-xl shadow-[0_16px_30px_hsl(var(--background)/0.45)] z-50 py-1 backdrop-blur-md"
-            style={{ top: menuPosition.top, left: menuPosition.left }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() =>
-                handleStartRename(
-                  menuSessionId,
-                  sessions.find((s) => s.id === menuSessionId)?.name || ''
-                )
-              }
-              className="block w-full text-left px-3 py-1.5 text-sm hover:bg-accent/70 transition-colors"
-            >
-              Rename
-            </button>
-            {sessions.length > 1 && (
-              <button
-                onClick={() => handleDelete(menuSessionId)}
-                className="block w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-accent/70 transition-colors"
-              >
-                Delete
-              </button>
-            )}
-          </div>,
-          document.body
-        )}
     </SidebarSection>
   );
 }
