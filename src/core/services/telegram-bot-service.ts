@@ -131,15 +131,16 @@ export class TelegramBotService implements ITelegramBotService {
       this.send(msg.chat.id, 'Enter the task title:').catch(this.logError);
     });
 
-    bot.onText(/\/threadinfo$/, (msg) => {
-      if (!this.isAllowed(msg)) return;
+    // No isAllowed check — this command exists to discover chat/thread IDs
+    // before they are configured. It only returns IDs, no task data.
+    bot.onText(/\/threadinfo/, (msg) => {
       this.log('in', msg.text ?? '/threadinfo');
       const lines = [
         `*Thread Info*`,
         `Chat ID: \`${msg.chat.id}\``,
         `Message Thread ID: \`${msg.message_thread_id ?? 'none'}\``,
       ];
-      this.send(msg.chat.id, lines.join('\n'), {
+      this.bot?.sendMessage(msg.chat.id, lines.join('\n'), {
         parse_mode: 'MarkdownV2',
         ...(msg.message_thread_id ? { message_thread_id: msg.message_thread_id } : {}),
       }).catch(this.logError);
