@@ -5,6 +5,7 @@ import { DaemonWsServer } from './ws/ws-server';
 import { WS_CHANNELS } from './ws/channels';
 import { startSupervisors, stopSupervisors } from './lifecycle';
 import { stopAllBots, autoStartTelegramBots } from './routes/telegram';
+import { InAppNotificationRouter } from '../core/services/in-app-notification-router';
 
 const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
 
@@ -31,6 +32,13 @@ async function main() {
       wsHolder.server?.broadcast(WS_CHANNELS.MAIN_DIVERGED, undefined, { projectId });
     },
   });
+
+  // Register in-app notification router (lazily broadcasts via WS once server is ready)
+  const inAppRouter = new InAppNotificationRouter(
+    services.inAppNotificationStore,
+    (type, payload) => { wsHolder.server?.broadcast(type, undefined, payload); },
+  );
+  services.notificationRouter.addRouter(inAppRouter);
 
   services.appLogger.info('daemon', 'Daemon starting');
 

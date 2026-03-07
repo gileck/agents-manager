@@ -20,6 +20,7 @@ import { gitRoutes } from './routes/git';
 import { promptRoutes } from './routes/prompts';
 import { artifactRoutes } from './routes/artifacts';
 import { automatedAgentRoutes } from './routes/automated-agents';
+import { notificationRoutes } from './routes/notifications';
 import { errorHandler } from './middleware/error-handler';
 import type { AppServices } from '../core/providers/setup';
 import type { DaemonWsServer } from './ws/ws-server';
@@ -55,6 +56,7 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
   app.use(settingsRoutes(services));
   app.use(dashboardRoutes(services));
   app.use(eventRoutes(services));
+  app.use(notificationRoutes(services));
 
   // Action routes (side-effects: agents, chat, git, etc.)
   app.use(agentRoutes(services, wsHolder));

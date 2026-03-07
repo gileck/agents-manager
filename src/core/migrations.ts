@@ -62,5 +62,21 @@ export function getMigrations(): Migration[] {
       name: '098_add_created_by_to_tasks',
       sql: `ALTER TABLE tasks ADD COLUMN created_by TEXT`,
     },
+    {
+      name: '099_create_app_notifications',
+      sql: `
+CREATE TABLE IF NOT EXISTS app_notifications (
+  id           TEXT    PRIMARY KEY,
+  task_id      TEXT    NOT NULL,
+  project_id   TEXT,
+  title        TEXT    NOT NULL,
+  body         TEXT    NOT NULL,
+  navigation_url TEXT  NOT NULL,
+  read         INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_app_notif_project ON app_notifications (project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_app_notif_unread  ON app_notifications (read, created_at)`,
+    },
   ];
 }

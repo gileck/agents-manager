@@ -23,6 +23,7 @@ import type { IKanbanBoardStore } from '../interfaces/kanban-board-store';
 import type { ISettingsStore } from '../interfaces/settings-store';
 import type { IAppDebugLog } from '../interfaces/app-debug-log';
 import type { IAutomatedAgentStore } from '../interfaces/automated-agent-store';
+import type { IInAppNotificationStore } from '../interfaces/in-app-notification-store';
 import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -42,6 +43,7 @@ import { SqliteKanbanBoardStore } from '../stores/sqlite-kanban-board-store';
 import { SqliteSettingsStore } from '../stores/settings-store';
 import { SqliteAppDebugLog } from '../stores/sqlite-app-debug-log';
 import { SqliteAutomatedAgentStore } from '../stores/sqlite-automated-agent-store';
+import { SqliteInAppNotificationStore } from '../stores/sqlite-in-app-notification-store';
 import { AppLogger, initAppLogger, getAppLogger } from '../services/app-logger';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
@@ -135,6 +137,7 @@ export interface AppServices {
   automatedAgentStore: IAutomatedAgentStore;
   scheduledAgentService: ScheduledAgentService;
   schedulerSupervisor: SchedulerSupervisor;
+  inAppNotificationStore: IInAppNotificationStore;
 }
 
 export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
@@ -225,6 +228,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
 
   // Automated agent stores and services (created before AgentService so it can be passed in for stop delegation)
   const automatedAgentStore = new SqliteAutomatedAgentStore(db);
+  const inAppNotificationStore = new SqliteInAppNotificationStore(db);
   const triageBuilder = new TriageAgentPromptBuilder(taskStore, taskContextStore);
   const promptBuilders = new Map([[triageBuilder.templateId, triageBuilder]]);
   const scheduledAgentService = new ScheduledAgentService(
@@ -324,5 +328,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     automatedAgentStore,
     scheduledAgentService,
     schedulerSupervisor,
+    inAppNotificationStore,
   };
 }

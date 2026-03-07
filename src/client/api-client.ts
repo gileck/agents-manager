@@ -21,6 +21,7 @@ import type {
   AutomatedAgent, AutomatedAgentCreateInput, AutomatedAgentUpdateInput, AutomatedAgentTemplate,
   AgentRun,
   TaskChatSessionWithTitle,
+  InAppNotification, InAppNotificationFilter,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -256,6 +257,14 @@ export interface ApiClient {
     trigger(id: string): Promise<AgentRun>;
     getRuns(id: string, limit?: number): Promise<AgentRun[]>;
     listTemplates(): Promise<AutomatedAgentTemplate[]>;
+  };
+
+  // In-app notifications
+  notifications: {
+    list(filter?: InAppNotificationFilter): Promise<InAppNotification[]>;
+    markRead(id: string): Promise<void>;
+    markAllRead(projectId?: string): Promise<void>;
+    getUnreadCount(projectId?: string): Promise<{ count: number }>;
   };
 }
 
@@ -565,6 +574,20 @@ export function createApiClient(baseUrl: string): ApiClient {
       trigger: (id) => req('POST', `/api/automated-agents/${id}/trigger`),
       getRuns: (id, limit?) => req('GET', `/api/automated-agents/${id}/runs${qs({ limit })}`),
       listTemplates: () => req('GET', '/api/automated-agents/templates'),
+    },
+
+    // -- In-app notifications ------------------------------------------------
+    notifications: {
+      list: (filter?: InAppNotificationFilter) => {
+        const q: Record<string, string | number | boolean | undefined> = {};
+        if (filter?.projectId) q.projectId = filter.projectId;
+        if (filter?.unreadOnly) q.unreadOnly = filter.unreadOnly;
+        if (filter?.limit !== undefined) q.limit = filter.limit;
+        return req('GET', `/api/notifications${qs(q)}`);
+      },
+      markRead: (id) => req('PUT', `/api/notifications/${id}/read`),
+      markAllRead: (projectId?) => req('PUT', `/api/notifications/read-all${qs({ projectId })}`),
+      getUnreadCount: (projectId?) => req('GET', `/api/notifications/unread-count${qs({ projectId })}`),
     },
   };
 }
