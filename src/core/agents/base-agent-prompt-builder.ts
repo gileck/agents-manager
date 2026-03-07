@@ -1,7 +1,21 @@
-import type { AgentContext, AgentConfig, AgentRunResult } from '../../shared/types';
+import type { AgentContext, AgentConfig, AgentRunResult, TaskContextEntry } from '../../shared/types';
 import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
 import type { AgentLibResult } from '../interfaces/agent-lib';
 import { PromptRenderer } from '../services/prompt-renderer';
+
+/** Format a context entry for inclusion in the prompt, including reviewer comments when present. */
+function formatContextEntry(e: TaskContextEntry): string {
+  const ts = new Date(e.createdAt).toISOString();
+  let text = `### [${e.source}] ${e.entryType} (${ts})\n${e.summary}`;
+  const comments = e.data?.comments;
+  if (Array.isArray(comments) && comments.length > 0) {
+    text += '\n\n**Review Comments:**';
+    for (const c of comments) {
+      text += `\n- ${String(c)}`;
+    }
+  }
+  return text;
+}
 
 export interface AgentExecutionConfig {
   prompt: string;
@@ -59,19 +73,13 @@ export abstract class BaseAgentPromptBuilder {
       const excludedTypes = new Set(this.getExcludedFeedbackTypes());
       const unaddressed = feedbackEntries.filter(e => !e.addressed && !excludedTypes.has(e.entryType));
       if (unaddressed.length > 0) {
-        const block = unaddressed.map(e => {
-          const ts = new Date(e.createdAt).toISOString();
-          return `### [${e.source}] ${e.entryType} (${ts})\n${e.summary}`;
-        }).join('\n\n');
+        const block = unaddressed.map(e => formatContextEntry(e)).join('\n\n');
         sections.push(`## Unaddressed Feedback\n\n${block}`);
       }
 
       // Work product context (agent summaries, user inputs, etc.)
       if (workEntries.length > 0) {
-        const block = workEntries.map(e => {
-          const ts = new Date(e.createdAt).toISOString();
-          return `### [${e.source}] ${e.entryType} (${ts})\n${e.summary}`;
-        }).join('\n\n');
+        const block = workEntries.map(e => formatContextEntry(e)).join('\n\n');
         sections.push(`## Task Context\n\n${block}`);
       }
 

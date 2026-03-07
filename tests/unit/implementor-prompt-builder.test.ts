@@ -322,6 +322,62 @@ describe('ImplementorPromptBuilder', () => {
     });
   });
 
+  describe('review_feedback comments included in prompt', () => {
+    it('should include reviewer comments from data.comments in the generated prompt', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'changes_requested' as RevisionReason,
+        taskContext: [
+          {
+            id: 'ctx-1',
+            taskId: 'task-1',
+            agentRunId: 'run-1',
+            source: 'reviewer',
+            entryType: 'review_feedback',
+            summary: 'Found issues with error handling',
+            data: {
+              verdict: 'changes_requested',
+              comments: [
+                'Fix the null check in getUserById — it silently returns undefined instead of throwing',
+                'Add input validation for the email parameter in createUser',
+              ],
+            },
+            createdAt: 1700000000000,
+            addressed: false,
+            addressedByRunId: null,
+          },
+        ],
+      });
+      const config = builder.buildExecutionConfig(ctx, defaultConfig);
+      expect(config.prompt).toContain('Fix the null check in getUserById');
+      expect(config.prompt).toContain('Add input validation for the email parameter in createUser');
+    });
+
+    it('should still render summary when data.comments is absent', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'changes_requested' as RevisionReason,
+        taskContext: [
+          {
+            id: 'ctx-1',
+            taskId: 'task-1',
+            agentRunId: 'run-1',
+            source: 'reviewer',
+            entryType: 'review_feedback',
+            summary: 'Found issues with error handling',
+            data: { verdict: 'changes_requested' },
+            createdAt: 1700000000000,
+            addressed: false,
+            addressedByRunId: null,
+          },
+        ],
+      });
+      const config = builder.buildExecutionConfig(ctx, defaultConfig);
+      expect(config.prompt).toContain('Found issues with error handling');
+      expect(config.prompt).not.toContain('Review Comments');
+    });
+  });
+
   describe('all modes produce a prompt', () => {
     const modeConfigs: Array<{ mode: AgentMode; revisionReason?: RevisionReason; label: string }> = [
       { mode: 'new', label: 'new (implement)' },
