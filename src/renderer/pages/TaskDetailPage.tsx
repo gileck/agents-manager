@@ -464,115 +464,116 @@ export function TaskDetailPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* 1. TOPNAV */}
-      <div style={{
-        display: 'flex', alignItems: 'center', height: 44, minHeight: 44,
-        borderBottom: '1px solid var(--border)', padding: '0 24px', gap: 8, flexShrink: 0,
-        background: 'var(--card)',
-      }}>
-        <button
-          onClick={() => (navigate as (delta: number) => void)(-1)}
-          style={{ fontSize: 13, color: 'var(--muted-foreground)', cursor: 'pointer', background: 'none', border: 'none', padding: '2px 4px' }}
-        >
-          ← Back
-        </button>
-        <span style={{ color: 'var(--border)', fontSize: 13 }}>/</span>
-        <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Tasks</span>
-        <span style={{ color: 'var(--border)', fontSize: 13 }}>/</span>
-        <span style={{ fontSize: 13, color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
-          {task.title}
-        </span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          {worktree?.path && (
-            <>
-              <Button variant="outline" size="sm" title="Open in iTerm" onClick={() => window.api.shell.openInIterm(worktree.path)}>
-                <img src={itermIcon} alt="iTerm" width={16} height={16} />
-              </Button>
-              <Button variant="outline" size="sm" title="Open in VS Code" onClick={() => window.api.shell.openInVscode(worktree.path)}>
-                <img src={vscodeIcon} alt="VS Code" width={16} height={16} />
-              </Button>
-            </>
-          )}
-          <Button variant="outline" size="sm" onClick={handleDuplicate} disabled={duplicating}>
-            {duplicating ? 'Duplicating...' : 'Duplicate'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={openEdit}>Edit</Button>
-          <Button variant="outline" size="sm" onClick={() => { setResetPipelineId(task.pipelineId); setResetOpen(true); }} disabled={hasRunningAgent}>Reset</Button>
-          <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>Delete</Button>
-        </div>
-      </div>
+      {/* UNIFIED HEADER */}
+      <div style={{ flexShrink: 0, background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
 
-      {/* 2. HERO */}
-      <div style={{ padding: '8px 24px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>{task.title}</h1>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12, color: 'var(--muted-foreground)' }}>
-          <PipelineBadge status={task.status} pipeline={pipeline} />
-          {pipeline && <><span>·</span><span>{pipeline.name}</span></>}
-          {task.featureId && <><span>·</span><span>{task.featureId}</span></>}
-          {task.priority !== undefined && <><span>·</span><span>P{task.priority}</span></>}
-          <span>·</span>
-          <span>{new Date(task.createdAt).toLocaleDateString()}</span>
-          {worktree && (
-            <>
-              <span>·</span>
-              <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--primary)', backgroundColor: 'rgba(59,130,246,0.1)', padding: '1px 6px', borderRadius: 4 }}>
-                {worktree.path ?? worktree.branch}
-              </span>
-            </>
-          )}
+        {/* Breadcrumb + actions */}
+        <div style={{
+          display: 'flex', alignItems: 'center', height: 40, minHeight: 40,
+          padding: '0 24px', gap: 8,
+        }}>
+          <button
+            onClick={() => (navigate as (delta: number) => void)(-1)}
+            style={{ fontSize: 13, color: 'var(--muted-foreground)', cursor: 'pointer', background: 'none', border: 'none', padding: '2px 4px' }}
+          >
+            ← Back
+          </button>
+          <span style={{ color: 'var(--border)', fontSize: 13 }}>/</span>
+          <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Tasks</span>
+          <span style={{ color: 'var(--border)', fontSize: 13 }}>/</span>
+          <span style={{ fontSize: 13, color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
+            {task.title}
+          </span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            {worktree?.path && (
+              <>
+                <Button variant="outline" size="sm" title="Open in iTerm" onClick={() => window.api.shell.openInIterm(worktree.path)}>
+                  <img src={itermIcon} alt="iTerm" width={16} height={16} />
+                </Button>
+                <Button variant="outline" size="sm" title="Open in VS Code" onClick={() => window.api.shell.openInVscode(worktree.path)}>
+                  <img src={vscodeIcon} alt="VS Code" width={16} height={16} />
+                </Button>
+              </>
+            )}
+            <Button variant="outline" size="sm" onClick={handleDuplicate} disabled={duplicating}>
+              {duplicating ? 'Duplicating...' : 'Duplicate'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={openEdit}>Edit</Button>
+            <Button variant="outline" size="sm" onClick={() => { setResetPipelineId(task.pipelineId); setResetOpen(true); }} disabled={hasRunningAgent}>Reset</Button>
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>Delete</Button>
+          </div>
         </div>
-        {/* Action strip */}
-        <div style={{ borderTop: '1px solid var(--border)', padding: '6px 0' }}>
-          {(!isAgentPipeline || agentRuns !== null) && (
-            <PipelineControlPanel
-              taskId={id!}
-              task={task}
-              isAgentPipeline={isAgentPipeline}
-              hasRunningAgent={hasRunningAgent}
-              activeRun={activeRun}
-              lastRun={lastRun}
-              isStuck={isStuck}
-              isFinalizing={isFinalizing}
-              primaryTransitions={primaryTransitions}
-              transitioning={transitioning}
-              stoppingAgent={stoppingAgent}
-              statusMeta={statusMeta}
-              pipelineStatuses={pipeline?.statuses ?? []}
-              onTransition={handleTransition}
-              onStopAgent={handleStopAgent}
-              onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
-              onHookFailures={(failures) => setHookFailureAlerts((prev) => [...prev, ...failures])}
-              diagnostics={diagnostics}
-              refetchDiagnostics={refetchDiagnostics}
-            />
-          )}
-          {/* PR Review feedback section */}
-          {task.status === 'pr_review' && (() => {
-            const implFeedback = (contextEntries ?? []).filter(e => e.entryType === 'implementation_feedback');
-            const reviseTransition = (transitions ?? []).find(t => t.to === 'implementing');
-            return (
-              <div className="mt-3 border rounded-md p-4">
-                <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Implementation Feedback</h4>
-                {implFeedback.length > 0 && (
-                  <div className="mb-4">
-                    <CommentThread entries={implFeedback} emptyMessage="No implementation feedback yet." />
-                  </div>
-                )}
-                <CommentInput
-                  placeholder="Add feedback for the implementor agent..."
-                  reviseTransition={reviseTransition}
-                  transitioning={transitioning}
-                  onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'implementation_feedback')}
-                />
-              </div>
-            );
-          })()}
-        </div>
-      </div>
 
-      {/* 3. PIPELINE BAR */}
-      {pipeline && (
-        <div style={{ borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
+        {/* Title + meta + controls */}
+        <div style={{ padding: '6px 24px 0' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 4px' }}>{task.title}</h1>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4, fontSize: 12, color: 'var(--muted-foreground)' }}>
+            <PipelineBadge status={task.status} pipeline={pipeline} />
+            {pipeline && <><span>·</span><span>{pipeline.name}</span></>}
+            {task.featureId && <><span>·</span><span>{task.featureId}</span></>}
+            {task.priority !== undefined && <><span>·</span><span>P{task.priority}</span></>}
+            <span>·</span>
+            <span>{new Date(task.createdAt).toLocaleDateString()}</span>
+            {worktree && (
+              <>
+                <span>·</span>
+                <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--primary)', backgroundColor: 'rgba(59,130,246,0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                  {worktree.path ?? worktree.branch}
+                </span>
+              </>
+            )}
+          </div>
+          {/* Action strip */}
+          <div style={{ padding: '2px 0 4px' }}>
+            {(!isAgentPipeline || agentRuns !== null) && (
+              <PipelineControlPanel
+                taskId={id!}
+                task={task}
+                isAgentPipeline={isAgentPipeline}
+                hasRunningAgent={hasRunningAgent}
+                activeRun={activeRun}
+                lastRun={lastRun}
+                isStuck={isStuck}
+                isFinalizing={isFinalizing}
+                primaryTransitions={primaryTransitions}
+                transitioning={transitioning}
+                stoppingAgent={stoppingAgent}
+                statusMeta={statusMeta}
+                pipelineStatuses={pipeline?.statuses ?? []}
+                onTransition={handleTransition}
+                onStopAgent={handleStopAgent}
+                onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
+                onHookFailures={(failures) => setHookFailureAlerts((prev) => [...prev, ...failures])}
+                diagnostics={diagnostics}
+                refetchDiagnostics={refetchDiagnostics}
+              />
+            )}
+            {/* PR Review feedback section */}
+            {task.status === 'pr_review' && (() => {
+              const implFeedback = (contextEntries ?? []).filter(e => e.entryType === 'implementation_feedback');
+              const reviseTransition = (transitions ?? []).find(t => t.to === 'implementing');
+              return (
+                <div className="mt-3 border rounded-md p-4">
+                  <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Implementation Feedback</h4>
+                  {implFeedback.length > 0 && (
+                    <div className="mb-4">
+                      <CommentThread entries={implFeedback} emptyMessage="No implementation feedback yet." />
+                    </div>
+                  )}
+                  <CommentInput
+                    placeholder="Add feedback for the implementor agent..."
+                    reviseTransition={reviseTransition}
+                    transitioning={transitioning}
+                    onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'implementation_feedback')}
+                  />
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Pipeline progress */}
+        {pipeline && (
           <PipelineProgress
             pipeline={pipeline}
             currentStatus={task.status}
@@ -582,8 +583,9 @@ export function TaskDetailPage() {
             onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
             implPhases={task.phases}
           />
-        </div>
-      )}
+        )}
+
+      </div>
 
       {/* 4. HOOK FAILURE BANNERS */}
       {hasVisibleBanners && (
@@ -657,8 +659,8 @@ export function TaskDetailPage() {
           borderRadius: 0,
           padding: '0 24px',
           justifyContent: 'flex-start',
-          height: 40,
-          background: 'hsl(var(--surface-1) / 0.9)',
+          height: 36,
+          background: 'var(--card)',
         }}>
           <TabsTrigger value="details">Task Details</TabsTrigger>
           <TabsTrigger value="plan" className={hasPlan ? '' : 'opacity-40'}>
@@ -687,10 +689,9 @@ export function TaskDetailPage() {
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: 'hsl(var(--surface-2) / 0.38)',
         }}>
 
-        <TabsContent value="details" style={{ padding: '20px 24px', overflowY: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
+        <TabsContent value="details" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <div className="flex justify-end mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/details`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -715,7 +716,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
+        <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <div className="flex justify-end mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/plan`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -736,7 +737,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
+        <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <div className="flex justify-end mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/design`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -757,7 +758,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="implementation" style={{ flex: 1, minHeight: 0, overflow: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
+        <TabsContent value="implementation" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <div className="flex justify-end px-6 pt-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/impl`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
@@ -782,7 +783,6 @@ export function TaskDetailPage() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          backgroundColor: 'hsl(var(--surface-1) / 0.75)',
         }}>
           <div className="flex justify-end px-6 pt-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/chat`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
@@ -792,7 +792,7 @@ export function TaskDetailPage() {
           <ChatPanel scope={{ type: 'task', id: id! }} />
         </TabsContent>
 
-        <TabsContent value="review" style={{ padding: '20px 24px', overflowY: 'auto', backgroundColor: 'hsl(var(--surface-1) / 0.75)' }}>
+        <TabsContent value="review" style={{ padding: '20px 24px', overflowY: 'auto' }}>
           <div className="flex justify-end mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/review`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
               &#x26F6;
