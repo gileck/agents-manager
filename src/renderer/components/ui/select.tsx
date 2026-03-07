@@ -70,7 +70,7 @@ function SelectTrigger({ children, className, id }: SelectTriggerProps) {
         setIsOpen(!isOpen);
       }}
       className={cn(
-        'flex h-9 w-full items-center justify-between whitespace-nowrap rounded-full border border-input/80 bg-background/70 px-3 py-1.5 text-sm text-foreground shadow-[0_0_0_1px_hsl(var(--border)/0.22)_inset] ring-offset-background placeholder:text-muted-foreground transition-[border-color,background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-muted/45 focus:outline-none focus:ring-2 focus:ring-ring/65 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-9 w-full items-center justify-between whitespace-nowrap rounded-full border border-input/80 bg-background dark:bg-background/70 px-3 py-1.5 text-sm text-foreground shadow-[0_0_0_1px_hsl(var(--border)/0.22)_inset] ring-offset-background placeholder:text-muted-foreground transition-[border-color,background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-muted/45 focus:outline-none focus:ring-2 focus:ring-ring/65 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
         className
       )}
     >
@@ -174,7 +174,7 @@ function SelectContent({ children, className }: SelectContentProps) {
       role="listbox"
       style={style}
       className={cn(
-        'fixed z-[80] overflow-auto rounded-2xl border border-border/80 bg-popover p-1.5 text-popover-foreground shadow-[0_20px_40px_hsl(var(--background)/0.62)]',
+        'fixed z-[80] overflow-auto rounded-2xl border border-border/80 bg-popover p-1.5 text-popover-foreground shadow-[0_20px_44px_rgba(2,8,23,0.24)] dark:shadow-[0_26px_56px_rgba(0,0,0,0.58)]',
         className
       )}
     >

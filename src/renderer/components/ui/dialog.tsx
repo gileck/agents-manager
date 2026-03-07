@@ -89,11 +89,12 @@ function DialogContent({ children, className, style }: DialogContentProps) {
     <div className="fixed inset-0 z-50">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/72"
+        className="fixed inset-0 bg-black/52 dark:bg-black/72 backdrop-blur-[1px]"
         onClick={() => onOpenChange(false)}
       />
       {/* Content */}
-      <div className={cn("fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border border-border bg-background p-6 shadow-[0_20px_40px_hsl(var(--background)/0.68)]", className)} style={style}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className={cn("relative grid w-full max-w-lg max-h-[85vh] gap-4 overflow-y-auto rounded-2xl border border-border/95 bg-card text-card-foreground p-6 shadow-[0_26px_60px_rgba(2,8,23,0.24)] dark:shadow-[0_30px_68px_rgba(0,0,0,0.62)]", className)} style={style}>
         {children}
         <button
           type="button"
@@ -103,6 +104,7 @@ function DialogContent({ children, className, style }: DialogContentProps) {
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </button>
+        </div>
       </div>
     </div>
   );
