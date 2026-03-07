@@ -83,25 +83,24 @@ export function StatusActionBar({
   // Agent running with active agent
   if (statusMeta.isAgentRunning && hasRunningAgent && activeRun) {
     return (
-      <div className="rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#22c55e' }}>
-        <span className="relative flex h-3 w-3">
+      <div className="flex items-center gap-2.5" style={{ fontSize: 13 }}>
+        <span className="relative flex" style={{ width: 8, height: 8 }}>
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+          <span className="relative inline-flex rounded-full bg-green-500" style={{ width: 8, height: 8 }} />
         </span>
-        <span className="text-sm">
-          Agent running: {activeRun.mode} / {activeRun.agentType}
+        <span style={{ color: 'var(--muted-foreground)' }}>
+          {activeRun.mode} / {activeRun.agentType}
         </span>
         <button
-          className="text-sm text-blue-500 hover:underline ml-2"
+          className="text-blue-500 hover:underline"
+          style={{ fontSize: 12 }}
           onClick={() => onNavigateToRun(activeRun.id)}
         >
           View Output &rarr;
         </button>
-        <div className="ml-auto">
-          <Button variant="destructive" size="sm" onClick={onStopAgent} disabled={stoppingAgent}>
-            {stoppingAgent ? 'Stopping...' : 'Stop Agent'}
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={onStopAgent} disabled={stoppingAgent} className="ml-auto" style={{ height: 26, fontSize: 12 }}>
+          {stoppingAgent ? 'Stopping...' : 'Stop Agent'}
+        </Button>
       </div>
     );
   }
@@ -109,17 +108,18 @@ export function StatusActionBar({
   // Agent running — agent just finished, post-completion work in progress
   if (statusMeta.isAgentRunning && isFinalizing) {
     return (
-      <div className="rounded-md border px-4 py-3 flex items-center gap-3" style={{ borderColor: '#3b82f6' }}>
-        <span className="relative flex h-3 w-3">
+      <div className="flex items-center gap-2.5" style={{ fontSize: 13 }}>
+        <span className="relative flex" style={{ width: 8, height: 8 }}>
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
+          <span className="relative inline-flex rounded-full bg-blue-500" style={{ width: 8, height: 8 }} />
         </span>
-        <span className="text-sm">
+        <span style={{ color: 'var(--muted-foreground)' }}>
           Finalizing — pushing branch and creating PR...
         </span>
         {lastRun && (
           <button
-            className="text-sm text-blue-500 hover:underline ml-2"
+            className="text-blue-500 hover:underline"
+            style={{ fontSize: 12 }}
             onClick={() => onNavigateToRun(lastRun.id)}
           >
             View Output &rarr;
@@ -227,8 +227,9 @@ export function StatusActionBar({
   // Waiting for input (needs_info, etc.)
   if (statusMeta.isWaitingForInput) {
     return (
-      <div className="rounded-md px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#fffbeb', border: '1px solid #fbbf24' }}>
-        <span className="text-sm font-medium" style={{ color: '#d97706' }}>
+      <div className="flex items-center gap-2" style={{ fontSize: 13 }}>
+        <span style={{ color: '#d97706', fontSize: 14 }}>&#x26A0;</span>
+        <span className="font-medium" style={{ color: '#d97706' }}>
           Agent needs more information
         </span>
         <span className="text-xs text-muted-foreground">— respond below</span>

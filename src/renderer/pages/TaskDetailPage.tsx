@@ -465,7 +465,7 @@ export function TaskDetailPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
       {/* UNIFIED HEADER */}
-      <div style={{ flexShrink: 0, background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ flexShrink: 0, background: 'var(--card)' }}>
 
         {/* Breadcrumb + actions */}
         <div style={{
@@ -691,12 +691,7 @@ export function TaskDetailPage() {
           flexDirection: 'column',
         }}>
 
-        <TabsContent value="details" style={{ padding: '20px 24px', overflowY: 'auto' }}>
-          <div className="flex justify-end mb-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/details`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
-              &#x26F6;
-            </Button>
-          </div>
+        <TabsContent value="details" style={{ padding: '12px 24px', overflowY: 'auto' }}>
           <TaskDetailDashboard
             task={task}
             taskId={id!}
@@ -716,12 +711,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="plan" style={{ padding: '20px 24px', overflowY: 'auto' }}>
-          <div className="flex justify-end mb-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/plan`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
-              &#x26F6;
-            </Button>
-          </div>
+        <TabsContent value="plan" style={{ padding: '12px 24px', overflowY: 'auto' }}>
           <PlanReviewCard
             title="Plan"
             content={task.plan}
@@ -737,12 +727,7 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="design" style={{ padding: '20px 24px', overflowY: 'auto' }}>
-          <div className="flex justify-end mb-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/design`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
-              &#x26F6;
-            </Button>
-          </div>
+        <TabsContent value="design" style={{ padding: '12px 24px', overflowY: 'auto' }}>
           <PlanReviewCard
             title="Technical Design"
             content={task.technicalDesign}
@@ -759,11 +744,6 @@ export function TaskDetailPage() {
         </TabsContent>
 
         <TabsContent value="implementation" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <div className="flex justify-end px-6 pt-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/impl`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
-              &#x26F6;
-            </Button>
-          </div>
           <ImplementationTab
             taskId={id!}
             task={task}
@@ -784,20 +764,10 @@ export function TaskDetailPage() {
           flexDirection: 'column',
           overflow: 'hidden',
         }}>
-          <div className="flex justify-end px-6 pt-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/chat`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
-              &#x26F6;
-            </Button>
-          </div>
           <ChatPanel scope={{ type: 'task', id: id! }} />
         </TabsContent>
 
-        <TabsContent value="review" style={{ padding: '20px 24px', overflowY: 'auto' }}>
-          <div className="flex justify-end mb-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/tasks/${id}/review`)} title="Open in full page" style={{ width: 28, height: 28, fontSize: 16 }}>
-              &#x26F6;
-            </Button>
-          </div>
+        <TabsContent value="review" style={{ padding: '12px 24px', overflowY: 'auto' }}>
           <WorkflowReviewTab
             taskId={id!}
             contextEntries={contextEntries ?? null}
