@@ -197,6 +197,8 @@ startSupervisors(services);
 httpServer.listen(PORT, '127.0.0.1');
 ```
 
+**Logging:** All daemon logging goes through `getAppLogger()` from `src/core/services/app-logger.ts` — there are no raw `console.*` calls. Before the DB is initialized, the app logger falls back to `console.*` which is captured to `~/.agents-manager/daemon.log`. Global `uncaughtException` and `unhandledRejection` handlers are registered at the top of the daemon entry point to ensure fatal errors are always recorded.
+
 ### Electron Main Process (`src/main/index.ts`)
 
 The Electron main process is a thin shell that delegates all operations to the daemon:

@@ -84,7 +84,7 @@ How all UI clients (Electron, CLI, Telegram bot) converge on the same daemon log
 
 Documented solutions to common Electron + React + SQLite problems in this project
 
-**Summary:** Ten documented issues with known fixes covering Electron rendering, SQLite compatibility, Tailwind CSS quirks, macOS PATH resolution, and native module ABI mismatches.
+**Summary:** Eleven documented issues with known fixes covering Electron rendering, SQLite compatibility, Tailwind CSS quirks, macOS PATH resolution, native module ABI mismatches, and daemon logging.
 
 **Key Points:**
 - Blank screen: add backgroundColor '#ffffff' to BrowserWindow options

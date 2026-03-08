@@ -115,6 +115,23 @@ function killProcessTree(pid: number) {
 
 **Key:** Use negative PID (`-pid`) on Unix/macOS to send signals to the entire process group, not just the parent.
 
+## Daemon Logging
+
+All daemon code must use `getAppLogger()` from `src/core/services/app-logger.ts` — never raw `console.*` calls. The app logger writes structured entries to SQLite during normal operation. Before the DB is initialized, its fallback routes to `console.*`, which is captured to `~/.agents-manager/daemon.log` by the launcher.
+
+The daemon entry point registers global `uncaughtException` and `unhandledRejection` handlers that log through `getAppLogger()`, ensuring fatal errors are recorded both in SQLite (if the DB is available) and the log file (via fallback).
+
+```typescript
+// Correct — use app logger everywhere in daemon code
+import { getAppLogger } from '../core/services/app-logger';
+getAppLogger().info('daemon', 'Something happened');
+getAppLogger().logError('daemon', 'Something failed', err);
+
+// WRONG — never use console.* directly in daemon code
+console.log('Something happened');    // ← goes nowhere if stdio is redirected
+console.error('Failed:', err);        // ← use getAppLogger().logError() instead
+```
+
 ## Shutdown Ordering
 
 The daemon shutdown handler in `src/daemon/index.ts` must execute cleanup steps in a specific order:

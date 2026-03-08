@@ -1,7 +1,7 @@
 ---
 title: Known Issues & Fixes
 description: Documented solutions to common Electron + React + SQLite problems in this project
-summary: Ten documented issues with known fixes covering Electron rendering, SQLite compatibility, Tailwind CSS quirks, macOS PATH resolution, and native module ABI mismatches.
+summary: Eleven documented issues with known fixes covering Electron rendering, SQLite compatibility, Tailwind CSS quirks, macOS PATH resolution, native module ABI mismatches, and daemon logging.
 priority: 2
 key_points:
   - "Blank screen: add backgroundColor '#ffffff' to BrowserWindow options"
@@ -206,4 +206,15 @@ See [cli-native-bindings.md](./cli-native-bindings.md) for full details and trou
 **Solution:** `src/cli/db.ts` auto-resolves the `build-node/` binding via `require.resolve` — no env var needed. If you hit this error outside the CLI (e.g., ad-hoc scripts), set the env var:
 ```bash
 export BETTER_SQLITE3_BINDING=node_modules/better-sqlite3/build-node/Release/better_sqlite3.node
+```
+
+## 11. Daemon Crash Logs Not Captured
+
+**Problem:** The daemon process is spawned detached by both Electron (`src/main/daemon-launcher.ts`) and CLI (`src/cli/ensure-daemon.ts`). Previously, `stdio` was set to `'ignore'`, discarding all stdout/stderr output. When the daemon crashed (unhandled exception, OOM, startup failure), there was no way to diagnose the cause.
+
+**Solution:** Both launchers now redirect stdout/stderr to `~/.agents-manager/daemon.log` (append mode). The daemon itself uses `getAppLogger()` exclusively — no raw `console.*` calls. Global `uncaughtException` and `unhandledRejection` handlers are registered at the top of `src/daemon/index.ts` to log fatal errors through the app logger before exiting.
+
+To diagnose daemon crashes:
+```bash
+cat ~/.agents-manager/daemon.log
 ```

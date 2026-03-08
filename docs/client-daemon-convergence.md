@@ -212,7 +212,7 @@ Both Electron and CLI call `ensureDaemon()` before any operation. The flow:
 
 1. **Probe** — `GET http://127.0.0.1:3847/api/health` (3-second timeout)
 2. **If 200** — daemon is already running, reuse it
-3. **If ECONNREFUSED** — no daemon running, spawn one as a detached background process
+3. **If ECONNREFUSED** — no daemon running, spawn one as a detached background process with stdout/stderr redirected to `~/.agents-manager/daemon.log`
 4. **Poll until healthy** — up to 15 seconds (CLI) or 10 seconds (Electron)
 
 The port is **fixed** at `3847` (overridable via `AM_DAEMON_PORT` env var). All clients use the same port, so they always talk to the same daemon.
@@ -260,10 +260,15 @@ The system self-heals: one daemon wins, the other dies, all clients connect to t
 | OS TCP port bind | Yes | Hard gate — `EADDRINUSE` kills the second daemon |
 | Lock file (`flock`) | No | No filesystem lock |
 | PID file | Advisory only | Written after spawn; used by `daemon stop` to find the process, but not read by `ensureDaemon()` |
+| Log file | Diagnostic | `~/.agents-manager/daemon.log` — captures stdout/stderr from the detached daemon process |
 
 ### PID File
 
 The PID file at `~/.agents-manager/daemon.pid` is written after spawning and read only by the `daemon stop` / `daemon status` commands. `ensureDaemon()` ignores it entirely — it relies purely on the health check.
+
+### Log File
+
+Both launchers redirect the daemon's stdout/stderr to `~/.agents-manager/daemon.log` (append mode). The daemon itself has no raw `console.*` calls — all logging goes through `getAppLogger()`, which writes to SQLite during normal operation. Before the DB is initialized, the app logger's fallback writes to `console.*`, which is captured by this log file. This ensures that fatal startup crashes and unhandled exceptions are always recorded even when the DB is unavailable.
 
 ### Key Files
 
@@ -273,6 +278,7 @@ The PID file at `~/.agents-manager/daemon.pid` is written after spawning and rea
 | `src/main/daemon-launcher.ts` | Electron auto-start: same pattern, 10s timeout |
 | `src/daemon/index.ts` | Daemon entry point: `httpServer.listen(PORT)` — EADDRINUSE kills duplicates |
 | `src/cli/commands/daemon.ts` | Explicit `daemon start/stop/status`, PID file read/write |
+| `~/.agents-manager/daemon.log` | Daemon stdout/stderr log file (append mode) |
 
 ## Key Files
 
