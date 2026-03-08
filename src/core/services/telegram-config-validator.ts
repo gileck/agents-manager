@@ -16,8 +16,8 @@ export function validateTelegramConfig(
   if (!/^-?\d+$/.test(chatId)) {
     throw new Error('Invalid Telegram chat ID format. Expected a numeric value (optionally prefixed with -).');
   }
-  if (notificationChatId && !/^-?\d+$/.test(notificationChatId)) {
-    throw new Error('Invalid Telegram notification chat ID format. Expected a numeric value (optionally prefixed with -).');
+  if (notificationChatId && !/^-?\d+(:\d+)?$/.test(notificationChatId)) {
+    throw new Error('Invalid Telegram notification chat ID format. Expected a numeric value (optionally prefixed with -), with optional :threadId suffix.');
   }
   return { botToken, chatId, notificationChatId: notificationChatId || undefined };
 }

@@ -6,15 +6,29 @@ import { getAppLogger } from './app-logger';
 export class TelegramNotificationRouter implements INotificationRouter {
   private bot: TelegramBot;
   private chatId: string;
+  private messageThreadId: number | undefined;
 
   constructor(bot: TelegramBot, chatId: string) {
     this.bot = bot;
+    // Support "chatId:threadId" format for sending to a specific forum topic
+    const colonIdx = chatId.lastIndexOf(':');
+    if (colonIdx > 0) {
+      const threadPart = parseInt(chatId.slice(colonIdx + 1), 10);
+      if (!isNaN(threadPart)) {
+        this.chatId = chatId.slice(0, colonIdx);
+        this.messageThreadId = threadPart;
+        return;
+      }
+    }
     this.chatId = chatId;
   }
 
   async send(notification: Notification): Promise<void> {
     const text = `*${this.escapeMarkdown(notification.title)}*\n${this.escapeMarkdown(notification.body)}`;
-    const options: TelegramBot.SendMessageOptions = { parse_mode: 'MarkdownV2' };
+    const options: TelegramBot.SendMessageOptions = {
+      parse_mode: 'MarkdownV2',
+      ...(this.messageThreadId ? { message_thread_id: this.messageThreadId } : {}),
+    };
 
     if (notification.actions && notification.actions.length > 0) {
       options.reply_markup = {
@@ -28,7 +42,9 @@ export class TelegramNotificationRouter implements INotificationRouter {
       getAppLogger().logError('TelegramNotificationRouter', 'MarkdownV2 send failed, retrying as plain text', err);
       // Retry as plain text with keyboard preserved
       const plainText = `${notification.title}\n${notification.body}`;
-      const fallbackOptions: TelegramBot.SendMessageOptions = {};
+      const fallbackOptions: TelegramBot.SendMessageOptions = {
+        ...(this.messageThreadId ? { message_thread_id: this.messageThreadId } : {}),
+      };
       if (options.reply_markup) {
         fallbackOptions.reply_markup = options.reply_markup;
       }
