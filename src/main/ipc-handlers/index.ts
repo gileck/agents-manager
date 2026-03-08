@@ -1,4 +1,3 @@
-import { app } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
 import type { ApiClient } from '../../client';
@@ -55,7 +54,7 @@ export function registerIpcHandlers(api: ApiClient): void {
   // ============================================
 
   registerIpcHandler(IPC_CHANNELS.APP_GET_VERSION, async () => {
-    return app.getVersion();
+    return api.app.getVersion();
   });
 
   // ============================================
@@ -75,5 +74,5 @@ export function registerIpcHandlers(api: ApiClient): void {
   registerDebugLogHandlers(api);
   registerAutomatedAgentHandlers(api);
   registerNotificationHandlers(api);
-  registerShellHandlers();
+  registerShellHandlers(api);
 }

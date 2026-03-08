@@ -267,6 +267,20 @@ export interface ApiClient {
     markAllRead(projectId?: string): Promise<void>;
     getUnreadCount(projectId?: string): Promise<{ count: number }>;
   };
+
+  // Shell operations (OS-level commands)
+  shell: {
+    openInChrome(url: string): Promise<void>;
+    openInIterm(dirPath: string): Promise<void>;
+    openInVscode(dirPath: string): Promise<void>;
+    openFileInVscode(filePath: string, line?: number): Promise<void>;
+    pickFolder(): Promise<string | null>;
+  };
+
+  // App metadata
+  app: {
+    getVersion(): Promise<string>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -591,6 +605,20 @@ export function createApiClient(baseUrl: string): ApiClient {
       markRead: (id) => req('PUT', `/api/notifications/${id}/read`),
       markAllRead: (projectId?) => req('PUT', `/api/notifications/read-all${qs({ projectId })}`),
       getUnreadCount: (projectId?) => req('GET', `/api/notifications/unread-count${qs({ projectId })}`),
+    },
+
+    // -- Shell operations ---------------------------------------------------
+    shell: {
+      openInChrome: (url) => req('POST', '/api/shell/open-in-chrome', { url }),
+      openInIterm: (dirPath) => req('POST', '/api/shell/open-in-iterm', { dirPath }),
+      openInVscode: (dirPath) => req('POST', '/api/shell/open-in-vscode', { dirPath }),
+      openFileInVscode: (filePath, line?) => req('POST', '/api/shell/open-file-in-vscode', { filePath, line }),
+      pickFolder: () => req<{ path: string | null }>('GET', '/api/shell/pick-folder').then(r => r.path),
+    },
+
+    // -- App metadata -------------------------------------------------------
+    app: {
+      getVersion: () => req<{ version: string }>('GET', '/api/app/version').then(r => r.version),
     },
   };
 }
