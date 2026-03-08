@@ -1,7 +1,7 @@
 import type { Worktree } from '../../shared/types';
 
 export interface IWorktreeManager {
-  create(branch: string, taskId: string): Promise<Worktree>;
+  create(branch: string, taskId: string, baseBranch?: string): Promise<Worktree>;
   get(taskId: string): Promise<Worktree | null>;
   list(): Promise<Worktree[]>;
   lock(taskId: string): Promise<void>;

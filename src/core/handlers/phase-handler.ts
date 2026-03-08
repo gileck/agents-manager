@@ -1,13 +1,19 @@
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { ITaskStore } from '../interfaces/task-store';
+import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
+import type { IProjectStore } from '../interfaces/project-store';
+import type { IScmPlatform } from '../interfaces/scm-platform';
 import type { Task, Transition, TransitionContext, HookResult } from '../../shared/types';
 import { getActivePhaseIndex, hasPendingPhases } from '../../shared/phase-utils';
 
 export interface PhaseHandlerDeps {
   taskStore: ITaskStore;
+  taskArtifactStore: ITaskArtifactStore;
   taskEventLog: ITaskEventLog;
   pipelineEngine: IPipelineEngine;
+  projectStore: IProjectStore;
+  createScmPlatform: (repoPath: string) => IScmPlatform;
 }
 
 export function registerPhaseHandler(engine: IPipelineEngine, deps: PhaseHandlerDeps): void {
@@ -45,7 +51,7 @@ export function registerPhaseHandler(engine: IPipelineEngine, deps: PhaseHandler
     // Find and activate the next pending phase
     const nextIdx = updatedPhases.findIndex(p => p.status === 'pending');
     if (nextIdx < 0) {
-      // All phases completed — update and stay at done
+      // All phases completed — create final PR from task branch → main
       try {
         await deps.taskStore.updateTask(task.id, { phases: updatedPhases });
       } catch (err) {
@@ -53,7 +59,78 @@ export function registerPhaseHandler(engine: IPipelineEngine, deps: PhaseHandler
         await log(`advance_phase: failed to persist completed phases: ${errMsg}`, 'error');
         return { success: false, error: `Failed to update phases: ${errMsg}` };
       }
-      await log('advance_phase: all phases completed — task stays at done', 'info');
+
+      const taskBranch = (task.metadata?.taskBranch as string) || undefined;
+      if (taskBranch) {
+        // Create final PR: task integration branch → main
+        await log('advance_phase: all phases completed — creating final PR', 'info', { taskBranch });
+        try {
+          const project = await deps.projectStore.getProject(task.projectId);
+          if (!project?.path) {
+            await log('advance_phase: project has no path — cannot create final PR', 'error');
+            return { success: false, error: 'Project has no path' };
+          }
+
+          const scmPlatform = deps.createScmPlatform(project.path);
+          const defaultBranch = (project.config?.defaultBranch as string) || 'main';
+
+          // Build summary body listing all merged phases
+          const phaseLines = updatedPhases.map((p, i) =>
+            `- Phase ${i + 1}: ${p.name} ${p.prLink ? `([PR](${p.prLink}))` : '(merged)'}`
+          ).join('\n');
+          const body = `## ${task.title}\n\nFinal PR merging all ${updatedPhases.length} phases into ${defaultBranch}.\n\n### Phases\n${phaseLines}`;
+
+          const prInfo = await scmPlatform.createPR({
+            title: task.title,
+            body,
+            head: taskBranch,
+            base: defaultBranch,
+          });
+
+          await deps.taskArtifactStore.createArtifact({
+            taskId: task.id,
+            type: 'pr',
+            data: { url: prInfo.url, number: prInfo.number, branch: taskBranch, isFinalPR: true },
+          });
+
+          await deps.taskStore.updateTask(task.id, {
+            prLink: prInfo.url,
+            branchName: taskBranch,
+          });
+
+          await log('advance_phase: final PR created', 'info', { url: prInfo.url, number: prInfo.number });
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          await log(`advance_phase: failed to create final PR: ${errMsg}`, 'error');
+          return { success: false, error: `Failed to create final PR: ${errMsg}` };
+        }
+
+        // Transition to pr_review for the final PR
+        try {
+          const freshTask = await deps.taskStore.getTask(task.id);
+          if (!freshTask) {
+            await log('advance_phase: task not found after final PR creation', 'error');
+            return { success: false, error: 'Task not found after final PR creation' };
+          }
+          const transitionResult = await deps.pipelineEngine.executeTransition(freshTask, 'pr_review', {
+            trigger: 'system',
+            data: { reason: 'final_pr_created', taskBranch },
+          });
+          if (transitionResult.success) {
+            await log('advance_phase: triggered done → pr_review for final PR', 'info');
+          } else {
+            await log(`advance_phase: done → pr_review transition failed: ${transitionResult.error ?? 'unknown'}`, 'error');
+            return { success: false, error: transitionResult.error ?? 'Transition to pr_review failed' };
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          await log(`advance_phase: failed to trigger done → pr_review: ${errMsg}`, 'error');
+          return { success: false, error: errMsg };
+        }
+      } else {
+        await log('advance_phase: all phases completed — no task branch (legacy flow), task stays at done', 'info');
+      }
+
       return { success: true };
     }
 
@@ -84,7 +161,7 @@ export function registerPhaseHandler(engine: IPipelineEngine, deps: PhaseHandler
 
     // Worktree deletion is handled by merge_pr (which runs before advance_phase),
     // so we don't need to delete it here. The next phase's start_agent hook will
-    // create a fresh worktree off main.
+    // create a fresh worktree off the task integration branch.
 
     // Trigger system transition done → implementing
     // We need the fresh task (with updated phases) for the pipeline engine

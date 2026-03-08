@@ -35,7 +35,7 @@ interface Task {
   debugInfo: string | null;           // Raw debug logs for bug investigation (only used by investigator agent)
   subtasks: Subtask[];                // JSON array in DB
   planComments: PlanComment[];        // JSON array in DB
-  metadata: Record<string, unknown>;  // JSON object in DB
+  metadata: Record<string, unknown>;  // JSON object in DB (see Metadata Fields below)
   createdAt: number;                  // millisecond timestamp
   updatedAt: number;
 }
@@ -83,7 +83,7 @@ All CRUD operations go through `WorkflowService` (`src/core/services/workflow-se
 
 **Deleted (cascade):** task_context_entries, pending_prompts, task_phases, task_artifacts, agent_runs, task_events, transition_history
 
-**Worktree cleanup:** Before reset, `WorkflowService.cleanupWorktree()` unlocks and deletes the worktree, then tries to delete the remote branch.
+**Worktree cleanup:** Before reset, `WorkflowService.cleanupWorktree()` unlocks and deletes the worktree, tries to delete the remote branch, and also deletes the remote task integration branch if `task.metadata.taskBranch` is set.
 
 ## Dependencies
 
@@ -209,10 +209,18 @@ Artifacts are created by the SCM handler during PR workflows:
 
 Artifacts are deleted on `resetTask()` and `deleteTask()`.
 
+## Metadata Fields
+
+The `metadata` field is a free-form JSON object. The following keys are used by the system:
+
+| Key | Type | Set By | Description |
+|-----|------|--------|-------------|
+| `taskBranch` | `string` | `AgentService` | Task integration branch name (e.g., `task/{taskId}/integration`). Created on first multi-phase implementor start. Used by `push_and_create_pr` to target phase PRs at the task branch, by `advance_phase` to create the final PR, and by `cleanupWorktree()` to delete the remote branch on completion/reset/delete. |
+
 ## Edge Cases
 
 - **Status cannot be set via `updateTask`** — the IPC handler strips the `status` field from update payloads. Status changes must go through `transitionTask()` to enforce guards and hooks.
 - **Tags and subtasks** are stored as JSON strings in SQLite. They are parsed with `parseJson()` (which never throws) on read.
-- Both **delete and reset** clean up worktrees (unlock, delete worktree, attempt remote branch deletion). Cleanup is best-effort — errors are caught and ignored.
+- Both **delete and reset** clean up worktrees (unlock, delete worktree, attempt remote branch deletion, and delete remote task integration branch if present). Cleanup is best-effort — errors are caught and ignored.
 - **`parentTaskId`** enables hierarchical tasks but has no special pipeline behavior — it is purely organizational.
 - **Feature deletion** unlinks tasks rather than deleting them, preserving work.

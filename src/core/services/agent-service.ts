@@ -197,23 +197,57 @@ export class AgentService implements IAgentService {
     });
 
     // 4. Prepare environment
-    let worktree = await worktreeManager.get(taskId);
-    if (!worktree) {
-      // Phase-aware branch naming: append /phase-{n} for multi-phase tasks
-      let branch = `task/${taskId}/${agentType}`;
-      if (isMultiPhase(task)) {
-        const phaseIdx = getActivePhaseIndex(task.phases);
-        if (phaseIdx >= 0) {
-          branch = `task/${taskId}/${agentType}/phase-${phaseIdx + 1}`;
+    // For multi-phase tasks, determine the task integration branch.
+    // Phase worktrees branch from the task branch (not main) so later phases
+    // see code from earlier merged phases.
+    const multiPhase = isMultiPhase(task);
+    let taskBranch: string | undefined = (task.metadata?.taskBranch as string) || undefined;
+
+    if (multiPhase && !taskBranch) {
+      // First phase start — create the task integration branch from origin/main
+      taskBranch = `task/${taskId}/integration`;
+      const gitOpsRoot = this.createGitOps(projectPath);
+      await gitOpsRoot.fetch('origin');
+      try {
+        await gitOpsRoot.createBranchRef(taskBranch, 'origin/main');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/already exists/.test(msg)) {
+          throw new Error(`Failed to create task integration branch "${taskBranch}": ${msg}`);
         }
       }
-      worktree = await worktreeManager.create(branch, taskId);
+      await gitOpsRoot.push(taskBranch);
+      await this.taskStore.updateTask(taskId, {
+        metadata: { ...task.metadata, taskBranch },
+      });
+      await this.taskEventLog.log({
+        taskId,
+        category: 'git',
+        severity: 'info',
+        message: `Task integration branch created: ${taskBranch}`,
+        data: { taskBranch },
+      });
+    }
+
+    // Determine base branch and phase branch name
+    const baseBranch = multiPhase && taskBranch ? `origin/${taskBranch}` : undefined;
+    let branch = `task/${taskId}/${agentType}`;
+    if (multiPhase) {
+      const phaseIdx = getActivePhaseIndex(task.phases);
+      if (phaseIdx >= 0) {
+        branch = `task/${taskId}/${agentType}/phase-${phaseIdx + 1}`;
+      }
+    }
+
+    let worktree = await worktreeManager.get(taskId);
+    if (!worktree) {
+      worktree = await worktreeManager.create(branch, taskId, baseBranch);
       await this.taskEventLog.log({
         taskId,
         category: 'worktree',
         severity: 'info',
         message: `Worktree created on branch ${branch}`,
-        data: { branch, path: worktree.path, taskId },
+        data: { branch, baseBranch: baseBranch ?? 'origin/main', path: worktree.path, taskId },
       });
     } else {
       await this.taskEventLog.log({
@@ -232,12 +266,7 @@ export class AgentService implements IAgentService {
       await this.taskEventLog.log({ taskId, category: 'worktree', severity: 'warning', message: msg });
       // Remove stale worktree record and recreate
       await worktreeManager.delete(taskId);
-      let branch = `task/${taskId}/${agentType}`;
-      if (isMultiPhase(task)) {
-        const phaseIdx = getActivePhaseIndex(task.phases);
-        if (phaseIdx >= 0) branch = `task/${taskId}/${agentType}/phase-${phaseIdx + 1}`;
-      }
-      worktree = await worktreeManager.create(branch, taskId);
+      worktree = await worktreeManager.create(branch, taskId, baseBranch);
       getAppLogger().info(`Agent:${agentType}`, `Worktree recreated at ${worktree.path}`, { taskId });
     }
 
@@ -280,11 +309,11 @@ export class AgentService implements IAgentService {
         data: { taskId },
       });
 
-      // Fetch and best-effort rebase onto origin/main so the agent starts from
-      // the latest main. If the rebase fails (e.g. prior commits conflict), the
-      // agent's own rebase step (in the prompt) will handle conflict resolution.
-      // Skip for resolve_conflicts — the agent handles the entire rebase itself,
-      // and the pre-agent rebase would predictably fail (that's why we're here).
+      // Fetch and best-effort rebase so the agent starts from the latest base.
+      // For multi-phase tasks, rebase onto the task integration branch (not main)
+      // so the phase branch only contains phase-specific changes.
+      // Skip for resolve_conflicts — the agent handles the entire rebase itself.
+      const rebaseTarget = baseBranch ?? 'origin/main';
       await gitOps.fetch('origin');
       if (revisionReason === 'conflicts_detected') {
         await this.taskEventLog.log({
@@ -296,13 +325,13 @@ export class AgentService implements IAgentService {
         });
       } else {
         try {
-          await gitOps.rebase('origin/main');
+          await gitOps.rebase(rebaseTarget);
           await this.taskEventLog.log({
             taskId,
             category: 'worktree',
             severity: 'info',
-            message: 'Worktree rebased onto origin/main',
-            data: { taskId },
+            message: `Worktree rebased onto ${rebaseTarget}`,
+            data: { taskId, rebaseTarget },
           });
         } catch (rebaseErr) {
           try { await gitOps.rebaseAbort(); } catch { /* may not be in rebase state */ }

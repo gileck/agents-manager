@@ -2,6 +2,8 @@ import type { GitLogEntry, GitCommitDetail } from '../../shared/types';
 
 export interface IGitOps {
   createBranch(name: string, baseBranch?: string): Promise<void>;
+  /** Create a branch ref without checking it out: `git branch <name> <base>`. */
+  createBranchRef(name: string, base: string): Promise<void>;
   checkout(branch: string): Promise<void>;
   fetch(remote?: string, refspec?: string): Promise<void>;
   push(branch: string, force?: boolean): Promise<void>;

@@ -37,6 +37,11 @@ export class StubGitOps implements IGitOps {
     this.currentBranch = name;
   }
 
+  async createBranchRef(name: string, _base: string): Promise<void> {
+    this.throwIfConfigured('createBranchRef');
+    this.branches.push(name);
+  }
+
   async checkout(branch: string): Promise<void> {
     this.throwIfConfigured('checkout');
     this.currentBranch = branch;

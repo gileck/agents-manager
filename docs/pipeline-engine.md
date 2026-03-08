@@ -194,16 +194,18 @@ type HookFn = (
 - Removes the worktree before merge
 - Merges via `scmPlatform.mergePR(prUrl)` (squash + delete-branch)
 - Optionally pulls `origin/main` if `project.config.pullMainAfterMerge` is set
+- **Multi-phase:** Skips `pullMainAfterMerge` for phase merges (PR doesn't target main)
 
 ### `push_and_create_pr` (`src/core/handlers/scm-handler.ts`)
 
 - **Policy:** `required` — if push/PR creation fails, the transition rolls back
 - Resolves worktree path (or project root if no worktree)
-- Rebases onto `origin/main` (non-fatal on failure)
-- Collects diff and saves as `diff` artifact
+- Rebases onto base ref (non-fatal on failure): `origin/main` for single-phase, `origin/{taskBranch}` for multi-phase tasks
+- Collects diff against base ref and saves as `diff` artifact
 - **Skips** push + PR if no changes detected
 - Force-pushes with `--force-with-lease` (safe after rebase)
 - Creates PR with task title and automated body
+- **Multi-phase:** Phase PRs target the task integration branch (`taskBranch`) instead of `main`
 - Saves `pr` artifact, updates task `prLink` and `branchName`
 
 ### `advance_phase` (`src/core/handlers/phase-handler.ts`)
@@ -212,6 +214,8 @@ type HookFn = (
 - Marks the current implementation phase as completed
 - Activates the next pending phase
 - If pending phases remain, triggers a `system` `done → implementing` transition (phase cycling)
+- **Final PR creation:** When all phases are completed and `task.metadata.taskBranch` exists, creates a final PR from the task branch to main via `scmPlatform.createPR()`, stores it as a `pr` artifact with `isFinalPR: true`, updates task `prLink`/`branchName`, and triggers a `system` `done → pr_review` transition for user review
+- **Single-phase / no taskBranch:** When all phases complete without a task branch, the task stays at `done` (backward compatible)
 - Used on `ready_to_merge → done` alongside `merge_pr`
 
 ## Seeded Pipelines
@@ -301,8 +305,10 @@ Note: All four `info_provided` transitions share the same outcome. Disambiguatio
 | From | To | Guards | Hooks |
 |------|----|--------|-------|
 | `done` | `implementing` | `has_pending_phases`, `no_running_agent` | `start_agent(mode: 'new', agentType: 'implementor')` |
+| `done` | `pr_review` | — | — |
 
-Phase cycling: when `advance_phase` detects remaining pending phases after merge, it fires this system transition to continue implementing the next phase.
+- **Phase cycling:** when `advance_phase` detects remaining pending phases after merge, it fires the `done → implementing` system transition to continue implementing the next phase.
+- **Final PR review:** when `advance_phase` detects all phases are completed and a task integration branch exists (`task.metadata.taskBranch`), it creates the final PR and fires the `done → pr_review` system transition for user review.
 
 ## Outcome-Driven Transitions
 
@@ -383,5 +389,5 @@ type HookExecutionPolicy = 'required' | 'best_effort' | 'fire_and_forget';
 - **Wildcard source** (`from: '*'`) allows transitions from any status, useful for recovery paths.
 - **TOCTOU protection** — both `executeTransition` and `executeForceTransition` re-fetch the task inside a synchronous transaction and verify the status has not changed since the caller read it.
 - The `pr_ready` outcome is verified by `AgentService` — it checks the branch actually has changes via `git diff`. If no changes exist, the outcome is overridden to `no_changes`.
-- **Phase cycling** — after merge, `advance_phase` marks the current phase done and triggers `done → implementing` if more phases remain. This loop continues until all phases are complete.
+- **Phase cycling** — after merge, `advance_phase` marks the current phase done and triggers `done → implementing` if more phases remain. This loop continues until all phases are complete. When all phases are done and a task integration branch exists, `advance_phase` creates a final PR (task branch → main) and triggers `done → pr_review`.
 - **`info_provided` multi-target routing** — four `info_provided` transitions exist (to `investigating`, `designing`, `planning`, `implementing`). `tryOutcomeTransition` uses `resumeToStatus` from `context.data` to select the correct target. A warning is logged if multiple candidates exist without a `resumeToStatus`.

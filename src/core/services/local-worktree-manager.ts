@@ -51,21 +51,27 @@ export class LocalWorktreeManager implements IWorktreeManager {
     }
   }
 
-  async create(branch: string, taskId: string): Promise<Worktree> {
+  async create(branch: string, taskId: string, baseBranch?: string): Promise<Worktree> {
     this.ensureGitignore();
 
     const wtPath = this.worktreePath(taskId);
+    const base = baseBranch ?? 'origin/main';
 
-    // Fetch latest remote state so the new branch is based on origin/main,
-    // not local main (which may have unpushed commits from other tasks).
+    // Fetch latest remote state so the new branch is based on the latest ref,
+    // not a stale local ref (which may have unpushed commits from other tasks).
     await this.git(['fetch', 'origin']);
 
     try {
-      // Try creating with a new branch based on origin/main
-      await this.git(['worktree', 'add', '-b', branch, wtPath, 'origin/main']);
-    } catch {
-      // Branch may already exist from a prior run — retry without -b
-      await this.git(['worktree', 'add', wtPath, branch]);
+      // Try creating with a new branch based on the specified base
+      await this.git(['worktree', 'add', '-b', branch, wtPath, base]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/already exists/.test(msg)) {
+        // Branch already exists from a prior run — retry without -b
+        await this.git(['worktree', 'add', wtPath, branch]);
+      } else {
+        throw new Error(`Failed to create worktree for branch "${branch}" from base "${base}": ${msg}`);
+      }
     }
 
     await this.ensureNodeModules(taskId);

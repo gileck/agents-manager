@@ -205,6 +205,11 @@ export const AGENT_PIPELINE: SeededPipeline = {
       guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
 
+    // === Final PR review: done → pr_review after all phases merged to task branch ===
+    // Triggered by advance_phase when no pending phases remain and a final PR
+    // (task branch → main) has been created.
+    { from: 'done', to: 'pr_review', trigger: 'system' },
+
     // === Recovery: cancel agent phases back to open ===
     { from: 'investigating', to: 'open', trigger: 'manual', label: 'Cancel Investigation' },
     { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },

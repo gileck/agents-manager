@@ -31,6 +31,10 @@ export class LocalGitOps implements IGitOps {
     await this.git(args);
   }
 
+  async createBranchRef(name: string, base: string): Promise<void> {
+    await this.git(['branch', name, base]);
+  }
+
   async checkout(branch: string): Promise<void> {
     await this.git(['checkout', branch]);
   }

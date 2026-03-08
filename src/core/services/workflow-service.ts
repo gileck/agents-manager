@@ -525,18 +525,42 @@ export class WorkflowService implements IWorkflowService {
       if (!project?.path) return;
       const wm = this.createWorktreeManager(project.path);
       const worktree = await wm.get(task.id);
-      if (!worktree) return;
-      const branch = worktree.branch;
-      if (worktree.locked) await wm.unlock(task.id);
-      await wm.delete(task.id);
+      const gitOps = this.createGitOps(project.path);
 
-      // Clean up the remote branch (best-effort)
-      if (branch) {
+      if (worktree) {
+        const branch = worktree.branch;
+        if (worktree.locked) await wm.unlock(task.id);
+        await wm.delete(task.id);
+
+        // Clean up the remote phase/worktree branch (best-effort)
+        if (branch) {
+          try {
+            await gitOps.deleteRemoteBranch(branch);
+          } catch (branchErr) {
+            const msg = branchErr instanceof Error ? branchErr.message : String(branchErr);
+            if (!/not found|does not exist|couldn't find remote ref/i.test(msg)) {
+              this.taskEventLog.log({
+                taskId: task.id, category: 'worktree', severity: 'warning',
+                message: `Failed to delete remote branch "${branch}": ${msg}`,
+              }).catch(() => { /* best-effort logging */ });
+            }
+          }
+        }
+      }
+
+      // Clean up the task integration branch for multi-phase tasks (best-effort)
+      const taskBranch = (task.metadata?.taskBranch as string) || undefined;
+      if (taskBranch) {
         try {
-          const gitOps = this.createGitOps(project.path);
-          await gitOps.deleteRemoteBranch(branch);
-        } catch {
-          // Remote branch may not exist — safe to ignore
+          await gitOps.deleteRemoteBranch(taskBranch);
+        } catch (branchErr) {
+          const msg = branchErr instanceof Error ? branchErr.message : String(branchErr);
+          if (!/not found|does not exist|couldn't find remote ref/i.test(msg)) {
+            this.taskEventLog.log({
+              taskId: task.id, category: 'worktree', severity: 'warning',
+              message: `Failed to delete remote task branch "${taskBranch}": ${msg}`,
+            }).catch(() => { /* best-effort logging */ });
+          }
         }
       }
     } catch (err) {
@@ -547,7 +571,7 @@ export class WorkflowService implements IWorkflowService {
         severity: 'warning',
         message: `cleanupWorktree failed: ${cleanupMsg}`,
         data: { error: cleanupMsg },
-      }).catch(() => {});
+      }).catch(() => { /* best-effort logging */ });
     }
   }
 }

@@ -83,10 +83,10 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     }
 
     // Optionally update local main to stay current with merged task branches.
-    // When main is checked out: `git pull --ff-only` to update working tree.
-    // When on a task branch: `git fetch origin main:main` to fast-forward the ref.
-    // If ff-only fails (local has unpushed commits), notify the user instead.
-    if (project.config?.pullMainAfterMerge) {
+    // Skip for phase merges (which target the task integration branch, not main).
+    const taskBranchForMerge = (task.metadata?.taskBranch as string) || undefined;
+    const isPhaseMerge = isMultiPhase(task) && taskBranchForMerge && (task.phases ?? []).some(p => p.status === 'pending' || p.status === 'in_progress');
+    if (project.config?.pullMainAfterMerge && !isPhaseMerge) {
       try {
         const gitOps = deps.createGitOps(project.path);
         const currentBranch = await gitOps.getCurrentBranch();
@@ -150,26 +150,34 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     const gitCwd = worktree?.path ?? project.path;
     const gitOps = deps.createGitOps(gitCwd);
 
-    // Rebase onto origin/main before push so the PR diff only contains agent
+    // For multi-phase tasks, rebase/diff/PR against the task integration branch
+    // instead of main. Phase PRs merge into the task branch; only the final PR
+    // (created by advance_phase) targets main.
+    const freshTaskForBranch = await deps.taskStore.getTask(task.id);
+    const taskBranch = (freshTaskForBranch?.metadata?.taskBranch as string) || undefined;
+    const isMultiPhaseTask = freshTaskForBranch ? isMultiPhase(freshTaskForBranch) : false;
+    const rebaseRef = isMultiPhaseTask && taskBranch ? `origin/${taskBranch}` : 'origin/main';
+
+    // Rebase onto the base ref before push so the PR diff only contains agent
     // changes and doesn't include unpushed local commits from other tasks.
     try {
       await gitOps.fetch('origin');
-      await gitOps.rebase('origin/main');
-      await gitLog('Rebased onto origin/main before push');
+      await gitOps.rebase(rebaseRef);
+      await gitLog(`Rebased onto ${rebaseRef} before push`);
     } catch (err) {
       // Abort the broken rebase so the worktree is usable
       try { await gitOps.rebaseAbort(); } catch { /* may not be in rebase state */ }
       const errorMsg = err instanceof Error ? err.message : String(err);
-      await gitLog(`Rebase onto origin/main failed (merge conflicts): ${errorMsg}`, 'error');
+      await gitLog(`Rebase onto ${rebaseRef} failed (merge conflicts): ${errorMsg}`, 'error');
 
       return { success: false, error: 'Merge conflicts detected — rebase failed' };
     }
 
-    // Collect diff against origin/main (what GitHub will compare against)
-    await gitLog('Collecting diff: origin/main..' + branch);
+    // Collect diff against the base ref (what GitHub will compare against)
+    await gitLog(`Collecting diff: ${rebaseRef}..${branch}`);
     let diffContent = '';
     try {
-      diffContent = await gitOps.diff('origin/main', branch);
+      diffContent = await gitOps.diff(rebaseRef, branch);
       await deps.taskArtifactStore.createArtifact({
         taskId: task.id,
         type: 'diff',
@@ -216,7 +224,9 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     await ghLog('Creating pull request');
     try {
       const freshTask = await deps.taskStore.getTask(task.id);
-      const baseBranch = (project.config?.defaultBranch as string) || 'main';
+      // Multi-phase PRs target the task integration branch; single-phase PRs target main
+      const defaultBranch = (project.config?.defaultBranch as string) || 'main';
+      const baseBranch = isMultiPhaseTask && taskBranch ? taskBranch : defaultBranch;
 
       // Phase-aware PR title and body
       let prTitle = freshTask?.title ?? 'PR';

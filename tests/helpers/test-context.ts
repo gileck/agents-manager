@@ -216,7 +216,10 @@ export function createTestContext(): TestContext {
   // The start_agent hook fires background agents during transitions,
   // which causes race conditions with test-controlled agents.
   // Tests that need start_agent behavior register their own stub (e.g. phase-cycling).
-  registerPhaseHandler(pipelineEngine, { taskStore, taskEventLog, pipelineEngine });
+  registerPhaseHandler(pipelineEngine, {
+    taskStore, taskArtifactStore, taskEventLog, pipelineEngine,
+    projectStore, createScmPlatform: () => scmPlatform,
+  });
 
   const transitionTo = async (taskId: string, toStatus: string): Promise<Task> => {
     const task = await taskStore.getTask(taskId);

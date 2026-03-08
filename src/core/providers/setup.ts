@@ -290,7 +290,8 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     onMainDiverged: config?.onMainDiverged,
   });
   registerPhaseHandler(pipelineEngine, {
-    taskStore, taskEventLog, pipelineEngine,
+    taskStore, taskArtifactStore, taskEventLog, pipelineEngine,
+    projectStore, createScmPlatform,
   });
 
   return {

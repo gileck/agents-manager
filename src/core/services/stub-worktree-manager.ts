@@ -13,7 +13,7 @@ export class StubWorktreeManager implements IWorktreeManager {
     this.createFailure = null;
   }
 
-  async create(branch: string, taskId: string): Promise<Worktree> {
+  async create(branch: string, taskId: string, _baseBranch?: string): Promise<Worktree> {
     if (this.createFailure) throw this.createFailure;
     const worktree: Worktree = {
       path: `/tmp/worktrees/${taskId}`,

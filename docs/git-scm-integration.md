@@ -6,7 +6,7 @@ priority: 3
 key_points:
   - "Interface: IWorktreeManager in src/core/interfaces/worktree-manager.ts"
   - "Implementation: LocalWorktreeManager in src/core/services/local-worktree-manager.ts"
-  - "Branch naming: task/<taskId>/<agentType>"
+  - "Branch naming: task/<taskId>/<agentType> (single-phase) or task/<taskId>/integration (multi-phase task branch)"
 ---
 # Git & SCM Integration
 
@@ -19,7 +19,7 @@ Worktrees, git operations, PR lifecycle, and branch strategy.
 
 ```typescript
 interface IWorktreeManager {
-  create(branch: string, taskId: string): Promise<Worktree>;
+  create(branch: string, taskId: string, baseBranch?: string): Promise<Worktree>;
   get(taskId: string): Promise<Worktree | null>;
   list(): Promise<Worktree[]>;
   lock(taskId: string): Promise<void>;
@@ -59,12 +59,13 @@ When creating a worktree, `LocalWorktreeManager` symlinks `node_modules` from th
 
 ### Worktree Lifecycle
 
-1. **Create** — `worktreeManager.create(branch, taskId)`
-   - Fetches `origin` first (to base on `origin/main`, not local main)
-   - Runs `git worktree add -b {branch} {path} origin/main`
+1. **Create** — `worktreeManager.create(branch, taskId, baseBranch?)`
+   - Fetches `origin` first
+   - Runs `git worktree add -b {branch} {path} {baseBranch}` (defaults to `origin/main`)
    - If the branch already exists, retries without `-b` flag
    - Symlinks `node_modules` from the main project (see above)
    - Returns a `Worktree` object
+   - **Multi-phase tasks:** `baseBranch` is set to `origin/{taskBranch}` so phases branch from the task integration branch instead of main (see [Task Integration Branch](#task-integration-branch))
 
 2. **Lock** — `worktreeManager.lock(taskId)`
    - Called at the start of agent execution to prevent concurrent access
@@ -78,6 +79,7 @@ When creating a worktree, `LocalWorktreeManager` symlinks `node_modules` from th
    - Runs `git worktree remove --force {path}`
    - Called on final status transitions, task reset, and task delete
    - Idempotent: tolerates "not a working tree" and "does not exist" errors
+   - **Multi-phase tasks:** `WorkflowService.cleanupWorktree()` also deletes the remote task integration branch (`git push origin --delete {taskBranch}`) if `task.metadata.taskBranch` is set
 
 5. **Cleanup** — `worktreeManager.cleanup(activeTaskIds?)`
    - Prunes orphaned worktrees via `git worktree prune`
@@ -134,28 +136,28 @@ All operations shell out to `git` via `execFileAsync` with:
 
 ## Rebase Strategy
 
-The system rebases the agent's work branch onto `origin/main` at two points:
+The system rebases the agent's work branch onto a base ref at two points. For single-phase tasks the base ref is `origin/main`. For multi-phase tasks it is `origin/{taskBranch}` (the task integration branch).
 
 ### Before Agent Execution (in `agent-service.ts`)
 
 ```
 git clean          ← discard uncommitted changes from prior runs
 git fetch origin
-git rebase origin/main   ← bring in latest changes from main
+git rebase {baseRef}   ← bring in latest changes from base
 ```
 
-This ensures the agent works on top of the latest codebase.
+This ensures the agent works on top of the latest codebase. `baseRef` is `origin/main` for single-phase tasks and `origin/{taskBranch}` for multi-phase tasks.
 
 ### Before PR Creation (in `scm-handler.ts`, `push_and_create_pr` hook)
 
 ```
 git fetch origin
-git rebase origin/main   ← ensure PR diff only shows agent changes
-git diff origin/main     ← collect diff for artifact
+git rebase {baseRef}   ← ensure PR diff only shows agent changes
+git diff {baseRef}     ← collect diff for artifact
 git push --force-with-lease  ← safe force-push after rebase
 ```
 
-The rebase before push ensures the PR diff contains only the agent's changes, not unrelated commits on main.
+The rebase before push ensures the PR diff contains only the agent's changes, not unrelated commits on the base branch.
 
 **Rebase failure is non-fatal:** If rebase fails, it is aborted (`git rebase --abort`) and logged as a warning. The agent's work is preserved.
 
@@ -181,7 +183,7 @@ gh pr create --title {title} --body {body} --head {head} --base {base}
 - Title: task title
 - Body: `"Automated PR for task {taskId}"`
 - Head: agent branch name
-- Base: `project.config.defaultBranch` or `'main'`
+- Base: `project.config.defaultBranch` or `'main'` (for multi-phase tasks, phase PRs target `taskBranch` instead)
 
 Returns `PRInfo` with `{ url, number }`.
 
@@ -239,20 +241,38 @@ This polling is necessary because GitHub computes merge status asynchronously af
 
 ## PR Lifecycle
 
-### Happy Path
+### Happy Path (Single-Phase)
 
 1. Agent completes implementation → outcome `pr_ready`
 2. `push_and_create_pr` hook:
    - Rebases onto `origin/main`
    - Collects diff → saved as `diff` artifact
    - Pushes branch → `git push -u origin --force-with-lease`
-   - Creates PR → saved as `pr` artifact
+   - Creates PR (targeting `main`) → saved as `pr` artifact
    - Updates task `prLink` and `branchName`
 3. Auto-started PR reviewer agent
 4. Reviewer reports `approved` → `merge_pr` hook:
    - Removes worktree (unlock + delete)
    - Merges PR via `gh pr merge --squash --delete-branch`
    - Optionally fetches main: `git fetch origin main:main`
+
+### Happy Path (Multi-Phase)
+
+For tasks with multiple implementation phases and a task integration branch:
+
+1. **First implementor start** creates the task integration branch (`task/{taskId}/integration`) from `origin/main`, pushes it to remote, and stores it in `task.metadata.taskBranch`
+2. Each phase agent branches from `origin/{taskBranch}` (not `origin/main`)
+3. Agent completes → `push_and_create_pr` hook creates a **phase PR targeting the task branch** (not main)
+4. Reviewer approves → `merge_pr` hook merges the phase PR into the task branch
+   - `pullMainAfterMerge` is skipped for phase merges (the PR doesn't target main)
+5. `advance_phase` marks the phase done and cycles to the next phase (`done → implementing`)
+6. Steps 2–5 repeat for each phase
+7. **After the final phase completes**, `advance_phase` creates a **final PR** from the task branch to main:
+   - Created via `scmPlatform.createPR({ head: taskBranch, base: defaultBranch })`
+   - Stored as a `pr` artifact with `isFinalPR: true`
+   - Task `prLink` and `branchName` updated to the final PR
+   - System transition `done → pr_review` fired for user review
+8. User approves → `merge_pr` merges the final PR to main, cleans up worktree + task branch
 
 ### Changes Requested
 
@@ -284,6 +304,23 @@ task/{taskId}/{agentType}/phase-{n}
 Example: `task/abc-123-def/implementor/phase-1`, `task/abc-123-def/implementor/phase-2`
 
 Each phase gets its own branch (and worktree). The phase index is 1-based.
+
+### Task Integration Branch
+
+Multi-phase tasks create a long-lived integration branch where all phase PRs merge:
+
+```
+task/{taskId}/integration
+```
+
+Example: `task/abc-123-def/integration`
+
+- Created from `origin/main` on first multi-phase implementor start
+- Pushed to remote and stored in `task.metadata.taskBranch`
+- Phase worktrees branch from `origin/{taskBranch}` (not `origin/main`)
+- Phase PRs target this branch (not main)
+- After all phases complete, a final PR is created from this branch to main
+- Deleted on task completion, reset, or delete via `WorkflowService.cleanupWorktree()`
 
 ## Shell Environment Resolution
 

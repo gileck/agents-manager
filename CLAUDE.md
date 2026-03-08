@@ -230,7 +230,7 @@ Worktrees, git operations, PR lifecycle, and branch strategy
 **Key Points:**
 - Interface: IWorktreeManager in src/core/interfaces/worktree-manager.ts
 - Implementation: LocalWorktreeManager in src/core/services/local-worktree-manager.ts
-- Branch naming: task/<taskId>/<agentType>
+- Branch naming: task/<taskId>/<agentType> (single-phase) or task/<taskId>/integration (multi-phase task branch)
 
 **Docs:** [git-scm-integration.md](docs/git-scm-integration.md)
 
