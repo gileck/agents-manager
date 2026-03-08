@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { AgentChatMessage, ChatSession, PermissionMode } from '../../shared/types';
+import type { AgentChatMessage, ChatSession } from '../../shared/types';
 import { reportError } from '../lib/error-handler';
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
@@ -169,16 +169,5 @@ export function useReviewConversation(
     });
   }, [session]);
 
-  const updatePermissionMode = useCallback(async (mode: PermissionMode) => {
-    const s = sessionRef.current;
-    if (!s) return;
-    try {
-      const updated = await window.api.chatSession.update(s.id, { permissionMode: mode });
-      if (updated) setSession(updated);
-    } catch (err) {
-      reportError(err instanceof Error ? err : new Error(String(err)), 'Update permission mode');
-    }
-  }, []);
-
-  return { session, streamingMessages, isStreaming, sendMessage, stopChat, updatePermissionMode };
+  return { session, streamingMessages, isStreaming, sendMessage, stopChat };
 }
