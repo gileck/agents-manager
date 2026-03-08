@@ -19,12 +19,16 @@ const SQLITE_BINDING = path.join(ROOT_DIR, 'node_modules/better-sqlite3/build-no
 const DEBOUNCE_MS = 500;
 const WITH_WEB = process.argv.includes('--web');
 
+// Backend dirs that require daemon restart
+const BACKEND_DIRS = ['core/', 'daemon/', 'shared/', 'cli/'];
+
 // esbuild command (same as package.json build:daemon)
 const ESBUILD_CMD = `node_modules/.bin/esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api`;
 
 let daemon: ChildProcess | null = null;
 let webServer: ChildProcess | null = null;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
+let restarting = false;
 
 function log(msg: string) {
   const ts = new Date().toLocaleTimeString();
@@ -181,6 +185,7 @@ async function handleChange(filename: string | null) {
 
   restartTimer = setTimeout(async () => {
     restartTimer = null;
+    if (restarting) return;
 
     const activeCount = await checkActiveAgents();
     if (activeCount > 0) {
@@ -188,18 +193,21 @@ async function handleChange(filename: string | null) {
       return;
     }
 
+    restarting = true;
     log(`Change detected${filename ? ` (${filename})` : ''} — rebuilding & restarting daemon...`);
     await stopDaemon();
     startDaemon();
+    restarting = false;
   }, DEBOUNCE_MS);
 }
 
 async function main() {
   startDaemon();
 
-  // Watch src/ recursively for TS changes
+  // Watch src/ recursively — only restart daemon for backend changes
   watch(SRC_DIR, { recursive: true }, (_event, filename) => {
     if (filename && /\.(ts|tsx)$/.test(filename)) {
+      if (!BACKEND_DIRS.some((dir) => filename.startsWith(dir))) return;
       handleChange(filename);
     }
   });
