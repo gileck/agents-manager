@@ -1,12 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { StatusActionBar } from './StatusActionBar';
 import { ForceTransitionDialog } from './ForceTransitionDialog';
-import type { AgentRun, Transition, PipelineStatus, HookFailure, PipelineDiagnostics } from '../../../shared/types';
+import type { AgentRun, Transition, PipelineStatus, HookFailure, PipelineDiagnostics, TaskType, TaskSize, TaskComplexity } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
 
 interface PipelineControlPanelProps {
   taskId: string;
-  task: { status: string; prLink?: string | null };
+  task: { status: string; prLink?: string | null; type?: TaskType | null; size?: TaskSize | null; complexity?: TaskComplexity | null };
   isAgentPipeline: boolean;
   hasRunningAgent: boolean;
   lastRun: AgentRun | null;
