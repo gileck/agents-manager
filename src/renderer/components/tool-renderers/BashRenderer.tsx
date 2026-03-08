@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { ToolRendererProps } from './types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { TaskActionCard } from './TaskActionCard';
+import type { Task } from '../../../shared/types';
 
 function parseSummary(input: string): { command: string; description?: string } {
   try {
@@ -22,11 +24,41 @@ function formatDuration(ms: number): string {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
+const TASK_CLI_PATTERN = /npx\s+agents-manager\s+tasks?\s+(create|get|update|transition)\b/;
+
+function isTaskCliCommand(command: string): boolean {
+  return TASK_CLI_PATTERN.test(command);
+}
+
+function parseTaskResult(result: string): Task | null {
+  try {
+    const parsed = JSON.parse(result);
+    if (!parsed || typeof parsed !== 'object') return null;
+    // Transition shape: { success, task?, error?, guardFailures? }
+    if ('success' in parsed) {
+      if (parsed.success && parsed.task && typeof parsed.task.id === 'string') {
+        return parsed.task as Task;
+      }
+      return null;
+    }
+    // Direct Task shape
+    if (typeof parsed.id === 'string' && typeof parsed.title === 'string') {
+      return parsed as Task;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRendererProps) {
   const { command, description } = parseSummary(toolUse.input);
   const shortCmd = command.length > 60 ? command.slice(0, 60) + '...' : command;
   const duration = toolResult ? toolResult.timestamp - toolUse.timestamp : null;
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const taskCliDetected = isTaskCliCommand(command);
+  const parsedTask = taskCliDetected && toolResult ? parseTaskResult(toolResult.result) : null;
 
   return (
     <div className="border border-border rounded my-1 overflow-hidden">
@@ -44,7 +76,12 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {expanded && toolResult && (
+      {expanded && toolResult && parsedTask && (
+        <div className="border-t border-border p-2">
+          <TaskActionCard task={parsedTask} rawOutput={toolResult.result} />
+        </div>
+      )}
+      {expanded && toolResult && !parsedTask && (
         <div className="border-t border-border">
           <pre className="text-xs bg-muted p-2 overflow-x-auto whitespace-pre-wrap" style={{ maxHeight: '300px', overflowY: 'auto' }}>
             {toolResult.result}
