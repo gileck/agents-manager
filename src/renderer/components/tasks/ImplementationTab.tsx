@@ -5,6 +5,7 @@ import type { TaskArtifact, Transition, TaskContextEntry, ImplementationPhase } 
 import { ImplementationReviewSection } from '../task-detail/ImplementationReviewSection';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { reportError } from '../../lib/error-handler';
+import { MarkdownContent } from '../chat/MarkdownContent';
 
 // ---------------------------------------------------------------------------
 // Diff parsing helpers
@@ -617,6 +618,14 @@ export function ImplementationTab({
     [contextEntries],
   );
 
+  const implementationSummary = useMemo(
+    () =>
+      (contextEntries ?? [])
+        .filter((e) => e.entryType === 'implementation_summary')
+        .sort((a, b) => a.createdAt - b.createdAt)[0] ?? null,
+    [contextEntries],
+  );
+
   const handleRequestChanges = async () => {
     if (!comment.trim()) return;
     setSubmitting(true);
@@ -707,6 +716,21 @@ export function ImplementationTab({
 
       {/* PR Header */}
       <PrHeader prLink={task.prLink} branchName={task.branchName} />
+
+      {/* Implementation Summary */}
+      {implementationSummary && (
+        <div style={{
+          marginBottom: 14, borderRadius: 8, padding: '12px 14px',
+          border: '1px solid hsl(var(--border) / 0.7)',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Implementation Summary
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+            <MarkdownContent content={implementationSummary.summary} />
+          </div>
+        </div>
+      )}
 
       {/* Unified file changes + diffs */}
       {hasChanges && (
