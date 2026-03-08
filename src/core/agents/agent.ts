@@ -108,11 +108,13 @@ export class Agent implements IAgent {
       // Fallback: if session resume failed immediately (missing/corrupt session file),
       // retry with the full prompt and no session resume instead of failing the run.
       if (context.resumeSession && this.isSessionResumeFailure(libResult)) {
-        log('Session resume failed — retrying with full prompt (session file may be missing)', {
-          originalError: libResult.error?.slice(0, 500),
+        log('Session resume failed — retrying with full prompt (no session resume)', {
           sessionId: context.sessionId,
+          exitCode: libResult.exitCode,
+          error: libResult.error?.slice(0, 300),
+          resumedFromRunId: context.resumedFromRunId,
         });
-        onOutput?.('\n[Session resume failed — retrying with full prompt]\n');
+        onOutput?.(`\n[Session resume failed for session "${context.sessionId}" (exit code ${libResult.exitCode}) — retrying with full prompt]\n`);
 
         libResult = await lib.execute(runId, {
           prompt: execConfig.prompt,
@@ -174,8 +176,17 @@ export class Agent implements IAgent {
 
   /**
    * Detect immediate session resume failure: process exited with an error,
-   * consumed no tokens, and produced no output. This typically means the
-   * session file is missing or corrupt on disk.
+   * consumed no tokens, and the error mentions "session". This typically
+   * means the session file is missing or corrupt on disk.
+   *
+   * Note: we do NOT check `output.length === 0` because when the lib catches
+   * an SDK error, the error message is placed in the `output` field as a
+   * fallback (output = resultText || errorMessage). We also require the error
+   * to mention "session" to avoid false-positive retries on unrelated failures
+   * (bad API key, network errors, invalid model, etc.).
+   *
+   * ClaudeCodeLib prefixes session resume errors with "Session resume failed"
+   * so this check reliably matches those cases.
    */
   private isSessionResumeFailure(result: AgentLibResult): boolean {
     return (
@@ -183,7 +194,7 @@ export class Agent implements IAgent {
       !result.killReason &&
       !result.costInputTokens &&
       !result.costOutputTokens &&
-      result.output.length === 0
+      (result.error?.toLowerCase().includes('session') ?? false)
     );
   }
 

@@ -355,6 +355,9 @@ export class ClaudeCodeLib implements IAgentLib {
       } else if (abortController.signal.aborted) {
         killReason = state.stoppedReason ?? 'stopped';
         errorMessage = `Agent aborted after ${Math.round(elapsed / 1000)}s (${state.messageCount} messages processed) [kill_reason=${killReason}]`;
+      } else if (options.resumeSession) {
+        // Session resume failure — provide a clear, actionable message
+        errorMessage = `Session resume failed (session "${options.sessionId}"): ${sdkError}\n\n--- Diagnostics ---\n${diagnostics}`;
       } else {
         // For unexpected errors (like "process exited with code 1"), include diagnostics in the error message
         errorMessage = `${sdkError}\n\n--- Diagnostics ---\n${diagnostics}`;
