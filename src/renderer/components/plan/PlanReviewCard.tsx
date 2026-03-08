@@ -43,6 +43,11 @@ export function PlanReviewCard({
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>{title}</CardTitle>
+          {reviewPath && (
+            <Button variant="outline" size="sm" onClick={() => navigate(reviewPath)}>
+              Open Review
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -74,11 +79,6 @@ export function PlanReviewCard({
               <h4 className="text-sm font-semibold text-muted-foreground">
                 Review Comments ({entries.length})
               </h4>
-              {reviewPath && (
-                <Button variant="outline" size="sm" onClick={() => navigate(reviewPath)}>
-                  Open Review
-                </Button>
-              )}
             </div>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {entries.map((entry) => {
