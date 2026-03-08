@@ -87,14 +87,18 @@ CREATE INDEX IF NOT EXISTS idx_app_notif_unread  ON app_notifications (read, cre
       sql: `ALTER TABLE agent_runs ADD COLUMN session_id TEXT`,
     },
     {
-      name: '102_add_cache_tokens_and_cost_usd_to_agent_runs',
+      name: '102_reseed_pipelines_backlog_status',
+      sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}', transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
+    },
+    {
+      name: '103_add_cache_tokens_and_cost_usd_to_agent_runs',
       sql: `
 ALTER TABLE agent_runs ADD COLUMN cache_read_input_tokens INTEGER;
 ALTER TABLE agent_runs ADD COLUMN cache_creation_input_tokens INTEGER;
 ALTER TABLE agent_runs ADD COLUMN total_cost_usd REAL`,
     },
     {
-      name: '103_add_cache_tokens_and_cost_usd_to_chat_messages',
+      name: '104_add_cache_tokens_and_cost_usd_to_chat_messages',
       sql: `
 ALTER TABLE chat_messages ADD COLUMN cache_read_input_tokens INTEGER;
 ALTER TABLE chat_messages ADD COLUMN cache_creation_input_tokens INTEGER;

@@ -193,9 +193,9 @@ describe('schema-baseline', () => {
     db.close();
   });
 
-  it('should have 90 baseline migration names', () => {
-    expect(BASELINE_MIGRATION_NAMES.length).toBe(90);
+  it('should have 91 baseline migration names', () => {
+    expect(BASELINE_MIGRATION_NAMES.length).toBe(91);
     expect(BASELINE_MIGRATION_NAMES[0]).toBe('001_create_items');
-    expect(BASELINE_MIGRATION_NAMES[89]).toBe('103_add_cache_tokens_and_cost_usd_to_chat_messages');
+    expect(BASELINE_MIGRATION_NAMES[90]).toBe('104_add_cache_tokens_and_cost_usd_to_chat_messages');
   });
 });

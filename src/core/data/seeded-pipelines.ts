@@ -16,6 +16,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
   taskType: 'agent',
   statuses: [
     { name: 'open', label: 'Open', category: 'ready', position: 0 },
+    { name: 'backlog', label: 'Backlog', color: '#94a3b8', category: 'ready' },
     { name: 'investigating', label: 'Investigating', color: '#f59e0b', category: 'agent_running', position: 1 },
     { name: 'investigation_review', label: 'Investigation Review', color: '#8b5cf6', category: 'human_review', position: 2 },
     { name: 'designing', label: 'Designing', category: 'agent_running', position: 3 },
@@ -32,6 +33,10 @@ export const AGENT_PIPELINE: SeededPipeline = {
   ],
   transitions: [
     // === Manual transitions from open ===
+    { from: 'open', to: 'backlog', trigger: 'manual', label: 'Move to Backlog',
+      guards: [{ name: 'no_running_agent' }] },
+    { from: 'backlog', to: 'open', trigger: 'manual', label: 'Move to Open',
+      guards: [{ name: 'no_running_agent' }] },
     { from: 'open', to: 'investigating', trigger: 'manual', label: 'Start Investigation',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'investigator' }, policy: 'fire_and_forget' }] },

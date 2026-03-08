@@ -99,8 +99,9 @@ export const BASELINE_MIGRATION_NAMES: string[] = [
   '086_create_automated_agents',
   '087_drop_agent_runs_task_fk',
   '098_add_created_by_to_tasks',
-  '102_add_cache_tokens_and_cost_usd_to_agent_runs',
-  '103_add_cache_tokens_and_cost_usd_to_chat_messages',
+  '102_reseed_pipelines_backlog_status',
+  '103_add_cache_tokens_and_cost_usd_to_agent_runs',
+  '104_add_cache_tokens_and_cost_usd_to_chat_messages',
 ];
 
 function escSql(s: string): string {
