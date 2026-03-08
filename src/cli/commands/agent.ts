@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import type { ApiClient } from '../../client/api-client';
 import { output, type OutputOptions } from '../output';
+import { resolveTaskId } from '../context';
 import { readStdinOrValue } from '../stdin';
 import { handleCliError } from '../error';
 
@@ -13,6 +14,7 @@ export function registerAgentCommands(program: Command, api: ApiClient): void {
     .action(async (taskId: string, runId: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        taskId = await resolveTaskId(api, taskId);
         await api.agents.stop(taskId, runId);
         if (opts.json) {
           output({ stopped: true, runId }, opts);
@@ -31,6 +33,7 @@ export function registerAgentCommands(program: Command, api: ApiClient): void {
     .action(async (taskId: string, cmdOpts: { message: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        taskId = await resolveTaskId(api, taskId);
         const message = await readStdinOrValue(cmdOpts.message);
         if (!message) {
           console.error('Message is required');
@@ -50,6 +53,7 @@ export function registerAgentCommands(program: Command, api: ApiClient): void {
     .action(async (taskId: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        taskId = await resolveTaskId(api, taskId);
         const result = await api.agents.workflowReview(taskId);
         output(result, opts);
       } catch (err) {
@@ -89,6 +93,9 @@ export function registerAgentCommands(program: Command, api: ApiClient): void {
     .action(async (cmdOpts: { task?: string; active?: boolean; all?: boolean }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        if (cmdOpts.task) {
+          cmdOpts.task = await resolveTaskId(api, cmdOpts.task);
+        }
         let runs: unknown[];
         if (cmdOpts.all) {
           runs = await api.agents.getAllRuns();
