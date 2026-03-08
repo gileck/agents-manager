@@ -305,8 +305,8 @@ export function PipelineProgress({
   const { phases, currentPhaseIndex } = groupIntoPhases(displayPath, currentIndex, skippedStatuses, statusLabelMap);
 
   return (
-    <div style={{ padding: '6px 24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 0, overflowX: 'auto' }}>
+    <div style={{ padding: '12px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 0, overflowX: 'auto', padding: '6px 0' }}>
         {phases.map((phase, phaseIdx) => {
           const isFirst = phaseIdx === 0;
           const connectorCompleted = phaseIdx > 0 && phaseIdx <= currentPhaseIndex;

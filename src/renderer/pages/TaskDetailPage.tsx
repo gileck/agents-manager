@@ -27,8 +27,6 @@ import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
 import { ImplementationTab } from '../components/tasks/ImplementationTab';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { PlanReviewCard } from '../components/plan/PlanReviewCard';
-import { CommentThread } from '../components/plan/CommentThread';
-import { CommentInput } from '../components/plan/CommentInput';
 import type {
   Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, HookFailure,
@@ -527,27 +525,6 @@ export function TaskDetailPage() {
                 refetchDiagnostics={refetchDiagnostics}
               />
             )}
-            {/* PR Review feedback section */}
-            {task.status === 'pr_review' && (() => {
-              const implFeedback = (contextEntries ?? []).filter(e => e.entryType === 'implementation_feedback');
-              const reviseTransition = (transitions ?? []).find(t => t.to === 'implementing');
-              return (
-                <div className="mt-3 border rounded-md p-4">
-                  <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Implementation Feedback</h4>
-                  {implFeedback.length > 0 && (
-                    <div className="mb-4">
-                      <CommentThread entries={implFeedback} emptyMessage="No implementation feedback yet." />
-                    </div>
-                  )}
-                  <CommentInput
-                    placeholder="Add feedback for the implementor agent..."
-                    reviseTransition={reviseTransition}
-                    transitioning={transitioning}
-                    onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'implementation_feedback')}
-                  />
-                </div>
-              );
-            })()}
           </div>
         </div>
 

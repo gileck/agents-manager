@@ -40,10 +40,11 @@ export function StatusActionBar({
     // Fallback: render all transitions as standard buttons
     if (!primaryTransitions.length) return null;
     return (
-      <div className="rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         {primaryTransitions.map((t) => (
           <Button
             key={t.to}
+            size="sm"
             onClick={() => onTransition(t.to)}
             disabled={transitioning !== null}
           >
@@ -60,10 +61,11 @@ export function StatusActionBar({
   if (statusMeta.isReady) {
     if (!primaryTransitions.length) return null;
     return (
-      <div className="rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         {primaryTransitions.map((t) => (
           <Button
             key={t.to}
+            size="sm"
             onClick={() => onTransition(t.to)}
             disabled={transitioning !== null}
           >
@@ -134,7 +136,7 @@ export function StatusActionBar({
     // PR review has special handling for the PR link
     if (status === 'pr_review' || status === 'ready_to_merge') {
       return (
-        <div className="rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {task.prLink ? (
             <button
               onClick={() => window.api.shell.openInChrome(task.prLink!)}
@@ -148,6 +150,7 @@ export function StatusActionBar({
           {primaryTransitions.map((t) => (
             <Button
               key={t.to}
+              size="sm"
               variant={t.to === 'done' ? 'default' : 'outline'}
               onClick={() => onTransition(t.to)}
               disabled={transitioning !== null}
@@ -160,11 +163,11 @@ export function StatusActionBar({
     }
     // Generic human review (plan_review, investigation_review, etc.)
     return (
-      <div className="rounded-md border px-4 py-3 flex items-center gap-3 flex-wrap" style={{ borderColor: '#3b82f6' }}>
-        <span className="text-sm">Review the output, then approve or request changes.</span>
+      <div className="flex items-center gap-2 flex-wrap">
         {primaryTransitions.map((t) => (
           <Button
             key={t.to}
+            size="sm"
             onClick={() => onTransition(t.to)}
             disabled={transitioning !== null}
           >
