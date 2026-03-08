@@ -56,3 +56,24 @@ export async function requireProject(
   }
   return project;
 }
+
+export async function resolveTaskId(api: ApiClient, input: string): Promise<string> {
+  // Fast path: full UUID — return immediately without an API call
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)) {
+    return input;
+  }
+
+  // Prefix match against the first segment (first 8 hex chars before the first dash)
+  const tasks = await api.tasks.list({});
+  const matches = tasks.filter((t) => t.id.split('-')[0] === input);
+
+  if (matches.length === 0) {
+    throw new Error(`Task not found: ${input}`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`Ambiguous ID, ${matches.length} matches found`);
+  }
+
+  process.stderr.write(`Resolved ${input} → ${matches[0].id}\n`);
+  return matches[0].id;
+}

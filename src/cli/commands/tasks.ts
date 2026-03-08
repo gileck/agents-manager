@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import type { ApiClient } from '../../client/api-client';
 import type { Subtask, SubtaskStatus, TaskType, TaskSize, TaskComplexity } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
-import { requireProject } from '../context';
+import { requireProject, resolveTaskId } from '../context';
 import { readStdinOrValue } from '../stdin';
 import { handleCliError } from '../error';
 
@@ -79,6 +79,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, cmdOpts: { field?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const task = await api.tasks.get(id);
 
         if (cmdOpts.field) {
@@ -249,6 +250,10 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
+        if (cmdOpts.parentTask) {
+          cmdOpts.parentTask = await resolveTaskId(api, cmdOpts.parentTask);
+        }
         const planValue = await readStdinOrValue(cmdOpts.plan);
         const designValue = await readStdinOrValue(cmdOpts.technicalDesign);
 
@@ -303,6 +308,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         await api.tasks.delete(id);
         if (opts.json) {
           output({ deleted: true, id }, opts);
@@ -321,6 +327,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, cmdOpts: { pipeline?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const result = await api.tasks.reset(id, cmdOpts.pipeline);
         output(result, opts);
       } catch (err) {
@@ -337,6 +344,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, status: string, cmdOpts: { actor?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const result = await api.tasks.transition(id, status, cmdOpts.actor) as {
           success: boolean;
           error?: string;
@@ -370,6 +378,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, status: string, cmdOpts: { actor?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const result = await api.tasks.forceTransition(id, status, cmdOpts.actor);
         output(result, opts);
       } catch (err) {
@@ -383,6 +392,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const transitions = await api.tasks.getTransitions(id) as {
           from: string;
           to: string;
@@ -407,6 +417,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const result = await api.tasks.getAllTransitions(id);
         output(result, opts);
       } catch (err) {
@@ -420,6 +431,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const result = await api.tasks.getPipelineDiagnostics(id);
         output(result, opts);
       } catch (err) {
@@ -433,6 +445,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const result = await api.tasks.advancePhase(id);
         output(result, opts);
       } catch (err) {
@@ -449,6 +462,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, cmdOpts: { hook: string; from?: string; to?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const result = await api.tasks.retryHook(id, cmdOpts.hook, cmdOpts.from, cmdOpts.to);
         output(result, opts);
       } catch (err) {
@@ -464,6 +478,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, cmdOpts: { to: string; trigger: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const result = await api.tasks.guardCheck(id, cmdOpts.to, cmdOpts.trigger);
         output(result, opts);
       } catch (err) {
@@ -478,6 +493,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, cmdOpts: { actor?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const transitions = await api.tasks.getTransitions(id) as { to: string }[];
         if (transitions.length === 0) {
           console.error('No available transitions for this task.');
@@ -514,6 +530,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const entries = await api.tasks.getContext(id) as {
           id: string;
           source: string;
@@ -546,6 +563,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, cmdOpts: { source: string; type: string; summary: string; data?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const summary = await readStdinOrValue(cmdOpts.summary);
         if (!summary) {
           console.error('Summary is required');
@@ -582,6 +600,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string, cmdOpts: { type: string; content: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const content = await readStdinOrValue(cmdOpts.content);
         if (!content) {
           console.error('Content is required');
@@ -604,6 +623,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const artifacts = await api.tasks.getArtifacts(id);
         output(artifacts, opts);
       } catch (err) {
@@ -617,6 +637,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const timeline = await api.tasks.getTimeline(id);
         output(timeline, opts);
       } catch (err) {
@@ -630,6 +651,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (id: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        id = await resolveTaskId(api, id);
         const worktree = await api.tasks.getWorktree(id);
         output(worktree, opts);
       } catch (err) {
@@ -647,6 +669,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (taskId: string) => {
       const opts = program.opts() as OutputOptions;
       try {
+        taskId = await resolveTaskId(api, taskId);
         const task = await api.tasks.get(taskId);
         output(task.subtasks, opts);
       } catch (err) {
@@ -662,6 +685,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (taskId: string, cmdOpts: { name: string; status: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        taskId = await resolveTaskId(api, taskId);
         const task = await api.tasks.get(taskId);
         const newSubtask: Subtask = { name: cmdOpts.name, status: cmdOpts.status as SubtaskStatus };
         const subtasks = [...task.subtasks, newSubtask];
@@ -680,6 +704,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (taskId: string, cmdOpts: { name: string; status: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        taskId = await resolveTaskId(api, taskId);
         const task = await api.tasks.get(taskId);
         const subtasks = task.subtasks.map((s) =>
           s.name === cmdOpts.name ? { ...s, status: cmdOpts.status as SubtaskStatus } : s
@@ -698,6 +723,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (taskId: string, cmdOpts: { name: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
+        taskId = await resolveTaskId(api, taskId);
         const task = await api.tasks.get(taskId);
         const subtasks = task.subtasks.filter((s) => s.name !== cmdOpts.name);
         await api.tasks.update(taskId, { subtasks });
@@ -722,6 +748,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
         return;
       }
       try {
+        taskId = await resolveTaskId(api, taskId);
         await api.tasks.get(taskId);
         await api.tasks.update(taskId, { subtasks });
         output(subtasks, opts);
