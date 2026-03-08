@@ -502,28 +502,27 @@ export function TaskDetailPage() {
                 </span>
               </>
             )}
-          </div>
-          {/* Action strip */}
-          <div style={{ padding: '2px 0 4px' }}>
             {(!isAgentPipeline || agentRuns !== null) && (
-              <PipelineControlPanel
-                taskId={id!}
-                task={task}
-                isAgentPipeline={isAgentPipeline}
-                hasRunningAgent={hasRunningAgent}
-                lastRun={lastRun}
-                isStuck={isStuck}
-                isFinalizing={isFinalizing}
-                primaryTransitions={primaryTransitions}
-                transitioning={transitioning}
-                statusMeta={statusMeta}
-                pipelineStatuses={pipeline?.statuses ?? []}
-                onTransition={handleTransition}
-                onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
-                onHookFailures={(failures) => setHookFailureAlerts((prev) => [...prev, ...failures])}
-                diagnostics={diagnostics}
-                refetchDiagnostics={refetchDiagnostics}
-              />
+              <div style={{ marginLeft: 4 }}>
+                <PipelineControlPanel
+                  taskId={id!}
+                  task={task}
+                  isAgentPipeline={isAgentPipeline}
+                  hasRunningAgent={hasRunningAgent}
+                  lastRun={lastRun}
+                  isStuck={isStuck}
+                  isFinalizing={isFinalizing}
+                  primaryTransitions={primaryTransitions}
+                  transitioning={transitioning}
+                  statusMeta={statusMeta}
+                  pipelineStatuses={pipeline?.statuses ?? []}
+                  onTransition={handleTransition}
+                  onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
+                  onHookFailures={(failures) => setHookFailureAlerts((prev) => [...prev, ...failures])}
+                  diagnostics={diagnostics}
+                  refetchDiagnostics={refetchDiagnostics}
+                />
+              </div>
             )}
           </div>
         </div>

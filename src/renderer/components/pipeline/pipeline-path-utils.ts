@@ -5,7 +5,7 @@ export function computeHappyPath(pipeline: Pipeline): string[] {
   const { statuses, transitions } = pipeline;
   if (statuses.length === 0) return [];
 
-  const statusIndex = new Map(statuses.map((s, i) => [s.name, i]));
+  const statusPosition = new Map(statuses.map((s, i) => [s.name, s.position ?? (900 + i)]));
   const path: string[] = [statuses[0].name];
   const visited = new Set<string>(path);
 
@@ -16,7 +16,7 @@ export function computeHappyPath(pipeline: Pipeline): string[] {
 
     const candidates = transitions
       .filter((t) => t.from === current && !visited.has(t.to))
-      .sort((a, b) => (statusIndex.get(a.to) ?? 999) - (statusIndex.get(b.to) ?? 999));
+      .sort((a, b) => (statusPosition.get(a.to) ?? 999) - (statusPosition.get(b.to) ?? 999));
 
     if (candidates.length === 0) break;
     const next = candidates[0].to;
@@ -33,7 +33,7 @@ export function projectForward(
   alreadyVisited: Set<string>,
 ): string[] {
   const { statuses, transitions } = pipeline;
-  const statusIndex = new Map(statuses.map((s, i) => [s.name, i]));
+  const statusPosition = new Map(statuses.map((s, i) => [s.name, s.position ?? (900 + i)]));
   const path: string[] = [];
   const visited = new Set(alreadyVisited);
   let current = from;
@@ -44,7 +44,7 @@ export function projectForward(
 
     const candidates = transitions
       .filter((t) => t.from === current && !visited.has(t.to))
-      .sort((a, b) => (statusIndex.get(a.to) ?? 999) - (statusIndex.get(b.to) ?? 999));
+      .sort((a, b) => (statusPosition.get(a.to) ?? 999) - (statusPosition.get(b.to) ?? 999));
 
     if (candidates.length === 0) break;
     const next = candidates[0].to;
