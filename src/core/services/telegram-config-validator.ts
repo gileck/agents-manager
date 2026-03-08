@@ -13,8 +13,8 @@ export function validateTelegramConfig(
   if (!/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
     throw new Error('Invalid Telegram bot token format. Expected format: <number>:<alphanumeric-string>.');
   }
-  if (!/^-?\d+$/.test(chatId)) {
-    throw new Error('Invalid Telegram chat ID format. Expected a numeric value (optionally prefixed with -).');
+  if (!/^-?\d+(:\d+)?$/.test(chatId)) {
+    throw new Error('Invalid Telegram chat ID format. Expected a numeric value (optionally prefixed with -), with optional :threadId suffix.');
   }
   if (notificationChatId && !/^-?\d+(:\d+)?$/.test(notificationChatId)) {
     throw new Error('Invalid Telegram notification chat ID format. Expected a numeric value (optionally prefixed with -), with optional :threadId suffix.');

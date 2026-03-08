@@ -83,7 +83,8 @@ export class TelegramAgentBotService implements ITelegramBotService {
     if (!project.path) throw new Error(`Project has no path: ${projectId}`);
 
     this.projectId = projectId;
-    this.chatId = chatId;
+    // Strip optional :threadId suffix — bot uses chatId only for isAllowed checks
+    this.chatId = chatId.includes(':') ? chatId.slice(0, chatId.lastIndexOf(':')) : chatId;
     this.bot = new TelegramBot(botToken, { polling: true });
     this.running = true;
 

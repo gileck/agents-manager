@@ -60,7 +60,8 @@ export class TelegramBotService implements ITelegramBotService {
     if (!project) throw new Error(`Project not found: ${projectId}`);
 
     this.projectId = projectId;
-    this.chatId = chatId;
+    // Strip optional :threadId suffix — bot uses chatId only for isAllowed checks
+    this.chatId = chatId.includes(':') ? chatId.slice(0, chatId.lastIndexOf(':')) : chatId;
     this.bot = new TelegramBot(botToken, { polling: true });
     this.running = true;
 
