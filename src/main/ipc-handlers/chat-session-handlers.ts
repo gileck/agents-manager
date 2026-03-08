@@ -1,6 +1,7 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { registerIpcHandler } from '@template/main/ipc/ipc-registry';
 import type { ApiClient } from '../../client';
+import type { PermissionMode } from '../../shared/types';
 
 export function registerChatSessionHandlers(api: ApiClient): void {
   // ============================================
@@ -49,7 +50,7 @@ export function registerChatSessionHandlers(api: ApiClient): void {
     return api.chat.listTaskSessionsForProject(projectId);
   });
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name?: string; agentLib?: string | null }) => {
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null }) => {
     return api.chat.updateSession(sessionId, input);
   });
 

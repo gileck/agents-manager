@@ -42,6 +42,7 @@ import type {
   AutomatedAgentTemplate,
   InAppNotification,
   InAppNotificationFilter,
+  PermissionMode,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -472,7 +473,7 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST, scopeType, scopeId),
     listTaskSessions: (projectId: string): Promise<TaskChatSessionWithTitle[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_TASK_SESSIONS, projectId),
-    update: (sessionId: string, input: { name?: string; agentLib?: string | null }): Promise<ChatSession | null> =>
+    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null }): Promise<ChatSession | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
