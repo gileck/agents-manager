@@ -9,17 +9,14 @@ interface PipelineControlPanelProps {
   task: { status: string; prLink?: string | null };
   isAgentPipeline: boolean;
   hasRunningAgent: boolean;
-  activeRun: AgentRun | null;
   lastRun: AgentRun | null;
   isStuck: boolean;
   isFinalizing: boolean;
   primaryTransitions: Transition[];
   transitioning: string | null;
-  stoppingAgent: boolean;
   statusMeta: StatusMeta;
   pipelineStatuses: PipelineStatus[];
   onTransition: (toStatus: string) => void;
-  onStopAgent: () => void;
   onNavigateToRun: (runId: string) => void;
   onHookFailures: (failures: HookFailure[]) => void;
   diagnostics: PipelineDiagnostics | null;
@@ -31,17 +28,14 @@ export function PipelineControlPanel({
   task,
   isAgentPipeline,
   hasRunningAgent,
-  activeRun,
   lastRun,
   isStuck,
   isFinalizing,
   primaryTransitions,
   transitioning,
-  stoppingAgent,
   statusMeta,
   pipelineStatuses,
   onTransition,
-  onStopAgent,
   onNavigateToRun,
   onHookFailures,
   diagnostics,
@@ -85,16 +79,13 @@ export function PipelineControlPanel({
         task={task}
         isAgentPipeline={isAgentPipeline}
         hasRunningAgent={hasRunningAgent}
-        activeRun={activeRun}
         lastRun={lastRun}
         isStuck={isStuck}
         isFinalizing={isFinalizing}
         primaryTransitions={primaryTransitions}
         transitioning={transitioning}
-        stoppingAgent={stoppingAgent}
         statusMeta={enhancedStatusMeta}
         onTransition={onTransition}
-        onStopAgent={onStopAgent}
         onNavigateToRun={onNavigateToRun}
         phases={phases ?? undefined}
         hasPendingPhases={hasPendingPhases}

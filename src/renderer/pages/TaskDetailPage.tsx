@@ -92,7 +92,6 @@ export function TaskDetailPage() {
   // Derived agent state
   const isAgentPipeline = pipeline?.statuses.some((s) => s.category === 'agent_running') ?? false;
   const hasRunningAgent = agentRuns?.some((r) => r.status === 'running') ?? false;
-  const activeRun = agentRuns?.find((r) => r.status === 'running') ?? null;
   const lastRun = agentRuns?.[0] ?? null;
   const isAgentPhase = statusMeta.isAgentRunning;
   const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
@@ -145,8 +144,6 @@ export function TaskDetailPage() {
   const [resetting, setResetting] = useState(false);
   const [resetPipelineId, setResetPipelineId] = useState<string | undefined>(undefined);
   const [duplicating, setDuplicating] = useState(false);
-  const [stoppingAgent, setStoppingAgent] = useState(false);
-
   // Prompt response state
   const [responding, setResponding] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -241,21 +238,6 @@ export function TaskDetailPage() {
     } catch (err) {
       console.error(`Feedback action failed (${entryType}):`, err);
       setTransitionError(err instanceof Error ? err.message : 'Failed to submit feedback');
-    }
-  };
-
-  const handleStopAgent = async () => {
-    if (!activeRun) return;
-    setStoppingAgent(true);
-    try {
-      await window.api.agents.stop(activeRun.id);
-      await refetchAgentRuns();
-      await refetch();
-      await refetchTransitions();
-    } catch (err) {
-      setTransitionError(err instanceof Error ? err.message : 'Failed to stop agent.');
-    } finally {
-      setStoppingAgent(false);
     }
   };
 
@@ -531,17 +513,14 @@ export function TaskDetailPage() {
                 task={task}
                 isAgentPipeline={isAgentPipeline}
                 hasRunningAgent={hasRunningAgent}
-                activeRun={activeRun}
                 lastRun={lastRun}
                 isStuck={isStuck}
                 isFinalizing={isFinalizing}
                 primaryTransitions={primaryTransitions}
                 transitioning={transitioning}
-                stoppingAgent={stoppingAgent}
                 statusMeta={statusMeta}
                 pipelineStatuses={pipeline?.statuses ?? []}
                 onTransition={handleTransition}
-                onStopAgent={handleStopAgent}
                 onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
                 onHookFailures={(failures) => setHookFailureAlerts((prev) => [...prev, ...failures])}
                 diagnostics={diagnostics}
