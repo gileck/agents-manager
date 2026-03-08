@@ -20,14 +20,13 @@ module.exports = {
     port: DEV_SERVER_PORT,
     hot: true,
     historyApiFallback: true,
+    // Move HMR WebSocket to /wds to avoid conflicting with the app's /ws path
+    webSocketServer: { type: 'ws', options: { path: '/wds' } },
+    client: { webSocketURL: { pathname: '/wds' } },
     proxy: [
       {
-        context: ['/api'],
+        context: ['/api', '/ws'],
         target: `http://127.0.0.1:${DAEMON_PORT}`,
-      },
-      {
-        context: ['/ws'],
-        target: `ws://127.0.0.1:${DAEMON_PORT}`,
         ws: true,
       },
     ],

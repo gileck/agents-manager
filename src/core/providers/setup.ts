@@ -149,7 +149,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const activityLog = new SqliteActivityLog(db);
   const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, db);
   const appDebugLog = new SqliteAppDebugLog(db);
-  const appLogger = initAppLogger(appDebugLog);
+  const appLogger = initAppLogger(appDebugLog, { verbose: process.env.AM_VERBOSE === '1' });
 
   // Register built-in guards
   registerCoreGuards(pipelineEngine, db);

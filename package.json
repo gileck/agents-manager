@@ -34,7 +34,7 @@
     "build:web:prod": "NODE_ENV=production webpack --config config/webpack.web.config.js",
     "dev:web": "webpack serve --config config/webpack.web.config.js",
     "dev:daemon": "npx tsx scripts/dev-daemon.ts",
-    "dev:start": "concurrently -n daemon,web -c blue,green \"npm run dev:daemon\" \"npm run dev:web\"",
+    "dev:start": "npx tsx scripts/dev-daemon.ts --web",
     "build:daemon": "esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api",
     "lint": "eslint src/ template/ tests/",
     "typecheck": "tsc --noEmit -p config/tsconfig.main.json && tsc --noEmit -p config/tsconfig.preload.json && tsc --noEmit -p config/tsconfig.renderer.json && tsc --noEmit -p config/tsconfig.cli.json && tsc --noEmit -p config/tsconfig.daemon.json && tsc --noEmit -p config/tsconfig.web.json",

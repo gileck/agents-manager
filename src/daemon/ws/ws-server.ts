@@ -30,6 +30,7 @@ export class DaemonWsServer {
     });
 
     ws.on('close', () => this.subscriptions.delete(ws));
+    ws.on('error', () => this.subscriptions.delete(ws));
   }
 
   broadcast(channel: string, id: string | undefined, data: unknown): void {

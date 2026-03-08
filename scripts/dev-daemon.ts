@@ -1,19 +1,29 @@
 /**
- * Dev daemon runner — watches src/ for changes and auto-restarts the daemon,
- * but skips restart when agents are actively running.
+ * Dev daemon runner — builds daemon with esbuild, runs with node,
+ * watches src/ for changes and auto-restarts (skipping when agents are running).
+ * With --web flag, also starts webpack-dev-server after daemon is healthy.
  *
- * Usage: npx tsx scripts/dev-daemon.ts
+ * Usage: npx tsx scripts/dev-daemon.ts [--web]
  */
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, execSync, type ChildProcess } from 'child_process';
 import { watch } from 'fs';
 import path from 'path';
 import http from 'http';
 
 const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
-const SRC_DIR = path.resolve(__dirname, '..', 'src');
+const ROOT_DIR = path.resolve(__dirname, '..');
+const SRC_DIR = path.join(ROOT_DIR, 'src');
+const WEBPACK_BIN = path.join(ROOT_DIR, 'node_modules', '.bin', 'webpack');
+const DAEMON_BUNDLE = path.join(ROOT_DIR, 'dist-daemon', 'index.js');
+const SQLITE_BINDING = path.join(ROOT_DIR, 'node_modules/better-sqlite3/build-node/Release/better_sqlite3.node');
 const DEBOUNCE_MS = 500;
+const WITH_WEB = process.argv.includes('--web');
+
+// esbuild command (same as package.json build:daemon)
+const ESBUILD_CMD = `node_modules/.bin/esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api`;
 
 let daemon: ChildProcess | null = null;
+let webServer: ChildProcess | null = null;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
 function log(msg: string) {
@@ -24,6 +34,32 @@ function log(msg: string) {
 function warn(msg: string) {
   const ts = new Date().toLocaleTimeString();
   console.log(`\x1b[33m[dev-daemon ${ts}]\x1b[0m ${msg}`);
+}
+
+function err(msg: string) {
+  const ts = new Date().toLocaleTimeString();
+  console.log(`\x1b[31m[dev-daemon ${ts}]\x1b[0m ${msg}`);
+}
+
+/** Check daemon health — resolves true if healthy */
+function checkHealth(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${PORT}/api/health`, (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(2000, () => { req.destroy(); resolve(false); });
+  });
+}
+
+/** Wait for daemon to be healthy, with timeout */
+async function waitForHealth(timeoutMs = 15000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await checkHealth()) return true;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return false;
 }
 
 /** Check if agents are currently running via the daemon API */
@@ -41,21 +77,47 @@ function checkActiveAgents(): Promise<number> {
         }
       });
     });
-    req.on('error', () => resolve(0)); // daemon not responding = no agents
+    req.on('error', () => resolve(0));
     req.setTimeout(2000, () => { req.destroy(); resolve(0); });
   });
 }
 
+/** Build daemon with esbuild (fast ~200ms) */
+function buildDaemon(): boolean {
+  try {
+    execSync(ESBUILD_CMD, { cwd: ROOT_DIR, stdio: 'pipe' });
+    return true;
+  } catch (e) {
+    err(`Build failed: ${(e as Error).message}`);
+    return false;
+  }
+}
+
+function killPortProcess() {
+  try {
+    const pids = execSync(`lsof -ti:${PORT}`, { encoding: 'utf8' }).trim();
+    if (pids) {
+      execSync(`kill ${pids}`, { stdio: 'pipe' });
+      log(`Killed stale process(es) on port ${PORT}`);
+    }
+  } catch { /* no process on port */ }
+}
+
 function startDaemon() {
-  daemon = spawn('npx', [
-    'tsx',
-    path.resolve(SRC_DIR, 'daemon', 'index.ts'),
-  ], {
+  killPortProcess();
+
+  if (!buildDaemon()) {
+    warn('Skipping daemon start due to build failure');
+    return;
+  }
+
+  daemon = spawn('node', [DAEMON_BUNDLE], {
     stdio: 'inherit',
-    shell: true,
+    cwd: ROOT_DIR,
     env: {
       ...process.env,
-      BETTER_SQLITE3_BINDING: 'node_modules/better-sqlite3/build-node/Release/better_sqlite3.node',
+      BETTER_SQLITE3_BINDING: SQLITE_BINDING,
+      AM_VERBOSE: '1',
     },
   });
 
@@ -69,17 +131,48 @@ function startDaemon() {
   log('Daemon started (pid=' + daemon.pid + ')');
 }
 
+function startWebServer() {
+  if (webServer) return;
+  log('Starting webpack dev server...');
+  webServer = spawn(WEBPACK_BIN, [
+    'serve', '--config', path.join(ROOT_DIR, 'config', 'webpack.web.config.js'),
+  ], {
+    stdio: 'inherit',
+    cwd: ROOT_DIR,
+    env: process.env,
+  });
+
+  webServer.on('exit', (code, signal) => {
+    if (signal !== 'SIGTERM') {
+      log(`Web dev server exited (code=${code}, signal=${signal})`);
+    }
+    webServer = null;
+  });
+}
+
 function stopDaemon(): Promise<void> {
   return new Promise((resolve) => {
     if (!daemon) return resolve();
     daemon.on('exit', () => resolve());
     daemon.kill('SIGTERM');
-    // Force kill after 5s if graceful shutdown stalls
     setTimeout(() => {
       if (daemon && !daemon.killed) {
         daemon.kill('SIGKILL');
       }
     }, 5000);
+  });
+}
+
+function stopWebServer(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!webServer) return resolve();
+    webServer.on('exit', () => resolve());
+    webServer.kill('SIGTERM');
+    setTimeout(() => {
+      if (webServer && !webServer.killed) {
+        webServer.kill('SIGKILL');
+      }
+    }, 3000);
   });
 }
 
@@ -95,34 +188,45 @@ async function handleChange(filename: string | null) {
       return;
     }
 
-    log(`Change detected${filename ? ` (${filename})` : ''} — restarting daemon...`);
+    log(`Change detected${filename ? ` (${filename})` : ''} — rebuilding & restarting daemon...`);
     await stopDaemon();
     startDaemon();
   }, DEBOUNCE_MS);
 }
 
-// Start daemon
-startDaemon();
+async function main() {
+  startDaemon();
 
-// Watch src/ recursively for changes
-watch(SRC_DIR, { recursive: true }, (_event, filename) => {
-  // Only watch TS files
-  if (filename && /\.(ts|tsx)$/.test(filename)) {
-    handleChange(filename);
+  // Watch src/ recursively for TS changes
+  watch(SRC_DIR, { recursive: true }, (_event, filename) => {
+    if (filename && /\.(ts|tsx)$/.test(filename)) {
+      handleChange(filename);
+    }
+  });
+
+  log(`Watching ${SRC_DIR} for changes...`);
+
+  if (WITH_WEB) {
+    log('Waiting for daemon to be healthy...');
+    const healthy = await waitForHealth();
+    if (healthy) {
+      log('Daemon is healthy');
+      startWebServer();
+    } else {
+      warn('Daemon failed to become healthy within 15s — starting web server anyway');
+      startWebServer();
+    }
   }
-});
+}
 
-log(`Watching ${SRC_DIR} for changes...`);
+main();
 
-// Forward signals to daemon
-process.on('SIGINT', async () => {
+// Forward signals — clean up both processes
+const shutdown = async () => {
   log('Shutting down...');
   if (restartTimer) clearTimeout(restartTimer);
-  await stopDaemon();
+  await Promise.all([stopWebServer(), stopDaemon()]);
   process.exit(0);
-});
-process.on('SIGTERM', async () => {
-  if (restartTimer) clearTimeout(restartTimer);
-  await stopDaemon();
-  process.exit(0);
-});
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

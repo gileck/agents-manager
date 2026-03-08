@@ -1,7 +1,11 @@
 import type { IAppDebugLog } from '../interfaces/app-debug-log';
 
 export class AppLogger {
-  constructor(private log: IAppDebugLog) {}
+  private verbose: boolean;
+
+  constructor(private log: IAppDebugLog, opts?: { verbose?: boolean }) {
+    this.verbose = opts?.verbose ?? false;
+  }
 
   debug(source: string, message: string, data?: Record<string, unknown>): void {
     this.log.log({ level: 'debug', source, message, data });
@@ -9,14 +13,21 @@ export class AppLogger {
 
   info(source: string, message: string, data?: Record<string, unknown>): void {
     this.log.log({ level: 'info', source, message, data });
+    if (this.verbose) this.toConsole(console.log, source, message, data);
   }
 
   warn(source: string, message: string, data?: Record<string, unknown>): void {
     this.log.log({ level: 'warn', source, message, data });
+    if (this.verbose) this.toConsole(console.warn, source, message, data);
   }
 
   error(source: string, message: string, data?: Record<string, unknown>): void {
     this.log.log({ level: 'error', source, message, data });
+    if (this.verbose) this.toConsole(console.error, source, message, data);
+  }
+
+  private toConsole(fn: (...args: unknown[]) => void, source: string, message: string, data?: Record<string, unknown>): void {
+    if (data) { fn(`[${source}] ${message}`, data); } else { fn(`[${source}] ${message}`); }
   }
 
   logError(source: string, message: string, err: unknown): void {
@@ -28,6 +39,9 @@ export class AppLogger {
       data.error = String(err);
     }
     this.log.log({ level: 'error', source, message, data });
+    if (this.verbose) {
+      console.error(`[${source}] ${message}`, err);
+    }
   }
 }
 
@@ -45,8 +59,8 @@ const _fallback = {
   logError: (s: string, m: string, err: unknown) => console.error(`[${s}] ${m}`, err),
 } as AppLogger;
 
-export function initAppLogger(log: IAppDebugLog): AppLogger {
-  _instance = new AppLogger(log);
+export function initAppLogger(log: IAppDebugLog, opts?: { verbose?: boolean }): AppLogger {
+  _instance = new AppLogger(log, opts);
   return _instance;
 }
 
