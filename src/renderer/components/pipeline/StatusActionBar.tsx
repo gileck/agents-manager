@@ -1,8 +1,75 @@
 import React from 'react';
 import { Button } from '../ui/button';
+import { SplitButton } from '../ui/SplitButton';
+import { getRecommendedTransition, isEscapeTransition } from '../../utils/getRecommendedTransition';
 import { AgentRunErrorBanner } from '../agent-run/AgentRunErrorBanner';
-import type { AgentRun, Transition, ImplementationPhase } from '../../../shared/types';
+import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
+
+type TaskProps = {
+  status: string;
+  prLink?: string | null;
+  type?: TaskType | null;
+  size?: TaskSize | null;
+  complexity?: TaskComplexity | null;
+};
+
+function renderSmartTransitions(
+  task: TaskProps,
+  primaryTransitions: Transition[],
+  transitioning: string | null,
+  onTransition: (toStatus: string) => void
+) {
+  if (!primaryTransitions.length) return null;
+
+  const recommended = getRecommendedTransition(task, primaryTransitions);
+  const escapeTransitions = primaryTransitions.filter(isEscapeTransition);
+  const forwardTransitions = primaryTransitions.filter((t) => !isEscapeTransition(t));
+
+  // Single transition: plain button, no dropdown needed
+  if (primaryTransitions.length === 1) {
+    const t = primaryTransitions[0];
+    return (
+      <Button
+        size="sm"
+        onClick={() => onTransition(t.to)}
+        disabled={transitioning !== null}
+      >
+        {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+      </Button>
+    );
+  }
+
+  // No recommended: fall back to all buttons flat
+  if (!recommended) {
+    return (
+      <div className="flex items-center gap-2 flex-wrap">
+        {primaryTransitions.map((t) => (
+          <Button
+            key={t.to}
+            size="sm"
+            onClick={() => onTransition(t.to)}
+            disabled={transitioning !== null}
+          >
+            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  const otherForwardTransitions = forwardTransitions.filter((t) => t.to !== recommended.to);
+
+  return (
+    <SplitButton
+      primaryTransition={recommended}
+      otherForwardTransitions={otherForwardTransitions}
+      escapeTransitions={escapeTransitions}
+      transitioning={transitioning}
+      onTransition={onTransition}
+    />
+  );
+}
 
 export function StatusActionBar({
   task,
@@ -21,7 +88,7 @@ export function StatusActionBar({
   totalFailedRuns,
   onOpenForceDialog,
 }: {
-  task: { status: string; prLink?: string | null };
+  task: TaskProps;
   isAgentPipeline: boolean;
   hasRunningAgent: boolean;
   lastRun: AgentRun | null;
@@ -38,43 +105,19 @@ export function StatusActionBar({
   onOpenForceDialog?: () => void;
 }) {
   if (!isAgentPipeline) {
-    // Fallback: render all transitions as standard buttons
-    if (!primaryTransitions.length) return null;
-    return (
-      <div className="flex items-center gap-2 flex-wrap">
-        {primaryTransitions.map((t) => (
-          <Button
-            key={t.to}
-            size="sm"
-            onClick={() => onTransition(t.to)}
-            disabled={transitioning !== null}
-          >
-            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
-          </Button>
-        ))}
-      </div>
-    );
+    // Fallback: render smart split button
+    const rendered = renderSmartTransitions(task, primaryTransitions, transitioning, onTransition);
+    if (!rendered) return null;
+    return <div className="flex items-center gap-2 flex-wrap">{rendered}</div>;
   }
 
   const status = task.status;
 
-  // Ready category (open, reported, etc.): show primary forward transitions
+  // Ready category (open, reported, etc.): show smart primary forward transition
   if (statusMeta.isReady) {
-    if (!primaryTransitions.length) return null;
-    return (
-      <div className="flex items-center gap-2 flex-wrap">
-        {primaryTransitions.map((t) => (
-          <Button
-            key={t.to}
-            size="sm"
-            onClick={() => onTransition(t.to)}
-            disabled={transitioning !== null}
-          >
-            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
-          </Button>
-        ))}
-      </div>
-    );
+    const rendered = renderSmartTransitions(task, primaryTransitions, transitioning, onTransition);
+    if (!rendered) return null;
+    return <div className="flex items-center gap-2 flex-wrap">{rendered}</div>;
   }
 
   // Agent running / finalizing: pipeline stepper already shows animated state
