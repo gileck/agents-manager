@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import { createServer as createHttpServer } from 'http';
+import path from 'path';
+import fs from 'fs';
 import { healthRoutes } from './routes/health';
 import { projectRoutes } from './routes/projects';
 import { taskRoutes } from './routes/tasks';
@@ -71,6 +73,16 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
 
   // Utility routes (no services dependency)
   app.use(shellRoutes());
+
+  // Serve web UI bundle if built (dist-web/ exists)
+  const webDistPath = path.resolve(process.cwd(), 'dist-web');
+  if (fs.existsSync(webDistPath)) {
+    app.use(express.static(webDistPath));
+    // SPA fallback — serve index.html for non-API GET requests
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(webDistPath, 'index.html'));
+    });
+  }
 
   // Error handler must be registered last
   app.use(errorHandler);
