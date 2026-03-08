@@ -161,6 +161,7 @@ export const IPC_CHANNELS = {
   /** PUSH-ONLY: main->renderer, do not invoke() */
   TASK_CHAT_MESSAGE: 'task-chat:message',
   CHAT_COSTS: 'chat:costs',
+  CHAT_LIVE_MESSAGES: 'chat:live-messages',
 
   // Chat sessions
   CHAT_SESSION_CREATE: 'chat:session:create',

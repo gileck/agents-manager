@@ -150,6 +150,7 @@ const IPC_CHANNELS = {
   TASK_CHAT_OUTPUT: 'task-chat:output',
   TASK_CHAT_MESSAGE: 'task-chat:message',
   CHAT_COSTS: 'chat:costs',
+  CHAT_LIVE_MESSAGES: 'chat:live-messages',
   CHAT_SESSION_CREATE: 'chat:session:create',
   CHAT_SESSION_LIST: 'chat:session:list',
   CHAT_SESSION_LIST_TASK_SESSIONS: 'chat:session:list-task-sessions',
@@ -463,6 +464,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SUMMARIZE, sessionId),
     costs: (): Promise<{ inputTokens: number; outputTokens: number }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COSTS),
+    chatLiveMessages: (sessionId: string): Promise<AgentChatMessage[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIVE_MESSAGES, sessionId),
   },
 
   // Chat session operations

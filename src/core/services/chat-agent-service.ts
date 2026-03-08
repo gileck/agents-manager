@@ -128,6 +128,7 @@ const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   private runningAgents = new Map<string, RunningAgent>();
+  private liveTurnMessages = new Map<string, AgentChatMessage[]>();
   private imageStorageDir: string;
 
   constructor(
@@ -602,6 +603,10 @@ export class ChatAgentService {
     return Array.from(this.runningAgents.values());
   }
 
+  getLiveMessages(sessionId: string): AgentChatMessage[] {
+    return [...(this.liveTurnMessages.get(sessionId) ?? [])];
+  }
+
   /**
    * Fire-and-forget: generates a short descriptive name for a session using Claude Haiku,
    * then persists it and invokes onRenamed with the updated session.
@@ -694,6 +699,7 @@ export class ChatAgentService {
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
     const turnMessages: AgentChatMessage[] = [];
+    this.liveTurnMessages.set(sessionId, turnMessages);
 
     // Safe wrapper: emit both event types from a single AgentChatMessage
     const emitMessage = (msg: AgentChatMessage) => {
@@ -846,6 +852,7 @@ export class ChatAgentService {
       }
     } finally {
       this.runningControllers.delete(sessionId);
+      this.liveTurnMessages.delete(sessionId);
 
       // Clean up completed agent after a delay to allow UI to show completion status
       setTimeout(() => {

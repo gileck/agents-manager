@@ -34,6 +34,10 @@ export function registerChatSessionHandlers(api: ApiClient): void {
     return api.chat.getCosts();
   });
 
+  registerIpcHandler(IPC_CHANNELS.CHAT_LIVE_MESSAGES, async (_, sessionId: string) => {
+    return api.chat.getLiveMessages(sessionId);
+  });
+
   // ============================================
   // Chat Session Operations
   // ============================================
