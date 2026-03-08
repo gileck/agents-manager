@@ -416,6 +416,11 @@ export class AgentService implements IAgentService {
         context.sessionId = pendingResumeRun.sessionId ?? pendingResumeRun.id;
         context.resumeSession = true;
         getAppLogger().info(`Agent:${agentType}`, `Resuming interrupted session ${context.sessionId}`, { taskId, resumeRunId: pendingResumeRun.id, sessionId: context.sessionId });
+        await this.taskEventLog.log({
+          taskId, category: 'agent', severity: 'info',
+          message: `Crash recovery: resuming interrupted session ${context.sessionId}`,
+          data: { agentRunId: run.id, resumeRunId: pendingResumeRun.id, sessionId: context.sessionId, mode: pendingResumeRun.mode },
+        });
       }
     }
 
@@ -457,6 +462,13 @@ export class AgentService implements IAgentService {
         context.resumeSession = false;
       }
     }
+
+    // Log the resolved session configuration
+    await this.taskEventLog.log({
+      taskId, category: 'agent', severity: 'debug',
+      message: `Session resolved: id=${context.sessionId}, resume=${context.resumeSession}`,
+      data: { agentRunId: run.id, sessionId: context.sessionId, resumeSession: context.resumeSession, resumedFromRunId: context.resumedFromRunId },
+    });
 
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
@@ -502,6 +514,13 @@ export class AgentService implements IAgentService {
       ...(context.sessionId ? { sessionId: context.sessionId } : {}),
     });
 
+    // Log resolved agent configuration
+    await this.taskEventLog.log({
+      taskId, category: 'agent', severity: 'debug',
+      message: `Agent config resolved: engine=${resolvedEngine}, model=${effectiveModel ?? 'default'}`,
+      data: { agentRunId: run.id, engine: resolvedEngine, model: effectiveModel, sessionId: context.sessionId, resumeSession: context.resumeSession, workdir: context.workdir },
+    });
+
     // 7. Store active callbacks for this task
     this.activeCallbacks.set(taskId, { onOutput, onMessage, onStatusChange });
 
@@ -517,12 +536,19 @@ export class AgentService implements IAgentService {
     } catch (err) {
       // Setup failed before the agent could start — mark the DB run as failed
       // so it doesn't remain as 'running' forever.
+      const setupError = err instanceof Error ? err.message : String(err);
+      const setupStack = err instanceof Error ? err.stack : undefined;
       if (run) {
         await this.agentRunStore.updateRun(run.id, {
           status: 'failed',
           outcome: 'interrupted',
           completedAt: now(),
-          error: `Setup failed: ${err instanceof Error ? err.message : String(err)}`,
+          error: `Setup failed: ${setupError}`,
+        });
+        await this.taskEventLog.log({
+          taskId, category: 'agent', severity: 'error',
+          message: `Agent setup failed before execution: ${setupError}`,
+          data: { agentRunId: run.id, error: setupError, ...(setupStack ? { stack: setupStack } : {}) },
         });
       }
       // Release spawn lock if execute() fails before reaching runAgentInBackground()
@@ -657,8 +683,15 @@ export class AgentService implements IAgentService {
           data: {
             agentRunId: run.id,
             error: errorMsg,
+            ...(errorStack ? { stack: errorStack } : {}),
             ...(killReason ? { killReason } : {}),
             ...(rawExitCode != null ? { rawExitCode } : {}),
+            engine: config.engine,
+            model: config.model,
+            mode: run.mode,
+            sessionId: context.sessionId,
+            resumeSession: context.resumeSession,
+            cwd: context.workdir,
           },
         });
         try {

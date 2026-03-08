@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '../ui/button';
+import { AgentRunErrorBanner } from '../agent-run/AgentRunErrorBanner';
 import type { AgentRun, Transition, ImplementationPhase } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
 
@@ -88,9 +89,11 @@ export function StatusActionBar({
     return (
       <div className="rounded-md px-4 py-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium" style={{ color: '#dc2626' }}>
-            {lastRun?.error || 'Agent failed or not running'}
-          </span>
+          {lastRun?.error ? (
+            <AgentRunErrorBanner error={lastRun.error} compact />
+          ) : (
+            <span className="text-sm font-medium" style={{ color: '#dc2626' }}>Agent failed or not running</span>
+          )}
           {maxRetriesExhausted && (
             <p className="text-xs mt-1" style={{ color: '#dc2626' }}>
               Max retries exhausted ({totalFailedRuns} failed runs). Use Force Transition to recover.

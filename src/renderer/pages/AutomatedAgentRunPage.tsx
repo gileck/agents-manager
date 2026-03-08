@@ -12,6 +12,8 @@ import type { OutputMode } from '../components/agent-run/OutputToolbar';
 import { PromptPanel } from '../components/agent-run/PromptPanel';
 import { JSONOutputPanel } from '../components/agent-run/JSONOutputPanel';
 import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
+import { AgentRunErrorBanner } from '../components/agent-run/AgentRunErrorBanner';
+import { DebugLogsPanel } from '../components/agent-run/DebugLogsPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
 import type { AgentRun, AutomatedAgent, AgentChatMessage } from '../../shared/types';
 import { messagesToRawText } from '../../shared/agent-message-utils';
@@ -207,12 +209,7 @@ export function AutomatedAgentRunPage() {
 
       {/* Error alert */}
       {!isRunning && (run.status === 'failed' || run.status === 'timed_out') && run.error && (
-        <div className="mx-6 mt-2 rounded-md px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
-          <svg className="h-5 w-5 flex-shrink-0" style={{ color: '#dc2626' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-          </svg>
-          <span className="text-sm font-medium" style={{ color: '#dc2626' }}>{run.error}</span>
-        </div>
+        <AgentRunErrorBanner error={run.error} />
       )}
 
       {/* Main content — tabs + optional sidebar */}
@@ -225,6 +222,7 @@ export function AutomatedAgentRunPage() {
             </TabsTrigger>
             <TabsTrigger value="prompt">Prompt</TabsTrigger>
             <TabsTrigger value="cost">Cost</TabsTrigger>
+            <TabsTrigger value="debug-logs">Debug Logs</TabsTrigger>
             <TabsTrigger value="json">JSON Output</TabsTrigger>
           </TabsList>
 
@@ -248,6 +246,10 @@ export function AutomatedAgentRunPage() {
 
           <TabsContent value="cost" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
             <AgentRunCostPanel run={run} />
+          </TabsContent>
+
+          <TabsContent value="debug-logs" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
+            <DebugLogsPanel run={run} />
           </TabsContent>
 
           <TabsContent value="json" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">
