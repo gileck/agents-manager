@@ -1,26 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-} from '../components/ui/select';
 import { InlineError } from '../components/InlineError';
 import { useTasks } from '../hooks/useTasks';
 import { usePipelines } from '../hooks/usePipelines';
 import { reportError } from '../lib/error-handler';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
-import { TaskFilterBar, EMPTY_FILTERS } from '../components/tasks/TaskFilterBar';
-import { TaskSortControls } from '../components/tasks/TaskSortControls';
+import { EMPTY_FILTERS } from '../components/tasks/TaskFilterBar';
 import { TaskStatusSummary } from '../components/tasks/TaskStatusSummary';
 import { TaskEmptyState } from '../components/tasks/TaskEmptyState';
 import { TaskGroupedList } from '../components/tasks/TaskGroupedList';
 import { TaskCreateDialog } from '../components/tasks/TaskCreateDialog';
 import { TaskDeleteDialog, BulkDeleteDialog } from '../components/tasks/TaskDeleteDialogs';
+import { TaskToolbar } from '../components/tasks/TaskToolbar';
+import { TaskFilterPanel } from '../components/tasks/TaskFilterPanel';
+import { TaskBulkActionBar } from '../components/tasks/TaskBulkActionBar';
 import { useFeatures } from '../hooks/useFeatures';
 import { sortTasks, collectTags, buildPipelineMap, buildFeatureMap } from '../components/tasks/task-helpers';
 import type { FilterState } from '../components/tasks/TaskFilterBar';
-import type { SortField, SortDirection, GroupBy } from '../components/tasks/task-helpers';
+import type { SortField, SortDirection, GroupBy, ViewMode } from '../components/tasks/task-helpers';
 import { toast } from 'sonner';
 import type { Task, TaskFilter, TaskCreateInput, AppSettings, TaskCreatedBy } from '../../shared/types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
@@ -29,11 +27,15 @@ export function TaskListPage() {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
   const navigate = useNavigate();
 
-  // Persistent filters, sort & group state
+  // Persistent filters, sort, group & view state
   const [filters, setFilters] = useLocalStorage<FilterState>('taskList.filters', EMPTY_FILTERS);
   const [sortField, setSortField] = useLocalStorage<SortField>('taskList.sortField', 'created');
   const [sortDirection, setSortDirection] = useLocalStorage<SortDirection>('taskList.sortDirection', 'desc');
   const [groupBy, setGroupBy] = useLocalStorage<GroupBy>('taskList.groupBy', 'none');
+  const [viewMode, setViewMode] = useLocalStorage<ViewMode>('taskList.viewMode', 'list');
+
+  // Filter panel open/closed
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
 
   // Build backend filter from UI state
   const taskFilter: TaskFilter = {};
@@ -148,6 +150,7 @@ export function TaskListPage() {
   const someSelected = selectedIds.size > 0 && selectedIds.size < tasks.length;
 
   const toggleSelect = (id: string) => {
+    setSelectMode(true); // auto-enter select mode when any checkbox is clicked
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -226,97 +229,85 @@ export function TaskListPage() {
 
   return (
     <div className="p-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-3xl font-bold">Tasks</h1>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mr-2">
-            <span>Group:</span>
-            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)}>
-              <SelectTrigger className="w-28 h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="status">Status</SelectItem>
-                <SelectItem value="priority">Priority</SelectItem>
-                <SelectItem value="pipeline">Pipeline</SelectItem>
-                <SelectItem value="feature">Feature</SelectItem>
-                <SelectItem value="createdBy">Created By</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mr-2">
-            <span>Sort:</span>
-            <TaskSortControls
-              sortField={sortField}
-              sortDirection={sortDirection}
-              onSortFieldChange={setSortField}
-              onSortDirectionToggle={() => setSortDirection((d) => d === 'asc' ? 'desc' : 'asc')}
-            />
-          </div>
-          {tasks.length > 0 && (
-            <Button
-              variant={selectMode ? 'outline' : 'secondary'}
-              size="sm"
-              onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
-            >
-              {selectMode ? 'Cancel' : 'Select'}
-            </Button>
-          )}
-          <Button size="sm" onClick={openCreateDialog}>New Task</Button>
-        </div>
-      </div>
+      {/* Page title */}
+      <h1 className="text-2xl font-bold mb-4">Tasks</h1>
 
-      {/* Filter bar */}
-      <div className="mb-4">
-        <TaskFilterBar
+      {/* Unified toolbar */}
+      <div className="mb-2">
+        <TaskToolbar
           filters={filters}
           onFiltersChange={setFilters}
-          statuses={allStatuses}
+          filterPanelOpen={filterPanelOpen}
+          onFilterPanelToggle={() => setFilterPanelOpen((o) => !o)}
+          groupBy={groupBy}
+          onGroupByChange={setGroupBy}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          onSortFieldChange={setSortField}
+          onSortDirectionToggle={() => setSortDirection((d) => d === 'asc' ? 'desc' : 'asc')}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onNewTask={openCreateDialog}
           pipelines={pipelines}
-          tags={availableTags}
           features={features}
+          statusSummary={
+            sortedTasks.length > 0
+              ? <TaskStatusSummary tasks={sortedTasks} pipelineMap={pipelineMap} />
+              : undefined
+          }
         />
       </div>
 
-      {/* Status summary */}
-      <div className="mb-4">
-        <TaskStatusSummary tasks={sortedTasks} pipelineMap={pipelineMap} />
-      </div>
+      {/* Collapsible filter panel */}
+      <TaskFilterPanel
+        open={filterPanelOpen}
+        filters={filters}
+        onFiltersChange={setFilters}
+        statuses={allStatuses}
+        pipelines={pipelines}
+        tags={availableTags}
+        features={features}
+      />
 
       {/* Task list */}
       {sortedTasks.length === 0 ? (
-        <TaskEmptyState
-          hasFilters={hasActiveFilters}
-          onClearFilters={() => setFilters(EMPTY_FILTERS)}
-          onCreateTask={openCreateDialog}
-        />
+        <div className="mt-4">
+          <TaskEmptyState
+            hasFilters={hasActiveFilters}
+            onClearFilters={() => setFilters(EMPTY_FILTERS)}
+            onCreateTask={openCreateDialog}
+          />
+        </div>
       ) : (
-        <>
-          {selectMode && (
-            <div className="flex items-center gap-3 px-4 py-2">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                ref={(el) => { if (el) el.indeterminate = someSelected; }}
-                onChange={toggleSelectAll}
-                className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
-              />
-              <span className="text-sm text-muted-foreground">
-                {selectedIds.size > 0 ? `${selectedIds.size} of ${tasks.length} selected` : 'Select all'}
-              </span>
-              {selectedIds.size > 0 && (
-                <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
-                  Delete selected ({selectedIds.size})
-                </Button>
-              )}
+        <div className={`mt-4 ${selectedIds.size > 0 ? 'pb-20' : ''}`}>
+          {/* Floating bulk action bar — visible when items are selected */}
+          {selectedIds.size > 0 && (
+            <TaskBulkActionBar
+              selectedCount={selectedIds.size}
+              totalCount={tasks.length}
+              allSelected={allSelected}
+              someSelected={someSelected}
+              onSelectAll={toggleSelectAll}
+              onDeleteSelected={() => setBulkDeleteOpen(true)}
+              onExit={exitSelectMode}
+            />
+          )}
+
+          {!selectMode && tasks.length > 0 && (
+            <div className="flex justify-end mb-2">
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                onClick={() => setSelectMode(true)}
+              >
+                Select tasks
+              </button>
             </div>
           )}
 
           <TaskGroupedList
             tasks={sortedTasks}
             groupBy={groupBy}
+            viewMode={viewMode}
             pipelineMap={pipelineMap}
             featureMap={featureMap}
             activeTaskIds={activeTaskIds}
@@ -328,7 +319,7 @@ export function TaskListPage() {
             onDuplicateTask={handleDuplicate}
             onStatusChange={handleStatusChange}
           />
-        </>
+        </div>
       )}
 
       {/* Dialogs */}

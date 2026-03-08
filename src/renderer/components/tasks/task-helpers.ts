@@ -10,6 +10,7 @@ export const PRIORITY_LABELS: Record<number, string> = {
 export type SortField = 'created' | 'updated' | 'priority' | 'status' | 'title';
 export type SortDirection = 'asc' | 'desc';
 export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline' | 'feature' | 'createdBy';
+export type ViewMode = 'list' | 'card';
 
 export function sortTasks(tasks: Task[], field: SortField, direction: SortDirection): Task[] {
   const sorted = [...tasks].sort((a, b) => {
