@@ -614,5 +614,6 @@ const api = {
 // Expose the API to the renderer
 contextBridge.exposeInMainWorld('api', api);
 
-// Type declaration for the renderer
-export type ElectronAPI = typeof api;
+// Re-export the shared API shape type for backward compatibility.
+// The canonical type lives in src/shared/api-shape.ts.
+export type { ApiShape as ElectronAPI } from '../shared/api-shape';

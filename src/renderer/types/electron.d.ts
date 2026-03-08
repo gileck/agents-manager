@@ -1,8 +1,8 @@
-import type { ElectronAPI } from '../../preload/index';
+import type { ApiShape } from '../../shared/api-shape';
 
 declare global {
   interface Window {
-    api: ElectronAPI;
+    api: ApiShape;
   }
 }
 
