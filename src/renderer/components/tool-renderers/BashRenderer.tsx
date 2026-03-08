@@ -56,6 +56,15 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
   const shortCmd = command.length > 60 ? command.slice(0, 60) + '...' : command;
   const duration = toolResult ? toolResult.timestamp - toolUse.timestamp : null;
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(command).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   const taskCliDetected = isTaskCliCommand(command);
   const parsedTask = taskCliDetected && toolResult ? parseTaskResult(toolResult.result) : null;
@@ -68,7 +77,9 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
       >
         <span className="text-green-500">$</span>
         <span className="text-foreground truncate">{shortCmd}</span>
-        {description && <span className="text-muted-foreground truncate ml-1">({description})</span>}
+        {description && !expanded && (
+          <span className="text-muted-foreground line-clamp-2 ml-1">({description})</span>
+        )}
         {duration != null && (
           <span className="text-muted-foreground ml-1 flex-shrink-0">{formatDuration(duration)}</span>
         )}
@@ -81,20 +92,40 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
           <TaskActionCard task={parsedTask} rawOutput={toolResult.result} />
         </div>
       )}
-      {expanded && toolResult && !parsedTask && (
+      {expanded && !parsedTask && (
         <div className="border-t border-border">
-          <pre className="text-xs bg-muted p-2 overflow-x-auto whitespace-pre-wrap" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-            {toolResult.result}
-          </pre>
-          {toolResult.result.length > 500 && (
-            <div className="px-2 py-1 border-t border-border">
-              <button
-                className="text-xs text-primary hover:underline"
-                onClick={(e) => { e.stopPropagation(); setDialogOpen(true); }}
-              >
-                View Full Output
-              </button>
+          <div className="bg-muted/60 border-b border-border px-3 py-2 flex items-start gap-2">
+            <span className="text-green-500 font-mono text-xs flex-shrink-0 mt-0.5">$</span>
+            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-all flex-1">{command}</pre>
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0 transition-colors px-1"
+              onClick={handleCopy}
+              title="Copy command"
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          {description && (
+            <div className="px-3 py-1.5 text-xs text-muted-foreground border-b border-border">
+              {description}
             </div>
+          )}
+          {toolResult && (
+            <>
+              <pre className="text-xs bg-muted p-2 overflow-x-auto whitespace-pre-wrap" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {toolResult.result}
+              </pre>
+              {toolResult.result.length > 500 && (
+                <div className="px-2 py-1 border-t border-border">
+                  <button
+                    className="text-xs text-primary hover:underline"
+                    onClick={(e) => { e.stopPropagation(); setDialogOpen(true); }}
+                  >
+                    View Full Output
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
