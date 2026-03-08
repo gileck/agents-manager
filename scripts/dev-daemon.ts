@@ -47,11 +47,12 @@ function checkActiveAgents(): Promise<number> {
 }
 
 function startDaemon() {
-  daemon = spawn('node', [
-    '--import', 'tsx',
+  daemon = spawn('npx', [
+    'tsx',
     path.resolve(SRC_DIR, 'daemon', 'index.ts'),
   ], {
     stdio: 'inherit',
+    shell: true,
     env: {
       ...process.env,
       BETTER_SQLITE3_BINDING: 'node_modules/better-sqlite3/build-node/Release/better_sqlite3.node',
