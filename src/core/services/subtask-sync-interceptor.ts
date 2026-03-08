@@ -47,20 +47,21 @@ export class SubtaskSyncInterceptor {
     const todos: Array<{ content?: string; subject?: string; status?: string }> = parsed.todos ?? parsed;
     if (!Array.isArray(todos)) return;
 
-    let changed = false;
-    for (const todo of todos) {
-      const todoName = (todo.content ?? todo.subject ?? '').trim().toLowerCase();
-      const mappedStatus = mapSdkStatus(todo.status ?? '');
-      if (!todoName || !mappedStatus) continue;
-      const idx = this.currentSubtasks.findIndex(s => s.name.trim().toLowerCase() === todoName);
-      if (idx !== -1 && this.currentSubtasks[idx].status !== mappedStatus) {
-        this.currentSubtasks[idx] = { ...this.currentSubtasks[idx], status: mappedStatus };
-        changed = true;
-      }
-    }
-    if (changed) {
-      this.persistSubtaskChanges();
-    }
+    // Map the agent's todo list directly to subtasks
+    const agentSubtasks: Subtask[] = todos.map(todo => ({
+      name: (todo.content ?? todo.subject ?? '').trim(),
+      status: mapSdkStatus(todo.status ?? '') ?? 'open',
+    })).filter(s => s.name.length > 0);
+
+    // Keep DONE subtasks from previous syncs that the agent hasn't re-listed
+    // (prevents duplicates for within-run updates where agent re-sends its own completed items)
+    const agentNames = new Set(agentSubtasks.map(s => s.name.trim().toLowerCase()));
+    const preservedDone = this.currentSubtasks.filter(
+      s => s.status === 'done' && !agentNames.has(s.name.trim().toLowerCase())
+    );
+
+    this.currentSubtasks = [...preservedDone, ...agentSubtasks];
+    this.persistSubtaskChanges();
   }
 
   private handleTaskCreate(msg: AgentChatMessage & { type: 'tool_use' }): void {
