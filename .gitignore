@@ -8,6 +8,7 @@ dist/
 dist-main/
 dist-cli/
 dist-daemon/
+dist-web/
 dist-electron/
 build/
 out/
