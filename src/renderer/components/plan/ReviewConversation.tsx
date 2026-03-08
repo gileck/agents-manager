@@ -1,16 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { TaskContextEntry, AgentChatMessage, PermissionMode } from '../../../shared/types';
+import type { TaskContextEntry, AgentChatMessage } from '../../../shared/types';
 import { ChatMessageList } from '../chat/ChatMessageList';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
-
-const PERMISSION_MODES: { value: PermissionMode; label: string; title: string }[] = [
-  { value: 'read_only', label: 'Read Only', title: 'Agent can only read files' },
-  { value: 'read_write', label: 'Read & Write', title: 'Agent can read and write files (no shell execution)' },
-  { value: 'full_access', label: 'Full Access', title: 'Agent has full access (read, write, execute)' },
-];
 
 interface ReviewConversationProps {
   entries: TaskContextEntry[];
@@ -20,8 +14,6 @@ interface ReviewConversationProps {
   onSend: (message: string) => Promise<void> | void;
   onStop: () => void;
   placeholder: string;
-  permissionMode: PermissionMode | null;
-  onPermissionModeChange: (mode: PermissionMode) => void;
 }
 
 export function ReviewConversation({
@@ -32,8 +24,6 @@ export function ReviewConversation({
   onSend,
   onStop,
   placeholder,
-  permissionMode,
-  onPermissionModeChange,
 }: ReviewConversationProps) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
@@ -58,9 +48,6 @@ export function ReviewConversation({
       handleSend();
     }
   };
-
-  // null means read_only (default)
-  const activeMode = permissionMode ?? 'read_only';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -142,24 +129,6 @@ export function ReviewConversation({
       {/* Input area */}
       {isReviewStatus && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px', flexShrink: 0 }}>
-          {/* Permission mode selector */}
-          <div className="flex items-center gap-1 mb-2">
-            <span className="text-xs text-muted-foreground mr-1">Mode:</span>
-            {PERMISSION_MODES.map((m) => (
-              <button
-                key={m.value}
-                title={m.title}
-                onClick={() => onPermissionModeChange(m.value)}
-                className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-                  activeMode === m.value
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background text-muted-foreground border-border hover:border-foreground/40'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import type { PermissionMode } from '../../../shared/types';
 import {
   Trash2,
   FileText,
@@ -110,6 +111,17 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
       reportError(err, 'ChatPanel: update model');
     }
   }, [currentSessionId, updateSession, agentLibModels, selectedAgentLib]);
+
+  const selectedPermissionMode = currentSession?.permissionMode ?? null;
+
+  const handlePermissionModeChange = useCallback(async (mode: PermissionMode) => {
+    if (!currentSessionId) return;
+    try {
+      await updateSession(currentSessionId, { permissionMode: mode });
+    } catch (err) {
+      reportError(err, 'ChatPanel: update permission mode');
+    }
+  }, [currentSessionId, updateSession]);
 
   const estimatedCost = (tokenUsage.inputTokens / 1_000_000) * 3.0 + (tokenUsage.outputTokens / 1_000_000) * 15.0;
   const showInlineTabs = scope.type === 'task';
@@ -229,6 +241,8 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               models={currentModels.length > 0 ? currentModels : undefined}
               selectedModel={selectedModel}
               onModelChange={handleModelChange}
+              permissionMode={selectedPermissionMode}
+              onPermissionModeChange={handlePermissionModeChange}
               emptyState={(
                 <div className="text-center text-muted-foreground/80 py-20">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border border-border/70 bg-card/65 mb-5">

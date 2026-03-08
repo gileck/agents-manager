@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers/test-context';
 import { SEEDED_PIPELINES } from '../../src/core/data/seeded-pipelines';
-import { resolveProject, requireProject } from '../../src/cli/context';
+import { resolveProject, requireProject, resolveTaskId } from '../../src/cli/context';
 import { output } from '../../src/cli/output';
 
 describe('CLI Integration', () => {
@@ -195,6 +195,51 @@ describe('CLI Integration', () => {
       await expect(
         requireProject(mockApiFromCtx()),
       ).rejects.toThrow('No project detected');
+    });
+  });
+
+  describe('resolveTaskId', () => {
+    function makeTaskApi(taskIds: string[]) {
+      return {
+        tasks: {
+          list: vi.fn().mockResolvedValue(taskIds.map((id) => ({ id }))),
+        },
+      } as unknown as Parameters<typeof resolveTaskId>[0];
+    }
+
+    it('returns a full UUID immediately without calling the API', async () => {
+      const fullId = 'abcdef12-1234-1234-1234-abcdef123456';
+      const api = makeTaskApi([]);
+      const result = await resolveTaskId(api, fullId);
+      expect(result).toBe(fullId);
+      expect(api.tasks.list).not.toHaveBeenCalled();
+    });
+
+    it('resolves a single prefix match and writes resolved message to stderr', async () => {
+      const fullId = 'abcdef12-1234-1234-1234-abcdef123456';
+      const api = makeTaskApi([fullId]);
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        const result = await resolveTaskId(api, 'abcdef12');
+        expect(result).toBe(fullId);
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('abcdef12'));
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining(fullId));
+      } finally {
+        stderrSpy.mockRestore();
+      }
+    });
+
+    it('throws an ambiguous error when multiple tasks share the same first segment', async () => {
+      const api = makeTaskApi([
+        'abcdef12-1111-1111-1111-111111111111',
+        'abcdef12-2222-2222-2222-222222222222',
+      ]);
+      await expect(resolveTaskId(api, 'abcdef12')).rejects.toThrow('Ambiguous ID, 2 matches found');
+    });
+
+    it('throws a not-found error when no task matches the prefix', async () => {
+      const api = makeTaskApi(['deadbeef-1234-1234-1234-deadbeef1234']);
+      await expect(resolveTaskId(api, 'aaaaaaaa')).rejects.toThrow('Task not found: aaaaaaaa');
     });
   });
 
