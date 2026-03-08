@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { calculateCost, formatCost, formatTokens } from '../../../shared/cost-utils';
+import { getEffectiveCost, formatCost, formatTokens } from '../../../shared/cost-utils';
 import type { AgentRun } from '../../../shared/types';
 
 interface MetricsCardProps {
@@ -16,7 +16,7 @@ export function MetricsCard({ agentRuns }: MetricsCardProps) {
     for (const run of runs) {
       inputTokens += Number(run.costInputTokens) || 0;
       outputTokens += Number(run.costOutputTokens) || 0;
-      cost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
+      cost += getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, model: run.model ?? undefined });
     }
     return { inputTokens, outputTokens, cost, runCount: runs.length };
   }, [agentRuns]);

@@ -492,6 +492,9 @@ export interface AgentRun {
   completedAt: number | null;
   costInputTokens: number | null;
   costOutputTokens: number | null;
+  cacheReadInputTokens: number | null;
+  cacheCreationInputTokens: number | null;
+  totalCostUsd: number | null;
   prompt: string | null;
   error: string | null;
   timeoutMs: number | null;
@@ -520,6 +523,9 @@ export interface AgentRunUpdateInput {
   completedAt?: number;
   costInputTokens?: number;
   costOutputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  totalCostUsd?: number;
   prompt?: string;
   error?: string;
   timeoutMs?: number;
@@ -728,6 +734,9 @@ export interface AgentRunResult {
   error?: string;
   costInputTokens?: number;
   costOutputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  totalCostUsd?: number;
   prompt?: string;
   model?: string;
   /** Why the process was killed: 'timeout', 'stopped', or 'external_signal'. */
@@ -1010,6 +1019,9 @@ export interface ChatMessage {
   createdAt: number;
   costInputTokens: number | null;
   costOutputTokens: number | null;
+  cacheReadInputTokens: number | null;
+  cacheCreationInputTokens: number | null;
+  totalCostUsd: number | null;
 }
 
 export interface ChatMessageCreateInput {
@@ -1018,6 +1030,9 @@ export interface ChatMessageCreateInput {
   content: string;
   costInputTokens?: number;
   costOutputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  totalCostUsd?: number;
 }
 
 // Chat scope type

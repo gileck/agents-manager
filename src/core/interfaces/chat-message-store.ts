@@ -5,5 +5,5 @@ export interface IChatMessageStore {
   getMessagesForSession(sessionId: string, limit?: number): Promise<ChatMessage[]>;
   clearMessages(sessionId: string): Promise<void>;
   replaceAllMessages(sessionId: string, messages: ChatMessageCreateInput[]): Promise<ChatMessage[]>;
-  getCostSummary(): Promise<{ inputTokens: number; outputTokens: number }>;
+  getCostSummary(): Promise<{ inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; totalCostUsd: number }>;
 }

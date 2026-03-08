@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import type { AgentRun } from '../../../shared/types';
-import { calculateCost, formatCost } from '../../../shared/cost-utils';
+import { getEffectiveCost, formatCost } from '../../../shared/cost-utils';
 
 interface AgentRunsCardProps {
   agentRuns: AgentRun[] | null;
@@ -68,7 +68,7 @@ export function AgentRunsCard({ agentRuns, onNavigateToRun }: AgentRunsCardProps
         ) : (
           <div className="space-y-1">
             {displayRuns.map((run) => {
-              const cost = calculateCost(run.costInputTokens, run.costOutputTokens);
+              const cost = getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, model: run.model ?? undefined });
               return (
                 <div
                   key={run.id}

@@ -86,5 +86,19 @@ CREATE INDEX IF NOT EXISTS idx_app_notif_unread  ON app_notifications (read, cre
       name: '101_add_session_id_to_agent_runs',
       sql: `ALTER TABLE agent_runs ADD COLUMN session_id TEXT`,
     },
+    {
+      name: '102_add_cache_tokens_and_cost_usd_to_agent_runs',
+      sql: `
+ALTER TABLE agent_runs ADD COLUMN cache_read_input_tokens INTEGER;
+ALTER TABLE agent_runs ADD COLUMN cache_creation_input_tokens INTEGER;
+ALTER TABLE agent_runs ADD COLUMN total_cost_usd REAL`,
+    },
+    {
+      name: '103_add_cache_tokens_and_cost_usd_to_chat_messages',
+      sql: `
+ALTER TABLE chat_messages ADD COLUMN cache_read_input_tokens INTEGER;
+ALTER TABLE chat_messages ADD COLUMN cache_creation_input_tokens INTEGER;
+ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
+    },
   ];
 }

@@ -13,18 +13,25 @@ interface SdkThinkingBlock { type: 'thinking'; thinking: string }
 interface SdkToolUseBlock { type: 'tool_use'; name: string; input?: unknown }
 type SdkContentBlock = SdkTextBlock | SdkThinkingBlock | SdkToolUseBlock;
 
+interface SdkUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+}
+
 interface SdkAssistantMessage {
   type: 'assistant';
-  message: { id?: string; content: SdkContentBlock[]; usage?: { input_tokens: number; output_tokens: number } };
+  message: { id?: string; content: SdkContentBlock[]; usage?: SdkUsage };
 }
 interface SdkResultMessage {
   type: 'result';
   subtype: string;
   errors?: string[];
   structured_output?: Record<string, unknown>;
-  usage?: { input_tokens: number; output_tokens: number };
+  usage?: SdkUsage;
   total_cost_usd?: number;
-  modelUsage?: Record<string, { input_tokens: number; output_tokens: number }>;
+  modelUsage?: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; costUSD: number }>;
 }
 interface SdkUserMessage {
   type: 'user';
@@ -44,6 +51,8 @@ interface RunState {
   abortController: AbortController;
   accumulatedInputTokens: number;
   accumulatedOutputTokens: number;
+  accumulatedCacheReadInputTokens: number;
+  accumulatedCacheCreationInputTokens: number;
   seenMessageIds: Set<string>;
   messageCount: number;
   timeout: number;
@@ -86,6 +95,8 @@ export class ClaudeCodeLib implements IAgentLib {
     return {
       accumulatedInputTokens: state.accumulatedInputTokens,
       accumulatedOutputTokens: state.accumulatedOutputTokens,
+      accumulatedCacheReadInputTokens: state.accumulatedCacheReadInputTokens,
+      accumulatedCacheCreationInputTokens: state.accumulatedCacheCreationInputTokens,
       messageCount: state.messageCount,
       timeout: state.timeout,
       maxTurns: state.maxTurns,
@@ -103,6 +114,8 @@ export class ClaudeCodeLib implements IAgentLib {
       abortController,
       accumulatedInputTokens: 0,
       accumulatedOutputTokens: 0,
+      accumulatedCacheReadInputTokens: 0,
+      accumulatedCacheCreationInputTokens: 0,
       seenMessageIds: new Set(),
       messageCount: 0,
       timeout: options.timeoutMs,
@@ -116,6 +129,9 @@ export class ClaudeCodeLib implements IAgentLib {
     let resultText = '';
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
+    let cacheReadInputTokens: number | undefined;
+    let cacheCreationInputTokens: number | undefined;
+    let totalCostUsd: number | undefined;
     let structuredOutput: Record<string, unknown> | undefined;
     let isError = false;
     let errorMessage: string | undefined;
@@ -252,6 +268,8 @@ export class ClaudeCodeLib implements IAgentLib {
               if (msgId) state.seenMessageIds.add(msgId);
               state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens;
               state.accumulatedOutputTokens += assistantMsg.message.usage.output_tokens;
+              state.accumulatedCacheReadInputTokens += assistantMsg.message.usage.cache_read_input_tokens ?? 0;
+              state.accumulatedCacheCreationInputTokens += assistantMsg.message.usage.cache_creation_input_tokens ?? 0;
             }
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
           }
@@ -276,12 +294,21 @@ export class ClaudeCodeLib implements IAgentLib {
           if (resultMsg.structured_output) {
             structuredOutput = resultMsg.structured_output;
           }
+          // Use the SDK's authoritative total_cost_usd when available — it accounts
+          // for cache pricing, multi-model usage, and all billing dimensions.
+          if (resultMsg.total_cost_usd != null) {
+            totalCostUsd = resultMsg.total_cost_usd;
+          }
           // Prefer the result message's authoritative cumulative totals.
           // Fall back to accumulated counts only when the result has no usage data.
           costInputTokens = resultMsg.usage?.input_tokens
             ?? (state.accumulatedInputTokens > 0 ? state.accumulatedInputTokens : undefined);
           costOutputTokens = resultMsg.usage?.output_tokens
             ?? (state.accumulatedOutputTokens > 0 ? state.accumulatedOutputTokens : undefined);
+          cacheReadInputTokens = resultMsg.usage?.cache_read_input_tokens
+            ?? (state.accumulatedCacheReadInputTokens > 0 ? state.accumulatedCacheReadInputTokens : undefined);
+          cacheCreationInputTokens = resultMsg.usage?.cache_creation_input_tokens
+            ?? (state.accumulatedCacheCreationInputTokens > 0 ? state.accumulatedCacheCreationInputTokens : undefined);
           if (costInputTokens != null || costOutputTokens != null) {
             onMessage?.({ type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, timestamp: Date.now() } as AgentChatMessage);
           }
@@ -394,6 +421,9 @@ export class ClaudeCodeLib implements IAgentLib {
       error: isError ? errorMessage : undefined,
       costInputTokens,
       costOutputTokens,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+      totalCostUsd,
       model: options.model ?? this.getDefaultModel(),
       structuredOutput,
       killReason,

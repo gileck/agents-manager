@@ -99,6 +99,8 @@ export const BASELINE_MIGRATION_NAMES: string[] = [
   '086_create_automated_agents',
   '087_drop_agent_runs_task_fk',
   '098_add_created_by_to_tasks',
+  '102_add_cache_tokens_and_cost_usd_to_agent_runs',
+  '103_add_cache_tokens_and_cost_usd_to_chat_messages',
 ];
 
 function escSql(s: string): string {
@@ -291,6 +293,9 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   completed_at INTEGER,
   cost_input_tokens INTEGER,
   cost_output_tokens INTEGER,
+  cache_read_input_tokens INTEGER,
+  cache_creation_input_tokens INTEGER,
+  total_cost_usd REAL,
   error TEXT,
   timeout_ms INTEGER,
   max_turns INTEGER,
@@ -385,7 +390,10 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   content TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   cost_input_tokens INTEGER,
-  cost_output_tokens INTEGER
+  cost_output_tokens INTEGER,
+  cache_read_input_tokens INTEGER,
+  cache_creation_input_tokens INTEGER,
+  total_cost_usd REAL
 );
 
 -- ====== UI / boards ======

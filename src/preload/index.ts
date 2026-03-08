@@ -462,7 +462,7 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR, sessionId),
     summarize: (sessionId: string): Promise<ChatMessage[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SUMMARIZE, sessionId),
-    costs: (): Promise<{ inputTokens: number; outputTokens: number }> =>
+    costs: (): Promise<{ inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; totalCostUsd: number }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COSTS),
     chatLiveMessages: (sessionId: string): Promise<AgentChatMessage[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIVE_MESSAGES, sessionId),

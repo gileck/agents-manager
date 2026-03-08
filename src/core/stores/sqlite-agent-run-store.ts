@@ -18,6 +18,9 @@ interface AgentRunRow {
   completed_at: number | null;
   cost_input_tokens: number | null;
   cost_output_tokens: number | null;
+  cache_read_input_tokens: number | null;
+  cache_creation_input_tokens: number | null;
+  total_cost_usd: number | null;
   prompt: string | null;
   error: string | null;
   timeout_ms: number | null;
@@ -45,6 +48,9 @@ function rowToRun(row: AgentRunRow): AgentRun {
     completedAt: row.completed_at,
     costInputTokens: row.cost_input_tokens,
     costOutputTokens: row.cost_output_tokens,
+    cacheReadInputTokens: row.cache_read_input_tokens ?? null,
+    cacheCreationInputTokens: row.cache_creation_input_tokens ?? null,
+    totalCostUsd: row.total_cost_usd ?? null,
     prompt: row.prompt,
     error: row.error ?? null,
     timeoutMs: row.timeout_ms ?? null,
@@ -124,6 +130,18 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       if (input.costOutputTokens !== undefined) {
         updates.push('cost_output_tokens = ?');
         values.push(input.costOutputTokens);
+      }
+      if (input.cacheReadInputTokens !== undefined) {
+        updates.push('cache_read_input_tokens = ?');
+        values.push(input.cacheReadInputTokens);
+      }
+      if (input.cacheCreationInputTokens !== undefined) {
+        updates.push('cache_creation_input_tokens = ?');
+        values.push(input.cacheCreationInputTokens);
+      }
+      if (input.totalCostUsd !== undefined) {
+        updates.push('total_cost_usd = ?');
+        values.push(input.totalCostUsd);
       }
       if (input.prompt !== undefined) {
         updates.push('prompt = ?');

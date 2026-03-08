@@ -84,6 +84,8 @@ export class AgentOutputFlusher {
     const agentAny = this.agent as unknown as {
       accumulatedInputTokens?: number;
       accumulatedOutputTokens?: number;
+      accumulatedCacheReadInputTokens?: number;
+      accumulatedCacheCreationInputTokens?: number;
       lastMessageCount?: number;
       lastTimeout?: number;
       lastMaxTurns?: number;
@@ -93,6 +95,12 @@ export class AgentOutputFlusher {
     }
     if (agentAny.accumulatedOutputTokens != null && agentAny.accumulatedOutputTokens > 0) {
       flushData.costOutputTokens = agentAny.accumulatedOutputTokens;
+    }
+    if (agentAny.accumulatedCacheReadInputTokens != null && agentAny.accumulatedCacheReadInputTokens > 0) {
+      flushData.cacheReadInputTokens = agentAny.accumulatedCacheReadInputTokens;
+    }
+    if (agentAny.accumulatedCacheCreationInputTokens != null && agentAny.accumulatedCacheCreationInputTokens > 0) {
+      flushData.cacheCreationInputTokens = agentAny.accumulatedCacheCreationInputTokens;
     }
     if (agentAny.lastMessageCount != null && agentAny.lastMessageCount > 0) {
       flushData.messageCount = agentAny.lastMessageCount;

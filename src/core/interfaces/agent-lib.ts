@@ -45,6 +45,12 @@ export interface AgentLibResult {
   error?: string;
   costInputTokens?: number;
   costOutputTokens?: number;
+  /** Cache read input tokens (billed at reduced rate). */
+  cacheReadInputTokens?: number;
+  /** Cache creation input tokens (billed at premium rate). */
+  cacheCreationInputTokens?: number;
+  /** Authoritative total cost in USD from the SDK (includes cache pricing, multi-model, etc.). */
+  totalCostUsd?: number;
   model?: string;
   structuredOutput?: Record<string, unknown>;
   /** Why the process was killed: 'timeout', 'stopped' (user/supervisor), or 'external_signal'. */
@@ -56,6 +62,8 @@ export interface AgentLibResult {
 export interface AgentLibTelemetry {
   accumulatedInputTokens: number;
   accumulatedOutputTokens: number;
+  accumulatedCacheReadInputTokens: number;
+  accumulatedCacheCreationInputTokens: number;
   messageCount: number;
   timeout?: number;
   maxTurns?: number;

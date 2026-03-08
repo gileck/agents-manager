@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { calculateCost, formatCost, formatTokens } from '../../../shared/cost-utils';
+import { getEffectiveCost, formatCost, formatTokens } from '../../../shared/cost-utils';
 import type { AgentRun } from '../../../shared/types';
 
 interface AgentRunCostPanelProps {
@@ -10,12 +10,19 @@ interface AgentRunCostPanelProps {
 export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
   const inputTokens = Number(run.costInputTokens) || 0;
   const outputTokens = Number(run.costOutputTokens) || 0;
+  const cacheReadTokens = Number(run.cacheReadInputTokens) || 0;
+  const cacheWriteTokens = Number(run.cacheCreationInputTokens) || 0;
   const totalTokens = inputTokens + outputTokens;
+  const hasCacheInfo = cacheReadTokens > 0 || cacheWriteTokens > 0;
 
   const model = run.model ?? undefined;
-  const inputCost = calculateCost(inputTokens, 0, model);
-  const outputCost = calculateCost(0, outputTokens, model);
-  const totalCost = inputCost + outputCost;
+  const totalCost = getEffectiveCost({
+    totalCostUsd: run.totalCostUsd,
+    inputTokens,
+    outputTokens,
+    model,
+  });
+  const hasAuthoritativeCost = run.totalCostUsd != null && run.totalCostUsd > 0;
 
   const isRunning = run.status === 'running';
 
@@ -77,24 +84,38 @@ export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
         </Card>
       </div>
 
-      {/* Cost breakdown */}
+      {/* Cache token breakdown (shown only when available) */}
+      {hasCacheInfo && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Cache Read Tokens</CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              <p className="text-2xl font-bold">{formatTokens(cacheReadTokens)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Cache Write Tokens</CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              <p className="text-2xl font-bold">{formatTokens(cacheWriteTokens)}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Cost */}
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-base">Estimated Cost Breakdown</CardTitle>
+          <CardTitle className="text-base">Estimated Cost</CardTitle>
         </CardHeader>
         <CardContent className="py-2">
           <table className="w-full text-sm">
             <tbody>
-              <tr className="border-b">
-                <td className="py-2 text-muted-foreground">Input cost</td>
-                <td className="py-2 font-mono text-right">{formatCost(inputCost)}</td>
-              </tr>
-              <tr className="border-b">
-                <td className="py-2 text-muted-foreground">Output cost</td>
-                <td className="py-2 font-mono text-right">{formatCost(outputCost)}</td>
-              </tr>
               <tr className="font-semibold">
-                <td className="py-2">Total estimated cost</td>
+                <td className="py-2">Total cost</td>
                 <td className="py-2 font-mono text-right">{formatCost(totalCost)}</td>
               </tr>
             </tbody>
@@ -130,7 +151,9 @@ export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Cost estimates use model-specific pricing when available, defaulting to Sonnet 4 ($3/$15 per MTok).
+        {hasAuthoritativeCost
+          ? 'Cost reported by the Claude Code SDK (includes cache pricing and multi-model usage).'
+          : 'Cost estimated from token counts using model-specific pricing, defaulting to Sonnet 4 ($3/$15 per MTok).'}
       </p>
     </div>
   );

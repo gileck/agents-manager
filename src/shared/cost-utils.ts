@@ -65,7 +65,7 @@ function findPricing(model: string): ModelPricing | undefined {
 }
 
 /**
- * Calculate cost in dollars from token counts.
+ * Calculate cost in dollars from token counts (fallback when totalCostUsd is not available).
  */
 export function calculateCost(
   inputTokens: number | null | undefined,
@@ -76,6 +76,23 @@ export function calculateCost(
   const input = Number(inputTokens) || 0;
   const output = Number(outputTokens) || 0;
   return (input / 1_000_000) * pricing.inputPerMTok + (output / 1_000_000) * pricing.outputPerMTok;
+}
+
+/**
+ * Returns the best available cost estimate. Prefers the authoritative
+ * totalCostUsd from the SDK when available; falls back to manual
+ * calculation from token counts.
+ */
+export function getEffectiveCost(opts: {
+  totalCostUsd?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  model?: string;
+}): number {
+  if (opts.totalCostUsd != null && opts.totalCostUsd > 0) {
+    return opts.totalCostUsd;
+  }
+  return calculateCost(opts.inputTokens, opts.outputTokens, opts.model);
 }
 
 /**

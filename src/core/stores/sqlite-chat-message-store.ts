@@ -12,6 +12,9 @@ interface ChatMessageRow {
   created_at: number;
   cost_input_tokens: number | null;
   cost_output_tokens: number | null;
+  cache_read_input_tokens: number | null;
+  cache_creation_input_tokens: number | null;
+  total_cost_usd: number | null;
 }
 
 function rowToMessage(row: ChatMessageRow): ChatMessage {
@@ -23,6 +26,9 @@ function rowToMessage(row: ChatMessageRow): ChatMessage {
     createdAt: row.created_at,
     costInputTokens: row.cost_input_tokens,
     costOutputTokens: row.cost_output_tokens,
+    cacheReadInputTokens: row.cache_read_input_tokens ?? null,
+    cacheCreationInputTokens: row.cache_creation_input_tokens ?? null,
+    totalCostUsd: row.total_cost_usd ?? null,
   };
 }
 
@@ -35,8 +41,8 @@ export class SqliteChatMessageStore implements IChatMessageStore {
       const timestamp = now();
 
       this.db.prepare(
-        'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(id, input.sessionId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null);
+        'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens, cache_read_input_tokens, cache_creation_input_tokens, total_cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(id, input.sessionId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null, input.cacheReadInputTokens ?? null, input.cacheCreationInputTokens ?? null, input.totalCostUsd ?? null);
 
       this.db.prepare('UPDATE chat_sessions SET updated_at = ? WHERE id = ?').run(timestamp, input.sessionId);
 
@@ -48,6 +54,9 @@ export class SqliteChatMessageStore implements IChatMessageStore {
         createdAt: timestamp,
         costInputTokens: input.costInputTokens ?? null,
         costOutputTokens: input.costOutputTokens ?? null,
+        cacheReadInputTokens: input.cacheReadInputTokens ?? null,
+        cacheCreationInputTokens: input.cacheCreationInputTokens ?? null,
+        totalCostUsd: input.totalCostUsd ?? null,
       };
     } catch (err) {
       getAppLogger().logError('ChatMessageStore', 'addMessage failed', err);
@@ -84,13 +93,13 @@ export class SqliteChatMessageStore implements IChatMessageStore {
         this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
 
         const insert = this.db.prepare(
-          'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens, cache_read_input_tokens, cache_creation_input_tokens, total_cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
 
         for (const msg of messages) {
           const id = generateId();
           const timestamp = now();
-          insert.run(id, sessionId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null);
+          insert.run(id, sessionId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null, msg.cacheReadInputTokens ?? null, msg.cacheCreationInputTokens ?? null, msg.totalCostUsd ?? null);
           result.push({
             id,
             sessionId,
@@ -99,6 +108,9 @@ export class SqliteChatMessageStore implements IChatMessageStore {
             createdAt: timestamp,
             costInputTokens: msg.costInputTokens ?? null,
             costOutputTokens: msg.costOutputTokens ?? null,
+            cacheReadInputTokens: msg.cacheReadInputTokens ?? null,
+            cacheCreationInputTokens: msg.cacheCreationInputTokens ?? null,
+            totalCostUsd: msg.totalCostUsd ?? null,
           });
         }
       });
@@ -111,12 +123,23 @@ export class SqliteChatMessageStore implements IChatMessageStore {
     }
   }
 
-  async getCostSummary(): Promise<{ inputTokens: number; outputTokens: number }> {
+  async getCostSummary(): Promise<{ inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; totalCostUsd: number }> {
     try {
       const row = this.db.prepare(
-        'SELECT COALESCE(SUM(cost_input_tokens), 0) AS input_tokens, COALESCE(SUM(cost_output_tokens), 0) AS output_tokens FROM chat_messages'
-      ).get() as { input_tokens: number; output_tokens: number };
-      return { inputTokens: row.input_tokens, outputTokens: row.output_tokens };
+        `SELECT COALESCE(SUM(cost_input_tokens), 0) AS input_tokens,
+                COALESCE(SUM(cost_output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(cache_read_input_tokens), 0) AS cache_read_input_tokens,
+                COALESCE(SUM(cache_creation_input_tokens), 0) AS cache_creation_input_tokens,
+                COALESCE(SUM(total_cost_usd), 0) AS total_cost_usd
+         FROM chat_messages`
+      ).get() as { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; total_cost_usd: number };
+      return {
+        inputTokens: row.input_tokens,
+        outputTokens: row.output_tokens,
+        cacheReadInputTokens: row.cache_read_input_tokens,
+        cacheCreationInputTokens: row.cache_creation_input_tokens,
+        totalCostUsd: row.total_cost_usd,
+      };
     } catch (err) {
       getAppLogger().logError('ChatMessageStore', 'getCostSummary failed', err);
       throw err;

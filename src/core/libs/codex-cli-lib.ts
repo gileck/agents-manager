@@ -128,6 +128,8 @@ export class CodexCliLib implements IAgentLib {
     return {
       accumulatedInputTokens: state.accumulatedInputTokens,
       accumulatedOutputTokens: state.accumulatedOutputTokens,
+      accumulatedCacheReadInputTokens: 0,
+      accumulatedCacheCreationInputTokens: 0,
       messageCount: state.messageCount,
       timeout: state.timeout,
       maxTurns: state.maxTurns,

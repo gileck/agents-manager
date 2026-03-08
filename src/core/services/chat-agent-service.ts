@@ -541,9 +541,15 @@ export class ChatAgentService {
     // Sum historical costs from existing messages
     let historicalInputTokens = 0;
     let historicalOutputTokens = 0;
+    let historicalCacheReadInputTokens = 0;
+    let historicalCacheCreationInputTokens = 0;
+    let historicalTotalCostUsd = 0;
     for (const m of messages) {
       historicalInputTokens += m.costInputTokens ?? 0;
       historicalOutputTokens += m.costOutputTokens ?? 0;
+      historicalCacheReadInputTokens += m.cacheReadInputTokens ?? 0;
+      historicalCacheCreationInputTokens += m.cacheCreationInputTokens ?? 0;
+      historicalTotalCostUsd += m.totalCostUsd ?? 0;
     }
 
     // Build a summarization prompt
@@ -559,12 +565,18 @@ export class ChatAgentService {
     let summaryText = '';
     let summaryCostInput: number | undefined;
     let summaryCostOutput: number | undefined;
+    let summaryCacheReadInputTokens: number | undefined;
+    let summaryCacheCreationInputTokens: number | undefined;
+    let summaryTotalCostUsd: number | undefined;
     try {
       await this.runSdkQuery(summaryPrompt, { maxTurns: 1 }, {
         onText: (text) => { summaryText += text; },
         onResult: (msg) => {
           summaryCostInput = msg.usage?.input_tokens;
           summaryCostOutput = msg.usage?.output_tokens;
+          summaryCacheReadInputTokens = msg.usage?.cache_read_input_tokens ?? undefined;
+          summaryCacheCreationInputTokens = msg.usage?.cache_creation_input_tokens ?? undefined;
+          summaryTotalCostUsd = msg.total_cost_usd ?? undefined;
         },
       });
     } catch (err) {
@@ -578,6 +590,9 @@ export class ChatAgentService {
     // Combine historical costs + summarization costs onto the summary message
     const totalInputTokens = historicalInputTokens + (summaryCostInput ?? 0);
     const totalOutputTokens = historicalOutputTokens + (summaryCostOutput ?? 0);
+    const totalCacheReadInputTokens = historicalCacheReadInputTokens + (summaryCacheReadInputTokens ?? 0);
+    const totalCacheCreationInputTokens = historicalCacheCreationInputTokens + (summaryCacheCreationInputTokens ?? 0);
+    const totalCostUsdValue = historicalTotalCostUsd + (summaryTotalCostUsd ?? 0);
 
     const result = await this.chatMessageStore.replaceAllMessages(sessionId, [
       {
@@ -586,6 +601,9 @@ export class ChatAgentService {
         content: `[Conversation Summary]\n\n${summaryText}`,
         costInputTokens: totalInputTokens || undefined,
         costOutputTokens: totalOutputTokens || undefined,
+        cacheReadInputTokens: totalCacheReadInputTokens || undefined,
+        cacheCreationInputTokens: totalCacheCreationInputTokens || undefined,
+        totalCostUsd: totalCostUsdValue || undefined,
       },
     ]);
 
@@ -698,6 +716,9 @@ export class ChatAgentService {
 
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
+    let cacheReadInputTokens: number | undefined;
+    let cacheCreationInputTokens: number | undefined;
+    let totalCostUsd: number | undefined;
     const turnMessages: AgentChatMessage[] = [];
     this.liveTurnMessages.set(sessionId, turnMessages);
 
@@ -823,6 +844,9 @@ export class ChatAgentService {
 
       costInputTokens = result.costInputTokens;
       costOutputTokens = result.costOutputTokens;
+      cacheReadInputTokens = result.cacheReadInputTokens;
+      cacheCreationInputTokens = result.cacheCreationInputTokens;
+      totalCostUsd = result.totalCostUsd;
 
       if (result.error) {
         emitEvent({ type: 'text', text: `\n[Agent error: ${result.error}]\n` });
@@ -871,6 +895,9 @@ export class ChatAgentService {
             content: JSON.stringify(turnMessages),
             costInputTokens,
             costOutputTokens,
+            cacheReadInputTokens,
+            cacheCreationInputTokens,
+            totalCostUsd,
           });
         } catch (persistErr) {
           getAppLogger().logError('ChatAgentService', 'Failed to persist assistant response', persistErr);
@@ -931,6 +958,9 @@ export class ChatAgentService {
               completedAt: Date.now(),
               costInputTokens: (existingRun.costInputTokens ?? 0) + (costInputTokens ?? 0),
               costOutputTokens: (existingRun.costOutputTokens ?? 0) + (costOutputTokens ?? 0),
+              cacheReadInputTokens: (existingRun.cacheReadInputTokens ?? 0) + (cacheReadInputTokens ?? 0),
+              cacheCreationInputTokens: (existingRun.cacheCreationInputTokens ?? 0) + (cacheCreationInputTokens ?? 0),
+              totalCostUsd: (existingRun.totalCostUsd ?? 0) + (totalCostUsd ?? 0),
               messages: [...(existingRun.messages ?? []), ...turnMessages],
               prompt: existingRun.prompt ? existingRun.prompt : `${systemPrompt}\n\n${prompt}`,
             });

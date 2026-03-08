@@ -33,6 +33,12 @@ export class Agent implements IAgent {
   get accumulatedOutputTokens(): number {
     return this.latestTelemetry?.accumulatedOutputTokens ?? 0;
   }
+  get accumulatedCacheReadInputTokens(): number {
+    return this.latestTelemetry?.accumulatedCacheReadInputTokens ?? 0;
+  }
+  get accumulatedCacheCreationInputTokens(): number {
+    return this.latestTelemetry?.accumulatedCacheCreationInputTokens ?? 0;
+  }
   get lastMessageCount(): number {
     return this.latestTelemetry?.messageCount ?? 0;
   }

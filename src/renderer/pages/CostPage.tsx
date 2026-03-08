@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { useIpc } from '@template/renderer/hooks/useIpc';
-import { calculateCost, formatCost, formatTokens } from '../../shared/cost-utils';
+import { getEffectiveCost, formatCost, formatTokens } from '../../shared/cost-utils';
 import type { AgentRun, Task } from '../../shared/types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
@@ -44,7 +44,7 @@ export function CostPage() {
     []
   );
 
-  const { data: chatCosts, loading: chatCostsLoading } = useIpc<{ inputTokens: number; outputTokens: number }>(
+  const { data: chatCosts, loading: chatCostsLoading } = useIpc<{ inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; totalCostUsd: number }>(
     () => window.api.chat.costs(),
     []
   );
@@ -64,14 +64,14 @@ export function CostPage() {
     for (const run of runs) {
       agentInputTokens += Number(run.costInputTokens) || 0;
       agentOutputTokens += Number(run.costOutputTokens) || 0;
-      agentCost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
+      agentCost += getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, model: run.model ?? undefined });
     }
     const chatInput = chatCosts?.inputTokens ?? 0;
     const chatOutput = chatCosts?.outputTokens ?? 0;
     const inputTokens = agentInputTokens + chatInput;
     const outputTokens = agentOutputTokens + chatOutput;
     // Chat costs use default pricing (no per-message model tracking)
-    const chatCost = calculateCost(chatInput, chatOutput);
+    const chatCost = getEffectiveCost({ totalCostUsd: chatCosts?.totalCostUsd, inputTokens: chatInput, outputTokens: chatOutput });
     return {
       inputTokens,
       outputTokens,
@@ -92,7 +92,7 @@ export function CostPage() {
       const existing = periodMap.get(key) ?? { inputTokens: 0, outputTokens: 0, runs: 0, cost: 0 };
       existing.inputTokens += Number(run.costInputTokens) || 0;
       existing.outputTokens += Number(run.costOutputTokens) || 0;
-      existing.cost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
+      existing.cost += getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, model: run.model ?? undefined });
       existing.runs += 1;
       periodMap.set(key, existing);
     }
@@ -112,7 +112,7 @@ export function CostPage() {
       const existing = taskMap.get(run.taskId) ?? { inputTokens: 0, outputTokens: 0, runs: 0, cost: 0 };
       existing.inputTokens += Number(run.costInputTokens) || 0;
       existing.outputTokens += Number(run.costOutputTokens) || 0;
-      existing.cost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
+      existing.cost += getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, model: run.model ?? undefined });
       existing.runs += 1;
       taskMap.set(run.taskId, existing);
     }

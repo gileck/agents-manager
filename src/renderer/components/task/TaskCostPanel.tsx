@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { calculateCost, formatCost, formatTokens } from '../../../shared/cost-utils';
+import { getEffectiveCost, formatCost, formatTokens } from '../../../shared/cost-utils';
 import type { AgentRun } from '../../../shared/types';
 
 interface TaskCostPanelProps {
@@ -9,6 +9,15 @@ interface TaskCostPanelProps {
 
 type SortField = 'cost' | 'inputTokens' | 'outputTokens' | 'duration' | 'startedAt';
 type SortDir = 'asc' | 'desc';
+
+function runCost(run: AgentRun): number {
+  return getEffectiveCost({
+    totalCostUsd: run.totalCostUsd,
+    inputTokens: run.costInputTokens,
+    outputTokens: run.costOutputTokens,
+    model: run.model ?? undefined,
+  });
+}
 
 export function TaskCostPanel({ runs }: TaskCostPanelProps) {
   const [sortField, setSortField] = useState<SortField>('cost');
@@ -21,7 +30,7 @@ export function TaskCostPanel({ runs }: TaskCostPanelProps) {
     for (const run of runs) {
       inputTokens += Number(run.costInputTokens) || 0;
       outputTokens += Number(run.costOutputTokens) || 0;
-      cost += calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
+      cost += runCost(run);
     }
     return { inputTokens, outputTokens, cost };
   }, [runs]);
@@ -33,8 +42,8 @@ export function TaskCostPanel({ runs }: TaskCostPanelProps) {
       let vb: number;
       switch (sortField) {
         case 'cost':
-          va = calculateCost(a.costInputTokens, a.costOutputTokens, a.model ?? undefined);
-          vb = calculateCost(b.costInputTokens, b.costOutputTokens, b.model ?? undefined);
+          va = runCost(a);
+          vb = runCost(b);
           break;
         case 'inputTokens':
           va = Number(a.costInputTokens) || 0;
@@ -141,7 +150,7 @@ export function TaskCostPanel({ runs }: TaskCostPanelProps) {
             </thead>
             <tbody>
               {sortedRuns.map((run) => {
-                const cost = calculateCost(run.costInputTokens, run.costOutputTokens, run.model ?? undefined);
+                const cost = runCost(run);
                 const duration = run.completedAt && run.startedAt
                   ? Math.round((run.completedAt - run.startedAt) / 1000)
                   : null;

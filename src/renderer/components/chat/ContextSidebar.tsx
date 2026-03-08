@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AgentChatMessage, AgentRun } from '../../../shared/types';
-import { calculateCost } from '../../../shared/cost-utils';
+import { getEffectiveCost } from '../../../shared/cost-utils';
 
 interface ContextSidebarProps {
   messages: AgentChatMessage[];
@@ -36,8 +36,21 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
   if (run?.costOutputTokens) totalOutput = Math.max(totalOutput, run.costOutputTokens);
 
   const totalTokens = totalInput + totalOutput;
-  const estimatedCost = calculateCost(totalInput, totalOutput, run?.model ?? undefined);
+
+  // Use totalCostUsd from the run if available (authoritative SDK cost),
+  // otherwise fall back to manual calculation from token counts.
+  const estimatedCost = getEffectiveCost({
+    totalCostUsd: run?.totalCostUsd,
+    inputTokens: totalInput,
+    outputTokens: totalOutput,
+    model: run?.model ?? undefined,
+  });
   const contextUsagePercent = Math.min((totalInput / CONTEXT_WINDOW) * 100, 100);
+
+  // Cache token info from run
+  const cacheRead = run?.cacheReadInputTokens ?? 0;
+  const cacheWrite = run?.cacheCreationInputTokens ?? 0;
+  const hasCacheInfo = cacheRead > 0 || cacheWrite > 0;
 
   const formatNumber = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -76,6 +89,18 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
           <span className="text-muted-foreground">Output tokens</span>
           <span className="font-mono">{formatNumber(totalOutput)}</span>
         </div>
+        {hasCacheInfo && (
+          <>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Cache read</span>
+              <span className="font-mono">{formatNumber(cacheRead)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Cache write</span>
+              <span className="font-mono">{formatNumber(cacheWrite)}</span>
+            </div>
+          </>
+        )}
         <div className="flex justify-between text-sm font-medium">
           <span>Total</span>
           <span className="font-mono">{formatNumber(totalTokens)}</span>
