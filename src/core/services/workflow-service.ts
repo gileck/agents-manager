@@ -27,6 +27,7 @@ import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IWorkflowService } from '../interfaces/workflow-service';
+import type { IDevServerManager } from '../interfaces/dev-server-manager';
 
 interface QuestionResponse {
   questionId: string;
@@ -51,6 +52,7 @@ export class WorkflowService implements IWorkflowService {
     private createWorktreeManager: (path: string) => IWorktreeManager,
     private createGitOps: (cwd: string) => IGitOps,
     private taskContextStore: ITaskContextStore,
+    private devServerManager?: IDevServerManager,
   ) {}
 
   async createTask(input: TaskCreateInput): Promise<Task> {
@@ -529,6 +531,13 @@ export class WorkflowService implements IWorkflowService {
 
       if (worktree) {
         const branch = worktree.branch;
+        // Stop dev server before removing worktree (process holds file handles)
+        await this.devServerManager?.stop(task.id).catch((err) => {
+          this.taskEventLog.log({
+            taskId: task.id, category: 'worktree', severity: 'warning',
+            message: `Failed to stop dev server: ${(err as Error).message}`,
+          }).catch(() => { /* best-effort logging */ });
+        });
         if (worktree.locked) await wm.unlock(task.id);
         await wm.delete(task.id);
 

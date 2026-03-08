@@ -24,6 +24,7 @@ import { artifactRoutes } from './routes/artifacts';
 import { automatedAgentRoutes } from './routes/automated-agents';
 import { notificationRoutes } from './routes/notifications';
 import { shellRoutes } from './routes/shell';
+import { devServerRoutes } from './routes/dev-servers';
 import { errorHandler } from './middleware/error-handler';
 import type { AppServices } from '../core/providers/setup';
 import type { DaemonWsServer } from './ws/ws-server';
@@ -70,6 +71,7 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
   app.use(promptRoutes(services));
   app.use(artifactRoutes(services));
   app.use(automatedAgentRoutes(services, wsHolder));
+  app.use(devServerRoutes(services));
 
   // Utility routes (no services dependency)
   app.use(shellRoutes());

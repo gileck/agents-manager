@@ -13,4 +13,6 @@ export const WS_CHANNELS = {
   MAIN_DIVERGED: 'git:main-diverged',
   CHAT_SESSION_RENAMED: 'chat:session:renamed',
   NOTIFICATION_ADDED: 'notification:added',
+  DEV_SERVER_LOG: 'dev-server:log',
+  DEV_SERVER_STATUS: 'dev-server:status',
 } as const;

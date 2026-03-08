@@ -289,6 +289,10 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
     }
 
+    if (context.devServerUrl) {
+      prompt += `\n\n## Dev Server\nThe application dev server is running at: ${context.devServerUrl}\nYou can test your changes by visiting this URL in the browser.`;
+    }
+
     return prompt;
   }
 

@@ -42,6 +42,14 @@ async function main() {
     onMainDiverged: (projectId: string) => {
       wsHolder.server?.broadcast(WS_CHANNELS.MAIN_DIVERGED, undefined, { projectId });
     },
+    devServerCallbacks: {
+      onLog: (taskId: string, line: string) => {
+        wsHolder.server?.broadcast(WS_CHANNELS.DEV_SERVER_LOG, taskId, { line });
+      },
+      onStatusChange: (info) => {
+        wsHolder.server?.broadcast(WS_CHANNELS.DEV_SERVER_STATUS, info.taskId, info);
+      },
+    },
   });
 
   // Register in-app notification router (lazily broadcasts via WS once server is ready)
@@ -118,6 +126,11 @@ async function main() {
       services.appLogger.logError('daemon', 'Failed to stop Telegram bots', err);
     });
     stopSupervisors(services);
+
+    // Stop all dev servers
+    await services.devServerManager.stopAll().catch(err => {
+      services.appLogger.logError('daemon', 'Failed to stop dev servers', err);
+    });
 
     // Drain running agents before closing connections
     try {

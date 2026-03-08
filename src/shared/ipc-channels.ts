@@ -205,6 +205,16 @@ export const IPC_CHANNELS = {
   AUTOMATED_AGENT_RUNS: 'automated-agent:runs',
   AUTOMATED_AGENT_TEMPLATES: 'automated-agent:templates',
 
+  // Dev server operations
+  DEV_SERVER_START: 'dev-server:start',
+  DEV_SERVER_STOP: 'dev-server:stop',
+  DEV_SERVER_STATUS: 'dev-server:status',
+  DEV_SERVER_LIST: 'dev-server:list',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  DEV_SERVER_LOG: 'dev-server:log',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  DEV_SERVER_STATUS_CHANGED: 'dev-server:status-changed',
+
   // In-app notifications
   NOTIFICATION_LIST: 'notification:list',
   NOTIFICATION_MARK_READ: 'notification:mark-read',

@@ -264,6 +264,15 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '- **comments** — array of specific issues found. Each comment should be actionable (say what to change and where). Empty array if approved.',
     );
 
+    if (context.devServerUrl) {
+      lines.push(
+        '',
+        '## Dev Server',
+        `The application dev server is running at: ${context.devServerUrl}`,
+        'You can test the changes by visiting this URL in the browser.',
+      );
+    }
+
     return lines.join('\n');
   }
 

@@ -43,6 +43,7 @@ import type {
   InAppNotification,
   InAppNotificationFilter,
   PermissionMode,
+  DevServerInfo,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -185,6 +186,12 @@ const IPC_CHANNELS = {
   NOTIFICATION_MARK_ALL_READ: 'notification:mark-all-read',
   NOTIFICATION_UNREAD_COUNT: 'notification:unread-count',
   NOTIFICATION_ADDED: 'notification:added',
+  DEV_SERVER_START: 'dev-server:start',
+  DEV_SERVER_STOP: 'dev-server:stop',
+  DEV_SERVER_STATUS: 'dev-server:status',
+  DEV_SERVER_LIST: 'dev-server:list',
+  DEV_SERVER_LOG: 'dev-server:log',
+  DEV_SERVER_STATUS_CHANGED: 'dev-server:status-changed',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -518,6 +525,18 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.NOTIFICATION_UNREAD_COUNT, projectId),
   },
 
+  // Dev server operations
+  devServers: {
+    start: (taskId: string): Promise<DevServerInfo> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEV_SERVER_START, taskId),
+    stop: (taskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEV_SERVER_STOP, taskId),
+    status: (taskId: string): Promise<DevServerInfo | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEV_SERVER_STATUS, taskId),
+    list: (): Promise<DevServerInfo[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEV_SERVER_LIST),
+  },
+
   // Shell operations
   shell: {
     openInChrome: (url: string): Promise<void> =>
@@ -607,6 +626,16 @@ const api = {
       const listener = (_: IpcRendererEvent, notification: InAppNotification) => callback(notification);
       ipcRenderer.on(IPC_CHANNELS.NOTIFICATION_ADDED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.NOTIFICATION_ADDED, listener);
+    },
+    devServerLog: (callback: (taskId: string, data: { line: string }) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string, data: { line: string }) => callback(taskId, data);
+      ipcRenderer.on(IPC_CHANNELS.DEV_SERVER_LOG, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.DEV_SERVER_LOG, listener);
+    },
+    devServerStatus: (callback: (taskId: string, info: DevServerInfo) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string, info: DevServerInfo) => callback(taskId, info);
+      ipcRenderer.on(IPC_CHANNELS.DEV_SERVER_STATUS_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.DEV_SERVER_STATUS_CHANGED, listener);
     },
   },
 };

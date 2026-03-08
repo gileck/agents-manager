@@ -13,6 +13,7 @@ import type { ApiShape } from '../shared/api-shape';
 import type {
   AgentChatMessage, AgentRun, AgentRunStatus,
   ChatSession, InAppNotification, TelegramBotLogEntry,
+  DevServerInfo,
 } from '../shared/types';
 
 export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiShape {
@@ -235,6 +236,14 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       getUnreadCount: (projectId?) => api.notifications.getUnreadCount(projectId),
     },
 
+    // ── Dev Servers ────────────────────────────────────────────────────
+    devServers: {
+      start: (taskId) => api.devServers.start(taskId),
+      stop: (taskId) => api.devServers.stop(taskId),
+      status: (taskId) => api.devServers.status(taskId),
+      list: () => api.devServers.list(),
+    },
+
     // ── Shell ─────────────────────────────────────────────────────────
     shell: {
       openInChrome: (url) => api.shell.openInChrome(url),
@@ -305,6 +314,14 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       notificationAdded: (callback) =>
         ws.subscribeGlobal(WS_CHANNELS.NOTIFICATION_ADDED, (_id, data) =>
           callback(data as InAppNotification)),
+
+      devServerLog: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.DEV_SERVER_LOG, (taskId, data) =>
+          callback(taskId as string, data as { line: string })),
+
+      devServerStatus: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.DEV_SERVER_STATUS, (taskId, data) =>
+          callback(taskId as string, data as DevServerInfo)),
     },
   };
 }

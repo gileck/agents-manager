@@ -34,6 +34,7 @@ export function ProjectConfigPage() {
   const [pullMainAfterMerge, setPullMainAfterMerge] = useState(false);
   const [validationCommands, setValidationCommands] = useState<Array<{ id: number; cmd: string }>>([]);
   const [maxValidationRetries, setMaxValidationRetries] = useState('');
+  const [devServerCommand, setDevServerCommand] = useState('');
   const [telegramEnabled, setTelegramEnabled] = useState(false);
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
@@ -63,6 +64,7 @@ export function ProjectConfigPage() {
     setMaxConcurrentAgents(c.maxConcurrentAgents != null ? String(c.maxConcurrentAgents) : '');
     setDefaultBranch((c.defaultBranch as string) ?? '');
     setPullMainAfterMerge(!!c.pullMainAfterMerge);
+    setDevServerCommand((c.devServerCommand as string) ?? '');
     setValidationCommands(
       Array.isArray(c.validationCommands)
         ? (c.validationCommands as string[]).map(cmd => ({ id: nextCmdId++, cmd }))
@@ -83,7 +85,7 @@ export function ProjectConfigPage() {
   const saveConfig = useCallback(async (
     fields: {
       defaultAgentLib: string; defaultPermissionMode: string; model: string; agentTimeout: string; maxConcurrentAgents: string;
-      defaultBranch: string; pullMainAfterMerge: boolean;
+      defaultBranch: string; pullMainAfterMerge: boolean; devServerCommand: string;
       validationCommands: Array<{ id: number; cmd: string }>;
       maxValidationRetries: string; telegramEnabled: boolean;
       telegramBotToken: string; telegramChatId: string; telegramNotificationChatId: string;
@@ -99,6 +101,7 @@ export function ProjectConfigPage() {
       maxConcurrentAgents: fields.maxConcurrentAgents ? Number(fields.maxConcurrentAgents) : undefined,
       defaultBranch: fields.defaultBranch || undefined,
       pullMainAfterMerge: fields.pullMainAfterMerge,
+      devServerCommand: fields.devServerCommand || undefined,
       validationCommands: fields.validationCommands.length > 0 ? fields.validationCommands.map(v => v.cmd) : undefined,
       maxValidationRetries: fields.maxValidationRetries ? Number(fields.maxValidationRetries) : undefined,
       telegram: {
@@ -136,14 +139,14 @@ export function ProjectConfigPage() {
     timerRef.current = setTimeout(() => {
       saveConfig({
         defaultAgentLib, defaultPermissionMode, model, agentTimeout, maxConcurrentAgents, defaultBranch,
-        pullMainAfterMerge, validationCommands, maxValidationRetries,
+        pullMainAfterMerge, devServerCommand, validationCommands, maxValidationRetries,
         telegramEnabled, telegramBotToken, telegramChatId, telegramNotificationChatId,
         telegramStreamThinking, telegramAutoStart,
       });
     }, 500);
     return () => clearTimeout(timerRef.current);
   }, [defaultAgentLib, defaultPermissionMode, model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
-      validationCommands, maxValidationRetries, telegramEnabled, telegramBotToken, telegramChatId,
+      devServerCommand, validationCommands, maxValidationRetries, telegramEnabled, telegramBotToken, telegramChatId,
       telegramNotificationChatId, telegramStreamThinking, telegramAutoStart, saveConfig]);
 
   const addValidationCommand = () =>
@@ -287,6 +290,16 @@ export function ProjectConfigPage() {
                   id="pullMainAfterMerge"
                   checked={pullMainAfterMerge}
                   onCheckedChange={setPullMainAfterMerge}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="devServerCommand">Dev Server Command</Label>
+                <Input
+                  id="devServerCommand"
+                  style={inputWidth}
+                  placeholder="e.g., yarn dev"
+                  value={devServerCommand}
+                  onChange={(e) => setDevServerCommand(e.target.value)}
                 />
               </div>
             </div>

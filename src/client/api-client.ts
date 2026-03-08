@@ -22,6 +22,7 @@ import type {
   AgentRun,
   TaskChatSessionWithTitle,
   InAppNotification, InAppNotificationFilter,
+  DevServerInfo,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -266,6 +267,14 @@ export interface ApiClient {
     markRead(id: string): Promise<void>;
     markAllRead(projectId?: string): Promise<void>;
     getUnreadCount(projectId?: string): Promise<{ count: number }>;
+  };
+
+  // Dev server operations
+  devServers: {
+    start(taskId: string): Promise<DevServerInfo>;
+    stop(taskId: string): Promise<void>;
+    status(taskId: string): Promise<DevServerInfo | null>;
+    list(): Promise<DevServerInfo[]>;
   };
 
   // Shell operations (OS-level commands)
@@ -613,6 +622,14 @@ export function createApiClient(baseUrl: string): ApiClient {
       markRead: (id) => req('PUT', `/api/notifications/${id}/read`),
       markAllRead: (projectId?) => req('PUT', `/api/notifications/read-all${qs({ projectId })}`),
       getUnreadCount: (projectId?) => req('GET', `/api/notifications/unread-count${qs({ projectId })}`),
+    },
+
+    // -- Dev server operations -----------------------------------------------
+    devServers: {
+      start: (taskId) => req('POST', `/api/tasks/${taskId}/dev-server/start`),
+      stop: (taskId) => req('POST', `/api/tasks/${taskId}/dev-server/stop`),
+      status: (taskId) => req('GET', `/api/tasks/${taskId}/dev-server/status`),
+      list: () => req('GET', '/api/dev-servers'),
     },
 
     // -- Shell operations ---------------------------------------------------

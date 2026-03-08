@@ -24,6 +24,7 @@ import { ValidationRunner } from './validation-runner';
 import type { OutcomeResolver } from './outcome-resolver';
 import type { ScheduledAgentService } from './scheduled-agent-service';
 import type { AgentLibRegistry } from './agent-lib-registry';
+import type { IDevServerManager } from '../interfaces/dev-server-manager';
 import * as path from 'path';
 import * as fs from 'fs';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
@@ -62,6 +63,7 @@ export class AgentService implements IAgentService {
     private outcomeResolver: OutcomeResolver,
     private scheduledAgentService?: ScheduledAgentService,
     private agentLibRegistry?: AgentLibRegistry,
+    private devServerManager?: IDevServerManager,
   ) {
     this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter);
   }
@@ -409,6 +411,7 @@ export class AgentService implements IAgentService {
     const customPrompt = queue && queue.length > 0 ? queue.shift() : undefined;
     if (queue && queue.length === 0) this.messageQueues.delete(taskId);
 
+    const devServer = this.devServerManager?.getStatus(task.id);
     const context: AgentContext = {
       task,
       project,
@@ -416,6 +419,7 @@ export class AgentService implements IAgentService {
       mode,
       revisionReason,
       customPrompt,
+      devServerUrl: devServer?.status === 'ready' ? devServer.url : undefined,
     };
 
     // Session ID management:

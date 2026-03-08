@@ -92,12 +92,15 @@ import { ChatAgentService } from '../services/chat-agent-service';
 import { ScheduledAgentService } from '../services/scheduled-agent-service';
 import { SchedulerSupervisor } from '../services/scheduler-supervisor';
 import { TriageAgentPromptBuilder } from '../services/triage-agent-prompt-builder';
+import { DevServerManager, type DevServerManagerCallbacks } from '../services/dev-server-manager';
+import type { IDevServerManager } from '../interfaces/dev-server-manager';
 
 export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
   notificationRouters?: import('../interfaces/notification-router').INotificationRouter[];
   imageStorageDir?: string;
   onMainDiverged?: (projectId: string) => void;
+  devServerCallbacks?: DevServerManagerCallbacks;
 }
 
 export interface AppServices {
@@ -138,6 +141,7 @@ export interface AppServices {
   scheduledAgentService: ScheduledAgentService;
   schedulerSupervisor: SchedulerSupervisor;
   inAppNotificationStore: IInAppNotificationStore;
+  devServerManager: IDevServerManager;
 }
 
 export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
@@ -237,6 +241,9 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   );
   const schedulerSupervisor = new SchedulerSupervisor(automatedAgentStore, scheduledAgentService);
 
+  // Dev server manager
+  const devServerManager = new DevServerManager(config?.devServerCallbacks);
+
   // Agent service
   const agentService = new AgentService(
     agentFramework, agentRunStore, createWorktreeManager,
@@ -245,7 +252,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     createGitOps, taskContextStore, agentDefinitionStore,
     taskReviewReportBuilder, notificationRouter,
     validationRunner, outcomeResolver,
-    scheduledAgentService, agentLibRegistry,
+    scheduledAgentService, agentLibRegistry, devServerManager,
   );
 
   // Workflow service
@@ -253,7 +260,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskStore, projectStore, pipelineEngine, pipelineStore,
     taskEventLog, activityLog, agentRunStore, pendingPromptStore,
     taskArtifactStore, agentService, createScmPlatform, createWorktreeManager,
-    createGitOps, taskContextStore,
+    createGitOps, taskContextStore, devServerManager,
   );
 
   // Pipeline inspection service (diagnostics, hook retry, phase advance)
@@ -330,5 +337,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     scheduledAgentService,
     schedulerSupervisor,
     inAppNotificationStore,
+    devServerManager,
   };
 }

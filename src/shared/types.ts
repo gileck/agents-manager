@@ -647,6 +647,8 @@ export interface AgentContext {
   resumeSession?: boolean;
   /** When set, this run is resuming a previously interrupted run (crash/shutdown recovery). */
   resumedFromRunId?: string;
+  /** URL of the dev server running in the task's worktree, if any. */
+  devServerUrl?: string;
 }
 
 // ============================================
@@ -1278,4 +1280,21 @@ export interface AutomatedAgentTemplate {
   defaultSchedule: AutomatedAgentSchedule;
   defaultCapabilities: AutomatedAgentCapabilities;
   defaultMaxRunDurationMs: number;
+}
+
+// ============================================
+// Dev Server Types
+// ============================================
+
+export type DevServerStatus = 'starting' | 'ready' | 'stopped' | 'error';
+
+export interface DevServerInfo {
+  taskId: string;
+  projectId: string;
+  port: number;
+  url: string;
+  status: DevServerStatus;
+  startedAt: number;
+  pid: number | null;
+  error?: string;
 }

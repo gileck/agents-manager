@@ -53,6 +53,7 @@ import type {
   InAppNotification,
   InAppNotificationFilter,
   PermissionMode,
+  DevServerInfo,
 } from './types';
 
 export interface ApiShape {
@@ -266,6 +267,14 @@ export interface ApiShape {
     getUnreadCount(projectId?: string): Promise<{ count: number }>;
   };
 
+  // Dev server operations
+  devServers: {
+    start(taskId: string): Promise<DevServerInfo>;
+    stop(taskId: string): Promise<void>;
+    status(taskId: string): Promise<DevServerInfo | null>;
+    list(): Promise<DevServerInfo[]>;
+  };
+
   // Shell operations
   shell: {
     openInChrome(url: string): Promise<void>;
@@ -295,5 +304,7 @@ export interface ApiShape {
     mainDiverged(callback: (data: { projectId: string }) => void): () => void;
     chatSessionRenamed(callback: (sessionId: string, session: ChatSession) => void): () => void;
     notificationAdded(callback: (notification: InAppNotification) => void): () => void;
+    devServerLog(callback: (taskId: string, data: { line: string }) => void): () => void;
+    devServerStatus(callback: (taskId: string, info: DevServerInfo) => void): () => void;
   };
 }

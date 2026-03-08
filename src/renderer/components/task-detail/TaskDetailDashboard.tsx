@@ -6,6 +6,7 @@ import { MetricsCard } from './MetricsCard';
 import { AgentRunsCard } from './AgentRunsCard';
 import { ArtifactsCard } from './ArtifactsCard';
 import { GitStatusCard } from './GitStatusCard';
+import { DevServerCard } from './DevServerCard';
 import { PRChecksCard } from './PRChecksCard';
 import { TimelineCard } from './TimelineCard';
 import { ContextCard } from './ContextCard';
@@ -288,6 +289,7 @@ export function TaskDetailDashboard({
         <ArtifactsCard artifacts={artifacts} />
         {task.prLink && <PRChecksCard taskId={taskId} />}
         <GitStatusCard taskId={taskId} />
+        <DevServerCard taskId={taskId} />
       </div>
     </div>
   );
