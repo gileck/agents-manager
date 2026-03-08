@@ -3,13 +3,14 @@ import { Badge } from '../ui/badge';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { TaskRow } from './TaskRow';
 import { groupTasks, sortGroupEntries } from './task-helpers';
-import type { GroupBy } from './task-helpers';
+import type { GroupBy, ViewMode } from './task-helpers';
 import type { Task, Pipeline, Feature } from '../../../shared/types';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 interface TaskGroupedListProps {
   tasks: Task[];
   groupBy: GroupBy;
+  viewMode?: ViewMode;
   pipelineMap: Map<string, Pipeline>;
   featureMap?: Map<string, Feature>;
   activeTaskIds: Set<string>;
@@ -25,6 +26,7 @@ interface TaskGroupedListProps {
 export function TaskGroupedList({
   tasks,
   groupBy,
+  viewMode: _viewMode,
   pipelineMap,
   featureMap,
   activeTaskIds,
