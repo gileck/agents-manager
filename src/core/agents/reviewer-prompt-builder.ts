@@ -283,6 +283,9 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
       error: libResult.error,
       costInputTokens: libResult.costInputTokens,
       costOutputTokens: libResult.costOutputTokens,
+      cacheReadInputTokens: libResult.cacheReadInputTokens,
+      cacheCreationInputTokens: libResult.cacheCreationInputTokens,
+      totalCostUsd: libResult.totalCostUsd,
       structuredOutput: libResult.structuredOutput,
       prompt,
     };
