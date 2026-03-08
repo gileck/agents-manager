@@ -501,6 +501,7 @@ export interface AgentRun {
   automatedAgentId: string | null;
   model: string | null;
   engine: string | null;
+  sessionId: string | null;
 }
 
 export interface AgentRunCreateInput {
@@ -527,6 +528,7 @@ export interface AgentRunUpdateInput {
   messages?: AgentChatMessage[];
   model?: string;
   engine?: string;
+  sessionId?: string;
 }
 
 export type ArtifactType = 'branch' | 'pr' | 'commit' | 'diff' | 'document';

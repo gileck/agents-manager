@@ -419,13 +419,16 @@ export class AgentService implements IAgentService {
 
     if (!context.sessionId) {
       if (agentType === 'reviewer' && mode === 'new') {
-        // Reviewer resumes the implementor's session for shared context
+        // Reviewer resumes the implementor's session for shared context.
+        // Use the stored sessionId from the run record (not run.id), because after
+        // crash recovery the run that completed may have resumed an earlier session.
         const runs = await this.agentRunStore.getRunsForTask(taskId);
         const origImplRun = this.findOriginalSessionRun(runs, 'implementor');
-        if (origImplRun) {
-          context.sessionId = origImplRun.id;
+        const implSessionId = origImplRun?.sessionId ?? origImplRun?.id;
+        if (implSessionId) {
+          context.sessionId = implSessionId;
           context.resumeSession = true;
-          getAppLogger().debug(`Agent:reviewer`, `Reviewer will resume implementor session from run ${origImplRun.id}`, { taskId, resumeRunId: origImplRun.id });
+          getAppLogger().debug(`Agent:reviewer`, `Reviewer will resume implementor session ${implSessionId}`, { taskId, implRunId: origImplRun!.id, implSessionId });
         } else {
           context.sessionId = run.id;
           context.resumeSession = false;
@@ -434,13 +437,14 @@ export class AgentService implements IAgentService {
       } else if (mode === 'revision') {
         const runs = await this.agentRunStore.getRunsForTask(taskId);
         // Find the original session creator (first mode='new' completed run).
-        // For implementor: always the original implementor run (shared with reviewer).
-        // For other agents: their own original run.
+        // Use the stored sessionId (not run.id) to handle crash-recovery scenarios
+        // where the completing run resumed an earlier session.
         const origRun = this.findOriginalSessionRun(runs, agentType);
-        context.sessionId = origRun?.id;
+        const sessionId = origRun?.sessionId ?? origRun?.id;
+        context.sessionId = sessionId;
         context.resumeSession = !!context.sessionId;
         if (origRun) {
-          getAppLogger().debug(`Agent:${agentType}`, `Revision will resume session from run ${origRun.id}`, { taskId, resumeRunId: origRun.id });
+          getAppLogger().debug(`Agent:${agentType}`, `Revision will resume session ${sessionId}`, { taskId, origRunId: origRun.id, sessionId });
         } else {
           const msg = `No prior completed ${agentType} run found — revision will use full prompt instead of session resume`;
           getAppLogger().warn(`Agent:${agentType}`, msg, { taskId });
@@ -484,13 +488,17 @@ export class AgentService implements IAgentService {
       engine: agentDefEngine,
     };
 
-    // Store the resolved engine and effective model on the run record so it's visible in the UI
+    // Store the resolved engine, effective model, and session ID on the run record
     const resolvedEngine = agentDefEngine ?? 'claude-code';
     let effectiveModel = config.model;
     if (!effectiveModel && this.agentLibRegistry) {
       try { effectiveModel = this.agentLibRegistry.getLib(resolvedEngine).getDefaultModel(); } catch { /* ignore */ }
     }
-    await this.agentRunStore.updateRun(run.id, { engine: agentDefEngine, ...(effectiveModel ? { model: effectiveModel } : {}) });
+    await this.agentRunStore.updateRun(run.id, {
+      engine: agentDefEngine,
+      ...(effectiveModel ? { model: effectiveModel } : {}),
+      ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+    });
 
     // 7. Store active callbacks for this task
     this.activeCallbacks.set(taskId, { onOutput, onMessage, onStatusChange });

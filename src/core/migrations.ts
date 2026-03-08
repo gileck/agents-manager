@@ -82,5 +82,9 @@ CREATE INDEX IF NOT EXISTS idx_app_notif_unread  ON app_notifications (read, cre
       name: '100_add_permission_mode_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN permission_mode TEXT DEFAULT NULL`,
     },
+    {
+      name: '101_add_session_id_to_agent_runs',
+      sql: `ALTER TABLE agent_runs ADD COLUMN session_id TEXT`,
+    },
   ];
 }
