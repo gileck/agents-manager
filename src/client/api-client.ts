@@ -198,6 +198,7 @@ export interface ApiClient {
     sendMessage(sessionId: string, message: string, images?: unknown[]): Promise<unknown>;
     stopGeneration(sessionId: string): Promise<unknown>;
     getMessages(sessionId: string): Promise<unknown[]>;
+    getLiveMessages(sessionId: string): Promise<unknown[]>;
     clearMessages(sessionId: string): Promise<unknown>;
     summarizeMessages(sessionId: string): Promise<unknown>;
     getCosts(): Promise<unknown>;
@@ -487,6 +488,8 @@ export function createApiClient(baseUrl: string): ApiClient {
         req('POST', `/api/chat/sessions/${sessionId}/stop`),
       getMessages: (sessionId) =>
         req('GET', `/api/chat/sessions/${sessionId}/messages`),
+      getLiveMessages: (sessionId) =>
+        req('GET', `/api/chat/sessions/${sessionId}/live-messages`),
       clearMessages: (sessionId) =>
         req('DELETE', `/api/chat/sessions/${sessionId}/messages`),
       summarizeMessages: (sessionId) =>
