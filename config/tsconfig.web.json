@@ -1,0 +1,19 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "isolatedModules": true
+  },
+  "include": [
+    "../src/web/**/*",
+    "../src/renderer/**/*",
+    "../src/shared/**/*",
+    "../src/client/api-client.ts",
+    "../src/daemon/ws/channels.ts"
+  ]
+}
