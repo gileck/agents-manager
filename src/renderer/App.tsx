@@ -107,19 +107,8 @@ function AppRoutes() {
     const unsubscribe = window.api?.on?.agentInterruptedRuns?.((runs) => {
       for (const run of runs) {
         toast.warning(`Agent interrupted: ${run.mode} on task`, {
-          description: `The "${run.mode}" agent was interrupted by app shutdown.`,
+          description: `The "${run.mode}" agent was interrupted by app shutdown. It will resume automatically.`,
           duration: 15000,
-          action: {
-            label: 'Restart',
-            onClick: async () => {
-              try {
-                await window.api.agents.start(run.taskId, run.mode, run.agentType);
-                toast.success('Agent restarted');
-              } catch (err) {
-                reportError(err, 'Agent restart');
-              }
-            },
-          },
         });
       }
     });
