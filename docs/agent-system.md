@@ -500,6 +500,47 @@ On startup, `recoverOrphanedRuns()`:
 
 This handles the case where the app was killed while agents were running.
 
+## Session Management
+
+Agent runs use Claude Code's native session resume feature to maintain conversational context across related runs. Each run stores its effective `sessionId` on the `agent_runs` record.
+
+### Session Chaining
+
+Sessions are identified by the run ID of the original creator (first `mode='new'` run):
+
+```
+implementor (new, run A)   → creates session A, stores sessionId=A
+reviewer    (new, run B)   → resumes session A, stores sessionId=A
+implementor (revision, C)  → resumes session A, stores sessionId=A
+reviewer    (new, run D)   → resumes session A, stores sessionId=A
+```
+
+The reviewer shares the implementor's session for context continuity. Other agent types (planner, designer) maintain independent session chains.
+
+### Session ID Resolution
+
+`AgentService.execute()` determines `context.sessionId` based on agent type and mode:
+
+| Agent Type | Mode | Session ID Source |
+|-----------|------|-------------------|
+| Any | `new` (first run) | `run.id` (creates new session) |
+| `reviewer` | `new` | `findOriginalSessionRun('implementor').sessionId` (resumes implementor's session) |
+| Any | `revision` | `findOriginalSessionRun(agentType).sessionId` (resumes own session chain) |
+| Any | crash recovery | `pendingResumeRun.id` (resumes interrupted session) |
+
+`findOriginalSessionRun()` returns the oldest completed `mode='new'` run for the given agent type. The stored `sessionId` field (not `run.id`) is used for chaining, because after crash recovery the completing run may have resumed an earlier session.
+
+### Crash Recovery and Session IDs
+
+When the app restarts after a crash:
+
+1. `recoverOrphanedRuns()` marks interrupted runs as `failed` with outcome `interrupted`
+2. `setPendingResume(taskId, interruptedRun)` stores the interrupted run for session resume
+3. On next `execute()`, the new run resumes the interrupted session using `pendingResumeRun.id` as the session ID
+4. The new run stores `sessionId = pendingResumeRun.id` (not its own `run.id`)
+
+This ensures that downstream agents (e.g., reviewer) can find the correct session ID by reading the stored `sessionId` from the completing run, even when that run resumed an earlier session.
+
 ## Agent Stop
 
 `Agent` tracks active libs per runId and delegates stop to the correct lib:

@@ -42,7 +42,7 @@ The daemon is the sole database owner. WAL mode is still enabled for safe concur
 | `transition_history` | Transition audit trail | id, taskId, fromStatus, toStatus, trigger, actor, guardResults (JSON) |
 | `task_events` | Granular event log | id, taskId, category, severity, message, data (JSON) |
 | `activity_log` | Cross-entity action log | id, action, entityType, entityId, projectId, summary, data (JSON) |
-| `agent_runs` | Agent execution records | id, taskId, agentType, mode, status, output, outcome, payload (JSON), exitCode, costInputTokens, costOutputTokens, prompt |
+| `agent_runs` | Agent execution records | id, taskId, agentType, mode, status, output, outcome, payload (JSON), exitCode, costInputTokens, costOutputTokens, prompt, sessionId |
 | `task_artifacts` | Artifact storage | id, taskId, type (CHECK), data (JSON) |
 | `task_phases` | Phase tracking | id, taskId, phase, status, agentRunId (FK) |
 | `pending_prompts` | Human interaction queue | id, taskId, agentRunId (FK), promptType, payload (JSON), response (JSON), resumeOutcome, status |
