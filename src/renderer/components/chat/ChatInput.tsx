@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Image, Square, Cpu, ArrowUp } from 'lucide-react';
+import { Image, Square, Cpu, ArrowUp, Eye, Pencil, Shield } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import type { ChatImage, PermissionMode } from '../../../shared/types';
 import {
@@ -30,10 +30,10 @@ const MAX_IMAGES = 5;
 
 const CONTEXT_WINDOW = 200_000;
 
-const PERMISSION_MODES: { value: PermissionMode; label: string; title: string }[] = [
-  { value: 'read_only', label: 'Read Only', title: 'Agent can only read files' },
-  { value: 'read_write', label: 'Read & Write', title: 'Agent can read and write files (no shell execution)' },
-  { value: 'full_access', label: 'Full Access', title: 'Agent has full access (read, write, execute)' },
+const PERMISSION_MODES: { value: PermissionMode; label: string; title: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { value: 'read_only', label: 'Read Only', title: 'Agent can only read files', icon: Eye },
+  { value: 'read_write', label: 'Read & Write', title: 'Agent can read and write files (no shell execution)', icon: Pencil },
+  { value: 'full_access', label: 'Full Access', title: 'Agent has full access (read, write, execute)', icon: Shield },
 ];
 
 function getContextColor(percent: number): string {
@@ -336,26 +336,37 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
               </Select>
             )}
             {onPermissionModeChange && (
-              <div className="flex items-center gap-1">
-                {PERMISSION_MODES.map((m) => {
-                  const activeMode = permissionMode ?? 'read_only';
-                  return (
-                    <button
-                      key={m.value}
-                      type="button"
-                      title={m.title}
-                      onClick={() => onPermissionModeChange(m.value)}
-                      className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-                        activeMode === m.value
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background text-muted-foreground border-border hover:border-foreground/40'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <Select
+                value={permissionMode ?? 'read_only'}
+                onValueChange={(v) => onPermissionModeChange(v as PermissionMode)}
+                disabled={isStreaming(isRunning)}
+              >
+                <SelectTrigger className="h-8 rounded-full border-transparent bg-transparent px-2 py-1 text-xs text-muted-foreground shadow-none hover:border-border/65 hover:bg-muted/45">
+                  {(() => {
+                    const active = PERMISSION_MODES.find((m) => m.value === (permissionMode ?? 'read_only'))!;
+                    const Icon = active.icon;
+                    return (
+                      <span className="flex items-center gap-1.5">
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <span>{active.label}</span>
+                      </span>
+                    );
+                  })()}
+                </SelectTrigger>
+                <SelectContent>
+                  {PERMISSION_MODES.map((m) => {
+                    const Icon = m.icon;
+                    return (
+                      <SelectItem key={m.value} value={m.value}>
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {m.label}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             )}
             {isQueued && (
               <span className="text-xs text-amber-500 font-medium ml-1">Queued</span>
