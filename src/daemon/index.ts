@@ -6,8 +6,19 @@ import { WS_CHANNELS } from './ws/channels';
 import { startSupervisors, stopSupervisors } from './lifecycle';
 import { stopAllBots, autoStartTelegramBots } from './routes/telegram';
 import { InAppNotificationRouter } from '../core/services/in-app-notification-router';
+import { getAppLogger } from '../core/services/app-logger';
 
 const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
+
+// Capture unhandled errors via app logger (falls back to console → daemon.log before DB init)
+process.on('uncaughtException', (err) => {
+  getAppLogger().logError('daemon', 'Uncaught exception', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  getAppLogger().logError('daemon', 'Unhandled rejection', err);
+});
 
 async function main() {
   // Open the database using the shared core initializer
@@ -92,9 +103,7 @@ async function main() {
     services.appLogger.logError('daemon', 'Failed to auto-start Telegram bots', err);
   });
 
-  // Start listening — dual-output so operators can see daemon lifecycle on stdout/stderr
   httpServer.listen(PORT, '127.0.0.1', () => {
-    console.log(`Daemon listening on http://127.0.0.1:${PORT}`);
     services.appLogger.info('daemon', `Daemon listening on http://127.0.0.1:${PORT}`);
   });
 
@@ -104,7 +113,6 @@ async function main() {
     if (shutdownInProgress) return;
     shutdownInProgress = true;
 
-    console.log('Shutting down daemon...');
     services.appLogger.info('daemon', 'Daemon shutting down');
     await stopAllBots().catch(err => {
       services.appLogger.logError('daemon', 'Failed to stop Telegram bots', err);
@@ -122,9 +130,7 @@ async function main() {
         drainTimeout,
       ]);
     } catch (err) {
-      const drainMsg = err instanceof Error ? err.message : String(err);
-      console.warn('Agent drain failed:', drainMsg);
-      services.appLogger.warn('daemon', 'Agent drain failed', { error: drainMsg });
+      services.appLogger.logError('daemon', 'Agent drain failed', err);
     }
 
     wsServer.close();
@@ -140,6 +146,6 @@ async function main() {
 }
 
 main().catch((err: unknown) => {
-  console.error('Daemon failed to start:', err);
+  getAppLogger().logError('daemon', 'Daemon failed to start', err);
   process.exit(1);
 });

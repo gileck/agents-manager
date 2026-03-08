@@ -70,6 +70,12 @@ function writePidFile(pid: number): void {
   fs.writeFileSync(path.join(DAEMON_DIR, 'daemon.pid'), String(pid), 'utf-8');
 }
 
+function openLogFile(): number {
+  ensureDaemonDir();
+  const logPath = path.join(DAEMON_DIR, 'daemon.log');
+  return fs.openSync(logPath, 'a');
+}
+
 function httpHealthCheck(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.request(
@@ -112,9 +118,10 @@ export async function ensureDaemon(): Promise<{ url: string; wsUrl: string }> {
   }
 
   const nodeBin = findSystemNode();
+  const logFd = openLogFile();
   const child = spawn(nodeBin, [daemonBin], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', logFd, logFd],
     env: { ...process.env, AM_DAEMON_PORT: String(port), PATH: getUserShellPath() },
   });
   child.unref();
