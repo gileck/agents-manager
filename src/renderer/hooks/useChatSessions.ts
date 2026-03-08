@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChatSession } from '../../shared/types';
+import { ChatSession, PermissionMode } from '../../shared/types';
 
 export interface ChatScope {
   type: 'project' | 'task';
@@ -134,7 +134,7 @@ export function useChatSessions(scope: ChatScope | null) {
     [sessions, currentSessionId]
   );
 
-  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string | null; model?: string | null }) => {
+  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null }) => {
     try {
       const updatedSession = await window.api.chatSession.update(sessionId, input);
       if (updatedSession) {

@@ -66,7 +66,7 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
   const approveTransition = (transitions ?? []).find(t => t.to === cfg.approveToStatus);
   const reviseTransition = (transitions ?? []).find(t => t.to === cfg.reviseToStatus);
 
-  const { session, streamingMessages, isStreaming, sendMessage, stopChat, updatePermissionMode } = useReviewConversation(
+  const { streamingMessages, isStreaming, sendMessage, stopChat } = useReviewConversation(
     id, cfg.agentRole, cfg.entryType, refetchContext,
   );
 
@@ -174,8 +174,6 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
             onSend={sendMessage}
             onStop={stopChat}
             placeholder={`Ask about the ${cfg.label.toLowerCase()} or request changes...`}
-            permissionMode={session?.permissionMode ?? null}
-            onPermissionModeChange={updatePermissionMode}
           />
         </div>
       </div>

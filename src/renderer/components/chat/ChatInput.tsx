@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Image, Square, Cpu, ArrowUp } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
-import type { ChatImage } from '../../../shared/types';
+import type { ChatImage, PermissionMode } from '../../../shared/types';
 import {
   Select,
   SelectTrigger,
@@ -29,6 +29,12 @@ const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'imag
 const MAX_IMAGES = 5;
 
 const CONTEXT_WINDOW = 200_000;
+
+const PERMISSION_MODES: { value: PermissionMode; label: string; title: string }[] = [
+  { value: 'read_only', label: 'Read Only', title: 'Agent can only read files' },
+  { value: 'read_write', label: 'Read & Write', title: 'Agent can read and write files (no shell execution)' },
+  { value: 'full_access', label: 'Full Access', title: 'Agent has full access (read, write, execute)' },
+];
 
 function getContextColor(percent: number): string {
   if (percent > 80) return '#ef4444';
@@ -58,6 +64,8 @@ interface ChatInputProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  permissionMode?: PermissionMode | null;
+  onPermissionModeChange?: (mode: PermissionMode) => void;
 }
 
 export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
@@ -72,6 +80,8 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   models,
   selectedModel,
   onModelChange,
+  permissionMode,
+  onPermissionModeChange,
 }: ChatInputProps, forwardedRef) {
   const [value, setValue] = useState('');
   const [images, setImages] = useState<ChatImage[]>([]);
@@ -324,6 +334,28 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
                   ))}
                 </SelectContent>
               </Select>
+            )}
+            {onPermissionModeChange && (
+              <div className="flex items-center gap-1">
+                {PERMISSION_MODES.map((m) => {
+                  const activeMode = permissionMode ?? 'read_only';
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      title={m.title}
+                      onClick={() => onPermissionModeChange(m.value)}
+                      className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                        activeMode === m.value
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-muted-foreground border-border hover:border-foreground/40'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
             )}
             {isQueued && (
               <span className="text-xs text-amber-500 font-medium ml-1">Queued</span>

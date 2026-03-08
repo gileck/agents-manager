@@ -1,5 +1,5 @@
 import React from 'react';
-import type { AgentChatMessage, AgentRun, ChatImage } from '../../../shared/types';
+import type { AgentChatMessage, AgentRun, ChatImage, PermissionMode } from '../../../shared/types';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput, AgentLibOption, ModelOption } from './ChatInput';
 import { ContextSidebar } from './ContextSidebar';
@@ -20,6 +20,8 @@ interface AgentChatProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  permissionMode?: PermissionMode | null;
+  onPermissionModeChange?: (mode: PermissionMode) => void;
   inputRef?: React.Ref<HTMLTextAreaElement>;
 }
 
@@ -39,6 +41,8 @@ export function AgentChat({
   models,
   selectedModel,
   onModelChange,
+  permissionMode,
+  onPermissionModeChange,
   inputRef,
 }: AgentChatProps) {
   return (
@@ -64,6 +68,8 @@ export function AgentChat({
           models={models}
           selectedModel={selectedModel}
           onModelChange={onModelChange}
+          permissionMode={permissionMode}
+          onPermissionModeChange={onPermissionModeChange}
         />
       </div>
       {showSidebar && (
