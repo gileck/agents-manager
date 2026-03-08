@@ -85,11 +85,11 @@ export function TaskToolbar({
 
   useEffect(() => { setLocalSearch(filters.search); }, [filters.search]);
 
-  const activeCount = countActiveFilters(filters);
+  // Count only panel-resident filters (not search, which is always visible inline)
+  const activeCount = countActiveFilters({ ...filters, search: '' });
 
-  // Build active filter chips (excluding search — search is always visible inline)
+  // Active filter chips for panel-resident filters only (search is visible inline, not duplicated here)
   const activeChips: { key: keyof FilterState; label: string }[] = [];
-  if (filters.search) activeChips.push({ key: 'search', label: `"${filters.search}"` });
   if (filters.status) activeChips.push({ key: 'status', label: `status: ${filters.status}` });
   if (filters.priority) {
     const priorityLabel = PRIORITY_LABELS[Number(filters.priority)] ?? `P${filters.priority}`;

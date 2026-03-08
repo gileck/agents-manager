@@ -60,7 +60,7 @@ export function TaskFilterPanel({
   return (
     <div
       className="overflow-hidden transition-all duration-300 ease-in-out"
-      style={{ maxHeight: open ? '300px' : '0px', opacity: open ? 1 : 0 }}
+      style={{ maxHeight: open ? '600px' : '0px', opacity: open ? 1 : 0 }}
     >
       <div className="border rounded-lg bg-muted/30 p-4 mt-2">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
