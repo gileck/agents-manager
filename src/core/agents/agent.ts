@@ -1,6 +1,6 @@
 import type { AgentContext, AgentConfig, AgentRunResult, AgentChatMessage } from '../../shared/types';
 import type { IAgent } from '../interfaces/agent';
-import type { IAgentLib, AgentLibTelemetry } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibTelemetry, AgentLibResult } from '../interfaces/agent-lib';
 import type { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import type { AgentLibRegistry } from '../services/agent-lib-registry';
 import { getAppLogger } from '../services/app-logger';
@@ -85,7 +85,7 @@ export class Agent implements IAgent {
     }
 
     try {
-      const libResult = await lib.execute(runId, {
+      let libResult = await lib.execute(runId, {
         prompt: effectivePrompt,
         cwd: context.workdir,
         model: config.model,
@@ -104,6 +104,36 @@ export class Agent implements IAgent {
         onLog,
         onMessage,
       });
+
+      // Fallback: if session resume failed immediately (missing/corrupt session file),
+      // retry with the full prompt and no session resume instead of failing the run.
+      if (context.resumeSession && this.isSessionResumeFailure(libResult)) {
+        log('Session resume failed — retrying with full prompt (session file may be missing)', {
+          originalError: libResult.error?.slice(0, 500),
+          sessionId: context.sessionId,
+        });
+        onOutput?.('\n[Session resume failed — retrying with full prompt]\n');
+
+        libResult = await lib.execute(runId, {
+          prompt: execConfig.prompt,
+          cwd: context.workdir,
+          model: config.model,
+          maxTurns: execConfig.maxTurns,
+          timeoutMs: execConfig.timeoutMs,
+          outputFormat: execConfig.outputFormat,
+          allowedPaths,
+          readOnlyPaths,
+          readOnly: execConfig.readOnly,
+          sessionId: context.sessionId,
+          resumeSession: false,
+          taskId: context.task.id,
+          agentType: this.type,
+        }, {
+          onOutput,
+          onLog,
+          onMessage,
+        });
+      }
 
       // Final telemetry snapshot
       const finalTelemetry = lib.getTelemetry(runId);
@@ -140,6 +170,21 @@ export class Agent implements IAgent {
     } else {
       getAppLogger().warn('Agent', `stop called for unknown runId: ${runId}`, { agentType: this.type });
     }
+  }
+
+  /**
+   * Detect immediate session resume failure: process exited with an error,
+   * consumed no tokens, and produced no output. This typically means the
+   * session file is missing or corrupt on disk.
+   */
+  private isSessionResumeFailure(result: AgentLibResult): boolean {
+    return (
+      result.exitCode !== 0 &&
+      !result.killReason &&
+      !result.costInputTokens &&
+      !result.costOutputTokens &&
+      result.output.length === 0
+    );
   }
 
   async isAvailable(): Promise<boolean> {
