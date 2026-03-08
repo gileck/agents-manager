@@ -16,8 +16,15 @@ interface TaskActionCardProps {
   rawOutput: string;
 }
 
+const AGENT_BUTTONS: { label: string; agentType: string; mode: 'new' | 'revision'; variant: 'default' | 'secondary' | 'outline' }[] = [
+  { label: 'Plan', agentType: 'planner', mode: 'new', variant: 'default' },
+  { label: 'Implement', agentType: 'implementor', mode: 'new', variant: 'secondary' },
+  { label: 'Review', agentType: 'reviewer', mode: 'new', variant: 'outline' },
+];
+
 export function TaskActionCard({ task, rawOutput }: TaskActionCardProps) {
   const [transitions, setTransitions] = useState<Transition[]>([]);
+  const [transitionsError, setTransitionsError] = useState<string | null>(null);
   const [transitionLoading, setTransitionLoading] = useState<string | null>(null);
   const [agentLoading, setAgentLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -26,7 +33,7 @@ export function TaskActionCard({ task, rawOutput }: TaskActionCardProps) {
   useEffect(() => {
     window.api.tasks.transitions(task.id)
       .then((result) => setTransitions(result))
-      .catch(() => { /* silently ignore — card still shows task info */ });
+      .catch(() => setTransitionsError('Transitions unavailable'));
   }, [task.id]);
 
   async function handleTransition(toStatus: string) {
@@ -41,11 +48,11 @@ export function TaskActionCard({ task, rawOutput }: TaskActionCardProps) {
     }
   }
 
-  async function handleAgentStart(mode: 'new' | 'revision') {
-    setAgentLoading(mode);
+  async function handleAgentStart(agentType: string, mode: 'new' | 'revision') {
+    setAgentLoading(agentType);
     setActionError(null);
     try {
-      await window.api.agents.start(task.id, mode, '');
+      await window.api.agents.start(task.id, mode, agentType);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to start agent');
     } finally {
@@ -75,7 +82,9 @@ export function TaskActionCard({ task, rawOutput }: TaskActionCardProps) {
       )}
 
       {/* Transition buttons */}
-      {transitions.length > 0 && (
+      {transitionsError ? (
+        <p className="text-xs text-muted-foreground">{transitionsError}</p>
+      ) : transitions.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {transitions.map((t) => (
             <Button
@@ -91,24 +100,19 @@ export function TaskActionCard({ task, rawOutput }: TaskActionCardProps) {
         </div>
       )}
 
-      {/* Agent action buttons */}
+      {/* Agent action buttons: Plan / Implement / Review */}
       <div className="flex flex-wrap gap-1.5">
-        <Button
-          size="sm"
-          variant="default"
-          disabled={agentLoading !== null || transitionLoading !== null}
-          onClick={() => handleAgentStart('new')}
-        >
-          {agentLoading === 'new' ? 'Starting…' : 'Start Agent'}
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={agentLoading !== null || transitionLoading !== null}
-          onClick={() => handleAgentStart('revision')}
-        >
-          {agentLoading === 'revision' ? 'Starting…' : 'Resume Agent'}
-        </Button>
+        {AGENT_BUTTONS.map(({ label, agentType, mode, variant }) => (
+          <Button
+            key={agentType}
+            size="sm"
+            variant={variant}
+            disabled={agentLoading !== null || transitionLoading !== null}
+            onClick={() => handleAgentStart(agentType, mode)}
+          >
+            {agentLoading === agentType ? 'Starting…' : label}
+          </Button>
+        ))}
       </div>
 
       {/* Inline error */}
