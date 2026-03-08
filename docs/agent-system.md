@@ -541,6 +541,31 @@ When the app restarts after a crash:
 
 This ensures that downstream agents (e.g., reviewer) can find the correct session ID by reading the stored `sessionId` from the completing run, even when that run resumed an earlier session.
 
+### Session Resume Fallback
+
+**File:** `src/core/agents/agent.ts` — `isSessionResumeFailure()`
+
+If a session resume fails — for any reason (missing session file, corrupt data, SDK bug) — `Agent.execute()` detects the failure and automatically retries with the full prompt and no session resume, rather than failing the run.
+
+**Detection (`isSessionResumeFailure`):** After `lib.execute()` returns, the result is checked for all of:
+- `exitCode !== 0` — process failed
+- `killReason` is unset — not a timeout or user-initiated stop
+- `costInputTokens` is 0 or undefined — no API calls were made
+- `costOutputTokens` is 0 or undefined — no tokens consumed
+- `output` is empty — no work was done
+
+This pattern matches the specific case where Claude Code exits immediately because it cannot find or load the session to resume.
+
+**Retry behavior:**
+1. Logs a warning with the original error and session ID
+2. Emits `[Session resume failed — retrying with full prompt]` to the output stream
+3. Calls `lib.execute()` again with:
+   - `prompt`: the full system prompt (`execConfig.prompt`), not the short continuation prompt
+   - `resumeSession: false` — starts a fresh session instead of resuming
+4. The retry result is used for outcome inference and result building as normal
+
+The fallback fires at most once per `execute()` call. If the retry also fails, it fails normally through the standard error path.
+
 ## Agent Stop
 
 `Agent` tracks active libs per runId and delegates stop to the correct lib:
