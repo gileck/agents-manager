@@ -1,39 +1,17 @@
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
-import type { AgentMode, RevisionReason } from '../../shared/types';
 import type { WsHolder } from '../server';
 import { WS_CHANNELS } from '../ws/channels';
 
 export function agentRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
 
-  // POST /api/tasks/:taskId/agent/start — start agent
-  router.post('/api/tasks/:taskId/agent/start', async (req, res, next) => {
-    try {
-      const { taskId } = req.params;
-      const { mode, agentType, revisionReason } = req.body as {
-        mode: AgentMode;
-        agentType?: string;
-        revisionReason?: RevisionReason;
-      };
-      if (!mode) {
-        res.status(400).json({ error: 'mode is required' });
-        return;
-      }
-      if (!agentType) {
-        res.status(400).json({ error: 'agentType is required' });
-        return;
-      }
-      const ws = wsHolder.server;
-      const run = await services.workflowService.startAgent(
-        taskId, mode, agentType,
-        revisionReason,
-        (chunk) => ws?.broadcast(WS_CHANNELS.AGENT_OUTPUT, taskId, chunk),
-        (msg) => ws?.broadcast(WS_CHANNELS.AGENT_MESSAGE, taskId, msg),
-        (status) => ws?.broadcast(WS_CHANNELS.AGENT_STATUS, taskId, status),
-      );
-      res.json(run);
-    } catch (err) { next(err); }
+  // POST /api/tasks/:taskId/agent/start — DISABLED: direct agent start is not allowed.
+  // Agents must be started via pipeline transitions (tasks transition / tasks start).
+  router.post('/api/tasks/:taskId/agent/start', (_req, res) => {
+    res.status(403).json({
+      error: 'Direct agent start is disabled. Use pipeline transitions (tasks transition / tasks start) to trigger agent runs via the start_agent hook.',
+    });
   });
 
   // POST /api/tasks/:taskId/agent/stop — stop agent
