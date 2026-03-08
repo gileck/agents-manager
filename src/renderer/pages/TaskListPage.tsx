@@ -150,6 +150,7 @@ export function TaskListPage() {
   const someSelected = selectedIds.size > 0 && selectedIds.size < tasks.length;
 
   const toggleSelect = (id: string) => {
+    setSelectMode(true); // auto-enter select mode when any checkbox is clicked
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -278,9 +279,9 @@ export function TaskListPage() {
           />
         </div>
       ) : (
-        <div className={`mt-4 ${selectMode ? 'pb-20' : ''}`}>
-          {/* Bulk action bar */}
-          {selectMode && (
+        <div className={`mt-4 ${selectedIds.size > 0 ? 'pb-20' : ''}`}>
+          {/* Floating bulk action bar — visible when items are selected */}
+          {selectedIds.size > 0 && (
             <TaskBulkActionBar
               selectedCount={selectedIds.size}
               totalCount={tasks.length}

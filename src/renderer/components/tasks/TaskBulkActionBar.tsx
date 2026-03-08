@@ -12,6 +12,10 @@ interface TaskBulkActionBarProps {
   onExit: () => void;
 }
 
+/**
+ * Fixed floating bar at the bottom-center of the viewport.
+ * Renders only when items are selected (selectedCount > 0).
+ */
 export function TaskBulkActionBar({
   selectedCount,
   totalCount,
@@ -21,52 +25,45 @@ export function TaskBulkActionBar({
   onDeleteSelected,
   onExit,
 }: TaskBulkActionBarProps) {
-  if (selectedCount === 0 && !allSelected && !someSelected) {
-    return (
-      <div className="flex items-center gap-3 px-4 py-2 mb-2 rounded-lg border bg-muted/40">
-        <input
-          type="checkbox"
-          checked={false}
-          onChange={onSelectAll}
-          className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
-        />
-        <span className="text-sm text-muted-foreground">Select all</span>
-        <Button variant="ghost" size="sm" className="ml-auto h-7 gap-1" onClick={onExit}>
-          <X className="h-3.5 w-3.5" />
-          Exit selection
-        </Button>
-      </div>
-    );
-  }
+  if (selectedCount === 0) return null;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 mb-2 rounded-lg border bg-muted/40">
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 rounded-full border bg-background shadow-lg shadow-black/10">
+      {/* Select-all checkbox */}
       <input
         type="checkbox"
         checked={allSelected}
-        ref={(el) => { if (el) el.indeterminate = someSelected; }}
+        ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
         onChange={onSelectAll}
         className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+        title={allSelected ? 'Deselect all' : 'Select all'}
       />
-      <span className="text-sm text-muted-foreground">
-        {selectedCount > 0
-          ? `${selectedCount} of ${totalCount} selected`
-          : 'Select all'}
+
+      {/* Selected count */}
+      <span className="text-sm font-medium whitespace-nowrap">
+        {selectedCount} of {totalCount} selected
       </span>
-      {selectedCount > 0 && (
-        <Button
-          variant="destructive"
-          size="sm"
-          className="h-7 gap-1.5"
-          onClick={onDeleteSelected}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Delete selected ({selectedCount})
-        </Button>
-      )}
-      <Button variant="ghost" size="sm" className="ml-auto h-7 gap-1" onClick={onExit}>
+
+      {/* Delete button */}
+      <Button
+        variant="destructive"
+        size="sm"
+        className="h-7 gap-1.5 rounded-full"
+        onClick={onDeleteSelected}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Delete ({selectedCount})
+      </Button>
+
+      {/* Exit selection */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 gap-1 text-muted-foreground hover:text-foreground"
+        onClick={onExit}
+      >
         <X className="h-3.5 w-3.5" />
-        Exit selection
+        Exit
       </Button>
     </div>
   );
