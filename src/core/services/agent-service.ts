@@ -407,13 +407,15 @@ export class AgentService implements IAgentService {
     if (pendingResumeRun) {
       context.resumedFromRunId = pendingResumeRun.id;
 
-      // For mode='new' (non-reviewer): the interrupted run created the session with its own ID.
+      // For mode='new' (non-reviewer): the interrupted run created (or resumed) a session.
+      // Use the stored sessionId to handle double-crash scenarios where the interrupted
+      // run itself was a crash-recovery resume of an even earlier session.
       // For other modes (revision, reviewer), fall through to existing logic below
       // which re-derives the correct original session ID.
       if (pendingResumeRun.mode === 'new' && pendingResumeRun.agentType !== 'reviewer') {
-        context.sessionId = pendingResumeRun.id;
+        context.sessionId = pendingResumeRun.sessionId ?? pendingResumeRun.id;
         context.resumeSession = true;
-        getAppLogger().info(`Agent:${agentType}`, `Resuming interrupted session from run ${pendingResumeRun.id}`, { taskId, resumeRunId: pendingResumeRun.id });
+        getAppLogger().info(`Agent:${agentType}`, `Resuming interrupted session ${context.sessionId}`, { taskId, resumeRunId: pendingResumeRun.id, sessionId: context.sessionId });
       }
     }
 
