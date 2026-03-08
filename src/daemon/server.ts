@@ -79,8 +79,8 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
   if (fs.existsSync(webDistPath)) {
     app.use(express.static(webDistPath));
     // SPA fallback — serve index.html for non-API GET requests
-    app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api/')) return next();
+    app.use((req, res, next) => {
+      if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
       res.sendFile(path.join(webDistPath, 'index.html'));
     });
   }
