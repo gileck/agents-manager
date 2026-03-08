@@ -9,4 +9,8 @@ export interface IAgentService {
   recoverOrphanedRuns(): Promise<AgentRun[]>;
   getActiveRunIds(): string[];
   isSpawning(taskId: string): boolean;
+  /** Register an interrupted run for session resume on next execute() for the same task. */
+  setPendingResume(taskId: string, interruptedRun: AgentRun): void;
+  /** Clear a pending resume (e.g. when auto-resume fails). */
+  clearPendingResume(taskId: string): void;
 }

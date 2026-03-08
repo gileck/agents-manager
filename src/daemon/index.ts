@@ -51,11 +51,12 @@ async function main() {
 
   // Recover orphaned agent runs from previous daemon session (before starting supervisors
   // to eliminate the race where the supervisor's first poll sees orphaned runs from a prior crash)
+  let interruptedRuns: import('../shared/types').AgentRun[] = [];
   try {
-    const interrupted = await services.agentService.recoverOrphanedRuns();
-    if (interrupted.length > 0) {
-      services.appLogger.info('daemon', `Recovered ${interrupted.length} orphaned agent run(s)`);
-      wsServer.broadcast(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, undefined, interrupted);
+    interruptedRuns = await services.agentService.recoverOrphanedRuns();
+    if (interruptedRuns.length > 0) {
+      services.appLogger.info('daemon', `Recovered ${interruptedRuns.length} orphaned agent run(s) — will auto-resume`);
+      wsServer.broadcast(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, undefined, interruptedRuns);
     }
   } catch (err) {
     services.appLogger.logError('daemon', 'Failed to recover orphaned runs', err);
@@ -63,6 +64,28 @@ async function main() {
 
   // Start background supervisors
   startSupervisors(services);
+
+  // Auto-resume interrupted agents after daemon is fully initialized.
+  // Delay allows supervisors, bots, and WebSocket to be ready before agent execution starts.
+  if (interruptedRuns.length > 0) {
+    setTimeout(() => {
+      Promise.allSettled(
+        interruptedRuns.map(async (run) => {
+          try {
+            services.appLogger.info('daemon', `Auto-resuming interrupted agent for task ${run.taskId} (run ${run.id}, ${run.agentType})`, { taskId: run.taskId, runId: run.id, agentType: run.agentType });
+            // Set pending resume right before starting — not in recoverOrphanedRuns — to avoid race with supervisor
+            services.agentService.setPendingResume(run.taskId, run);
+            await services.workflowService.startAgent(run.taskId, run.mode as import('../shared/types').AgentMode, run.agentType);
+          } catch (err) {
+            services.agentService.clearPendingResume(run.taskId);
+            services.appLogger.logError('daemon', `Failed to auto-resume agent for task ${run.taskId}`, err);
+          }
+        })
+      ).catch(err => {
+        services.appLogger.logError('daemon', 'Auto-resume batch failed unexpectedly', err);
+      });
+    }, 3000);
+  }
 
   // Auto-start Telegram bots for projects with config
   autoStartTelegramBots(services, wsHolder).catch(err => {

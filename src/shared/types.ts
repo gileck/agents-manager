@@ -637,6 +637,8 @@ export interface AgentContext {
   sessionId?: string;
   /** When true, the session should be resumed (not created fresh). Set by agent-service session management. */
   resumeSession?: boolean;
+  /** When set, this run is resuming a previously interrupted run (crash/shutdown recovery). */
+  resumedFromRunId?: string;
 }
 
 // ============================================

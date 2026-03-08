@@ -40,6 +40,8 @@ export class AgentService implements IAgentService {
   private activeCallbacks = new Map<string, { onOutput?: (chunk: string) => void; onMessage?: (msg: AgentChatMessage) => void; onStatusChange?: (status: string) => void }>();
   private runningAgents = new Map<string, IAgent>();
   private spawningTasks = new Set<string>();
+  /** Interrupted runs awaiting session resume on next execute() for the same task. */
+  private pendingResumes = new Map<string, import('../../shared/types').AgentRun>();
   private readonly postRunExtractor: PostRunExtractor;
 
   constructor(
@@ -120,7 +122,7 @@ export class AgentService implements IAgentService {
           taskId: run.taskId,
           category: 'agent',
           severity: 'warning',
-          message: 'Agent run interrupted by app shutdown',
+          message: 'Agent run interrupted by app shutdown — will attempt session resume',
           data: { agentRunId: run.id, agentType: run.agentType, mode: run.mode },
         });
 
@@ -139,12 +141,33 @@ export class AgentService implements IAgentService {
     this.messageQueues.set(taskId, queue);
   }
 
+  setPendingResume(taskId: string, interruptedRun: import('../../shared/types').AgentRun): void {
+    this.pendingResumes.set(taskId, interruptedRun);
+  }
+
+  clearPendingResume(taskId: string): void {
+    this.pendingResumes.delete(taskId);
+  }
+
   async execute(taskId: string, mode: AgentMode, agentType: string, revisionReason?: RevisionReason, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
     // Pre-spawn guard: prevent duplicate agent launches for the same task
     if (this.spawningTasks.has(taskId)) {
       throw new Error(`Agent already spawning for task ${taskId} — duplicate launch prevented`);
     }
     this.spawningTasks.add(taskId);
+
+    // Extract pending resume info early (before worktree operations need it).
+    // Discard stale entries older than 10 minutes to avoid resuming an expired session.
+    const RESUME_TTL_MS = 10 * 60 * 1000;
+    let pendingResumeRun = this.pendingResumes.get(taskId);
+    if (pendingResumeRun) {
+      this.pendingResumes.delete(taskId);
+      const age = now() - (pendingResumeRun.completedAt ?? pendingResumeRun.startedAt);
+      if (age > RESUME_TTL_MS) {
+        getAppLogger().warn(`Agent:${agentType}`, `Discarding stale pending resume for task ${taskId} (age: ${Math.round(age / 1000)}s)`, { taskId, resumeRunId: pendingResumeRun.id });
+        pendingResumeRun = undefined;
+      }
+    }
 
     // 1. Fetch task + project
     const task = await this.taskStore.getTask(taskId);
@@ -228,6 +251,22 @@ export class AgentService implements IAgentService {
     });
 
     // 5. Clean worktree and rebase onto main so the branch only contains agent changes
+    // Skip clean + rebase when resuming an interrupted run — preserve the agent's in-progress work.
+    if (pendingResumeRun) {
+      // Abort any in-progress rebase left over from the crash
+      try {
+        const gitOps = this.createGitOps(worktree.path);
+        await gitOps.rebaseAbort();
+        await this.taskEventLog.log({ taskId, category: 'worktree', severity: 'info', message: 'Aborted stale rebase from interrupted run' });
+      } catch { /* not in rebase state — expected */ }
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'info',
+        message: 'Skipping worktree clean/rebase — resuming interrupted agent run',
+        data: { taskId, resumedFromRunId: pendingResumeRun.id },
+      });
+    } else {
     try {
       const gitOps = this.createGitOps(worktree.path);
 
@@ -286,6 +325,7 @@ export class AgentService implements IAgentService {
         data: { taskId, error: errorMsg },
       });
     }
+    } // end: skip clean/rebase for interrupted resume
 
     // Ensure node_modules symlink is intact (git clean or a prior agent run may
     // have replaced it with a real directory or removed it entirely).
@@ -361,37 +401,55 @@ export class AgentService implements IAgentService {
     //   ...continues for multiple review cycles
     //
     // Other agents (planner, designer) maintain their own session chains.
-    if (agentType === 'reviewer' && mode === 'new') {
-      // Reviewer resumes the implementor's session for shared context
-      const runs = await this.agentRunStore.getRunsForTask(taskId);
-      const origImplRun = this.findOriginalSessionRun(runs, 'implementor');
-      if (origImplRun) {
-        context.sessionId = origImplRun.id;
+
+    // Crash recovery: if this task has a pending resume from an interrupted run,
+    // resume that session instead of creating a new one.
+    if (pendingResumeRun) {
+      context.resumedFromRunId = pendingResumeRun.id;
+
+      // For mode='new' (non-reviewer): the interrupted run created the session with its own ID.
+      // For other modes (revision, reviewer), fall through to existing logic below
+      // which re-derives the correct original session ID.
+      if (pendingResumeRun.mode === 'new' && pendingResumeRun.agentType !== 'reviewer') {
+        context.sessionId = pendingResumeRun.id;
         context.resumeSession = true;
-        getAppLogger().debug(`Agent:reviewer`, `Reviewer will resume implementor session from run ${origImplRun.id}`, { taskId, resumeRunId: origImplRun.id });
+        getAppLogger().info(`Agent:${agentType}`, `Resuming interrupted session from run ${pendingResumeRun.id}`, { taskId, resumeRunId: pendingResumeRun.id });
+      }
+    }
+
+    if (!context.sessionId) {
+      if (agentType === 'reviewer' && mode === 'new') {
+        // Reviewer resumes the implementor's session for shared context
+        const runs = await this.agentRunStore.getRunsForTask(taskId);
+        const origImplRun = this.findOriginalSessionRun(runs, 'implementor');
+        if (origImplRun) {
+          context.sessionId = origImplRun.id;
+          context.resumeSession = true;
+          getAppLogger().debug(`Agent:reviewer`, `Reviewer will resume implementor session from run ${origImplRun.id}`, { taskId, resumeRunId: origImplRun.id });
+        } else {
+          context.sessionId = run.id;
+          context.resumeSession = false;
+          getAppLogger().debug(`Agent:reviewer`, `No implementor session found — reviewer will create own session`, { taskId });
+        }
+      } else if (mode === 'revision') {
+        const runs = await this.agentRunStore.getRunsForTask(taskId);
+        // Find the original session creator (first mode='new' completed run).
+        // For implementor: always the original implementor run (shared with reviewer).
+        // For other agents: their own original run.
+        const origRun = this.findOriginalSessionRun(runs, agentType);
+        context.sessionId = origRun?.id;
+        context.resumeSession = !!context.sessionId;
+        if (origRun) {
+          getAppLogger().debug(`Agent:${agentType}`, `Revision will resume session from run ${origRun.id}`, { taskId, resumeRunId: origRun.id });
+        } else {
+          const msg = `No prior completed ${agentType} run found — revision will use full prompt instead of session resume`;
+          getAppLogger().warn(`Agent:${agentType}`, msg, { taskId });
+          await this.taskEventLog.log({ taskId, category: 'agent', severity: 'warning', message: msg, data: { agentType, mode } });
+        }
       } else {
         context.sessionId = run.id;
         context.resumeSession = false;
-        getAppLogger().debug(`Agent:reviewer`, `No implementor session found — reviewer will create own session`, { taskId });
       }
-    } else if (mode === 'revision') {
-      const runs = await this.agentRunStore.getRunsForTask(taskId);
-      // Find the original session creator (first mode='new' completed run).
-      // For implementor: always the original implementor run (shared with reviewer).
-      // For other agents: their own original run.
-      const origRun = this.findOriginalSessionRun(runs, agentType);
-      context.sessionId = origRun?.id;
-      context.resumeSession = !!context.sessionId;
-      if (origRun) {
-        getAppLogger().debug(`Agent:${agentType}`, `Revision will resume session from run ${origRun.id}`, { taskId, resumeRunId: origRun.id });
-      } else {
-        const msg = `No prior completed ${agentType} run found — revision will use full prompt instead of session resume`;
-        getAppLogger().warn(`Agent:${agentType}`, msg, { taskId });
-        await this.taskEventLog.log({ taskId, category: 'agent', severity: 'warning', message: msg, data: { agentType, mode } });
-      }
-    } else {
-      context.sessionId = run.id;
-      context.resumeSession = false;
     }
 
     // Load accumulated task context entries for the agent

@@ -158,15 +158,23 @@ export class AgentSupervisor {
           });
 
           try {
+            // If the last run was interrupted by shutdown, set up session resume
+            // so the restarted agent continues from where it left off.
+            if (latestRun.outcome === 'interrupted') {
+              this.agentService.setPendingResume(task.id, latestRun);
+            }
             await this.workflowService.startAgent(task.id, latestRun.mode, latestRun.agentType);
             await this.taskEventLog.log({
               taskId: task.id,
               category: 'system',
               severity: 'info',
-              message: `Stall recovery succeeded for task ${task.id}: restarted ${latestRun.agentType}`,
-              data: { agentType: latestRun.agentType, mode: latestRun.mode, recoveryAttempt: attempts + 1 },
+              message: `Stall recovery succeeded for task ${task.id}: ${latestRun.outcome === 'interrupted' ? 'resumed' : 'restarted'} ${latestRun.agentType}`,
+              data: { agentType: latestRun.agentType, mode: latestRun.mode, recoveryAttempt: attempts + 1, resumed: latestRun.outcome === 'interrupted' },
             });
           } catch (err) {
+            if (latestRun.outcome === 'interrupted') {
+              this.agentService.clearPendingResume(task.id);
+            }
             const msg = err instanceof Error ? err.message : String(err);
             try {
               await this.taskEventLog.log({

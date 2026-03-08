@@ -74,9 +74,19 @@ export class Agent implements IAgent {
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     log(`Starting agent run: mode=${context.mode}, workdir=${context.workdir}, timeout=${execConfig.timeoutMs}ms, model=${config.model ?? 'default'}`);
 
+    // For crash recovery resume with native-resume engines, use a short continuation
+    // prompt instead of the full system prompt (the prior conversation is replayed by the SDK).
+    let effectivePrompt = execConfig.prompt;
+    if (context.resumedFromRunId && context.resumeSession && lib.supportedFeatures().nativeResume) {
+      effectivePrompt = context.customPrompt?.trim() || 'You were interrupted by an app shutdown. Continue where you left off and complete the task.';
+      log(`Resuming interrupted session — using continuation prompt`, { resumedFromRunId: context.resumedFromRunId, promptLength: effectivePrompt.length });
+      // Update stored prompt to reflect what was actually sent (not the full system prompt)
+      onPromptBuilt?.(effectivePrompt);
+    }
+
     try {
       const libResult = await lib.execute(runId, {
-        prompt: execConfig.prompt,
+        prompt: effectivePrompt,
         cwd: context.workdir,
         model: config.model,
         maxTurns: execConfig.maxTurns,
