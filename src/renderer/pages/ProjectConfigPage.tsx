@@ -25,6 +25,7 @@ export function ProjectConfigPage() {
   );
 
   const [defaultAgentLib, setDefaultAgentLib] = useState('__default__');
+  const [defaultPermissionMode, setDefaultPermissionMode] = useState('__default__');
   const [agentLibData, setAgentLibData] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
   const [model, setModel] = useState('__default__');
   const [agentTimeout, setAgentTimeout] = useState('');
@@ -56,6 +57,7 @@ export function ProjectConfigPage() {
     projectConfigRef.current = c;
     initialized.current = false; // prevent auto-save during setState batch
     setDefaultAgentLib((c.defaultAgentLib as string) || '__default__');
+    setDefaultPermissionMode((c.defaultPermissionMode as string) || '__default__');
     setModel((c.defaultAgentLibModel as string) || '__default__');
     setAgentTimeout(c.agentTimeout != null ? String(c.agentTimeout) : '');
     setMaxConcurrentAgents(c.maxConcurrentAgents != null ? String(c.maxConcurrentAgents) : '');
@@ -80,7 +82,7 @@ export function ProjectConfigPage() {
 
   const saveConfig = useCallback(async (
     fields: {
-      defaultAgentLib: string; model: string; agentTimeout: string; maxConcurrentAgents: string;
+      defaultAgentLib: string; defaultPermissionMode: string; model: string; agentTimeout: string; maxConcurrentAgents: string;
       defaultBranch: string; pullMainAfterMerge: boolean;
       validationCommands: Array<{ id: number; cmd: string }>;
       maxValidationRetries: string; telegramEnabled: boolean;
@@ -91,6 +93,7 @@ export function ProjectConfigPage() {
     if (!id) return;
     const managed: Record<string, unknown> = {
       defaultAgentLib: fields.defaultAgentLib === '__default__' ? undefined : fields.defaultAgentLib,
+      defaultPermissionMode: fields.defaultPermissionMode === '__default__' ? undefined : fields.defaultPermissionMode,
       defaultAgentLibModel: fields.model === '__default__' ? undefined : fields.model,
       agentTimeout: fields.agentTimeout ? Number(fields.agentTimeout) : undefined,
       maxConcurrentAgents: fields.maxConcurrentAgents ? Number(fields.maxConcurrentAgents) : undefined,
@@ -132,14 +135,14 @@ export function ProjectConfigPage() {
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       saveConfig({
-        defaultAgentLib, model, agentTimeout, maxConcurrentAgents, defaultBranch,
+        defaultAgentLib, defaultPermissionMode, model, agentTimeout, maxConcurrentAgents, defaultBranch,
         pullMainAfterMerge, validationCommands, maxValidationRetries,
         telegramEnabled, telegramBotToken, telegramChatId, telegramNotificationChatId,
         telegramStreamThinking, telegramAutoStart,
       });
     }, 500);
     return () => clearTimeout(timerRef.current);
-  }, [defaultAgentLib, model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
+  }, [defaultAgentLib, defaultPermissionMode, model, agentTimeout, maxConcurrentAgents, defaultBranch, pullMainAfterMerge,
       validationCommands, maxValidationRetries, telegramEnabled, telegramBotToken, telegramChatId,
       telegramNotificationChatId, telegramStreamThinking, telegramAutoStart, saveConfig]);
 
@@ -195,6 +198,25 @@ export function ProjectConfigPage() {
                     {Object.keys(agentLibData).map((name) => (
                       <SelectItem key={name} value={name}>{name}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="defaultPermissionMode">Default Chat Permission</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">Applied to new chat sessions.</p>
+                </div>
+                <div style={inputWidth}>
+                <Select value={defaultPermissionMode} onValueChange={setDefaultPermissionMode}>
+                  <SelectTrigger id="defaultPermissionMode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">Read Only (default)</SelectItem>
+                    <SelectItem value="read_only">Read Only</SelectItem>
+                    <SelectItem value="read_write">Read &amp; Write</SelectItem>
+                    <SelectItem value="full_access">Full Access</SelectItem>
                   </SelectContent>
                 </Select>
                 </div>

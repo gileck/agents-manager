@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { AgentChatMessage, ChatSession } from '../../shared/types';
+import type { AgentChatMessage, ChatSession, PermissionMode } from '../../shared/types';
 import { reportError } from '../lib/error-handler';
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
@@ -24,7 +24,23 @@ export function useReviewConversation(
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
-  // Lazy session init: get/create agent-chat session on first sendMessage.
+  // Eager session init: get/create agent-chat session on mount.
+  // Uses a promise ref to deduplicate concurrent calls.
+  useEffect(() => {
+    if (!taskId || !agentRole) return;
+    if (sessionRef.current) return;
+    if (!sessionPromiseRef.current) {
+      sessionPromiseRef.current = window.api.chatSession.getAgentChatSession(taskId, agentRole)
+        .then((s) => { setSession(s); return s; })
+        .catch((err) => {
+          sessionPromiseRef.current = null;
+          reportError(err instanceof Error ? err : new Error(String(err)), 'useReviewConversation');
+          return null;
+        });
+    }
+  }, [taskId, agentRole]);
+
+  // Lazy session init: get/create agent-chat session on demand (e.g. first sendMessage).
   // Uses a promise ref to deduplicate concurrent calls.
   const ensureSession = useCallback(async (): Promise<ChatSession | null> => {
     if (session) return session;
@@ -153,5 +169,16 @@ export function useReviewConversation(
     });
   }, [session]);
 
-  return { streamingMessages, isStreaming, sendMessage, stopChat };
+  const updatePermissionMode = useCallback(async (mode: PermissionMode) => {
+    const s = sessionRef.current;
+    if (!s) return;
+    try {
+      const updated = await window.api.chatSession.update(s.id, { permissionMode: mode });
+      if (updated) setSession(updated);
+    } catch (err) {
+      reportError(err instanceof Error ? err : new Error(String(err)), 'Update permission mode');
+    }
+  }, []);
+
+  return { session, streamingMessages, isStreaming, sendMessage, stopChat, updatePermissionMode };
 }
