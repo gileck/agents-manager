@@ -86,5 +86,9 @@ CREATE INDEX IF NOT EXISTS idx_app_notif_unread  ON app_notifications (read, cre
       name: '101_add_session_id_to_agent_runs',
       sql: `ALTER TABLE agent_runs ADD COLUMN session_id TEXT`,
     },
+    {
+      name: '102_reseed_pipelines_backlog_status',
+      sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}', transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
+    },
   ];
 }
