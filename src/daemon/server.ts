@@ -75,11 +75,12 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}) {
   app.use(shellRoutes());
 
   // Serve web UI bundle if built (dist-web/ exists)
-  const webDistPath = path.resolve(process.cwd(), 'dist-web');
+  const webDistPath = path.resolve(__dirname, '..', 'dist-web');
   if (fs.existsSync(webDistPath)) {
     app.use(express.static(webDistPath));
     // SPA fallback — serve index.html for non-API GET requests
-    app.get('*', (_req, res) => {
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api/')) return next();
       res.sendFile(path.join(webDistPath, 'index.html'));
     });
   }
