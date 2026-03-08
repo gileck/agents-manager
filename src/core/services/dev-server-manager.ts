@@ -47,7 +47,7 @@ export class DevServerManager implements IDevServerManager {
     };
 
     const env = { ...getShellEnv(), PORT: String(port) };
-    const child = spawn(command, { shell: true, cwd: worktreePath, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, { shell: true, cwd: worktreePath, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
 
     info.pid = child.pid ?? null;
 
