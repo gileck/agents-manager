@@ -487,20 +487,21 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     });
 
   tasks
-    .command('start <id>')
-    .description('Start a task (transition to first non-initial status)')
+    .command('start <id> [status]')
+    .description('Start a task by transitioning to the given status')
     .option('--actor <name>', 'Actor performing the transition')
-    .action(async (id: string, cmdOpts: { actor?: string }) => {
+    .action(async (id: string, status: string | undefined, cmdOpts: { actor?: string }) => {
       const opts = program.opts() as OutputOptions;
       try {
         id = await resolveTaskId(api, id);
-        const transitions = await api.tasks.getTransitions(id) as { to: string }[];
-        if (transitions.length === 0) {
-          console.error('No available transitions for this task.');
+        if (!status) {
+          const transitions = await api.tasks.getTransitions(id) as { to: string }[];
+          const available = transitions.map((t: { to: string }) => t.to).join(', ');
+          console.error(`Error: <status> is required. Available transitions: ${available || 'none'}`);
           process.exitCode = 1;
           return;
         }
-        const result = await api.tasks.transition(id, transitions[0].to, cmdOpts.actor) as {
+        const result = await api.tasks.transition(id, status, cmdOpts.actor) as {
           success: boolean;
           error?: string;
           task?: unknown;
