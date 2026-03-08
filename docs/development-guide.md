@@ -25,16 +25,19 @@ key_points:
 
 ```bash
 # Development
-yarn build             # Build all (main + preload + renderer)
+yarn build             # Build all (main + preload + renderer + web + daemon)
 yarn build:daemon      # Build daemon process
-yarn start             # Build and run (no DevTools)
-yarn start:devtools    # Build and run with DevTools
+yarn build:web         # Build web UI bundle (output: dist-web/)
+yarn build:web:prod    # Build web UI bundle (production mode)
+yarn start             # Build and run Electron app (no DevTools)
+yarn start:devtools    # Build and run Electron app with DevTools
 yarn electron          # Run without rebuilding (no DevTools)
 yarn electron:debug    # Run without rebuilding (with DevTools)
 
 # Validation
 yarn checks            # Run TypeScript type-checking + ESLint (ALWAYS run after changing code)
-yarn typecheck         # TypeScript only (all tsconfig projects)
+yarn typecheck         # TypeScript only (all tsconfig projects including web)
+yarn typecheck:web     # TypeScript web project only
 yarn lint              # ESLint only
 
 # Production / Deployment
@@ -42,7 +45,8 @@ yarn dist              # Build distributable .app bundle
 yarn deploy            # Build, install to /Applications, and launch
 
 # Watch mode
-yarn dev               # Watch all three targets in parallel
+yarn dev               # Watch Electron targets in parallel
+yarn dev:web           # Watch web UI bundle
 ```
 
 **Important:** Always run `yarn checks` after modifying code to ensure TypeScript and lint validations pass. A pre-commit hook enforces this automatically on every commit.
@@ -131,7 +135,7 @@ The daemon owns the database and opens it via `src/core/db.ts`. Path resolves fr
 The `.gitignore` file excludes common build artifacts and temporary files from version control:
 
 **Build outputs:**
-- `dist/`, `dist-main/`, `dist-daemon/` - Compiled TypeScript and bundled code
+- `dist/`, `dist-main/`, `dist-daemon/`, `dist-web/` - Compiled TypeScript and bundled code
 - `release/` - Electron builder output
 - `build/`, `out/` - Alternative build directories
 

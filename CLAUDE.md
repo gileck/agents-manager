@@ -65,9 +65,9 @@ Agent types, execution lifecycle, prompts, validation, and context accumulation
 
 ## Client-Daemon Convergence
 
-How all UI clients (Electron, CLI, Telegram bot) converge on the same daemon logic
+How all UI clients (Electron, CLI, Web, Telegram bot) converge on the same daemon logic
 
-**Summary:** Every UI action — whether from Electron, CLI, Telegram bot, or a future web client — ends up calling the same WorkflowService methods in the daemon process. This guarantees identical behavior: pipeline guards, hooks, agent execution, notifications, and event logging all run the same way regardless of the originating client.
+**Summary:** Every UI action — whether from Electron, CLI, Web UI, or Telegram bot — ends up calling the same WorkflowService methods in the daemon process. This guarantees identical behavior: pipeline guards, hooks, agent execution, notifications, and event logging all run the same way regardless of the originating client.
 
 **Key Points:**
 - All clients converge on the same daemon WorkflowService — transitions, task CRUD, agent starts all go through one code path
@@ -139,6 +139,24 @@ Test infrastructure, TestContext, factories, and best practices
 - Use AGENT_PIPELINE.id for all tests (the only seeded pipeline)
 
 **Full docs:** [testing.md](docs/testing.md)
+
+---
+
+## Web UI
+
+Browser-based UI client sharing the same React renderer as Electron
+
+**Summary:** The web UI serves the same React app as Electron but runs in a standard browser. The API shim replaces the Electron preload bridge with direct HTTP + browser WebSocket to the daemon.
+
+**Key Points:**
+- Web entry point: src/web/index.tsx — installs API shim, mounts same <App/> as Electron
+- API shim (src/web/api-shim.ts) implements ApiShape using ApiClient (HTTP) + browser WebSocket
+- Shared type: src/shared/api-shape.ts — single source of truth for window.api surface
+- Build: `yarn build:web` → dist-web/ — daemon serves it at http://localhost:3847
+- Shell operations (iTerm, VS Code, Chrome) work via daemon REST endpoints, not Electron IPC
+- All renderer code (src/renderer/) is shared — zero Electron imports
+
+**Docs:** [web-ui.md](docs/web-ui.md)
 
 ---
 

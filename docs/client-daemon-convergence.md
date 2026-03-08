@@ -1,7 +1,7 @@
 ---
 title: Client-Daemon Convergence
-description: How all UI clients (Electron, CLI, Telegram bot) converge on the same daemon logic
-summary: "Every UI action — whether from Electron, CLI, Telegram bot, or a future web client — ends up calling the same WorkflowService methods in the daemon process. This guarantees identical behavior: pipeline guards, hooks, agent execution, notifications, and event logging all run the same way regardless of the originating client."
+description: How all UI clients (Electron, CLI, Web, Telegram bot) converge on the same daemon logic
+summary: "Every UI action — whether from Electron, CLI, Web UI, or Telegram bot — ends up calling the same WorkflowService methods in the daemon process. This guarantees identical behavior: pipeline guards, hooks, agent execution, notifications, and event logging all run the same way regardless of the originating client."
 priority: 2
 key_points:
   - "All clients converge on the same daemon WorkflowService — transitions, task CRUD, agent starts all go through one code path"
@@ -65,16 +65,23 @@ const botService = new TelegramAgentBotService({
 
 So from `transitionTask()` onward, Telegram, Electron, and CLI execute **identical code** — same guards, same hooks, same agent execution.
 
-### Future Web Client (HTTP → Daemon)
+### Web UI (HTTP + WebSocket → Daemon)
 
-A web client would use the same API client (`src/client/api-client.ts`) or call the daemon REST endpoints directly. The daemon already exposes a full REST API — no additional work needed.
+The web client uses the API shim (`src/web/api-shim.ts`) which wraps the same `ApiClient` from `src/client/api-client.ts`. Push events use a browser-native WebSocket connected to the daemon's WS server. See `docs/web-ui.md` for full details.
+
+```
+Browser: window.api.tasks.transition(taskId, status)
+  → api-shim → ApiClient.tasks.transition(...)   // HTTP POST
+    → Daemon route: POST /api/tasks/:id/transition
+      → services.workflowService.transitionTask(...)  ←── THE SAME OBJECT
+```
 
 ## Convergence Diagram
 
 ```
 ┌─────────────┐  ┌──────────┐  ┌───────────────┐
-│  Electron   │  │   CLI    │  │  Future Web   │
-│  Renderer   │  │ (am CLI) │  │  Client       │
+│  Electron   │  │   CLI    │  │   Web UI      │
+│  Renderer   │  │ (am CLI) │  │  (Browser)    │
 └──────┬──────┘  └────┬─────┘  └──────┬────────┘
        │ IPC          │               │
 ┌──────┴──────┐       │               │
@@ -295,10 +302,11 @@ Both launchers redirect the daemon's stdout/stderr to `~/.agents-manager/daemon.
 
 ## Adding a New Client
 
-To add a new UI client (e.g., a web dashboard):
+To add a new UI client:
 
 1. Use the existing `createApiClient(daemonUrl)` from `src/client/api-client.ts`, or call the daemon REST API directly
-2. For push events, connect to the daemon WebSocket (`ws://127.0.0.1:{port}`)
+2. For push events, connect to the daemon WebSocket (`ws://127.0.0.1:{port}/ws`)
 3. No service code changes needed — the daemon already exposes everything
+4. See `src/web/api-shim.ts` as a reference implementation
 
 The client is display + input only. All business logic, validation, guards, hooks, agent execution, and event logging happen in the daemon.
