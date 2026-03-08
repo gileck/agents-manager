@@ -6,9 +6,10 @@ import { createWebApiShim } from './api-shim';
 import { reportError } from '../renderer/lib/error-handler';
 import '../renderer/styles/globals.css';
 
-// Daemon URL: same origin when served by the daemon, or port 3847 on same host
-const DAEMON_URL = `${window.location.protocol}//${window.location.hostname}:3847`;
-const DAEMON_WS_URL = DAEMON_URL.replace(/^http/, 'ws') + '/ws';
+// When served by webpack-dev-server, the proxy forwards /api and /ws to the daemon,
+// so we use same-origin. When served directly by the daemon, same-origin also works.
+const DAEMON_URL = window.location.origin;
+const DAEMON_WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
 // Install the API shim before React renders
 window.api = createWebApiShim(DAEMON_URL, DAEMON_WS_URL);
