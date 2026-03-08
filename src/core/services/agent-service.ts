@@ -570,7 +570,7 @@ export class AgentService implements IAgentService {
     const activePhaseForSync = getActivePhase(task.phases);
     const activePhaseIdxForSync = getActivePhaseIndex(task.phases);
     const effectiveSubtasks = (isMultiPhase(task) && activePhaseForSync) ? activePhaseForSync.subtasks : task.subtasks;
-    const hasSubtaskTracking = agentType === 'implementor' && effectiveSubtasks && effectiveSubtasks.length > 0;
+    const hasSubtaskTracking = agentType === 'implementor';
 
     const subtaskInterceptor = hasSubtaskTracking
       ? new SubtaskSyncInterceptor(
@@ -579,7 +579,7 @@ export class AgentService implements IAgentService {
           task.phases,
           activePhaseIdxForSync,
           isMultiPhase(task),
-          effectiveSubtasks,
+          effectiveSubtasks ?? [],
           (msg) => onLog(msg),
         )
       : null;
