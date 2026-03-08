@@ -533,8 +533,16 @@ export function createApiClient(baseUrl: string): ApiClient {
         req('GET', `/api/projects/${projectId}/git/branch`),
       getProjectCommit: (projectId, hash) =>
         req('GET', `/api/projects/${projectId}/git/commit/${hash}`),
-      syncMain: (projectId) =>
-        req('POST', `/api/projects/${projectId}/git/sync-main`),
+      syncMain: async (projectId) => {
+        const res = await fetch(`${baseUrl}/api/projects/${projectId}/git/sync-main`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (res.ok) return { ok: true as const };
+        const body = await res.json().catch(() => ({ error: res.statusText, hasConflicts: false }));
+        if (res.status === 409) return body as { error: string; hasConflicts: boolean };
+        throw new ApiError(res.status, (body as Record<string, string>).error || `HTTP ${res.status}`);
+      },
     },
 
     // -- Debug Logs ----------------------------------------------------------

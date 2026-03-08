@@ -282,7 +282,7 @@ export function gitRoutes(services: AppServices): Router {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const hasConflicts = /conflict/i.test(message) || /CONFLICT/i.test(message);
-      res.status(409).json({ error: message, hasConflicts });
+      res.status(hasConflicts ? 409 : 500).json({ error: message, hasConflicts });
     }
   });
 
