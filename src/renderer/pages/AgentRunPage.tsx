@@ -149,23 +149,10 @@ export function AgentRunPage() {
   const [outputMode, setOutputMode] = useLocalStorage<OutputMode>('agentRun.outputMode', 'raw');
 
   // --- Actions ---
-  const [restarting, setRestarting] = useState(false);
-
   const handleStop = async () => {
     if (!runId) return;
     await window.api.agents.stop(runId);
     await refetch();
-  };
-
-  const handleRestart = async () => {
-    if (!run) return;
-    setRestarting(true);
-    try {
-      const newRun = await window.api.agents.start(run.taskId, run.mode, run.agentType);
-      navigate(`/agents/${newRun.id}`, { replace: true });
-    } finally {
-      setRestarting(false);
-    }
   };
 
   // --- Loading / error states (only on initial load, not during refetches) ---
@@ -233,11 +220,6 @@ export function AgentRunPage() {
           )}
           {isRunning && (
             <Button variant="destructive" size="sm" onClick={handleStop}>Stop</Button>
-          )}
-          {!isRunning && (
-            <Button size="sm" onClick={handleRestart} disabled={restarting}>
-              {restarting ? 'Restarting...' : 'Restart'}
-            </Button>
           )}
         </div>
       </div>

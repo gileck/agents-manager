@@ -1,33 +1,11 @@
 import { Command } from 'commander';
 import type { ApiClient } from '../../client/api-client';
-import type { AgentMode, RevisionReason } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { readStdinOrValue } from '../stdin';
 import { handleCliError } from '../error';
 
 export function registerAgentCommands(program: Command, api: ApiClient): void {
   const agent = program.command('agent').description('Manage agent runs');
-
-  agent
-    .command('start <taskId>')
-    .description('Start an agent on a task')
-    .option('--mode <mode>', 'Agent mode: new, revision', 'new')
-    .option('--type <agentType>', 'Agent type', 'scripted')
-    .option('--revision-reason <reason>', 'Revision reason (changes_requested|info_provided|conflicts_detected)')
-    .action(async (taskId: string, cmdOpts: { mode: string; type: string; revisionReason?: string }) => {
-      const opts = program.opts() as OutputOptions;
-      try {
-        const run = await api.agents.start(
-          taskId,
-          cmdOpts.mode as AgentMode,
-          cmdOpts.type,
-          cmdOpts.revisionReason as RevisionReason | undefined,
-        );
-        output(run, opts);
-      } catch (err) {
-        handleCliError(err, 'Failed to start agent');
-      }
-    });
 
   agent
     .command('stop <taskId> <runId>')

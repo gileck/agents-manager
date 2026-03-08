@@ -44,6 +44,7 @@ function rulesSection(): string {
     '- You CAN use Bash to run `npx agents-manager` CLI commands (e.g. `npx agents-manager tasks list`, `npx agents-manager tasks create`, `npx agents-manager tasks update`).',
     '- You CAN use Bash for read-only commands like `ls`, `cat`, `git log`, `git diff`, etc.',
     '- When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.',
+    '- You MUST NOT use `agent start` directly. To trigger an agent, use `tasks start <taskId>` or `tasks transition <taskId> <status>` to move the task through the pipeline.',
   ].join('\n');
 }
 
@@ -82,7 +83,6 @@ function cliReferenceSection(taskId?: string): string {
     '',
     '### Agent Runs',
     `- agent runs [--task ${t}] [--active] — List agent runs`,
-    `- agent start ${t} --type <type>  — Start an agent on a task`,
     `- agent get <runId>                   — Get agent run details`,
     '',
     '### Prompts (Interactive Feedback)',
