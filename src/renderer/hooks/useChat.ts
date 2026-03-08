@@ -75,6 +75,17 @@ export function useChat(sessionId: string | null) {
       .then(setDbMessages)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
+
+    // Reconnect to in-flight session: seed streaming state from live turn messages
+    window.api.chat.chatLiveMessages(sessionId)
+      .then((liveMessages) => {
+        if (liveMessages.length > 0) {
+          setStreamingMessages(liveMessages);
+          streamingRef.current = true;
+          setIsStreaming(true);
+        }
+      })
+      .catch(() => { /* session not running, ignore */ });
   }, [sessionId]);
 
   // Subscribe to chat output (for streaming state and completion sentinel)

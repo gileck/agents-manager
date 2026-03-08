@@ -184,6 +184,14 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // GET /api/chat/sessions/:id/live-messages — get in-flight turn messages for a running agent
+  router.get('/api/chat/sessions/:id/live-messages', (req, res, next) => {
+    try {
+      const msgs = services.chatAgentService.getLiveMessages(req.params.id);
+      res.json(msgs);
+    } catch (err) { next(err); }
+  });
+
   // DELETE /api/chat/sessions/:id/messages — clear messages
   router.delete('/api/chat/sessions/:id/messages', async (req, res, next) => {
     try {
