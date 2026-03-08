@@ -26,7 +26,7 @@ interface TaskGroupedListProps {
 export function TaskGroupedList({
   tasks,
   groupBy,
-  viewMode: _viewMode,
+  viewMode = 'card',
   pipelineMap,
   featureMap,
   activeTaskIds,
@@ -61,7 +61,7 @@ export function TaskGroupedList({
 
   if (groupBy === 'none') {
     return (
-      <div className="space-y-2">
+      <div className={viewMode === 'list' ? 'border rounded-lg overflow-hidden divide-y divide-border' : 'space-y-2'}>
         {tasks.map((task) => (
           <TaskRow
             key={task.id}
@@ -76,6 +76,7 @@ export function TaskGroupedList({
             onDelete={() => onDeleteTask(task)}
             onDuplicate={() => onDuplicateTask(task)}
             onStatusChange={onStatusChange}
+            viewMode={viewMode}
           />
         ))}
       </div>
@@ -88,22 +89,29 @@ export function TaskGroupedList({
         const isCollapsed = collapsed.has(groupKey);
         return (
           <div key={groupKey}>
+            {/* Enhanced group header */}
             <button
-              className="flex items-center gap-2 mb-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+              className="flex items-center gap-2 mb-1.5 w-full text-left px-3 py-2 rounded-md bg-muted/40 border-l-2 border-l-primary/60 hover:bg-muted/60 transition-colors"
               onClick={() => toggleGroup(groupKey)}
             >
-              {isCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-              <span>{groupKey}</span>
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+              <span
+                className="font-semibold text-sm text-foreground flex-1 truncate"
+                title={groupKey}
+              >
+                {groupKey}
+              </span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
                 {groupTasks_.length}
               </Badge>
+              {isCollapsed ? (
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+              )}
             </button>
+
             {!isCollapsed && (
-              <div className="space-y-2">
+              <div className={viewMode === 'list' ? 'border rounded-lg overflow-hidden divide-y divide-border' : 'space-y-2'}>
                 {groupTasks_.map((task) => (
                   <TaskRow
                     key={task.id}
@@ -118,6 +126,7 @@ export function TaskGroupedList({
                     onDelete={() => onDeleteTask(task)}
                     onDuplicate={() => onDuplicateTask(task)}
                     onStatusChange={onStatusChange}
+                    viewMode={viewMode}
                   />
                 ))}
               </div>
