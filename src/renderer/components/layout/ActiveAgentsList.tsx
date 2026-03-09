@@ -79,6 +79,7 @@ export function ActiveAgentsEntries({
           <div className="flex-1 min-w-0">
             <div className="truncate">{taskTitle}</div>
             <div className="flex items-center gap-1.5">
+              <span className="text-[10px] opacity-70">{run.agentType}</span>
               <span className="text-[10px] opacity-70">{run.mode}</span>
               {run.status === 'running' && <ElapsedTime startedAt={run.startedAt} />}
               {run.status !== 'running' && run.completedAt && (
