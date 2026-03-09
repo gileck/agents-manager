@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import type { ApiClient } from '../../client/api-client';
-import type { Subtask, SubtaskStatus, TaskType, TaskSize, TaskComplexity } from '../../shared/types';
-import { VALID_TASK_TYPES } from '../../shared/types';
+import { VALID_TASK_TYPES, type Subtask, type SubtaskStatus, type TaskType, type TaskSize, type TaskComplexity } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject, resolveTaskId } from '../context';
 import { readStdinOrValue } from '../stdin';
@@ -158,14 +157,15 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       metadata?: string;
     }) => {
       const opts = program.opts() as OutputOptions & { project?: string };
+
+      if (!VALID_TASK_TYPES.includes(cmdOpts.type as TaskType)) {
+        console.error(`Error: Invalid task type "${cmdOpts.type}". Valid types are: ${VALID_TASK_TYPES.join(', ')}`);
+        process.exitCode = 1;
+        return;
+      }
+
       try {
         const project = await requireProject(api, opts.project);
-
-        if (!VALID_TASK_TYPES.includes(cmdOpts.type as TaskType)) {
-          console.error(`Error: Invalid task type "${cmdOpts.type}". Valid types are: ${VALID_TASK_TYPES.join(', ')}`);
-          process.exitCode = 1;
-          return;
-        }
 
         let pipelineId = cmdOpts.pipeline;
         if (!pipelineId) {
