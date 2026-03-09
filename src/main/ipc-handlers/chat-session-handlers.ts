@@ -62,6 +62,18 @@ export function registerChatSessionHandlers(api: ApiClient): void {
     return api.chat.deleteSession(sessionId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_HIDE, async (_, sessionId: string) => {
+    return api.chat.hideSession(sessionId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_HIDE_ALL, async (_, projectId: string) => {
+    return api.chat.hideAllSessions(projectId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_LIST_ALL, async (_, projectId: string) => {
+    return api.chat.listAllForProject(projectId);
+  });
+
   registerIpcHandler(IPC_CHANNELS.CHAT_AGENT_SESSION, async (_, taskId: string, agentRole: string) => {
     return api.chat.getAgentChatSession(taskId, agentRole);
   });

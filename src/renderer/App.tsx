@@ -20,6 +20,7 @@ import { SettingsLayout } from './pages/SettingsLayout';
 import { FeatureListPage } from './pages/FeatureListPage';
 import { FeatureDetailPage } from './pages/FeatureDetailPage';
 import { ChatPage } from './pages/ChatPage';
+import { ThreadsHistoryPage } from './pages/ThreadsHistoryPage';
 import { TelegramPage } from './pages/TelegramPage';
 import { CostPage } from './pages/CostPage';
 import { SourceControlPage } from './pages/SourceControlPage';
@@ -168,6 +169,7 @@ function AppRoutes() {
         <Route path="features" element={<FeatureListPage />} />
         <Route path="features/:id" element={<FeatureDetailPage />} />
         <Route path="chat" element={<ChatPage />} />
+        <Route path="threads" element={<ThreadsHistoryPage />} />
         <Route path="automated-agents" element={<AutomatedAgentsPage />} />
         <Route path="automated-agents/:id" element={<AutomatedAgentDetailPage />} />
         <Route path="automated-agents/runs/:runId" element={<AutomatedAgentRunPage />} />

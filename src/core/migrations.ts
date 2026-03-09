@@ -108,5 +108,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '105_reseed_pipelines_status_colors',
       sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
     },
+    {
+      name: '106_add_sidebar_hidden_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN sidebar_hidden INTEGER NOT NULL DEFAULT 0`,
+    },
   ];
 }

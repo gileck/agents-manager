@@ -104,6 +104,40 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // GET /api/chat/sessions/all — list all sessions for a project (incl. hidden), with message count
+  router.get('/api/chat/sessions/all', async (req, res, next) => {
+    try {
+      const { projectId } = req.query as { projectId?: string };
+      if (!projectId) {
+        res.status(400).json({ error: 'projectId query param is required' });
+        return;
+      }
+      const sessions = await services.chatSessionStore.listAllForProject(projectId);
+      res.json(sessions);
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/chat/sessions/hide-all — soft-hide all sessions for a project
+  router.post('/api/chat/sessions/hide-all', async (req, res, next) => {
+    try {
+      const { projectId } = req.body as { projectId?: string };
+      if (!projectId) {
+        res.status(400).json({ error: 'projectId is required' });
+        return;
+      }
+      const ok = await services.chatSessionStore.hideAllSessions(projectId);
+      res.json({ ok });
+    } catch (err) { next(err); }
+  });
+
+  // PATCH /api/chat/sessions/:id/hide — soft-hide session from sidebar
+  router.patch('/api/chat/sessions/:id/hide', async (req, res, next) => {
+    try {
+      const ok = await services.chatSessionStore.hideSession(req.params.id);
+      res.json({ ok });
+    } catch (err) { next(err); }
+  });
+
   // GET /api/chat/sessions/:id — get session
   router.get('/api/chat/sessions/:id', async (req, res, next) => {
     try {

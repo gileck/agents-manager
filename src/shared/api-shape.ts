@@ -32,6 +32,7 @@ import type {
   ChatImage,
   AgentChatMessage,
   ChatSession,
+  ChatSessionWithDetails,
   TaskChatSessionWithTitle,
   RunningAgent,
   TelegramBotLogEntry,
@@ -241,8 +242,11 @@ export interface ApiShape {
     create(scopeType: 'project' | 'task', scopeId: string, name: string, agentLib?: string): Promise<ChatSession>;
     list(scopeType: 'project' | 'task', scopeId: string): Promise<ChatSession[]>;
     listTaskSessions(projectId: string): Promise<TaskChatSessionWithTitle[]>;
+    listAll(projectId: string): Promise<ChatSessionWithDetails[]>;
     update(sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null }): Promise<ChatSession | null>;
     delete(sessionId: string): Promise<boolean>;
+    hide(sessionId: string): Promise<boolean>;
+    hideAll(projectId: string): Promise<boolean>;
     getAgentChatSession(taskId: string, agentRole: string): Promise<ChatSession>;
     listAgents(): Promise<RunningAgent[]>;
   };

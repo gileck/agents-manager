@@ -192,8 +192,11 @@ export interface ApiClient {
     createSession(input: { scopeType: string; scopeId: string; name: string; agentLib?: string }): Promise<unknown>;
     listSessions(scopeType: string, scopeId: string): Promise<unknown[]>;
     listTaskSessionsForProject(projectId: string): Promise<TaskChatSessionWithTitle[]>;
+    listAllForProject(projectId: string): Promise<unknown[]>;
     getSession(id: string): Promise<unknown>;
     deleteSession(id: string): Promise<unknown>;
+    hideSession(id: string): Promise<unknown>;
+    hideAllSessions(projectId: string): Promise<unknown>;
     updateSession(id: string, input: { name?: string; agentLib?: string | null }): Promise<unknown>;
     getAgentChatSession(taskId: string, agentRole: string): Promise<unknown>;
     sendMessage(sessionId: string, message: string, images?: unknown[]): Promise<unknown>;
@@ -500,8 +503,12 @@ export function createApiClient(baseUrl: string): ApiClient {
         req('GET', `/api/chat/sessions${qs({ scopeType, scopeId })}`),
       listTaskSessionsForProject: (projectId) =>
         req('GET', `/api/chat/sessions${qs({ scopeType: 'task', projectId })}`),
+      listAllForProject: (projectId) =>
+        req('GET', `/api/chat/sessions/all${qs({ projectId })}`),
       getSession: (id) => req('GET', `/api/chat/sessions/${id}`),
       deleteSession: (id) => req('DELETE', `/api/chat/sessions/${id}`),
+      hideSession: (id) => req('PATCH', `/api/chat/sessions/${id}/hide`),
+      hideAllSessions: (projectId) => req('POST', '/api/chat/sessions/hide-all', { projectId }),
       updateSession: (id, input) => req('PATCH', `/api/chat/sessions/${id}`, input),
       getAgentChatSession: (taskId, agentRole) =>
         req('GET', `/api/chat/agent-session${qs({ taskId, agentRole })}`),
