@@ -83,11 +83,11 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
                   {msg.images.map((img, j) => (
                     <img
                       key={j}
-                      src={`file://${img.path}`}
+                      src={`/api/chat/images?path=${encodeURIComponent(img.path)}`}
                       alt={img.name || 'Attached image'}
                       className="rounded border border-primary-foreground/20 object-cover cursor-pointer"
                       style={{ maxHeight: 192, maxWidth: 256 }}
-                      onClick={() => window.open(`file://${img.path}`, '_blank')}
+                      onClick={() => window.open(`/api/chat/images?path=${encodeURIComponent(img.path)}`, '_blank')}
                       onError={(e) => {
                         const el = e.target as HTMLImageElement;
                         el.style.display = 'none';
