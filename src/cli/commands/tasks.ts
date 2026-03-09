@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import type { ApiClient } from '../../client/api-client';
-import type { Subtask, SubtaskStatus, TaskType, TaskSize, TaskComplexity } from '../../shared/types';
+import { VALID_TASK_TYPES, type Subtask, type SubtaskStatus, type TaskType, type TaskSize, type TaskComplexity } from '../../shared/types';
 import { output, type OutputOptions } from '../output';
 import { requireProject, resolveTaskId } from '../context';
 import { readStdinOrValue } from '../stdin';
@@ -126,7 +126,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .description('Create a new task')
     .requiredOption('--title <title>', 'Task title')
     .option('--description <desc>', 'Task description')
-    .option('--type <type>', 'Task type (bug|feature|improvement)', 'feature')
+    .requiredOption('--type <type>', 'Task type (bug|feature|improvement)')
     .option('--size <size>', 'Task size (xs|sm|md|lg|xl)')
     .option('--complexity <complexity>', 'Task complexity (low|medium|high)')
     .option('--pipeline <id>', 'Pipeline ID')
@@ -142,7 +142,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
     .action(async (cmdOpts: {
       title: string;
       description?: string;
-      type?: string;
+      type: string;
       size?: string;
       complexity?: string;
       pipeline?: string;
@@ -157,6 +157,13 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
       metadata?: string;
     }) => {
       const opts = program.opts() as OutputOptions & { project?: string };
+
+      if (!VALID_TASK_TYPES.includes(cmdOpts.type as TaskType)) {
+        console.error(`Error: Invalid task type "${cmdOpts.type}". Valid types are: ${VALID_TASK_TYPES.join(', ')}`);
+        process.exitCode = 1;
+        return;
+      }
+
       try {
         const project = await requireProject(api, opts.project);
 
@@ -187,7 +194,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
           pipelineId,
           title: cmdOpts.title,
           description: cmdOpts.description,
-          type: cmdOpts.type as TaskType | undefined,
+          type: cmdOpts.type as TaskType,
           size: cmdOpts.size as TaskSize | undefined,
           complexity: cmdOpts.complexity as TaskComplexity | undefined,
           debugInfo: cmdOpts.debugInfo,
