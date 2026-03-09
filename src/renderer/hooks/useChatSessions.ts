@@ -155,6 +155,68 @@ export function useChatSessions(scope: ChatScope | null) {
     if (currentScope) localStorage.setItem(storageKey(currentScope), sessionId);
   }, []);
 
+  const hideSession = useCallback(
+    async (sessionId: string) => {
+      if (sessions.length <= 1) {
+        // Last visible session: auto-create replacement before hiding
+        const currentScope = scopeRef.current;
+        if (!currentScope) return false;
+        try {
+          await window.api.chatSession.hide(sessionId);
+          setSessions([]);
+          setCurrentSessionId(null);
+          const newSession = await window.api.chatSession.create(currentScope.type, currentScope.id, 'General');
+          setSessions([newSession]);
+          setCurrentSessionId(newSession.id);
+          localStorage.setItem(storageKey(currentScope), newSession.id);
+          return true;
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err));
+          throw err;
+        }
+      }
+
+      try {
+        const success = await window.api.chatSession.hide(sessionId);
+        if (success) {
+          setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+          if (sessionId === currentSessionId) {
+            const remaining = sessions.filter((s) => s.id !== sessionId);
+            if (remaining.length > 0) {
+              const currentScope = scopeRef.current;
+              setCurrentSessionId(remaining[0].id);
+              if (currentScope) localStorage.setItem(storageKey(currentScope), remaining[0].id);
+            }
+          }
+        }
+        return success;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+    },
+    [sessions, currentSessionId]
+  );
+
+  const hideAllSessions = useCallback(async () => {
+    const currentScope = scopeRef.current;
+    if (!currentScope) return;
+
+    try {
+      await window.api.chatSession.hideAll(currentScope.id);
+      setSessions([]);
+      setCurrentSessionId(null);
+
+      const newSession = await window.api.chatSession.create(currentScope.type, currentScope.id, 'General');
+      setSessions([newSession]);
+      setCurrentSessionId(newSession.id);
+      localStorage.setItem(storageKey(currentScope), newSession.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }, []);
+
   const clearAllSessions = useCallback(async () => {
     const currentScope = scopeRef.current;
     if (!currentScope) return;
@@ -187,6 +249,8 @@ export function useChatSessions(scope: ChatScope | null) {
     renameSession,
     updateSession,
     deleteSession,
+    hideSession,
+    hideAllSessions,
     clearAllSessions,
     switchSession,
   };

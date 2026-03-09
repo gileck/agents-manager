@@ -1,4 +1,4 @@
-import type { ChatScopeType, ChatSessionSource, ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput, TaskChatSessionWithTitle } from '../../shared/types';
+import type { ChatScopeType, ChatSessionSource, ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput, ChatSessionWithDetails, TaskChatSessionWithTitle } from '../../shared/types';
 
 // Re-export types from shared/types so existing consumers of this module are unaffected.
 export type { ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput };
@@ -12,6 +12,9 @@ export interface IChatSessionStore {
   getSession(id: string): Promise<ChatSession | null>;
   listSessionsForScope(scopeType: ChatScopeType, scopeId: string, options?: ListSessionsOptions): Promise<ChatSession[]>;
   listTaskSessionsForProject(projectId: string, options?: ListSessionsOptions): Promise<TaskChatSessionWithTitle[]>;
+  listAllForProject(projectId: string): Promise<ChatSessionWithDetails[]>;
   updateSession(id: string, input: ChatSessionUpdateInput): Promise<ChatSession | null>;
   deleteSession(id: string): Promise<boolean>;
+  hideSession(id: string): Promise<boolean>;
+  hideAllSessions(projectId: string): Promise<boolean>;
 }

@@ -5,6 +5,7 @@ import {
   Bot,
   Bug,
   CheckSquare,
+  Clock,
   FolderOpen,
   RefreshCw,
   SquarePen,
@@ -23,6 +24,7 @@ import { reportError } from '../../lib/error-handler';
 const navItems = [
   { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
   { to: '/kanban', icon: Trello, label: 'Kanban' },
+  { to: '/threads', icon: Clock, label: 'Thread History' },
   { to: '/projects', icon: FolderOpen, label: 'Projects' },
   { to: '/automated-agents', icon: Bot, label: 'Automations' },
 ];

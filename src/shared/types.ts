@@ -1061,8 +1061,14 @@ export interface ChatSession {
   agentRole: string | null;
   agentRunId: string | null;
   permissionMode: PermissionMode | null;
+  sidebarHidden: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ChatSessionWithDetails extends ChatSession {
+  messageCount: number;
+  taskTitle?: string;
 }
 
 export interface ChatSessionCreateInput {

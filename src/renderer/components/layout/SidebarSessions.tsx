@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, CheckSquare, Trash2, Loader2, Check } from 'lucide-react';
+import { Plus, CheckSquare, Loader2, Check, EyeOff, X, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
@@ -18,7 +18,8 @@ export function SidebarSessions() {
     currentSessionId,
     createSession,
     renameSession,
-    deleteSession,
+    hideSession,
+    hideAllSessions,
     switchSession,
   } = useProjectChatSessions();
   const navigate = useNavigate();
@@ -103,9 +104,13 @@ export function SidebarSessions() {
     setRenameName('');
   };
 
-  const handleDelete = (e: React.MouseEvent, sessionId: string) => {
+  const handleHide = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
-    deleteSession(sessionId);
+    hideSession(sessionId).catch((err) => reportError(err, 'Hide session'));
+  };
+
+  const handleClearAll = () => {
+    hideAllSessions().catch((err) => reportError(err, 'Clear all sessions'));
   };
 
   const handleTaskSessionClick = (taskSession: TaskChatSessionWithTitle) => {
@@ -117,24 +122,42 @@ export function SidebarSessions() {
     navigate(`/tasks/${taskSession.scopeId}`);
   };
 
-  const handleDeleteTaskSession = async (e: React.MouseEvent, sessionId: string) => {
+  const handleHideTaskSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     try {
-      await window.api.chatSession.delete(sessionId);
+      await window.api.chatSession.hide(sessionId);
       setTaskSessions((prev) => prev.filter((ts) => ts.id !== sessionId));
     } catch (err) {
-      reportError(err, 'Delete task session');
+      reportError(err, 'Hide task session');
     }
   };
 
   const headerButtons = (
-    <button
-      onClick={handleCreate}
-      className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
-      title="New session"
-    >
-      <Plus className="h-3.5 w-3.5" />
-    </button>
+    <div className="flex items-center gap-0.5">
+      {sessions.length > 0 && (
+        <button
+          onClick={handleClearAll}
+          className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
+          title="Clear all from sidebar"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <button
+        onClick={() => navigate('/threads')}
+        className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
+        title="View thread history"
+      >
+        <Clock className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={handleCreate}
+        className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
+        title="New session"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 
   if (!currentProjectId) {
@@ -214,19 +237,17 @@ export function SidebarSessions() {
                         {formatRelativeTimestamp(session.updatedAt)}
                       </span>
                     )}
-                    {sessions.length > 1 && (
-                      <button
-                        onClick={(e) => handleDelete(e, session.id)}
-                        className={cn(
-                          'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
-                          'opacity-0 group-hover:opacity-100',
-                          isActive && 'hover:bg-primary-foreground/20'
-                        )}
-                        title="Delete session"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => handleHide(e, session.id)}
+                      className={cn(
+                        'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
+                        'opacity-0 group-hover:opacity-100',
+                        isActive && 'hover:bg-primary-foreground/20'
+                      )}
+                      title="Remove from sidebar"
+                    >
+                      <EyeOff className="h-3 w-3" />
+                    </button>
                   </>
                 )}
               </div>
@@ -281,14 +302,14 @@ export function SidebarSessions() {
                     </span>
                   )}
                   <button
-                    onClick={(e) => handleDeleteTaskSession(e, ts.id)}
+                    onClick={(e) => handleHideTaskSession(e, ts.id)}
                     className={cn(
                       'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
                       'opacity-0 group-hover:opacity-100'
                     )}
-                    title="Delete session"
+                    title="Remove from sidebar"
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <EyeOff className="h-3 w-3" />
                   </button>
                 </div>
               );

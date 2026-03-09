@@ -22,6 +22,7 @@ import type {
   ChatImage,
   AgentChatMessage,
   ChatSession,
+  ChatSessionWithDetails,
   TaskChatSessionWithTitle,
   RunningAgent,
   TelegramBotLogEntry,
@@ -155,8 +156,11 @@ const IPC_CHANNELS = {
   CHAT_SESSION_CREATE: 'chat:session:create',
   CHAT_SESSION_LIST: 'chat:session:list',
   CHAT_SESSION_LIST_TASK_SESSIONS: 'chat:session:list-task-sessions',
+  CHAT_SESSION_LIST_ALL: 'chat:session:list-all',
   CHAT_SESSION_UPDATE: 'chat:session:update',
   CHAT_SESSION_DELETE: 'chat:session:delete',
+  CHAT_SESSION_HIDE: 'chat:session:hide',
+  CHAT_SESSION_HIDE_ALL: 'chat:session:hide-all',
   CHAT_AGENT_SESSION: 'chat:agent-session',
   CHAT_AGENTS_LIST: 'chat:agents:list',
   CHAT_SESSION_RENAMED: 'chat:session:renamed',
@@ -483,10 +487,16 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST, scopeType, scopeId),
     listTaskSessions: (projectId: string): Promise<TaskChatSessionWithTitle[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_TASK_SESSIONS, projectId),
+    listAll: (projectId: string): Promise<ChatSessionWithDetails[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_ALL, projectId),
     update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null }): Promise<ChatSession | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
+    hide: (sessionId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_HIDE, sessionId),
+    hideAll: (projectId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_HIDE_ALL, projectId),
     getAgentChatSession: (taskId: string, agentRole: string): Promise<ChatSession> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_AGENT_SESSION, taskId, agentRole),
     listAgents: (): Promise<RunningAgent[]> =>
