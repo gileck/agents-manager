@@ -15,12 +15,13 @@ import { TaskDeleteDialog, BulkDeleteDialog } from '../components/tasks/TaskDele
 import { TaskToolbar } from '../components/tasks/TaskToolbar';
 import { TaskFilterPanel } from '../components/tasks/TaskFilterPanel';
 import { TaskBulkActionBar } from '../components/tasks/TaskBulkActionBar';
+import { TaskBatchEditDialog, type BatchEditState } from '../components/tasks/TaskBatchEditDialog';
 import { useFeatures } from '../hooks/useFeatures';
 import { sortTasks, collectTags, buildPipelineMap, buildFeatureMap } from '../components/tasks/task-helpers';
 import type { FilterState } from '../components/tasks/TaskFilterBar';
 import type { SortField, SortDirection, GroupBy, ViewMode } from '../components/tasks/task-helpers';
 import { toast } from 'sonner';
-import type { Task, TaskFilter, TaskCreateInput, AppSettings, TaskCreatedBy } from '../../shared/types';
+import type { Task, TaskFilter, TaskCreateInput, TaskUpdateInput, AppSettings, TaskCreatedBy } from '../../shared/types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 export function TaskListPage() {
@@ -175,6 +176,121 @@ export function TaskListPage() {
     }
   };
 
+  // Batch update
+  const [batchUpdating, setBatchUpdating] = useState(false);
+  const [batchEditOpen, setBatchEditOpen] = useState(false);
+
+  const selectedTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const id of selectedIds) {
+      const task = tasks.find((t) => t.id === id);
+      task?.tags.forEach((tag) => tagSet.add(tag));
+    }
+    return Array.from(tagSet).sort();
+  }, [selectedIds, tasks]);
+
+  const showBatchResultToast = (succeeded: number, failed: Array<{ title: string; error: string }>) => {
+    const total = succeeded + failed.length;
+    if (failed.length === 0) {
+      toast.success(`Updated ${succeeded} task${succeeded !== 1 ? 's' : ''}`);
+    } else if (succeeded > 0) {
+      toast.warning(`Updated ${succeeded} of ${total} tasks. ${failed.length} failed.`);
+    } else {
+      toast.error(`All ${total} updates failed.`);
+    }
+  };
+
+  const handleBatchUpdate = async (state: BatchEditState) => {
+    setBatchUpdating(true);
+    setBatchEditOpen(false);
+    let succeeded = 0;
+    const failed: Array<{ id: string; title: string; error: string }> = [];
+
+    for (const id of selectedIds) {
+      const task = tasks.find((t) => t.id === id);
+      try {
+        const input: TaskUpdateInput = {};
+        if (state.priority.enabled)   input.priority   = state.priority.value;
+        if (state.assignee.enabled)   input.assignee   = state.assignee.value || null;
+        if (state.featureId.enabled)  input.featureId  = state.featureId.value || null;
+        if (state.pipelineId.enabled) input.pipelineId = state.pipelineId.value;
+        if (state.type.enabled)       input.type       = state.type.value;
+        if (state.size.enabled)       input.size       = state.size.value || null;
+        if (state.complexity.enabled) input.complexity = state.complexity.value || null;
+        if (state.tags.enabled) {
+          if (state.tags.mode === 'replace') {
+            input.tags = state.tags.values;
+          } else if (state.tags.mode === 'add') {
+            input.tags = [...new Set([...(task?.tags ?? []), ...state.tags.values])];
+          } else {
+            input.tags = (task?.tags ?? []).filter((t) => !state.tags.values.includes(t));
+          }
+        }
+        await window.api.tasks.update(id, input);
+        succeeded++;
+      } catch (err) {
+        failed.push({ id, title: task?.title ?? id, error: String(err) });
+      }
+    }
+
+    setBatchUpdating(false);
+    showBatchResultToast(succeeded, failed);
+    if (succeeded > 0) {
+      exitSelectMode();
+      await refetch();
+    }
+  };
+
+  const handleBatchPriority = async (priority: number) => {
+    setBatchUpdating(true);
+    let succeeded = 0;
+    const failed: Array<{ id: string; title: string; error: string }> = [];
+
+    for (const id of selectedIds) {
+      const task = tasks.find((t) => t.id === id);
+      try {
+        await window.api.tasks.update(id, { priority });
+        succeeded++;
+      } catch (err) {
+        failed.push({ id, title: task?.title ?? id, error: String(err) });
+      }
+    }
+
+    setBatchUpdating(false);
+    showBatchResultToast(succeeded, failed);
+    if (succeeded > 0) {
+      exitSelectMode();
+      await refetch();
+    }
+  };
+
+  const handleBatchTransition = async (toStatus: string) => {
+    setBatchUpdating(true);
+    let succeeded = 0;
+    const failed: Array<{ id: string; title: string; error: string }> = [];
+
+    for (const id of selectedIds) {
+      const task = tasks.find((t) => t.id === id);
+      try {
+        const result = await window.api.tasks.forceTransition(id, toStatus, 'admin');
+        if (result.success) {
+          succeeded++;
+        } else {
+          failed.push({ id, title: task?.title ?? id, error: result.error ?? 'Transition failed' });
+        }
+      } catch (err) {
+        failed.push({ id, title: task?.title ?? id, error: String(err) });
+      }
+    }
+
+    setBatchUpdating(false);
+    showBatchResultToast(succeeded, failed);
+    if (succeeded > 0) {
+      exitSelectMode();
+      await refetch();
+    }
+  };
+
   const handleDuplicate = async (task: Task) => {
     const newTask = await window.api.tasks.create({
       projectId: task.projectId,
@@ -279,7 +395,7 @@ export function TaskListPage() {
           />
         </div>
       ) : (
-        <div className={`mt-4 ${selectedIds.size > 0 ? 'pb-20' : ''}`}>
+        <div className={`mt-4 ${selectedIds.size > 0 ? 'pb-20' : ''} ${batchUpdating ? 'opacity-50 pointer-events-none' : ''}`}>
           {/* Floating bulk action bar — visible when items are selected */}
           {selectedIds.size > 0 && (
             <TaskBulkActionBar
@@ -290,6 +406,13 @@ export function TaskListPage() {
               onSelectAll={toggleSelectAll}
               onDeleteSelected={() => setBulkDeleteOpen(true)}
               onExit={exitSelectMode}
+              pipelines={pipelines}
+              tasks={tasks}
+              features={features}
+              onBatchPriority={handleBatchPriority}
+              onBatchStatus={handleBatchTransition}
+              onBatchEdit={() => setBatchEditOpen(true)}
+              batchUpdating={batchUpdating}
             />
           )}
 
@@ -345,6 +468,16 @@ export function TaskListPage() {
         onClose={() => setBulkDeleteOpen(false)}
         onConfirm={handleBulkDelete}
         deleting={bulkDeleting}
+      />
+      <TaskBatchEditDialog
+        open={batchEditOpen}
+        onClose={() => setBatchEditOpen(false)}
+        selectedCount={selectedIds.size}
+        pipelines={pipelines}
+        features={features}
+        existingTags={selectedTags}
+        onApply={handleBatchUpdate}
+        applying={batchUpdating}
       />
     </div>
   );
