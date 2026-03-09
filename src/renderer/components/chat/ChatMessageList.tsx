@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Pencil } from 'lucide-react';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -8,9 +9,10 @@ import { getToolRenderer } from '../tool-renderers';
 interface ChatMessageListProps {
   messages: AgentChatMessage[];
   isRunning?: boolean;
+  onEditMessage?: (text: string) => void;
 }
 
-export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
+export function ChatMessageList({ messages, isRunning, onEditMessage }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
@@ -74,8 +76,20 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
           </div>
         );
       } else if (msg.type === 'user') {
+        const msgText = msg.text;
         nodes.push(
-          <div key={i} className="flex justify-end py-2.5">
+          <div key={i} className="flex justify-end items-end py-2.5 group/msg">
+            {onEditMessage && (
+              <button
+                type="button"
+                disabled={isRunning}
+                onClick={() => onEditMessage(msgText)}
+                className="self-center mr-2 opacity-0 group-hover/msg:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-muted/55 text-muted-foreground hover:text-foreground disabled:pointer-events-none"
+                title="Edit & resend"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
             <div className="bg-primary/90 text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5 max-w-[82%] shadow-[0_8px_18px_hsl(var(--primary)/0.24)]">
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
               {msg.images && msg.images.length > 0 && (
@@ -130,7 +144,7 @@ export function ChatMessageList({ messages, isRunning }: ChatMessageListProps) {
       // usage messages are skipped
     }
     return nodes;
-  }, [messages, expandedTools, toggleTool]);
+  }, [messages, expandedTools, toggleTool, onEditMessage, isRunning]);
 
   return (
     <div className="flex-1 overflow-y-auto">

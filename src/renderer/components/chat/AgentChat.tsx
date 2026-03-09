@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import type { AgentChatMessage, AgentRun, ChatImage, PermissionMode } from '../../../shared/types';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput, AgentLibOption, ModelOption } from './ChatInput';
@@ -45,6 +45,13 @@ export function AgentChat({
   onPermissionModeChange,
   inputRef,
 }: AgentChatProps) {
+  const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
+
+  const handleEditMessage = useCallback((text: string) => {
+    const hint = '[Revised message - please disregard the earlier version]\n\n';
+    setPrefill((prev) => ({ text: hint + text, seq: (prev?.seq ?? 0) + 1 }));
+  }, []);
+
   return (
     <div className="flex-1 min-h-0 flex">
       <div className="flex-1 min-h-0 flex flex-col">
@@ -53,7 +60,7 @@ export function AgentChat({
             {emptyState}
           </div>
         ) : (
-          <ChatMessageList messages={messages} isRunning={isRunning} />
+          <ChatMessageList messages={messages} isRunning={isRunning} onEditMessage={handleEditMessage} />
         )}
         <ChatInput
           ref={inputRef}
@@ -70,6 +77,7 @@ export function AgentChat({
           onModelChange={onModelChange}
           permissionMode={permissionMode}
           onPermissionModeChange={onPermissionModeChange}
+          prefill={prefill}
         />
       </div>
       {showSidebar && (
