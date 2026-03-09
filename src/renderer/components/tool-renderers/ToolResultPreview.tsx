@@ -8,6 +8,29 @@ interface ToolResultPreviewProps {
   showDiff?: boolean;
 }
 
+function prettyJson(raw: string): { text: string; isJson: boolean } {
+  try {
+    const parsed = JSON.parse(raw);
+    return { text: JSON.stringify(parsed, null, 2), isJson: true };
+  } catch {
+    return { text: raw, isJson: false };
+  }
+}
+
+function renderContent(raw: string, maxLen = 2000): React.ReactNode {
+  const display = raw.length > maxLen ? raw.slice(0, maxLen) + '\n... (truncated)' : raw;
+  const { text, isJson } = prettyJson(display);
+  if (isJson) {
+    return (
+      <div>
+        <span className="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-mono mb-1">JSON</span>
+        <pre className="text-xs font-mono overflow-x-auto whitespace-pre">{text}</pre>
+      </div>
+    );
+  }
+  return <pre className="text-xs font-mono whitespace-pre-wrap">{text}</pre>;
+}
+
 export function ToolResultPreview({ toolUse, toolResult, showDiff }: ToolResultPreviewProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogContent, setDialogContent] = useState<{ title: string; text: string }>({ title: '', text: '' });
@@ -24,7 +47,7 @@ export function ToolResultPreview({ toolUse, toolResult, showDiff }: ToolResultP
       if (parsed.old_string && parsed.new_string) {
         diffPreview = (
           <div className="mb-2">
-            <span className="text-xs font-medium text-muted-foreground">Diff</span>
+            <span className="inline-block text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium mb-1">Diff</span>
             <pre className="text-xs p-2 rounded mt-1 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
               <span style={{ color: '#ef4444' }}>- {parsed.old_string}</span>
               {'\n'}
@@ -37,38 +60,40 @@ export function ToolResultPreview({ toolUse, toolResult, showDiff }: ToolResultP
   }
 
   return (
-    <div className="px-3 py-2 space-y-2 border-t border-border">
-      {diffPreview}
+    <div className="border-t border-border divide-y divide-border">
+      {diffPreview && (
+        <div className="px-3 py-2">
+          {diffPreview}
+        </div>
+      )}
       {!showDiff && toolUse.input && (
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Input</span>
+        <div className="px-3 py-2 bg-muted/30">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="inline-block text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">Input</span>
             {toolUse.input.length > 500 && (
               <button className="text-xs text-primary hover:underline" onClick={() => openDialog('Input', toolUse.input)}>
                 View Full
               </button>
             )}
           </div>
-          <pre className="text-xs bg-muted p-2 rounded mt-1 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
-            {toolUse.input.length > 2000 ? toolUse.input.slice(0, 2000) + '\n...' : toolUse.input}
-          </pre>
+          <div className="bg-background rounded border border-border p-2 overflow-x-auto max-h-32 overflow-y-auto">
+            {renderContent(toolUse.input)}
+          </div>
         </div>
       )}
       {toolResult && (
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Result</span>
+        <div className="px-3 py-2">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="inline-block text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">Result</span>
             {toolResult.result.length > 500 && (
               <button className="text-xs text-primary hover:underline" onClick={() => openDialog('Result', toolResult.result)}>
                 View Full
               </button>
             )}
           </div>
-          <pre className="text-xs bg-muted p-2 rounded mt-1 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
-            {toolResult.result.length > 2000
-              ? toolResult.result.slice(0, 2000) + '\n... (truncated)'
-              : toolResult.result}
-          </pre>
+          <div className="bg-muted/50 rounded border border-border p-2 overflow-x-auto max-h-32 overflow-y-auto">
+            {renderContent(toolResult.result)}
+          </div>
         </div>
       )}
 

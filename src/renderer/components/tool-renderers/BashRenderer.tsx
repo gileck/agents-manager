@@ -51,6 +51,21 @@ function parseTaskResult(result: string): Task | null {
   }
 }
 
+function renderResultContent(text: string): React.ReactNode {
+  try {
+    const parsed = JSON.parse(text);
+    const pretty = JSON.stringify(parsed, null, 2);
+    return (
+      <div>
+        <span className="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-mono mb-1">JSON</span>
+        <pre className="text-xs font-mono overflow-x-auto whitespace-pre">{pretty}</pre>
+      </div>
+    );
+  } catch {
+    return <pre className="text-xs font-mono whitespace-pre-wrap">{text}</pre>;
+  }
+}
+
 export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRendererProps) {
   const { command, description } = parseSummary(toolUse.input);
   const shortCmd = command.length > 60 ? command.slice(0, 60) + '...' : command;
@@ -72,18 +87,32 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
   return (
     <div className="border border-border rounded my-1 overflow-hidden">
       <button
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left font-mono"
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
         onClick={onToggle}
       >
-        <span className="text-green-500">$</span>
-        <span className="text-foreground truncate">{shortCmd}</span>
-        {description && !expanded && (
-          <span className="text-muted-foreground line-clamp-2 ml-1">({description})</span>
-        )}
-        {duration != null && (
-          <span className="text-muted-foreground ml-1 flex-shrink-0">{formatDuration(duration)}</span>
-        )}
-        <svg className={`w-3 h-3 ml-auto text-muted-foreground transition-transform flex-shrink-0 ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="flex-1 min-w-0">
+          {description ? (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-foreground font-medium truncate">{description}</span>
+              <div className="flex items-center gap-1.5 text-muted-foreground font-mono">
+                <span className="text-green-500">$</span>
+                <span className="truncate">{shortCmd}</span>
+                {duration != null && (
+                  <span className="flex-shrink-0">· {formatDuration(duration)}</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 font-mono">
+              <span className="text-green-500">$</span>
+              <span className="text-foreground truncate">{shortCmd}</span>
+              {duration != null && (
+                <span className="text-muted-foreground flex-shrink-0 ml-1">{formatDuration(duration)}</span>
+              )}
+            </div>
+          )}
+        </div>
+        <svg className={`w-3 h-3 text-muted-foreground transition-transform flex-shrink-0 ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -96,7 +125,7 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
         <div className="border-t border-border">
           <div className="bg-muted/60 border-b border-border px-3 py-2 flex items-start gap-2">
             <span className="text-green-500 font-mono text-xs flex-shrink-0 mt-0.5">$</span>
-            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-all flex-1">{command}</pre>
+            <pre className="text-xs font-mono text-foreground overflow-x-auto whitespace-pre flex-1">{command}</pre>
             <button
               className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0 transition-colors px-1"
               onClick={handleCopy}
@@ -112,9 +141,9 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
           )}
           {toolResult && (
             <>
-              <pre className="text-xs bg-muted p-2 overflow-x-auto whitespace-pre-wrap" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {toolResult.result}
-              </pre>
+              <div className="text-xs bg-muted p-3 overflow-x-auto" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {renderResultContent(toolResult.result)}
+              </div>
               {toolResult.result.length > 500 && (
                 <div className="px-2 py-1 border-t border-border">
                   <button
