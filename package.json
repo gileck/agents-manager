@@ -104,6 +104,7 @@
     "autoprefixer": "^10.4.20",
     "babel-loader": "^10.0.0",
     "concurrently": "^9.1.2",
+    "copy-webpack-plugin": "^13.0.1",
     "css-loader": "^7.1.2",
     "electron": "^40.2.1",
     "electron-builder": "^26.4.0",

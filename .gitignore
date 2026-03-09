@@ -154,6 +154,7 @@ out
 # Gatsby
 .cache/
 public
+!src/web/public
 
 # Serverless directories
 .serverless/

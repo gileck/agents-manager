@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 const DAEMON_PORT = parseInt(process.env.AM_DAEMON_PORT || '3847', 10);
 const DEV_SERVER_PORT = parseInt(process.env.WEB_DEV_PORT || '3850', 10);
@@ -80,6 +81,11 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: './src/web/index.html'
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: 'src/web/public', to: '.' }
+      ]
     })
   ],
   resolve: {
