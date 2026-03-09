@@ -66,6 +66,7 @@ interface ChatInputProps {
   onModelChange?: (model: string) => void;
   permissionMode?: PermissionMode | null;
   onPermissionModeChange?: (mode: PermissionMode) => void;
+  prefill?: { text: string; seq: number } | null;
 }
 
 export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
@@ -82,6 +83,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   onModelChange,
   permissionMode,
   onPermissionModeChange,
+  prefill,
 }: ChatInputProps, forwardedRef) {
   const [value, setValue] = useState('');
   const [images, setImages] = useState<ChatImage[]>([]);
@@ -95,6 +97,13 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
+
+  useEffect(() => {
+    if (prefill) {
+      setValue(prefill.text);
+      textareaRef.current?.focus();
+    }
+  }, [prefill?.seq]); // intentionally only tracks seq so a new prefill object with same seq doesn't re-fire
 
   const addImageFile = useCallback((file: File) => {
     if (!VALID_IMAGE_TYPES.has(file.type)) return;
