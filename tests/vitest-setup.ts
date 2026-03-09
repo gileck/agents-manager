@@ -17,6 +17,11 @@
  */
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { initShellEnv } from '../src/shared/shell-env';
+
+// Pre-warm the shell PATH cache so synchronous getShellEnv() calls in tests
+// don't block on execSync (which can time out and hit the test timeout).
+await initShellEnv();
 
 const require = createRequire(import.meta.url);
 
