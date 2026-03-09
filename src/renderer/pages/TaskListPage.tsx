@@ -247,7 +247,6 @@ export function TaskListPage() {
           onSortDirectionToggle={() => setSortDirection((d) => d === 'asc' ? 'desc' : 'asc')}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
-          onNewTask={openCreateDialog}
           pipelines={pipelines}
           features={features}
           statusSummary={

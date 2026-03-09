@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '../ui/select';
-import { Search, SlidersHorizontal, ArrowUp, ArrowDown, List, LayoutGrid, Plus, X } from 'lucide-react';
+import { Search, SlidersHorizontal, ArrowUp, ArrowDown, List, LayoutGrid, X } from 'lucide-react';
 import { countActiveFilters, PRIORITY_LABELS } from './task-helpers';
 import type { FilterState } from './TaskFilterBar';
 import type { SortField, SortDirection, GroupBy, ViewMode } from './task-helpers';
@@ -50,7 +50,6 @@ interface TaskToolbarProps {
   onSortDirectionToggle: () => void;
   viewMode: ViewMode;
   onViewModeChange: (m: ViewMode) => void;
-  onNewTask: () => void;
   pipelines: Pipeline[];
   features?: Feature[];
   statusSummary?: React.ReactNode;
@@ -69,7 +68,6 @@ export function TaskToolbar({
   onSortDirectionToggle,
   viewMode,
   onViewModeChange,
-  onNewTask,
   pipelines,
   features,
   statusSummary,
@@ -216,11 +214,6 @@ export function TaskToolbar({
           </div>
         )}
 
-        {/* New Task button — always rightmost */}
-        <Button size="sm" className="h-8 gap-1.5" onClick={onNewTask}>
-          <Plus className="h-3.5 w-3.5" />
-          New Task
-        </Button>
       </div>
 
       {/* Active filter chips row */}
