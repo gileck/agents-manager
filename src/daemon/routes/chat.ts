@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
 import type { WsHolder } from '../server';
@@ -25,6 +26,27 @@ function validateImages(images: unknown): ChatImage[] | undefined {
 
 export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
+
+  // GET /api/chat/images — serve a stored chat image by absolute path
+  router.get('/api/chat/images', (req, res, next) => {
+    try {
+      const rawPath = req.query.path;
+      if (typeof rawPath !== 'string' || !rawPath) {
+        res.status(400).json({ error: 'path query param is required' });
+        return;
+      }
+      const imageStorageDir = services.chatAgentService.getImageStorageDir();
+      const resolved = path.resolve(rawPath);
+      const storageRoot = path.resolve(imageStorageDir);
+      if (!resolved.startsWith(storageRoot + path.sep) && resolved !== storageRoot) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+      res.sendFile(resolved, (err) => {
+        if (err) next(err);
+      });
+    } catch (err) { next(err); }
+  });
 
   // GET /api/chat/agent-session — get or create agent-chat session for a task+role
   router.get('/api/chat/agent-session', async (req, res, next) => {

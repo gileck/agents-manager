@@ -625,6 +625,10 @@ export class ChatAgentService {
     return [...(this.liveTurnMessages.get(sessionId) ?? [])];
   }
 
+  getImageStorageDir(): string {
+    return this.imageStorageDir;
+  }
+
   /**
    * Fire-and-forget: generates a short descriptive name for a session using Claude Haiku,
    * then persists it and invokes onRenamed with the updated session.
