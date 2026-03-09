@@ -71,7 +71,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
         params.push(...options.excludeSources);
       }
 
-      sql += ` ORDER BY updated_at DESC`;
+      sql += ` ORDER BY created_at ASC`;
 
       const stmt = this.db.prepare(sql);
       const rows = stmt.all(...params) as ChatSession[];
