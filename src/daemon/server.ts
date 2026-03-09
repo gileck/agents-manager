@@ -1,6 +1,6 @@
-import express, { type Express } from 'express';
+import express from 'express';
 import cors from 'cors';
-import { createServer as createHttpServer, type Server } from 'http';
+import { createServer as createHttpServer, type Server as HttpServer } from 'http';
 import path from 'path';
 import fs from 'fs';
 import { healthRoutes } from './routes/health';
@@ -32,7 +32,7 @@ import type { DaemonWsServer } from './ws/ws-server';
 /** Mutable holder resolved after the WS server is created */
 export type WsHolder = { server?: DaemonWsServer };
 
-export function createServer(services: AppServices, wsHolder: WsHolder = {}): { app: Express; httpServer: Server } {
+export function createServer(services: AppServices, wsHolder: WsHolder = {}): { app: express.Application; httpServer: HttpServer } {
   const app = express();
   app.use(cors({
     origin: (origin, cb) => {
