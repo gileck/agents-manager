@@ -254,7 +254,8 @@ export interface PlanComment {
 }
 
 // Task types
-export type TaskType = 'bug' | 'feature' | 'improvement';
+export const VALID_TASK_TYPES = ['bug', 'feature', 'improvement'] as const;
+export type TaskType = typeof VALID_TASK_TYPES[number];
 
 export const VALID_TASK_SIZES = ['xs', 'sm', 'md', 'lg', 'xl'] as const;
 export type TaskSize = typeof VALID_TASK_SIZES[number];
