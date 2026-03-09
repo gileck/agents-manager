@@ -1,34 +1,12 @@
 import React, { useState } from 'react';
 import type { AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { renderToolContent } from './renderUtils';
 
 interface ToolResultPreviewProps {
   toolUse: AgentChatMessageToolUse;
   toolResult?: AgentChatMessageToolResult;
   showDiff?: boolean;
-}
-
-function prettyJson(raw: string): { text: string; isJson: boolean } {
-  try {
-    const parsed = JSON.parse(raw);
-    return { text: JSON.stringify(parsed, null, 2), isJson: true };
-  } catch {
-    return { text: raw, isJson: false };
-  }
-}
-
-function renderContent(raw: string, maxLen = 2000): React.ReactNode {
-  const display = raw.length > maxLen ? raw.slice(0, maxLen) + '\n... (truncated)' : raw;
-  const { text, isJson } = prettyJson(display);
-  if (isJson) {
-    return (
-      <div>
-        <span className="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-mono mb-1">JSON</span>
-        <pre className="text-xs font-mono overflow-x-auto whitespace-pre">{text}</pre>
-      </div>
-    );
-  }
-  return <pre className="text-xs font-mono whitespace-pre-wrap">{text}</pre>;
 }
 
 export function ToolResultPreview({ toolUse, toolResult, showDiff }: ToolResultPreviewProps) {
@@ -77,7 +55,7 @@ export function ToolResultPreview({ toolUse, toolResult, showDiff }: ToolResultP
             )}
           </div>
           <div className="bg-background rounded border border-border p-2 overflow-x-auto max-h-32 overflow-y-auto">
-            {renderContent(toolUse.input)}
+            {renderToolContent(toolUse.input, 2000)}
           </div>
         </div>
       )}
@@ -92,7 +70,7 @@ export function ToolResultPreview({ toolUse, toolResult, showDiff }: ToolResultP
             )}
           </div>
           <div className="bg-muted/50 rounded border border-border p-2 overflow-x-auto max-h-32 overflow-y-auto">
-            {renderContent(toolResult.result)}
+            {renderToolContent(toolResult.result, 2000)}
           </div>
         </div>
       )}

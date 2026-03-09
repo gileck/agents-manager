@@ -3,6 +3,7 @@ import type { ToolRendererProps } from './types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { TaskActionCard } from './TaskActionCard';
 import type { Task } from '../../../shared/types';
+import { renderToolContent } from './renderUtils';
 
 function parseSummary(input: string): { command: string; description?: string } {
   try {
@@ -51,20 +52,6 @@ function parseTaskResult(result: string): Task | null {
   }
 }
 
-function renderResultContent(text: string): React.ReactNode {
-  try {
-    const parsed = JSON.parse(text);
-    const pretty = JSON.stringify(parsed, null, 2);
-    return (
-      <div>
-        <span className="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-mono mb-1">JSON</span>
-        <pre className="text-xs font-mono overflow-x-auto whitespace-pre">{pretty}</pre>
-      </div>
-    );
-  } catch {
-    return <pre className="text-xs font-mono whitespace-pre-wrap">{text}</pre>;
-  }
-}
 
 export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRendererProps) {
   const { command, description } = parseSummary(toolUse.input);
@@ -142,7 +129,7 @@ export function BashRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRe
           {toolResult && (
             <>
               <div className="text-xs bg-muted p-3 overflow-x-auto" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {renderResultContent(toolResult.result)}
+                {renderToolContent(toolResult.result)}
               </div>
               {toolResult.result.length > 500 && (
                 <div className="px-2 py-1 border-t border-border">
