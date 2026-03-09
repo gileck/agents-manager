@@ -29,6 +29,7 @@ interface TaskRowProps {
   onDuplicate: () => void;
   onStatusChange: (taskId: string, toStatus: string) => Promise<void>;
   viewMode?: ViewMode;
+  hideStatus?: boolean;
 }
 
 export function TaskRow({
@@ -44,6 +45,7 @@ export function TaskRow({
   onDuplicate,
   onStatusChange,
   viewMode = 'card',
+  hideStatus = false,
 }: TaskRowProps) {
   if (viewMode === 'list') {
     return (
@@ -59,6 +61,7 @@ export function TaskRow({
         onDelete={onDelete}
         onDuplicate={onDuplicate}
         onStatusChange={onStatusChange}
+        hideStatus={hideStatus}
       />
     );
   }
@@ -79,7 +82,7 @@ export function TaskRow({
             className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
           />
         )}
-        <PipelineBadge status={task.status} pipeline={pipeline} />
+        {!hideStatus && <PipelineBadge status={task.status} pipeline={pipeline} />}
         <Badge variant={PRIORITY_VARIANTS[task.priority] ?? 'outline'}>P{task.priority}</Badge>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

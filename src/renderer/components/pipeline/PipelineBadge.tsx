@@ -76,8 +76,22 @@ export function PipelineBadge({ status, pipeline }: PipelineBadgeProps) {
     return <Badge variant={statusNameToVariant(status)}>{status}</Badge>;
   }
 
-  const variant = statusDef.color
-    ? colorToVariant(statusDef.color)
+  const color = statusDef.color;
+  // Use inline hex color when available for accurate color rendering
+  if (color?.startsWith('#')) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-transparent text-white shadow-sm"
+        style={{ backgroundColor: color }}
+      >
+        {statusDef.label || status}
+      </Badge>
+    );
+  }
+
+  const variant = color
+    ? colorToVariant(color)
     : statusNameToVariant(status);
 
   return <Badge variant={variant}>{statusDef.label || status}</Badge>;

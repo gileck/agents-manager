@@ -104,5 +104,9 @@ ALTER TABLE chat_messages ADD COLUMN cache_read_input_tokens INTEGER;
 ALTER TABLE chat_messages ADD COLUMN cache_creation_input_tokens INTEGER;
 ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
     },
+    {
+      name: '105_reseed_pipelines_status_colors',
+      sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
+    },
   ];
 }

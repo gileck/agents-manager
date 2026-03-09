@@ -44,6 +44,7 @@ interface TaskListRowProps {
   onDelete: () => void;
   onDuplicate: () => void;
   onStatusChange: (taskId: string, toStatus: string) => Promise<void>;
+  hideStatus?: boolean;
 }
 
 export function TaskListRow({
@@ -57,6 +58,7 @@ export function TaskListRow({
   onDelete,
   onDuplicate,
   onStatusChange,
+  hideStatus = false,
 }: TaskListRowProps) {
   const priorityBorderClass = PRIORITY_BORDER_CLASS[task.priority] ?? 'border-l-border';
   // Active agent overrides the priority left-border
@@ -84,11 +86,13 @@ export function TaskListRow({
       </div>
 
       {/* Status dot */}
-      <span
-        className="h-2 w-2 rounded-full shrink-0 bg-muted-foreground/40"
-        style={statusDotColor ? { backgroundColor: statusDotColor } : undefined}
-        title={task.status}
-      />
+      {!hideStatus && (
+        <span
+          className="h-2 w-2 rounded-full shrink-0 bg-muted-foreground/40"
+          style={statusDotColor ? { backgroundColor: statusDotColor } : undefined}
+          title={task.status}
+        />
+      )}
 
       {/* Title */}
       <span className="flex-1 min-w-0 font-medium text-sm truncate">
