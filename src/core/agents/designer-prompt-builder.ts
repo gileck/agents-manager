@@ -127,7 +127,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
         '',
         '## Instructions',
         '1. Read the task description and the existing plan carefully.',
-        '2. Explore the codebase thoroughly — file structure, patterns, existing implementations.',
+        '2. Explore the codebase thoroughly — file structure, patterns, existing implementations. If you delegate to an Explore subagent, wait for its result before issuing any further search or read calls — do not search in parallel with a running subagent.',
         '3. Produce a structured technical design document covering:',
         '   - **Architecture Overview** — high-level approach',
         '   - **Files to Create/Modify** — specific file paths with descriptions',
