@@ -132,15 +132,25 @@ export async function createTaskMcpServer(
     {
       name: 'get_task',
       description:
-        'Get full details for a task by ID, including its title, description, status, ' +
-        'plan, technical design, tags, and other metadata.',
+        'Get details for a task by ID. By default returns all fields (title, description, status, ' +
+        'plan, technical design, tags, and other metadata). Use the fields parameter to request ' +
+        'only specific fields (e.g. ["plan", "status", "title"]) to reduce token usage.',
       inputSchema: {
         taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
+        fields: z.array(z.string()).optional().describe('Specific fields to include in the response. When omitted, all fields are returned.'),
       },
-      handler: async (args: { taskId: string }): Promise<CallToolResult> => {
+      handler: async (args: { taskId: string; fields?: string[] }): Promise<CallToolResult> => {
         try {
           const taskId = await resolveTaskId(api, args.taskId);
           const task = await api.tasks.get(taskId);
+          if (args.fields) {
+            const t = task as unknown as Record<string, unknown>;
+            const result: Record<string, unknown> = {};
+            for (const key of args.fields) {
+              if (key in t) result[key] = t[key];
+            }
+            return ok(result);
+          }
           return ok(task);
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
