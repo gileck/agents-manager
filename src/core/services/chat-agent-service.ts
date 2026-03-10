@@ -15,6 +15,7 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionScope } from './chat-prompt-parts';
 import { buildAgentChatSystemPrompt, buildDesktopSystemPrompt } from './chat-prompt-parts';
+import { createTaskMcpServer } from '../mcp/task-mcp-server';
 
 import * as fs from 'fs';
 import * as os from 'os';
@@ -823,6 +824,21 @@ export class ChatAgentService {
       // When resuming a pipeline agent session, use its sessionId for the execute call
       const executeSessionId = extra?.pipelineSessionId ?? sessionId;
 
+      // Build task MCP server for chat sessions (not pipeline agent runs)
+      let mcpServers: Record<string, unknown> | undefined;
+      if (!extra?.pipelineSessionId) {
+        try {
+          const session = await this.chatSessionStore.getSession(sessionId);
+          if (session?.projectId) {
+            const daemonUrl = `http://127.0.0.1:${process.env.AM_DAEMON_PORT ?? 3847}`;
+            const mcpServer = await createTaskMcpServer(daemonUrl, { projectId: session.projectId });
+            mcpServers = { taskManager: mcpServer };
+          }
+        } catch (mcpErr) {
+          getAppLogger().warn('ChatAgentService', 'Failed to create task MCP server, continuing without it', { error: mcpErr instanceof Error ? mcpErr.message : String(mcpErr) });
+        }
+      }
+
       const result = await lib.execute(executeSessionId, {
         prompt: `${systemPrompt}\n\n${prompt}`,
         cwd: projectPath,
@@ -835,6 +851,7 @@ export class ChatAgentService {
         ...(extra?.resumeSession ? { resumeSession: true } : {}),
         ...(preToolUse ? { hooks: { preToolUse } } : {}),
         ...(libImages ? { images: libImages } : {}),
+        ...(mcpServers ? { mcpServers } : {}),
       }, callbacks);
 
       if (result.costInputTokens != null || result.costOutputTokens != null) {
