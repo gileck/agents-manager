@@ -91,7 +91,15 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         '- If feedback is ambiguous, interpret it in the most reasonable way and note your interpretation.',
         '- Keep parts of the plan that were not criticized — only revise what the feedback targets.',
         '- Re-assess and include complexity and effort assessments right after the plan title (see Complexity Assessment below).',
-        '- In the `planSummary` field, describe what you changed and how you addressed the admin\'s feedback.',
+        '',
+        '## Output Requirements',
+        '- The `plan` field must be a CLEAN, standalone plan — as if written from scratch.',
+        '  - Do NOT include "(Revised)" in the title.',
+        '  - Do NOT include "Changes from Initial Plan", "Addressing Feedback", or any revision commentary.',
+        '  - Do NOT include sections explaining what changed or how feedback was addressed.',
+        '  - The plan should read as a fresh, authoritative document — not as a diff or changelog.',
+        '- The `planSummary` field is where you describe what changed and how you addressed the feedback.',
+        '  - This is the ONLY place revision notes belong.',
       );
       prompt = prLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {

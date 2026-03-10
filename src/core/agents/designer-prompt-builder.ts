@@ -72,8 +72,15 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
         '- Address every piece of feedback — do not skip or partially address any comment.',
         '- If feedback conflicts with a technical constraint, explain the constraint and propose an alternative that satisfies the intent.',
         '- Keep parts of the design that were not criticized — only revise what the feedback targets.',
-        '- Produce an updated design document.',
-        '- In the `designSummary` field, describe what you changed and how you addressed the admin\'s feedback.',
+        '',
+        '## Output Requirements',
+        '- The `technicalDesign` field must be a CLEAN, standalone design document — as if written from scratch.',
+        '  - Do NOT include "(Revised)" in the title.',
+        '  - Do NOT include "Changes from Initial Design", "Addressing Feedback", or any revision commentary.',
+        '  - Do NOT include sections explaining what changed or how feedback was addressed.',
+        '  - The design should read as a fresh, authoritative document — not as a diff or changelog.',
+        '- The `designSummary` field is where you describe what changed and how you addressed the feedback.',
+        '  - This is the ONLY place revision notes belong.',
       );
       prompt = tdrLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
