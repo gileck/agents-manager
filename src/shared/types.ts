@@ -708,6 +708,8 @@ export interface AgentChatMessageRunInfo {
   type: 'agent_run_info';
   agentRunId: string;
   timestamp: number;
+  agentType?: string;
+  taskId?: string;
 }
 
 export type AgentChatMessage =
