@@ -101,7 +101,7 @@ function killPortProcess() {
   try {
     const pids = execSync(`lsof -ti:${PORT}`, { encoding: 'utf8' }).trim();
     if (pids) {
-      execSync(`kill ${pids}`, { stdio: 'pipe' });
+      execSync(`kill -9 ${pids}`, { stdio: 'pipe' });
       log(`Killed stale process(es) on port ${PORT}`);
     }
   } catch { /* no process on port */ }
@@ -157,13 +157,23 @@ function startWebServer() {
 function stopDaemon(): Promise<void> {
   return new Promise((resolve) => {
     if (!daemon) return resolve();
-    daemon.on('exit', () => resolve());
+    let exited = false;
+    daemon.on('exit', () => { exited = true; resolve(); });
     daemon.kill('SIGTERM');
+    // SIGKILL fallback — daemon.killed is true right after .kill(), so track exit state instead
     setTimeout(() => {
-      if (daemon && !daemon.killed) {
+      if (!exited && daemon) {
+        warn('Daemon did not exit after SIGTERM — sending SIGKILL');
         daemon.kill('SIGKILL');
       }
     }, 5000);
+    // Safety: resolve even if exit event never fires (e.g. zombie process)
+    setTimeout(() => {
+      if (!exited) {
+        warn('Daemon exit event never fired — force-continuing restart');
+        resolve();
+      }
+    }, 7000);
   });
 }
 
