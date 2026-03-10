@@ -5,6 +5,7 @@ import { MarkdownContent } from '../chat/MarkdownContent';
 import { useChatActions } from '../chat/ChatActionsContext';
 import type { ToolRendererProps } from './types';
 import type { Task, Transition } from '../../../shared/types';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 
 const AGENT_BUTTONS: { label: string; agentType: string; mode: 'new' | 'revision'; variant: 'default' | 'secondary' | 'outline' }[] = [
   { label: 'Plan', agentType: 'planner', mode: 'new', variant: 'default' },
@@ -23,20 +24,27 @@ function parseTask(result: string): Task | null {
   }
 }
 
-interface PlanReviewPanelProps {
-  plan: string;
-  taskId: string;
+interface PlanDesignPanelProps {
+  task: Task;
   isStreaming: boolean;
   sendMessage: (text: string) => void;
 }
 
-function PlanReviewPanel({ plan, taskId, isStreaming, sendMessage }: PlanReviewPanelProps) {
+function PlanDesignPanel({ task, isStreaming, sendMessage }: PlanDesignPanelProps) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [planExpanded, setPlanExpanded] = useState(false);
+  const [contentExpanded, setContentExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('plan');
+
+  const hasPlan = !!task.plan;
+  const hasDesign = !!task.technicalDesign;
+  const showTabs = hasPlan && hasDesign;
+
+  const subtaskCount = task.subtasks?.length ?? 0;
+  const phaseCount = task.phases?.length ?? 0;
 
   function handleApprove() {
-    sendMessage(`I approve the plan for task ${taskId}, proceed to implementation`);
+    sendMessage(`I approve the plan for task ${task.id}, proceed to implementation`);
   }
 
   function handleSubmitFeedback() {
@@ -49,19 +57,51 @@ function PlanReviewPanel({ plan, taskId, isStreaming, sendMessage }: PlanReviewP
   return (
     <div className="border-t border-border/60 pt-2 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-foreground">Plan</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-foreground">
+            {hasPlan && hasDesign ? 'Plan & Design' : hasPlan ? 'Plan' : 'Technical Design'}
+          </span>
+          {(subtaskCount > 0 || phaseCount > 0) && (
+            <span className="text-[10px] text-muted-foreground">
+              {subtaskCount > 0 && `${subtaskCount} subtask${subtaskCount !== 1 ? 's' : ''}`}
+              {subtaskCount > 0 && phaseCount > 0 && ' · '}
+              {phaseCount > 0 && `${phaseCount} phase${phaseCount !== 1 ? 's' : ''}`}
+            </span>
+          )}
+        </div>
         <button
           className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-          onClick={() => setPlanExpanded((v) => !v)}
+          onClick={() => setContentExpanded((v) => !v)}
         >
-          {planExpanded ? 'Collapse' : 'Expand'}
+          {contentExpanded ? 'Collapse' : 'Expand'}
         </button>
       </div>
-      {planExpanded && (
-        <div className="text-xs prose-sm max-h-64 overflow-y-auto border border-border/40 rounded p-2 bg-muted/30">
-          <MarkdownContent content={plan} />
-        </div>
+
+      {contentExpanded && (
+        showTabs ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="h-7">
+              <TabsTrigger value="plan" className="text-xs h-6 px-2">Plan</TabsTrigger>
+              <TabsTrigger value="design" className="text-xs h-6 px-2">Technical Design</TabsTrigger>
+            </TabsList>
+            <TabsContent value="plan">
+              <div className="text-xs prose-sm max-h-64 overflow-y-auto border border-border/40 rounded p-2 bg-muted/30">
+                <MarkdownContent content={task.plan!} />
+              </div>
+            </TabsContent>
+            <TabsContent value="design">
+              <div className="text-xs prose-sm max-h-64 overflow-y-auto border border-border/40 rounded p-2 bg-muted/30">
+                <MarkdownContent content={task.technicalDesign!} />
+              </div>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <div className="text-xs prose-sm max-h-64 overflow-y-auto border border-border/40 rounded p-2 bg-muted/30">
+            <MarkdownContent content={(task.plan ?? task.technicalDesign)!} />
+          </div>
+        )
       )}
+
       <div className="flex flex-wrap gap-1.5">
         <Button
           size="sm"
@@ -198,11 +238,10 @@ function TaskDetailBody({ task }: TaskDetailBodyProps) {
         <p className="text-xs text-destructive">{actionError}</p>
       )}
 
-      {/* Inline plan review panel when a plan exists */}
-      {task.plan && (
-        <PlanReviewPanel
-          plan={task.plan}
-          taskId={task.id}
+      {/* Inline plan/design panel when plan or technical design exists */}
+      {(task.plan || task.technicalDesign) && (
+        <PlanDesignPanel
+          task={task}
           isStreaming={isStreaming}
           sendMessage={sendMessage}
         />

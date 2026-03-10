@@ -5,6 +5,7 @@ import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolRes
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
+import { AgentRunInfoCard } from './AgentRunInfoCard';
 
 interface ChatMessageListProps {
   messages: AgentChatMessage[];
@@ -132,12 +133,20 @@ export function ChatMessageList({ messages, isRunning, onEditMessage }: ChatMess
       } else if (msg.type === 'agent_run_info') {
         nodes.push(
           <div key={i} className="py-1.5">
-            <button
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/70 rounded-full px-2 py-1 hover:bg-accent/60"
-              onClick={() => navigate(`/agents/${msg.agentRunId}`)}
-            >
-              Agent Run &middot; View details &rarr;
-            </button>
+            {msg.agentRunId ? (
+              <AgentRunInfoCard
+                agentRunId={msg.agentRunId}
+                taskId={msg.taskId}
+                agentType={msg.agentType}
+              />
+            ) : (
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/70 rounded-full px-2 py-1 hover:bg-accent/60"
+                onClick={() => navigate(`/agents/${msg.agentRunId}`)}
+              >
+                Agent Run &middot; View details &rarr;
+              </button>
+            )}
           </div>
         );
       }

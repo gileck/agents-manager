@@ -477,7 +477,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId, permissionMode: permissionMode ?? null }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -711,7 +711,7 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
-    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null },
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -751,7 +751,7 @@ export class ChatAgentService {
     try {
       // Emit agent run info link so UI can show it during streaming
       if (agentRunId) {
-        emitMessage({ type: 'agent_run_info', agentRunId, timestamp: Date.now() });
+        emitMessage({ type: 'agent_run_info', agentRunId, timestamp: Date.now(), agentType: extra?.agentType, taskId: extra?.taskId });
       }
 
       const lib = this.agentLibRegistry.getLib(agentLibName);
