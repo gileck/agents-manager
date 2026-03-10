@@ -53,6 +53,8 @@ interface RunState {
   accumulatedOutputTokens: number;
   accumulatedCacheReadInputTokens: number;
   accumulatedCacheCreationInputTokens: number;
+  /** Input tokens from the most recent assistant message (overwritten each time, not accumulated). */
+  lastInputTokens: number | undefined;
   seenMessageIds: Set<string>;
   messageCount: number;
   timeout: number;
@@ -116,6 +118,7 @@ export class ClaudeCodeLib implements IAgentLib {
       accumulatedOutputTokens: 0,
       accumulatedCacheReadInputTokens: 0,
       accumulatedCacheCreationInputTokens: 0,
+      lastInputTokens: undefined,
       seenMessageIds: new Set(),
       messageCount: 0,
       timeout: options.timeoutMs,
@@ -132,6 +135,7 @@ export class ClaudeCodeLib implements IAgentLib {
     let cacheReadInputTokens: number | undefined;
     let cacheCreationInputTokens: number | undefined;
     let totalCostUsd: number | undefined;
+    let lastContextInputTokens: number | undefined;
     let structuredOutput: Record<string, unknown> | undefined;
     let isError = false;
     let errorMessage: string | undefined;
@@ -272,6 +276,9 @@ export class ClaudeCodeLib implements IAgentLib {
               state.accumulatedCacheReadInputTokens += assistantMsg.message.usage.cache_read_input_tokens ?? 0;
               state.accumulatedCacheCreationInputTokens += assistantMsg.message.usage.cache_creation_input_tokens ?? 0;
             }
+            // Always overwrite (not accumulate): this gives us the input tokens
+            // from the most recent API call, which equals the current context window usage.
+            state.lastInputTokens = assistantMsg.message.usage.input_tokens;
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
           }
           for (const block of assistantMsg.message.content) {
@@ -303,13 +310,14 @@ export class ClaudeCodeLib implements IAgentLib {
           // Prefer the result message's authoritative cumulative totals.
           // Fall back to accumulated counts only when the result has no usage data.
           costInputTokens = resultMsg.usage?.input_tokens
-            ?? (state.accumulatedInputTokens > 0 ? state.accumulatedInputTokens : undefined);
+            ?? (state.accumulatedInputTokens >= 0 ? state.accumulatedInputTokens : undefined);
           costOutputTokens = resultMsg.usage?.output_tokens
-            ?? (state.accumulatedOutputTokens > 0 ? state.accumulatedOutputTokens : undefined);
+            ?? (state.accumulatedOutputTokens >= 0 ? state.accumulatedOutputTokens : undefined);
           cacheReadInputTokens = resultMsg.usage?.cache_read_input_tokens
-            ?? (state.accumulatedCacheReadInputTokens > 0 ? state.accumulatedCacheReadInputTokens : undefined);
+            ?? (state.accumulatedCacheReadInputTokens >= 0 ? state.accumulatedCacheReadInputTokens : undefined);
           cacheCreationInputTokens = resultMsg.usage?.cache_creation_input_tokens
-            ?? (state.accumulatedCacheCreationInputTokens > 0 ? state.accumulatedCacheCreationInputTokens : undefined);
+            ?? (state.accumulatedCacheCreationInputTokens >= 0 ? state.accumulatedCacheCreationInputTokens : undefined);
+          lastContextInputTokens = state.lastInputTokens;
           if (costInputTokens != null || costOutputTokens != null) {
             onMessage?.({ type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, timestamp: Date.now() } as AgentChatMessage);
           }
@@ -425,6 +433,7 @@ export class ClaudeCodeLib implements IAgentLib {
       cacheReadInputTokens,
       cacheCreationInputTokens,
       totalCostUsd,
+      lastContextInputTokens,
       model: options.model ?? this.getDefaultModel(),
       structuredOutput,
       killReason,

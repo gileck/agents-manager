@@ -112,5 +112,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '106_add_sidebar_hidden_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN sidebar_hidden INTEGER NOT NULL DEFAULT 0`,
     },
+    {
+      name: '107_add_last_context_input_tokens_to_chat_messages',
+      sql: `ALTER TABLE chat_messages ADD COLUMN last_context_input_tokens INTEGER DEFAULT NULL`,
+    },
   ];
 }

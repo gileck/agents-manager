@@ -1025,6 +1025,8 @@ export interface ChatMessage {
   cacheReadInputTokens: number | null;
   cacheCreationInputTokens: number | null;
   totalCostUsd: number | null;
+  /** Input tokens from the last API call in this turn — represents actual context window usage. */
+  lastContextInputTokens: number | null;
 }
 
 export interface ChatMessageCreateInput {
@@ -1036,6 +1038,7 @@ export interface ChatMessageCreateInput {
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
   totalCostUsd?: number;
+  lastContextInputTokens?: number;
 }
 
 // Chat scope type

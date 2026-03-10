@@ -5,7 +5,7 @@ import { getEffectiveCost } from '../../../shared/cost-utils';
 interface ContextSidebarProps {
   messages: AgentChatMessage[];
   run?: AgentRun | null;
-  tokenUsage?: { inputTokens: number; outputTokens: number };
+  tokenUsage?: { inputTokens: number; outputTokens: number; lastContextInputTokens?: number | null };
   agentLib?: string;
   model?: string;
   modelLabel?: string;
@@ -45,7 +45,10 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
     outputTokens: totalOutput,
     model: run?.model ?? undefined,
   });
-  const contextUsagePercent = Math.min((totalInput / CONTEXT_WINDOW) * 100, 100);
+  // Use the last turn's context size (actual input to the last API call) when available,
+  // since that reflects true context window utilization. Fall back to cumulative sum otherwise.
+  const contextWindowTokens = tokenUsage?.lastContextInputTokens ?? totalInput;
+  const contextUsagePercent = Math.min((contextWindowTokens / CONTEXT_WINDOW) * 100, 100);
 
   // Cache token info from run
   const cacheRead = run?.cacheReadInputTokens ?? 0;
@@ -130,7 +133,7 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
             />
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            {formatNumber(totalInput)} / {formatNumber(CONTEXT_WINDOW)}
+            {formatNumber(contextWindowTokens)} / {formatNumber(CONTEXT_WINDOW)}
           </div>
         </div>
       </div>
