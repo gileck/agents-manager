@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { PipelineBadge } from '../pipeline/PipelineBadge';
+import { TaskBaseCard } from './TaskBaseCard';
 import type { Task, Transition } from '../../../shared/types';
-
-const PRIORITY_LABELS: Record<number, string> = {
-  0: 'P0',
-  1: 'P1',
-  2: 'P2',
-  3: 'P3',
-};
 
 interface TaskActionCardProps {
   task: Task;
@@ -60,27 +52,8 @@ export function TaskActionCard({ task, rawOutput }: TaskActionCardProps) {
     }
   }
 
-  const priorityLabel = PRIORITY_LABELS[task.priority] ?? `P${task.priority}`;
-
   return (
-    <div className="border border-border rounded p-3 my-1 bg-card space-y-2">
-      {/* Header row: status badge, priority, type */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <PipelineBadge status={task.status} />
-        <Badge variant="outline">{priorityLabel}</Badge>
-        <Badge variant="secondary">{task.type}</Badge>
-      </div>
-
-      {/* Title */}
-      <div className="font-medium text-sm leading-snug">{task.title}</div>
-
-      {/* Description excerpt */}
-      {task.description && (
-        <p className="text-xs text-muted-foreground line-clamp-2">
-          {task.description}
-        </p>
-      )}
-
+    <TaskBaseCard task={task}>
       {/* Transition buttons */}
       {transitionsError ? (
         <p className="text-xs text-muted-foreground">{transitionsError}</p>
@@ -134,6 +107,6 @@ export function TaskActionCard({ task, rawOutput }: TaskActionCardProps) {
           </pre>
         )}
       </div>
-    </div>
+    </TaskBaseCard>
   );
 }
