@@ -175,9 +175,12 @@ function TaskDetailBody({ task }: TaskDetailBodyProps) {
         </div>
       )}
 
-      {/* Agent action buttons */}
+      {/* Agent action buttons — filtered by task state */}
       <div className="flex flex-wrap gap-1.5">
-        {AGENT_BUTTONS.map(({ label, agentType, mode, variant }) => (
+        {AGENT_BUTTONS.filter(({ agentType }) => {
+          if (agentType === 'implementor') return task.plan != null;
+          return true;
+        }).map(({ label, agentType, mode, variant }) => (
           <Button
             key={agentType}
             size="sm"

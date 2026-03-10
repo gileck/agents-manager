@@ -1,6 +1,7 @@
 import React from 'react';
 import { Badge } from '../ui/badge';
 import { PipelineBadge } from '../pipeline/PipelineBadge';
+import { useChatActions } from '../chat/ChatActionsContext';
 import type { ToolRendererProps } from './types';
 
 interface CompactTask {
@@ -29,6 +30,8 @@ function parseTaskList(result: string): CompactTask[] | null {
 }
 
 export function TaskListCard({ toolResult }: ToolRendererProps) {
+  const { sendMessage, isStreaming } = useChatActions();
+
   if (!toolResult) {
     return (
       <div className="border border-border rounded p-3 my-1 bg-card text-xs text-muted-foreground">
@@ -68,7 +71,11 @@ export function TaskListCard({ toolResult }: ToolRendererProps) {
             ? (PRIORITY_LABELS[task.priority] ?? `P${task.priority}`)
             : null;
           return (
-            <li key={task.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 transition-colors">
+            <li
+              key={task.id}
+              className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 transition-colors cursor-pointer"
+              onClick={() => !isStreaming && sendMessage(`Get details for task ${task.id}`)}
+            >
               <PipelineBadge status={task.status} />
               <span className="flex-1 min-w-0 text-xs text-foreground truncate">
                 {task.title}

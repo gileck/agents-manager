@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -48,23 +48,14 @@ function parseAgentRuns(result: string): CompactAgentRun[] | null {
 interface AgentRunRowProps {
   run: CompactAgentRun;
   isStreaming: boolean;
+  sendMessage: (text: string) => void;
 }
 
-function AgentRunRow({ run, isStreaming }: AgentRunRowProps) {
+function AgentRunRow({ run, isStreaming, sendMessage }: AgentRunRowProps) {
   const navigate = useNavigate();
-  const [stopping, setStopping] = useState(false);
-  const [stopError, setStopError] = useState<string | null>(null);
 
-  async function handleStop() {
-    setStopping(true);
-    setStopError(null);
-    try {
-      await window.api.agents.stop(run.id);
-    } catch (err) {
-      setStopError(err instanceof Error ? err.message : 'Failed to stop agent');
-    } finally {
-      setStopping(false);
-    }
+  function handleStop() {
+    sendMessage(`Stop the agent run ${run.id}`);
   }
 
   const statusVariant = STATUS_VARIANTS[run.status] ?? 'outline';
@@ -96,22 +87,19 @@ function AgentRunRow({ run, isStreaming }: AgentRunRowProps) {
           <Button
             size="sm"
             variant="destructive"
-            disabled={isStreaming || stopping}
+            disabled={isStreaming}
             onClick={handleStop}
           >
-            {stopping ? 'Stopping…' : 'Stop Agent'}
+            Stop Agent
           </Button>
         )}
       </div>
-      {stopError && (
-        <p className="text-xs text-destructive">{stopError}</p>
-      )}
     </li>
   );
 }
 
 export function AgentRunningCard({ toolResult }: ToolRendererProps) {
-  const { isStreaming } = useChatActions();
+  const { isStreaming, sendMessage } = useChatActions();
 
   if (!toolResult) {
     return (
@@ -156,7 +144,7 @@ export function AgentRunningCard({ toolResult }: ToolRendererProps) {
       </div>
       <ul className="divide-y divide-border/40 max-h-80 overflow-y-auto">
         {runs.map((run) => (
-          <AgentRunRow key={run.id} run={run} isStreaming={isStreaming} />
+          <AgentRunRow key={run.id} run={run} isStreaming={isStreaming} sendMessage={sendMessage} />
         ))}
       </ul>
     </div>
