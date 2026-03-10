@@ -30,6 +30,7 @@ export interface AgentLibRunOptions {
   resumeSession?: boolean;
   taskId?: string;
   agentType?: string;
+  mcpServers?: Record<string, unknown>;
 }
 
 export interface AgentLibCallbacks {

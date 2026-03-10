@@ -246,6 +246,7 @@ export class ClaudeCodeLib implements IAgentLib {
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           hooks: { preToolUse: mergedPreToolUse },
           ...sessionOptions,
+          ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
         },
       }) as AsyncIterable<SdkStreamMessage>) {
         // Skip replayed messages during session resume to avoid duplicate callbacks/tokens
