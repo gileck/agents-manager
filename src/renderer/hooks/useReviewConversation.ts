@@ -57,6 +57,27 @@ export function useReviewConversation(
     return sessionPromiseRef.current;
   }, [session, taskId, agentRole]);
 
+  // Reconnect on mount/session change: check for in-flight agent and seed streaming state.
+  // Also refetch entries to pick up any responses saved while the user was away.
+  useEffect(() => {
+    if (!session) return;
+    const sessionId = session.id;
+
+    // Seed streaming state from live turn messages (same pattern as useChat)
+    window.api.chat.chatLiveMessages(sessionId)
+      .then((liveMessages) => {
+        if (liveMessages.length > 0) {
+          setStreamingMessages(liveMessages);
+          streamingRef.current = true;
+          setIsStreaming(true);
+        }
+      })
+      .catch(() => { /* session not running, ignore */ });
+
+    // Refetch entries in case agent completed while we were unmounted
+    onEntriesChangedRef.current();
+  }, [session]);
+
   // Subscribe to WS events when session exists
   useEffect(() => {
     if (!session) return;
