@@ -45,6 +45,7 @@ function rulesSection(): string {
     '- You CAN use Bash for read-only commands like `ls`, `cat`, `git log`, `git diff`, etc.',
     '- When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.',
     '- You MUST NOT use `agent start` directly. To trigger an agent, use `tasks start <taskId>` or `tasks transition <taskId> <status>` to move the task through the pipeline.',
+    '- When running `tasks get`, `tasks create`, `tasks update`, or `tasks transition`, always append `--json` so the output renders as a TaskCard in the UI.',
   ].join('\n');
 }
 
@@ -56,15 +57,15 @@ function cliReferenceSection(taskId?: string): string {
     '',
     '### Task Management',
     `- tasks list                          — List all tasks (--status, --assignee, --priority)`,
-    `- tasks get ${t}                  — Get full task details`,
-    `- tasks create --title "..." [opts]   — Create a task (--description, --priority, --assignee, --tags, --pipeline)`,
-    `- tasks update ${t} [opts]        — Update task fields (--title, --description, --priority, --assignee, --tags)`,
+    `- tasks get ${t} --json           — Get full task details (--json required for TaskCard rendering)`,
+    `- tasks create --title "..." [opts] --json — Create a task (--description, --priority, --assignee, --tags, --pipeline)`,
+    `- tasks update ${t} [opts] --json — Update task fields (--title, --description, --priority, --assignee, --tags)`,
     `- tasks delete ${t}               — Delete a task`,
     `- tasks reset ${t}                — Reset task to initial state`,
     '',
     '### Task Transitions',
     `- tasks transitions ${t}          — Show valid status transitions`,
-    `- tasks transition ${t} <status>  — Move task to a new status`,
+    `- tasks transition ${t} <status> --json — Move task to a new status (--json required for TaskCard rendering)`,
     `- tasks start ${t}                — Start a task (move to first active status)`,
     '',
     '### Subtasks',
