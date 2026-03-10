@@ -908,46 +908,10 @@ export class ChatAgentService {
           try { emitEvent({ type: 'text', text: '\n[Warning: Failed to save this response. It may not appear after refresh.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'persist-warning delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
         }
 
-        // Post-process agent-chat responses: if the agent returned JSON with
-        // a revised plan/design, persist it to the task. Plain-text Q&A responses
-        // will fail JSON.parse and are silently ignored.
-        if (extra?.isAgentChat) {
-          const fullText = turnMessages
-            .filter(m => m.type === 'assistant_text')
-            .map(m => m.text)
-            .join('');
-
-          let parsed: Record<string, unknown> | null = null;
-          try {
-            parsed = JSON.parse(fullText);
-          } catch {
-            // Plain-text Q&A response — no plan update needed
-          }
-
-          if (parsed) {
-            try {
-              const session = await this.chatSessionStore.getSession(sessionId);
-              if (!session?.agentRole) {
-                getAppLogger().warn('ChatAgentService', `agent-chat: session ${sessionId} has no agentRole; cannot update task`);
-              } else {
-                const field = session.agentRole === 'designer' ? 'technicalDesign' : 'plan';
-                const revisedContent = parsed.revisedDesign ?? parsed.revisedPlan;
-                if (!revisedContent || typeof revisedContent !== 'string') {
-                  getAppLogger().warn('ChatAgentService', `agent-chat: agent response missing or non-string revisedDesign/revisedPlan for session ${sessionId}`);
-                  try { emitEvent({ type: 'text', text: '\n[Warning: Agent response did not contain a valid revised plan/design. No update was made.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
-                } else if (session.scopeType !== 'task') {
-                  getAppLogger().warn('ChatAgentService', `agent-chat: session ${sessionId} scopeType is '${session.scopeType}', not 'task'; skipping update`);
-                } else {
-                  await this.taskStore.updateTask(session.scopeId, { [field]: revisedContent } as import('../../shared/types').TaskUpdateInput);
-                  getAppLogger().info('ChatAgentService', `Updated task ${session.scopeId} ${field} via agent-chat`);
-                }
-              }
-            } catch (dbErr) {
-              getAppLogger().logError('ChatAgentService', `Failed to persist revised content for session ${sessionId}`, dbErr);
-              try { emitEvent({ type: 'text', text: '\n[Warning: The revised content was generated but could not be saved to the task.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
-            }
-          }
-        }
+        // Agent-chat responses are purely conversational — the agent does not
+        // modify the plan/design directly. Plan/design changes are handled by
+        // the "Request Changes" flow which transitions the task back to
+        // planning/designing and re-runs the full pipeline.
       }
 
       // Update AgentRun with accumulated costs and messages

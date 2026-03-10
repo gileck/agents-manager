@@ -45,7 +45,7 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
   const navigate = useNavigate();
   const cfg = CONFIG[reviewType];
   const [transitioning, setTransitioning] = useState(false);
-  const [chatOpen, setChatOpen] = useLocalStorage('planReview.chatOpen', false);
+  const [chatOpen, setChatOpen] = useLocalStorage('planReview.chatOpen', true);
 
   const { task, refetch } = useTask(id!);
 
@@ -94,26 +94,25 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
   const handleFeedbackAction = useCallback(async (toStatus: string, comment: string) => {
     if (!id) return;
     try {
-      if (comment.trim()) {
-        await window.api.tasks.addFeedback(id, { entryType: cfg.entryType, content: comment.trim() });
-        await refetchContext();
-      }
+      const feedbackContent = comment.trim() || `User requested changes to the ${cfg.label.toLowerCase()}.`;
+      await window.api.tasks.addFeedback(id, { entryType: cfg.entryType, content: feedbackContent });
+      await refetchContext();
     } catch (err) {
       reportError(err instanceof Error ? err : new Error(String(err)), 'Save review feedback');
       return;
     }
     await handleTransition(toStatus);
-  }, [id, cfg.entryType, refetchContext, handleTransition]);
+  }, [id, cfg.entryType, cfg.label, refetchContext, handleTransition]);
 
   const chatToggleButton = (
     <Button
-      variant={chatOpen ? 'secondary' : 'ghost'}
+      variant={chatOpen ? 'secondary' : 'outline'}
       size="sm"
       onClick={() => setChatOpen(!chatOpen)}
       title="Toggle chat panel"
     >
       <MessageSquare size={16} />
-      Chat
+      {chatOpen ? 'Chat' : 'Chat & Review'}
     </Button>
   );
 
@@ -122,11 +121,6 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
       {approveTransition && (
         <Button size="sm" disabled={transitioning} onClick={() => handleFeedbackAction(approveTransition.to, '')}>
           {transitioning ? 'Submitting...' : approveTransition.label || 'Approve & Implement'}
-        </Button>
-      )}
-      {reviseTransition && (
-        <Button variant="outline" size="sm" disabled={transitioning} onClick={() => handleFeedbackAction(reviseTransition.to, '')}>
-          {transitioning ? 'Submitting...' : reviseTransition.label || 'Request Changes'}
         </Button>
       )}
       {chatToggleButton}
@@ -156,6 +150,7 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
         {/* Right panel — conversation */}
         <div style={{
           width: chatOpen ? '40%' : '0',
+          height: '100%',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -173,6 +168,9 @@ export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {
             isStreaming={isStreaming}
             onSend={sendMessage}
             onStop={stopChat}
+            onRequestChanges={reviseTransition ? (comment) => handleFeedbackAction(reviseTransition.to, comment ?? '') : undefined}
+            requestingChanges={transitioning}
+            hasConversation={entries.length > 0}
             placeholder={`Ask about the ${cfg.label.toLowerCase()} or request changes...`}
           />
         </div>

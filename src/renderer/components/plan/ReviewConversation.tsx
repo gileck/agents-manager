@@ -5,6 +5,7 @@ import { ChatMessageList } from '../chat/ChatMessageList';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
+import { reportError } from '../../lib/error-handler';
 
 interface ReviewConversationProps {
   entries: TaskContextEntry[];
@@ -13,6 +14,9 @@ interface ReviewConversationProps {
   isStreaming: boolean;
   onSend: (message: string) => Promise<void> | void;
   onStop: () => void;
+  onRequestChanges?: (comment?: string) => Promise<void> | void;
+  requestingChanges?: boolean;
+  hasConversation?: boolean;
   placeholder: string;
 }
 
@@ -23,6 +27,9 @@ export function ReviewConversation({
   isStreaming,
   onSend,
   onStop,
+  onRequestChanges,
+  requestingChanges,
+  hasConversation,
   placeholder,
 }: ReviewConversationProps) {
   const navigate = useNavigate();
@@ -37,9 +44,11 @@ export function ReviewConversation({
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || isStreaming || requestingChanges) return;
     setInput('');
-    onSend(text);
+    Promise.resolve(onSend(text)).catch((err: unknown) => {
+      reportError(err instanceof Error ? err : new Error(String(err)), 'Send review message');
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -136,21 +145,41 @@ export function ReviewConversation({
             placeholder={placeholder}
             rows={2}
             className="mb-2 resize-none"
-            disabled={isStreaming}
+            disabled={isStreaming || requestingChanges}
           />
-          <div className="flex justify-end gap-2">
-            {isStreaming && (
-              <Button variant="outline" size="sm" onClick={onStop}>
-                Stop
+          <div className="flex justify-between">
+            <div>
+              {onRequestChanges && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const text = input.trim();
+                    setInput('');
+                    Promise.resolve(onRequestChanges(text || undefined)).catch((err: unknown) => {
+                      reportError(err instanceof Error ? err : new Error(String(err)), 'Request changes');
+                    });
+                  }}
+                  disabled={(!hasConversation && !input.trim()) || isStreaming || requestingChanges}
+                >
+                  {requestingChanges ? 'Submitting...' : 'Request Changes'}
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {isStreaming && (
+                <Button variant="outline" size="sm" onClick={onStop}>
+                  Stop
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={handleSend}
+                disabled={!input.trim() || isStreaming || requestingChanges}
+              >
+                Send
               </Button>
-            )}
-            <Button
-              size="sm"
-              onClick={handleSend}
-              disabled={!input.trim() || isStreaming}
-            >
-              Send
-            </Button>
+            </div>
           </div>
         </div>
       )}

@@ -735,3 +735,50 @@ Task
 Both run types appear in `getRunsForTask(taskId)` and are visible in the Agent Runs tab.
 
 **UI integration:** An `agent_run_info` message is emitted at the start of each `runAgent()` call when an `agentRunId` is available. The `ChatMessageList` component renders this as a small "Agent Run · View details →" link that navigates to `/agents/:runId`.
+
+### Plan/Design Review Chat
+
+The review chat is a conversational interface on the Plan Review and Design Review pages. It supports two user flows through a single chat panel:
+
+**Q&A Flow (Send button):** User asks questions about the plan/design. The agent responds conversationally — explaining rationale, discussing tradeoffs, suggesting alternatives. No modifications are made to the plan/design.
+
+**Request Changes Flow (Request Changes button):** User describes desired changes in the chat conversation. The agent acknowledges the request, summarizes what will change, and asks clarifying questions if needed. Conversation messages are saved incrementally as context entries during the chat. When the user clicks "Request Changes", any text in the input is saved as a final feedback entry and the task transitions back to `planning`/`designing`. The planner/designer pipeline re-runs with the full conversation as context.
+
+```
+User lands on Plan Review
+├── Reads plan on left panel, chat on right (open by default)
+├── Q&A: types question → Send → agent responds → no state change
+├── Change request: describes changes → agent acknowledges/clarifies
+│   └── Clicks "Request Changes" → optional final comment saved → task → planning
+│       └── Planner re-runs (mode='revision') with feedback context
+│           └── New plan produced → task → plan_review → user reviews again
+└── Satisfied: clicks "Approve & Implement" → task → implementing
+```
+
+**UI layout (PlanReviewPage):**
+- Header: `[Approve & Implement]  [Chat toggle]`
+- Left panel (60%): Plan/design content as markdown
+- Right panel (40%): ReviewConversation with chat history + input area
+- Input area: `[Send]` (right) + `[Request Changes]` (left, enabled when conversation exists or input has text; disabled during streaming)
+
+**Session resume chain:** The chat agent resumes the original planner/designer's Claude session, preserving full context. When the planner re-runs after "Request Changes", it also resumes the same session — so it sees the original plan, the user's Q&A conversation, and the feedback.
+
+```
+Planner (mode='new')        → creates Claude session S1
+Chat agent (planner role)   → resumes S1 (sees planner's full context)
+User chats Q&A              → messages added to S1
+User clicks Request Changes → task transitions to 'planning'
+Planner (mode='revision')   → resumes S1 (sees original plan + chat + feedback)
+```
+
+**Key design decisions:**
+- The chat agent does NOT modify the plan/design directly — it is purely conversational
+- Plan/design changes are only made by the full pipeline agent (planner/designer) which has structured output, proper prompt builders, and full context
+- This avoids reliability issues with LLM-driven inline edits (rewording, reordering, missing details)
+- The same flow applies to both plan review and design review via the `CONFIG` object in PlanReviewPage
+
+**Files:**
+- `src/renderer/pages/PlanReviewPage.tsx` — review page (handles both plan and design)
+- `src/renderer/components/plan/ReviewConversation.tsx` — chat UI with Send + Request Changes
+- `src/renderer/hooks/useReviewConversation.ts` — bridges context entries with agent-chat streaming
+- `src/core/services/chat-prompt-parts.ts` — `buildAgentChatSystemPrompt()` (review chat prompt)
