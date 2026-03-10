@@ -164,7 +164,14 @@ export class ClaudeCodeLib implements IAgentLib {
 
     // Build merged preToolUse hook: caller's hook runs first, then sandbox guard
     const callerPreToolUse = options.hooks?.preToolUse;
+    const TASK_CLI_PATTERN = /npx\s+agents-manager\s+tasks?\s+(create|get|update|transition)\b/;
     const mergedPreToolUse = (toolName: string, toolInput: Record<string, unknown>) => {
+      // Append --json to task CLI commands so BashRenderer can parse the output as structured JSON
+      if (toolName === 'Bash' && typeof toolInput.command === 'string') {
+        if (TASK_CLI_PATTERN.test(toolInput.command) && !toolInput.command.includes('--json')) {
+          toolInput.command = toolInput.command + ' --json';
+        }
+      }
       if (callerPreToolUse) {
         try {
           const callerResult = callerPreToolUse(toolName, toolInput);
