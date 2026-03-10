@@ -42,7 +42,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(403).json({ error: 'Access denied' });
         return;
       }
-      res.sendFile(resolved, (err) => {
+      res.sendFile(resolved, { dotfiles: 'allow' }, (err) => {
         if (err) next(err);
       });
     } catch (err) { next(err); }
