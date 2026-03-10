@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createApiClient } from '../../client/api-client';
+import type { TaskType } from '../../shared/types';
 import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 
 // Use Function constructor to preserve dynamic import() at runtime.
@@ -13,27 +14,39 @@ type CallToolResult = {
 };
 
 function ok(data: unknown): CallToolResult {
-  return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+  return { content: [{ type: 'text', text: JSON.stringify(data) }] };
 }
 
 function fail(message: string): CallToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
+// Module-level cache: the SDK is ESM-only so the dynamic import is expensive.
+// Cache the createSdkMcpServer function after the first load.
+let cachedCreateSdkMcpServer: ((opts: { name: string; version?: string; tools?: unknown[] }) => McpSdkServerConfigWithInstance) | undefined;
+
+async function loadCreateSdkMcpServer(): Promise<(opts: { name: string; version?: string; tools?: unknown[] }) => McpSdkServerConfigWithInstance> {
+  if (!cachedCreateSdkMcpServer) {
+    const sdk = await importESM('@anthropic-ai/claude-agent-sdk');
+    cachedCreateSdkMcpServer = sdk.createSdkMcpServer as (opts: {
+      name: string;
+      version?: string;
+      tools?: unknown[];
+    }) => McpSdkServerConfigWithInstance;
+  }
+  return cachedCreateSdkMcpServer;
+}
+
 /**
  * Creates an in-process MCP server that exposes task management tools to the chat agent.
  * Tools call the daemon API directly via api-client, scoped to the given projectId context.
+ * The SDK module is cached after the first load — subsequent calls return quickly.
  */
 export async function createTaskMcpServer(
   daemonUrl: string,
   context: { projectId: string },
 ): Promise<McpSdkServerConfigWithInstance> {
-  const sdk = await importESM('@anthropic-ai/claude-agent-sdk');
-  const createSdkMcpServer = sdk.createSdkMcpServer as (opts: {
-    name: string;
-    version?: string;
-    tools?: unknown[];
-  }) => McpSdkServerConfigWithInstance;
+  const createSdkMcpServer = await loadCreateSdkMcpServer();
 
   const api = createApiClient(daemonUrl);
 
@@ -82,7 +95,7 @@ export async function createTaskMcpServer(
             title: args.title,
             description: args.description,
             priority: args.priority,
-            type: args.type as import('../../shared/types').TaskType | undefined,
+            type: args.type as TaskType | undefined,
             tags: args.tags,
             featureId: args.featureId,
           });
@@ -141,7 +154,7 @@ export async function createTaskMcpServer(
             projectId: args.projectId ?? context.projectId,
             status: args.status,
             assignee: args.assignee,
-            type: args.type as import('../../shared/types').TaskType | undefined,
+            type: args.type as TaskType | undefined,
             search: args.search,
           });
           return ok(tasks);
@@ -182,13 +195,15 @@ export async function createTaskMcpServer(
       description:
         'List agent runs. When taskId is provided, returns runs for that task. ' +
         'When active is true, returns only currently active runs. ' +
-        'Otherwise returns all recent runs.',
+        'Otherwise returns the most recent runs (up to limit).',
       inputSchema: {
         taskId: z.string().optional().describe('Task ID to filter runs by'),
         active: z.boolean().optional().describe('If true, return only active (in-progress) runs'),
+        limit: z.number().optional().describe('Maximum number of runs to return. Defaults to 20.'),
       },
-      handler: async (args: { taskId?: string; active?: boolean }): Promise<CallToolResult> => {
+      handler: async (args: { taskId?: string; active?: boolean; limit?: number }): Promise<CallToolResult> => {
         try {
+          const limit = args.limit ?? 20;
           let runs: unknown[];
           if (args.taskId) {
             runs = await api.agents.runs(args.taskId);
@@ -197,7 +212,7 @@ export async function createTaskMcpServer(
           } else {
             runs = await api.agents.getAllRuns();
           }
-          return ok(runs);
+          return ok(runs.slice(0, limit));
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
         }
