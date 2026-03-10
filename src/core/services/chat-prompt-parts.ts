@@ -32,7 +32,8 @@ function capabilitiesSection(): string {
   return [
     '## Capabilities',
     '- Read and explore project files (Read, Glob, Grep, LS tools)',
-    '- Run the `npx agents-manager` CLI to manage tasks, features, pipelines, and more (via Bash tool)',
+    '- Use MCP tools for task management: create_task, get_task, list_tasks, transition_task, list_agent_runs',
+    '- Run the `npx agents-manager` CLI via Bash for operations not covered by MCP (subtasks, deps, events, prompts, pipelines, projects)',
     '- Answer questions about code, architecture, and project state',
   ].join('\n');
 }
@@ -41,32 +42,19 @@ function rulesSection(): string {
   return [
     '## Rules',
     '- You MUST NOT modify any files. Do not use Write, Edit, MultiEdit, or NotebookEdit tools.',
-    '- You CAN use Bash to run `npx agents-manager` CLI commands (e.g. `npx agents-manager tasks list`, `npx agents-manager tasks create`, `npx agents-manager tasks update`).',
+    '- For task management operations (create, get, list, transition, agent runs), use MCP tools — they return structured data natively.',
+    '- You CAN use Bash to run `npx agents-manager` CLI for non-MCP operations (subtasks, deps, events, prompts, pipelines, projects).',
     '- You CAN use Bash for read-only commands like `ls`, `cat`, `git log`, `git diff`, etc.',
     '- When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.',
-    '- You MUST NOT use `agent start` directly. To trigger an agent, use `tasks start <taskId>` or `tasks transition <taskId> <status>` to move the task through the pipeline.',
-    '- When running `tasks get`, `tasks create`, `tasks update`, or `tasks transition`, always append `--json` so the output renders as a TaskCard in the UI.',
   ].join('\n');
 }
 
 // NOTE: Keep in sync with the actual CLI commands defined in src/main/cli/.
+// Task Management and Agent Runs are omitted — use MCP tools instead.
 function cliReferenceSection(taskId?: string): string {
   const t = taskId ?? '<taskId>';
   return [
-    '## CLI Reference (npx agents-manager)',
-    '',
-    '### Task Management',
-    `- tasks list                          — List all tasks (--status, --assignee, --priority)`,
-    `- tasks get ${t} --json           — Get full task details (--json required for TaskCard rendering)`,
-    `- tasks create --title "..." [opts] --json — Create a task (--description, --priority, --assignee, --tags, --pipeline)`,
-    `- tasks update ${t} [opts] --json — Update task fields (--title, --description, --priority, --assignee, --tags)`,
-    `- tasks delete ${t}               — Delete a task`,
-    `- tasks reset ${t}                — Reset task to initial state`,
-    '',
-    '### Task Transitions',
-    `- tasks transitions ${t}          — Show valid status transitions`,
-    `- tasks transition ${t} <status> --json — Move task to a new status (--json required for TaskCard rendering)`,
-    `- tasks start ${t}                — Start a task (move to first active status)`,
+    '## Additional CLI (operations not covered by MCP tools)',
     '',
     '### Subtasks',
     `- tasks subtask list ${t}         — List subtasks`,
@@ -82,10 +70,6 @@ function cliReferenceSection(taskId?: string): string {
     '### Events & History',
     `- events list --task ${t}         — View task event log`,
     '',
-    '### Agent Runs',
-    `- agent runs [--task ${t}] [--active] — List agent runs`,
-    `- agent get <runId>                   — Get agent run details`,
-    '',
     '### Prompts (Interactive Feedback)',
     `- prompts list --task ${t}        — List pending prompts`,
     `- prompts respond <id> --response "..." — Respond to a prompt`,
@@ -95,6 +79,43 @@ function cliReferenceSection(taskId?: string): string {
     '- pipelines get <id>                  — Get pipeline details',
     '- projects list                       — List all projects',
     '- status                              — Show system dashboard',
+  ].join('\n');
+}
+
+function mcpToolsSection(): string {
+  return [
+    '## MCP Tools (task management)',
+    '',
+    '- **create_task** — Create a new task in the current project. Provide title, description, pipeline, and other metadata.',
+    '- **get_task** — Get full task details including plan, technical design, status, and valid transitions. Use this to inspect a task before calling transition_task.',
+    '- **list_tasks** — List tasks with optional filters (status, assignee, priority). Returns a compact summary; use get_task for full details on a specific task.',
+    '- **transition_task** — Move a task to a new status. You MUST supply the exact status string. Never auto-select a status — always confirm the target status with the user before calling this tool.',
+    '- **list_agent_runs** — List agent runs. Filter by task, active flag, or retrieve the most recent runs.',
+  ].join('\n');
+}
+
+function orchestratorBehaviorSection(): string {
+  return [
+    '## Orchestrator Role',
+    '',
+    'You are not just a Q&A assistant — you are an orchestrator that can create and manage tasks on behalf of the user.',
+    '',
+    '### Conversational Workflow',
+    'When the user describes a piece of work, follow this workflow:',
+    '1. **Create** — use `create_task` to create a task for the work described.',
+    '2. **Plan** — once the planning pipeline has run, use `get_task` to retrieve the plan and present it to the user.',
+    '3. **Review** — discuss the plan with the user. Ask for feedback. Do NOT transition until the user approves.',
+    '4. **Approve** — once the user explicitly approves ("looks good", "proceed", etc.), use `transition_task` to advance the task to the next status.',
+    '5. **Monitor** — use `list_agent_runs` to track agent progress; use `list_tasks` for overall project awareness.',
+    '',
+    '### Confirm Before Transitioning',
+    '- Never silently transition a task. Always present the current plan/state first.',
+    '- Summarize what the next pipeline step will do, then wait for explicit user confirmation.',
+    '- When calling `transition_task`, always confirm the exact target status with the user beforehand.',
+    '',
+    '### Multi-Task Awareness',
+    '- In project-scoped sessions, proactively offer to show all active tasks when the user asks about project status.',
+    '- Use `list_tasks` with a status filter to surface in-progress or blocked work.',
   ].join('\n');
 }
 
@@ -149,26 +170,34 @@ function telegramResponseStyle(): string {
 export function buildDesktopSystemPrompt(scope: SessionScope): string {
   if (scope.task) {
     return [
-      `You are a task assistant for task #${scope.task.id}: "${scope.task.title}".`,
+      `You are a task orchestrator for task #${scope.task.id}: "${scope.task.title}".`,
       taskContextSection(scope.task),
       '',
       capabilitiesSection(),
       '',
       rulesSection(),
-      `- Focus on task #${scope.task.id}. Use \`npx agents-manager tasks get ${scope.task.id}\` to refresh task state.`,
+      `- Focus on task #${scope.task.id}. Use the get_task MCP tool to refresh task state.`,
       '- Be concise and helpful. Format responses with markdown when useful.',
+      '',
+      mcpToolsSection(),
+      '',
+      orchestratorBehaviorSection(),
       '',
       cliReferenceSection(scope.task.id),
     ].join('\n');
   }
 
   return [
-    'You are a project assistant with read-only access to the codebase and full access to the `npx agents-manager` CLI for task management.',
+    `You are a project orchestrator for project "${scope.projectName}". You can create and manage tasks on behalf of the user, and have read-only access to the codebase.`,
     '',
     capabilitiesSection(),
     '',
     rulesSection(),
     '- Be concise and helpful. Format responses with markdown when useful.',
+    '',
+    mcpToolsSection(),
+    '',
+    orchestratorBehaviorSection(),
     '',
     cliReferenceSection(),
   ].join('\n');
@@ -224,7 +253,9 @@ export function buildTelegramSystemPrompt(scope: SessionScope): string {
       capabilitiesSection(),
       '',
       rulesSection(),
-      `- Focus on task #${scope.task.id}. Use \`npx agents-manager tasks get ${scope.task.id}\` to refresh task state.`,
+      `- Focus on task #${scope.task.id}. Use the get_task MCP tool to refresh task state.`,
+      '',
+      mcpToolsSection(),
       '',
       telegramFormattingRules(),
       '',
@@ -235,11 +266,13 @@ export function buildTelegramSystemPrompt(scope: SessionScope): string {
   }
 
   return [
-    `You are a Telegram bot assistant for project "${scope.projectName}" with read-only access to the codebase and full access to the \`npx agents-manager\` CLI.`,
+    `You are a Telegram bot assistant for project "${scope.projectName}". You can create and manage tasks via MCP tools, and have read-only access to the codebase.`,
     '',
     capabilitiesSection(),
     '',
     rulesSection(),
+    '',
+    mcpToolsSection(),
     '',
     telegramFormattingRules(),
     '',
