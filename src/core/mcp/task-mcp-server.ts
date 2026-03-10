@@ -58,13 +58,43 @@ async function loadCreateSdkMcpServer(): Promise<(opts: { name: string; version?
 }
 
 /**
+ * Scans a parsed JSON value for objects that look like tasks (have `id` + `status`).
+ * Handles direct task objects, arrays of tasks, and one level of nesting (e.g. TransitionResult.task).
+ */
+function extractTaskIds(data: unknown): string[] {
+  const ids: string[] = [];
+  function scan(val: unknown): void {
+    if (Array.isArray(val)) {
+      for (const item of val) scan(item);
+    } else if (val && typeof val === 'object') {
+      const obj = val as Record<string, unknown>;
+      if (typeof obj.id === 'string' && obj.id.length > 0 && typeof obj.status === 'string' && obj.status.length > 0) {
+        ids.push(obj.id);
+      } else {
+        // One level of nesting — catches TransitionResult { task: { id, status } }
+        for (const nested of Object.values(obj)) {
+          if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+            const n = nested as Record<string, unknown>;
+            if (typeof n.id === 'string' && n.id.length > 0 && typeof n.status === 'string' && n.status.length > 0) {
+              ids.push(n.id);
+            }
+          }
+        }
+      }
+    }
+  }
+  scan(data);
+  return ids;
+}
+
+/**
  * Creates an in-process MCP server that exposes task management tools to the chat agent.
  * Tools call the daemon API directly via api-client, scoped to the given projectId context.
  * The SDK module is cached after the first load — subsequent calls return quickly.
  */
 export async function createTaskMcpServer(
   daemonUrl: string,
-  context: { projectId: string },
+  context: { projectId: string; sessionId?: string },
 ): Promise<McpSdkServerConfigWithInstance> {
   const createSdkMcpServer = await loadCreateSdkMcpServer();
 
@@ -283,5 +313,37 @@ export async function createTaskMcpServer(
     },
   ];
 
-  return createSdkMcpServer({ name: 'task-manager', tools });
+  // Wrap all tool handlers with a post-handler that tracks task IDs in the session.
+  // If sessionId is present, any tool result containing objects with { id, status }
+  // will be recorded via the track-task endpoint (idempotent).
+  const trackedTools = context.sessionId
+    ? tools.map((tool) => ({
+        ...tool,
+        handler: async (args: Parameters<typeof tool.handler>[0]): Promise<CallToolResult> => {
+          const result = await (tool.handler as (a: typeof args) => Promise<CallToolResult>)(args);
+          if (!result.isError) {
+            for (const part of result.content) {
+              if (part.type === 'text') {
+                try {
+                  const parsed: unknown = JSON.parse(part.text);
+                  const taskIds = extractTaskIds(parsed);
+                  for (const taskId of taskIds) {
+                    fetch(`${daemonUrl}/api/chat/sessions/${context.sessionId}/track-task`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ taskId }),
+                    }).catch(() => { /* fire-and-forget */ });
+                  }
+                } catch {
+                  // JSON parse failed — not a task result, skip
+                }
+              }
+            }
+          }
+          return result;
+        },
+      }))
+    : tools;
+
+  return createSdkMcpServer({ name: 'task-manager', tools: trackedTools });
 }

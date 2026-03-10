@@ -71,6 +71,8 @@ initializeApp({
         sendToRenderer(IPC_CHANNELS.DEV_SERVER_LOG, taskId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.DEV_SERVER_STATUS, (taskId, data) =>
         sendToRenderer(IPC_CHANNELS.DEV_SERVER_STATUS_CHANGED, taskId, data));
+      wsClient.subscribeGlobal(WS_CHANNELS.TASK_STATUS_CHANGED, (taskId, data) =>
+        sendToRenderer(IPC_CHANNELS.TASK_STATUS_CHANGED, taskId, data));
 
       // Create the tray icon with a simple menu
       tray = createTray({

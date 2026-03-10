@@ -116,5 +116,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '107_add_last_context_input_tokens_to_chat_messages',
       sql: `ALTER TABLE chat_messages ADD COLUMN last_context_input_tokens INTEGER DEFAULT NULL`,
     },
+    {
+      name: '108_add_task_ids_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN task_ids TEXT NOT NULL DEFAULT '[]'`,
+    },
   ];
 }

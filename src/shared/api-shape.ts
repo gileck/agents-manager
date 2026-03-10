@@ -310,5 +310,6 @@ export interface ApiShape {
     notificationAdded(callback: (notification: InAppNotification) => void): () => void;
     devServerLog(callback: (taskId: string, data: { line: string }) => void): () => void;
     devServerStatus(callback: (taskId: string, info: DevServerInfo) => void): () => void;
+    taskStatusChanged(callback: (taskId: string, task: Task) => void): () => void;
   };
 }

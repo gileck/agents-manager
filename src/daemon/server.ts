@@ -51,7 +51,7 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}): { 
 
   // CRUD routes (data: projects, tasks, pipelines, etc.)
   app.use(projectRoutes(services));
-  app.use(taskRoutes(services));
+  app.use(taskRoutes(services, wsHolder));
   app.use(pipelineRoutes(services));
   app.use(featureRoutes(services));
   app.use(kanbanRoutes(services));

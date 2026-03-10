@@ -333,6 +333,30 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // POST /api/chat/sessions/:id/track-task — idempotently add a task to this session's tracked list
+  router.post('/api/chat/sessions/:id/track-task', async (req, res, next) => {
+    try {
+      const { taskId } = req.body as { taskId?: string };
+      if (!taskId || typeof taskId !== 'string') {
+        res.status(400).json({ error: 'taskId is required' });
+        return;
+      }
+      await services.chatSessionStore.addTrackedTask(req.params.id, taskId);
+      res.status(204).end();
+    } catch (err) { next(err); }
+  });
+
+  // GET /api/chat/sessions/:id/tracked-tasks — return full task objects for all tracked task IDs
+  router.get('/api/chat/sessions/:id/tracked-tasks', async (req, res, next) => {
+    try {
+      const taskIds = await services.chatSessionStore.getTrackedTaskIds(req.params.id);
+      const tasks = await Promise.all(
+        taskIds.map((id) => services.taskStore.getTask(id).catch(() => null)),
+      );
+      res.json(tasks.filter(Boolean));
+    } catch (err) { next(err); }
+  });
+
   // GET /api/chat/costs — get cost summary
   router.get('/api/chat/costs', async (_req, res, next) => {
     try {

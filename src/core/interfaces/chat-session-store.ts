@@ -17,4 +17,6 @@ export interface IChatSessionStore {
   deleteSession(id: string): Promise<boolean>;
   hideSession(id: string): Promise<boolean>;
   hideAllSessions(projectId: string): Promise<boolean>;
+  addTrackedTask(sessionId: string, taskId: string): Promise<void>;
+  getTrackedTaskIds(sessionId: string): Promise<string[]>;
 }
