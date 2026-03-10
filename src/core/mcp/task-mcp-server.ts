@@ -155,13 +155,16 @@ export async function createTaskMcpServer(
       name: 'list_tasks',
       description:
         'List tasks with optional filters. Defaults to the current project scope. ' +
-        'Returns an array of task objects.',
+        'Returns a compact summary (id, title, status, priority, type, assignee, tags, dates). ' +
+        'Use get_task(taskId) for full details including description, plan, and technical design.',
       inputSchema: {
         status: z.string().optional().describe('Filter by status (e.g. "todo", "in_progress", "done")'),
         projectId: z.string().optional().describe('Project ID. Defaults to the current project.'),
         assignee: z.string().optional().describe('Filter by assignee name or ID'),
         type: z.string().optional().describe('Filter by task type'),
         search: z.string().optional().describe('Free-text search across title and description'),
+        limit: z.number().optional().describe('Maximum number of tasks to return. Defaults to 20.'),
+        fields: z.array(z.string()).optional().describe('Specific fields to include in each task object. When omitted, a compact summary is returned.'),
       },
       handler: async (args: {
         status?: string;
@@ -169,6 +172,8 @@ export async function createTaskMcpServer(
         assignee?: string;
         type?: string;
         search?: string;
+        limit?: number;
+        fields?: string[];
       }): Promise<CallToolResult> => {
         try {
           const tasks = await api.tasks.list({
@@ -178,7 +183,23 @@ export async function createTaskMcpServer(
             type: args.type as TaskType | undefined,
             search: args.search,
           });
-          return ok(tasks);
+          const limit = args.limit ?? 20;
+          const sliced = tasks.slice(0, limit);
+          const SUMMARY_FIELDS = new Set([
+            'id', 'title', 'status', 'priority', 'type', 'assignee', 'tags',
+            'createdAt', 'updatedAt', 'pipelineId', 'featureId', 'size',
+            'complexity', 'branchName', 'prLink',
+          ]);
+          const fieldList = args.fields ?? [...SUMMARY_FIELDS];
+          const projected = sliced.map((task) => {
+            const t = task as unknown as Record<string, unknown>;
+            const result: Record<string, unknown> = {};
+            for (const key of fieldList) {
+              if (key in t) result[key] = t[key];
+            }
+            return result;
+          });
+          return ok(projected);
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
         }
@@ -235,7 +256,16 @@ export async function createTaskMcpServer(
           } else {
             runs = await api.agents.getAllRuns();
           }
-          return ok(runs.slice(0, limit));
+          const STRIP_FIELDS = new Set(['output', 'messages', 'prompt', 'payload', 'error']);
+          const projected = runs.slice(0, limit).map((run) => {
+            const r = run as Record<string, unknown>;
+            const result: Record<string, unknown> = {};
+            for (const key of Object.keys(r)) {
+              if (!STRIP_FIELDS.has(key)) result[key] = r[key];
+            }
+            return result;
+          });
+          return ok(projected);
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
         }
