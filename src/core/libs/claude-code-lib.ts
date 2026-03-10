@@ -245,6 +245,7 @@ export class ClaudeCodeLib implements IAgentLib {
           stderr: onStderr,
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           hooks: { preToolUse: mergedPreToolUse },
+          ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
           ...sessionOptions,
         },
       }) as AsyncIterable<SdkStreamMessage>) {
