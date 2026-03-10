@@ -9,6 +9,10 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
     return false;
   }
 
+  protected getExcludedFeedbackTypes(): string[] {
+    return ['design_feedback'];
+  }
+
   protected getMaxTurns(): number {
     return 150;
   }

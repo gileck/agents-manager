@@ -9,6 +9,10 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
     return true;
   }
 
+  protected getExcludedFeedbackTypes(): string[] {
+    return ['plan_feedback'];
+  }
+
   protected getMaxTurns(): number {
     return 150;
   }
