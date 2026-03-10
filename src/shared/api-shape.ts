@@ -235,6 +235,8 @@ export interface ApiShape {
     summarize(sessionId: string): Promise<ChatMessage[]>;
     costs(): Promise<{ inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; totalCostUsd: number }>;
     chatLiveMessages(sessionId: string): Promise<AgentChatMessage[]>;
+    trackedTasks(sessionId: string): Promise<Task[]>;
+    trackTask(sessionId: string, taskId: string): Promise<void>;
   };
 
   // Chat session operations
