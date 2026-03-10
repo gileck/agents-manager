@@ -724,6 +724,7 @@ export class ChatAgentService {
     let cacheReadInputTokens: number | undefined;
     let cacheCreationInputTokens: number | undefined;
     let totalCostUsd: number | undefined;
+    let lastContextInputTokens: number | undefined;
     const turnMessages: AgentChatMessage[] = [];
     this.liveTurnMessages.set(sessionId, turnMessages);
 
@@ -868,6 +869,7 @@ export class ChatAgentService {
       cacheReadInputTokens = result.cacheReadInputTokens;
       cacheCreationInputTokens = result.cacheCreationInputTokens;
       totalCostUsd = result.totalCostUsd;
+      lastContextInputTokens = result.lastContextInputTokens;
 
       if (result.error) {
         emitEvent({ type: 'text', text: `\n[Agent error: ${result.error}]\n` });
@@ -919,6 +921,7 @@ export class ChatAgentService {
             cacheReadInputTokens,
             cacheCreationInputTokens,
             totalCostUsd,
+            lastContextInputTokens,
           });
         } catch (persistErr) {
           getAppLogger().logError('ChatAgentService', 'Failed to persist assistant response', persistErr);

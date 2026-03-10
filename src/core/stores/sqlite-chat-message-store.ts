@@ -15,6 +15,7 @@ interface ChatMessageRow {
   cache_read_input_tokens: number | null;
   cache_creation_input_tokens: number | null;
   total_cost_usd: number | null;
+  last_context_input_tokens: number | null;
 }
 
 function rowToMessage(row: ChatMessageRow): ChatMessage {
@@ -29,6 +30,7 @@ function rowToMessage(row: ChatMessageRow): ChatMessage {
     cacheReadInputTokens: row.cache_read_input_tokens ?? null,
     cacheCreationInputTokens: row.cache_creation_input_tokens ?? null,
     totalCostUsd: row.total_cost_usd ?? null,
+    lastContextInputTokens: row.last_context_input_tokens ?? null,
   };
 }
 
@@ -41,8 +43,8 @@ export class SqliteChatMessageStore implements IChatMessageStore {
       const timestamp = now();
 
       this.db.prepare(
-        'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens, cache_read_input_tokens, cache_creation_input_tokens, total_cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(id, input.sessionId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null, input.cacheReadInputTokens ?? null, input.cacheCreationInputTokens ?? null, input.totalCostUsd ?? null);
+        'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens, cache_read_input_tokens, cache_creation_input_tokens, total_cost_usd, last_context_input_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(id, input.sessionId, input.role, input.content, timestamp, input.costInputTokens ?? null, input.costOutputTokens ?? null, input.cacheReadInputTokens ?? null, input.cacheCreationInputTokens ?? null, input.totalCostUsd ?? null, input.lastContextInputTokens ?? null);
 
       this.db.prepare('UPDATE chat_sessions SET updated_at = ? WHERE id = ?').run(timestamp, input.sessionId);
 
@@ -57,6 +59,7 @@ export class SqliteChatMessageStore implements IChatMessageStore {
         cacheReadInputTokens: input.cacheReadInputTokens ?? null,
         cacheCreationInputTokens: input.cacheCreationInputTokens ?? null,
         totalCostUsd: input.totalCostUsd ?? null,
+        lastContextInputTokens: input.lastContextInputTokens ?? null,
       };
     } catch (err) {
       getAppLogger().logError('ChatMessageStore', 'addMessage failed', err);
@@ -93,13 +96,13 @@ export class SqliteChatMessageStore implements IChatMessageStore {
         this.db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
 
         const insert = this.db.prepare(
-          'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens, cache_read_input_tokens, cache_creation_input_tokens, total_cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO chat_messages (id, session_id, role, content, created_at, cost_input_tokens, cost_output_tokens, cache_read_input_tokens, cache_creation_input_tokens, total_cost_usd, last_context_input_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
 
         for (const msg of messages) {
           const id = generateId();
           const timestamp = now();
-          insert.run(id, sessionId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null, msg.cacheReadInputTokens ?? null, msg.cacheCreationInputTokens ?? null, msg.totalCostUsd ?? null);
+          insert.run(id, sessionId, msg.role, msg.content, timestamp, msg.costInputTokens ?? null, msg.costOutputTokens ?? null, msg.cacheReadInputTokens ?? null, msg.cacheCreationInputTokens ?? null, msg.totalCostUsd ?? null, msg.lastContextInputTokens ?? null);
           result.push({
             id,
             sessionId,
@@ -111,6 +114,7 @@ export class SqliteChatMessageStore implements IChatMessageStore {
             cacheReadInputTokens: msg.cacheReadInputTokens ?? null,
             cacheCreationInputTokens: msg.cacheCreationInputTokens ?? null,
             totalCostUsd: msg.totalCostUsd ?? null,
+            lastContextInputTokens: msg.lastContextInputTokens ?? null,
           });
         }
       });

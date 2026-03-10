@@ -52,6 +52,8 @@ export interface AgentLibResult {
   cacheCreationInputTokens?: number;
   /** Authoritative total cost in USD from the SDK (includes cache pricing, multi-model, etc.). */
   totalCostUsd?: number;
+  /** Input tokens from the last assistant message — represents actual context window usage. */
+  lastContextInputTokens?: number;
   model?: string;
   structuredOutput?: Record<string, unknown>;
   /** Why the process was killed: 'timeout', 'stopped' (user/supervisor), or 'external_signal'. */

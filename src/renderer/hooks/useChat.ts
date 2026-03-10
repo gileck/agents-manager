@@ -214,10 +214,13 @@ export function useChat(sessionId: string | null) {
   const tokenUsage = useMemo(() => {
     let inputTokens = 0;
     let outputTokens = 0;
+    let lastContextInputTokens: number | null = null;
     // Sum from DB messages (costInputTokens / costOutputTokens fields)
     for (const msg of dbMessages) {
-      if (msg.costInputTokens) inputTokens += msg.costInputTokens;
-      if (msg.costOutputTokens) outputTokens += msg.costOutputTokens;
+      if (msg.costInputTokens != null) inputTokens += msg.costInputTokens;
+      if (msg.costOutputTokens != null) outputTokens += msg.costOutputTokens;
+      // Track the most recent non-null lastContextInputTokens (last turn's context size)
+      if (msg.lastContextInputTokens != null) lastContextInputTokens = msg.lastContextInputTokens;
     }
     // Add latest streaming usage on top of DB totals
     // (SDK reports cumulative totals for the current turn only)
@@ -229,7 +232,11 @@ export function useChat(sessionId: string | null) {
         streamOutput = msg.outputTokens;
       }
     }
-    return { inputTokens: inputTokens + streamInput, outputTokens: outputTokens + streamOutput };
+    return {
+      inputTokens: inputTokens + streamInput,
+      outputTokens: outputTokens + streamOutput,
+      lastContextInputTokens,
+    };
   }, [dbMessages, streamingMessages]);
 
   const clearError = useCallback(() => setError(null), []);
