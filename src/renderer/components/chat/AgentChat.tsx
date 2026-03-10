@@ -3,6 +3,7 @@ import type { AgentChatMessage, AgentRun, ChatImage, PermissionMode } from '../.
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput, AgentLibOption, ModelOption } from './ChatInput';
 import { ContextSidebar } from './ContextSidebar';
+import { TaskStatusBar } from './TaskStatusBar';
 
 interface AgentChatProps {
   messages: AgentChatMessage[];
@@ -23,6 +24,7 @@ interface AgentChatProps {
   permissionMode?: PermissionMode | null;
   onPermissionModeChange?: (mode: PermissionMode) => void;
   inputRef?: React.Ref<HTMLTextAreaElement>;
+  sessionId?: string | null;
 }
 
 export function AgentChat({
@@ -44,6 +46,7 @@ export function AgentChat({
   permissionMode,
   onPermissionModeChange,
   inputRef,
+  sessionId,
 }: AgentChatProps) {
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
 
@@ -62,6 +65,7 @@ export function AgentChat({
         ) : (
           <ChatMessageList messages={messages} isRunning={isRunning} onEditMessage={handleEditMessage} />
         )}
+        <TaskStatusBar sessionId={sessionId ?? null} />
         <ChatInput
           ref={inputRef}
           onSend={onSend}

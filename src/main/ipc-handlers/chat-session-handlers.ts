@@ -81,4 +81,12 @@ export function registerChatSessionHandlers(api: ApiClient): void {
   registerIpcHandler(IPC_CHANNELS.CHAT_AGENTS_LIST, async () => {
     return api.chat.getRunningAgents();
   });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_TRACKED_TASKS, async (_, sessionId: string) => {
+    return api.chat.getTrackedTasks(sessionId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_TRACK_TASK, async (_, sessionId: string, taskId: string) => {
+    return api.chat.trackTask(sessionId, taskId);
+  });
 }

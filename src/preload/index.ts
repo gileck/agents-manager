@@ -197,6 +197,8 @@ const IPC_CHANNELS = {
   DEV_SERVER_LOG: 'dev-server:log',
   DEV_SERVER_STATUS_CHANGED: 'dev-server:status-changed',
   TASK_STATUS_CHANGED: 'task:status-changed',
+  CHAT_TRACKED_TASKS: 'chat:tracked-tasks',
+  CHAT_TRACK_TASK: 'chat:track-task',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -478,6 +480,10 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COSTS),
     chatLiveMessages: (sessionId: string): Promise<AgentChatMessage[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIVE_MESSAGES, sessionId),
+    trackedTasks: (sessionId: string): Promise<Task[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_TRACKED_TASKS, sessionId),
+    trackTask: (sessionId: string, taskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_TRACK_TASK, sessionId, taskId),
   },
 
   // Chat session operations
