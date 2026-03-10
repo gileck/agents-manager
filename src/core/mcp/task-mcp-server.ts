@@ -21,6 +21,26 @@ function fail(message: string): CallToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
+async function resolveTaskId(api: ReturnType<typeof createApiClient>, input: string): Promise<string> {
+  // Fast path: full UUID — return immediately without an API call
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)) {
+    return input;
+  }
+
+  // Prefix match against the first segment (first 8 hex chars before the first dash)
+  const tasks = await api.tasks.list({});
+  const matches = tasks.filter((t) => t.id.split('-')[0] === input);
+
+  if (matches.length === 0) {
+    throw new Error(`Task not found: ${input}`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`Ambiguous ID, ${matches.length} matches found`);
+  }
+
+  return matches[0].id;
+}
+
 // Module-level cache: the SDK is ESM-only so the dynamic import is expensive.
 // Cache the createSdkMcpServer function after the first load.
 let cachedCreateSdkMcpServer: ((opts: { name: string; version?: string; tools?: unknown[] }) => McpSdkServerConfigWithInstance) | undefined;
@@ -115,11 +135,12 @@ export async function createTaskMcpServer(
         'Get full details for a task by ID, including its title, description, status, ' +
         'plan, technical design, tags, and other metadata.',
       inputSchema: {
-        taskId: z.string().describe('Task ID'),
+        taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
       },
       handler: async (args: { taskId: string }): Promise<CallToolResult> => {
         try {
-          const task = await api.tasks.get(args.taskId);
+          const taskId = await resolveTaskId(api, args.taskId);
+          const task = await api.tasks.get(taskId);
           return ok(task);
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
@@ -174,12 +195,13 @@ export async function createTaskMcpServer(
         'Never auto-select a status — always use an explicit value confirmed with the user. ' +
         'Use get_task to inspect valid transitions before calling this tool.',
       inputSchema: {
-        taskId: z.string().describe('Task ID'),
+        taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
         status: z.string().describe('The exact target status to transition the task to'),
       },
       handler: async (args: { taskId: string; status: string }): Promise<CallToolResult> => {
         try {
-          const result = await api.tasks.transition(args.taskId, args.status);
+          const taskId = await resolveTaskId(api, args.taskId);
+          const result = await api.tasks.transition(taskId, args.status);
           return ok(result);
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
@@ -197,7 +219,7 @@ export async function createTaskMcpServer(
         'When active is true, returns only currently active runs. ' +
         'Otherwise returns the most recent runs (up to limit).',
       inputSchema: {
-        taskId: z.string().optional().describe('Task ID to filter runs by'),
+        taskId: z.string().optional().describe('Task ID to filter runs by (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
         active: z.boolean().optional().describe('If true, return only active (in-progress) runs'),
         limit: z.number().optional().describe('Maximum number of runs to return. Defaults to 20.'),
       },
@@ -206,7 +228,8 @@ export async function createTaskMcpServer(
           const limit = args.limit ?? 20;
           let runs: unknown[];
           if (args.taskId) {
-            runs = await api.agents.runs(args.taskId);
+            const taskId = await resolveTaskId(api, args.taskId);
+            runs = await api.agents.runs(taskId);
           } else if (args.active) {
             runs = await api.agents.getActiveRuns();
           } else {
