@@ -196,6 +196,7 @@ const IPC_CHANNELS = {
   DEV_SERVER_LIST: 'dev-server:list',
   DEV_SERVER_LOG: 'dev-server:log',
   DEV_SERVER_STATUS_CHANGED: 'dev-server:status-changed',
+  TASK_STATUS_CHANGED: 'task:status-changed',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -646,6 +647,11 @@ const api = {
       const listener = (_: IpcRendererEvent, taskId: string, info: DevServerInfo) => callback(taskId, info);
       ipcRenderer.on(IPC_CHANNELS.DEV_SERVER_STATUS_CHANGED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.DEV_SERVER_STATUS_CHANGED, listener);
+    },
+    taskStatusChanged: (callback: (taskId: string, task: Task) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string, task: Task) => callback(taskId, task);
+      ipcRenderer.on(IPC_CHANNELS.TASK_STATUS_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_STATUS_CHANGED, listener);
     },
   },
 };

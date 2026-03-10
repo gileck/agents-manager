@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
 import type { TaskCreateInput, TaskUpdateInput, TaskFilter } from '../../shared/types';
+import type { WsHolder } from '../server';
+import { WS_CHANNELS } from '../ws/channels';
 
-export function taskRoutes(services: AppServices): Router {
+export function taskRoutes(services: AppServices, wsHolder: WsHolder = {}): Router {
   const router = Router();
 
   // ============================================
@@ -90,6 +92,9 @@ export function taskRoutes(services: AppServices): Router {
       const { toStatus, actor } = req.body as { toStatus?: string; actor?: string };
       if (!toStatus) { res.status(400).json({ error: 'toStatus is required' }); return; }
       const result = await services.workflowService.transitionTask(req.params.id, toStatus, actor);
+      if (result.success && result.task) {
+        wsHolder.server?.broadcast(WS_CHANNELS.TASK_STATUS_CHANGED, result.task.id, result.task);
+      }
       res.json(result);
     } catch (err) { next(err); }
   });
