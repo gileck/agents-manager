@@ -20,6 +20,8 @@ export function AgentRunCostPanel({ run }: AgentRunCostPanelProps) {
     totalCostUsd: run.totalCostUsd,
     inputTokens,
     outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
     model,
   });
   const hasAuthoritativeCost = run.totalCostUsd != null && run.totalCostUsd > 0;

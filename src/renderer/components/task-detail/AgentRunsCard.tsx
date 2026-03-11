@@ -68,7 +68,7 @@ export function AgentRunsCard({ agentRuns, onNavigateToRun }: AgentRunsCardProps
         ) : (
           <div className="space-y-1">
             {displayRuns.map((run) => {
-              const cost = getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, model: run.model ?? undefined });
+              const cost = getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, cacheReadTokens: run.cacheReadInputTokens, cacheWriteTokens: run.cacheCreationInputTokens, model: run.model ?? undefined });
               return (
                 <div
                   key={run.id}

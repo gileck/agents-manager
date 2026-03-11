@@ -43,6 +43,8 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
     totalCostUsd: run?.totalCostUsd,
     inputTokens: totalInput,
     outputTokens: totalOutput,
+    cacheReadTokens: run?.cacheReadInputTokens,
+    cacheWriteTokens: run?.cacheCreationInputTokens,
     model: run?.model ?? undefined,
   });
   // Use the last turn's context size (actual input to the last API call) when available,
