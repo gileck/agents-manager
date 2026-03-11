@@ -11,6 +11,7 @@ interface AgentChatProps {
   isQueued?: boolean;
   onSend: (message: string, images?: ChatImage[]) => void;
   onStop?: () => void;
+  onCancelQueue?: () => void;
   showSidebar?: boolean;
   run?: AgentRun | null;
   emptyState?: React.ReactNode;
@@ -33,6 +34,7 @@ export function AgentChat({
   isQueued = false,
   onSend,
   onStop,
+  onCancelQueue,
   showSidebar = false,
   run,
   emptyState,
@@ -98,6 +100,7 @@ export function AgentChat({
           onStop={onStop}
           isRunning={isRunning}
           isQueued={isQueued}
+          onCancelQueue={onCancelQueue}
           tokenUsage={tokenUsage}
           agentLibs={agentLibs}
           selectedAgentLib={selectedAgentLib}

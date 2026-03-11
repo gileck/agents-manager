@@ -239,6 +239,8 @@ export function useChat(sessionId: string | null) {
     };
   }, [dbMessages, streamingMessages]);
 
+  const cancelQueuedMessage = useCallback(() => setQueuedMessage(null), []);
+
   const clearError = useCallback(() => setError(null), []);
 
   return {
@@ -250,6 +252,7 @@ export function useChat(sessionId: string | null) {
     clearError,
     sendMessage,
     stopChat,
+    cancelQueuedMessage,
     clearChat,
     summarizeChat,
     tokenUsage,
