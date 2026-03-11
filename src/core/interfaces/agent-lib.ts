@@ -13,6 +13,8 @@ export interface AgentLibFeatures {
 
 export interface AgentLibRunOptions {
   prompt: string;
+  systemPrompt?: string;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   cwd: string;
   model?: string;
   maxTurns: number;

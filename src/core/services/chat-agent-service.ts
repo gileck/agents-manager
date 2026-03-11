@@ -416,42 +416,26 @@ export class ChatAgentService {
     // Load conversation history
     const history = await this.chatMessageStore.getMessagesForSession(sessionId);
 
-    // Build prompt with conversation history
-    const conversationLines: string[] = [];
-    // All messages except the latest user message (which becomes the prompt)
+    // Build structured history (all messages except the latest user message)
+    const historyMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
     for (const msg of history.slice(0, -1)) {
-      const roleLabel = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'System';
-      let line: string;
       if (msg.role === 'user') {
-        const parsed = parseUserContent(msg.content);
-        line = `[${roleLabel}]: ${parsed.text}`;
-        if (parsed.images) {
-          for (const img of parsed.images) {
-            line += `\n  (Image: ${img.path})`;
-          }
-        }
-      } else {
-        const text = msg.role === 'assistant' ? extractTextFromContent(msg.content) : msg.content;
-        line = `[${roleLabel}]: ${text}`;
+        historyMessages.push({ role: 'user', content: parseUserContent(msg.content).text });
+      } else if (msg.role === 'assistant') {
+        historyMessages.push({ role: 'assistant', content: extractTextFromContent(msg.content) });
       }
-      conversationLines.push(line);
+      // 'system' role messages skipped — not meaningful as conversation turns
     }
 
-    let prompt = '';
-    if (conversationLines.length > 0) {
-      prompt += '## Conversation History\n\n' + conversationLines.join('\n\n') + '\n\n---\n\n';
-    }
-    let userPart = message.trim()
-      ? `[User]: ${message}`
-      : '[User]: (see attached images)';
+    let prompt = message.trim() || '(see attached images)';
     // Include image paths so the agent can Read them
     if (imageRefs && imageRefs.length > 0) {
       for (const img of imageRefs) {
-        userPart += `\n  (Image attached: ${img.path})`;
+        prompt += `\n  (Image attached: ${img.path})`;
       }
-      userPart += '\n\nIMPORTANT: The user attached image(s). Use the Read tool to view them at the paths above.';
+      prompt += '\n\nIMPORTANT: The user attached image(s). Use the Read tool to view them at the paths above.';
     }
-    prompt += `${userPart}\n\nRespond to the latest user message. If your response requires a plan change, respond with the JSON format described in your instructions; otherwise respond in plain text.`;
+    prompt += '\n\nRespond to the latest user message. If your response requires a plan change, respond with the JSON format described in your instructions; otherwise respond in plain text.';
 
     // Create or reuse AgentRun for agent-chat sessions
     let agentRunId: string | undefined;
@@ -477,7 +461,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, historyMessages: historyMessages.length > 0 ? historyMessages : undefined }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -711,7 +695,7 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
-    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string },
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string; historyMessages?: Array<{ role: 'user' | 'assistant'; content: string }> },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -841,7 +825,9 @@ export class ChatAgentService {
       }
 
       const result = await lib.execute(executeSessionId, {
-        prompt: `${systemPrompt}\n\n${prompt}`,
+        prompt,
+        systemPrompt,
+        ...(extra?.historyMessages ? { history: extra.historyMessages } : {}),
         cwd: projectPath,
         model,
         maxTurns: 50,
