@@ -126,11 +126,13 @@ export class PipelineEngine implements IPipelineEngine {
       return { success: false, error: `Pipeline not found: ${task.pipelineId}` };
     }
 
-    // Find matching transition — enforce trigger type match and agentOutcome
+    // Find ALL matching transitions — enforce trigger type match and agentOutcome.
+    // Multiple transitions may share the same from/to/trigger with different guards;
+    // we iterate them in order and fall through to the next on guard failure.
     const fromMatch = (t: Transition) => t.from === task.status || t.from === '*';
     const outcomeMatch = (t: Transition) => {
       // When the context carries an agent outcome, only match transitions with a matching
-      // agentOutcome. This prevents .find() from returning the wrong self-loop transition
+      // agentOutcome. This prevents matching the wrong self-loop transition
       // (e.g. the 'failed' transition instead of 'conflicts_detected') when multiple
       // transitions share the same from/to/trigger combination.
       if (ctx.trigger === 'agent' && ctx.data?.outcome) {
@@ -138,16 +140,20 @@ export class PipelineEngine implements IPipelineEngine {
       }
       return true;
     };
-    const transition = pipeline.transitions.find(
+    const candidateTransitions = pipeline.transitions.filter(
       (t) => fromMatch(t) && t.to === toStatus && t.trigger === ctx.trigger && outcomeMatch(t),
     );
-    if (!transition) {
+    if (candidateTransitions.length === 0) {
       return {
         success: false,
         error: `No transition from "${task.status}" to "${toStatus}" in pipeline "${pipeline.name}"`,
       };
     }
 
+    // Try each matching transition in order, falling through on guard failures.
+    let lastGuardFailures: Array<{ guard: string; reason: string }> = [];
+
+    for (const transition of candidateTransitions) {
     // Execute atomically within a sync transaction (better-sqlite3 requirement).
     // Uses raw SQL inside the transaction — the async store interface can't be
     // called from a synchronous callback.
@@ -185,7 +191,7 @@ export class PipelineEngine implements IPipelineEngine {
       }
 
       if (guardFailures.length > 0) {
-        // Record the denied transition so every attempt is visible in the audit trail
+        // Record the denied attempt so it's visible in the audit trail
         this.db.prepare(`
           INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -213,15 +219,9 @@ export class PipelineEngine implements IPipelineEngine {
     }
 
     if (guardFailures.length > 0) {
-      // Log guard failures to the task event log so they're visible in the timeline
-      this.taskEventLog.log({
-        taskId: task.id,
-        category: 'system',
-        severity: 'warning',
-        message: `Transition ${task.status} → ${toStatus} blocked by guards: ${guardFailures.map(g => `${g.guard}: ${g.reason}`).join('; ')}`,
-        data: { fromStatus: task.status, toStatus, trigger: ctx.trigger, guardFailures },
-      }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
-      return { success: false, guardFailures };
+      lastGuardFailures = guardFailures;
+      // Continue to the next candidate transition
+      continue;
     }
 
     if (!updatedTask) {
@@ -293,6 +293,17 @@ export class PipelineEngine implements IPipelineEngine {
     });
 
     return { success: true, task: updatedTask, ...(hookFailures.length > 0 ? { hookFailures } : {}) };
+    } // end for (transition of candidateTransitions)
+
+    // All candidate transitions were blocked by guards — log and return failure
+    this.taskEventLog.log({
+      taskId: task.id,
+      category: 'system',
+      severity: 'warning',
+      message: `Transition ${task.status} → ${toStatus} blocked by guards: ${lastGuardFailures.map(g => `${g.guard}: ${g.reason}`).join('; ')}`,
+      data: { fromStatus: task.status, toStatus, trigger: ctx.trigger, guardFailures: lastGuardFailures },
+    }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
+    return { success: false, guardFailures: lastGuardFailures };
   }
 
   async getAllTransitions(task: Task): Promise<AllTransitionsResult> {

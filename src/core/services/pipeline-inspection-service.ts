@@ -93,15 +93,17 @@ export class PipelineInspectionService implements IPipelineInspectionService {
       }
     }
 
-    // Check for done + pending phases with failed advance_phase
+    // Check for done + pending phases with failed advance_phase,
+    // OR all phases completed but final PR creation failed (advance_phase error)
     if (currentStatusDef?.category === 'terminal' && task.phases) {
-      const pendingPhases = task.phases.filter((p) => p.status === 'pending');
-      if (pendingPhases.length > 0) {
-        const advanceFailure = hookFailures.find((f) => f.hookName === 'advance_phase');
-        if (advanceFailure) {
-          isStuck = true;
-          stuckReason = `Phase advance failed: ${advanceFailure.error}`;
-        }
+      const nonCompleted = task.phases.filter((p) => p.status !== 'completed');
+      const advanceFailure = hookFailures.find((f) => f.hookName === 'advance_phase');
+      if (nonCompleted.length > 0 && advanceFailure) {
+        isStuck = true;
+        stuckReason = `Phase advance failed: ${advanceFailure.error}`;
+      } else if (nonCompleted.length === 0 && task.metadata?.taskBranch && advanceFailure) {
+        isStuck = true;
+        stuckReason = `Final PR creation failed after all phases completed: ${advanceFailure.error}`;
       }
     }
 

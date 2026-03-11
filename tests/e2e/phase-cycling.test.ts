@@ -77,7 +77,11 @@ describe('Phase Cycling E2E', () => {
   }
 
   /**
-   * Helper: Drive a task through one phase cycle (implementing -> pr_review -> done).
+   * Helper: Drive a task through one phase cycle.
+   * - Intermediate phases (has_following_phases = true): pr_review → done (merge_pr + advance_phase
+   *   cycles to implementing)
+   * - Last phase or single-phase (has_following_phases = false): pr_review → ready_to_merge
+   *   (merge_pr + advance_phase creates final PR) → done
    * Returns the refreshed task after the cycle.
    */
   async function drivePhaseToApproval(taskId: string, phaseBranch: string, phaseLabel?: string): Promise<Task> {
@@ -97,23 +101,36 @@ describe('Phase Cycling E2E', () => {
     });
     expect(prResult.success).toBe(true);
 
-    // Transition pr_review -> ready_to_merge via manual trigger (Approve)
     task = (await ctx.taskStore.getTask(taskId))!;
     expect(task.status).toBe('pr_review');
-    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', {
-      trigger: 'manual',
-    });
-    expect(approveResult.success).toBe(true);
 
-    // Transition ready_to_merge -> done via manual trigger (Merge)
-    // This triggers merge_pr (required) + advance_phase (best_effort)
-    task = (await ctx.taskStore.getTask(taskId))!;
-    expect(task.status).toBe('ready_to_merge');
-    const doneResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
-      trigger: 'manual',
-      actor: 'admin',
-    });
-    expect(doneResult.success).toBe(true);
+    // Determine approval path based on whether following pending phases exist
+    const hasFollowing = task.phases?.some(p => p.status === 'pending') ?? false;
+
+    if (hasFollowing) {
+      // Intermediate phase: pr_review -> done (has_following_phases guard)
+      // merge_pr runs + advance_phase cycles task back to implementing
+      const approveResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
+        trigger: 'manual',
+      });
+      expect(approveResult.success).toBe(true);
+    } else {
+      // Last phase or single-phase: pr_review -> ready_to_merge (has_pending_phases guard or no-guard)
+      // merge_pr runs + advance_phase creates final PR (if taskBranch set)
+      const approveResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', {
+        trigger: 'manual',
+      });
+      expect(approveResult.success).toBe(true);
+
+      // Merge the final PR: ready_to_merge -> done
+      task = (await ctx.taskStore.getTask(taskId))!;
+      expect(task.status).toBe('ready_to_merge');
+      const mergeResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
+        trigger: 'manual',
+        actor: 'admin',
+      });
+      expect(mergeResult.success).toBe(true);
+    }
 
     return (await ctx.taskStore.getTask(taskId))!;
   }
@@ -345,7 +362,7 @@ describe('Phase Cycling E2E', () => {
     expect(worktree).not.toBeNull();
     expect(worktree!.branch).toBe(branch1);
 
-    // Create PR artifact and drive through pr_review -> done
+    // Create PR artifact and drive through pr_review -> done (intermediate phase)
     await createPrArtifact(task.id, branch1, 'Phase 1/3');
     task = (await ctx.taskStore.getTask(task.id))!;
     const prResult = await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
@@ -354,20 +371,12 @@ describe('Phase Cycling E2E', () => {
     });
     expect(prResult.success).toBe(true);
 
-    // Approve: pr_review -> ready_to_merge
+    // Approve: pr_review -> done (has_following_phases guard — merge_pr deletes worktree, advance_phase cycles)
     task = (await ctx.taskStore.getTask(task.id))!;
-    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', {
+    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
       trigger: 'manual',
     });
     expect(approveResult.success).toBe(true);
-
-    // Merge: ready_to_merge -> done (merge_pr hook will delete worktree, advance_phase will cycle)
-    task = (await ctx.taskStore.getTask(task.id))!;
-    const doneResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
-      trigger: 'manual',
-      actor: 'admin',
-    });
-    expect(doneResult.success).toBe(true);
 
     // Worktree should have been deleted by merge_pr hook
     worktree = await wm.get(task.id);
@@ -465,14 +474,9 @@ describe('Phase Cycling E2E', () => {
     task = (await ctx.taskStore.getTask(task.id))!;
     expect(task.status).toBe('pr_review');
 
-    // Approve: pr_review -> ready_to_merge
-    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
+    // Approve: pr_review -> done (has_following_phases guard — intermediate phase, advance_phase cycles)
+    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
     expect(approveResult.success).toBe(true);
-
-    // Merge: ready_to_merge -> done
-    task = (await ctx.taskStore.getTask(task.id))!;
-    const doneResult = await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
-    expect(doneResult.success).toBe(true);
 
     // advance_phase should have kicked in, cycling the task back to implementing
     task = (await ctx.taskStore.getTask(task.id))!;
@@ -491,7 +495,7 @@ describe('Phase Cycling E2E', () => {
     // Drive to implementing
     task = await ctx.transitionTo(task.id, 'implementing');
 
-    // Phase 1: implementing -> pr_review -> done -> implementing (cycled)
+    // Phase 1: implementing -> pr_review -> done -> implementing (cycled via has_following_phases)
     await createPrArtifact(task.id, 'branch-p1', 'Phase 1/3');
     task = (await ctx.taskStore.getTask(task.id))!;
     await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
@@ -499,9 +503,8 @@ describe('Phase Cycling E2E', () => {
       data: { outcome: 'pr_ready', branch: 'branch-p1' },
     });
     task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
-    task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
+    // Intermediate phase: approve directly to done (merge_pr + advance_phase cycles)
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
 
     // Get transition history
     const history = ctx.getTransitionHistory(task.id);
@@ -509,10 +512,9 @@ describe('Phase Cycling E2E', () => {
     // Should have at least these transitions:
     // 1. open -> implementing (manual)
     // 2. implementing -> pr_review (agent)
-    // 3. pr_review -> ready_to_merge (manual)
-    // 4. ready_to_merge -> done (manual)
-    // 5. done -> implementing (system, from advance_phase)
-    expect(history.length).toBeGreaterThanOrEqual(5);
+    // 3. pr_review -> done (manual, has_following_phases guard)
+    // 4. done -> implementing (system, from advance_phase)
+    expect(history.length).toBeGreaterThanOrEqual(4);
 
     // Verify the system transition was recorded
     const systemTransitions = history.filter(h => h.trigger === 'system');
@@ -538,9 +540,8 @@ describe('Phase Cycling E2E', () => {
       data: { outcome: 'pr_ready', branch: 'branch-p1' },
     });
     task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
-    task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
+    // Intermediate phase: approve to done directly (has_following_phases guard)
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
 
     // After cycling, check that phase 1 has the PR link stored
     task = (await ctx.taskStore.getTask(task.id))!;
@@ -706,16 +707,15 @@ describe('Phase Cycling E2E', () => {
     // Drive to implementing
     task = await ctx.transitionTo(task.id, 'implementing');
 
-    // --- Phase 1 ---
+    // --- Phase 1 (intermediate) ---
     await createPrArtifact(task.id, `${taskBranch}/phase-1`, 'Phase 1/3');
     task = (await ctx.taskStore.getTask(task.id))!;
     await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
       trigger: 'agent', data: { outcome: 'pr_ready', branch: `${taskBranch}/phase-1` },
     });
     task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
-    task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
+    // Intermediate phase: approve to done (has_following_phases guard, advance_phase cycles)
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
 
     // Phase 1 done, should cycle to implementing for phase 2
     task = (await ctx.taskStore.getTask(task.id))!;
@@ -723,16 +723,15 @@ describe('Phase Cycling E2E', () => {
     expect(task.phases![0].status).toBe('completed');
     expect(task.phases![1].status).toBe('in_progress');
 
-    // --- Phase 2 ---
+    // --- Phase 2 (intermediate) ---
     await createPrArtifact(task.id, `${taskBranch}/phase-2`, 'Phase 2/3');
     task = (await ctx.taskStore.getTask(task.id))!;
     await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
       trigger: 'agent', data: { outcome: 'pr_ready', branch: `${taskBranch}/phase-2` },
     });
     task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
-    task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
+    // Intermediate phase: approve to done (has_following_phases guard, advance_phase cycles)
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
 
     // Phase 2 done, should cycle to implementing for phase 3
     task = (await ctx.taskStore.getTask(task.id))!;
@@ -740,22 +739,20 @@ describe('Phase Cycling E2E', () => {
     expect(task.phases![1].status).toBe('completed');
     expect(task.phases![2].status).toBe('in_progress');
 
-    // --- Phase 3 (final) ---
+    // --- Phase 3 (last phase) ---
     await createPrArtifact(task.id, `${taskBranch}/phase-3`, 'Phase 3/3');
     task = (await ctx.taskStore.getTask(task.id))!;
     await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
       trigger: 'agent', data: { outcome: 'pr_ready', branch: `${taskBranch}/phase-3` },
     });
+    // Last phase: pr_review → ready_to_merge (has_pending_phases guard)
+    // merge_pr merges phase-3 PR, advance_phase creates final integration PR and updates prLink
     task = (await ctx.taskStore.getTask(task.id))!;
     await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', { trigger: 'manual' });
-    task = (await ctx.taskStore.getTask(task.id))!;
-    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
 
-    // All phases completed with taskBranch — advance_phase should:
-    // 1. Create a final PR (task branch → main)
-    // 2. Transition to pr_review
+    // After last-phase approval, task is at ready_to_merge with final PR created
     task = (await ctx.taskStore.getTask(task.id))!;
-    expect(task.status).toBe('pr_review');
+    expect(task.status).toBe('ready_to_merge');
     expect(task.phases!.every(p => p.status === 'completed')).toBe(true);
     expect(task.prLink).toBeDefined();
     expect(task.branchName).toBe(taskBranch);
@@ -765,6 +762,11 @@ describe('Phase Cycling E2E', () => {
     const finalPr = prArtifacts[prArtifacts.length - 1];
     expect(finalPr.data.isFinalPR).toBe(true);
     expect(finalPr.data.branch).toBe(taskBranch);
+
+    // Merge the final PR: ready_to_merge → done
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
+    task = (await ctx.taskStore.getTask(task.id))!;
+    expect(task.status).toBe('done');
   });
 
   it('should allow merge of final PR through ready_to_merge → done', async () => {
@@ -797,6 +799,87 @@ describe('Phase Cycling E2E', () => {
     task = (await ctx.taskStore.getTask(task.id))!;
     expect(task.status).toBe('ready_to_merge');
     const mergeResult = await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual', actor: 'admin' });
+    expect(mergeResult.success).toBe(true);
+
+    task = (await ctx.taskStore.getTask(task.id))!;
+    expect(task.status).toBe('done');
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: last phase of multi-phase task routes to ready_to_merge (not done)
+  // This test would have FAILED before the fix — the task would end up at 'done'
+  // (via the old done → pr_review bounce) instead of landing cleanly at ready_to_merge.
+  // -------------------------------------------------------------------------
+  it('should route last-phase approval to ready_to_merge, create final PR, notify, and merge to done', async () => {
+    let task = await createThreePhaseTaskWithBranch();
+    const taskBranch = task.metadata?.taskBranch as string;
+
+    task = await ctx.transitionTo(task.id, 'implementing');
+    ctx.notificationRouter.clear();
+
+    // --- Phase 1 (intermediate, has_following_phases = true) ---
+    await createPrArtifact(task.id, `${taskBranch}/phase-1`, 'Phase 1/3');
+    task = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
+      trigger: 'agent', data: { outcome: 'pr_ready', branch: `${taskBranch}/phase-1` },
+    });
+    task = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
+    task = (await ctx.taskStore.getTask(task.id))!;
+    expect(task.status).toBe('implementing');
+
+    // --- Phase 2 (intermediate, has_following_phases = true) ---
+    await createPrArtifact(task.id, `${taskBranch}/phase-2`, 'Phase 2/3');
+    task = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
+      trigger: 'agent', data: { outcome: 'pr_ready', branch: `${taskBranch}/phase-2` },
+    });
+    task = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(task, 'done', { trigger: 'manual' });
+    task = (await ctx.taskStore.getTask(task.id))!;
+    expect(task.status).toBe('implementing');
+
+    // --- Phase 3 (last phase, has_following_phases = false, has_pending_phases = true) ---
+    await createPrArtifact(task.id, `${taskBranch}/phase-3`, 'Phase 3/3');
+    task = (await ctx.taskStore.getTask(task.id))!;
+    await ctx.pipelineEngine.executeTransition(task, 'pr_review', {
+      trigger: 'agent', data: { outcome: 'pr_ready', branch: `${taskBranch}/phase-3` },
+    });
+
+    ctx.notificationRouter.clear();
+    task = (await ctx.taskStore.getTask(task.id))!;
+    expect(task.status).toBe('pr_review');
+
+    // KEY ASSERTION: last-phase approval must route to ready_to_merge (not done)
+    const approveResult = await ctx.pipelineEngine.executeTransition(task, 'ready_to_merge', {
+      trigger: 'manual',
+    });
+    expect(approveResult.success).toBe(true);
+
+    task = (await ctx.taskStore.getTask(task.id))!;
+    expect(task.status).toBe('ready_to_merge');
+    expect(task.phases!.every(p => p.status === 'completed')).toBe(true);
+
+    // advance_phase should have created the final integration PR and updated prLink
+    expect(task.prLink).toBeDefined();
+    expect(task.branchName).toBe(taskBranch);
+    const prArtifacts = await ctx.taskArtifactStore.getArtifactsForTask(task.id, 'pr');
+    const finalPrArtifact = prArtifacts.find(a => a.data.isFinalPR);
+    expect(finalPrArtifact).toBeDefined();
+    expect(finalPrArtifact!.data.branch).toBe(taskBranch);
+    expect(task.prLink).toBe(finalPrArtifact!.data.url);
+
+    // notify hook should have fired with "Final PR ready to merge" title
+    const finalPrNotification = ctx.notificationRouter.sent.find(
+      n => n.notification.title?.includes('Final PR ready to merge'),
+    );
+    expect(finalPrNotification).toBeDefined();
+
+    // Merge the final PR: ready_to_merge → done (advance_phase is no-op)
+    const mergeResult = await ctx.pipelineEngine.executeTransition(task, 'done', {
+      trigger: 'manual',
+      actor: 'admin',
+    });
     expect(mergeResult.success).toBe(true);
 
     task = (await ctx.taskStore.getTask(task.id))!;

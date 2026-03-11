@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { Task, Transition, TransitionContext, GuardResult } from '../../shared/types';
-import { hasPendingPhases } from '../../shared/phase-utils';
+import { hasPendingPhases, hasFollowingPhases } from '../../shared/phase-utils';
 
 export function registerCoreGuards(engine: IPipelineEngine, _db: Database.Database): void {
   engine.registerGuard('has_pr', (task: Task): GuardResult => {
@@ -64,6 +64,13 @@ export function registerCoreGuards(engine: IPipelineEngine, _db: Database.Databa
       return { allowed: true };
     }
     return { allowed: false, reason: 'No pending implementation phases' };
+  });
+
+  engine.registerGuard('has_following_phases', (task: Task): GuardResult => {
+    if (hasFollowingPhases(task.phases)) {
+      return { allowed: true };
+    }
+    return { allowed: false, reason: 'No following pending phases' };
   });
 
   engine.registerGuard('is_admin', (_task: Task, _transition: Transition, context: TransitionContext, dbRef: unknown): GuardResult => {
