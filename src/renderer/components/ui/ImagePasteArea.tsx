@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChatImage } from '../../../shared/types';
 
@@ -11,8 +11,23 @@ interface ImagePasteAreaProps {
 }
 
 export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) {
+  // Internal state avoids stale-closure race when multiple FileReader.onload
+  // callbacks fire in the same tick (e.g. multi-file drop).
+  const [internalImages, setInternalImages] = useState<ChatImage[]>(images);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync parent → internal when parent changes (e.g. dialog reset)
+  useEffect(() => {
+    setInternalImages(images);
+  }, [images]);
+
+  // Sync internal → parent whenever internal state changes
+  const onImagesChangeRef = useRef(onImagesChange);
+  onImagesChangeRef.current = onImagesChange;
+  useEffect(() => {
+    onImagesChangeRef.current(internalImages);
+  }, [internalImages]);
 
   const addImageFile = useCallback((file: File) => {
     if (!VALID_IMAGE_TYPES.has(file.type)) return;
@@ -21,14 +36,17 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
       const result = reader.result as string;
       const base64 = result.split(',')[1];
       if (!base64) return;
-      onImagesChange([...images.slice(0, MAX_IMAGES - 1), {
-        mediaType: file.type as ChatImage['mediaType'],
-        base64,
-        name: file.name,
-      }].slice(0, MAX_IMAGES));
+      setInternalImages((curr) => {
+        if (curr.length >= MAX_IMAGES) return curr;
+        return [...curr, {
+          mediaType: file.type as ChatImage['mediaType'],
+          base64,
+          name: file.name,
+        }];
+      });
     };
     reader.readAsDataURL(file);
-  }, [images, onImagesChange]);
+  }, []);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
@@ -59,14 +77,14 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
   }, []);
 
   const removeImage = useCallback((index: number) => {
-    onImagesChange(images.filter((_, i) => i !== index));
+    setInternalImages((prev) => prev.filter((_, i) => i !== index));
     setPreviewIndex((prev) => {
       if (prev === null) return null;
       if (prev === index) return null;
       if (prev > index) return prev - 1;
       return prev;
     });
-  }, [images, onImagesChange]);
+  }, []);
 
   return (
     <div
@@ -74,9 +92,9 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {images.length > 0 && (
+      {internalImages.length > 0 && (
         <div className="flex gap-2 flex-wrap mb-2">
-          {images.map((img, i) => (
+          {internalImages.map((img, i) => (
             <div key={i} className="relative group">
               <img
                 src={`data:${img.mediaType};base64,${img.base64}`}
@@ -98,7 +116,7 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
         </div>
       )}
 
-      {previewIndex !== null && images[previewIndex] && createPortal(
+      {previewIndex !== null && internalImages[previewIndex] && createPortal(
         <div
           className="absolute inset-0 bg-black/80 flex items-center justify-center z-50"
           onClick={() => setPreviewIndex(null)}
@@ -108,8 +126,8 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
         >
           <div className="relative" onClick={(e) => e.stopPropagation()}>
             <img
-              src={`data:${images[previewIndex].mediaType};base64,${images[previewIndex].base64}`}
-              alt={images[previewIndex].name || 'Preview'}
+              src={`data:${internalImages[previewIndex].mediaType};base64,${internalImages[previewIndex].base64}`}
+              alt={internalImages[previewIndex].name || 'Preview'}
               style={{ maxHeight: '80vh', maxWidth: '80vw' }}
               className="rounded-lg"
             />
@@ -131,7 +149,7 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
         className="border border-dashed border-border/60 rounded-lg p-3 text-center text-xs text-muted-foreground cursor-pointer hover:border-border hover:bg-muted/30 transition-colors"
         onClick={() => fileInputRef.current?.click()}
       >
-        Paste, drop, or click to add screenshots ({images.length}/{MAX_IMAGES})
+        Paste, drop, or click to add screenshots ({internalImages.length}/{MAX_IMAGES})
       </div>
       <input
         ref={fileInputRef}

@@ -33,19 +33,25 @@ export function screenshotRoutes(services: AppServices): Router {
         return;
       }
 
-      const storageDir = getScreenshotStorageDir(services);
-      await fs.promises.mkdir(storageDir, { recursive: true });
-
-      const paths: string[] = [];
+      // Decode and validate all images before writing any to disk
+      const decoded: { buffer: Buffer; ext: string }[] = [];
       for (const img of images) {
         const ext = MEDIA_TYPE_TO_EXT[img.mediaType] || 'png';
-        const filename = `${randomUUID()}.${ext}`;
-        const filePath = path.join(storageDir, filename);
         const buffer = Buffer.from(img.base64, 'base64');
         if (buffer.length === 0) {
           res.status(400).json({ error: `Image "${img.name || 'unnamed'}" decoded to empty data` });
           return;
         }
+        decoded.push({ buffer, ext });
+      }
+
+      const storageDir = getScreenshotStorageDir(services);
+      await fs.promises.mkdir(storageDir, { recursive: true });
+
+      const paths: string[] = [];
+      for (const { buffer, ext } of decoded) {
+        const filename = `${randomUUID()}.${ext}`;
+        const filePath = path.join(storageDir, filename);
         await fs.promises.writeFile(filePath, buffer);
         paths.push(filePath);
       }
