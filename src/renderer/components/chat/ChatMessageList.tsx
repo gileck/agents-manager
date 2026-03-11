@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil } from 'lucide-react';
+import { Pencil, ChevronDown } from 'lucide-react';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
 import { AgentRunInfoCard } from './AgentRunInfoCard';
+import { ThinkingGroup } from './ThinkingGroup';
 
 interface ChatMessageListProps {
   messages: AgentChatMessage[];
@@ -14,10 +15,49 @@ interface ChatMessageListProps {
   onResume?: (text: string) => void;
 }
 
+// Message types that are "leaf" nodes rendered directly in the timeline
+const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status']);
+// Message types that belong inside a ThinkingGroup (internal processing noise)
+const GROUP_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
+
+type LeafSegment = { type: 'leaf'; msg: AgentChatMessage; index: number };
+type GroupSegment = { type: 'group'; messages: AgentChatMessage[]; startIndex: number };
+type Segment = LeafSegment | GroupSegment;
+
+function groupMessages(messages: AgentChatMessage[]): Segment[] {
+  const segments: Segment[] = [];
+  let i = 0;
+
+  while (i < messages.length) {
+    const msg = messages[i];
+
+    if (LEAF_TYPES.has(msg.type)) {
+      segments.push({ type: 'leaf', msg, index: i });
+      i++;
+    } else if (GROUP_TYPES.has(msg.type)) {
+      const startIndex = i;
+      const groupMsgs: AgentChatMessage[] = [];
+      while (i < messages.length && GROUP_TYPES.has(messages[i].type)) {
+        groupMsgs.push(messages[i]);
+        i++;
+      }
+      segments.push({ type: 'group', messages: groupMsgs, startIndex });
+    } else {
+      // Unknown type – render as leaf
+      segments.push({ type: 'leaf', msg, index: i });
+      i++;
+    }
+  }
+
+  return segments;
+}
+
 export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
+  const [autoScroll, setAutoScroll] = useState(true);
 
   const toggleTool = useCallback((index: number) => {
     setExpandedTools((prev) => {
@@ -28,12 +68,29 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
     });
   }, []);
 
+  // Detect user scroll to pause / resume auto-scroll
+  const handleScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+    setAutoScroll(nearBottom);
+  }, []);
+
+  // Auto-scroll to bottom when new messages arrive (only when enabled)
   useEffect(() => {
+    if (!autoScroll) return;
     endRef.current?.scrollIntoView({ behavior: 'instant' });
-  }, [messages.length]);
+  }, [messages.length, autoScroll]);
+
+  const scrollToLatest = useCallback(() => {
+    setAutoScroll(true);
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const segments = useMemo(() => groupMessages(messages), [messages]);
 
   const rendered = useMemo(() => {
-    // Pre-build toolId → toolResult map so parallel tool calls get matched
+    // Pre-build toolId → toolResult map for top-level (ungrouped) tool calls
     const resultMap = new Map<string, AgentChatMessageToolResult>();
     for (const msg of messages) {
       if (msg.type === 'tool_result' && msg.toolId) {
@@ -43,8 +100,22 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
     const matchedResultIds = new Set<string>();
 
     const nodes: React.ReactNode[] = [];
-    for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i];
+
+    for (const segment of segments) {
+      if (segment.type === 'group') {
+        nodes.push(
+          <ThinkingGroup
+            key={`group-${segment.startIndex}`}
+            messages={segment.messages}
+            startIndex={segment.startIndex}
+            expandedTools={expandedTools}
+            onToggleTool={toggleTool}
+          />
+        );
+        continue;
+      }
+
+      const { msg, index: i } = segment;
 
       if (msg.type === 'assistant_text') {
         nodes.push(
@@ -53,6 +124,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
           </div>
         );
       } else if (msg.type === 'tool_use') {
+        // Top-level tool_use (not inside a group) – kept for completeness
         const toolUse = msg as AgentChatMessageToolUse;
         const toolResult = toolUse.toolId ? resultMap.get(toolUse.toolId) : undefined;
         if (toolResult?.toolId) matchedResultIds.add(toolResult.toolId);
@@ -68,7 +140,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
         );
       } else if (msg.type === 'tool_result') {
         const result = msg as AgentChatMessageToolResult;
-        if (result.toolId && matchedResultIds.has(result.toolId)) continue; // already paired
+        if (result.toolId && matchedResultIds.has(result.toolId)) continue;
         nodes.push(
           <div key={i} className="border border-border rounded p-2 my-2 text-xs">
             <span className="text-muted-foreground">Tool result:</span>
@@ -189,31 +261,50 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
       // usage messages are skipped
     }
     return nodes;
-  }, [messages, expandedTools, toggleTool, onEditMessage, onResume, isRunning]);
+  }, [segments, messages, expandedTools, toggleTool, onEditMessage, onResume, isRunning, navigate]);
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[980px] px-4 py-6">
-        {rendered.length === 0 && isRunning && (
-          <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
-            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-          </div>
-        )}
-        {rendered}
-        {isRunning && rendered.length > 0 && (
-          <div className="flex items-center gap-2 py-3 text-muted-foreground text-sm">
-            <div className="flex gap-1">
-              <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" />
-              <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-              <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+    <div className="relative flex-1 min-h-0">
+      <div
+        ref={containerRef}
+        className="h-full overflow-y-auto"
+        onScroll={handleScroll}
+      >
+        <div className="mx-auto w-full max-w-[980px] px-4 py-6">
+          {rendered.length === 0 && isRunning && (
+            <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
+              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
             </div>
-            <span className="text-xs">Thinking...</span>
-          </div>
-        )}
-        <div ref={endRef} />
+          )}
+          {rendered}
+          {isRunning && rendered.length > 0 && (
+            <div className="flex items-center gap-2 py-3 text-muted-foreground text-sm">
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" />
+                <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+              </div>
+              <span className="text-xs">Thinking...</span>
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
       </div>
+
+      {!autoScroll && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+          <button
+            type="button"
+            onClick={scrollToLatest}
+            className="flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-medium px-3.5 py-1.5 rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+            Back to latest
+          </button>
+        </div>
+      )}
     </div>
   );
 }
