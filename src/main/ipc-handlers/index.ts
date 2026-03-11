@@ -18,6 +18,7 @@ import { registerDebugLogHandlers } from './debug-log-handlers';
 import { registerAutomatedAgentHandlers } from './automated-agent-handlers';
 import { registerNotificationHandlers } from './notification-handlers';
 import { registerDevServerHandlers } from './dev-server-handlers';
+import { registerScreenshotHandlers } from './screenshot-handlers';
 
 export function registerIpcHandlers(api: ApiClient): void {
   // ============================================
@@ -77,4 +78,5 @@ export function registerIpcHandlers(api: ApiClient): void {
   registerNotificationHandlers(api);
   registerDevServerHandlers(api);
   registerShellHandlers(api);
+  registerScreenshotHandlers(api);
 }

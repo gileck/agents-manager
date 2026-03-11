@@ -21,7 +21,7 @@ import { sortTasks, collectTags, buildPipelineMap, buildFeatureMap } from '../co
 import type { FilterState } from '../components/tasks/TaskFilterBar';
 import type { SortField, SortDirection, GroupBy, ViewMode } from '../components/tasks/task-helpers';
 import { toast } from 'sonner';
-import type { Task, TaskFilter, TaskCreateInput, TaskUpdateInput, AppSettings, TaskCreatedBy } from '../../shared/types';
+import type { Task, TaskFilter, TaskCreateInput, TaskUpdateInput, AppSettings, TaskCreatedBy, ChatImage } from '../../shared/types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 export function TaskListPage() {
@@ -96,6 +96,7 @@ export function TaskListPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '', type: 'feature' });
   const [creating, setCreating] = useState(false);
+  const [dialogImages, setDialogImages] = useState<ChatImage[]>([]);
 
   useEffect(() => {
     window.api.settings.get().then((s: AppSettings) => setDefaultPipelineId(s.defaultPipelineId))
@@ -106,6 +107,7 @@ export function TaskListPage() {
     const prefill = (defaultPipelineId && pipelines.some((p) => p.id === defaultPipelineId))
       ? defaultPipelineId : '';
     setForm({ pipelineId: prefill, title: '', description: '', type: 'feature' });
+    setDialogImages([]);
     setDialogOpen(true);
   };
 
@@ -113,9 +115,26 @@ export function TaskListPage() {
     if (!form.title.trim() || !currentProjectId || !form.pipelineId) return;
     setCreating(true);
     try {
-      const task = await window.api.tasks.create({ ...form, projectId: currentProjectId });
+      let description = form.description ?? '';
+
+      // Save screenshots if any
+      if (dialogImages.length > 0) {
+        try {
+          const { paths } = await window.api.screenshots.save(dialogImages);
+          if (paths.length > 0) {
+            const screenshotSection = '\n\n## Screenshots\n' +
+              paths.map((p, i) => `![screenshot-${i + 1}](${p})`).join('\n');
+            description = description + screenshotSection;
+          }
+        } catch (err) {
+          reportError(err, 'Save screenshots');
+        }
+      }
+
+      const task = await window.api.tasks.create({ ...form, description, projectId: currentProjectId });
       setDialogOpen(false);
       setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
+      setDialogImages([]);
       await refetch();
       navigate(`/tasks/${task.id}`);
     } finally {
@@ -454,6 +473,8 @@ export function TaskListPage() {
         onFormChange={setForm}
         onCreate={handleCreate}
         creating={creating}
+        images={dialogImages}
+        onImagesChange={setDialogImages}
       />
       <TaskDeleteDialog
         target={deleteTarget}

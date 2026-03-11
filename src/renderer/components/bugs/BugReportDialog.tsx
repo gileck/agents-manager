@@ -11,6 +11,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../ui/dialog';
 import { X } from 'lucide-react';
+import { ImagePasteArea } from '../ui/ImagePasteArea';
+import type { ChatImage } from '../../../shared/types';
 
 export interface BugReportInitialValues {
   title?: string;
@@ -33,6 +35,7 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
   const [submitting, setSubmitting] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [images, setImages] = useState<ChatImage[]>([]);
 
   // Extract task ID from route if on a task page
   const taskIdMatch = location.pathname.match(/\/tasks\/([^/]+)/);
@@ -47,6 +50,7 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
       setDebugLogs('');
       setError(null);
       setLoadingLogs(null);
+      setImages([]);
     }
   }, [open, initialValues]);
 
@@ -176,6 +180,19 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
         sections.push('## Description', description.trim());
       }
 
+      // Save screenshots if any
+      if (images.length > 0) {
+        try {
+          const { paths } = await window.api.screenshots.save(images);
+          if (paths.length > 0) {
+            sections.push('', '## Screenshots');
+            paths.forEach((p, i) => sections.push(`![screenshot-${i + 1}](${p})`));
+          }
+        } catch (err) {
+          reportError(err, 'Save screenshots');
+        }
+      }
+
       sections.push('', '## Context', `- **Route:** \`${currentRoute}\``);
       if (currentTaskId) {
         sections.push(`- **Related Task:** \`${currentTaskId}\``);
@@ -234,6 +251,11 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Steps to reproduce, expected vs actual behavior..."
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Screenshots</Label>
+            <ImagePasteArea images={images} onImagesChange={setImages} />
           </div>
 
           {/* Context info */}

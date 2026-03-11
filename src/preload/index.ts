@@ -199,6 +199,7 @@ const IPC_CHANNELS = {
   TASK_STATUS_CHANGED: 'task:status-changed',
   CHAT_TRACKED_TASKS: 'chat:tracked-tasks',
   CHAT_TRACK_TASK: 'chat:track-task',
+  SCREENSHOT_SAVE: 'screenshot:save',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -552,6 +553,12 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.DEV_SERVER_STATUS, taskId),
     list: (): Promise<DevServerInfo[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.DEV_SERVER_LIST),
+  },
+
+  // Screenshot operations
+  screenshots: {
+    save: (images: ChatImage[]): Promise<{ paths: string[] }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SCREENSHOT_SAVE, images),
   },
 
   // Shell operations

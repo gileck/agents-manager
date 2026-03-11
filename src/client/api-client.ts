@@ -23,6 +23,7 @@ import type {
   TaskChatSessionWithTitle,
   InAppNotification, InAppNotificationFilter,
   DevServerInfo,
+  ChatImage,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -280,6 +281,11 @@ export interface ApiClient {
     stop(taskId: string): Promise<void>;
     status(taskId: string): Promise<DevServerInfo | null>;
     list(): Promise<DevServerInfo[]>;
+  };
+
+  // Screenshots
+  screenshots: {
+    save(images: ChatImage[]): Promise<{ paths: string[] }>;
   };
 
   // Shell operations (OS-level commands)
@@ -641,6 +647,11 @@ export function createApiClient(baseUrl: string): ApiClient {
       stop: (taskId) => req('POST', `/api/tasks/${taskId}/dev-server/stop`),
       status: (taskId) => req('GET', `/api/tasks/${taskId}/dev-server/status`),
       list: () => req('GET', '/api/dev-servers'),
+    },
+
+    // -- Screenshots ---------------------------------------------------------
+    screenshots: {
+      save: (images) => req('POST', '/api/screenshots', { images }),
     },
 
     // -- Shell operations ---------------------------------------------------
