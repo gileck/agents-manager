@@ -84,14 +84,22 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'pr_review', to: 'implementing', trigger: 'manual', label: 'Request Changes',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
-    // Multi-phase manual approve: auto-merge and cycle when phases remain
+    // Multi-phase intermediate approve: auto-merge and cycle when following phases remain
     { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve',
-      guards: [{ name: 'has_pending_phases' }],
+      guards: [{ name: 'has_following_phases' }],
       hooks: [
         { name: 'merge_pr', policy: 'required' },
         { name: 'advance_phase', policy: 'best_effort' },
       ] },
-    // Single-phase or final phase: go to ready_to_merge for manual merge
+    // Last phase of multi-phase task: merge into integration branch, create final PR, notify
+    { from: 'pr_review', to: 'ready_to_merge', trigger: 'manual', label: 'Approve',
+      guards: [{ name: 'has_pending_phases' }],
+      hooks: [
+        { name: 'merge_pr', policy: 'required' },
+        { name: 'advance_phase', policy: 'best_effort' },
+        { name: 'notify', params: { titleTemplate: 'Final PR ready to merge', bodyTemplate: 'All phases complete. Final integration PR ready to merge: {taskTitle}' }, policy: 'best_effort' },
+      ] },
+    // Single-phase or no-phase task: go to ready_to_merge for manual merge
     { from: 'pr_review', to: 'ready_to_merge', trigger: 'manual', label: 'Approve',
       hooks: [{ name: 'notify', params: { titleTemplate: 'PR approved', bodyTemplate: 'PR approved: {taskTitle}' }, policy: 'best_effort' }] },
     { from: 'pr_review', to: 'pr_review', trigger: 'manual', label: 'Re-run PR Review',
@@ -164,14 +172,22 @@ export const AGENT_PIPELINE: SeededPipeline = {
       hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
 
     // === PR review agent outcomes ===
-    // Multi-phase auto-merge: when phases remain, merge immediately and cycle back
+    // Multi-phase intermediate auto-approve: merge immediately and cycle back when following phases remain
     { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
-      guards: [{ name: 'has_pending_phases' }],
+      guards: [{ name: 'has_following_phases' }],
       hooks: [
         { name: 'merge_pr', policy: 'required' },
         { name: 'advance_phase', policy: 'best_effort' },
       ] },
-    // Single-phase or final phase: go to ready_to_merge for manual merge
+    // Last phase of multi-phase task: merge into integration branch, create final PR, notify
+    { from: 'pr_review', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'approved',
+      guards: [{ name: 'has_pending_phases' }],
+      hooks: [
+        { name: 'merge_pr', policy: 'required' },
+        { name: 'advance_phase', policy: 'best_effort' },
+        { name: 'notify', params: { titleTemplate: 'Final PR ready to merge', bodyTemplate: 'All phases complete. Final integration PR ready to merge: {taskTitle}' }, policy: 'best_effort' },
+      ] },
+    // Single-phase or no-phase task: go to ready_to_merge for manual merge
     { from: 'pr_review', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'approved',
       hooks: [{ name: 'notify', params: { titleTemplate: 'PR approved', bodyTemplate: 'PR approved: {taskTitle}' }, policy: 'best_effort' }] },
     { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
@@ -204,11 +220,6 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'done', to: 'implementing', trigger: 'manual', label: 'Retry Next Phase',
       guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
-
-    // === Final PR review: done → pr_review after all phases merged to task branch ===
-    // Triggered by advance_phase when no pending phases remain and a final PR
-    // (task branch → main) has been created.
-    { from: 'done', to: 'pr_review', trigger: 'system' },
 
     // === Recovery: cancel agent phases back to open ===
     { from: 'investigating', to: 'open', trigger: 'manual', label: 'Cancel Investigation' },

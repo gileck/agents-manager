@@ -32,6 +32,16 @@ export function hasPendingPhases(phases: ImplementationPhase[] | null | undefine
   return phases.some(p => p.status !== 'completed');
 }
 
+/**
+ * Returns true if there are phases still queued to run after the current one
+ * (status === 'pending'). Used to distinguish intermediate phases from the last
+ * phase: intermediate phases have following pending phases; the last phase does not.
+ */
+export function hasFollowingPhases(phases: ImplementationPhase[] | null | undefined): boolean {
+  if (!phases || phases.length === 0) return false;
+  return phases.some(p => p.status === 'pending');
+}
+
 /** Flattens all subtasks from all phases into a single array. */
 export function getAllSubtasksFromPhases(phases: ImplementationPhase[] | null | undefined): Subtask[] {
   if (!phases || phases.length === 0) return [];

@@ -98,34 +98,11 @@ export function registerPhaseHandler(engine: IPipelineEngine, deps: PhaseHandler
             branchName: taskBranch,
           });
 
-          await log('advance_phase: final PR created', 'info', { url: prInfo.url, number: prInfo.number });
+          await log('advance_phase: all phases complete — final PR created, task at ready_to_merge', 'info', { url: prInfo.url, number: prInfo.number });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           await log(`advance_phase: failed to create final PR: ${errMsg}`, 'error');
           return { success: false, error: `Failed to create final PR: ${errMsg}` };
-        }
-
-        // Transition to pr_review for the final PR
-        try {
-          const freshTask = await deps.taskStore.getTask(task.id);
-          if (!freshTask) {
-            await log('advance_phase: task not found after final PR creation', 'error');
-            return { success: false, error: 'Task not found after final PR creation' };
-          }
-          const transitionResult = await deps.pipelineEngine.executeTransition(freshTask, 'pr_review', {
-            trigger: 'system',
-            data: { reason: 'final_pr_created', taskBranch },
-          });
-          if (transitionResult.success) {
-            await log('advance_phase: triggered done → pr_review for final PR', 'info');
-          } else {
-            await log(`advance_phase: done → pr_review transition failed: ${transitionResult.error ?? 'unknown'}`, 'error');
-            return { success: false, error: transitionResult.error ?? 'Transition to pr_review failed' };
-          }
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          await log(`advance_phase: failed to trigger done → pr_review: ${errMsg}`, 'error');
-          return { success: false, error: errMsg };
         }
       } else {
         await log('advance_phase: all phases completed — no task branch (legacy flow), task stays at done', 'info');
