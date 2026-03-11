@@ -427,19 +427,12 @@ export class ChatAgentService {
       messagePreview: message.slice(0, 100),
     });
 
-    // Load conversation history
+    // Load conversation history to detect whether this is a follow-up message.
+    // Instead of manually replaying history (the SDK rejects assistant-role messages
+    // in the AsyncIterable prompt), we use native SDK session resume on follow-ups.
     const history = await this.chatMessageStore.getMessagesForSession(sessionId);
-
-    // Build structured history (all messages except the latest user message)
-    const historyMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-    for (const msg of history.slice(0, -1)) {
-      if (msg.role === 'user') {
-        historyMessages.push({ role: 'user', content: parseUserContent(msg.content).text });
-      } else if (msg.role === 'assistant') {
-        historyMessages.push({ role: 'assistant', content: extractTextFromContent(msg.content) });
-      }
-      // 'system' role messages skipped — not meaningful as conversation turns
-    }
+    const hasHistory = history.length > 1; // more than just the current user message
+    const shouldResume = resumeSession || hasHistory;
 
     let prompt = message.trim() || '(see attached images)';
     // Include image paths so the agent can Read them
@@ -475,7 +468,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, historyMessages: historyMessages.length > 0 ? historyMessages : undefined }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -791,7 +784,7 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
-    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string; historyMessages?: Array<{ role: 'user' | 'assistant'; content: string }> },
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -920,10 +913,10 @@ export class ChatAgentService {
         }
       }
 
-      const result = await lib.execute(executeSessionId, {
+      const executeOptions = {
         prompt,
         systemPrompt,
-        ...(extra?.historyMessages ? { history: extra.historyMessages } : {}),
+        sessionId: executeSessionId,
         cwd: projectPath,
         model,
         maxTurns: 50,
@@ -935,7 +928,22 @@ export class ChatAgentService {
         ...(preToolUse ? { hooks: { preToolUse } } : {}),
         ...(libImages ? { images: libImages } : {}),
         ...(mcpServers ? { mcpServers } : {}),
-      }, callbacks);
+      };
+
+      let result = await lib.execute(executeSessionId, executeOptions, callbacks);
+
+      // Fallback: if session resume failed (missing/corrupt session from before the fix),
+      // retry without resume so existing threads don't permanently break.
+      if (extra?.resumeSession && result.exitCode !== 0 && !result.killReason &&
+          !result.costInputTokens && !result.costOutputTokens &&
+          (result.error?.includes('session') || result.output?.includes('session') || (!result.output && !result.error))) {
+        getAppLogger().info('ChatAgentService', `Session resume failed for ${executeSessionId}, retrying without resume`);
+        emitEvent({ type: 'text', text: '\n[Session resume failed — starting fresh session]\n' });
+        result = await lib.execute(executeSessionId, {
+          ...executeOptions,
+          resumeSession: false,
+        }, callbacks);
+      }
 
       if (result.costInputTokens != null || result.costOutputTokens != null) {
         emitMessage({

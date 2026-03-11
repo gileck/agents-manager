@@ -190,34 +190,24 @@ export class ClaudeCodeLib implements IAgentLib {
       return undefined;
     };
 
-    // Build SDK prompt: structured AsyncIterable when history or images are present, otherwise plain string
+    // Build SDK prompt: multimodal when images are present, otherwise plain string.
+    // Conversation history is handled via native SDK session resume (not manual replay).
     let sdkPrompt: string | AsyncIterable<SdkUserMessage>;
-    const hasHistory = options.history && options.history.length > 0;
-    const hasImages = options.images && options.images.length > 0;
-    if (hasHistory || hasImages) {
-      const currentContentBlocks: unknown[] = [
+    if (options.images && options.images.length > 0) {
+      const contentBlocks = [
         { type: 'text' as const, text: options.prompt },
-        ...(options.images?.map((img) => ({
+        ...options.images.map((img) => ({
           type: 'image' as const,
           source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
-        })) ?? []),
+        })),
       ];
-      sdkPrompt = (async function* () {
-        for (const msg of options.history ?? []) {
-          yield {
-            type: 'user',
-            message: { role: msg.role, content: msg.content },
-            parent_tool_use_id: null,
-            session_id: runId,
-          } as SdkUserMessage;
-        }
-        yield {
-          type: 'user',
-          message: { role: 'user', content: currentContentBlocks },
-          parent_tool_use_id: null,
-          session_id: runId,
-        } as SdkUserMessage;
-      })();
+      const userMessage: SdkUserMessage = {
+        type: 'user',
+        message: { role: 'user', content: contentBlocks },
+        parent_tool_use_id: null,
+        session_id: runId,
+      };
+      sdkPrompt = (async function* () { yield userMessage; })();
     } else {
       sdkPrompt = options.prompt;
     }

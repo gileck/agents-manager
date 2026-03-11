@@ -690,9 +690,9 @@ The agent lib for a chat session is resolved in priority order:
 
 If the resolved lib is not registered in the registry, falls back to `claude-code` with a warning.
 
-### History Injection
+### Session Resume for Chat
 
-Conversation history is loaded from `ChatMessageStore` and prepended to the prompt as a `## Conversation History` block. Assistant messages are extracted from their JSON storage format (structured `AgentChatMessage` arrays) back to plain text.
+Conversation continuity is handled via native SDK session resume — not manual history replay. On follow-up messages, `ChatAgentService` sets `resumeSession: true` and passes the session key as `sessionId` in the execute options. See [agent-types.md](./agent-types.md) for full session key resolution per agent type.
 
 ### Scope Resolution
 
