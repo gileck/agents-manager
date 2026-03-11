@@ -12,6 +12,13 @@ const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
 
 // Capture unhandled errors via app logger (falls back to console → daemon.log before DB init)
 process.on('uncaughtException', (err) => {
+  // EPIPE is expected when a client disconnects while an agent subprocess is still
+  // writing to its pipe.  Crashing the daemon for this is unnecessary — just log it.
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED') {
+    getAppLogger().logError('daemon', `Ignoring transient stream error (${code})`, err);
+    return;
+  }
   getAppLogger().logError('daemon', 'Uncaught exception', err);
   process.exit(1);
 });
