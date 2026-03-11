@@ -9,6 +9,36 @@ interface AgentRunErrorBannerProps {
   compact?: boolean;
 }
 
+/** Format seconds into a human-readable duration string */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+}
+
+/** Translate raw technical error strings into user-friendly summaries */
+function humanizeErrorSummary(raw: string): string {
+  // Pattern: "Agent aborted after Xs (N messages processed) [kill_reason=...]"
+  const abortMatch = raw.match(/^Agent aborted after (\d+)s \(\d+ messages processed\) \[kill_reason=(\w+)\]$/);
+  if (abortMatch) {
+    const duration = formatDuration(Number(abortMatch[1]));
+    const reason = abortMatch[2];
+    if (reason === 'stopped') return `Agent was stopped by user after ${duration}`;
+    if (reason === 'timeout') return `Agent timed out after ${duration}`;
+    return `Agent was interrupted after ${duration}`;
+  }
+
+  // Pattern: "Agent timed out after Xs (timeout=Xs, N messages processed)"
+  const timeoutMatch = raw.match(/^Agent timed out after (\d+)s \(timeout=\d+s, \d+ messages processed\)$/);
+  if (timeoutMatch) {
+    const duration = formatDuration(Number(timeoutMatch[1]));
+    return `Agent timed out after ${duration}`;
+  }
+
+  return raw;
+}
+
 /** Parse error string into summary line and structured diagnostics */
 function parseError(error: string): { summary: string; diagnostics: Record<string, string> | null; rawDiagnostics: string | null } {
   const diagSeparator = '--- Diagnostics ---';
@@ -51,7 +81,7 @@ export function AgentRunErrorBanner({ error, compact }: AgentRunErrorBannerProps
   if (compact) {
     return (
       <span className="text-sm font-medium" style={{ color: '#dc2626' }}>
-        {summary}
+        {humanizeErrorSummary(summary)}
       </span>
     );
   }
@@ -64,7 +94,7 @@ export function AgentRunErrorBanner({ error, compact }: AgentRunErrorBannerProps
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
         </svg>
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium" style={{ color: '#dc2626' }}>{summary}</span>
+          <span className="text-sm font-medium" style={{ color: '#dc2626' }}>{humanizeErrorSummary(summary)}</span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button
