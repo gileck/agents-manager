@@ -245,6 +245,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               onModelChange={handleModelChange}
               permissionMode={selectedPermissionMode}
               onPermissionModeChange={handlePermissionModeChange}
+              sessionId={currentSessionId}
               emptyState={(
                 <div className="text-center text-muted-foreground/80 py-20">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border border-border/70 bg-card/65 mb-5">

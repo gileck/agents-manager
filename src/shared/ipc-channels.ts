@@ -225,4 +225,11 @@ export const IPC_CHANNELS = {
   NOTIFICATION_UNREAD_COUNT: 'notification:unread-count',
   /** PUSH-ONLY: main->renderer, do not invoke() */
   NOTIFICATION_ADDED: 'notification:added',
+
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  TASK_STATUS_CHANGED: 'task:status-changed',
+
+  // Chat session task tracking
+  CHAT_TRACKED_TASKS: 'chat:tracked-tasks',
+  CHAT_TRACK_TASK: 'chat:track-task',
 } as const;

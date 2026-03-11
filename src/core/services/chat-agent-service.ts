@@ -832,7 +832,7 @@ export class ChatAgentService {
           const session = await this.chatSessionStore.getSession(sessionId);
           if (session?.projectId) {
             const daemonUrl = `http://127.0.0.1:${process.env.AM_DAEMON_PORT ?? 3847}`;
-            const mcpServer = await createTaskMcpServer(daemonUrl, { projectId: session.projectId });
+            const mcpServer = await createTaskMcpServer(daemonUrl, { projectId: session.projectId, sessionId });
             mcpServers = { taskManager: mcpServer };
           }
         } catch (mcpErr) {

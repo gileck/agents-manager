@@ -15,4 +15,6 @@ export const WS_CHANNELS = {
   NOTIFICATION_ADDED: 'notification:added',
   DEV_SERVER_LOG: 'dev-server:log',
   DEV_SERVER_STATUS: 'dev-server:status',
+  /** PUSH-ONLY: broadcast when a task transitions to a new status */
+  TASK_STATUS_CHANGED: 'task:status-changed',
 } as const;

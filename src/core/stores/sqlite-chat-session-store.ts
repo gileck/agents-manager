@@ -252,4 +252,30 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       throw new Error(`Failed to hide all chat sessions: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+
+  async addTrackedTask(sessionId: string, taskId: string): Promise<void> {
+    try {
+      const row = this.db.prepare(`SELECT task_ids FROM chat_sessions WHERE id = ?`).get(sessionId) as { task_ids: string } | undefined;
+      if (!row) return;
+      const ids: string[] = JSON.parse(row.task_ids || '[]');
+      if (!ids.includes(taskId)) {
+        ids.push(taskId);
+        this.db.prepare(`UPDATE chat_sessions SET task_ids = ? WHERE id = ?`).run(JSON.stringify(ids), sessionId);
+      }
+    } catch (error) {
+      getAppLogger().logError('ChatSessionStore', 'addTrackedTask failed', error);
+      throw new Error(`Failed to add tracked task: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async getTrackedTaskIds(sessionId: string): Promise<string[]> {
+    try {
+      const row = this.db.prepare(`SELECT task_ids FROM chat_sessions WHERE id = ?`).get(sessionId) as { task_ids: string } | undefined;
+      if (!row) return [];
+      return JSON.parse(row.task_ids || '[]');
+    } catch (error) {
+      getAppLogger().logError('ChatSessionStore', 'getTrackedTaskIds failed', error);
+      throw new Error(`Failed to get tracked task IDs: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 }
