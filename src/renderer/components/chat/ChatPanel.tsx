@@ -52,6 +52,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     clearError,
     sendMessage,
     stopChat,
+    cancelQueuedMessage,
     clearChat,
     summarizeChat,
     tokenUsage,
@@ -235,6 +236,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               isQueued={isQueued}
               onSend={sendMessage}
               onStop={stopChat}
+              onCancelQueue={cancelQueuedMessage}
               inputRef={inputRef}
               tokenUsage={tokenUsage}
               agentLibs={agentLibs.length > 0 && currentSessionId ? agentLibs : undefined}

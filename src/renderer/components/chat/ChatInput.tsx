@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Image, Square, Cpu, ArrowUp, Eye, Pencil, Shield } from 'lucide-react';
+import { Image, Square, Cpu, ArrowUp, Eye, Pencil, Shield, Zap, X } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import type { ChatImage, PermissionMode } from '../../../shared/types';
 import {
@@ -66,6 +66,7 @@ interface ChatInputProps {
   onModelChange?: (model: string) => void;
   permissionMode?: PermissionMode | null;
   onPermissionModeChange?: (mode: PermissionMode) => void;
+  onCancelQueue?: () => void;
   prefill?: { text: string; seq: number } | null;
   lastUserMessage?: string;
   onEditLastMessage?: () => void;
@@ -85,6 +86,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   onModelChange,
   permissionMode,
   onPermissionModeChange,
+  onCancelQueue,
   prefill,
   lastUserMessage,
   onEditLastMessage,
@@ -393,7 +395,19 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
               </Select>
             )}
             {isQueued && (
-              <span className="text-xs text-amber-500 font-medium ml-1">Queued</span>
+              <span className="inline-flex items-center gap-1 text-xs text-amber-500 font-medium ml-1">
+                Queued
+                {onCancelQueue && (
+                  <button
+                    type="button"
+                    onClick={onCancelQueue}
+                    className="p-0.5 rounded hover:bg-amber-500/15 transition-colors"
+                    title="Discard queued message"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
             )}
           </div>
 
@@ -452,10 +466,18 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
               <button
                 type="button"
                 onClick={onStop}
-                className="p-2 rounded-full text-destructive hover:bg-destructive/10 transition-colors"
-                title="Stop"
+                className={`p-2 rounded-full transition-colors ${
+                  isQueued
+                    ? 'text-amber-500 hover:bg-amber-500/10'
+                    : 'text-destructive hover:bg-destructive/10'
+                }`}
+                title={isQueued ? 'Stop agent and send queued message now' : 'Stop'}
               >
-                <Square className="h-4 w-4 fill-current" />
+                {isQueued ? (
+                  <Zap className="h-4 w-4 fill-current" />
+                ) : (
+                  <Square className="h-4 w-4 fill-current" />
+                )}
               </button>
             )}
             <button
