@@ -130,8 +130,8 @@ export function StatusActionBar({
   if (statusMeta.isAgentRunning && isStuck) {
     const maxRetriesExhausted = totalFailedRuns !== undefined && totalFailedRuns > 3;
     return (
-      <div className="rounded-md px-4 py-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
-        <div className="flex-1 min-w-0">
+      <div className="rounded-md px-4 py-3 flex flex-col gap-3" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
+        <div className="min-w-0">
           {lastRun?.error ? (
             <AgentRunErrorBanner error={lastRun.error} compact />
           ) : (
@@ -139,39 +139,43 @@ export function StatusActionBar({
           )}
           {maxRetriesExhausted && (
             <p className="text-xs mt-1" style={{ color: '#dc2626' }}>
-              Max retries exhausted ({totalFailedRuns} failed runs). Use Force Transition to recover.
+              Implementation failed after {totalFailedRuns} attempts. Use the Force Transition button below to recover, or go back to planning.
             </p>
           )}
         </div>
-        {lastRun && (
-          <button
-            className="text-sm text-blue-500 hover:underline"
-            onClick={() => onNavigateToRun(lastRun.id)}
-          >
-            View Last Run
-          </button>
-        )}
-        <div className="flex gap-2 ml-auto">
-          {primaryTransitions.map((t) => (
-            <Button
-              key={t.to}
-              variant="outline"
-              size="sm"
-              onClick={() => onTransition(t.to)}
-              disabled={transitioning !== null}
-            >
-              {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
-            </Button>
-          ))}
-          {maxRetriesExhausted && onOpenForceDialog && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onOpenForceDialog}
-            >
-              Force...
-            </Button>
-          )}
+        <div className="flex items-center gap-2 flex-wrap justify-between">
+          <div>
+            {lastRun && (
+              <button
+                className="text-sm text-blue-500 hover:underline"
+                onClick={() => onNavigateToRun(lastRun.id)}
+              >
+                View Last Run
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {primaryTransitions.map((t) => (
+              <Button
+                key={t.to}
+                variant="outline"
+                size="sm"
+                onClick={() => onTransition(t.to)}
+                disabled={transitioning !== null}
+              >
+                {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+              </Button>
+            ))}
+            {maxRetriesExhausted && onOpenForceDialog && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={onOpenForceDialog}
+              >
+                Force...
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     );
