@@ -283,14 +283,18 @@ export class ClaudeCodeLib implements IAgentLib {
             // Only accumulate once per unique message id. Still emit the usage callback for UI progress regardless.
             if (!msgId || !state.seenMessageIds.has(msgId)) {
               if (msgId) state.seenMessageIds.add(msgId);
-              state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens;
+              state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens
+                + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
+                + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
               state.accumulatedOutputTokens += assistantMsg.message.usage.output_tokens;
               state.accumulatedCacheReadInputTokens += assistantMsg.message.usage.cache_read_input_tokens ?? 0;
               state.accumulatedCacheCreationInputTokens += assistantMsg.message.usage.cache_creation_input_tokens ?? 0;
             }
             // Always overwrite (not accumulate): this gives us the input tokens
             // from the most recent API call, which equals the current context window usage.
-            state.lastInputTokens = assistantMsg.message.usage.input_tokens;
+            state.lastInputTokens = assistantMsg.message.usage.input_tokens
+              + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
+              + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
           }
           for (const block of assistantMsg.message.content) {
