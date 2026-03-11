@@ -67,6 +67,8 @@ interface ChatInputProps {
   permissionMode?: PermissionMode | null;
   onPermissionModeChange?: (mode: PermissionMode) => void;
   prefill?: { text: string; seq: number } | null;
+  lastUserMessage?: string;
+  onEditLastMessage?: () => void;
 }
 
 export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
@@ -84,6 +86,8 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   permissionMode,
   onPermissionModeChange,
   prefill,
+  lastUserMessage,
+  onEditLastMessage,
 }: ChatInputProps, forwardedRef) {
   const [value, setValue] = useState('');
   const [images, setImages] = useState<ChatImage[]>([]);
@@ -174,10 +178,21 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     setImages([]);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
+    }
+    if (
+      e.key === 'ArrowUp' &&
+      value === '' &&
+      onEditLastMessage &&
+      lastUserMessage &&
+      e.currentTarget.selectionStart === 0 &&
+      e.currentTarget.selectionEnd === 0
+    ) {
+      e.preventDefault();
+      onEditLastMessage();
     }
   };
 
@@ -384,25 +399,30 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
 
           <div className="flex items-center gap-1.5">
             {tokenUsage !== undefined && contextPercent > 0 && (
-              <svg
-                width="22" height="22"
-                viewBox="0 0 22 22"
-                className="shrink-0"
-                aria-label={`Context: ${contextPercent.toFixed(1)}% used`}
-              >
-                <title>{`Context: ${contextPercent.toFixed(1)}% used (${tokenUsage.inputTokens.toLocaleString()} / ${CONTEXT_WINDOW.toLocaleString()} tokens)`}</title>
-                <circle cx="11" cy="11" r={circleRadius} fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/20" />
-                <circle
-                  cx="11" cy="11" r={circleRadius}
-                  fill="none"
-                  stroke={circleColor}
-                  strokeWidth="2"
-                  strokeDasharray={circleCircumference}
-                  strokeDashoffset={circleOffset}
-                  strokeLinecap="round"
-                  transform="rotate(-90 11 11)"
-                />
-              </svg>
+              <div className="group relative cursor-default shrink-0">
+                <svg
+                  width="22" height="22"
+                  viewBox="0 0 22 22"
+                  aria-label={`Context: ${contextPercent.toFixed(1)}% used`}
+                >
+                  <circle cx="11" cy="11" r={circleRadius} fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/20" />
+                  <circle
+                    cx="11" cy="11" r={circleRadius}
+                    fill="none"
+                    stroke={circleColor}
+                    strokeWidth="2"
+                    strokeDasharray={circleCircumference}
+                    strokeDashoffset={circleOffset}
+                    strokeLinecap="round"
+                    transform="rotate(-90 11 11)"
+                  />
+                </svg>
+                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 z-50 hidden group-hover:block w-52 rounded-lg border border-border bg-popover px-3 py-2.5 text-xs text-popover-foreground shadow-md">
+                  <p className="font-semibold mb-1.5">Context Window</p>
+                  <p>{tokenUsage.inputTokens.toLocaleString()} / {CONTEXT_WINDOW.toLocaleString()} tokens</p>
+                  <p className="text-muted-foreground mt-0.5">{contextPercent.toFixed(1)}% used</p>
+                </div>
+              </div>
             )}
             <button
               type="button"

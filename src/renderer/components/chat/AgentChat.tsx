@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import type { AgentChatMessage, AgentRun, ChatImage, PermissionMode } from '../../../shared/types';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput, AgentLibOption, ModelOption } from './ChatInput';
@@ -58,6 +58,29 @@ export function AgentChat({
     onSend(text);
   }, [onSend]);
 
+  // Global Esc → stop agent
+  useEffect(() => {
+    if (!isRunning || !onStop) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onStop();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isRunning, onStop]);
+
+  // Last user message text for Arrow-Up-to-edit
+  const lastUserMessage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type === 'user') return msg.text;
+    }
+    return undefined;
+  }, [messages]);
+
+  const handleEditLastMessage = useCallback(() => {
+    if (lastUserMessage) handleEditMessage(lastUserMessage);
+  }, [lastUserMessage, handleEditMessage]);
+
   return (
     <div className="flex-1 min-h-0 flex">
       <div className="flex-1 min-h-0 flex flex-col">
@@ -85,6 +108,8 @@ export function AgentChat({
           permissionMode={permissionMode}
           onPermissionModeChange={onPermissionModeChange}
           prefill={prefill}
+          lastUserMessage={lastUserMessage}
+          onEditLastMessage={handleEditLastMessage}
         />
       </div>
       {showSidebar && (
