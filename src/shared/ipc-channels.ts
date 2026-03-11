@@ -232,4 +232,7 @@ export const IPC_CHANNELS = {
   // Chat session task tracking
   CHAT_TRACKED_TASKS: 'chat:tracked-tasks',
   CHAT_TRACK_TASK: 'chat:track-task',
+
+  // Screenshot operations
+  SCREENSHOT_SAVE: 'screenshot:save',
 } as const;

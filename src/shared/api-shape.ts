@@ -281,6 +281,11 @@ export interface ApiShape {
     list(): Promise<DevServerInfo[]>;
   };
 
+  // Screenshot operations
+  screenshots: {
+    save(images: ChatImage[]): Promise<{ paths: string[] }>;
+  };
+
   // Shell operations
   shell: {
     openInChrome(url: string): Promise<void>;

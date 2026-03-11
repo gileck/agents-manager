@@ -249,6 +249,11 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       list: () => api.devServers.list(),
     },
 
+    // ── Screenshots ────────────────────────────────────────────────────
+    screenshots: {
+      save: (images) => api.screenshots.save(images),
+    },
+
     // ── Shell ─────────────────────────────────────────────────────────
     shell: {
       openInChrome: (url) => api.shell.openInChrome(url),

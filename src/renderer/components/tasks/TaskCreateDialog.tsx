@@ -9,7 +9,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../ui/dialog';
-import type { Pipeline, Feature, TaskCreateInput, TaskType } from '../../../shared/types';
+import { ImagePasteArea } from '../ui/ImagePasteArea';
+import type { Pipeline, Feature, TaskCreateInput, TaskType, ChatImage } from '../../../shared/types';
 
 interface TaskCreateDialogProps {
   open: boolean;
@@ -20,6 +21,8 @@ interface TaskCreateDialogProps {
   onFormChange: (form: Omit<TaskCreateInput, 'projectId'>) => void;
   onCreate: () => void;
   creating: boolean;
+  images?: ChatImage[];
+  onImagesChange?: (images: ChatImage[]) => void;
 }
 
 export function TaskCreateDialog({
@@ -31,6 +34,8 @@ export function TaskCreateDialog({
   onFormChange,
   onCreate,
   creating,
+  images,
+  onImagesChange,
 }: TaskCreateDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,6 +87,12 @@ export function TaskCreateDialog({
               placeholder="Optional description"
             />
           </div>
+          {images && onImagesChange && (
+            <div className="space-y-2">
+              <Label>Screenshots</Label>
+              <ImagePasteArea images={images} onImagesChange={onImagesChange} />
+            </div>
+          )}
           {features && features.length > 0 && (
             <div className="space-y-2">
               <Label>Feature</Label>
