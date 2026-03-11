@@ -1310,3 +1310,19 @@ export interface DevServerInfo {
   pid: number | null;
   error?: string;
 }
+
+// ============================================
+// Agent Subscription Notification Types
+// ============================================
+
+export interface AgentNotificationPayload {
+  taskId: string;
+  taskTitle: string;
+  fromStatus: string;
+  toStatus: string;
+  outcome: string;
+  agentType: string;
+  agentRunId: string;
+  summary?: string;
+  autoNotify: boolean;
+}

@@ -25,6 +25,8 @@ import type { OutcomeResolver } from './outcome-resolver';
 import type { ScheduledAgentService } from './scheduled-agent-service';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { IDevServerManager } from '../interfaces/dev-server-manager';
+import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
+import type { AgentNotificationPayload } from '../../shared/types';
 import * as path from 'path';
 import * as fs from 'fs';
 import { validateOutcomePayload } from '../handlers/outcome-schemas';
@@ -45,6 +47,12 @@ export class AgentService implements IAgentService {
   private pendingResumes = new Map<string, import('../../shared/types').AgentRun>();
   private readonly postRunExtractor: PostRunExtractor;
 
+  private enqueueInjectedMessage?: (
+    sessionId: string,
+    content: string,
+    metadata: Record<string, unknown>,
+  ) => void;
+
   constructor(
     private agentFramework: IAgentFramework,
     private agentRunStore: IAgentRunStore,
@@ -64,8 +72,19 @@ export class AgentService implements IAgentService {
     private scheduledAgentService?: ScheduledAgentService,
     private agentLibRegistry?: AgentLibRegistry,
     private devServerManager?: IDevServerManager,
+    private subscriptionRegistry?: AgentSubscriptionRegistry,
+    private onAgentSubscriptionFired?: (
+      sessionId: string,
+      payload: AgentNotificationPayload,
+    ) => void,
   ) {
     this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter);
+  }
+
+  setInjectedMessageHandler(
+    handler: (sessionId: string, content: string, metadata: Record<string, unknown>) => void,
+  ): void {
+    this.enqueueInjectedMessage = handler;
   }
 
   async recoverOrphanedRuns(): Promise<AgentRun[]> {
@@ -848,6 +867,60 @@ export class AgentService implements IAgentService {
       await this.outcomeResolver.resolveAndTransition({
         taskId, result, run, worktree, worktreeManager, phase, context, summary: agentSummary,
       });
+
+      // --- Notify subscribed chat sessions ---
+      if (this.subscriptionRegistry) {
+        const subscribers = this.subscriptionRegistry.getAndRemove(taskId);
+        if (subscribers.length > 0) {
+          const updatedTask = await this.taskStore.getTask(taskId);
+          for (const sub of subscribers) {
+            const payload: AgentNotificationPayload = {
+              taskId,
+              taskTitle: updatedTask?.title ?? task.title,
+              fromStatus: task.status,
+              toStatus: updatedTask?.status ?? task.status,
+              outcome: result.outcome ?? 'unknown',
+              agentType,
+              agentRunId: run.id,
+              summary: agentSummary,
+              autoNotify: sub.autoNotify,
+            };
+
+            // Tier 1: WebSocket push (always)
+            try {
+              this.onAgentSubscriptionFired?.(sub.sessionId, payload);
+            } catch (err) {
+              getAppLogger().warn('AgentService', 'Failed to fire subscription WS notification', {
+                sessionId: sub.sessionId, taskId,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+
+            // Tier 2: Injected agent turn (if requested)
+            if (sub.autoNotify && this.enqueueInjectedMessage) {
+              const content =
+                `[System Notification] The ${agentType} agent for task "${updatedTask?.title ?? task.title}" ` +
+                `has completed with outcome "${result.outcome}". ` +
+                `Status: ${task.status} → ${updatedTask?.status ?? task.status}. ` +
+                (agentSummary ? `Summary: ${agentSummary}` : '');
+              try {
+                this.enqueueInjectedMessage(sub.sessionId, content, {
+                  injected: true,
+                  taskId,
+                  outcome: result.outcome ?? 'unknown',
+                  agentType,
+                  agentRunId: run.id,
+                });
+              } catch (err) {
+                getAppLogger().warn('AgentService', 'Failed to enqueue injected message', {
+                  sessionId: sub.sessionId, taskId,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
+            }
+          }
+        }
+      }
 
       // Log completion event
       const completionLevel = result.exitCode === 0 ? 'info' : 'error';

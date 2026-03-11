@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createApiClient } from '../../client/api-client';
 import type { TaskType } from '../../shared/types';
 import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentSubscriptionRegistry } from '../services/agent-subscription-registry';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
@@ -94,7 +95,7 @@ function extractTaskIds(data: unknown): string[] {
  */
 export async function createTaskMcpServer(
   daemonUrl: string,
-  context: { projectId: string; sessionId?: string },
+  context: { projectId: string; sessionId?: string; subscriptionRegistry?: AgentSubscriptionRegistry },
 ): Promise<McpSdkServerConfigWithInstance> {
   const createSdkMcpServer = await loadCreateSdkMcpServer();
 
@@ -306,6 +307,57 @@ export async function createTaskMcpServer(
             return result;
           });
           return ok(projected);
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // subscribe_for_agent
+    // -------------------------------------------------------------------------
+    {
+      name: 'subscribe_for_agent',
+      description:
+        'Subscribe to receive a notification when a pipeline agent finishes ' +
+        'for the given task. The notification will be delivered to this chat ' +
+        'session when the task transitions to a new status after agent completion. ' +
+        'Subscription is single-fire (auto-removed after delivery) and expires ' +
+        'after 1 hour. Returns immediately — agent continues chatting normally.',
+      inputSchema: {
+        taskId: z.string().describe(
+          'Task ID to watch (full UUID or 8-char short prefix)',
+        ),
+        autoNotify: z.boolean().optional().describe(
+          'If true, the agent will automatically start a new turn to process ' +
+          'the notification. If false (default), only a client-side UI ' +
+          'notification is shown and the user can choose to engage.',
+        ),
+      },
+      handler: async (args: {
+        taskId: string;
+        autoNotify?: boolean;
+      }): Promise<CallToolResult> => {
+        if (!context.sessionId) {
+          return fail('subscribe_for_agent requires a session context');
+        }
+        if (!context.subscriptionRegistry) {
+          return fail('Subscription registry not available');
+        }
+        try {
+          const taskId = await resolveTaskId(api, args.taskId);
+          context.subscriptionRegistry.subscribe({
+            sessionId: context.sessionId,
+            taskId,
+            autoNotify: args.autoNotify ?? false,
+            createdAt: Date.now(),
+          });
+          return ok({
+            subscribed: true,
+            taskId,
+            sessionId: context.sessionId,
+            autoNotify: args.autoNotify ?? false,
+          });
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
         }

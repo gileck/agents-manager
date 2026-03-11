@@ -94,6 +94,8 @@ import { SchedulerSupervisor } from '../services/scheduler-supervisor';
 import { TriageAgentPromptBuilder } from '../services/triage-agent-prompt-builder';
 import { DevServerManager, type DevServerManagerCallbacks } from '../services/dev-server-manager';
 import type { IDevServerManager } from '../interfaces/dev-server-manager';
+import { AgentSubscriptionRegistry } from '../services/agent-subscription-registry';
+import type { AgentNotificationPayload } from '../../shared/types';
 
 export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
@@ -101,6 +103,7 @@ export interface AppServicesConfig {
   imageStorageDir?: string;
   onMainDiverged?: (projectId: string) => void;
   devServerCallbacks?: DevServerManagerCallbacks;
+  onAgentSubscriptionFired?: (sessionId: string, payload: AgentNotificationPayload) => void;
 }
 
 export interface AppServices {
@@ -142,6 +145,7 @@ export interface AppServices {
   schedulerSupervisor: SchedulerSupervisor;
   inAppNotificationStore: IInAppNotificationStore;
   devServerManager: IDevServerManager;
+  subscriptionRegistry: AgentSubscriptionRegistry;
 }
 
 export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
@@ -244,6 +248,9 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   // Dev server manager
   const devServerManager = new DevServerManager(config?.devServerCallbacks);
 
+  // Agent subscription registry (in-memory, single-fire + TTL)
+  const subscriptionRegistry = new AgentSubscriptionRegistry();
+
   // Agent service
   const agentService = new AgentService(
     agentFramework, agentRunStore, createWorktreeManager,
@@ -253,6 +260,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskReviewReportBuilder, notificationRouter,
     validationRunner, outcomeResolver,
     scheduledAgentService, agentLibRegistry, devServerManager,
+    subscriptionRegistry, config?.onAgentSubscriptionFired,
   );
 
   // Workflow service
@@ -285,7 +293,13 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
       return 'claude-code';
     }
   };
-  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, agentRunStore, getDefaultAgentLib, config?.imageStorageDir);
+  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, agentRunStore, getDefaultAgentLib, config?.imageStorageDir, subscriptionRegistry);
+
+  // Wire cross-service injected message handler (avoids circular deps)
+  agentService.setInjectedMessageHandler(
+    (sessionId, content, metadata) =>
+      chatAgentService.enqueueInjectedMessage(sessionId, content, metadata),
+  );
 
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore, createStreamingCallbacks: config?.createStreamingCallbacks });
@@ -338,5 +352,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     schedulerSupervisor,
     inAppNotificationStore,
     devServerManager,
+    subscriptionRegistry,
   };
 }

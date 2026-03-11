@@ -7,6 +7,7 @@ import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks } from '../interfaces/agent-lib';
+import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type {
   SDKMessage,
   SDKAssistantMessage,
@@ -34,8 +35,8 @@ interface SdkQueryCallbacks {
   onUserToolResult?: (toolUseId: string, content: string) => void;
 }
 
-/** Parse a user message content field that may be a JSON envelope with images. */
-function parseUserContent(content: string): { text: string; images?: ChatImageRef[] } {
+/** Parse a user message content field that may be a JSON envelope with images and/or metadata. */
+function parseUserContent(content: string): { text: string; images?: ChatImageRef[]; metadata?: Record<string, unknown> } {
   if (content.startsWith('{')) {
     try {
       const parsed = JSON.parse(content);
@@ -43,7 +44,10 @@ function parseUserContent(content: string): { text: string; images?: ChatImageRe
         const images = Array.isArray(parsed.images) && parsed.images.length > 0
           ? (parsed.images as ChatImageRef[])
           : undefined;
-        return { text: parsed.text, images };
+        const metadata = parsed.metadata && typeof parsed.metadata === 'object'
+          ? (parsed.metadata as Record<string, unknown>)
+          : undefined;
+        return { text: parsed.text, images, metadata };
       }
     } catch (err) {
       getAppLogger().warn('ChatAgentService', 'parseUserContent: Content starts with { but failed JSON parse', { error: err instanceof Error ? err.message : String(err) });
@@ -123,6 +127,13 @@ export interface RunningAgent {
   messagePreview?: string;
 }
 
+interface InjectedMessage {
+  sessionId: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  queuedAt: number;
+}
+
 const DEFAULT_AGENT_LIB = 'claude-code';
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
@@ -131,6 +142,8 @@ export class ChatAgentService {
   private runningAgents = new Map<string, RunningAgent>();
   private liveTurnMessages = new Map<string, AgentChatMessage[]>();
   private imageStorageDir: string;
+  private injectedQueue = new Map<string, InjectedMessage[]>();
+  private injectedEventHandler?: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined;
 
   constructor(
     private chatMessageStore: IChatMessageStore,
@@ -142,6 +155,7 @@ export class ChatAgentService {
     private agentRunStore: IAgentRunStore,
     private getDefaultAgentLib: () => string = () => DEFAULT_AGENT_LIB,
     imageStorageDir?: string,
+    private subscriptionRegistry?: AgentSubscriptionRegistry,
   ) {
     this.imageStorageDir = imageStorageDir
       ?? path.join(process.env.HOME || os.homedir(), '.agents-manager', 'chat-images');
@@ -492,6 +506,9 @@ export class ChatAgentService {
   }
 
   stop(sessionId: string): void {
+    // Discard queued injected messages — session is being stopped
+    this.injectedQueue.delete(sessionId);
+
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
       getAppLogger().info('ChatAgentService', `Stopping chat agent for session ${sessionId}`);
@@ -513,7 +530,7 @@ export class ChatAgentService {
   }
 
   async clearMessages(sessionId: string): Promise<void> {
-    this.stop(sessionId);
+    this.stop(sessionId); // also clears injectedQueue
     return this.chatMessageStore.clearMessages(sessionId);
   }
 
@@ -612,6 +629,85 @@ export class ChatAgentService {
 
   getImageStorageDir(): string {
     return this.imageStorageDir;
+  }
+
+  setInjectedEventHandler(
+    handler: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined,
+  ): void {
+    this.injectedEventHandler = handler;
+  }
+
+  /**
+   * Enqueue a system-injected message for a chat session.
+   * If no agent is currently running for this session, delivers immediately.
+   * If an agent is running, queues for delivery after the current turn completes.
+   *
+   * Delivery stores the notification as a `system` role message (not `user`)
+   * and emits a WS event — it does NOT trigger a new agent turn.
+   */
+  enqueueInjectedMessage(
+    sessionId: string,
+    content: string,
+    metadata: Record<string, unknown>,
+  ): void {
+    const message: InjectedMessage = {
+      sessionId,
+      content,
+      metadata: { ...metadata, injected: true },
+      queuedAt: Date.now(),
+    };
+
+    if (this.runningControllers.has(sessionId)) {
+      const queue = this.injectedQueue.get(sessionId) ?? [];
+      queue.push(message);
+      this.injectedQueue.set(sessionId, queue);
+      getAppLogger().info('ChatAgentService',
+        `Queued injected message for busy session ${sessionId}`);
+      return;
+    }
+
+    this.deliverInjectedMessage(message).catch(err => {
+      getAppLogger().logError('ChatAgentService',
+        'Failed to deliver injected message', err);
+    });
+  }
+
+  /**
+   * Store the notification as a system message and emit via WS.
+   * Does NOT call send() — no agent turn is triggered, avoiding
+   * concurrent-send races and "user message masquerade" issues.
+   */
+  private async deliverInjectedMessage(message: InjectedMessage): Promise<void> {
+    const { sessionId, content, metadata } = message;
+
+    const session = await this.chatSessionStore.getSession(sessionId);
+    if (!session) {
+      getAppLogger().warn('ChatAgentService',
+        `Skipping injected message: session ${sessionId} not found`);
+      return;
+    }
+
+    // Store as system message — clearly distinct from user input so it
+    // won't confuse the agent's context in future turns.
+    await this.chatMessageStore.addMessage({
+      sessionId,
+      role: 'system',
+      content: JSON.stringify({ text: content, metadata }),
+    });
+
+    // Emit via WS so the UI can display the notification inline
+    const onEvent = this.injectedEventHandler?.(sessionId);
+    if (onEvent) {
+      onEvent({
+        type: 'message',
+        message: {
+          type: 'status',
+          status: 'completed',
+          message: content,
+          timestamp: Date.now(),
+        },
+      });
+    }
   }
 
   /**
@@ -816,7 +912,7 @@ export class ChatAgentService {
           const session = await this.chatSessionStore.getSession(sessionId);
           if (session?.projectId) {
             const daemonUrl = `http://127.0.0.1:${process.env.AM_DAEMON_PORT ?? 3847}`;
-            const mcpServer = await createTaskMcpServer(daemonUrl, { projectId: session.projectId, sessionId });
+            const mcpServer = await createTaskMcpServer(daemonUrl, { projectId: session.projectId, sessionId, subscriptionRegistry: this.subscriptionRegistry });
             mcpServers = { taskManager: mcpServer };
           }
         } catch (mcpErr) {
@@ -949,6 +1045,22 @@ export class ChatAgentService {
       // Signal completion to renderer so it can reset streaming state
       getAppLogger().info('ChatAgentService', `Chat agent finished for session ${sessionId}, sending completion sentinel`);
       emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
+
+      // Drain all queued injected messages for this session.
+      // Messages are stored as system messages (no agent turn triggered),
+      // so we can drain them all at once without delays.
+      const queued = this.injectedQueue.get(sessionId);
+      if (queued && queued.length > 0) {
+        this.injectedQueue.delete(sessionId);
+        for (const msg of queued) {
+          try {
+            await this.deliverInjectedMessage(msg);
+          } catch (err) {
+            getAppLogger().logError('ChatAgentService',
+              'Failed to deliver queued injected message', err);
+          }
+        }
+      }
     }
   }
 

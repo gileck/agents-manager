@@ -17,4 +17,6 @@ export const WS_CHANNELS = {
   DEV_SERVER_STATUS: 'dev-server:status',
   /** PUSH-ONLY: broadcast when a task transitions to a new status */
   TASK_STATUS_CHANGED: 'task:status-changed',
+  /** PUSH-ONLY: notification sent to chat session when a subscribed pipeline agent finishes */
+  CHAT_AGENT_NOTIFICATION: 'chat:agent-notification',
 } as const;
