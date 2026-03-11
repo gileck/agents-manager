@@ -50,6 +50,9 @@ async function main() {
         wsHolder.server?.broadcast(WS_CHANNELS.DEV_SERVER_STATUS, info.taskId, info);
       },
     },
+    onAgentSubscriptionFired: (sessionId, payload) => {
+      wsHolder.server?.broadcast(WS_CHANNELS.CHAT_AGENT_NOTIFICATION, sessionId, payload);
+    },
   });
 
   // Register in-app notification router (lazily broadcasts via WS once server is ready)
@@ -67,6 +70,17 @@ async function main() {
   // Attach WebSocket server to the HTTP server
   const wsServer = new DaemonWsServer(httpServer);
   wsHolder.server = wsServer;
+
+  // Wire injected event handler so Tier 2 injected messages stream to the correct WS channels
+  services.chatAgentService.setInjectedEventHandler((sessionId) => {
+    return (event: import('../shared/types').ChatAgentEvent) => {
+      if (event.type === 'text') {
+        wsServer.broadcast(WS_CHANNELS.CHAT_OUTPUT, sessionId, event.text);
+      } else if (event.type === 'message') {
+        wsServer.broadcast(WS_CHANNELS.CHAT_MESSAGE, sessionId, event.message);
+      }
+    };
+  });
 
   // Recover orphaned agent runs from previous daemon session (before starting supervisors
   // to eliminate the race where the supervisor's first poll sees orphaned runs from a prior crash)
