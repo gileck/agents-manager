@@ -138,7 +138,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         `4. In the \`summary\` field, describe what you changed and how you addressed the feedback.`,
         `5. Run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass.`,
         `6. Stage and commit with a descriptive message that references which feedback was addressed.`,
-        `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\` to make sure nothing broke.`,
+        `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues.`,
       );
       prompt = rcLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'conflicts_detected') {
@@ -154,7 +154,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         `3. Run \`git rebase origin/main\` to start the rebase.`,
         `4. For each conflict, resolve by preserving the intent of both changes, then \`git add\` the resolved files.`,
         `5. Run \`git rebase --continue\` after resolving each conflict.`,
-        `6. Once the rebase is complete, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass.`,
+        `6. Once the rebase is complete, run \`yarn checks\` (or the project's equivalent). If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues.`,
         `7. Do NOT push — the pipeline will handle pushing after you finish.`,
       ];
       prompt = conflictLines.join('\n');
@@ -214,7 +214,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         '3. Follow existing patterns — match the style of surrounding code. Make focused changes only.',
         '4. Run `yarn checks` (or the project\'s equivalent) to ensure TypeScript and lint pass before committing.',
         '5. Stage and commit with a descriptive message.',
-        '6. **Rebase onto origin/main before finishing:** run `git fetch origin && git rebase origin/main`. If there are merge conflicts, resolve them (preserve the intent of both sides), `git add` the resolved files, and `git rebase --continue`. After the rebase, re-run `yarn checks` to make sure nothing broke.',
+        '6. **Rebase onto origin/main before finishing:** run `git fetch origin && git rebase origin/main`. If there are merge conflicts, resolve them (preserve the intent of both sides), `git add` the resolved files, and `git rebase --continue`. After the rebase, re-run `yarn checks`. If checks fail, compare against `origin/main` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues.',
       );
       prompt = irLines.join('\n');
     } else {
@@ -224,11 +224,12 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         ``,
         `## Instructions`,
         `1. **Read the files you will modify first.** If the task description names a specific file path and function/method, open those files directly — do not spawn an Explore subagent. If you do delegate to an Explore subagent, wait for its result before issuing any further search or read calls — do not search in parallel. Understand existing patterns, naming conventions, and code style before writing anything.`,
-        `2. Follow existing patterns — match the style of surrounding code.`,
-        `3. Make focused changes — only modify what is necessary for this task.`,
-        `4. After making all changes, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass. Fix any errors before committing.`,
-        `5. Stage and commit with a descriptive message (git add the relevant files, then git commit).`,
-        `6. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\` to make sure nothing broke.`,
+        `2. **If the plan includes an Assumptions section**, verify each UNVERIFIED assumption by reading the relevant code before making any edits. If an assumption is wrong, report it via \`needs_info\` with details — do not try to work around a broken assumption.`,
+        `3. Follow existing patterns — match the style of surrounding code.`,
+        `4. Make focused changes — only modify what is necessary for this task.`,
+        `5. After making all changes, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass. Fix any errors before committing.`,
+        `6. Stage and commit with a descriptive message (git add the relevant files, then git commit).`,
+        `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues.`,
       ];
       // Phase-aware subtask display
       const activePhase = getActivePhase(task.phases);

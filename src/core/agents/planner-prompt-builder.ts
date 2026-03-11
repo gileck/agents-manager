@@ -90,6 +90,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         '- Address every piece of feedback — do not skip or partially address any comment.',
         '- If feedback is ambiguous, interpret it in the most reasonable way and note your interpretation.',
         '- Keep parts of the plan that were not criticized — only revise what the feedback targets.',
+        '- **If this revision changes which files are modified or changes the core technical approach** (not just wording or parameter tweaks), re-read the files your new design depends on. Do not rely solely on context from the initial exploration — verify that your new approach works with the actual code.',
         '- Re-assess and include complexity and effort assessments right after the plan title (see Complexity Assessment below).',
         '',
         '## Output Requirements',
@@ -123,7 +124,8 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         '2. Use their decisions to guide your implementation plan.',
         '3. **Explore the codebase** to ground your plan in real file paths and existing patterns. If the task description already includes a detailed design with specific files and data flows, focus exploration on verifying assumptions and identifying gaps rather than rediscovering what was already specified.',
         '4. Produce a complete implementation plan with 3-8 concrete, independently testable subtasks ordered by dependency.',
-        '5. Include complexity and effort assessments right after the plan title (see Complexity Assessment below).',
+        '5. List any assumptions about existing code behavior that your plan depends on but does not modify. For each, note whether it is VERIFIED (cite the file and line) or UNVERIFIED.',
+        '6. Include complexity and effort assessments right after the plan title (see Complexity Assessment below).',
       );
       prompt = prLines.join('\n');
     } else {
@@ -137,9 +139,10 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
         `2. Describe the current state — what exists today and what needs to change.`,
         `3. Outline your approach — the high-level strategy, key decisions, and any alternatives you considered.`,
         `4. List specific files to create or modify, with a short description of each change.`,
-        `5. Identify edge cases, error handling, and potential risks.`,
-        `6. Break the plan into 3-8 concrete subtasks. Each subtask should be independently testable and ordered by dependency.`,
-        `7. Include complexity and effort assessments right after the plan title (see Complexity Assessment below).`,
+        `5. Identify edge cases, error handling, and potential risks. If an edge case requires a code change to handle, include that file in your change list.`,
+        `6. List any **assumptions about existing code behavior** that your plan depends on but does not modify. For each, note whether it is VERIFIED (cite the file and line) or UNVERIFIED. The implementor will verify unverified assumptions before starting edits.`,
+        `7. Break the plan into 3-8 concrete subtasks. Each subtask should be independently testable and ordered by dependency.`,
+        `8. Include complexity and effort assessments right after the plan title (see Complexity Assessment below).`,
         ``,
         `## Multi-Phase Tasks (Optional)`,
         `For large tasks that would result in a massive PR, you can organize subtasks into sequential **implementation phases**.`,
