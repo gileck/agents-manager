@@ -51,9 +51,12 @@ export function AgentChat({
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
 
   const handleEditMessage = useCallback((text: string) => {
-    const hint = '[Revised message - please disregard the earlier version]\n\n';
-    setPrefill((prev) => ({ text: hint + text, seq: (prev?.seq ?? 0) + 1 }));
+    setPrefill((prev) => ({ text, seq: (prev?.seq ?? 0) + 1 }));
   }, []);
+
+  const handleResume = useCallback((text: string) => {
+    onSend(text);
+  }, [onSend]);
 
   return (
     <div className="flex-1 min-h-0 flex">
@@ -63,7 +66,7 @@ export function AgentChat({
             {emptyState}
           </div>
         ) : (
-          <ChatMessageList messages={messages} isRunning={isRunning} onEditMessage={handleEditMessage} />
+          <ChatMessageList messages={messages} isRunning={isRunning} onEditMessage={handleEditMessage} onResume={handleResume} />
         )}
         <TaskStatusBar sessionId={sessionId ?? null} />
         <ChatInput
