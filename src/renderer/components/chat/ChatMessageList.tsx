@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pencil } from 'lucide-react';
-import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../shared/types';
+import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
@@ -11,9 +11,10 @@ interface ChatMessageListProps {
   messages: AgentChatMessage[];
   isRunning?: boolean;
   onEditMessage?: (text: string) => void;
+  onResume?: (text: string) => void;
 }
 
-export function ChatMessageList({ messages, isRunning, onEditMessage }: ChatMessageListProps) {
+export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
@@ -123,13 +124,48 @@ export function ChatMessageList({ messages, isRunning, onEditMessage }: ChatMess
           <ThinkingBlock key={i} text={msg.text} />
         );
       } else if (msg.type === 'status') {
-        nodes.push(
-          <div key={i} className="text-center py-3">
-            <span className="text-xs text-muted-foreground/80 bg-muted/35 border border-border/60 px-3 py-1 rounded-full">
-              {msg.message}
-            </span>
-          </div>
-        );
+        const isStopped = msg.message.includes('kill_reason=stopped');
+        if (isStopped) {
+          const lastUserMsg = [...messages].reverse().find((m): m is AgentChatMessageUser => m.type === 'user');
+          const lastUserText = lastUserMsg?.text ?? null;
+          nodes.push(
+            <div key={i} className="flex flex-col items-center py-4 gap-3">
+              <span className="text-xs text-muted-foreground/80 bg-muted/35 border border-border/60 px-3 py-1.5 rounded-full font-medium">
+                Agent Stopped
+              </span>
+              {!isRunning && lastUserText && (
+                <div className="flex gap-2">
+                  {onResume && (
+                    <button
+                      type="button"
+                      onClick={() => onResume(lastUserText)}
+                      className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >
+                      Resume
+                    </button>
+                  )}
+                  {onEditMessage && (
+                    <button
+                      type="button"
+                      onClick={() => onEditMessage(lastUserText)}
+                      className="px-3 py-1.5 text-xs rounded-md border border-border bg-background hover:bg-accent transition-colors"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        } else {
+          nodes.push(
+            <div key={i} className="text-center py-3">
+              <span className="text-xs text-muted-foreground/80 bg-muted/35 border border-border/60 px-3 py-1 rounded-full">
+                {msg.message}
+              </span>
+            </div>
+          );
+        }
       } else if (msg.type === 'agent_run_info') {
         nodes.push(
           <div key={i} className="py-1.5">
@@ -153,7 +189,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage }: ChatMess
       // usage messages are skipped
     }
     return nodes;
-  }, [messages, expandedTools, toggleTool, onEditMessage, isRunning]);
+  }, [messages, expandedTools, toggleTool, onEditMessage, onResume, isRunning]);
 
   return (
     <div className="flex-1 overflow-y-auto">
