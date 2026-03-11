@@ -506,6 +506,9 @@ export class ChatAgentService {
   }
 
   stop(sessionId: string): void {
+    // Discard queued injected messages — session is being stopped
+    this.injectedQueue.delete(sessionId);
+
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
       getAppLogger().info('ChatAgentService', `Stopping chat agent for session ${sessionId}`);
@@ -527,7 +530,7 @@ export class ChatAgentService {
   }
 
   async clearMessages(sessionId: string): Promise<void> {
-    this.stop(sessionId);
+    this.stop(sessionId); // also clears injectedQueue
     return this.chatMessageStore.clearMessages(sessionId);
   }
 
@@ -636,9 +639,11 @@ export class ChatAgentService {
 
   /**
    * Enqueue a system-injected message for a chat session.
-   * If no agent is currently running for this session, delivers immediately
-   * by calling send(). If an agent is running, queues for delivery after
-   * the current turn completes.
+   * If no agent is currently running for this session, delivers immediately.
+   * If an agent is running, queues for delivery after the current turn completes.
+   *
+   * Delivery stores the notification as a `system` role message (not `user`)
+   * and emits a WS event — it does NOT trigger a new agent turn.
    */
   enqueueInjectedMessage(
     sessionId: string,
@@ -667,6 +672,11 @@ export class ChatAgentService {
     });
   }
 
+  /**
+   * Store the notification as a system message and emit via WS.
+   * Does NOT call send() — no agent turn is triggered, avoiding
+   * concurrent-send races and "user message masquerade" issues.
+   */
   private async deliverInjectedMessage(message: InjectedMessage): Promise<void> {
     const { sessionId, content, metadata } = message;
 
@@ -677,15 +687,27 @@ export class ChatAgentService {
       return;
     }
 
-    const sendCtx = await this.buildSendContext(sessionId);
-    const onEvent = this.injectedEventHandler?.(sessionId);
-
-    const userContent = JSON.stringify({ text: content, metadata });
-
-    await this.send(sessionId, userContent, {
-      ...sendCtx,
-      onEvent,
+    // Store as system message — clearly distinct from user input so it
+    // won't confuse the agent's context in future turns.
+    await this.chatMessageStore.addMessage({
+      sessionId,
+      role: 'system',
+      content: JSON.stringify({ text: content, metadata }),
     });
+
+    // Emit via WS so the UI can display the notification inline
+    const onEvent = this.injectedEventHandler?.(sessionId);
+    if (onEvent) {
+      onEvent({
+        type: 'message',
+        message: {
+          type: 'status',
+          status: 'completed',
+          message: content,
+          timestamp: Date.now(),
+        },
+      });
+    }
   }
 
   /**
@@ -1024,20 +1046,20 @@ export class ChatAgentService {
       getAppLogger().info('ChatAgentService', `Chat agent finished for session ${sessionId}, sending completion sentinel`);
       emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
 
-      // Drain any queued injected messages for this session
+      // Drain all queued injected messages for this session.
+      // Messages are stored as system messages (no agent turn triggered),
+      // so we can drain them all at once without delays.
       const queued = this.injectedQueue.get(sessionId);
       if (queued && queued.length > 0) {
         this.injectedQueue.delete(sessionId);
-        const next = queued[0];
-        setTimeout(() => {
-          this.deliverInjectedMessage(next).catch(err => {
+        for (const msg of queued) {
+          try {
+            await this.deliverInjectedMessage(msg);
+          } catch (err) {
             getAppLogger().logError('ChatAgentService',
               'Failed to deliver queued injected message', err);
-          });
-          if (queued.length > 1) {
-            this.injectedQueue.set(sessionId, queued.slice(1));
           }
-        }, 1500);
+        }
       }
     }
   }

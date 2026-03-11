@@ -5,6 +5,8 @@ export interface AgentSubscription {
   createdAt: number;
 }
 
+const MAX_SUBSCRIPTIONS_PER_SESSION = 50;
+
 export class AgentSubscriptionRegistry {
   private subscriptions = new Map<string, AgentSubscription[]>();
   private cleanupTimer: ReturnType<typeof setInterval>;
@@ -18,6 +20,16 @@ export class AgentSubscriptionRegistry {
   subscribe(sub: AgentSubscription): void {
     const existing = this.subscriptions.get(sub.taskId) ?? [];
     if (!existing.some(s => s.sessionId === sub.sessionId)) {
+      // Enforce per-session cap to prevent abuse
+      let sessionCount = 0;
+      for (const subs of this.subscriptions.values()) {
+        for (const s of subs) {
+          if (s.sessionId === sub.sessionId) sessionCount++;
+        }
+      }
+      if (sessionCount >= MAX_SUBSCRIPTIONS_PER_SESSION) {
+        throw new Error(`Subscription limit reached: max ${MAX_SUBSCRIPTIONS_PER_SESSION} active subscriptions per session`);
+      }
       existing.push(sub);
       this.subscriptions.set(sub.taskId, existing);
     }

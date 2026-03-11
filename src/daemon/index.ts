@@ -160,6 +160,7 @@ async function main() {
       services.appLogger.logError('daemon', 'Agent drain failed', err);
     }
 
+    services.subscriptionRegistry.dispose();
     wsServer.close();
     httpServer.closeAllConnections();
     httpServer.close(() => {
