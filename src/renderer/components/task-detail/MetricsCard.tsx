@@ -16,7 +16,7 @@ export function MetricsCard({ agentRuns }: MetricsCardProps) {
     for (const run of runs) {
       inputTokens += Number(run.costInputTokens) || 0;
       outputTokens += Number(run.costOutputTokens) || 0;
-      cost += getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, model: run.model ?? undefined });
+      cost += getEffectiveCost({ totalCostUsd: run.totalCostUsd, inputTokens: run.costInputTokens, outputTokens: run.costOutputTokens, cacheReadTokens: run.cacheReadInputTokens, cacheWriteTokens: run.cacheCreationInputTokens, model: run.model ?? undefined });
     }
     return { inputTokens, outputTokens, cost, runCount: runs.length };
   }, [agentRuns]);

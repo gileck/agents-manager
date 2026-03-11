@@ -15,6 +15,8 @@ function runCost(run: AgentRun): number {
     totalCostUsd: run.totalCostUsd,
     inputTokens: run.costInputTokens,
     outputTokens: run.costOutputTokens,
+    cacheReadTokens: run.cacheReadInputTokens,
+    cacheWriteTokens: run.cacheCreationInputTokens,
     model: run.model ?? undefined,
   });
 }
