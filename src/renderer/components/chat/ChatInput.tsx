@@ -225,7 +225,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
         onSubmit={handleSubmit}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
-        className="rounded-[1.35rem] border border-border/75 bg-card/82 shadow-[0_16px_30px_hsl(var(--background)/0.42)] overflow-hidden transition-[border-color,box-shadow] duration-[var(--motion-base)] ease-[var(--ease-standard)] focus-within:shadow-[0_18px_36px_hsl(var(--background)/0.52)] focus-within:border-ring/60 backdrop-blur-lg"
+        className="rounded-[1.35rem] border border-border/75 bg-card/82 shadow-[0_16px_30px_hsl(var(--background)/0.42)] transition-[border-color,box-shadow] duration-[var(--motion-base)] ease-[var(--ease-standard)] focus-within:shadow-[0_18px_36px_hsl(var(--background)/0.52)] focus-within:border-ring/60 backdrop-blur-lg"
       >
         {images.length > 0 && (
           <div className="flex gap-2 px-4 pt-3 flex-wrap">
