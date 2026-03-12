@@ -27,12 +27,12 @@ export interface BaseRunState {
   messageCount: number;
   readonly timeout: number;
   readonly maxTurns: number;
-  /** Set by stop() before aborting so the catch block can distinguish user-stop from timeout. */
+  /** Set by the timeout handler or doStop() before aborting, so catch blocks can distinguish timeout from user-initiated stop. */
   stoppedReason?: string;
 }
 
 // ============================================
-// CanUseTool callback type (engine-agnostic)
+// CanUseTool callback type (Claude SDK-compatible signature)
 // ============================================
 
 export type CanUseToolCallback = (
@@ -114,8 +114,8 @@ export abstract class BaseAgentLib implements IAgentLib {
 
   /**
    * Engine-specific execution. Concrete libs implement this to call their SDK/subprocess.
-   * The base class handles: timeout, abort, permission chain, session history fallback,
-   * telemetry, and result assembly.
+   * The base class handles: timeout, abort, permission chain, telemetry state, and result assembly.
+   * Engines can call resolveSessionPrompt() for prompt-based session resume.
    */
   protected abstract runEngine(
     runId: string,
@@ -218,7 +218,7 @@ export abstract class BaseAgentLib implements IAgentLib {
           return { behavior: 'deny', message: `Tool interceptor failed: ${errMsg}` };
         }
       }
-      // 3. Interactive permission approval (surfaces tool call to UI) — only if engine supports it
+      // 3. Interactive permission approval (surfaces tool call to UI)
       if (onPermissionRequest) {
         try {
           const effectiveInput = updatedInput ?? input;
