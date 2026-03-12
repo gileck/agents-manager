@@ -63,6 +63,23 @@ Agent types, execution lifecycle, prompts, validation, and context accumulation
 
 ---
 
+## Agent Types & Session Resume
+
+All agent types, their identifiers, session keys, and how conversation resume works
+
+**Summary:** Two agent categories: Pipeline agents (investigator, designer, planner, implementor, reviewer) run through the task pipeline with session resume keyed by taskId+agentType. Thread chat agents run interactive conversations with session resume keyed by chat sessionId (thread) or pipelineSessionId (agent-chat review).
+
+**Key Points:**
+- Pipeline agents are keyed by taskId + agentType; session ID = first completed run's ID
+- Thread chat agents are keyed by chat session UUID (thread ID); resume on follow-up messages
+- Agent-chat (review) sessions resume the pipeline agent's SDK session via pipelineSessionId
+- All session resume uses the SDK's native resume mechanism (not manual history replay)
+- sessionId MUST be passed in AgentLibRunOptions for SDK resume to work
+
+**Docs:** [agent-types.md](docs/agent-types.md)
+
+---
+
 ## Client-Daemon Convergence
 
 How all UI clients (Electron, CLI, Web, Telegram bot) converge on the same daemon logic

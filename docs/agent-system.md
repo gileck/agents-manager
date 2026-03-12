@@ -98,14 +98,17 @@ export interface IAgent {
 
 ```typescript
 export interface AgentLibFeatures {
-  images: boolean;   // supports base64 image content blocks
-  hooks: boolean;    // supports preToolUse hook interception
-  thinking: boolean; // supports thinking/reasoning blocks
+  images: boolean;       // supports base64 image content blocks
+  hooks: boolean;        // supports full hook system (pre/post tool use, notifications, subagents, etc.)
+  thinking: boolean;     // supports thinking/reasoning blocks
+  nativeResume: boolean; // supports native SDK session resume
 }
 
 export interface IAgentLib {
   readonly name: string;
   supportedFeatures(): AgentLibFeatures;
+  getDefaultModel(): string;
+  getSupportedModels(): AgentLibModelOption[];
   execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult>;
   stop(runId: string): Promise<void>;
   isAvailable(): Promise<boolean>;
@@ -114,9 +117,39 @@ export interface IAgentLib {
 ```
 
 Feature support by lib:
-- `ClaudeCodeLib`: `{ images: true, hooks: true, thinking: true }`
-- `CursorAgentLib`: `{ images: false, hooks: false, thinking: false }`
-- `CodexCliLib`: `{ images: false, hooks: false, thinking: false }`
+- `ClaudeCodeLib`: `{ images: true, hooks: true, thinking: true, nativeResume: true }`
+- `CursorAgentLib`: `{ images: false, hooks: false, thinking: false, nativeResume: false }`
+- `CodexCliLib`: `{ images: false, hooks: false, thinking: false, nativeResume: false }`
+
+#### Key Supporting Types
+
+**File:** `src/core/interfaces/agent-lib.ts`
+
+The interface defines several supporting types used across the agent system:
+
+- **`PromptPushHandle`** — Handle for injecting messages into a running agent's async generator prompt. Exposes `push(message)` and `close()` methods. Created by `ClaudeCodeLib` and exposed via the `onPromptHandleReady` callback.
+
+- **`PermissionRequest` / `PermissionResponse`** — Tool approval types. `PermissionRequest` contains `toolName`, `toolInput`, and `toolUseId`. `PermissionResponse` contains `allowed: boolean`. Used by the `onPermissionRequest` callback to surface tool calls to the UI for interactive approval.
+
+- **`SystemPromptPreset`** — Preset-based system prompt configuration: `{ type: 'preset', preset: 'claude_code', append?: string }`. Uses the SDK's built-in Claude Code system prompt with optional appended instructions, instead of replacing it entirely with a custom string.
+
+- **`SubagentDefinition`** — Defines a custom subagent available via the Task tool: `description`, `prompt`, optional `tools`/`disallowedTools` arrays, `model` (`'sonnet'`/`'opus'`/`'haiku'`/`'inherit'`), and `maxTurns`.
+
+- **`AgentLibHooks`** — Full hooks interface with callbacks for agent lifecycle events:
+  - `preToolUse` — Called before each tool execution. Returns `{ decision: 'block'|'allow'; reason? }`.
+  - `postToolUse` — Called after a tool completes successfully.
+  - `postToolUseFailure` — Called after a tool fails.
+  - `notification` — Called when the agent emits a notification.
+  - `stop` — Called when the agent stops.
+  - `subagentStart` / `subagentStop` — Called when subagents start/stop.
+  - `preCompact` — Called before context compaction.
+
+- **`AgentLibCallbacks`** — Execution callbacks including:
+  - `onStreamEvent` — Receives raw stream delta events for partial message streaming (text, thinking, input JSON deltas).
+  - `onPromptHandleReady` — Called once the `PromptPushHandle` is ready for mid-stream message injection.
+  - `onPermissionRequest` — Called when a tool needs user permission. Blocks tool execution until the returned promise resolves.
+
+- **`AgentLibRunOptions`** — Extended with: `agents` (subagent definitions), `plugins` (local plugin paths), `settingSources` (e.g., `['project']` for CLAUDE.md auto-loading), `canUseTool` (async tool interceptor for allow/deny/modify), `systemPrompt` (accepts string or `SystemPromptPreset`), `betas`, `maxBudgetUsd`.
 
 ### BaseAgentPromptBuilder
 
@@ -641,7 +674,14 @@ Ghost runs (DB says running but no in-memory tracking) are prevented at the sour
 
 **File:** `src/core/services/sandbox-guard.ts`
 
-`SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by `ClaudeCodeLib` as a `preToolUse` hook for both task agents and chat agents. `ChatAgentService` passes write-tool blocking via the `hooks.preToolUse` option on `AgentLibRunOptions`, which `ClaudeCodeLib` merges with the SandboxGuard hook.
+`SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by `ClaudeCodeLib` for both task agents and chat agents.
+
+**Two execution paths in `ClaudeCodeLib`:**
+
+1. **Without `onPermissionRequest`** (pipeline agents, full_access mode) — SandboxGuard runs as a `preToolUse` hook in the SDK hooks system. Blocked tools are silently denied.
+2. **With `onPermissionRequest`** (interactive chat, read_only/read_write modes) — SandboxGuard runs first inside the `canUseTool` callback. If the guard allows it, the tool call is forwarded to `onPermissionRequest`, which surfaces it to the UI for interactive user approval. This two-stage pipeline ensures sandbox violations are caught before reaching the user, while tools within bounds still require explicit consent.
+
+`ChatAgentService` passes write-tool blocking via the `hooks.preToolUse` option on `AgentLibRunOptions`, which `ClaudeCodeLib` merges with its SandboxGuard hook.
 
 ### Configuration
 
@@ -782,3 +822,80 @@ Planner (mode='revision')   → resumes S1 (sees original plan + chat + feedback
 - `src/renderer/components/plan/ReviewConversation.tsx` — chat UI with Send + Request Changes
 - `src/renderer/hooks/useReviewConversation.ts` — bridges context entries with agent-chat streaming
 - `src/core/services/chat-prompt-parts.ts` — `buildAgentChatSystemPrompt()` (review chat prompt)
+
+### Interactive Tool Approval
+
+When not in `full_access` permission mode, `ChatAgentService` builds an `onPermissionRequest` callback that surfaces tool calls to the UI for interactive user approval before execution.
+
+**Flow:**
+1. `ClaudeCodeLib` receives a tool call, runs the SandboxGuard first (deny if out-of-bounds), then calls `onPermissionRequest`
+2. `ChatAgentService` generates a `requestId` (`{sessionId}:{uuid}`), broadcasts a `permission_request` message to the UI via the `CHAT_PERMISSION_REQUEST` WebSocket channel
+3. A promise is created and stored in `pendingPermissionRequests` map (keyed by `requestId`)
+4. Tool execution blocks until the promise resolves
+5. The UI calls `resolvePermissionRequest(requestId, allowed)` which resolves the promise
+6. If the user does not respond within 5 minutes (`PERMISSION_TIMEOUT_MS`), the request is auto-denied
+7. On agent stop, `clearPendingPermissionRequests()` auto-denies all pending requests for the session
+
+### Streaming
+
+Real-time token streaming uses the SDK's `onStreamEvent` callback:
+
+- `ClaudeCodeLib` forwards raw `content_block_delta` events via `callbacks.onStreamEvent`
+- `ChatAgentService` transforms deltas into typed messages: `text_delta`, `thinking_delta`, `input_json_delta`
+- Deltas are broadcast to the renderer via the `CHAT_STREAM_DELTA` WebSocket push channel
+- The renderer accumulates deltas to reconstruct partial messages during generation
+
+### AsyncGenerator Prompt Input
+
+`ClaudeCodeLib` wraps all prompts in an async generator via `createPromptGenerator()`:
+
+1. The initial user message is yielded first
+2. A `PromptPushHandle` is returned alongside the generator, exposing `push(message)` and `close()`
+3. `push()` queues additional `SdkUserMessage` objects into the generator for mid-stream injection
+4. `close()` signals the generator to terminate
+5. The handle is stored per session in `ChatAgentService.promptPushHandles` via the `onPromptHandleReady` callback
+6. On agent stop, `pushHandle.close()` is called to cleanly terminate the generator
+
+### System Prompt Customization
+
+Sessions support custom system prompt instructions via `systemPromptAppend`:
+
+- When a session has `systemPromptAppend`, the system prompt is returned as a preset object: `{ type: 'preset', preset: 'claude_code', append: '...' }`. This tells the SDK to use its built-in Claude Code system prompt and append the combined instructions (built prompt + user's custom instructions).
+- Without `systemPromptAppend`, the base prompt string is passed directly for backward compatibility
+- `settingSources: ['project']` is always set, enabling automatic CLAUDE.md loading from the project directory
+
+### Full Hooks System
+
+`ChatAgentService` constructs a hooks object passed via `AgentLibRunOptions.hooks`. `ClaudeCodeLib.buildSdkHooks()` transforms these into the SDK hook format (`Partial<Record<HookEvent, HookCallbackMatcher[]>>`).
+
+Default hooks wired by `ChatAgentService`:
+- **PostToolUse** — Debug-level audit logging of tool name and response preview
+- **Notification** — Forwards agent notifications to the UI as `notification` messages
+- **Stop** — Logs the stop event
+- **SubagentStart / SubagentStop** — Emit `subagent_activity` messages to the UI for real-time subagent lifecycle tracking
+
+When `onPermissionRequest` is not provided (pipeline agents, full_access mode), `preToolUse` hooks handle the SandboxGuard. When `onPermissionRequest` is provided, the guard runs inside `canUseTool` instead, and PreToolUse hooks handle only the caller's custom hook logic.
+
+### Subagent Definitions
+
+Thread chat sessions (source `desktop`/`telegram`/`cli`, not `agent-chat`) receive three default subagents via the `agents` option in `AgentLibRunOptions`:
+
+| Subagent | Model | Max Turns | Purpose |
+|----------|-------|-----------|---------|
+| `code-reviewer` | sonnet | 15 | Review diffs, PRs, and code quality |
+| `researcher` | sonnet | 20 | Codebase exploration and architecture analysis |
+| `test-runner` | haiku | 10 | Run tests, analyze results, investigate failures |
+
+These are defined in `DEFAULT_CHAT_SUBAGENTS` and made available via the SDK's Task tool. Agent-chat (review) sessions and pipeline agents do not receive subagents.
+
+### Slash Commands
+
+`ChatAgentService` detects messages starting with `/` and handles them:
+- `/clear` — Clears local message history via `chatMessageStore.clearMessages()`. The SDK also handles the session-level clear natively.
+- All other slash commands (e.g., `/compact`) — Forwarded to the SDK as the raw prompt. The SDK handles them natively.
+
+A `slash_command` event is emitted to the UI with the command name and arguments.
+
+### Plugins
+
+Project-level plugins are parsed from `project.config.plugins` via `parsePluginsConfig()` and passed through to the SDK via `AgentLibRunOptions.plugins`. Only `{ type: 'local', path: string }` plugins are supported. The SDK loads and activates them during agent execution.

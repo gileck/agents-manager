@@ -177,6 +177,26 @@ If a session resume fails (missing/corrupt session file), `Agent.execute()` dete
 
 When the SDK resumes a session, it replays prior messages marked with `isReplay: true`. `ClaudeCodeLib` skips these to avoid duplicate callbacks and token double-counting.
 
+## Thread Chat SDK Features
+
+Thread chat agents (`desktop`, `telegram`, `cli` sources) have access to the full SDK feature set managed by `ChatAgentService`:
+
+| Feature | Description | Pipeline Agents |
+|---------|-------------|-----------------|
+| Interactive tool approval | `onPermissionRequest` callback surfaces tool calls to UI for approval | No (hooks-based SandboxGuard only) |
+| Real-time streaming | `onStreamEvent` streams text/thinking/input deltas via `CHAT_STREAM_DELTA` | No |
+| Subagents | Three default subagents: `code-reviewer`, `researcher`, `test-runner` | No |
+| Hooks | PostToolUse audit logging, Notification forwarding, SubagentStart/Stop tracking | PreToolUse sandbox guard only |
+| System prompt presets | `{ type: 'preset', preset: 'claude_code', append }` for SDK built-in prompt | Custom string prompts |
+| CLAUDE.md auto-loading | `settingSources: ['project']` for automatic project context | Not set |
+| Plugins | Project-level plugins passed through from `project.config.plugins` | Not passed |
+| Slash commands | `/clear`, `/compact`, etc. forwarded to SDK natively | Not applicable |
+| Prompt push handle | `PromptPushHandle` stored per session for mid-stream message injection | Not used |
+
+Agent-chat (review) sessions share most features but do not receive default subagents.
+
+See [agent-system.md](./agent-system.md) (ChatAgentService section) for implementation details.
+
 ## Summary Table
 
 | Agent Category | Agent Types | Session Key | ID Source | Resume Trigger |

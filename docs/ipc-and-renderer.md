@@ -71,8 +71,8 @@ IPC channels, renderer pages, hooks, and streaming.
 **Dashboard (1):**
 `dashboard:stats`
 
-**Chat Operations (8):**
-`chat:send`, `chat:stop`, `chat:messages`, `chat:clear`, `chat:summarize`, `chat:costs`, `chat:output` (push), `chat:message` (push)
+**Chat Operations (11):**
+`chat:send`, `chat:stop`, `chat:messages`, `chat:clear`, `chat:summarize`, `chat:costs`, `chat:output` (push), `chat:message` (push), `chat:stream-delta` (push), `chat:permission-request` (push), `chat:permission-response`
 
 **Chat Sessions (5):**
 `chat:session:create`, `chat:session:list`, `chat:session:update`, `chat:session:delete`, `chat:agents:list`
@@ -127,6 +127,8 @@ Push event channels stream data from daemon → Electron main → renderer:
 | `agent:status` | main -> renderer | Agent run status changes (running, completed, failed) |
 | `chat:output` | main -> renderer | Streams chat output chunks during conversation |
 | `chat:message` | main -> renderer | Structured chat messages |
+| `chat:stream-delta` | main -> renderer | Streams real-time text/thinking/input deltas during generation |
+| `chat:permission-request` | main -> renderer | Tool approval requests (tool name, input preview) — blocks tool execution until user responds |
 | `task-chat:output` | main -> renderer | Streams task-scoped chat output chunks |
 | `task-chat:message` | main -> renderer | Structured task-scoped chat messages |
 | `telegram:bot-log` | main -> renderer | Telegram bot activity log entries |
