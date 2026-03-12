@@ -1,16 +1,18 @@
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import type { IAgentLib, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
-import type { ISessionHistoryProvider } from '../interfaces/session-history-provider';
-import { SessionHistoryFormatter } from '../services/session-history-formatter';
+import type { AgentLibFeatures, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
-import { getAppLogger } from '../services/app-logger';
+import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
 // but the SDK is ESM-only. This bypasses that transformation.
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
+
+// ============================================
+// Codex SDK types (engine-specific)
+// ============================================
 
 type SandboxMode = 'read-only' | 'workspace-write';
 type CodexInput = string | CodexUserInput[];
@@ -91,35 +93,18 @@ type CodexThreadItem =
   | { id: string; type: 'file_change'; changes: Array<{ path: string; kind: 'add' | 'delete' | 'update' }>; status: 'completed' | 'failed' }
   | { id: string; type: 'error'; message: string };
 
-interface RunState {
-  abortController: AbortController;
-  messageCount: number;
-  accumulatedInputTokens: number;
-  accumulatedOutputTokens: number;
-  accumulatedCacheReadInputTokens: number;
-  timeout: number;
-  maxTurns: number;
-  stoppedReason?: string;
-}
+// ============================================
+// CodexCliLib — Codex SDK engine
+// ============================================
 
-export class CodexCliLib implements IAgentLib {
+export class CodexCliLib extends BaseAgentLib {
   readonly name = 'codex-cli';
 
-  private runningStates = new Map<string, RunState>();
-  /** Tracks why a run was stopped, survives the stop() -> completion gap. */
-  private stoppedReasons = new Map<string, string>();
   /** Maps our external session key to the SDK's real thread id for in-process native resume. */
   private sdkThreadIds = new Map<string, string>();
 
-  constructor(private sessionHistoryProvider?: ISessionHistoryProvider) {}
-
-  supportedFeatures() {
-    return {
-      images: true,
-      hooks: false,
-      thinking: true,
-      nativeResume: false,
-    };
+  supportedFeatures(): AgentLibFeatures {
+    return { images: true, hooks: false, thinking: true, nativeResume: false };
   }
 
   getDefaultModel(): string { return 'gpt-5.3-codex'; }
@@ -140,104 +125,43 @@ export class CodexCliLib implements IAgentLib {
     return !!Codex;
   }
 
-  getTelemetry(runId: string): AgentLibTelemetry | null {
-    const state = this.runningStates.get(runId);
-    if (!state) return null;
-    return {
-      accumulatedInputTokens: state.accumulatedInputTokens,
-      accumulatedOutputTokens: state.accumulatedOutputTokens,
-      accumulatedCacheReadInputTokens: state.accumulatedCacheReadInputTokens,
-      accumulatedCacheCreationInputTokens: 0,
-      messageCount: state.messageCount,
-      timeout: state.timeout,
-      maxTurns: state.maxTurns,
-    };
-  }
+  protected async runEngine(
+    runId: string,
+    state: BaseRunState,
+    engineOpts: EngineRunOptions,
+  ): Promise<EngineResult> {
+    const { options, callbacks, log, emit, stream } = engineOpts;
+    const { onMessage } = callbacks;
 
-  async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
-    const { onLog } = callbacks;
-    const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
+    // Session resume: try in-memory thread ID first (native), then prompt replay fallback
     const nativeResumeThreadId = options.resumeSession && options.sessionId
       ? this.sdkThreadIds.get(options.sessionId)
       : undefined;
 
+    let effectivePrompt = engineOpts.prompt;
     if (nativeResumeThreadId) {
       log('Resuming Codex SDK thread from in-memory mapping', {
         sessionId: options.sessionId,
         threadId: nativeResumeThreadId,
       });
-    }
-
-    // Fall back to prompt replay when we do not have a live SDK thread id for this session.
-    if (!nativeResumeThreadId && options.resumeSession && this.sessionHistoryProvider && options.taskId && options.agentType) {
-      try {
-        const prevMessages = await this.sessionHistoryProvider.getPreviousMessages(options.taskId, options.agentType);
-        if (prevMessages && prevMessages.length > 0) {
-          const history = SessionHistoryFormatter.format(prevMessages);
-          options = { ...options, prompt: history + '\n\n---\n\n' + options.prompt };
-          log('Session history prepended to prompt', { messageCount: prevMessages.length, historyLength: history.length });
-        }
-      } catch (err) {
-        log(`Failed to load session history (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
-      }
+    } else {
+      // Fall back to prompt replay when we do not have a live SDK thread id
+      effectivePrompt = await this.resolveSessionPrompt(engineOpts.prompt, options, log);
     }
 
     const Codex = await this.tryLoadCodexConstructor();
-    if (Codex) {
-      return this.executeWithSdk(Codex, runId, options, callbacks, nativeResumeThreadId);
+    if (!Codex) {
+      const sdkError = 'Codex SDK not available. Install @openai/codex-sdk.';
+      log(sdkError);
+      return { isError: true, errorMessage: sdkError };
     }
-
-    const sdkError = 'Codex SDK not available. Install @openai/codex-sdk.';
-    log(sdkError);
-    return {
-      exitCode: 1,
-      output: sdkError,
-      error: sdkError,
-      model: options.model ?? this.getDefaultModel(),
-    };
-  }
-
-  async stop(runId: string): Promise<void> {
-    const state = this.runningStates.get(runId);
-    if (!state) {
-      getAppLogger().warn('CodexCliLib', `stop called for unknown runId: ${runId}`);
-      return;
-    }
-
-    this.stoppedReasons.set(runId, 'stopped');
-    state.stoppedReason = 'stopped';
-
-    state.abortController.abort();
-  }
-
-  private async executeWithSdk(
-    Codex: CodexConstructor,
-    runId: string,
-    options: AgentLibRunOptions,
-    callbacks: AgentLibCallbacks,
-    nativeResumeThreadId?: string,
-  ): Promise<AgentLibResult> {
-    const { onOutput, onLog, onMessage } = callbacks;
-    const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
-
-    const abortController = new AbortController();
-    const state: RunState = {
-      abortController,
-      messageCount: 0,
-      accumulatedInputTokens: 0,
-      accumulatedOutputTokens: 0,
-      accumulatedCacheReadInputTokens: 0,
-      timeout: options.timeoutMs,
-      maxTurns: options.maxTurns,
-    };
-    this.runningStates.set(runId, state);
 
     const shellEnv = getShellEnv();
     const env = Object.fromEntries(
       Object.entries(shellEnv).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
     );
     const sandboxMode: SandboxMode = options.readOnly ? 'read-only' : 'workspace-write';
-    const { input: sdkInput, imageTempDir } = await this.buildSdkInput(runId, options.prompt, options.images);
+    const { input: sdkInput, imageTempDir } = await this.buildSdkInput(runId, effectivePrompt, options.images);
     const additionalDirectories = Array.from(new Set([
       ...options.allowedPaths.filter(Boolean),
       ...(imageTempDir ? [imageTempDir] : []),
@@ -266,7 +190,6 @@ export class CodexCliLib implements IAgentLib {
       resumeThreadId: nativeResumeThreadId,
     });
 
-    let resultText = '';
     let finalAssistantText = '';
     let structuredOutput: Record<string, unknown> | undefined;
     let isError = false;
@@ -274,40 +197,9 @@ export class CodexCliLib implements IAgentLib {
     let killReason: string | undefined;
     let activeThreadId = nativeResumeThreadId ?? thread.id ?? undefined;
 
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      this.stoppedReasons.set(runId, 'timeout');
-      state.stoppedReason = 'timeout';
-      abortController.abort();
-    }, options.timeoutMs);
-
     const assistantSnapshots = new Map<string, string>();
     const commandOutputOffsets = new Map<string, number>();
     const emittedToolUse = new Set<string>();
-
-    const appendPersistentOutput = (chunk: string): void => {
-      if (!chunk) return;
-      resultText += chunk;
-      onOutput?.(chunk);
-    };
-
-    const emitStreamOnly = (chunk: string): void => {
-      if (!chunk) return;
-      onOutput?.(chunk);
-    };
-
-    const parseStructuredOutput = (text: string): Record<string, unknown> | undefined => {
-      try {
-        const parsed = JSON.parse(text) as unknown;
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          return parsed as Record<string, unknown>;
-        }
-      } catch {
-        // Best effort parse only
-      }
-      return undefined;
-    };
 
     const textFromMcpResult = (content?: unknown[]): string => {
       if (!Array.isArray(content)) return '';
@@ -327,7 +219,7 @@ export class CodexCliLib implements IAgentLib {
         sdkInput,
         {
           ...(options.outputFormat ? { outputSchema: options.outputFormat } : {}),
-          signal: abortController.signal,
+          signal: state.abortController.signal,
         },
       );
 
@@ -386,7 +278,7 @@ export class CodexCliLib implements IAgentLib {
             const nextText = item.text ?? '';
             const delta = nextText.startsWith(prevText) ? nextText.slice(prevText.length) : nextText;
             if (delta) {
-              appendPersistentOutput(delta);
+              emit(delta);
               onMessage?.({ type: 'assistant_text', text: delta, timestamp: Date.now() });
             }
             assistantSnapshots.set(item.id, nextText);
@@ -407,14 +299,14 @@ export class CodexCliLib implements IAgentLib {
                 input: item.command.slice(0, 2000),
                 timestamp: Date.now(),
               });
-              emitStreamOnly(`\n> Tool: bash\n> Input: ${item.command}\n`);
+              stream(`\n> Tool: bash\n> Input: ${item.command}\n`);
             }
 
             const previousOffset = commandOutputOffsets.get(item.id) ?? 0;
             const currentOutput = item.aggregated_output ?? '';
             if (currentOutput.length > previousOffset) {
               const diff = currentOutput.slice(previousOffset);
-              emitStreamOnly(diff);
+              stream(diff);
               commandOutputOffsets.set(item.id, currentOutput.length);
             }
 
@@ -438,7 +330,7 @@ export class CodexCliLib implements IAgentLib {
                 input: JSON.stringify(item.arguments ?? {}).slice(0, 2000),
                 timestamp: Date.now(),
               });
-              emitStreamOnly(`\n> Tool: ${item.server}.${item.tool}\n`);
+              stream(`\n> Tool: ${item.server}.${item.tool}\n`);
             }
 
             if (event.type === 'item.completed') {
@@ -477,21 +369,21 @@ export class CodexCliLib implements IAgentLib {
             if (event.type === 'item.completed') {
               const total = item.items.length;
               const done = item.items.filter((entry) => entry.completed).length;
-              emitStreamOnly(`\n> Todo: ${done}/${total} completed\n`);
+              stream(`\n> Todo: ${done}/${total} completed\n`);
             }
             break;
           }
           case 'file_change': {
             if (event.type === 'item.completed') {
               const summary = item.changes.map((change) => `${change.kind}:${change.path}`).join(', ');
-              emitStreamOnly(`\n> File changes: ${summary}\n`);
+              stream(`\n> File changes: ${summary}\n`);
             }
             break;
           }
           case 'error': {
             isError = true;
             errorMessage = item.message;
-            appendPersistentOutput(`[error] ${item.message}\n`);
+            emit(`[error] ${item.message}\n`);
             break;
           }
           default: {
@@ -501,36 +393,28 @@ export class CodexCliLib implements IAgentLib {
       }
 
       if (options.outputFormat) {
-        structuredOutput = parseStructuredOutput(finalAssistantText);
+        structuredOutput = CodexCliLib.parseStructuredOutput(finalAssistantText);
       }
     } catch (err) {
       isError = true;
       const baseMessage = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
-      if (timedOut) {
+      if (state.stoppedReason === 'timeout') {
         killReason = 'timeout';
         errorMessage = `codex-sdk timed out after ${Math.round(options.timeoutMs / 1000)}s`;
-      } else if (abortController.signal.aborted) {
-        killReason = this.stoppedReasons.get(runId) ?? state.stoppedReason ?? 'stopped';
+      } else if (state.abortController.signal.aborted) {
+        killReason = state.stoppedReason ?? 'stopped';
         errorMessage = `codex-sdk run aborted [kill_reason=${killReason}]`;
       } else {
-        // Include diagnostics for unexpected failures
-        const diagnostics = [
-          `sdk_error: ${baseMessage}`,
-          ...(errorStack ? [`stack: ${errorStack}`] : []),
-          `messages_processed: ${state.messageCount}`,
-          `cwd: ${options.cwd}`,
-          `model: ${options.model ?? 'default'}`,
-          `max_turns: ${options.maxTurns}`,
-          `timeout: ${Math.round(options.timeoutMs / 1000)}s`,
-          `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
-          `cached_input_tokens: ${state.accumulatedCacheReadInputTokens}`,
-          `thread_id: ${activeThreadId ?? 'unknown'}`,
-          `result_text_length: ${resultText.length}`,
-        ].join('\n');
+        const diagnostics = this.buildDiagnostics(state, options, {
+          sdk_error: baseMessage,
+          ...(errorStack ? { stack: errorStack } : {}),
+          cached_input_tokens: state.accumulatedCacheReadInputTokens,
+          thread_id: activeThreadId ?? 'unknown',
+        });
         errorMessage = `${baseMessage}\n\n--- Diagnostics ---\n${diagnostics}`;
       }
-      log(`Codex SDK run failed`, {
+      log('Codex SDK run failed', {
         error: baseMessage,
         stack: errorStack,
         messagesProcessed: state.messageCount,
@@ -541,16 +425,11 @@ export class CodexCliLib implements IAgentLib {
         accumulatedInputTokens: state.accumulatedInputTokens,
         accumulatedOutputTokens: state.accumulatedOutputTokens,
         accumulatedCacheReadInputTokens: state.accumulatedCacheReadInputTokens,
-        resultTextLength: resultText.length,
-        timedOut,
-        aborted: abortController.signal.aborted,
+        aborted: state.abortController.signal.aborted,
         killReason,
         threadId: activeThreadId,
       });
     } finally {
-      clearTimeout(timer);
-      this.runningStates.delete(runId);
-      this.stoppedReasons.delete(runId);
       if (imageTempDir) {
         try {
           await fs.rm(imageTempDir, { recursive: true, force: true });
@@ -560,25 +439,18 @@ export class CodexCliLib implements IAgentLib {
       }
     }
 
-    const output = resultText || finalAssistantText || errorMessage || '';
-    const exitCode = isError ? 1 : 0;
     return {
-      exitCode,
-      output,
-      error: isError ? errorMessage : undefined,
-      costInputTokens: state.accumulatedInputTokens || undefined,
-      costOutputTokens: state.accumulatedOutputTokens || undefined,
-      cacheReadInputTokens: state.accumulatedCacheReadInputTokens || undefined,
-      model: options.model ?? this.getDefaultModel(),
-      structuredOutput,
+      isError,
+      errorMessage,
+      fallbackOutput: finalAssistantText || undefined,
       killReason,
-      rawExitCode: exitCode,
+      rawExitCode: isError ? 1 : 0,
+      structuredOutput,
+      cacheReadInputTokens: state.accumulatedCacheReadInputTokens || undefined,
     };
   }
 
   private async tryLoadCodexConstructor(): Promise<CodexConstructor | null> {
-    // Try native dynamic import first. In vitest/Vite this is usually supported,
-    // while production CommonJS builds may rewrite it to require().
     try {
       const mod = await import('@openai/codex-sdk');
       if (typeof mod.Codex === 'function') {
@@ -587,8 +459,6 @@ export class CodexCliLib implements IAgentLib {
     } catch {
       // Fall through to importESM below.
     }
-
-    // Fallback for CommonJS builds: preserve true dynamic import at runtime.
     try {
       const mod = await importESM('@openai/codex-sdk');
       if (typeof mod.Codex !== 'function') return null;
@@ -598,18 +468,25 @@ export class CodexCliLib implements IAgentLib {
     }
   }
 
+  private static parseStructuredOutput(text: string): Record<string, unknown> | undefined {
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Best effort parse only
+    }
+    return undefined;
+  }
+
   private mediaTypeToExtension(mediaType: string): string {
     switch (mediaType) {
-      case 'image/png':
-        return 'png';
-      case 'image/jpeg':
-        return 'jpg';
-      case 'image/gif':
-        return 'gif';
-      case 'image/webp':
-        return 'webp';
-      default:
-        return 'img';
+      case 'image/png': return 'png';
+      case 'image/jpeg': return 'jpg';
+      case 'image/gif': return 'gif';
+      case 'image/webp': return 'webp';
+      default: return 'img';
     }
   }
 

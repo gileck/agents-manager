@@ -1,12 +1,15 @@
 import type { AgentChatMessage } from '../../shared/types';
-import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption, ModelTokenUsage, AgentLibHooks } from '../interfaces/agent-lib';
-import { SandboxGuard } from '../services/sandbox-guard';
-import { getAppLogger } from '../services/app-logger';
+import type { AgentLibFeatures, AgentLibModelOption, AgentLibHooks, ModelTokenUsage } from '../interfaces/agent-lib';
+import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
 // but the SDK is ESM-only (.mjs). This bypasses that transformation.
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
+
+// ============================================
+// SDK message types (engine-specific)
+// ============================================
 
 interface SdkTextBlock { type: 'text'; text: string }
 interface SdkThinkingBlock { type: 'thinking'; thinking: string }
@@ -57,26 +60,15 @@ interface SdkOtherMessage {
 }
 type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkUserMessage | SdkSystemMessage | SdkOtherMessage;
 
-interface RunState {
-  abortController: AbortController;
-  accumulatedInputTokens: number;
-  accumulatedOutputTokens: number;
-  accumulatedCacheReadInputTokens: number;
-  accumulatedCacheCreationInputTokens: number;
-  /** Input tokens from the most recent assistant message (overwritten each time, not accumulated). */
-  lastInputTokens: number | undefined;
-  seenMessageIds: Set<string>;
-  messageCount: number;
-  timeout: number;
-  maxTurns: number;
-  /** Set by stop() before aborting so the catch block can distinguish user-stop from timeout. */
-  stoppedReason?: string;
-}
+// ============================================
+// ClaudeCodeLib — Claude Agent SDK engine
+// ============================================
 
-export class ClaudeCodeLib implements IAgentLib {
+export class ClaudeCodeLib extends BaseAgentLib {
   readonly name = 'claude-code';
 
-  private runningStates = new Map<string, RunState>();
+  /** Track seen message IDs per run to avoid duplicate token counting. */
+  private seenMessageIds = new Map<string, Set<string>>();
 
   supportedFeatures(): AgentLibFeatures {
     return { images: true, hooks: true, thinking: true, nativeResume: true };
@@ -101,61 +93,21 @@ export class ClaudeCodeLib implements IAgentLib {
     }
   }
 
-  getTelemetry(runId: string): AgentLibTelemetry | null {
-    const state = this.runningStates.get(runId);
-    if (!state) return null;
-    return {
-      accumulatedInputTokens: state.accumulatedInputTokens,
-      accumulatedOutputTokens: state.accumulatedOutputTokens,
-      accumulatedCacheReadInputTokens: state.accumulatedCacheReadInputTokens,
-      accumulatedCacheCreationInputTokens: state.accumulatedCacheCreationInputTokens,
-      messageCount: state.messageCount,
-      timeout: state.timeout,
-      maxTurns: state.maxTurns,
-    };
-  }
-
-  async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
-    const { onOutput, onLog, onMessage, onUserToolResult, onStreamEvent, onPermissionRequest } = callbacks;
-    const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
+  protected async runEngine(
+    runId: string,
+    state: BaseRunState,
+    engineOpts: EngineRunOptions,
+  ): Promise<EngineResult> {
+    const { prompt, options, callbacks, canUseTool, hooks, log, emit, stream, getResultLength } = engineOpts;
+    const { onMessage, onUserToolResult, onStreamEvent } = callbacks;
 
     const query = await this.loadQuery();
 
-    const abortController = new AbortController();
-    const state: RunState = {
-      abortController,
-      accumulatedInputTokens: 0,
-      accumulatedOutputTokens: 0,
-      accumulatedCacheReadInputTokens: 0,
-      accumulatedCacheCreationInputTokens: 0,
-      lastInputTokens: undefined,
-      seenMessageIds: new Set(),
-      messageCount: 0,
-      timeout: options.timeoutMs,
-      maxTurns: options.maxTurns,
-    };
-    this.runningStates.set(runId, state);
+    // Track seen message IDs for dedup
+    const seenIds = new Set<string>();
+    this.seenMessageIds.set(runId, seenIds);
 
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; abortController.abort(); }, options.timeoutMs);
-
-    let resultText = '';
-    let costInputTokens: number | undefined;
-    let costOutputTokens: number | undefined;
-    let cacheReadInputTokens: number | undefined;
-    let cacheCreationInputTokens: number | undefined;
-    let totalCostUsd: number | undefined;
-    let lastContextInputTokens: number | undefined;
-    let structuredOutput: Record<string, unknown> | undefined;
-    let isError = false;
-    let errorMessage: string | undefined;
-    let killReason: string | undefined;
-    let contextWindow: number | undefined;
-    let maxOutputTokens: number | undefined;
-    let durationMs: number | undefined;
-    let durationApiMs: number | undefined;
-    let numTurns: number | undefined;
-    let modelUsage: Record<string, ModelTokenUsage> | undefined;
+    let lastInputTokens: number | undefined;
 
     // Capture stderr from the Claude Code process for diagnostics
     const stderrChunks: string[] = [];
@@ -168,98 +120,12 @@ export class ClaudeCodeLib implements IAgentLib {
       }
     };
 
-    const emit = (chunk: string) => {
-      resultText += chunk;
-      onOutput?.(chunk);
-    };
-    /** Stream-only: sent to onOutput for real-time display but NOT stored in resultText */
-    const stream = (chunk: string) => {
-      onOutput?.(chunk);
-    };
-
-    log(`Starting agent run: cwd=${options.cwd}, timeout=${options.timeoutMs}ms, model=${options.model ?? 'default'}`);
-
-    // Set up sandbox guard for file-system boundary enforcement
-    const sandboxGuard = new SandboxGuard(options.allowedPaths, options.readOnlyPaths);
-    const callerCanUseTool = options.canUseTool;
-    const callerPreToolUse = options.hooks?.preToolUse;
-
-    // Build mergedPreToolUse: combines sandbox guard + caller's preToolUse hook.
-    // Used by buildSdkHooks when canUseTool is NOT provided (no interactive approval).
-    const mergedPreToolUse = (toolName: string, toolInput: Record<string, unknown>): { decision: 'block' | 'allow'; reason?: string } | undefined => {
-      const guardResult = sandboxGuard.evaluateToolCall(toolName, toolInput);
-      if (!guardResult.allow) {
-        return { decision: 'block', reason: guardResult.reason ?? 'Blocked by sandbox guard' };
-      }
-      if (callerPreToolUse) {
-        return callerPreToolUse(toolName, toolInput);
-      }
-      return undefined;
-    };
-
-    // Build unified canUseTool callback for the SDK.
-    // Chains: sandbox guard → callerCanUseTool (e.g. AskUserQuestion) → onPermissionRequest (interactive UI approval).
-    const sdkCanUseTool = async (
-      toolName: string,
-      input: Record<string, unknown>,
-      sdkOptions: { signal: AbortSignal; suggestions?: unknown[]; blockedPath?: string; decisionReason?: string; toolUseID: string; agentID?: string },
-    ): Promise<{ behavior: 'allow'; updatedInput?: Record<string, unknown> } | { behavior: 'deny'; message: string }> => {
-      // 1. Sandbox guard (synchronous path check)
-      const guardResult = sandboxGuard.evaluateToolCall(toolName, input);
-      if (!guardResult.allow) {
-        log(`Sandbox guard blocked ${toolName}: ${guardResult.reason}`);
-        return { behavior: 'deny', message: guardResult.reason ?? 'Blocked by sandbox guard' };
-      }
-      // 2. Caller's canUseTool interceptor (e.g. AskUserQuestion handler)
-      let updatedInput: Record<string, unknown> | undefined;
-      if (callerCanUseTool) {
-        try {
-          const callerResult = await callerCanUseTool(toolName, input);
-          if (callerResult.behavior === 'deny') {
-            return callerResult;
-          }
-          if (callerResult.behavior === 'allow' && callerResult.updatedInput) {
-            updatedInput = callerResult.updatedInput;
-          }
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          log(`callerCanUseTool failed for ${toolName}, denying: ${errMsg}`);
-          return { behavior: 'deny', message: `Tool interceptor failed: ${errMsg}` };
-        }
-      }
-      // 3. Interactive permission approval (surfaces tool call to UI)
-      if (onPermissionRequest) {
-        try {
-          const effectiveInput = updatedInput ?? input;
-          const response = await onPermissionRequest({ toolName, toolInput: effectiveInput, toolUseId: sdkOptions.toolUseID });
-          if (response.allowed) {
-            return updatedInput ? { behavior: 'allow', updatedInput } : { behavior: 'allow' };
-          }
-          return { behavior: 'deny', message: 'Denied by user' };
-        } catch (err) {
-          if (sdkOptions.signal.aborted) {
-            return { behavior: 'deny', message: 'Agent was stopped' };
-          }
-          const errMsg = err instanceof Error ? err.message : String(err);
-          log(`onPermissionRequest failed for ${toolName}, denying: ${errMsg}`);
-          return { behavior: 'deny', message: `Permission check failed: ${errMsg}` };
-        }
-      }
-      return updatedInput ? { behavior: 'allow', updatedInput } : { behavior: 'allow' };
-    };
-
-    // Build SDK hooks from our AgentLibHooks.
-    // Sandbox guard already runs in sdkCanUseTool above, so skip adding it as a
-    // PreToolUse hook to avoid double-checking (pass hasCanUseTool=true).
-    const sdkHooks = this.buildSdkHooks(options.hooks, mergedPreToolUse, log, true);
-
     // Build SDK prompt: use Single Message Input (string) by default.
     // Only use an async generator when images are attached (need content blocks).
-    // Multi-turn is handled via SDK session resume, not generator yielding.
     let sdkPrompt: string | AsyncIterable<SdkUserMessage>;
     if (options.images && options.images.length > 0) {
       const contentBlocks = [
-        { type: 'text' as const, text: options.prompt },
+        { type: 'text' as const, text: prompt },
         ...options.images.map((img) => ({
           type: 'image' as const,
           source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
@@ -271,14 +137,13 @@ export class ClaudeCodeLib implements IAgentLib {
         parent_tool_use_id: null,
         session_id: runId,
       };
-      // Single-yield generator: yields the image message and returns immediately
       sdkPrompt = (async function* () { yield imageMsg; })();
     } else {
-      sdkPrompt = options.prompt;
+      sdkPrompt = prompt;
     }
 
     log(`Entering SDK message loop`, {
-      promptLength: options.prompt.length,
+      promptLength: prompt.length,
       model: options.model ?? 'default',
       maxTurns: options.maxTurns,
       hasOutputFormat: !!options.outputFormat,
@@ -296,9 +161,28 @@ export class ClaudeCodeLib implements IAgentLib {
     }
 
     // Build a clean env: remove CLAUDECODE to prevent "nested session" rejection
-    // when the daemon itself runs inside a Claude Code session.
     const cleanEnv = { ...process.env };
     delete cleanEnv.CLAUDECODE;
+
+    // Build SDK hooks from our AgentLibHooks (engine-specific format transformation)
+    const sdkHooks = this.buildSdkHooks(hooks, log);
+
+    // Result tracking
+    let costInputTokens: number | undefined;
+    let costOutputTokens: number | undefined;
+    let cacheReadInputTokens: number | undefined;
+    let cacheCreationInputTokens: number | undefined;
+    let totalCostUsd: number | undefined;
+    let structuredOutput: Record<string, unknown> | undefined;
+    let isError = false;
+    let errorMessage: string | undefined;
+    let killReason: string | undefined;
+    let contextWindow: number | undefined;
+    let maxOutputTokens: number | undefined;
+    let durationMs: number | undefined;
+    let durationApiMs: number | undefined;
+    let numTurns: number | undefined;
+    let modelUsage: Record<string, ModelTokenUsage> | undefined;
 
     try {
       for await (const message of query({
@@ -306,7 +190,7 @@ export class ClaudeCodeLib implements IAgentLib {
         options: {
           cwd: options.cwd,
           ...(options.systemPrompt ? { systemPrompt: options.systemPrompt } : {}),
-          abortController,
+          abortController: state.abortController,
           permissionMode: 'bypassPermissions',
           allowDangerouslySkipPermissions: true,
           model: options.model,
@@ -318,7 +202,7 @@ export class ClaudeCodeLib implements IAgentLib {
           ...(options.settingSources?.length ? { settingSources: options.settingSources } : {}),
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           ...(options.disallowedTools?.length ? { disallowedTools: options.disallowedTools } : {}),
-          canUseTool: sdkCanUseTool,
+          canUseTool,
           ...(Object.keys(sdkHooks).length > 0 ? { hooks: sdkHooks } : {}),
           ...sessionOptions,
           ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
@@ -339,22 +223,19 @@ export class ClaudeCodeLib implements IAgentLib {
         }
 
         if (message.type === 'assistant') {
-          // Per SDK docs: with includePartialMessages, stream_event messages carry
-          // the deltas. The SDK emits ONE AssistantMessage per turn (after all
-          // stream_events) with the complete content. Process it directly.
           const assistantMsg = message as SdkAssistantMessage;
           if (assistantMsg.message.usage) {
             const msgId = assistantMsg.message.id;
-            if (!msgId || !state.seenMessageIds.has(msgId)) {
-              if (msgId) state.seenMessageIds.add(msgId);
+            if (!msgId || !seenIds.has(msgId)) {
+              if (msgId) seenIds.add(msgId);
               state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens;
               state.accumulatedOutputTokens += assistantMsg.message.usage.output_tokens;
               state.accumulatedCacheReadInputTokens += assistantMsg.message.usage.cache_read_input_tokens ?? 0;
               state.accumulatedCacheCreationInputTokens += assistantMsg.message.usage.cache_creation_input_tokens ?? 0;
             }
-            state.lastInputTokens = assistantMsg.message.usage.input_tokens
+            lastInputTokens = assistantMsg.message.usage.input_tokens
               + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
-              + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0); // Total context tokens (all types) for context window tracking
+              + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
           }
           for (const block of assistantMsg.message.content) {
@@ -378,18 +259,14 @@ export class ClaudeCodeLib implements IAgentLib {
           if (resultMsg.structured_output) {
             structuredOutput = resultMsg.structured_output;
           }
-          // Use the SDK's authoritative total_cost_usd when available — it accounts
-          // for cache pricing, multi-model usage, and all billing dimensions.
           if (resultMsg.total_cost_usd != null) {
             totalCostUsd = resultMsg.total_cost_usd;
           }
-          // Extract telemetry fields from result
           if (resultMsg.duration_ms != null) durationMs = resultMsg.duration_ms;
           if (resultMsg.duration_api_ms != null) durationApiMs = resultMsg.duration_api_ms;
           if (resultMsg.num_turns != null) numTurns = resultMsg.num_turns;
           if (resultMsg.modelUsage) {
             modelUsage = resultMsg.modelUsage;
-            // Extract contextWindow/maxOutputTokens from the primary model (first entry with contextWindow)
             for (const usage of Object.values(resultMsg.modelUsage)) {
               if (usage.contextWindow != null) {
                 contextWindow = usage.contextWindow;
@@ -398,8 +275,6 @@ export class ClaudeCodeLib implements IAgentLib {
               }
             }
           }
-          // Prefer the result message's authoritative cumulative totals.
-          // Fall back to accumulated counts only when the result has no usage data.
           costInputTokens = resultMsg.usage?.input_tokens
             ?? (state.accumulatedInputTokens >= 0 ? state.accumulatedInputTokens : undefined);
           costOutputTokens = resultMsg.usage?.output_tokens
@@ -408,7 +283,6 @@ export class ClaudeCodeLib implements IAgentLib {
             ?? (state.accumulatedCacheReadInputTokens >= 0 ? state.accumulatedCacheReadInputTokens : undefined);
           cacheCreationInputTokens = resultMsg.usage?.cache_creation_input_tokens
             ?? (state.accumulatedCacheCreationInputTokens >= 0 ? state.accumulatedCacheCreationInputTokens : undefined);
-          lastContextInputTokens = state.lastInputTokens;
           if (costInputTokens != null || costOutputTokens != null) {
             const usageMsg: AgentChatMessage = { type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, contextWindow, timestamp: Date.now() };
             onMessage?.(usageMsg);
@@ -429,7 +303,6 @@ export class ClaudeCodeLib implements IAgentLib {
             }
           }
         } else if (message.type === 'user') {
-          // SDK emits tool results as user messages with tool_result content blocks
           const userMsg = message as SdkUserMessage;
           const content = userMsg.message?.content;
           if (Array.isArray(content)) {
@@ -443,7 +316,6 @@ export class ClaudeCodeLib implements IAgentLib {
             }
           }
         } else if (message.type === 'stream_event') {
-          // Partial message streaming: forward raw stream event to callback
           const streamMsg = message as { type: 'stream_event'; event?: { type?: string; delta?: { type?: string; text?: string; thinking?: string; partial_json?: string } } };
           if (onStreamEvent && streamMsg.event) {
             onStreamEvent(streamMsg.event as { type: string; [key: string]: unknown });
@@ -479,36 +351,24 @@ export class ClaudeCodeLib implements IAgentLib {
       const elapsed = Date.now() - startTime;
       errorMessage = sdkError;
 
-      // Collect stderr output from the Claude Code process
       const stderrOutput = stderrChunks.join('').trim();
+      const diagnostics = this.buildDiagnostics(state, options, {
+        sdk_error: sdkError,
+        ...(stderrOutput ? { stderr: stderrOutput } : {}),
+        ...(sdkStack ? { stack: sdkStack } : {}),
+        elapsed: `${Math.round(elapsed / 1000)}s`,
+        result_text_length: getResultLength(),
+      });
 
-      // Build diagnostic context that will be included in the error for debugging
-      const diagnostics = [
-        `sdk_error: ${sdkError}`,
-        ...(stderrOutput ? [`stderr: ${stderrOutput}`] : []),
-        ...(sdkStack ? [`stack: ${sdkStack}`] : []),
-        `elapsed: ${Math.round(elapsed / 1000)}s`,
-        `messages_processed: ${state.messageCount}`,
-        `cwd: ${options.cwd}`,
-        `model: ${options.model ?? 'default'}`,
-        `max_turns: ${options.maxTurns}`,
-        `timeout: ${Math.round(options.timeoutMs / 1000)}s`,
-        ...(options.resumeSession ? [`resume_session: ${options.sessionId}`] : []),
-        `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
-        `result_text_length: ${resultText.length}`,
-      ].join('\n');
-
-      if (timedOut) {
+      if (state.stoppedReason === 'timeout') {
         killReason = 'timeout';
         errorMessage = `Agent timed out after ${Math.round(elapsed / 1000)}s (timeout=${Math.round(options.timeoutMs / 1000)}s, ${state.messageCount} messages processed)`;
-      } else if (abortController.signal.aborted) {
+      } else if (state.abortController.signal.aborted) {
         killReason = state.stoppedReason ?? 'stopped';
         errorMessage = `Agent aborted after ${Math.round(elapsed / 1000)}s (${state.messageCount} messages processed) [kill_reason=${killReason}]`;
       } else if (options.resumeSession) {
-        // Session resume failure — provide a clear, actionable message
         errorMessage = `Session resume failed (session "${options.sessionId}"): ${sdkError}\n\n--- Diagnostics ---\n${diagnostics}`;
       } else {
-        // For unexpected errors (like "process exited with code 1"), include diagnostics in the error message
         errorMessage = `${sdkError}\n\n--- Diagnostics ---\n${diagnostics}`;
       }
       log(`Agent execution error`, {
@@ -525,32 +385,26 @@ export class ClaudeCodeLib implements IAgentLib {
         sessionId: options.sessionId,
         accumulatedInputTokens: state.accumulatedInputTokens,
         accumulatedOutputTokens: state.accumulatedOutputTokens,
-        resultTextLength: resultText.length,
-        timedOut,
-        aborted: abortController.signal.aborted,
+        resultTextLength: getResultLength(),
+        aborted: state.abortController.signal.aborted,
         killReason,
       });
     } finally {
-      clearTimeout(timer);
-      this.runningStates.delete(runId);
+      this.seenMessageIds.delete(runId);
     }
 
-    const output = resultText || errorMessage || '';
-    const exitCode = isError ? 1 : 0;
     return {
-      exitCode,
-      output,
-      error: isError ? errorMessage : undefined,
+      isError,
+      errorMessage,
+      killReason,
+      rawExitCode: isError ? 1 : 0,
+      structuredOutput,
       costInputTokens,
       costOutputTokens,
       cacheReadInputTokens,
       cacheCreationInputTokens,
       totalCostUsd,
-      lastContextInputTokens,
-      model: options.model ?? this.getDefaultModel(),
-      structuredOutput,
-      killReason,
-      rawExitCode: exitCode,
+      lastContextInputTokens: lastInputTokens,
       contextWindow,
       maxOutputTokens,
       durationMs,
@@ -560,61 +414,16 @@ export class ClaudeCodeLib implements IAgentLib {
     };
   }
 
-  async stop(runId: string): Promise<void> {
-    const state = this.runningStates.get(runId);
-    if (!state) {
-      getAppLogger().warn('ClaudeCodeLib', `stop called for unknown runId: ${runId}`);
-      return;
-    }
-    state.stoppedReason = 'stopped';
-    state.abortController.abort();
-    this.runningStates.delete(runId);
-  }
-
   /**
    * Transform our AgentLibHooks interface into the SDK's hook format.
    * The SDK expects: `Partial<Record<HookEvent, HookCallbackMatcher[]>>`
-   * where each HookCallbackMatcher has { matcher?: string; hooks: HookCallback[]; timeout?: number }.
-   *
-   * When canUseTool is NOT provided, PreToolUse hooks handle the sandbox guard.
-   * When canUseTool IS provided, sandbox guard runs inside canUseTool instead.
+   * Sandbox guard runs in the base class's canUseTool chain, not here.
    */
   private buildSdkHooks(
     hooks: AgentLibHooks | undefined,
-    mergedPreToolUse: (toolName: string, toolInput: Record<string, unknown>) => { decision: 'block' | 'allow'; reason?: string } | undefined,
     log: (msg: string, data?: Record<string, unknown>) => void,
-    hasCanUseTool: boolean,
   ): Record<string, unknown> {
     const sdkHooks: Record<string, Array<{ hooks: Array<(input: Record<string, unknown>, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<Record<string, unknown>>> }>> = {};
-
-    // PreToolUse: always include sandbox guard when canUseTool is not provided
-    // (when canUseTool is provided, the guard runs inside canUseTool instead)
-    const preToolUseCallbacks: Array<(input: Record<string, unknown>, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<Record<string, unknown>>> = [];
-
-    // Only add PreToolUse sandbox guard as hook when canUseTool is NOT being used
-    if (!hasCanUseTool) {
-      preToolUseCallbacks.push(async (input: Record<string, unknown>) => {
-        const toolName = input.tool_name as string;
-        const toolInput = input.tool_input as Record<string, unknown>;
-        const result = mergedPreToolUse(toolName, toolInput);
-        if (result?.decision === 'block') {
-          return {
-            decision: 'block',
-            reason: result.reason,
-            hookSpecificOutput: {
-              hookEventName: 'PreToolUse',
-              permissionDecision: 'deny',
-              permissionDecisionReason: result.reason,
-            },
-          };
-        }
-        return { continue: true };
-      });
-    }
-
-    if (preToolUseCallbacks.length > 0) {
-      sdkHooks.PreToolUse = [{ hooks: preToolUseCallbacks }];
-    }
 
     // PostToolUse hook
     if (hooks?.postToolUse) {

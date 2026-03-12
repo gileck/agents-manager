@@ -1,29 +1,20 @@
 import { spawn, type ChildProcess } from 'child_process';
-import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
-import type { ISessionHistoryProvider } from '../interfaces/session-history-provider';
-import { SessionHistoryFormatter } from '../services/session-history-formatter';
+import type { AgentLibFeatures, AgentLibCallbacks, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 import { getAppLogger } from '../services/app-logger';
+import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
 
-interface RunState {
-  process: ChildProcess;
-  accumulatedInputTokens: number;
-  accumulatedOutputTokens: number;
-  messageCount: number;
-  timeout: number;
-  maxTurns: number;
-  killTimer?: ReturnType<typeof setTimeout>;
-  thinkingBuffer: string;
-}
+// ============================================
+// CursorAgentLib — cursor-agent CLI subprocess engine
+// ============================================
 
-export class CursorAgentLib implements IAgentLib {
+export class CursorAgentLib extends BaseAgentLib {
   readonly name = 'cursor-agent';
 
-  private runningStates = new Map<string, RunState>();
-  /** Tracks why a process was killed, survives the stop() → close gap. */
-  private stoppedReasons = new Map<string, string>();
-
-  constructor(private sessionHistoryProvider?: ISessionHistoryProvider) {}
+  /** Track active child processes for stop/timeout — keyed by runId. */
+  private processes = new Map<string, ChildProcess>();
+  /** SIGKILL escalation timers — keyed by runId. */
+  private killTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   supportedFeatures(): AgentLibFeatures {
     return { images: false, hooks: false, thinking: true, nativeResume: false };
@@ -66,38 +57,22 @@ export class CursorAgentLib implements IAgentLib {
     }
   }
 
-  getTelemetry(runId: string): AgentLibTelemetry | null {
-    const state = this.runningStates.get(runId);
-    if (!state) return null;
-    return {
-      accumulatedInputTokens: state.accumulatedInputTokens,
-      accumulatedOutputTokens: state.accumulatedOutputTokens,
-      accumulatedCacheReadInputTokens: 0,
-      accumulatedCacheCreationInputTokens: 0,
-      messageCount: state.messageCount,
-      timeout: state.timeout,
-      maxTurns: state.maxTurns,
-    };
+  protected doStop(runId: string, state: BaseRunState): void {
+    state.stoppedReason = 'stopped';
+    // abort() fires the onAbort listener in runEngine which calls killProcess
+    state.abortController.abort();
   }
 
-  async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
-    const { onOutput, onLog, onMessage, onUserToolResult } = callbacks;
-    const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
+  protected async runEngine(
+    runId: string,
+    state: BaseRunState,
+    engineOpts: EngineRunOptions,
+  ): Promise<EngineResult> {
+    const { options, callbacks, log, emit, stream } = engineOpts;
+    const { onMessage, onUserToolResult } = callbacks;
 
-    // Session resume: prepend prior session history to the prompt
-    let effectivePrompt = options.prompt;
-    if (options.resumeSession && this.sessionHistoryProvider && options.taskId && options.agentType) {
-      try {
-        const prevMessages = await this.sessionHistoryProvider.getPreviousMessages(options.taskId, options.agentType);
-        if (prevMessages && prevMessages.length > 0) {
-          const history = SessionHistoryFormatter.format(prevMessages);
-          effectivePrompt = history + '\n\n---\n\n' + options.prompt;
-          log('Session history prepended to prompt', { messageCount: prevMessages.length, historyLength: history.length });
-        }
-      } catch (err) {
-        log(`Failed to load session history (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
+    // Session resume: prompt replay fallback (no native resume for cursor-agent)
+    const effectivePrompt = await this.resolveSessionPrompt(engineOpts.prompt, options, log);
 
     const args = [effectivePrompt, '-p', '--output-format', 'stream-json', '--force'];
     if (options.readOnly) {
@@ -107,67 +82,36 @@ export class CursorAgentLib implements IAgentLib {
       args.push('--model', options.model);
     }
 
-    log(`Spawning cursor-agent`, { args: args.slice(0, 6), cwd: options.cwd, timeout: options.timeoutMs, maxTurns: options.maxTurns });
+    log('Spawning cursor-agent', { args: args.slice(0, 6), cwd: options.cwd, timeout: options.timeoutMs, maxTurns: options.maxTurns });
 
     const env = getShellEnv();
     const proc = spawn('cursor-agent', args, { cwd: options.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     proc.stdin?.end();
+    this.processes.set(runId, proc);
 
-    const state: RunState = {
-      process: proc,
-      accumulatedInputTokens: 0,
-      accumulatedOutputTokens: 0,
-      messageCount: 0,
-      timeout: options.timeoutMs,
-      maxTurns: options.maxTurns,
-      thinkingBuffer: '',
-    };
-    this.runningStates.set(runId, state);
+    // Listen for abort signal (from base class timeout or stop()) to kill the subprocess
+    const onAbort = () => this.killProcess(runId, proc);
+    state.abortController.signal.addEventListener('abort', onAbort, { once: true });
 
-    let resultText = '';
-    let isError = false;
-    let errorMessage: string | undefined;
-    let costInputTokens: number | undefined;
-    let costOutputTokens: number | undefined;
-    let structuredOutput: Record<string, unknown> | undefined;
+    // Thinking buffer for delta → completed assembly
+    let thinkingBuffer = '';
+
     const resultRef = { structuredOutput: undefined as Record<string, unknown> | undefined, isError: false, errorMessage: undefined as string | undefined };
 
-    /** Appended to resultText AND streamed to onOutput for real-time display */
-    const emit = (chunk: string) => {
-      resultText += chunk;
-      onOutput?.(chunk);
-    };
-    /** Stream-only: sent to onOutput for real-time display but NOT stored in resultText */
-    const stream = (chunk: string) => {
-      onOutput?.(chunk);
-    };
-
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      this.stoppedReasons.set(runId, 'timeout');
-      if (proc.pid) {
-        try { process.kill(-proc.pid, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
-      } else {
-        proc.kill('SIGTERM');
-      }
-      state.killTimer = setTimeout(() => {
-        if (proc.pid) {
-          try { process.kill(-proc.pid, 'SIGKILL'); } catch (err) {
-            getAppLogger().warn('CursorAgentLib', `SIGKILL failed for pid ${proc.pid}`, { error: err instanceof Error ? err.message : String(err) });
-          }
-        }
-      }, 5000);
-    }, options.timeoutMs);
-
-    return new Promise<AgentLibResult>((resolve) => {
+    return new Promise<EngineResult>((resolve) => {
       let stderrOutput = '';
       let stdoutBuffer = '';
+
+      const processMsg = (msg: Record<string, unknown>) => {
+        this.processMessage(msg, state, resultRef, thinkingBuffer, {
+          emit, stream, onMessage, onUserToolResult, log,
+          setThinkingBuffer: (v: string) => { thinkingBuffer = v; },
+        });
+      };
 
       proc.stdout?.on('data', (data: Buffer) => {
         stdoutBuffer += data.toString();
         const lines = stdoutBuffer.split('\n');
-        // Keep the last (possibly incomplete) chunk in the buffer
         stdoutBuffer = lines.pop() ?? '';
 
         for (const line of lines) {
@@ -190,7 +134,7 @@ export class CursorAgentLib implements IAgentLib {
           }
 
           try {
-            this.processMessage(msg, state, resultRef, { emit, stream, onMessage, onUserToolResult, log });
+            processMsg(msg);
           } catch (err) {
             log(`Error processing message: ${err instanceof Error ? err.message : String(err)}`);
             emit(line + '\n');
@@ -207,57 +151,51 @@ export class CursorAgentLib implements IAgentLib {
       });
 
       proc.on('close', (code, signal) => {
-        // Flush any remaining buffered stdout
+        // Flush remaining buffered stdout
         if (stdoutBuffer.trim()) {
           state.messageCount++;
           let msg: Record<string, unknown> | null = null;
           try { msg = JSON.parse(stdoutBuffer); } catch { /* not JSON */ }
           if (msg) {
-            try {
-              this.processMessage(msg, state, resultRef, { emit, stream, onMessage, onUserToolResult, log });
-            } catch { emit(stdoutBuffer + '\n'); }
+            try { processMsg(msg); } catch { emit(stdoutBuffer + '\n'); }
           } else {
             emit(stdoutBuffer + '\n');
           }
         }
 
-        clearTimeout(timer);
-        if (state.killTimer) clearTimeout(state.killTimer);
-        this.runningStates.delete(runId);
+        // Cleanup
+        state.abortController.signal.removeEventListener('abort', onAbort);
+        const killTimer = this.killTimers.get(runId);
+        if (killTimer) { clearTimeout(killTimer); this.killTimers.delete(runId); }
+        this.processes.delete(runId);
 
         let killReason: string | undefined;
+        let isError = resultRef.isError;
+        let errorMessage = resultRef.errorMessage;
         const rawExitCode = code ?? (signal === 'SIGTERM' ? 143 : signal === 'SIGKILL' ? 137 : undefined);
         const isSignalExit = rawExitCode === 143 || rawExitCode === 137 || signal != null;
 
-        if (timedOut) {
+        if (state.stoppedReason === 'timeout') {
           isError = true;
           killReason = 'timeout';
           errorMessage = `cursor-agent timed out after ${Math.round(options.timeoutMs / 1000)}s`;
         } else if (isSignalExit) {
-          killReason = this.stoppedReasons.get(runId) ?? 'external_signal';
+          killReason = state.stoppedReason ?? 'external_signal';
           isError = true;
           errorMessage = stderrOutput || `cursor-agent exited with code ${rawExitCode} [kill_reason=${killReason}]`;
         } else if (code !== 0 && !isError) {
           isError = true;
           const baseError = stderrOutput || `cursor-agent exited with code ${code}`;
-          // Include diagnostics for unexpected failures
-          const diagnostics = [
-            `error: ${baseError}`,
-            ...(stderrOutput ? [`stderr: ${stderrOutput}`] : []),
-            `exit_code: ${code}`,
-            `messages_processed: ${state.messageCount}`,
-            `cwd: ${options.cwd}`,
-            `model: ${options.model ?? 'default'}`,
-            `max_turns: ${options.maxTurns}`,
-            `timeout: ${Math.round(options.timeoutMs / 1000)}s`,
-            `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
-            `result_text_length: ${resultText.length}`,
-          ].join('\n');
+          const diagnostics = this.buildDiagnostics(state, options, {
+            error: baseError,
+            ...(stderrOutput ? { stderr: stderrOutput } : {}),
+            exit_code: code,
+          });
           errorMessage = `${baseError}\n\n--- Diagnostics ---\n${diagnostics}`;
         }
 
         if (isError) {
-          log(`cursor-agent failed`, {
+          log('cursor-agent failed', {
             error: errorMessage,
             stderr: stderrOutput || undefined,
             exitCode: code,
@@ -266,99 +204,74 @@ export class CursorAgentLib implements IAgentLib {
             messagesProcessed: state.messageCount,
             cwd: options.cwd,
             model: options.model,
-            resultTextLength: resultText.length,
           });
         }
 
-        this.stoppedReasons.delete(runId);
-
-        if (resultRef.structuredOutput) structuredOutput = resultRef.structuredOutput;
-        if (resultRef.isError) {
-          isError = true;
-          if (!errorMessage) errorMessage = resultRef.errorMessage;
-        }
-
-        costInputTokens = state.accumulatedInputTokens > 0 ? state.accumulatedInputTokens : costInputTokens;
-        costOutputTokens = state.accumulatedOutputTokens > 0 ? state.accumulatedOutputTokens : costOutputTokens;
-
         log(`cursor-agent completed: exitCode=${code}, messages=${state.messageCount}`, {
-          inputTokens: costInputTokens,
-          outputTokens: costOutputTokens,
-          hasStructuredOutput: !!structuredOutput,
+          inputTokens: state.accumulatedInputTokens,
+          outputTokens: state.accumulatedOutputTokens,
+          hasStructuredOutput: !!resultRef.structuredOutput,
         });
 
         resolve({
-          exitCode: isError ? 1 : 0,
-          output: resultText || errorMessage || '',
-          error: isError ? errorMessage : undefined,
-          costInputTokens,
-          costOutputTokens,
-          model: options.model ?? this.getDefaultModel(),
-          structuredOutput,
+          isError,
+          errorMessage,
+          structuredOutput: resultRef.structuredOutput,
           killReason,
           rawExitCode: rawExitCode ?? undefined,
         });
       });
 
       proc.on('error', (err) => {
-        clearTimeout(timer);
-        if (state.killTimer) clearTimeout(state.killTimer);
-        this.runningStates.delete(runId);
-        this.stoppedReasons.delete(runId);
-        isError = true;
-        errorMessage = `Failed to spawn cursor-agent: ${err.message}\n\n--- Diagnostics ---\nspawn_error: ${err.message}\ncwd: ${options.cwd}\nmodel: ${options.model ?? 'default'}\nPATH: ${(env.PATH ?? '').split(':').slice(0, 5).join(':')}...`;
-        log(`cursor-agent spawn error`, {
-          error: err.message,
-          stack: err.stack,
-          cwd: options.cwd,
-          model: options.model,
-        });
+        state.abortController.signal.removeEventListener('abort', onAbort);
+        const killTimer = this.killTimers.get(runId);
+        if (killTimer) { clearTimeout(killTimer); this.killTimers.delete(runId); }
+        this.processes.delete(runId);
+
+        const spawnError = `Failed to spawn cursor-agent: ${err.message}`;
+        log('cursor-agent spawn error', { error: err.message, stack: err.stack, cwd: options.cwd, model: options.model });
         resolve({
-          exitCode: 1,
-          output: resultText || errorMessage,
-          error: errorMessage,
-          model: options.model ?? this.getDefaultModel(),
+          isError: true,
+          errorMessage: `${spawnError}\n\n--- Diagnostics ---\nspawn_error: ${err.message}\ncwd: ${options.cwd}\nmodel: ${options.model ?? 'default'}\nPATH: ${(env.PATH ?? '').split(':').slice(0, 5).join(':')}...`,
         });
       });
     });
   }
 
-  async stop(runId: string): Promise<void> {
-    const state = this.runningStates.get(runId);
-    if (!state) {
-      getAppLogger().warn('CursorAgentLib', `stop called for unknown runId: ${runId}`);
-      return;
-    }
-    this.stoppedReasons.set(runId, 'stopped');
-    const pid = state.process.pid;
+  /** Send SIGTERM to process group, escalate to SIGKILL after 5s. */
+  private killProcess(runId: string, proc: ChildProcess): void {
+    const pid = proc.pid;
     if (pid) {
-      try { process.kill(-pid, 'SIGTERM'); } catch { state.process.kill('SIGTERM'); }
+      try { process.kill(-pid, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
     } else {
-      state.process.kill('SIGTERM');
+      proc.kill('SIGTERM');
     }
-    state.killTimer = setTimeout(() => {
+    const killTimer = setTimeout(() => {
       if (pid) {
         try { process.kill(-pid, 'SIGKILL'); } catch (err) {
           getAppLogger().warn('CursorAgentLib', `SIGKILL failed for pid ${pid}`, { error: err instanceof Error ? err.message : String(err) });
         }
       }
+      this.killTimers.delete(runId);
     }, 5000);
+    this.killTimers.set(runId, killTimer);
   }
 
   /**
-   * Processes a single parsed JSON message from the cursor-agent stream.
-   * Extracted to keep the stdout handler readable and testable.
+   * Process a single parsed JSON message from the cursor-agent stream.
    */
   private processMessage(
     msg: Record<string, unknown>,
-    state: RunState,
+    state: BaseRunState,
     resultRef: { structuredOutput?: Record<string, unknown>; isError: boolean; errorMessage?: string },
+    thinkingBuffer: string,
     ctx: {
       emit: (chunk: string) => void;
       stream: (chunk: string) => void;
       onMessage?: AgentLibCallbacks['onMessage'];
       onUserToolResult?: AgentLibCallbacks['onUserToolResult'];
       log: (msg: string, data?: Record<string, unknown>) => void;
+      setThinkingBuffer: (v: string) => void;
     },
   ): void {
     const { emit, stream, onMessage, onUserToolResult, log } = ctx;
@@ -394,10 +307,10 @@ export class CursorAgentLib implements IAgentLib {
       case 'thinking': {
         const thinking = (msg.thinking ?? msg.text ?? '') as string;
         if (msg.subtype === 'delta') {
-          state.thinkingBuffer += thinking;
+          ctx.setThinkingBuffer(thinkingBuffer + thinking);
         } else if (msg.subtype === 'completed') {
-          const full = state.thinkingBuffer || thinking;
-          state.thinkingBuffer = '';
+          const full = thinkingBuffer || thinking;
+          ctx.setThinkingBuffer('');
           if (full) {
             onMessage?.({ type: 'thinking', text: full, timestamp: Date.now() });
           }
@@ -417,8 +330,6 @@ export class CursorAgentLib implements IAgentLib {
       }
 
       case 'tool_call': {
-        // cursor-agent format: { type: "tool_call", subtype: "started"|"completed",
-        //   call_id: "...", tool_call: { readToolCall: { args: {...}, result?: {...} } } }
         const callId = msg.call_id as string | undefined;
         const toolCallObj = msg.tool_call as Record<string, { args?: Record<string, unknown>; result?: unknown }> | undefined;
         if (!toolCallObj) break;
@@ -508,13 +419,8 @@ export class CursorAgentLib implements IAgentLib {
     'relatedCursorRules', 'isEmpty', 'exceededLimit', 'totalLines', 'fileSize',
   ]);
 
-  /**
-   * Extract only the user-facing fields from cursor-agent tool args,
-   * dropping internal metadata that clutters the display.
-   */
   private static extractCleanArgs(toolName: string, args?: Record<string, unknown>): Record<string, unknown> {
     if (!args) return {};
-    // For well-known tools, pick only the primary field
     switch (toolName) {
       case 'shell': return { command: args.command ?? args.fullText };
       case 'read': return { path: args.path };
@@ -525,7 +431,6 @@ export class CursorAgentLib implements IAgentLib {
       case 'grep':
       case 'search': return { pattern: args.pattern ?? args.query, path: args.path };
     }
-    // For unknown tools, drop metadata keys
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(args)) {
       if (!CursorAgentLib.METADATA_KEYS.has(k)) clean[k] = v;
@@ -533,10 +438,6 @@ export class CursorAgentLib implements IAgentLib {
     return clean;
   }
 
-  /**
-   * Extract a readable result string from cursor-agent tool_call completed payload.
-   * The result is deeply nested: { success: { content, ... } } or { error: { ... } }
-   */
   private static extractCleanResult(_toolName: string, result?: unknown): string {
     if (!result || typeof result !== 'object') return typeof result === 'string' ? result : JSON.stringify(result ?? '');
     const r = result as Record<string, unknown>;
