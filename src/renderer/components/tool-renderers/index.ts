@@ -6,6 +6,11 @@ import { GrepRenderer } from './GrepRenderer';
 import { EditRenderer } from './EditRenderer';
 import { WriteRenderer } from './WriteRenderer';
 import { TodoWriteRenderer } from './TodoWriteRenderer';
+import { GlobRenderer } from './GlobRenderer';
+import { WebFetchRenderer } from './WebFetchRenderer';
+import { WebSearchRenderer } from './WebSearchRenderer';
+import { TaskRenderer } from './TaskRenderer';
+import { AskUserQuestionRenderer } from './AskUserQuestionRenderer';
 import { GenericToolRenderer } from './GenericToolRenderer';
 import { TaskEventCard } from './TaskEventCard';
 import { TaskDetailCard } from './TaskDetailCard';
@@ -19,12 +24,23 @@ const TOOL_RENDERERS: Record<string, React.ComponentType<ToolRendererProps>> = {
   Edit: EditRenderer,
   Write: WriteRenderer,
   TodoWrite: TodoWriteRenderer,
+  Glob: GlobRenderer,
+  WebFetch: WebFetchRenderer,
+  WebSearch: WebSearchRenderer,
+  Task: TaskRenderer,
+  AskUserQuestion: AskUserQuestionRenderer,
   // cursor-agent uses lowercase tool names (from shellToolCall, readToolCall, etc.)
   shell: BashRenderer,
   read: ReadRenderer,
   grep: GrepRenderer,
   edit: EditRenderer,
   write: WriteRenderer,
+  // Defensive lowercase variants for new tools
+  glob: GlobRenderer,
+  webfetch: WebFetchRenderer,
+  websearch: WebSearchRenderer,
+  task: TaskRenderer,
+  askuserquestion: AskUserQuestionRenderer,
 
   // MCP task-manager tools — claude-code lib format (mcp__<serverKey>__<toolName>)
   // Note: serverKey comes from the mcpServers record key in chat-agent-service.ts ('taskManager')
