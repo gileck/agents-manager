@@ -118,8 +118,36 @@ export interface IAgentLib {
 
 Feature support by lib:
 - `ClaudeCodeLib`: `{ images: true, hooks: true, thinking: true, nativeResume: true }`
-- `CursorAgentLib`: `{ images: false, hooks: false, thinking: false, nativeResume: false }`
-- `CodexCliLib`: `{ images: false, hooks: false, thinking: false, nativeResume: false }`
+- `CursorAgentLib`: `{ images: false, hooks: false, thinking: true, nativeResume: false }`
+- `CodexCliLib`: `{ images: true, hooks: false, thinking: false, nativeResume: false }`
+
+#### Implementing a New Agent Lib — Feature Contract
+
+All new features added to `AgentLibRunOptions` and `AgentLibCallbacks` are **optional**. A lib only needs to handle the features it declares in `supportedFeatures()`. The service layer (`chat-agent-service.ts`) checks feature flags before wiring callbacks and options.
+
+To add support for a feature in a new or existing lib, implement the corresponding contract:
+
+| Feature | Options/Callbacks to Handle | What the Lib Must Do | Reference Implementation |
+|---------|---------------------------|---------------------|------------------------|
+| **Hooks** | `options.hooks` (all 8 types in `AgentLibHooks`) | Transform hooks into engine-native format, call them at the right lifecycle points. If the engine has no native hook system, call them manually around tool execution. | `claude-code-lib.ts` → `buildSdkHooks()` |
+| **Streaming** | `callbacks.onStreamEvent` | Emit `{ type: 'text_delta' \| 'thinking_delta' \| 'input_json_delta', delta: string }` events as tokens arrive. If the engine supports partial/streaming output, enable it and forward deltas. | `claude-code-lib.ts` → `includePartialMessages: true` handling |
+| **Prompt Push Handle** | `callbacks.onPromptHandleReady` | Create an async generator that yields the initial prompt, then blocks waiting for pushed messages. Call `onPromptHandleReady(handle)` once the handle is ready. Close the handle on stop/abort. | `claude-code-lib.ts` → `createPromptGenerator()` |
+| **Interactive Permissions** | `callbacks.onPermissionRequest` | Before executing a tool, call `onPermissionRequest({ toolName, toolInput, toolUseId })` and await the response. If `allowed: false`, block the tool. This layers on top of `options.hooks.preToolUse` (sandbox guard). | `claude-code-lib.ts` → `canUseTool` callback |
+| **System Prompt Preset** | `options.systemPrompt` (string or `SystemPromptPreset`) | If the engine supports preset prompts, pass the preset object. Otherwise, fall back to using `systemPrompt` as a plain string (ignore the preset structure). | `claude-code-lib.ts` → systemPrompt pass-through |
+| **Subagents** | `options.agents` (`Record<string, SubagentDefinition>`) | Pass agent definitions to the engine. If the engine has no native subagent support, ignore this option. | `claude-code-lib.ts` → `agents` pass-through |
+| **Plugins** | `options.plugins` | Pass plugin configs to the engine. If the engine has no plugin system, ignore. | `claude-code-lib.ts` → `plugins` pass-through |
+| **Setting Sources** | `options.settingSources` | Tell the engine which filesystem settings to load (e.g., `['project']` auto-loads CLAUDE.md). Ignore if unsupported. | `claude-code-lib.ts` → `settingSources` pass-through |
+| **Images** | `options.images` | Pass base64 image content blocks to the engine. The service checks `supportedFeatures().images` — if `false`, it embeds file paths in the prompt text instead. | `claude-code-lib.ts` → multimodal content blocks |
+
+**Minimal implementation:** A lib that returns `{ hooks: false, images: false, thinking: false, nativeResume: false }` only needs to handle `prompt`, `cwd`, `model`, `maxTurns`, `timeoutMs`, `readOnly`, and the basic `onOutput`/`onMessage` callbacks. All advanced features are opt-in.
+
+**How the service adapts:** `chat-agent-service.ts` checks `supportedFeatures()` before wiring:
+- `hooks === true` → passes `preToolUse` sandbox guard and all default hooks
+- `hooks === false` → no hooks passed (permission enforcement falls back to prompt-level instructions)
+- `images === true` → passes base64 image data via `options.images`
+- `images === false` → injects image file paths into the prompt text
+- `nativeResume === true` → passes `sessionId` + `resumeSession` for conversation continuity
+- `nativeResume === false` → replays message history via `SessionHistoryFormatter`
 
 #### Key Supporting Types
 
