@@ -155,7 +155,7 @@ async function main() {
 
     // Drain running agents before closing connections
     try {
-      const drainTimeout = new Promise<void>(resolve => setTimeout(resolve, 5000));
+      const drainTimeout = new Promise<void>(resolve => setTimeout(resolve, 2000));
       await Promise.race([
         Promise.all([
           services.agentService.stopAllRunningAgents(),
@@ -174,6 +174,13 @@ async function main() {
       db.close();
       process.exit(0);
     });
+
+    // Force exit if httpServer.close callback never fires
+    setTimeout(() => {
+      services.appLogger.warn('daemon', 'Graceful shutdown timed out — forcing exit');
+      db.close();
+      process.exit(1);
+    }, 2000).unref();
   };
 
   process.on('SIGTERM', shutdown);
