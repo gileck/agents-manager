@@ -17,11 +17,20 @@ type CodexInput = string | CodexUserInput[];
 type CodexUserInput = { type: 'text'; text: string } | { type: 'local_image'; path: string };
 
 interface CodexThreadLike {
+  readonly id?: string | null;
   runStreamed(input: CodexInput, options?: { outputSchema?: unknown; signal?: AbortSignal }): Promise<{ events: AsyncIterable<CodexThreadEvent> }>;
 }
 
 interface CodexLike {
   startThread(options?: {
+    model?: string;
+    sandboxMode?: SandboxMode;
+    workingDirectory?: string;
+    skipGitRepoCheck?: boolean;
+    approvalPolicy?: 'never' | 'on-request' | 'on-failure' | 'untrusted';
+    additionalDirectories?: string[];
+  }): CodexThreadLike;
+  resumeThread(id: string, options?: {
     model?: string;
     sandboxMode?: SandboxMode;
     workingDirectory?: string;
@@ -59,7 +68,13 @@ interface CodexThreadItemEvent {
   item: CodexThreadItem;
 }
 
+interface CodexThreadStartedEvent {
+  type: 'thread.started';
+  thread_id: string;
+}
+
 type CodexThreadEvent =
+  | CodexThreadStartedEvent
   | CodexThreadTurnCompletedEvent
   | CodexThreadTurnFailedEvent
   | CodexThreadErrorEvent
@@ -81,6 +96,7 @@ interface RunState {
   messageCount: number;
   accumulatedInputTokens: number;
   accumulatedOutputTokens: number;
+  accumulatedCacheReadInputTokens: number;
   timeout: number;
   maxTurns: number;
   stoppedReason?: string;
@@ -92,6 +108,8 @@ export class CodexCliLib implements IAgentLib {
   private runningStates = new Map<string, RunState>();
   /** Tracks why a run was stopped, survives the stop() -> completion gap. */
   private stoppedReasons = new Map<string, string>();
+  /** Maps our external session key to the SDK's real thread id for in-process native resume. */
+  private sdkThreadIds = new Map<string, string>();
 
   constructor(private sessionHistoryProvider?: ISessionHistoryProvider) {}
 
@@ -128,7 +146,7 @@ export class CodexCliLib implements IAgentLib {
     return {
       accumulatedInputTokens: state.accumulatedInputTokens,
       accumulatedOutputTokens: state.accumulatedOutputTokens,
-      accumulatedCacheReadInputTokens: 0,
+      accumulatedCacheReadInputTokens: state.accumulatedCacheReadInputTokens,
       accumulatedCacheCreationInputTokens: 0,
       messageCount: state.messageCount,
       timeout: state.timeout,
@@ -139,9 +157,19 @@ export class CodexCliLib implements IAgentLib {
   async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
     const { onLog } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
+    const nativeResumeThreadId = options.resumeSession && options.sessionId
+      ? this.sdkThreadIds.get(options.sessionId)
+      : undefined;
 
-    // Session resume: prepend prior session history to the prompt
-    if (options.resumeSession && this.sessionHistoryProvider && options.taskId && options.agentType) {
+    if (nativeResumeThreadId) {
+      log('Resuming Codex SDK thread from in-memory mapping', {
+        sessionId: options.sessionId,
+        threadId: nativeResumeThreadId,
+      });
+    }
+
+    // Fall back to prompt replay when we do not have a live SDK thread id for this session.
+    if (!nativeResumeThreadId && options.resumeSession && this.sessionHistoryProvider && options.taskId && options.agentType) {
       try {
         const prevMessages = await this.sessionHistoryProvider.getPreviousMessages(options.taskId, options.agentType);
         if (prevMessages && prevMessages.length > 0) {
@@ -156,7 +184,7 @@ export class CodexCliLib implements IAgentLib {
 
     const Codex = await this.tryLoadCodexConstructor();
     if (Codex) {
-      return this.executeWithSdk(Codex, runId, options, callbacks);
+      return this.executeWithSdk(Codex, runId, options, callbacks, nativeResumeThreadId);
     }
 
     const sdkError = 'Codex SDK not available. Install @openai/codex-sdk.';
@@ -187,6 +215,7 @@ export class CodexCliLib implements IAgentLib {
     runId: string,
     options: AgentLibRunOptions,
     callbacks: AgentLibCallbacks,
+    nativeResumeThreadId?: string,
   ): Promise<AgentLibResult> {
     const { onOutput, onLog, onMessage } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
@@ -197,6 +226,7 @@ export class CodexCliLib implements IAgentLib {
       messageCount: 0,
       accumulatedInputTokens: 0,
       accumulatedOutputTokens: 0,
+      accumulatedCacheReadInputTokens: 0,
       timeout: options.timeoutMs,
       maxTurns: options.maxTurns,
     };
@@ -213,15 +243,18 @@ export class CodexCliLib implements IAgentLib {
       ...(imageTempDir ? [imageTempDir] : []),
     ]));
 
-    const codex = new Codex({ env });
-    const thread = codex.startThread({
+    const threadOptions = {
       model: options.model,
       sandboxMode,
       workingDirectory: options.cwd,
       skipGitRepoCheck: true,
-      approvalPolicy: 'never',
+      approvalPolicy: 'never' as const,
       ...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
-    });
+    };
+    const codex = new Codex({ env });
+    const thread = nativeResumeThreadId
+      ? codex.resumeThread(nativeResumeThreadId, threadOptions)
+      : codex.startThread(threadOptions);
 
     log('Starting Codex SDK run', {
       cwd: options.cwd,
@@ -230,6 +263,7 @@ export class CodexCliLib implements IAgentLib {
       maxTurns: options.maxTurns,
       sandboxMode,
       hasOutputSchema: !!options.outputFormat,
+      resumeThreadId: nativeResumeThreadId,
     });
 
     let resultText = '';
@@ -238,6 +272,7 @@ export class CodexCliLib implements IAgentLib {
     let isError = false;
     let errorMessage: string | undefined;
     let killReason: string | undefined;
+    let activeThreadId = nativeResumeThreadId ?? thread.id ?? undefined;
 
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -299,13 +334,27 @@ export class CodexCliLib implements IAgentLib {
       for await (const event of events) {
         state.messageCount++;
 
+        if (event.type === 'thread.started') {
+          const started = event as CodexThreadStartedEvent;
+          activeThreadId = started.thread_id;
+          if (options.sessionId) {
+            this.sdkThreadIds.set(options.sessionId, started.thread_id);
+          }
+          log('Codex SDK thread started', {
+            sessionId: options.sessionId,
+            threadId: started.thread_id,
+          });
+          continue;
+        }
+
         if (event.type === 'turn.completed') {
           const usage = (event as CodexThreadTurnCompletedEvent).usage;
-          state.accumulatedInputTokens = usage.input_tokens;
+          state.accumulatedCacheReadInputTokens = usage.cached_input_tokens;
+          state.accumulatedInputTokens = usage.input_tokens + usage.cached_input_tokens;
           state.accumulatedOutputTokens = usage.output_tokens;
           onMessage?.({
             type: 'usage',
-            inputTokens: usage.input_tokens,
+            inputTokens: state.accumulatedInputTokens,
             outputTokens: usage.output_tokens,
             timestamp: Date.now(),
           });
@@ -475,6 +524,8 @@ export class CodexCliLib implements IAgentLib {
           `max_turns: ${options.maxTurns}`,
           `timeout: ${Math.round(options.timeoutMs / 1000)}s`,
           `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
+          `cached_input_tokens: ${state.accumulatedCacheReadInputTokens}`,
+          `thread_id: ${activeThreadId ?? 'unknown'}`,
           `result_text_length: ${resultText.length}`,
         ].join('\n');
         errorMessage = `${baseMessage}\n\n--- Diagnostics ---\n${diagnostics}`;
@@ -489,10 +540,12 @@ export class CodexCliLib implements IAgentLib {
         timeout: options.timeoutMs,
         accumulatedInputTokens: state.accumulatedInputTokens,
         accumulatedOutputTokens: state.accumulatedOutputTokens,
+        accumulatedCacheReadInputTokens: state.accumulatedCacheReadInputTokens,
         resultTextLength: resultText.length,
         timedOut,
         aborted: abortController.signal.aborted,
         killReason,
+        threadId: activeThreadId,
       });
     } finally {
       clearTimeout(timer);
@@ -515,6 +568,7 @@ export class CodexCliLib implements IAgentLib {
       error: isError ? errorMessage : undefined,
       costInputTokens: state.accumulatedInputTokens || undefined,
       costOutputTokens: state.accumulatedOutputTokens || undefined,
+      cacheReadInputTokens: state.accumulatedCacheReadInputTokens || undefined,
       model: options.model ?? this.getDefaultModel(),
       structuredOutput,
       killReason,
