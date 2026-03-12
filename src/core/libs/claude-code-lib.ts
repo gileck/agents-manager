@@ -179,69 +179,79 @@ export class ClaudeCodeLib implements IAgentLib {
 
     log(`Starting agent run: cwd=${options.cwd}, timeout=${options.timeoutMs}ms, model=${options.model ?? 'default'}`);
 
-    // Set up sandbox guard as a canUseTool wrapper
+    // Set up sandbox guard for file-system boundary enforcement
     const sandboxGuard = new SandboxGuard(options.allowedPaths, options.readOnlyPaths);
     const callerCanUseTool = options.canUseTool;
-
-    // Merge sandbox guard with caller's canUseTool (e.g. AskUserQuestion handler)
-    const mergedCanUseTool = async (
-      toolName: string,
-      input: Record<string, unknown>,
-      _sdkOptions: { signal: AbortSignal; suggestions?: unknown[]; blockedPath?: string; decisionReason?: string; toolUseID: string; agentID?: string },
-    ): Promise<{ behavior: 'allow'; updatedInput?: Record<string, unknown> } | { behavior: 'deny'; message: string }> => {
-      // Sandbox guard runs first (synchronous path check)
-      const guardResult = sandboxGuard.evaluateToolCall(toolName, input);
-      if (!guardResult.allow) {
-        log(`Sandbox guard blocked ${toolName}: ${guardResult.reason}`);
-        return { behavior: 'deny', message: guardResult.reason ?? 'Blocked by sandbox guard' };
-      }
-      // Then delegate to caller's canUseTool (e.g. AskUserQuestion handler)
-      if (callerCanUseTool) {
-        return callerCanUseTool(toolName, input);
-      }
-      return { behavior: 'allow' };
-    };
-
-    // Build mergedPreToolUse: combines sandbox guard + caller's preToolUse hook
     const callerPreToolUse = options.hooks?.preToolUse;
+
+    // Build mergedPreToolUse: combines sandbox guard + caller's preToolUse hook.
+    // Used by buildSdkHooks when canUseTool is NOT provided (no interactive approval).
     const mergedPreToolUse = (toolName: string, toolInput: Record<string, unknown>): { decision: 'block' | 'allow'; reason?: string } | undefined => {
-      // Sandbox guard runs first
       const guardResult = sandboxGuard.evaluateToolCall(toolName, toolInput);
       if (!guardResult.allow) {
         return { decision: 'block', reason: guardResult.reason ?? 'Blocked by sandbox guard' };
       }
-      // Then delegate to caller's preToolUse hook if provided
       if (callerPreToolUse) {
         return callerPreToolUse(toolName, toolInput);
       }
       return undefined;
     };
 
-    // Build canUseTool callback: runs sandbox guard first, then delegates to onPermissionRequest
-    const canUseTool = onPermissionRequest
-      ? async (toolName: string, input: Record<string, unknown>, canUseToolOptions: { signal: AbortSignal; toolUseID: string }) => {
-          // First check the sandbox guard and caller hooks
-          const guardResult = mergedPreToolUse(toolName, input);
-          if (guardResult?.decision === 'block') {
-            return { behavior: 'deny' as const, message: guardResult.reason ?? 'Blocked by sandbox guard', toolUseID: canUseToolOptions.toolUseID };
+    // Build unified canUseTool callback for the SDK.
+    // Chains: sandbox guard → callerCanUseTool (e.g. AskUserQuestion) → onPermissionRequest (interactive UI approval).
+    const sdkCanUseTool = async (
+      toolName: string,
+      input: Record<string, unknown>,
+      sdkOptions: { signal: AbortSignal; suggestions?: unknown[]; blockedPath?: string; decisionReason?: string; toolUseID: string; agentID?: string },
+    ): Promise<{ behavior: 'allow'; updatedInput?: Record<string, unknown> } | { behavior: 'deny'; message: string }> => {
+      // 1. Sandbox guard (synchronous path check)
+      const guardResult = sandboxGuard.evaluateToolCall(toolName, input);
+      if (!guardResult.allow) {
+        log(`Sandbox guard blocked ${toolName}: ${guardResult.reason}`);
+        return { behavior: 'deny', message: guardResult.reason ?? 'Blocked by sandbox guard' };
+      }
+      // 2. Caller's canUseTool interceptor (e.g. AskUserQuestion handler)
+      let updatedInput: Record<string, unknown> | undefined;
+      if (callerCanUseTool) {
+        try {
+          const callerResult = await callerCanUseTool(toolName, input);
+          if (callerResult.behavior === 'deny') {
+            return callerResult;
           }
-          // Sandbox guard allows it — ask the user via onPermissionRequest
-          try {
-            const response = await onPermissionRequest({ toolName, toolInput: input, toolUseId: canUseToolOptions.toolUseID });
-            if (response.allowed) {
-              return { behavior: 'allow' as const, toolUseID: canUseToolOptions.toolUseID };
-            }
-            return { behavior: 'deny' as const, message: 'Denied by user', toolUseID: canUseToolOptions.toolUseID };
-          } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            log(`onPermissionRequest failed for ${toolName}, denying: ${errMsg}`);
-            return { behavior: 'deny' as const, message: `Permission check failed: ${errMsg}`, toolUseID: canUseToolOptions.toolUseID };
+          if (callerResult.behavior === 'allow' && callerResult.updatedInput) {
+            updatedInput = callerResult.updatedInput;
           }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          log(`callerCanUseTool failed for ${toolName}, denying: ${errMsg}`);
+          return { behavior: 'deny', message: `Tool interceptor failed: ${errMsg}` };
         }
-      : undefined;
+      }
+      // 3. Interactive permission approval (surfaces tool call to UI)
+      if (onPermissionRequest) {
+        try {
+          const effectiveInput = updatedInput ?? input;
+          const response = await onPermissionRequest({ toolName, toolInput: effectiveInput, toolUseId: sdkOptions.toolUseID });
+          if (response.allowed) {
+            return updatedInput ? { behavior: 'allow', updatedInput } : { behavior: 'allow' };
+          }
+          return { behavior: 'deny', message: 'Denied by user' };
+        } catch (err) {
+          if (sdkOptions.signal.aborted) {
+            return { behavior: 'deny', message: 'Agent was stopped' };
+          }
+          const errMsg = err instanceof Error ? err.message : String(err);
+          log(`onPermissionRequest failed for ${toolName}, denying: ${errMsg}`);
+          return { behavior: 'deny', message: `Permission check failed: ${errMsg}` };
+        }
+      }
+      return updatedInput ? { behavior: 'allow', updatedInput } : { behavior: 'allow' };
+    };
 
-    // Build SDK hooks from our AgentLibHooks
-    const sdkHooks = this.buildSdkHooks(options.hooks, mergedPreToolUse, log, !!canUseTool);
+    // Build SDK hooks from our AgentLibHooks.
+    // Sandbox guard already runs in sdkCanUseTool above, so skip adding it as a
+    // PreToolUse hook to avoid double-checking (pass hasCanUseTool=true).
+    const sdkHooks = this.buildSdkHooks(options.hooks, mergedPreToolUse, log, true);
 
     // Build SDK prompt: use Single Message Input (string) by default.
     // Only use an async generator when images are attached (need content blocks).
@@ -308,7 +318,7 @@ export class ClaudeCodeLib implements IAgentLib {
           ...(options.settingSources?.length ? { settingSources: options.settingSources } : {}),
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           ...(options.disallowedTools?.length ? { disallowedTools: options.disallowedTools } : {}),
-          canUseTool: mergedCanUseTool,
+          canUseTool: sdkCanUseTool,
           ...(Object.keys(sdkHooks).length > 0 ? { hooks: sdkHooks } : {}),
           ...sessionOptions,
           ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
@@ -337,16 +347,14 @@ export class ClaudeCodeLib implements IAgentLib {
             const msgId = assistantMsg.message.id;
             if (!msgId || !state.seenMessageIds.has(msgId)) {
               if (msgId) state.seenMessageIds.add(msgId);
-              state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens
-                + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
-                + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
+              state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens;
               state.accumulatedOutputTokens += assistantMsg.message.usage.output_tokens;
               state.accumulatedCacheReadInputTokens += assistantMsg.message.usage.cache_read_input_tokens ?? 0;
               state.accumulatedCacheCreationInputTokens += assistantMsg.message.usage.cache_creation_input_tokens ?? 0;
             }
             state.lastInputTokens = assistantMsg.message.usage.input_tokens
               + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
-              + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
+              + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0); // Total context tokens (all types) for context window tracking
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
           }
           for (const block of assistantMsg.message.content) {

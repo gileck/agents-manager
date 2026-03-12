@@ -131,8 +131,7 @@ To add support for a feature in a new or existing lib, implement the correspondi
 |---------|---------------------------|---------------------|------------------------|
 | **Hooks** | `options.hooks` (all 8 types in `AgentLibHooks`) | Transform hooks into engine-native format, call them at the right lifecycle points. If the engine has no native hook system, call them manually around tool execution. | `claude-code-lib.ts` → `buildSdkHooks()` |
 | **Streaming** | `callbacks.onStreamEvent` | Emit `{ type: 'text_delta' \| 'thinking_delta' \| 'input_json_delta', delta: string }` events as tokens arrive. If the engine supports partial/streaming output, enable it and forward deltas. | `claude-code-lib.ts` → `includePartialMessages: true` handling |
-| **Prompt Push Handle** | `callbacks.onPromptHandleReady` | Create an async generator that yields the initial prompt, then blocks waiting for pushed messages. Call `onPromptHandleReady(handle)` once the handle is ready. Close the handle on stop/abort. | `claude-code-lib.ts` → `createPromptGenerator()` |
-| **Interactive Permissions** | `callbacks.onPermissionRequest` | Before executing a tool, call `onPermissionRequest({ toolName, toolInput, toolUseId })` and await the response. If `allowed: false`, block the tool. This layers on top of `options.hooks.preToolUse` (sandbox guard). | `claude-code-lib.ts` → `canUseTool` callback |
+| **Interactive Permissions** | `callbacks.onPermissionRequest` | Before executing a tool, call `onPermissionRequest({ toolName, toolInput, toolUseId })` and await the response. If `allowed: false`, block the tool. This layers on top of the sandbox guard. | `claude-code-lib.ts` → `sdkCanUseTool` callback |
 | **System Prompt Preset** | `options.systemPrompt` (string or `SystemPromptPreset`) | If the engine supports preset prompts, pass the preset object. Otherwise, fall back to using `systemPrompt` as a plain string (ignore the preset structure). | `claude-code-lib.ts` → systemPrompt pass-through |
 | **Subagents** | `options.agents` (`Record<string, SubagentDefinition>`) | Pass agent definitions to the engine. If the engine has no native subagent support, ignore this option. | `claude-code-lib.ts` → `agents` pass-through |
 | **Plugins** | `options.plugins` | Pass plugin configs to the engine. If the engine has no plugin system, ignore. | `claude-code-lib.ts` → `plugins` pass-through |
@@ -155,8 +154,6 @@ To add support for a feature in a new or existing lib, implement the correspondi
 
 The interface defines several supporting types used across the agent system:
 
-- **`PromptPushHandle`** — Handle for injecting messages into a running agent's async generator prompt. Exposes `push(message)` and `close()` methods. Created by `ClaudeCodeLib` and exposed via the `onPromptHandleReady` callback.
-
 - **`PermissionRequest` / `PermissionResponse`** — Tool approval types. `PermissionRequest` contains `toolName`, `toolInput`, and `toolUseId`. `PermissionResponse` contains `allowed: boolean`. Used by the `onPermissionRequest` callback to surface tool calls to the UI for interactive approval.
 
 - **`SystemPromptPreset`** — Preset-based system prompt configuration: `{ type: 'preset', preset: 'claude_code', append?: string }`. Uses the SDK's built-in Claude Code system prompt with optional appended instructions, instead of replacing it entirely with a custom string.
@@ -174,7 +171,6 @@ The interface defines several supporting types used across the agent system:
 
 - **`AgentLibCallbacks`** — Execution callbacks including:
   - `onStreamEvent` — Receives raw stream delta events for partial message streaming (text, thinking, input JSON deltas).
-  - `onPromptHandleReady` — Called once the `PromptPushHandle` is ready for mid-stream message injection.
   - `onPermissionRequest` — Called when a tool needs user permission. Blocks tool execution until the returned promise resolves.
 
 - **`AgentLibRunOptions`** — Extended with: `agents` (subagent definitions), `plugins` (local plugin paths), `settingSources` (e.g., `['project']` for CLAUDE.md auto-loading), `canUseTool` (async tool interceptor for allow/deny/modify), `systemPrompt` (accepts string or `SystemPromptPreset`), `betas`, `maxBudgetUsd`.
@@ -704,12 +700,13 @@ Ghost runs (DB says running but no in-memory tracking) are prevented at the sour
 
 `SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by `ClaudeCodeLib` for both task agents and chat agents.
 
-**Two execution paths in `ClaudeCodeLib`:**
+`ClaudeCodeLib` builds a unified `sdkCanUseTool` callback that chains three checks:
 
-1. **Without `onPermissionRequest`** (pipeline agents, full_access mode) — SandboxGuard runs as a `preToolUse` hook in the SDK hooks system. Blocked tools are silently denied.
-2. **With `onPermissionRequest`** (interactive chat, read_only/read_write modes) — SandboxGuard runs first inside the `canUseTool` callback. If the guard allows it, the tool call is forwarded to `onPermissionRequest`, which surfaces it to the UI for interactive user approval. This two-stage pipeline ensures sandbox violations are caught before reaching the user, while tools within bounds still require explicit consent.
+1. **SandboxGuard** — synchronous file-system boundary check (always runs first)
+2. **Caller's `canUseTool`** — async interceptor for special tools (e.g. AskUserQuestion handler)
+3. **`onPermissionRequest`** — interactive UI approval (only when provided, i.e. non-full_access modes)
 
-`ChatAgentService` passes write-tool blocking via the `hooks.preToolUse` option on `AgentLibRunOptions`, which `ClaudeCodeLib` merges with its SandboxGuard hook.
+When `onPermissionRequest` is not provided (pipeline agents, full_access mode), the SandboxGuard also runs as a `preToolUse` hook via `buildSdkHooks()` for defense-in-depth. When `onPermissionRequest` is provided, the PreToolUse hook skips the sandbox guard (already handled in `sdkCanUseTool`) to avoid double-checking.
 
 ### Configuration
 
@@ -873,16 +870,9 @@ Real-time token streaming uses the SDK's `onStreamEvent` callback:
 - Deltas are broadcast to the renderer via the `CHAT_STREAM_DELTA` WebSocket push channel
 - The renderer accumulates deltas to reconstruct partial messages during generation
 
-### AsyncGenerator Prompt Input
+### SDK Prompt Input
 
-`ClaudeCodeLib` wraps all prompts in an async generator via `createPromptGenerator()`:
-
-1. The initial user message is yielded first
-2. A `PromptPushHandle` is returned alongside the generator, exposing `push(message)` and `close()`
-3. `push()` queues additional `SdkUserMessage` objects into the generator for mid-stream injection
-4. `close()` signals the generator to terminate
-5. The handle is stored per session in `ChatAgentService.promptPushHandles` via the `onPromptHandleReady` callback
-6. On agent stop, `pushHandle.close()` is called to cleanly terminate the generator
+`ClaudeCodeLib` uses Single Message Input (string prompt) by default. Only messages with images use a single-yield async generator to pass multimodal content blocks. Multi-turn conversation is handled via native SDK session resume — not by keeping a generator alive. See [agent-lib-features.md](./agent-lib-features.md) for details.
 
 ### System Prompt Customization
 
@@ -902,7 +892,7 @@ Default hooks wired by `ChatAgentService`:
 - **Stop** — Logs the stop event
 - **SubagentStart / SubagentStop** — Emit `subagent_activity` messages to the UI for real-time subagent lifecycle tracking
 
-When `onPermissionRequest` is not provided (pipeline agents, full_access mode), `preToolUse` hooks handle the SandboxGuard. When `onPermissionRequest` is provided, the guard runs inside `canUseTool` instead, and PreToolUse hooks handle only the caller's custom hook logic.
+When `onPermissionRequest` is not provided (pipeline agents, full_access mode), the SandboxGuard also runs as a `preToolUse` hook for defense-in-depth. When `onPermissionRequest` is provided (interactive chat), the SandboxGuard runs only inside `sdkCanUseTool`, and PreToolUse hooks skip the sandbox guard to avoid double-checking.
 
 ### Subagent Definitions
 
