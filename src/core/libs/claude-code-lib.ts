@@ -116,7 +116,7 @@ export class ClaudeCodeLib implements IAgentLib {
   }
 
   async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
-    const { onOutput, onLog, onMessage, onUserToolResult } = callbacks;
+    const { onOutput, onLog, onMessage, onUserToolResult, onStreamEvent } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
     const query = await this.loadQuery();
@@ -261,6 +261,8 @@ export class ClaudeCodeLib implements IAgentLib {
           thinking: { type: 'adaptive' },
           env: cleanEnv,
           stderr: onStderr,
+          includePartialMessages: true,
+          ...(options.settingSources?.length ? { settingSources: options.settingSources } : {}),
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           ...(options.disallowedTools?.length ? { disallowedTools: options.disallowedTools } : {}),
           canUseTool: mergedCanUseTool,
@@ -385,6 +387,24 @@ export class ClaudeCodeLib implements IAgentLib {
                   : (Array.isArray(b.content) ? b.content.map((c: { text?: string }) => c.text || '').join('') : '(no output)');
                 onUserToolResult?.(b.tool_use_id, resultContent);
               }
+            }
+          }
+        } else if (message.type === 'stream_event') {
+          // Partial message streaming: forward raw stream event to callback
+          const streamMsg = message as { type: 'stream_event'; event?: { type?: string; delta?: { type?: string; text?: string; thinking?: string; partial_json?: string } } };
+          if (onStreamEvent && streamMsg.event) {
+            onStreamEvent(streamMsg.event as { type: string; [key: string]: unknown });
+          }
+          // Also extract text/thinking deltas and emit as onMessage for UI rendering
+          const evt = streamMsg.event;
+          if (evt?.type === 'content_block_delta' && evt.delta) {
+            const delta = evt.delta;
+            if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+              onMessage?.({ type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() });
+            } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+              onMessage?.({ type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() });
+            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+              onMessage?.({ type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() });
             }
           }
         } else {

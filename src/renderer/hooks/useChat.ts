@@ -127,6 +127,18 @@ export function useChat(sessionId: string | null) {
     return () => { unsubscribe(); };
   }, [sessionId]);
 
+  // Subscribe to stream delta events (partial message streaming)
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubscribe = window.api.on.chatStreamDelta((incomingSessionId: string, delta: AgentChatMessage) => {
+      if (incomingSessionId !== sessionId) return;
+      setStreamingMessages((prev) => [...prev, delta]);
+    });
+
+    return () => { unsubscribe(); };
+  }, [sessionId]);
+
   const doSend = useCallback(async (message: string, images?: ChatImage[]) => {
     if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
 
@@ -204,11 +216,43 @@ export function useChat(sessionId: string | null) {
     }
   }, [sessionId]);
 
-  // Combine converted DB messages with streaming messages (memoized)
-  const messages = useMemo<AgentChatMessage[]>(
-    () => [...convertDbMessages(dbMessages), ...streamingMessages],
-    [dbMessages, streamingMessages],
-  );
+  // Combine converted DB messages with streaming messages (memoized).
+  // Stream deltas are merged into accumulated text/thinking blocks for display.
+  const messages = useMemo<AgentChatMessage[]>(() => {
+    const base = convertDbMessages(dbMessages);
+    // Process streaming messages: merge consecutive stream_delta into text/thinking blocks
+    const processed: AgentChatMessage[] = [];
+    let pendingText = '';
+    let pendingThinking = '';
+
+    const flushPending = () => {
+      if (pendingText) {
+        processed.push({ type: 'assistant_text', text: pendingText, timestamp: Date.now() });
+        pendingText = '';
+      }
+      if (pendingThinking) {
+        processed.push({ type: 'thinking', text: pendingThinking, timestamp: Date.now() });
+        pendingThinking = '';
+      }
+    };
+
+    for (const msg of streamingMessages) {
+      if (msg.type === 'stream_delta') {
+        if (msg.deltaType === 'text_delta') {
+          pendingText += msg.delta;
+        } else if (msg.deltaType === 'thinking_delta') {
+          pendingThinking += msg.delta;
+        }
+        // input_json_delta is not displayed directly — it's part of tool input
+      } else {
+        flushPending();
+        processed.push(msg);
+      }
+    }
+    flushPending();
+
+    return [...base, ...processed];
+  }, [dbMessages, streamingMessages]);
 
   // Compute token usage from DB messages + streaming usage messages
   const tokenUsage = useMemo(() => {

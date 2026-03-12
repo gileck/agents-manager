@@ -120,5 +120,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '108_add_task_ids_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN task_ids TEXT NOT NULL DEFAULT '[]'`,
     },
+    {
+      name: '109_add_system_prompt_append_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN system_prompt_append TEXT DEFAULT NULL`,
+    },
   ];
 }

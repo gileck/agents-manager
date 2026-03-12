@@ -5,6 +5,7 @@ export const WS_CHANNELS = {
   AGENT_INTERRUPTED_RUNS: 'agent:interrupted-runs',
   CHAT_OUTPUT: 'chat:output',
   CHAT_MESSAGE: 'chat:message',
+  CHAT_STREAM_DELTA: 'chat:stream-delta',
   TASK_CHAT_OUTPUT: 'task-chat:output',
   TASK_CHAT_MESSAGE: 'task-chat:message',
   TELEGRAM_BOT_LOG: 'telegram:bot-log',

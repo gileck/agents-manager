@@ -21,9 +21,16 @@ export interface AgentLibFeatures {
   nativeResume: boolean;
 }
 
+/** Preset-based system prompt: uses the SDK's built-in prompt with optional appended instructions. */
+export interface SystemPromptPreset {
+  type: 'preset';
+  preset: 'claude_code';
+  append?: string;
+}
+
 export interface AgentLibRunOptions {
   prompt: string;
-  systemPrompt?: string;
+  systemPrompt?: string | SystemPromptPreset;
   cwd: string;
   model?: string;
   maxTurns: number;
@@ -49,6 +56,8 @@ export interface AgentLibRunOptions {
     { behavior: 'allow'; updatedInput?: Record<string, unknown> } |
     { behavior: 'deny'; message: string }
   >;
+  /** Control which filesystem settings to load (e.g., ['project'] to auto-load CLAUDE.md). Supported by claude-code engine only. */
+  settingSources?: Array<'user' | 'project' | 'local'>;
 }
 
 export interface AgentLibCallbacks {
@@ -56,6 +65,8 @@ export interface AgentLibCallbacks {
   onLog?: (message: string, data?: Record<string, unknown>) => void;
   onMessage?: (msg: AgentChatMessage) => void;
   onUserToolResult?: (toolUseId: string, content: string) => void;
+  /** Called when a stream delta event is received (partial message streaming). */
+  onStreamEvent?: (event: { type: string; [key: string]: unknown }) => void;
 }
 
 export interface AgentLibResult {

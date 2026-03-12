@@ -333,9 +333,13 @@ export class ChatAgentService {
    * Builds a system prompt and resume options for a session.
    * Agent-chat sessions get agent-role-specific prompts and pipeline session resume;
    * regular sessions get the standard desktop prompt.
+   *
+   * When the session has a `systemPromptAppend`, the system prompt is returned as a
+   * preset object so the SDK auto-loads its default prompt and appends the combined
+   * instructions (built prompt + user's custom append).
    */
   async buildSendContext(sessionId: string): Promise<{
-    systemPrompt: string;
+    systemPrompt: string | { type: 'preset'; preset: 'claude_code'; append?: string };
     pipelineSessionId?: string;
     resumeSession?: boolean;
     isAgentChat?: boolean;
@@ -353,8 +357,9 @@ export class ChatAgentService {
       if (!lastCompleted) {
         getAppLogger().warn('ChatAgentService', `No prior completed ${session.agentRole} run found for task ${session.scopeId} — agent chat will not resume session`);
       }
+      const basePrompt = buildAgentChatSystemPrompt(scope, session.agentRole);
       return {
-        systemPrompt: buildAgentChatSystemPrompt(scope, session.agentRole),
+        systemPrompt: this.buildSystemPromptWithAppend(basePrompt, session.systemPromptAppend),
         pipelineSessionId: lastCompleted?.id,
         resumeSession: !!lastCompleted,
         isAgentChat: true,
@@ -362,7 +367,31 @@ export class ChatAgentService {
       };
     }
 
-    return { systemPrompt: buildDesktopSystemPrompt(scope), permissionMode: session.permissionMode };
+    const basePrompt = buildDesktopSystemPrompt(scope);
+    return {
+      systemPrompt: this.buildSystemPromptWithAppend(basePrompt, session.systemPromptAppend),
+      permissionMode: session.permissionMode,
+    };
+  }
+
+  /**
+   * If the session has custom append instructions, build a preset system prompt
+   * that includes both the built prompt and the user's custom instructions.
+   * Otherwise, return the base prompt string as-is for backward compatibility.
+   */
+  private buildSystemPromptWithAppend(
+    basePrompt: string,
+    systemPromptAppend: string | null,
+  ): string | { type: 'preset'; preset: 'claude_code'; append?: string } {
+    if (systemPromptAppend && systemPromptAppend.trim()) {
+      // Use preset with combined append: base prompt instructions + user's custom append
+      return {
+        type: 'preset',
+        preset: 'claude_code',
+        append: `${basePrompt}\n\n--- Custom Instructions ---\n${systemPromptAppend.trim()}`,
+      };
+    }
+    return basePrompt;
   }
 
   async send(
@@ -826,7 +855,7 @@ export class ChatAgentService {
   private async runAgent(
     sessionId: string,
     projectPath: string,
-    systemPrompt: string,
+    systemPrompt: string | { type: 'preset'; preset: 'claude_code'; append?: string },
     prompt: string,
     abortController: AbortController,
     agentLibName: string,
@@ -921,6 +950,19 @@ export class ChatAgentService {
             result: content,
             timestamp: Date.now(),
           });
+        },
+        onStreamEvent: (event: { type: string; [key: string]: unknown }) => {
+          // Forward raw stream events for partial message streaming
+          const delta = event.delta as { type?: string; text?: string; thinking?: string; partial_json?: string } | undefined;
+          if (event.type === 'content_block_delta' && delta) {
+            if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() } });
+            } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() } });
+            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() } });
+            }
+          }
         },
       };
 
@@ -1032,6 +1074,7 @@ export class ChatAgentService {
         allowedPaths: readOnly ? [] : [projectPath, imageDir],
         readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
         readOnly,
+        settingSources: ['project'] as Array<'user' | 'project' | 'local'>,
         ...(extra?.resumeSession ? { resumeSession: true } : {}),
         ...(disallowedTools ? { disallowedTools } : {}),
         ...(libImages ? { images: libImages } : {}),

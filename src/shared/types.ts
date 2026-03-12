@@ -747,6 +747,14 @@ export interface AgentChatMessageAskUserQuestion {
   timestamp: number;
 }
 
+/** Partial streaming delta — text or thinking token being generated in real-time. */
+export interface AgentChatMessageStreamDelta {
+  type: 'stream_delta';
+  deltaType: 'text_delta' | 'thinking_delta' | 'input_json_delta';
+  delta: string;
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
@@ -758,7 +766,8 @@ export type AgentChatMessage =
   | AgentChatMessageRunInfo
   | AgentChatMessageCompactBoundary
   | AgentChatMessageCompacting
-  | AgentChatMessageAskUserQuestion;
+  | AgentChatMessageAskUserQuestion
+  | AgentChatMessageStreamDelta;
 
 export interface AgentConfig {
   model?: string;
@@ -1105,6 +1114,8 @@ export interface ChatSession {
   agentRunId: string | null;
   permissionMode: PermissionMode | null;
   sidebarHidden: boolean;
+  /** Custom instructions appended to the system prompt for this session. */
+  systemPromptAppend: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -1130,10 +1141,11 @@ export interface ChatSessionCreateInput {
 // Chat agent event types (used by ChatAgentService consumers)
 export type ChatAgentEvent =
   | { type: 'text'; text: string }
-  | { type: 'message'; message: AgentChatMessage };
+  | { type: 'message'; message: AgentChatMessage }
+  | { type: 'stream_delta'; delta: AgentChatMessageStreamDelta };
 
 export interface ChatSendOptions {
-  systemPrompt: string;
+  systemPrompt: string | { type: 'preset'; preset: 'claude_code'; append?: string };
   onEvent?: (event: ChatAgentEvent) => void;
   images?: ChatImage[];
   pipelineSessionId?: string;
@@ -1154,6 +1166,7 @@ export interface ChatSessionUpdateInput {
   model?: string | null;
   agentRunId?: string | null;
   permissionMode?: PermissionMode | null;
+  systemPromptAppend?: string | null;
 }
 
 export interface TaskChatSessionWithTitle extends ChatSession {

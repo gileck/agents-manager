@@ -51,6 +51,8 @@ initializeApp({
         sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_MESSAGE, (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, data));
+      wsClient.subscribeGlobal(WS_CHANNELS.CHAT_STREAM_DELTA, (sessionId, data) =>
+        sendToRenderer(IPC_CHANNELS.CHAT_STREAM_DELTA, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TASK_CHAT_OUTPUT, (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.TASK_CHAT_OUTPUT, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TASK_CHAT_MESSAGE, (sessionId, data) =>

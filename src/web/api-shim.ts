@@ -298,6 +298,10 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
         ws.subscribeGlobal(WS_CHANNELS.CHAT_MESSAGE, (sessionId, data) =>
           callback(sessionId as string, data as AgentChatMessage)),
 
+      chatStreamDelta: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.CHAT_STREAM_DELTA, (sessionId, data) =>
+          callback(sessionId as string, data as AgentChatMessage)),
+
       taskChatOutput: (callback) =>
         ws.subscribeGlobal(WS_CHANNELS.TASK_CHAT_OUTPUT, (sessionId, data) =>
           callback(sessionId as string, data as string)),

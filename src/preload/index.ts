@@ -149,6 +149,7 @@ const IPC_CHANNELS = {
   CHAT_SUMMARIZE: 'chat:summarize',
   CHAT_OUTPUT: 'chat:output',
   CHAT_MESSAGE: 'chat:message',
+  CHAT_STREAM_DELTA: 'chat:stream-delta',
   TASK_CHAT_OUTPUT: 'task-chat:output',
   TASK_CHAT_MESSAGE: 'task-chat:message',
   CHAT_COSTS: 'chat:costs',
@@ -501,7 +502,7 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_TASK_SESSIONS, projectId),
     listAll: (projectId: string): Promise<ChatSessionWithDetails[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_ALL, projectId),
-    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null }): Promise<ChatSession | null> =>
+    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null }): Promise<ChatSession | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
@@ -619,6 +620,11 @@ const api = {
       const listener = (_: IpcRendererEvent, sessionId: string, msg: AgentChatMessage) => callback(sessionId, msg);
       ipcRenderer.on(IPC_CHANNELS.CHAT_MESSAGE, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_MESSAGE, listener);
+    },
+    chatStreamDelta: (callback: (sessionId: string, delta: AgentChatMessage) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, delta: AgentChatMessage) => callback(sessionId, delta);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_DELTA, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_STREAM_DELTA, listener);
     },
     taskChatOutput: (callback: (sessionId: string, chunk: string) => void) => {
       const listener = (_: IpcRendererEvent, sessionId: string, chunk: string) => callback(sessionId, chunk);

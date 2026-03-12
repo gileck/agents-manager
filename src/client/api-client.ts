@@ -198,7 +198,7 @@ export interface ApiClient {
     deleteSession(id: string): Promise<unknown>;
     hideSession(id: string): Promise<unknown>;
     hideAllSessions(projectId: string): Promise<unknown>;
-    updateSession(id: string, input: { name?: string; agentLib?: string | null }): Promise<unknown>;
+    updateSession(id: string, input: { name?: string; agentLib?: string | null; systemPromptAppend?: string | null }): Promise<unknown>;
     getAgentChatSession(taskId: string, agentRole: string): Promise<unknown>;
     sendMessage(sessionId: string, message: string, images?: unknown[]): Promise<unknown>;
     stopGeneration(sessionId: string): Promise<unknown>;

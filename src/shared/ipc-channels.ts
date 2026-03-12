@@ -156,6 +156,8 @@ export const IPC_CHANNELS = {
   CHAT_OUTPUT: 'chat:output',
   /** PUSH-ONLY: main->renderer, do not invoke() */
   CHAT_MESSAGE: 'chat:message',
+  /** PUSH-ONLY: main->renderer, do not invoke() – partial message streaming deltas */
+  CHAT_STREAM_DELTA: 'chat:stream-delta',
   /** PUSH-ONLY: main->renderer, do not invoke() */
   TASK_CHAT_OUTPUT: 'task-chat:output',
   /** PUSH-ONLY: main->renderer, do not invoke() */

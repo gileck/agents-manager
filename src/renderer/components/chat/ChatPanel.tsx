@@ -279,6 +279,14 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
                 agentLib={selectedAgentLib}
                 model={selectedModel}
                 modelLabel={currentModels.find((m) => m.value === selectedModel)?.label}
+                systemPromptAppend={currentSession?.systemPromptAppend ?? null}
+                onSystemPromptAppendChange={currentSessionId ? async (value) => {
+                  try {
+                    await updateSession(currentSessionId, { systemPromptAppend: value });
+                  } catch (err) {
+                    reportError(err, 'ChatPanel: update custom instructions');
+                  }
+                } : undefined}
               />
             )}
             {scopeAgents.length > 0 && (

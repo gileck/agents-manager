@@ -18,7 +18,7 @@ interface ChatMessageListProps {
 }
 
 // Message types that are "leaf" nodes rendered directly in the timeline
-const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question']);
+const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta']);
 // Message types that belong inside a ThinkingGroup (internal processing noise)
 const GROUP_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
 

@@ -54,7 +54,7 @@ export function registerChatSessionHandlers(api: ApiClient): void {
     return api.chat.listTaskSessionsForProject(projectId);
   });
 
-  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null }) => {
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UPDATE, async (_, sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null }) => {
     return api.chat.updateSession(sessionId, input);
   });
 

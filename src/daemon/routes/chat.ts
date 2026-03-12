@@ -214,6 +214,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
           onEvent: (event) => {
             if (event.type === 'text') ws?.broadcast(WS_CHANNELS.CHAT_OUTPUT, sessionId, event.text);
             else if (event.type === 'message') ws?.broadcast(WS_CHANNELS.CHAT_MESSAGE, sessionId, event.message);
+            else if (event.type === 'stream_delta') ws?.broadcast(WS_CHANNELS.CHAT_STREAM_DELTA, sessionId, event.delta);
           },
           images: validatedImages,
         },
@@ -268,7 +269,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   router.patch('/api/chat/sessions/:id', async (req, res, next) => {
     try {
       const sessionId = req.params.id;
-      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: string | null };
+      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: string | null; systemPromptAppend?: string | null };
       if (!input || typeof input !== 'object') {
         res.status(400).json({ error: 'Invalid input: expected object' });
         return;
@@ -293,7 +294,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(404).json({ error: 'Session not found' });
         return;
       }
-      const updateInput: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null } = {};
+      const updateInput: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null } = {};
       if (input.name !== undefined) updateInput.name = input.name.trim();
       if (input.agentLib !== undefined) {
         if (input.agentLib !== null) {
@@ -327,6 +328,17 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
           return;
         }
         updateInput.permissionMode = input.permissionMode as PermissionMode | null;
+      }
+      if (input.systemPromptAppend !== undefined) {
+        if (input.systemPromptAppend !== null && typeof input.systemPromptAppend !== 'string') {
+          res.status(400).json({ error: 'systemPromptAppend must be a string or null' });
+          return;
+        }
+        if (input.systemPromptAppend !== null && input.systemPromptAppend.length > 10000) {
+          res.status(400).json({ error: 'systemPromptAppend must be 10000 characters or less' });
+          return;
+        }
+        updateInput.systemPromptAppend = input.systemPromptAppend;
       }
       const updated = await services.chatSessionStore.updateSession(sessionId, updateInput);
       res.json(updated);

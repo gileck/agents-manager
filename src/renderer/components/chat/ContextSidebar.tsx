@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { AgentChatMessage, AgentRun } from '../../../shared/types';
 import { getEffectiveCost, findPricing, formatCost } from '../../../shared/cost-utils';
 
@@ -27,11 +27,13 @@ interface ContextSidebarProps {
   agentLib?: string;
   model?: string;
   modelLabel?: string;
+  systemPromptAppend?: string | null;
+  onSystemPromptAppendChange?: (value: string | null) => void;
 }
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 
-export function ContextSidebar({ messages, run, tokenUsage, perTurnUsage, agentLib, model, modelLabel }: ContextSidebarProps) {
+export function ContextSidebar({ messages, run, tokenUsage, perTurnUsage, agentLib, model, modelLabel, systemPromptAppend, onSystemPromptAppendChange }: ContextSidebarProps) {
   const [costExpanded, setCostExpanded] = useState(false);
 
   // Use the latest usage message (SDK reports cumulative totals)
@@ -254,6 +256,61 @@ export function ContextSidebar({ messages, run, tokenUsage, perTurnUsage, agentL
           </div>
         </div>
       </div>
+
+      {/* Custom Instructions section */}
+      {onSystemPromptAppendChange && (
+        <CustomInstructionsSection
+          value={systemPromptAppend ?? ''}
+          onChange={onSystemPromptAppendChange}
+        />
+      )}
+    </div>
+  );
+}
+
+function CustomInstructionsSection({ value, onChange }: { value: string; onChange: (v: string | null) => void }) {
+  const [localValue, setLocalValue] = useState(value);
+  const [isExpanded, setIsExpanded] = useState(!!value);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleChange = useCallback((newValue: string) => {
+    setLocalValue(newValue);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onChange(newValue.trim() || null);
+    }, 800);
+  }, [onChange]);
+
+  return (
+    <div className="p-4 space-y-2 border-t border-border">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between w-full text-sm font-semibold text-foreground hover:text-foreground/80 transition-colors"
+      >
+        <span>Custom Instructions</span>
+        <span className="text-xs text-muted-foreground">{isExpanded ? 'Hide' : 'Show'}</span>
+      </button>
+      {isExpanded && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">
+            Additional instructions appended to the system prompt for this session.
+          </p>
+          <textarea
+            className="w-full min-h-[80px] max-h-[200px] resize-y rounded-md border border-border bg-background px-2.5 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/60"
+            placeholder="e.g. Always explain your reasoning step by step..."
+            value={localValue}
+            onChange={(e) => handleChange(e.target.value)}
+          />
+          {localValue && localValue !== value && (
+            <p className="text-xs text-muted-foreground/70 italic">Saving...</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
