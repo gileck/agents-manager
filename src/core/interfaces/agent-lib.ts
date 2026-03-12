@@ -249,6 +249,8 @@ export interface AgentLibRunOptions {
   settingSources?: Array<'user' | 'project' | 'local'>;
   /** Custom subagent definitions that the main agent can delegate tasks to via the Task tool. Supported by claude-code engine only. */
   agents?: Record<string, SubagentDefinition>;
+  /** Plugins to load for this session. Each plugin extends the agent with custom commands, skills, hooks, etc. Supported by claude-code engine only. */
+  plugins?: Array<{ type: 'local'; path: string }>;
 }
 
 export interface AgentLibCallbacks {

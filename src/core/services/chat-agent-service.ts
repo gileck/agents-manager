@@ -134,6 +134,16 @@ interface InjectedMessage {
   queuedAt: number;
 }
 
+/** Parse plugins config from project config into typed array. */
+function parsePluginsConfig(raw: unknown): Array<{ type: 'local'; path: string }> | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const valid = raw.filter(
+    (p): p is { type: 'local'; path: string } =>
+      p && typeof p === 'object' && p.type === 'local' && typeof p.path === 'string',
+  );
+  return valid.length > 0 ? valid : undefined;
+}
+
 const DEFAULT_AGENT_LIB = 'claude-code';
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
@@ -469,7 +479,7 @@ export class ChatAgentService {
     });
 
     // Resolve project path
-    const { projectPath, projectId, projectName, projectDefaultAgentLib } = await this.resolveScope(session);
+    const { projectPath, projectId, projectName, projectDefaultAgentLib, projectPlugins } = await this.resolveScope(session);
 
     // Safe event emitter
     const emitEvent = (event: ChatAgentEvent) => {
@@ -513,15 +523,40 @@ export class ChatAgentService {
     const hasHistory = history.length > 1; // more than just the current user message
     const shouldResume = resumeSession || hasHistory;
 
-    let prompt = message.trim() || '(see attached images)';
-    // Include image paths so the agent can Read them
-    if (imageRefs && imageRefs.length > 0) {
-      for (const img of imageRefs) {
-        prompt += `\n  (Image attached: ${img.path})`;
+    // Detect slash commands — the SDK handles them natively when sent as the prompt
+    const isSlashCommand = message.trim().startsWith('/');
+    let slashCommandName: string | undefined;
+    let slashCommandArgs: string | undefined;
+    if (isSlashCommand) {
+      const parts = message.trim().split(/\s+/);
+      slashCommandName = parts[0]; // e.g. "/compact", "/clear"
+      slashCommandArgs = parts.slice(1).join(' ') || undefined;
+      getAppLogger().info('ChatAgentService', `Slash command detected: ${slashCommandName}`, { args: slashCommandArgs });
+      emitEvent({ type: 'message', message: { type: 'slash_command', command: slashCommandName, args: slashCommandArgs, status: 'invoked', timestamp: Date.now() } });
+
+      // /clear: also clear local message history (the SDK handles the session-level clear)
+      if (slashCommandName === '/clear') {
+        try {
+          await this.chatMessageStore.clearMessages(sessionId);
+          getAppLogger().info('ChatAgentService', `Cleared local message history for session ${sessionId} (slash command /clear)`);
+        } catch (clearErr) {
+          getAppLogger().warn('ChatAgentService', 'Failed to clear messages on /clear', { error: clearErr instanceof Error ? clearErr.message : String(clearErr) });
+        }
       }
-      prompt += '\n\nIMPORTANT: The user attached image(s). Use the Read tool to view them at the paths above.';
     }
-    prompt += '\n\nRespond to the latest user message. If your response requires a plan change, respond with the JSON format described in your instructions; otherwise respond in plain text.';
+
+    let prompt = message.trim() || '(see attached images)';
+    // For slash commands, send the raw command as the prompt (SDK handles it natively)
+    if (!isSlashCommand) {
+      // Include image paths so the agent can Read them
+      if (imageRefs && imageRefs.length > 0) {
+        for (const img of imageRefs) {
+          prompt += `\n  (Image attached: ${img.path})`;
+        }
+        prompt += '\n\nIMPORTANT: The user attached image(s). Use the Read tool to view them at the paths above.';
+      }
+      prompt += '\n\nRespond to the latest user message. If your response requires a plan change, respond with the JSON format described in your instructions; otherwise respond in plain text.';
+    }
 
     // Create or reuse AgentRun for agent-chat sessions
     let agentRunId: string | undefined;
@@ -547,7 +582,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, plugins: projectPlugins }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -902,6 +937,7 @@ export class ChatAgentService {
     projectId: string;
     projectName: string;
     projectDefaultAgentLib?: string;
+    projectPlugins?: Array<{ type: 'local'; path: string }>;
   }> {
     if (session.scopeType === 'task') {
       const task = await this.taskStore.getTask(session.scopeId);
@@ -913,6 +949,7 @@ export class ChatAgentService {
         projectId: task.projectId,
         projectName: project.name,
         projectDefaultAgentLib: project.config?.defaultAgentLib as string | undefined,
+        projectPlugins: parsePluginsConfig(project.config?.plugins),
       };
     }
 
@@ -928,6 +965,7 @@ export class ChatAgentService {
       projectId: session.scopeId,
       projectName: project.name,
       projectDefaultAgentLib: project.config?.defaultAgentLib as string | undefined,
+      projectPlugins: parsePluginsConfig(project.config?.plugins),
     };
   }
 
@@ -941,7 +979,7 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
-    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string },
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string; plugins?: Array<{ type: 'local'; path: string }> },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -1255,6 +1293,7 @@ export class ChatAgentService {
         ...(mcpServers ? { mcpServers } : {}),
         canUseTool,
         ...(agents ? { agents } : {}),
+        ...(extra?.plugins?.length ? { plugins: extra.plugins } : {}),
       };
 
       let result = await lib.execute(executeSessionId, executeOptions, callbacks);

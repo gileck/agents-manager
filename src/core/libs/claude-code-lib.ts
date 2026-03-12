@@ -392,6 +392,7 @@ export class ClaudeCodeLib implements IAgentLib {
           ...(options.maxBudgetUsd != null ? { maxBudgetUsd: options.maxBudgetUsd } : {}),
           ...(options.betas?.length ? { betas: options.betas } : {}),
           ...(options.agents && Object.keys(options.agents).length > 0 ? { agents: options.agents } : {}),
+          ...(options.plugins?.length ? { plugins: options.plugins } : {}),
         },
       }) as AsyncIterable<SdkStreamMessage>) {
         // Skip replayed messages during session resume to avoid duplicate callbacks/tokens

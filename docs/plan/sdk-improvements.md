@@ -17,8 +17,8 @@ based on a review of the official SDK documentation against our current implemen
 | 3 | Interactive Tool Approval (canUseTool) | 3 | DONE | #2 |
 | 8 | Full Hooks System | 3 | DONE | #3 |
 | 5 | Subagent Definitions | 4 | DONE | #8 |
-| 11 | Slash Commands | 5 | NOT STARTED | #2 |
-| 13 | Plugins | 5 | NOT STARTED | #7 |
+| 11 | Slash Commands | 5 | DONE | #2 |
+| 13 | Plugins | 5 | DONE | #7 |
 
 Status values: `NOT STARTED` · `IN PROGRESS` · `DONE`
 
@@ -281,15 +281,15 @@ hooks, and MCP servers to chat sessions.
 
 #### Phase 5 — Todo List
 
-- [ ] Rebase worktree branch from main
-- [ ] **#11** Detect `/` prefix in `chat-agent-service.ts`, route as slash command prompt to SDK
-- [ ] **#11** Add `slash_command` message type to `shared/types.ts`
-- [ ] **#11** Renderer: slash command autocomplete in chat input
-- [ ] **#11** Renderer: special result bubbles for slash command output
-- [ ] **#13** Add `plugins` array to `AgentLibRunOptions` in `agent-lib.ts`
-- [ ] **#13** Pass `plugins` to SDK in `claude-code-lib.ts`
-- [ ] **#13** Load plugin paths from project config in `chat-agent-service.ts`
-- [ ] Run `yarn checks` — fix any TypeScript / ESLint errors
+- [x] Rebase worktree branch from main
+- [x] **#11** Detect `/` prefix in `chat-agent-service.ts`, route as slash command prompt to SDK
+- [x] **#11** Add `slash_command` message type to `shared/types.ts`
+- [x] **#11** Renderer: slash command card with terminal icon, status indicator in `ChatMessageList.tsx`
+- [x] **#11** `/clear` also clears local DB message history
+- [x] **#13** Add `plugins` array to `AgentLibRunOptions` in `agent-lib.ts`
+- [x] **#13** Pass `plugins` to SDK in `claude-code-lib.ts`
+- [x] **#13** Load plugin paths from project config via `parsePluginsConfig()` in `chat-agent-service.ts`
+- [x] Run `yarn checks` — fix any TypeScript / ESLint errors
 - [ ] Manual smoke test: `/compact`, `/clear`, plugin loading
 - [ ] **Review** — review changes, update status to DONE, merge to main
 

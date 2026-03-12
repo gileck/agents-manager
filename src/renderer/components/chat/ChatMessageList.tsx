@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, ChevronDown, Play, AlertTriangle, ShieldCheck, ShieldX, Bell, Bot, CheckCircle2 } from 'lucide-react';
-import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification, AgentChatMessageSubagentActivity } from '../../../shared/types';
+import { Pencil, ChevronDown, Play, AlertTriangle, ShieldCheck, ShieldX, Bell, Bot, CheckCircle2, Terminal } from 'lucide-react';
+import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification, AgentChatMessageSubagentActivity, AgentChatMessageSlashCommand } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
@@ -19,7 +19,7 @@ interface ChatMessageListProps {
 }
 
 // Message types that are "leaf" nodes rendered directly in the timeline
-const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta', 'permission_request', 'permission_response', 'notification', 'subagent_activity']);
+const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta', 'permission_request', 'permission_response', 'notification', 'subagent_activity', 'slash_command']);
 // Message types that belong inside a ThinkingGroup (internal processing noise)
 const GROUP_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
 
@@ -375,6 +375,18 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
             </span>
             <span className="text-muted-foreground">
               {isStarted ? 'started' : 'completed'}
+            </span>
+          </div>
+        );
+      } else if (msg.type === 'slash_command') {
+        const slashCmd = msg as AgentChatMessageSlashCommand;
+        nodes.push(
+          <div key={i} className="flex items-center gap-2 my-2 px-3 py-2 text-sm rounded-lg border" style={{ borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.06)' }}>
+            <Terminal className="h-4 w-4 flex-shrink-0" style={{ color: '#6366f1' }} />
+            <span className="font-mono font-medium" style={{ color: '#6366f1' }}>{slashCmd.command}</span>
+            {slashCmd.args && <span className="text-muted-foreground">{slashCmd.args}</span>}
+            <span className="text-muted-foreground text-xs ml-auto">
+              {slashCmd.status === 'completed' ? 'completed' : 'running...'}
             </span>
           </div>
         );

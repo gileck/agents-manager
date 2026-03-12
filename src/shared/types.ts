@@ -790,6 +790,15 @@ export interface AgentChatMessageSubagentActivity {
   timestamp: number;
 }
 
+/** Slash command invocation — emitted when the user sends a /command. */
+export interface AgentChatMessageSlashCommand {
+  type: 'slash_command';
+  command: string;
+  args?: string;
+  status: 'invoked' | 'completed';
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
@@ -806,7 +815,8 @@ export type AgentChatMessage =
   | AgentChatMessagePermissionRequest
   | AgentChatMessagePermissionResponse
   | AgentChatMessageNotification
-  | AgentChatMessageSubagentActivity;
+  | AgentChatMessageSubagentActivity
+  | AgentChatMessageSlashCommand;
 
 export interface AgentConfig {
   model?: string;
