@@ -164,6 +164,7 @@ const IPC_CHANNELS = {
   CHAT_AGENT_SESSION: 'chat:agent-session',
   CHAT_AGENTS_LIST: 'chat:agents:list',
   CHAT_SESSION_RENAMED: 'chat:session:renamed',
+  CHAT_AGENT_NOTIFICATION: 'chat:agent-notification',
   AGENT_LIB_LIST: 'agent-lib:list',
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
