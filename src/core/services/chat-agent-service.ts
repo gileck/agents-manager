@@ -6,7 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
-import type { AgentLibCallbacks, PromptPushHandle, PermissionRequest, PermissionResponse, SubagentDefinition } from '../interfaces/agent-lib';
+import type { AgentLibCallbacks, PermissionRequest, PermissionResponse, SubagentDefinition } from '../interfaces/agent-lib';
 import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type {
   SDKMessage,
@@ -181,8 +181,6 @@ const DEFAULT_CHAT_SUBAGENTS: Record<string, SubagentDefinition> = {
 
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
-  /** Prompt push handles for running sessions — allows mid-stream message injection. */
-  private promptPushHandles = new Map<string, PromptPushHandle>();
   private runningAgents = new Map<string, RunningAgent>();
   private liveTurnMessages = new Map<string, AgentChatMessage[]>();
   private imageStorageDir: string;
@@ -626,13 +624,6 @@ export class ChatAgentService {
 
     // Auto-deny all pending permission requests for this session
     this.clearPendingPermissionRequests(sessionId);
-
-    // Close the prompt push handle so the generator terminates cleanly
-    const pushHandle = this.promptPushHandles.get(sessionId);
-    if (pushHandle) {
-      pushHandle.close();
-      this.promptPushHandles.delete(sessionId);
-    }
 
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
@@ -1159,10 +1150,6 @@ export class ChatAgentService {
             }
           }
         },
-        onPromptHandleReady: (handle) => {
-          // Store the push handle so we can inject messages mid-stream (Phase 3+)
-          this.promptPushHandles.set(sessionId, handle);
-        },
         onPermissionRequest,
       };
 
@@ -1365,7 +1352,6 @@ export class ChatAgentService {
       }
     } finally {
       this.runningControllers.delete(sessionId);
-      this.promptPushHandles.delete(sessionId);
       this.clearPendingPermissionRequests(sessionId);
       this.liveTurnMessages.delete(sessionId);
 

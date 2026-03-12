@@ -20,18 +20,6 @@ export interface PermissionResponse {
 // Agent Lib — Low-level engine interface
 // ============================================
 
-/**
- * Handle for pushing messages into a running agent query's async generator.
- * Created internally by the lib and exposed via the `onPromptHandleReady` callback
- * so the caller (e.g., chat-agent-service) can inject follow-up messages mid-stream.
- */
-export interface PromptPushHandle {
-  /** Push a new user message into the running query. */
-  push(message: string): void;
-  /** Signal the generator to finish — no more messages will be yielded. */
-  close(): void;
-}
-
 export interface ModelTokenUsage {
   inputTokens: number;
   outputTokens: number;
@@ -260,8 +248,6 @@ export interface AgentLibCallbacks {
   onUserToolResult?: (toolUseId: string, content: string) => void;
   /** Called when a stream delta event is received (partial message streaming). */
   onStreamEvent?: (event: { type: string; [key: string]: unknown }) => void;
-  /** Called once the prompt push handle is ready, allowing the caller to inject messages mid-stream. */
-  onPromptHandleReady?: (handle: PromptPushHandle) => void;
   /** Called when a tool needs user permission approval. Blocks tool execution until resolved. */
   onPermissionRequest?: (request: PermissionRequest) => Promise<PermissionResponse>;
 }
