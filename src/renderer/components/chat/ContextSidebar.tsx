@@ -1,11 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { AgentChatMessage, AgentRun } from '../../../shared/types';
-import { getEffectiveCost } from '../../../shared/cost-utils';
+import { getEffectiveCost, findPricing, formatCost } from '../../../shared/cost-utils';
+
+interface PerTurnUsage {
+  turn: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  totalCostUsd: number;
+}
 
 interface ContextSidebarProps {
   messages: AgentChatMessage[];
   run?: AgentRun | null;
-  tokenUsage?: { inputTokens: number; outputTokens: number; lastContextInputTokens?: number | null; contextWindow?: number | null };
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadInputTokens?: number;
+    cacheCreationInputTokens?: number;
+    totalCostUsd?: number;
+    lastContextInputTokens?: number | null;
+    contextWindow?: number | null;
+  };
+  perTurnUsage?: PerTurnUsage[];
   agentLib?: string;
   model?: string;
   modelLabel?: string;
@@ -13,7 +31,9 @@ interface ContextSidebarProps {
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 
-export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, modelLabel }: ContextSidebarProps) {
+export function ContextSidebar({ messages, run, tokenUsage, perTurnUsage, agentLib, model, modelLabel }: ContextSidebarProps) {
+  const [costExpanded, setCostExpanded] = useState(false);
+
   // Use the latest usage message (SDK reports cumulative totals)
   let totalInput = 0;
   let totalOutput = 0;
@@ -37,15 +57,20 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
 
   const totalTokens = totalInput + totalOutput;
 
+  // Merge cache tokens from tokenUsage (DB sums) and run (agent run level), taking the max
+  const cacheRead = Math.max(tokenUsage?.cacheReadInputTokens ?? 0, run?.cacheReadInputTokens ?? 0);
+  const cacheWrite = Math.max(tokenUsage?.cacheCreationInputTokens ?? 0, run?.cacheCreationInputTokens ?? 0);
+  const hasCacheInfo = cacheRead > 0 || cacheWrite > 0;
+
   // Use totalCostUsd from the run if available (authoritative SDK cost),
   // otherwise fall back to manual calculation from token counts.
   const estimatedCost = getEffectiveCost({
     totalCostUsd: run?.totalCostUsd,
     inputTokens: totalInput,
     outputTokens: totalOutput,
-    cacheReadTokens: run?.cacheReadInputTokens,
-    cacheWriteTokens: run?.cacheCreationInputTokens,
-    model: run?.model ?? undefined,
+    cacheReadTokens: cacheRead,
+    cacheWriteTokens: cacheWrite,
+    model: run?.model ?? model ?? undefined,
   });
   // Derive the effective context window size from SDK modelUsage when available,
   // falling back to the hardcoded default.
@@ -57,16 +82,27 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
   const contextWindowTokens = tokenUsage?.lastContextInputTokens ?? totalInput;
   const contextUsagePercent = Math.min((contextWindowTokens / effectiveContextWindow) * 100, 100);
 
-  // Cache token info from run
-  const cacheRead = run?.cacheReadInputTokens ?? 0;
-  const cacheWrite = run?.cacheCreationInputTokens ?? 0;
-  const hasCacheInfo = cacheRead > 0 || cacheWrite > 0;
+  // Look up per-token pricing for the cost breakdown
+  const effectiveModel = run?.model ?? model;
+  const pricing = effectiveModel ? findPricing(effectiveModel) : undefined;
 
   const formatNumber = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
     return n.toString();
   };
+
+  // Compute per-category cost breakdown
+  const categoryBreakdown = pricing ? (() => {
+    const cacheReadRate = pricing.cacheReadPerMTok ?? pricing.inputPerMTok * 0.1;
+    const cacheWriteRate = pricing.cacheWritePerMTok ?? pricing.inputPerMTok * 1.25;
+    return [
+      { label: 'Input', tokens: totalInput, cost: (totalInput / 1_000_000) * pricing.inputPerMTok },
+      { label: 'Output', tokens: totalOutput, cost: (totalOutput / 1_000_000) * pricing.outputPerMTok },
+      ...(cacheRead > 0 ? [{ label: 'Cache read', tokens: cacheRead, cost: (cacheRead / 1_000_000) * cacheReadRate }] : []),
+      ...(cacheWrite > 0 ? [{ label: 'Cache write', tokens: cacheWrite, cost: (cacheWrite / 1_000_000) * cacheWriteRate }] : []),
+    ];
+  })() : null;
 
   return (
     <div className="p-4 space-y-4 border-b border-border">
@@ -122,6 +158,80 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
           <span className="text-muted-foreground">Est. cost</span>
           <span className="font-mono">${estimatedCost.toFixed(4)}</span>
         </div>
+
+        {/* Expandable cost breakdown */}
+        {(categoryBreakdown || (perTurnUsage && perTurnUsage.length > 0)) && (
+          <>
+            <button
+              onClick={() => setCostExpanded(!costExpanded)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+            >
+              <span style={{ display: 'inline-block', width: '12px', textAlign: 'center', fontSize: '10px' }}>
+                {costExpanded ? '▼' : '▶'}
+              </span>
+              <span>Cost breakdown</span>
+            </button>
+
+            {costExpanded && (
+              <div className="space-y-3 pl-1">
+                {/* Per-category cost breakdown */}
+                {categoryBreakdown && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-muted-foreground mb-1">By category</div>
+                    {categoryBreakdown.map(({ label, tokens, cost }) => (
+                      <div key={label} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">{label} ({formatNumber(tokens)})</span>
+                        <span className="font-mono">{formatCost(cost)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Per-turn table */}
+                {perTurnUsage && perTurnUsage.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">By turn</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-muted-foreground">
+                            <th className="text-left font-medium py-0.5 pr-2">#</th>
+                            <th className="text-right font-medium py-0.5 px-1">Input</th>
+                            <th className="text-right font-medium py-0.5 px-1">Output</th>
+                            <th className="text-right font-medium py-0.5 px-1">Cache</th>
+                            <th className="text-right font-medium py-0.5 pl-1">Cost</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {perTurnUsage.map((t) => {
+                            const turnCost = getEffectiveCost({
+                              totalCostUsd: t.totalCostUsd,
+                              inputTokens: t.inputTokens,
+                              outputTokens: t.outputTokens,
+                              cacheReadTokens: t.cacheReadTokens,
+                              cacheWriteTokens: t.cacheWriteTokens,
+                              model: effectiveModel,
+                            });
+                            const totalCache = t.cacheReadTokens + t.cacheWriteTokens;
+                            return (
+                              <tr key={t.turn} className="text-foreground">
+                                <td className="py-0.5 pr-2 text-muted-foreground">{t.turn}</td>
+                                <td className="text-right py-0.5 px-1 font-mono">{formatNumber(t.inputTokens)}</td>
+                                <td className="text-right py-0.5 px-1 font-mono">{formatNumber(t.outputTokens)}</td>
+                                <td className="text-right py-0.5 px-1 font-mono">{totalCache > 0 ? formatNumber(totalCache) : '—'}</td>
+                                <td className="text-right py-0.5 pl-1 font-mono">{formatCost(turnCost)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
         <hr className="border-border" />
 

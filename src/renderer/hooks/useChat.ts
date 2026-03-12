@@ -214,12 +214,18 @@ export function useChat(sessionId: string | null) {
   const tokenUsage = useMemo(() => {
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheReadInputTokens = 0;
+    let cacheCreationInputTokens = 0;
+    let totalCostUsd = 0;
     let lastContextInputTokens: number | null = null;
     let contextWindow: number | null = null;
     // Sum from DB messages (costInputTokens / costOutputTokens fields)
     for (const msg of dbMessages) {
       if (msg.costInputTokens != null) inputTokens += msg.costInputTokens;
       if (msg.costOutputTokens != null) outputTokens += msg.costOutputTokens;
+      if (msg.cacheReadInputTokens != null) cacheReadInputTokens += msg.cacheReadInputTokens;
+      if (msg.cacheCreationInputTokens != null) cacheCreationInputTokens += msg.cacheCreationInputTokens;
+      if (msg.totalCostUsd != null) totalCostUsd += msg.totalCostUsd;
       // Track the most recent non-null lastContextInputTokens (last turn's context size)
       if (msg.lastContextInputTokens != null) lastContextInputTokens = msg.lastContextInputTokens;
     }
@@ -237,10 +243,40 @@ export function useChat(sessionId: string | null) {
     return {
       inputTokens: inputTokens + streamInput,
       outputTokens: outputTokens + streamOutput,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+      totalCostUsd,
       lastContextInputTokens,
       contextWindow,
     };
   }, [dbMessages, streamingMessages]);
+
+  // Build per-turn usage array from assistant DB messages that have cost data
+  const perTurnUsage = useMemo(() => {
+    let turnIndex = 0;
+    const turns: Array<{
+      turn: number;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheWriteTokens: number;
+      totalCostUsd: number;
+    }> = [];
+    for (const msg of dbMessages) {
+      if (msg.role === 'assistant' && msg.costInputTokens != null) {
+        turnIndex++;
+        turns.push({
+          turn: turnIndex,
+          inputTokens: msg.costInputTokens ?? 0,
+          outputTokens: msg.costOutputTokens ?? 0,
+          cacheReadTokens: msg.cacheReadInputTokens ?? 0,
+          cacheWriteTokens: msg.cacheCreationInputTokens ?? 0,
+          totalCostUsd: msg.totalCostUsd ?? 0,
+        });
+      }
+    }
+    return turns;
+  }, [dbMessages]);
 
   const cancelQueuedMessage = useCallback(() => setQueuedMessage(null), []);
 
@@ -259,5 +295,6 @@ export function useChat(sessionId: string | null) {
     clearChat,
     summarizeChat,
     tokenUsage,
+    perTurnUsage,
   };
 }

@@ -64,7 +64,7 @@ const DEFAULT_PRICING: ModelPricing = MODEL_PRICING_TABLE.find(e => e.pattern ==
  * Returns the first entry whose pattern appears in the model string
  * (case-insensitive), or `undefined` if no match is found.
  */
-function findPricing(model: string): ModelPricing | undefined {
+export function findPricing(model: string): ModelPricing | undefined {
   const lower = model.toLowerCase();
   return MODEL_PRICING_TABLE.find(entry => lower.includes(entry.pattern))?.pricing;
 }

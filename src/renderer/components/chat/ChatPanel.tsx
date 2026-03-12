@@ -56,6 +56,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     clearChat,
     summarizeChat,
     tokenUsage,
+    perTurnUsage,
   } = useChat(currentSessionId);
 
   const [showSidebar, setShowSidebar] = useState(false);
@@ -273,6 +274,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               <ContextSidebar
                 messages={messages}
                 tokenUsage={tokenUsage}
+                perTurnUsage={perTurnUsage}
                 agentLib={selectedAgentLib}
                 model={selectedModel}
                 modelLabel={currentModels.find((m) => m.value === selectedModel)?.label}
