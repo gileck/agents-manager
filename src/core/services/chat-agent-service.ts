@@ -890,35 +890,20 @@ export class ChatAgentService {
         lib.stop(sessionId).catch(err => getAppLogger().warn('ChatAgentService', 'Failed to stop agent lib', { error: err instanceof Error ? err.message : String(err) }));
       });
 
-      // Determine readOnly and preToolUse based on permissionMode (null/undefined = read_only)
+      // Determine readOnly and disallowedTools based on permissionMode (null/undefined = read_only)
       const effectiveMode = extra?.permissionMode ?? 'read_only';
       let readOnly: boolean;
-      let preToolUse: ((toolName: string, _toolInput: Record<string, unknown>) => { decision: 'block'; reason: string } | undefined) | undefined;
+      let disallowedTools: string[] | undefined;
 
       if (effectiveMode === 'full_access') {
         readOnly = false;
-        preToolUse = undefined;
       } else if (effectiveMode === 'read_write') {
         readOnly = false;
-        if (features.hooks) {
-          preToolUse = (toolName: string, _toolInput: Record<string, unknown>) => {
-            if (BASH_TOOL_NAMES.has(toolName)) {
-              return { decision: 'block' as const, reason: 'Chat agent in read-write mode: Bash execution is not allowed.' };
-            }
-            return undefined;
-          };
-        }
+        disallowedTools = [...BASH_TOOL_NAMES];
       } else {
         // read_only (default)
         readOnly = true;
-        if (features.hooks) {
-          preToolUse = (toolName: string, _toolInput: Record<string, unknown>) => {
-            if (WRITE_TOOL_NAMES.has(toolName) || BASH_TOOL_NAMES.has(toolName)) {
-              return { decision: 'block' as const, reason: 'Chat agent has read-only access. File modifications and shell execution are not allowed.' };
-            }
-            return undefined;
-          };
-        }
+        disallowedTools = [...WRITE_TOOL_NAMES, ...BASH_TOOL_NAMES];
       }
 
       // Build callbacks
@@ -1048,7 +1033,7 @@ export class ChatAgentService {
         readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
         readOnly,
         ...(extra?.resumeSession ? { resumeSession: true } : {}),
-        ...(preToolUse ? { hooks: { preToolUse } } : {}),
+        ...(disallowedTools ? { disallowedTools } : {}),
         ...(libImages ? { images: libImages } : {}),
         ...(mcpServers ? { mcpServers } : {}),
         canUseTool,

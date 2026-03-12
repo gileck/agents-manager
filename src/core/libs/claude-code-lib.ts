@@ -179,31 +179,27 @@ export class ClaudeCodeLib implements IAgentLib {
 
     log(`Starting agent run: cwd=${options.cwd}, timeout=${options.timeoutMs}ms, model=${options.model ?? 'default'}`);
 
-    // Set up sandbox guard
+    // Set up sandbox guard as a canUseTool wrapper
     const sandboxGuard = new SandboxGuard(options.allowedPaths, options.readOnlyPaths);
+    const callerCanUseTool = options.canUseTool;
 
-    // Build merged preToolUse hook: caller's hook runs first, then sandbox guard
-    const callerPreToolUse = options.hooks?.preToolUse;
-    const mergedPreToolUse = (toolName: string, toolInput: Record<string, unknown>) => {
-      if (callerPreToolUse) {
-        try {
-          const callerResult = callerPreToolUse(toolName, toolInput);
-          if (callerResult?.decision === 'block') {
-            log(`Caller hook blocked ${toolName}: ${callerResult.reason}`);
-            return callerResult;
-          }
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          log(`Caller preToolUse hook threw for ${toolName}, blocking tool call: ${errMsg}`);
-          return { decision: 'block' as const, reason: `Hook error: ${errMsg}` };
-        }
+    // Merge sandbox guard with caller's canUseTool (e.g. AskUserQuestion handler)
+    const mergedCanUseTool = async (
+      toolName: string,
+      input: Record<string, unknown>,
+      _sdkOptions: { signal: AbortSignal; suggestions?: unknown[]; blockedPath?: string; decisionReason?: string; toolUseID: string; agentID?: string },
+    ): Promise<{ behavior: 'allow'; updatedInput?: Record<string, unknown> } | { behavior: 'deny'; message: string }> => {
+      // Sandbox guard runs first (synchronous path check)
+      const guardResult = sandboxGuard.evaluateToolCall(toolName, input);
+      if (!guardResult.allow) {
+        log(`Sandbox guard blocked ${toolName}: ${guardResult.reason}`);
+        return { behavior: 'deny', message: guardResult.reason ?? 'Blocked by sandbox guard' };
       }
-      const result = sandboxGuard.evaluateToolCall(toolName, toolInput);
-      if (!result.allow) {
-        log(`Sandbox guard blocked ${toolName}: ${result.reason}`);
-        return { decision: 'block' as const, reason: result.reason };
+      // Then delegate to caller's canUseTool (e.g. AskUserQuestion handler)
+      if (callerCanUseTool) {
+        return callerCanUseTool(toolName, input);
       }
-      return undefined;
+      return { behavior: 'allow' };
     };
 
     // Build SDK prompt: multimodal when images are present, otherwise plain string.
@@ -266,12 +262,12 @@ export class ClaudeCodeLib implements IAgentLib {
           env: cleanEnv,
           stderr: onStderr,
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
-          hooks: { preToolUse: mergedPreToolUse },
+          ...(options.disallowedTools?.length ? { disallowedTools: options.disallowedTools } : {}),
+          canUseTool: mergedCanUseTool,
           ...sessionOptions,
           ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
           ...(options.maxBudgetUsd != null ? { maxBudgetUsd: options.maxBudgetUsd } : {}),
           ...(options.betas?.length ? { betas: options.betas } : {}),
-          ...(options.canUseTool ? { canUseTool: options.canUseTool } : {}),
         },
       }) as AsyncIterable<SdkStreamMessage>) {
         // Skip replayed messages during session resume to avoid duplicate callbacks/tokens

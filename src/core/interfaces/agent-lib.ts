@@ -32,10 +32,8 @@ export interface AgentLibRunOptions {
   allowedPaths: string[];
   readOnlyPaths: string[];
   readOnly: boolean;
-  hooks?: {
-    preToolUse?: (toolName: string, toolInput: Record<string, unknown>) =>
-      { decision: 'block' | 'allow'; reason?: string } | undefined;
-  };
+  /** Tool names to completely remove from the model's context (cannot be used at all). */
+  disallowedTools?: string[];
   images?: Array<{ base64: string; mediaType: string }>;
   sessionId?: string;
   resumeSession?: boolean;
