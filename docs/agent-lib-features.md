@@ -141,45 +141,37 @@ ClaudeCodeLib (via `includePartialMessages: true`)
 
 ---
 
-## Prompt Push Handle (Mid-Stream Injection)
+## SDK Prompt Mode: Single Message Input
 
-Allows injecting messages into a running agent query after it has started.
+Each agent execution uses a **string prompt** (Single Message Input) rather than the SDK's
+Streaming Input Mode (async generator). Multi-turn conversation is handled via native
+SDK session resume — not by keeping a generator alive.
 
-### Interface
+### Why Not Streaming Input Mode?
 
-```typescript
-// AgentLibCallbacks
-onPromptHandleReady?: (handle: PromptPushHandle) => void;
+The SDK docs recommend Streaming Input Mode for apps that push multiple user messages
+into a single `query()` call (interactive REPL-style agents). Our chat model is
+**request-response**: each `chat.send()` starts a new `query()` call, and follow-ups
+use session resume. A long-lived async generator caused deadlocks — the generator's
+`while (!closed)` loop blocked forever because `close()` ran in the `finally` block
+that couldn't execute until the generator returned.
 
-interface PromptPushHandle {
-  push(message: string): void;
-  close(): void;
-}
-```
+### Current Behavior
 
-### Logic
+- **Text messages** → `prompt: string` (Single Message Input)
+- **Messages with images** → single-yield async generator (yields one message, returns immediately)
+- **Follow-up messages** → new `query()` call with `resume: sessionId`
 
-1. The lib wraps the initial prompt in an async generator and passes it to the engine
-2. Once the generator is ready, the lib calls `onPromptHandleReady(handle)`
-3. The service stores the handle in a `promptPushHandles` map keyed by session ID
-4. Callers can inject follow-up messages via `handle.push(message)` without starting a new query
-5. `handle.close()` signals the generator to terminate
-6. The handle is closed automatically on `stop()`, abort, and in the `finally` cleanup block
+### Limitation: No Mid-Stream Message Injection
 
-### UX Flow
+Users cannot push messages into a running agent. When the agent is running:
+- **Stop** — abort the agent via `AbortController`
+- **Queue** — one message is queued in `useChat.ts` and auto-sent after the agent completes
+- **Wait** — send a follow-up after the agent finishes (new `query()` with session resume)
 
-```
-User sends a message
-  → Lib creates async generator, yields initial prompt
-  → Lib calls onPromptHandleReady(handle)
-  → Service stores handle for the session
-  → [Future: slash commands, permission changes, or follow-up messages can be pushed mid-stream]
-  → On stop/abort → handle.close() terminates the generator cleanly
-```
-
-### Implemented By
-
-ClaudeCodeLib (via `createPromptGenerator()` internal helper)
+If mid-stream injection is ever needed, the SDK's Streaming Input Mode can be re-adopted
+with a properly implemented generator that uses event-driven wakeup (not a blocking loop)
+tied to the abort signal.
 
 ---
 
@@ -469,11 +461,23 @@ The service checks `supportedFeatures().nativeResume`:
 
 ```
 User sends a follow-up message in an existing session
-  → Service detects prior messages exist
-  → If nativeResume → passes sessionId to lib, engine resumes context natively
+  → Service detects prior messages exist (hasHistory = true)
+  → If nativeResume → passes sessionId to lib with resumeSession: true
+  → Lib calls query() with string prompt + resume: sessionId
+  → SDK loads prior conversation from its session files, appends the new message
   → If no nativeResume → formats message history as text, prepends to prompt
   → Agent sees full conversation context either way
 ```
+
+This works with Single Message Input — each follow-up is a new `query()` call with
+a string prompt, and the SDK's `resume` option restores the full conversation history.
+No async generator needed for multi-turn.
+
+### Fallback
+
+If session resume fails (missing/corrupt session files), the service retries without
+`resumeSession` so existing threads don't permanently break. The user sees a
+"[Session resume failed — starting fresh session]" notice.
 
 ### Implemented By
 
@@ -507,7 +511,6 @@ ClaudeCodeLib, CursorAgentLib
 |---------|-----------|:----------:|:------:|:-----:|
 | Interactive Tool Approval | `onPermissionRequest` | yes | — | — |
 | Partial Message Streaming | `onStreamEvent` | yes | — | — |
-| Prompt Push Handle | `onPromptHandleReady` | yes | — | — |
 | Hook System (8 hooks) | `options.hooks` | yes | — | — |
 | Subagent Definitions | `options.agents` | yes | — | — |
 | System Prompt Preset | `options.systemPrompt` | yes | — | — |
