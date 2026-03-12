@@ -257,14 +257,10 @@ export function useChat(sessionId: string | null) {
         }
         // input_json_delta is not displayed directly — it's part of tool input
       } else {
-        // When a full message arrives, discard accumulated deltas of the same type
-        // since the full message supersedes the partial stream deltas
-        if (msg.type === 'assistant_text') {
-          pendingText = '';
-        } else if (msg.type === 'thinking') {
-          pendingThinking = '';
-        }
-        flushPending();
+        // When any full message arrives, discard ALL accumulated deltas
+        // (both types) since full messages supersede the stream delta preview
+        pendingText = '';
+        pendingThinking = '';
         processed.push(msg);
       }
     }

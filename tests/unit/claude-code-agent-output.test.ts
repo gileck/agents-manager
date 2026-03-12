@@ -198,11 +198,9 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
 
     expect(mockQuery).toHaveBeenCalledOnce();
     const callArgs = mockQuery.mock.calls[0][0];
-    // Prompt is an async generator (Streaming Input Mode); consume first message to verify
-    const firstMsg = await callArgs.prompt[Symbol.asyncIterator]().next();
-    const content = firstMsg.value?.message?.content;
-    const promptText = typeof content === 'string' ? content : JSON.stringify(content);
-    expect(promptText).toContain('Test task');
+    // Prompt is a string (Single Message Input mode) when no images attached
+    expect(typeof callArgs.prompt).toBe('string');
+    expect(callArgs.prompt).toContain('Test task');
     expect(callArgs.options.cwd).toBe('/my/project');
     expect(callArgs.options.permissionMode).toBe('bypassPermissions');
     expect(callArgs.options.allowDangerouslySkipPermissions).toBe(true);

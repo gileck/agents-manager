@@ -1,5 +1,5 @@
 import type { AgentChatMessage } from '../../shared/types';
-import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption, ModelTokenUsage, AgentLibHooks, PromptPushHandle } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption, ModelTokenUsage, AgentLibHooks } from '../interfaces/agent-lib';
 import { SandboxGuard } from '../services/sandbox-guard';
 import { getAppLogger } from '../services/app-logger';
 
@@ -71,77 +71,6 @@ interface RunState {
   maxTurns: number;
   /** Set by stop() before aborting so the catch block can distinguish user-stop from timeout. */
   stoppedReason?: string;
-  /** Handle for pushing follow-up messages into the running query's async generator. */
-  promptPushHandle?: PromptPushHandle;
-}
-
-/**
- * Creates an async generator that yields an initial user message and then
- * waits for additional messages pushed via the returned handle.
- *
- * Unlike a simple generator that blocks forever, this one is tied to an
- * AbortSignal — when the signal fires (stop, timeout, or SDK completion),
- * the generator returns cleanly instead of hanging.
- */
-function createPromptGenerator(
-  initialMessage: SdkUserMessage,
-  signal: AbortSignal,
-): { generator: AsyncGenerator<SdkUserMessage, void, undefined>; pushHandle: PromptPushHandle } {
-  const queue: SdkUserMessage[] = [];
-  let closed = false;
-  let resolver: ((value: void) => void) | null = null;
-
-  const wake = () => {
-    if (resolver) {
-      const r = resolver;
-      resolver = null;
-      r();
-    }
-  };
-
-  const pushHandle: PromptPushHandle = {
-    push(message: string) {
-      if (closed) return;
-      queue.push({
-        type: 'user',
-        message: { role: 'user', content: message },
-        parent_tool_use_id: null,
-        session_id: '',
-      });
-      wake();
-    },
-    close() {
-      closed = true;
-      wake();
-    },
-  };
-
-  // Auto-close when the abort signal fires (stop, timeout, or query completion)
-  signal.addEventListener('abort', () => {
-    closed = true;
-    wake();
-  }, { once: true });
-
-  async function* generator(): AsyncGenerator<SdkUserMessage, void, undefined> {
-    // Yield the initial message first
-    yield initialMessage;
-
-    // Then wait for pushed messages or close/abort
-    while (!closed) {
-      if (queue.length > 0) {
-        yield queue.shift()!;
-      } else {
-        await new Promise<void>((resolve) => { resolver = resolve; });
-      }
-    }
-
-    // Drain any remaining queued messages
-    while (queue.length > 0) {
-      yield queue.shift()!;
-    }
-  }
-
-  return { generator: generator(), pushHandle };
 }
 
 export class ClaudeCodeLib implements IAgentLib {
@@ -314,11 +243,10 @@ export class ClaudeCodeLib implements IAgentLib {
     // Build SDK hooks from our AgentLibHooks
     const sdkHooks = this.buildSdkHooks(options.hooks, mergedPreToolUse, log, !!canUseTool);
 
-    // Build SDK prompt using the Streaming Input Mode (recommended by SDK docs).
-    // The async generator yields the initial message, then waits for pushed
-    // follow-up messages via PromptPushHandle. The generator is tied to the
-    // abort signal so it returns cleanly on stop/timeout instead of hanging.
-    let initialUserMessage: SdkUserMessage;
+    // Build SDK prompt: use Single Message Input (string) by default.
+    // Only use an async generator when images are attached (need content blocks).
+    // Multi-turn is handled via SDK session resume, not generator yielding.
+    let sdkPrompt: string | AsyncIterable<SdkUserMessage>;
     if (options.images && options.images.length > 0) {
       const contentBlocks = [
         { type: 'text' as const, text: options.prompt },
@@ -327,27 +255,17 @@ export class ClaudeCodeLib implements IAgentLib {
           source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
         })),
       ];
-      initialUserMessage = {
+      const imageMsg: SdkUserMessage = {
         type: 'user',
         message: { role: 'user', content: contentBlocks },
         parent_tool_use_id: null,
         session_id: runId,
       };
+      // Single-yield generator: yields the image message and returns immediately
+      sdkPrompt = (async function* () { yield imageMsg; })();
     } else {
-      initialUserMessage = {
-        type: 'user',
-        message: { role: 'user', content: options.prompt },
-        parent_tool_use_id: null,
-        session_id: runId,
-      };
+      sdkPrompt = options.prompt;
     }
-
-    const { generator: promptGenerator, pushHandle } = createPromptGenerator(initialUserMessage, abortController.signal);
-    state.promptPushHandle = pushHandle;
-    const sdkPrompt: AsyncIterable<SdkUserMessage> = promptGenerator;
-
-    // Notify caller that the push handle is ready for mid-stream injection
-    callbacks.onPromptHandleReady?.(pushHandle);
 
     log(`Entering SDK message loop`, {
       promptLength: options.prompt.length,
@@ -371,9 +289,6 @@ export class ClaudeCodeLib implements IAgentLib {
     // when the daemon itself runs inside a Claude Code session.
     const cleanEnv = { ...process.env };
     delete cleanEnv.CLAUDECODE;
-
-    // Buffer for deduplicating partial assistant messages (includePartialMessages)
-    let pendingAssistantMsg: SdkAssistantMessage | null = null;
 
     try {
       for await (const message of query({
@@ -414,18 +329,12 @@ export class ClaudeCodeLib implements IAgentLib {
         }
 
         if (message.type === 'assistant') {
+          // Per SDK docs: with includePartialMessages, stream_event messages carry
+          // the deltas. The SDK emits ONE AssistantMessage per turn (after all
+          // stream_events) with the complete content. Process it directly.
           const assistantMsg = message as SdkAssistantMessage;
-          // With includePartialMessages, the SDK emits multiple assistant messages
-          // as content builds up — each subsequent one is more complete. Buffer the
-          // latest version and only emit (onMessage + emit) when a non-assistant
-          // message arrives (e.g., result, user, tool). This ensures we only emit
-          // the most complete version of each assistant response.
-          //
-          // Usage tracking runs immediately (not deferred) for accurate running totals.
           if (assistantMsg.message.usage) {
             const msgId = assistantMsg.message.id;
-            // Deduplicate: parallel tool calls emit multiple assistant messages with the same id and identical usage.
-            // Only accumulate once per unique message id. Still emit the usage callback for UI progress regardless.
             if (!msgId || !state.seenMessageIds.has(msgId)) {
               if (msgId) state.seenMessageIds.add(msgId);
               state.accumulatedInputTokens += assistantMsg.message.usage.input_tokens
@@ -435,21 +344,12 @@ export class ClaudeCodeLib implements IAgentLib {
               state.accumulatedCacheReadInputTokens += assistantMsg.message.usage.cache_read_input_tokens ?? 0;
               state.accumulatedCacheCreationInputTokens += assistantMsg.message.usage.cache_creation_input_tokens ?? 0;
             }
-            // Always overwrite (not accumulate): this gives us the input tokens
-            // from the most recent API call, which equals the current context window usage.
             state.lastInputTokens = assistantMsg.message.usage.input_tokens
               + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
               + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
           }
-          // Buffer this assistant message — will be flushed when a non-assistant message arrives
-          pendingAssistantMsg = assistantMsg;
-          continue;
-        }
-
-        // Flush any buffered assistant message before processing non-assistant messages
-        if (pendingAssistantMsg) {
-          for (const block of pendingAssistantMsg.message.content) {
+          for (const block of assistantMsg.message.content) {
             if (block.type === 'text') {
               emit(block.text + '\n');
               onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
@@ -461,10 +361,7 @@ export class ClaudeCodeLib implements IAgentLib {
               onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input: input.slice(0, 2000), timestamp: Date.now() });
             }
           }
-          pendingAssistantMsg = null;
-        }
-
-        if (message.type === 'result') {
+        } else if (message.type === 'result') {
           const resultMsg = message as SdkResultMessage;
           if (resultMsg.subtype !== 'success') {
             isError = true;
@@ -561,22 +458,6 @@ export class ClaudeCodeLib implements IAgentLib {
           }
         }
       }
-      // Flush any remaining buffered assistant message after the loop ends
-      if (pendingAssistantMsg) {
-        for (const block of pendingAssistantMsg.message.content) {
-          if (block.type === 'text') {
-            emit(block.text + '\n');
-            onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
-          } else if (block.type === 'thinking') {
-            onMessage?.({ type: 'thinking', text: block.thinking, timestamp: Date.now() });
-          } else if (block.type === 'tool_use') {
-            const input = JSON.stringify(block.input ?? {});
-            stream(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
-            onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input: input.slice(0, 2000), timestamp: Date.now() });
-          }
-        }
-        pendingAssistantMsg = null;
-      }
       log(`SDK message loop completed: ${state.messageCount} messages, hasStructuredOutput=${!!structuredOutput}, isError=${isError}`, {
         accumulatedInputTokens: state.accumulatedInputTokens,
         accumulatedOutputTokens: state.accumulatedOutputTokens,
@@ -643,8 +524,6 @@ export class ClaudeCodeLib implements IAgentLib {
       });
     } finally {
       clearTimeout(timer);
-      // Ensure the prompt generator is closed so it doesn't hang
-      state.promptPushHandle?.close();
       this.runningStates.delete(runId);
     }
 
@@ -680,8 +559,6 @@ export class ClaudeCodeLib implements IAgentLib {
       return;
     }
     state.stoppedReason = 'stopped';
-    // Close prompt generator and abort — generator also auto-closes on abort signal
-    state.promptPushHandle?.close();
     state.abortController.abort();
     this.runningStates.delete(runId);
   }
