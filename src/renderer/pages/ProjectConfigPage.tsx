@@ -217,7 +217,6 @@ export function ProjectConfigPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__default__">Read Only (default)</SelectItem>
-                    <SelectItem value="read_only">Read Only</SelectItem>
                     <SelectItem value="read_write">Read &amp; Write</SelectItem>
                     <SelectItem value="full_access">Full Access</SelectItem>
                   </SelectContent>

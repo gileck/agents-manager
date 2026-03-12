@@ -189,8 +189,9 @@ export class ChatAgentService {
 
     // Verify scope target exists and derive projectId
     let projectId: string;
+    let project: Awaited<ReturnType<typeof this.projectStore.getProject>> | undefined;
     if (scopeType === 'project') {
-      const project = await this.projectStore.getProject(scopeId);
+      project = await this.projectStore.getProject(scopeId);
       if (!project) {
         throw Object.assign(new Error('Project not found'), { status: 404 });
       }
@@ -201,6 +202,7 @@ export class ChatAgentService {
         throw Object.assign(new Error('Task not found'), { status: 404 });
       }
       projectId = task.projectId;
+      project = await this.projectStore.getProject(projectId);
     }
 
     // Validate agentLib if provided
@@ -214,12 +216,16 @@ export class ChatAgentService {
       }
     }
 
+    // Apply project-level default permission mode to new sessions
+    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? undefined;
+
     return this.chatSessionStore.createSession({
       scopeType: scopeType as 'project' | 'task',
       scopeId,
       name: name.trim(),
       agentLib,
       projectId,
+      permissionMode: defaultPermissionMode,
     });
   }
 
@@ -234,11 +240,14 @@ export class ChatAgentService {
     }
     const task = await this.taskStore.getTask(taskId);
     if (!task) throw Object.assign(new Error('Task not found'), { status: 404 });
+    const project = await this.projectStore.getProject(task.projectId);
+    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? undefined;
     const session = await this.chatSessionStore.createSession({
       scopeType: 'task',
       scopeId: taskId,
       name: 'Task Chat',
       projectId: task.projectId,
+      permissionMode: defaultPermissionMode,
     });
     return session.id;
   }
@@ -864,8 +873,8 @@ export class ChatAgentService {
         readOnly = true;
         if (features.hooks) {
           preToolUse = (toolName: string, _toolInput: Record<string, unknown>) => {
-            if (WRITE_TOOL_NAMES.has(toolName)) {
-              return { decision: 'block' as const, reason: 'Chat agent has read-only access. File modifications are not allowed.' };
+            if (WRITE_TOOL_NAMES.has(toolName) || BASH_TOOL_NAMES.has(toolName)) {
+              return { decision: 'block' as const, reason: 'Chat agent has read-only access. File modifications and shell execution are not allowed.' };
             }
             return undefined;
           };
@@ -921,7 +930,7 @@ export class ChatAgentService {
         model,
         maxTurns: 50,
         timeoutMs: 300000,
-        allowedPaths: [],
+        allowedPaths: readOnly ? [] : [projectPath, imageDir],
         readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
         readOnly,
         ...(extra?.resumeSession ? { resumeSession: true } : {}),
