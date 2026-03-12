@@ -1,5 +1,5 @@
 import type { AgentChatMessage } from '../../shared/types';
-import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption, ModelTokenUsage } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption, ModelTokenUsage, PromptPushHandle } from '../interfaces/agent-lib';
 import { SandboxGuard } from '../services/sandbox-guard';
 import { getAppLogger } from '../services/app-logger';
 
@@ -71,6 +71,73 @@ interface RunState {
   maxTurns: number;
   /** Set by stop() before aborting so the catch block can distinguish user-stop from timeout. */
   stoppedReason?: string;
+  /** Handle for pushing follow-up messages into the running query's async generator. */
+  promptPushHandle?: PromptPushHandle;
+}
+
+/**
+ * Creates an async generator that yields an initial user message and then
+ * waits for additional messages pushed via the returned handle.
+ *
+ * The generator yields `SdkUserMessage` objects. On `push(message)`, the message
+ * is queued and the generator yields it. On `close()`, the generator returns.
+ */
+function createPromptGenerator(
+  initialMessage: SdkUserMessage,
+): { generator: AsyncGenerator<SdkUserMessage, void, undefined>; pushHandle: PromptPushHandle } {
+  // Queue of pending messages and a resolver for the "next message" promise
+  const queue: SdkUserMessage[] = [];
+  let closed = false;
+  let resolver: ((value: void) => void) | null = null;
+
+  const pushHandle: PromptPushHandle = {
+    push(message: string) {
+      if (closed) return;
+      queue.push({
+        type: 'user',
+        message: { role: 'user', content: message },
+        parent_tool_use_id: null,
+        session_id: '',
+      });
+      // Wake up the generator if it's waiting
+      if (resolver) {
+        const r = resolver;
+        resolver = null;
+        r();
+      }
+    },
+    close() {
+      closed = true;
+      // Wake up the generator so it can return
+      if (resolver) {
+        const r = resolver;
+        resolver = null;
+        r();
+      }
+    },
+  };
+
+  async function* generator(): AsyncGenerator<SdkUserMessage, void, undefined> {
+    // Yield the initial message first
+    yield initialMessage;
+
+    // Then wait for pushed messages or close
+    while (!closed) {
+      if (queue.length > 0) {
+        yield queue.shift()!;
+      } else {
+        // Wait for a push or close
+        await new Promise<void>((resolve) => { resolver = resolve; });
+      }
+    }
+
+    // Drain any remaining queued messages
+    while (queue.length > 0) {
+      yield queue.shift()!;
+    }
+  }
+
+  return { generator: generator(), pushHandle };
 }
 
 export class ClaudeCodeLib implements IAgentLib {
@@ -202,9 +269,10 @@ export class ClaudeCodeLib implements IAgentLib {
       return { behavior: 'allow' };
     };
 
-    // Build SDK prompt: multimodal when images are present, otherwise plain string.
+    // Build SDK prompt as an async generator wrapping the initial message.
+    // This enables mid-stream message injection via the PromptPushHandle.
     // Conversation history is handled via native SDK session resume (not manual replay).
-    let sdkPrompt: string | AsyncIterable<SdkUserMessage>;
+    let initialUserMessage: SdkUserMessage;
     if (options.images && options.images.length > 0) {
       const contentBlocks = [
         { type: 'text' as const, text: options.prompt },
@@ -213,16 +281,27 @@ export class ClaudeCodeLib implements IAgentLib {
           source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
         })),
       ];
-      const userMessage: SdkUserMessage = {
+      initialUserMessage = {
         type: 'user',
         message: { role: 'user', content: contentBlocks },
         parent_tool_use_id: null,
         session_id: runId,
       };
-      sdkPrompt = (async function* () { yield userMessage; })();
     } else {
-      sdkPrompt = options.prompt;
+      initialUserMessage = {
+        type: 'user',
+        message: { role: 'user', content: options.prompt },
+        parent_tool_use_id: null,
+        session_id: runId,
+      };
     }
+
+    const { generator: promptGenerator, pushHandle } = createPromptGenerator(initialUserMessage);
+    state.promptPushHandle = pushHandle;
+    const sdkPrompt: AsyncIterable<SdkUserMessage> = promptGenerator;
+
+    // Notify caller that the push handle is ready for mid-stream injection
+    callbacks.onPromptHandleReady?.(pushHandle);
 
     log(`Entering SDK message loop`, {
       promptLength: options.prompt.length,
@@ -491,6 +570,8 @@ export class ClaudeCodeLib implements IAgentLib {
       });
     } finally {
       clearTimeout(timer);
+      // Ensure the prompt generator is closed so it doesn't hang
+      state.promptPushHandle?.close();
       this.runningStates.delete(runId);
     }
 
@@ -526,6 +607,8 @@ export class ClaudeCodeLib implements IAgentLib {
       return;
     }
     state.stoppedReason = 'stopped';
+    // Close the prompt generator so it stops yielding
+    state.promptPushHandle?.close();
     state.abortController.abort();
     this.runningStates.delete(runId);
   }

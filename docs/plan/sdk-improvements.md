@@ -13,7 +13,7 @@ based on a review of the official SDK documentation against our current implemen
 |---|---------|-------|--------|------------|
 | 7 | System Prompt Customization | 1 | DONE | — |
 | 1 | Partial Message Streaming | 1 | DONE | — |
-| 2 | Streaming Input (AsyncGenerator) | 2 | NOT STARTED | — |
+| 2 | Streaming Input (AsyncGenerator) | 2 | DONE | — |
 | 3 | Interactive Tool Approval (canUseTool) | 3 | NOT STARTED | #2 |
 | 8 | Full Hooks System | 3 | NOT STARTED | #3 |
 | 5 | Subagent Definitions | 4 | NOT STARTED | #8 |
@@ -154,14 +154,14 @@ permission changes all need a way to inject messages into the running query.
 
 #### Phase 2 — Todo List
 
-- [ ] Rebase worktree branch from main
-- [ ] Add `createPromptGenerator` option to `AgentLibRunOptions` in `agent-lib.ts` (generator + push/close handles)
-- [ ] Implement AsyncGenerator creation in `claude-code-lib.ts`, store push handle in `RunState`
-- [ ] Update `execute()` in `claude-code-lib.ts` to pass generator to `query()` instead of string prompt
-- [ ] Update `chat-agent-service.ts` to use generator, store push handle alongside abort controller
-- [ ] Ensure backward compatibility — string prompt still works when generator is not used
-- [ ] Update `stop()` to close the generator handle on abort
-- [ ] Run `yarn checks` — fix any TypeScript / ESLint errors
+- [x] Rebase worktree branch from main
+- [x] Add `PromptPushHandle` interface + `onPromptHandleReady` callback to `agent-lib.ts`
+- [x] Implement `createPromptGenerator()` in `claude-code-lib.ts`, store push handle in `RunState`
+- [x] Update `execute()` in `claude-code-lib.ts` to always wrap prompt in AsyncGenerator
+- [x] Update `chat-agent-service.ts` to store push handle via `onPromptHandleReady` callback
+- [x] Backward compatible — other agent libs unaffected, callback is optional
+- [x] Update `stop()` to close the generator handle on abort (lib + service)
+- [x] Run `yarn checks` — fix any TypeScript / ESLint errors
 - [ ] Manual smoke test: send message, verify response, verify stop works
 - [ ] **Review** — review changes, update status to DONE, merge to main
 

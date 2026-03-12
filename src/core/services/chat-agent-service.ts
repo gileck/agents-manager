@@ -6,7 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
-import type { AgentLibCallbacks } from '../interfaces/agent-lib';
+import type { AgentLibCallbacks, PromptPushHandle } from '../interfaces/agent-lib';
 import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type {
   SDKMessage,
@@ -139,6 +139,8 @@ const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
+  /** Prompt push handles for running sessions — allows mid-stream message injection. */
+  private promptPushHandles = new Map<string, PromptPushHandle>();
   private runningAgents = new Map<string, RunningAgent>();
   private liveTurnMessages = new Map<string, AgentChatMessage[]>();
   private imageStorageDir: string;
@@ -553,6 +555,13 @@ export class ChatAgentService {
       pending.reject(new Error('Agent stopped by user'));
     }
 
+    // Close the prompt push handle so the generator terminates cleanly
+    const pushHandle = this.promptPushHandles.get(sessionId);
+    if (pushHandle) {
+      pushHandle.close();
+      this.promptPushHandles.delete(sessionId);
+    }
+
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
       getAppLogger().info('ChatAgentService', `Stopping chat agent for session ${sessionId}`);
@@ -964,6 +973,10 @@ export class ChatAgentService {
             }
           }
         },
+        onPromptHandleReady: (handle) => {
+          // Store the push handle so we can inject messages mid-stream (Phase 3+)
+          this.promptPushHandles.set(sessionId, handle);
+        },
       };
 
       // Build images array for libs that support native images
@@ -1151,6 +1164,7 @@ export class ChatAgentService {
       }
     } finally {
       this.runningControllers.delete(sessionId);
+      this.promptPushHandles.delete(sessionId);
       this.liveTurnMessages.delete(sessionId);
 
       // Clean up any orphaned pending questions for this session (e.g. SDK timeout)
