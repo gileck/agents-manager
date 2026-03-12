@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, ChevronDown } from 'lucide-react';
+import { Pencil, ChevronDown, Play, AlertTriangle } from 'lucide-react';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -196,33 +196,44 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
           <ThinkingBlock key={i} text={msg.text} />
         );
       } else if (msg.type === 'status') {
-        const isStopped = msg.message.includes('kill_reason=stopped');
-        if (isStopped) {
+        const isStopped = msg.status === 'cancelled';
+        const isError = msg.status === 'failed' || msg.status === 'timed_out';
+
+        if (isStopped || isError) {
           const lastUserMsg = [...messages].reverse().find((m): m is AgentChatMessageUser => m.type === 'user');
           const lastUserText = lastUserMsg?.text ?? null;
+          const label = isStopped ? 'Agent Stopped' : msg.status === 'timed_out' ? 'Agent Timed Out' : 'Agent Error';
+
           nodes.push(
             <div key={i} className="flex flex-col items-center py-4 gap-3">
-              <span className="text-xs text-muted-foreground/80 bg-muted/35 border border-border/60 px-3 py-1.5 rounded-full font-medium">
-                Agent Stopped
-              </span>
-              {!isRunning && lastUserText && (
+              <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium ${
+                isError
+                  ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50'
+                  : 'text-muted-foreground/80 bg-muted/35 border border-border/60'
+              }`}>
+                {isError && <AlertTriangle className="h-3 w-3" />}
+                {label}
+              </div>
+              {!isRunning && (
                 <div className="flex gap-2">
                   {onResume && (
                     <button
                       type="button"
-                      onClick={() => onResume(lastUserText)}
-                      className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                      onClick={() => onResume(lastUserText ?? 'continue')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                     >
-                      Resume
+                      <Play className="h-3 w-3" />
+                      {lastUserText ? 'Continue' : 'Retry'}
                     </button>
                   )}
-                  {onEditMessage && (
+                  {onEditMessage && lastUserText && (
                     <button
                       type="button"
                       onClick={() => onEditMessage(lastUserText)}
-                      className="px-3 py-1.5 text-xs rounded-md border border-border bg-background hover:bg-accent transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border bg-background hover:bg-accent transition-colors"
                     >
-                      Edit
+                      <Pencil className="h-3 w-3" />
+                      Edit & Retry
                     </button>
                   )}
                 </div>

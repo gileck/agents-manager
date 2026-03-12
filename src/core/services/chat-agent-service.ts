@@ -963,7 +963,10 @@ export class ChatAgentService {
 
       if (result.error) {
         emitEvent({ type: 'text', text: `\n[Agent error: ${result.error}]\n` });
-        emitMessage({ type: 'assistant_text', text: `\n[Agent error: ${result.error}]\n`, timestamp: Date.now() });
+        const isStopped = result.error.includes('kill_reason=stopped');
+        const isTimeout = result.error.includes('kill_reason=timeout') || result.error.includes('timed out');
+        const errorStatus: 'cancelled' | 'timed_out' | 'failed' = isStopped ? 'cancelled' : isTimeout ? 'timed_out' : 'failed';
+        emitMessage({ type: 'status', status: errorStatus, message: result.error, timestamp: Date.now() });
       }
 
       // Mark as completed successfully
@@ -978,9 +981,11 @@ export class ChatAgentService {
       // Use the abort controller signal as source of truth (works regardless of error type)
       if (abortController.signal.aborted) {
         getAppLogger().info('ChatAgentService', `Chat agent aborted for session ${sessionId}`);
+        try { emitMessage({ type: 'status', status: 'cancelled', message: 'Agent stopped by user', timestamp: Date.now() }); } catch (emitErr) { getAppLogger().warn('ChatAgentService', 'Failed to emit cancellation status', { error: emitErr instanceof Error ? emitErr.message : String(emitErr) }); }
       } else {
         getAppLogger().logError('ChatAgentService', `Chat agent error for session ${sessionId}`, err);
         emitEvent({ type: 'text', text: `\nError: ${errMsg}\n` });
+        try { emitMessage({ type: 'status', status: 'failed', message: errMsg, timestamp: Date.now() }); } catch (emitErr) { getAppLogger().warn('ChatAgentService', 'Failed to emit error status', { error: emitErr instanceof Error ? emitErr.message : String(emitErr) }); }
       }
       const agent = this.runningAgents.get(sessionId);
       if (agent) {
