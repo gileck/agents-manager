@@ -242,4 +242,8 @@ export const IPC_CHANNELS = {
 
   // Screenshot operations
   SCREENSHOT_SAVE: 'screenshot:save',
+
+  /** PUSH-ONLY: main->renderer, do not invoke() — permission request from agent */
+  CHAT_PERMISSION_REQUEST: 'chat:permission-request',
+  CHAT_PERMISSION_RESPONSE: 'chat:permission-response',
 } as const;

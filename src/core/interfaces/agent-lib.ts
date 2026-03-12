@@ -1,6 +1,22 @@
 import type { AgentChatMessage } from '../../shared/types';
 
 // ============================================
+// Permission Request/Response Types
+// ============================================
+
+/** A permission request sent to the UI for user approval before tool execution. */
+export interface PermissionRequest {
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  toolUseId: string;
+}
+
+/** The user's response to a permission request. */
+export interface PermissionResponse {
+  allowed: boolean;
+}
+
+// ============================================
 // Agent Lib — Low-level engine interface
 // ============================================
 
@@ -33,6 +49,146 @@ export interface AgentLibFeatures {
   nativeResume: boolean;
 }
 
+// ============================================
+// Hook Input/Output Types (aligned with SDK hook types)
+// ============================================
+
+/** Input for PreToolUse hooks — called before a tool executes. */
+export interface PreToolUseHookInput {
+  hookEventName: 'PreToolUse';
+  toolName: string;
+  toolInput: unknown;
+  toolUseId: string;
+}
+
+/** Output for PreToolUse hooks — can allow, deny, or modify tool input. */
+export interface PreToolUseHookOutput {
+  decision?: 'allow' | 'deny';
+  reason?: string;
+  updatedInput?: Record<string, unknown>;
+  additionalContext?: string;
+}
+
+/** Input for PostToolUse hooks — called after a tool completes. */
+export interface PostToolUseHookInput {
+  hookEventName: 'PostToolUse';
+  toolName: string;
+  toolInput: unknown;
+  toolResponse: unknown;
+  toolUseId: string;
+}
+
+/** Output for PostToolUse hooks. */
+export interface PostToolUseHookOutput {
+  additionalContext?: string;
+}
+
+/** Input for PostToolUseFailure hooks — called when a tool fails. */
+export interface PostToolUseFailureHookInput {
+  hookEventName: 'PostToolUseFailure';
+  toolName: string;
+  toolInput: unknown;
+  error: string;
+  toolUseId: string;
+}
+
+/** Output for PostToolUseFailure hooks. */
+export interface PostToolUseFailureHookOutput {
+  additionalContext?: string;
+}
+
+/** Input for Notification hooks — called when the agent emits a notification. */
+export interface NotificationHookInput {
+  hookEventName: 'Notification';
+  message: string;
+  title?: string;
+  notificationType: string;
+}
+
+/** Output for Notification hooks. */
+export interface NotificationHookOutput {
+  additionalContext?: string;
+}
+
+/** Input for Stop hooks — called when the agent stops. */
+export interface StopHookInput {
+  hookEventName: 'Stop';
+  stopHookActive: boolean;
+}
+
+/** Input for SubagentStart hooks — called when a subagent starts. */
+export interface SubagentStartHookInput {
+  hookEventName: 'SubagentStart';
+  agentId: string;
+  agentType: string;
+}
+
+/** Output for SubagentStart hooks. */
+export interface SubagentStartHookOutput {
+  additionalContext?: string;
+}
+
+/** Input for SubagentStop hooks — called when a subagent stops. */
+export interface SubagentStopHookInput {
+  hookEventName: 'SubagentStop';
+  stopHookActive: boolean;
+  agentId: string;
+  agentType: string;
+}
+
+/** Input for PreCompact hooks — called before context compaction. */
+export interface PreCompactHookInput {
+  hookEventName: 'PreCompact';
+  trigger: 'manual' | 'auto';
+  customInstructions: string | null;
+}
+
+export type AgentLibHookInput =
+  | PreToolUseHookInput
+  | PostToolUseHookInput
+  | PostToolUseFailureHookInput
+  | NotificationHookInput
+  | StopHookInput
+  | SubagentStartHookInput
+  | SubagentStopHookInput
+  | PreCompactHookInput;
+
+export type AgentLibHookOutput =
+  | PreToolUseHookOutput
+  | PostToolUseHookOutput
+  | PostToolUseFailureHookOutput
+  | NotificationHookOutput
+  | SubagentStartHookOutput
+  | void;
+
+/**
+ * Full hooks interface for agent execution.
+ * Each hook type maps to a callback that receives the hook-specific input
+ * and optionally returns hook-specific output.
+ *
+ * PreToolUse uses the legacy signature for backward compatibility with
+ * the existing sandbox guard integration.
+ */
+export interface AgentLibHooks {
+  /** Called before each tool execution. Return a decision to allow/block. */
+  preToolUse?: (toolName: string, toolInput: Record<string, unknown>) =>
+    { decision: 'block' | 'allow'; reason?: string } | undefined;
+  /** Called after a tool completes successfully. */
+  postToolUse?: (input: PostToolUseHookInput) => PostToolUseHookOutput | void;
+  /** Called after a tool fails. */
+  postToolUseFailure?: (input: PostToolUseFailureHookInput) => PostToolUseFailureHookOutput | void;
+  /** Called when the agent emits a notification. */
+  notification?: (input: NotificationHookInput) => NotificationHookOutput | void;
+  /** Called when the agent stops. */
+  stop?: (input: StopHookInput) => void;
+  /** Called when a subagent starts. */
+  subagentStart?: (input: SubagentStartHookInput) => SubagentStartHookOutput | void;
+  /** Called when a subagent stops. */
+  subagentStop?: (input: SubagentStopHookInput) => void;
+  /** Called before context compaction. */
+  preCompact?: (input: PreCompactHookInput) => void;
+}
+
 /** Preset-based system prompt: uses the SDK's built-in prompt with optional appended instructions. */
 export interface SystemPromptPreset {
   type: 'preset';
@@ -53,6 +209,7 @@ export interface AgentLibRunOptions {
   readOnly: boolean;
   /** Tool names to completely remove from the model's context (cannot be used at all). */
   disallowedTools?: string[];
+  hooks?: AgentLibHooks;
   images?: Array<{ base64: string; mediaType: string }>;
   sessionId?: string;
   resumeSession?: boolean;
@@ -81,6 +238,8 @@ export interface AgentLibCallbacks {
   onStreamEvent?: (event: { type: string; [key: string]: unknown }) => void;
   /** Called once the prompt push handle is ready, allowing the caller to inject messages mid-stream. */
   onPromptHandleReady?: (handle: PromptPushHandle) => void;
+  /** Called when a tool needs user permission approval. Blocks tool execution until resolved. */
+  onPermissionRequest?: (request: PermissionRequest) => Promise<PermissionResponse>;
 }
 
 export interface AgentLibResult {

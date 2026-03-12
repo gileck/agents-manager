@@ -14,8 +14,8 @@ based on a review of the official SDK documentation against our current implemen
 | 7 | System Prompt Customization | 1 | DONE | — |
 | 1 | Partial Message Streaming | 1 | DONE | — |
 | 2 | Streaming Input (AsyncGenerator) | 2 | DONE | — |
-| 3 | Interactive Tool Approval (canUseTool) | 3 | NOT STARTED | #2 |
-| 8 | Full Hooks System | 3 | NOT STARTED | #3 |
+| 3 | Interactive Tool Approval (canUseTool) | 3 | DONE | #2 |
+| 8 | Full Hooks System | 3 | DONE | #3 |
 | 5 | Subagent Definitions | 4 | NOT STARTED | #8 |
 | 11 | Slash Commands | 5 | NOT STARTED | #2 |
 | 13 | Plugins | 5 | NOT STARTED | #7 |
@@ -201,20 +201,20 @@ Also enables `AskUserQuestion` structured questions.
 
 #### Phase 3 — Todo List
 
-- [ ] Rebase worktree branch from main
-- [ ] **#3** Add `onPermissionRequest` async callback to `AgentLibCallbacks` in `agent-lib.ts`
-- [ ] **#3** Implement `canUseTool` in `claude-code-lib.ts` — route through sandbox guard, then callback
-- [ ] **#3** Add `permission_request` and `permission_response` message types to `shared/types.ts`
-- [ ] **#3** Add pending-request map with promise resolvers in `chat-agent-service.ts`
-- [ ] **#3** Add `POST /sessions/:id/permission-response` endpoint in `daemon/routes/chat.ts`
-- [ ] **#3** Renderer: permission request UI (tool name, input preview, allow/deny buttons)
-- [ ] **#3** Handle `AskUserQuestion` tool as a structured question in the permission flow
-- [ ] **#8** Expand `hooks` type in `agent-lib.ts` with PostToolUse, Stop, Notification, SubagentStart/Stop, PreCompact
-- [ ] **#8** Transform hooks into SDK format with matchers in `claude-code-lib.ts`
-- [ ] **#8** Add default hooks in `chat-agent-service.ts` (PostToolUse audit, Notification forwarding, SubagentStop tracking)
-- [ ] **#8** Add `notification` message type to `shared/types.ts`
-- [ ] **#8** Renderer: display notification messages in chat thread
-- [ ] Run `yarn checks` — fix any TypeScript / ESLint errors
+- [x] Rebase worktree branch from main
+- [x] **#3** Add `onPermissionRequest` async callback + `PermissionRequest`/`PermissionResponse` types to `agent-lib.ts`
+- [x] **#3** Implement `canUseTool` in `claude-code-lib.ts` — sandbox guard first, then callback
+- [x] **#3** Add `permission_request` and `permission_response` message types to `shared/types.ts`
+- [x] **#3** Add pending-request map with promise resolvers + 5-min timeout in `chat-agent-service.ts`
+- [x] **#3** Add `POST /sessions/:id/permission-response` endpoint in `daemon/routes/chat.ts`
+- [x] **#3** Renderer: permission request card with Allow/Deny buttons in `ChatMessageList.tsx`
+- [x] **#3** Full transport layer: WS channel, IPC channels, API client, web shim, preload
+- [x] **#8** Expand `AgentLibHooks` in `agent-lib.ts` with all SDK hook types
+- [x] **#8** `buildSdkHooks()` in `claude-code-lib.ts` transforms hooks to SDK `HookCallbackMatcher[]` format
+- [x] **#8** Default hooks in `chat-agent-service.ts`: PostToolUse audit, Notification forwarding, Stop logging
+- [x] **#8** Add `notification` message type to `shared/types.ts`
+- [x] **#8** Renderer: display notification + permission messages in chat thread
+- [x] Run `yarn checks` — fix any TypeScript / ESLint errors
 - [ ] Manual smoke test: trigger tool approval flow, verify allow/deny, verify hooks fire
 - [ ] **Review** — review changes, update status to DONE, merge to main
 

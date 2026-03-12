@@ -203,6 +203,8 @@ const IPC_CHANNELS = {
   CHAT_TRACK_TASK: 'chat:track-task',
   CHAT_ANSWER_QUESTION: 'chat:answer-question',
   SCREENSHOT_SAVE: 'screenshot:save',
+  CHAT_PERMISSION_REQUEST: 'chat:permission-request',
+  CHAT_PERMISSION_RESPONSE: 'chat:permission-response',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -484,6 +486,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COSTS),
     chatLiveMessages: (sessionId: string): Promise<AgentChatMessage[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIVE_MESSAGES, sessionId),
+    permissionResponse: (sessionId: string, requestId: string, allowed: boolean): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_PERMISSION_RESPONSE, sessionId, requestId, allowed),
     trackedTasks: (sessionId: string): Promise<Task[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_TRACKED_TASKS, sessionId),
     trackTask: (sessionId: string, taskId: string): Promise<void> =>
@@ -675,6 +679,11 @@ const api = {
       const listener = (_: IpcRendererEvent, taskId: string, task: Task) => callback(taskId, task);
       ipcRenderer.on(IPC_CHANNELS.TASK_STATUS_CHANGED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_STATUS_CHANGED, listener);
+    },
+    chatPermissionRequest: (callback: (sessionId: string, request: AgentChatMessage) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, request: AgentChatMessage) => callback(sessionId, request);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_PERMISSION_REQUEST, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_PERMISSION_REQUEST, listener);
     },
   },
 };

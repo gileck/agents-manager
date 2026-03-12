@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, ChevronDown, Play, AlertTriangle } from 'lucide-react';
-import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion } from '../../../shared/types';
+import { Pencil, ChevronDown, Play, AlertTriangle, ShieldCheck, ShieldX, Bell } from 'lucide-react';
+import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
@@ -15,10 +15,11 @@ interface ChatMessageListProps {
   isRunning?: boolean;
   onEditMessage?: (text: string) => void;
   onResume?: (text: string) => void;
+  onPermissionResponse?: (requestId: string, allowed: boolean) => void;
 }
 
 // Message types that are "leaf" nodes rendered directly in the timeline
-const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta']);
+const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta', 'permission_request', 'permission_response', 'notification']);
 // Message types that belong inside a ThinkingGroup (internal processing noise)
 const GROUP_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
 
@@ -54,7 +55,7 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
   return segments;
 }
 
-export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }: ChatMessageListProps) {
+export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, onPermissionResponse }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -300,10 +301,71 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
           );
         }
       }
+      else if (msg.type === 'permission_request') {
+        const permReq = msg as AgentChatMessagePermissionRequest;
+        // Check if this request has already been responded to
+        const hasResponse = messages.some(m => m.type === 'permission_response' && (m as AgentChatMessagePermissionResponse).requestId === permReq.requestId);
+        const responseMsg = hasResponse
+          ? messages.find(m => m.type === 'permission_response' && (m as AgentChatMessagePermissionResponse).requestId === permReq.requestId) as AgentChatMessagePermissionResponse | undefined
+          : undefined;
+
+        nodes.push(
+          <div key={i} className="my-3 border rounded-lg overflow-hidden" style={{ borderColor: '#f59e0b' }}>
+            <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium" style={{ backgroundColor: 'rgba(245, 158, 11, 0.08)', color: '#f59e0b' }}>
+              <ShieldCheck className="h-4 w-4" />
+              Tool Permission Request
+            </div>
+            <div className="px-3 py-2 text-sm">
+              <p className="font-medium text-foreground">{permReq.toolName}</p>
+              <pre className="mt-1 text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto bg-muted/30 rounded p-2">
+                {typeof permReq.toolInput === 'string' ? permReq.toolInput : JSON.stringify(permReq.toolInput, null, 2).slice(0, 2000)}
+              </pre>
+            </div>
+            {hasResponse ? (
+              <div className={`flex items-center gap-2 px-3 py-2 text-xs font-medium ${responseMsg?.allowed ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20'}`}>
+                {responseMsg?.allowed ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldX className="h-3.5 w-3.5" />}
+                {responseMsg?.allowed ? 'Allowed' : 'Denied'}
+              </div>
+            ) : (
+              <div className="flex gap-2 px-3 py-2 border-t border-border/50">
+                <button
+                  type="button"
+                  onClick={() => onPermissionResponse?.(permReq.requestId, true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+                >
+                  <ShieldCheck className="h-3 w-3" />
+                  Allow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onPermissionResponse?.(permReq.requestId, false)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  <ShieldX className="h-3 w-3" />
+                  Deny
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      } else if (msg.type === 'permission_response') {
+        // Standalone permission_response (rendered inline with the request above — skip duplicate)
+      } else if (msg.type === 'notification') {
+        const notif = msg as AgentChatMessageNotification;
+        nodes.push(
+          <div key={i} className="flex items-start gap-2 my-2 px-3 py-2 text-sm rounded-lg border" style={{ borderColor: 'hsl(var(--primary) / 0.3)', backgroundColor: 'hsl(var(--primary) / 0.04)' }}>
+            <Bell className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+            <div>
+              {notif.title && <p className="font-medium text-foreground">{notif.title}</p>}
+              <p className="text-muted-foreground">{notif.body}</p>
+            </div>
+          </div>
+        );
+      }
       // usage messages are skipped
     }
     return nodes;
-  }, [segments, messages, expandedTools, toggleTool, onEditMessage, onResume, isRunning, navigate, answerQuestion]);
+  }, [segments, messages, expandedTools, toggleTool, onEditMessage, onResume, onPermissionResponse, isRunning, navigate, answerQuestion]);
 
   return (
     <div className="relative flex-1 min-h-0">

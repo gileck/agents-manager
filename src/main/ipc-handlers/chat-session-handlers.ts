@@ -93,4 +93,8 @@ export function registerChatSessionHandlers(api: ApiClient): void {
   registerIpcHandler(IPC_CHANNELS.CHAT_ANSWER_QUESTION, async (_, sessionId: string, questionId: string, answers: Record<string, string>) => {
     return api.chat.answerQuestion(sessionId, questionId, answers);
   });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_PERMISSION_RESPONSE, async (_, sessionId: string, requestId: string, allowed: boolean) => {
+    return api.chat.sendPermissionResponse(sessionId, requestId, allowed);
+  });
 }

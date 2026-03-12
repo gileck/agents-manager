@@ -201,6 +201,7 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       summarize: (sessionId) => api.chat.summarizeMessages(sessionId) as Promise<never>,
       costs: () => api.chat.getCosts() as Promise<never>,
       chatLiveMessages: (sessionId) => api.chat.getLiveMessages(sessionId) as Promise<never>,
+      permissionResponse: (sessionId, requestId, allowed) => api.chat.sendPermissionResponse(sessionId, requestId, allowed),
       trackedTasks: (sessionId) => api.chat.getTrackedTasks(sessionId),
       trackTask: (sessionId, taskId) => api.chat.trackTask(sessionId, taskId),
       answerQuestion: (sessionId, questionId, answers) => api.chat.answerQuestion(sessionId, questionId, answers),
@@ -341,6 +342,10 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       taskStatusChanged: (callback) =>
         ws.subscribeGlobal(WS_CHANNELS.TASK_STATUS_CHANGED, (taskId, data) =>
           callback(taskId as string, data as Task)),
+
+      chatPermissionRequest: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.CHAT_PERMISSION_REQUEST, (sessionId, data) =>
+          callback(sessionId as string, data as AgentChatMessage)),
     },
   };
 }

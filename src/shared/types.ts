@@ -755,6 +755,31 @@ export interface AgentChatMessageStreamDelta {
   timestamp: number;
 }
 
+/** Permission request — sent to UI when a tool needs user approval before execution. */
+export interface AgentChatMessagePermissionRequest {
+  type: 'permission_request';
+  requestId: string;
+  toolName: string;
+  toolInput: unknown;
+  timestamp: number;
+}
+
+/** Permission response — sent from UI back to service to approve/deny a tool. */
+export interface AgentChatMessagePermissionResponse {
+  type: 'permission_response';
+  requestId: string;
+  allowed: boolean;
+  timestamp: number;
+}
+
+/** Notification from the agent (e.g., progress updates, warnings). */
+export interface AgentChatMessageNotification {
+  type: 'notification';
+  title?: string;
+  body: string;
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
@@ -767,7 +792,10 @@ export type AgentChatMessage =
   | AgentChatMessageCompactBoundary
   | AgentChatMessageCompacting
   | AgentChatMessageAskUserQuestion
-  | AgentChatMessageStreamDelta;
+  | AgentChatMessageStreamDelta
+  | AgentChatMessagePermissionRequest
+  | AgentChatMessagePermissionResponse
+  | AgentChatMessageNotification;
 
 export interface AgentConfig {
   model?: string;
@@ -1142,7 +1170,8 @@ export interface ChatSessionCreateInput {
 export type ChatAgentEvent =
   | { type: 'text'; text: string }
   | { type: 'message'; message: AgentChatMessage }
-  | { type: 'stream_delta'; delta: AgentChatMessageStreamDelta };
+  | { type: 'stream_delta'; delta: AgentChatMessageStreamDelta }
+  | { type: 'permission_request'; request: AgentChatMessagePermissionRequest };
 
 export interface ChatSendOptions {
   systemPrompt: string | { type: 'preset'; preset: 'claude_code'; append?: string };

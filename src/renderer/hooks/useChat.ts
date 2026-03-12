@@ -139,6 +139,18 @@ export function useChat(sessionId: string | null) {
     return () => { unsubscribe(); };
   }, [sessionId]);
 
+  // Subscribe to permission request events
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubscribe = window.api.on.chatPermissionRequest((incomingSessionId: string, request: AgentChatMessage) => {
+      if (incomingSessionId !== sessionId) return;
+      setStreamingMessages((prev) => [...prev, request]);
+    });
+
+    return () => { unsubscribe(); };
+  }, [sessionId]);
+
   const doSend = useCallback(async (message: string, images?: ChatImage[]) => {
     if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
 
@@ -322,6 +334,20 @@ export function useChat(sessionId: string | null) {
     return turns;
   }, [dbMessages]);
 
+  const respondToPermission = useCallback(async (requestId: string, allowed: boolean) => {
+    if (!sessionId) return;
+    try {
+      await window.api.chat.permissionResponse(sessionId, requestId, allowed);
+      // Update the permission_request message in streaming messages to show the response
+      setStreamingMessages((prev) => [
+        ...prev,
+        { type: 'permission_response' as const, requestId, allowed, timestamp: Date.now() },
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [sessionId]);
+
   const cancelQueuedMessage = useCallback(() => setQueuedMessage(null), []);
 
   const clearError = useCallback(() => setError(null), []);
@@ -358,5 +384,6 @@ export function useChat(sessionId: string | null) {
     summarizeChat,
     tokenUsage,
     perTurnUsage,
+    respondToPermission,
   };
 }

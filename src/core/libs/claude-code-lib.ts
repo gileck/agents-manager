@@ -1,5 +1,5 @@
 import type { AgentChatMessage } from '../../shared/types';
-import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption, ModelTokenUsage, PromptPushHandle } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption, ModelTokenUsage, PromptPushHandle, AgentLibHooks } from '../interfaces/agent-lib';
 import { SandboxGuard } from '../services/sandbox-guard';
 import { getAppLogger } from '../services/app-logger';
 
@@ -183,7 +183,7 @@ export class ClaudeCodeLib implements IAgentLib {
   }
 
   async execute(runId: string, options: AgentLibRunOptions, callbacks: AgentLibCallbacks): Promise<AgentLibResult> {
-    const { onOutput, onLog, onMessage, onUserToolResult, onStreamEvent } = callbacks;
+    const { onOutput, onLog, onMessage, onUserToolResult, onStreamEvent, onPermissionRequest } = callbacks;
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
 
     const query = await this.loadQuery();
@@ -269,6 +269,47 @@ export class ClaudeCodeLib implements IAgentLib {
       return { behavior: 'allow' };
     };
 
+    // Build mergedPreToolUse: combines sandbox guard + caller's preToolUse hook
+    const callerPreToolUse = options.hooks?.preToolUse;
+    const mergedPreToolUse = (toolName: string, toolInput: Record<string, unknown>): { decision: 'block' | 'allow'; reason?: string } | undefined => {
+      // Sandbox guard runs first
+      const guardResult = sandboxGuard.evaluateToolCall(toolName, toolInput);
+      if (!guardResult.allow) {
+        return { decision: 'block', reason: guardResult.reason ?? 'Blocked by sandbox guard' };
+      }
+      // Then delegate to caller's preToolUse hook if provided
+      if (callerPreToolUse) {
+        return callerPreToolUse(toolName, toolInput);
+      }
+      return undefined;
+    };
+
+    // Build canUseTool callback: runs sandbox guard first, then delegates to onPermissionRequest
+    const canUseTool = onPermissionRequest
+      ? async (toolName: string, input: Record<string, unknown>, canUseToolOptions: { signal: AbortSignal; toolUseID: string }) => {
+          // First check the sandbox guard and caller hooks
+          const guardResult = mergedPreToolUse(toolName, input);
+          if (guardResult?.decision === 'block') {
+            return { behavior: 'deny' as const, message: guardResult.reason ?? 'Blocked by sandbox guard', toolUseID: canUseToolOptions.toolUseID };
+          }
+          // Sandbox guard allows it — ask the user via onPermissionRequest
+          try {
+            const response = await onPermissionRequest({ toolName, toolInput: input, toolUseId: canUseToolOptions.toolUseID });
+            if (response.allowed) {
+              return { behavior: 'allow' as const, toolUseID: canUseToolOptions.toolUseID };
+            }
+            return { behavior: 'deny' as const, message: 'Denied by user', toolUseID: canUseToolOptions.toolUseID };
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            log(`onPermissionRequest failed for ${toolName}, denying: ${errMsg}`);
+            return { behavior: 'deny' as const, message: `Permission check failed: ${errMsg}`, toolUseID: canUseToolOptions.toolUseID };
+          }
+        }
+      : undefined;
+
+    // Build SDK hooks from our AgentLibHooks
+    const sdkHooks = this.buildSdkHooks(options.hooks, mergedPreToolUse, log, !!canUseTool);
+
     // Build SDK prompt as an async generator wrapping the initial message.
     // This enables mid-stream message injection via the PromptPushHandle.
     // Conversation history is handled via native SDK session resume (not manual replay).
@@ -345,6 +386,7 @@ export class ClaudeCodeLib implements IAgentLib {
           ...(options.outputFormat ? { outputFormat: options.outputFormat } : {}),
           ...(options.disallowedTools?.length ? { disallowedTools: options.disallowedTools } : {}),
           canUseTool: mergedCanUseTool,
+          ...(Object.keys(sdkHooks).length > 0 ? { hooks: sdkHooks } : {}),
           ...sessionOptions,
           ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
           ...(options.maxBudgetUsd != null ? { maxBudgetUsd: options.maxBudgetUsd } : {}),
@@ -611,6 +653,210 @@ export class ClaudeCodeLib implements IAgentLib {
     state.promptPushHandle?.close();
     state.abortController.abort();
     this.runningStates.delete(runId);
+  }
+
+  /**
+   * Transform our AgentLibHooks interface into the SDK's hook format.
+   * The SDK expects: `Partial<Record<HookEvent, HookCallbackMatcher[]>>`
+   * where each HookCallbackMatcher has { matcher?: string; hooks: HookCallback[]; timeout?: number }.
+   *
+   * When canUseTool is NOT provided, PreToolUse hooks handle the sandbox guard.
+   * When canUseTool IS provided, sandbox guard runs inside canUseTool instead.
+   */
+  private buildSdkHooks(
+    hooks: AgentLibHooks | undefined,
+    mergedPreToolUse: (toolName: string, toolInput: Record<string, unknown>) => { decision: 'block' | 'allow'; reason?: string } | undefined,
+    log: (msg: string, data?: Record<string, unknown>) => void,
+    hasCanUseTool: boolean,
+  ): Record<string, unknown> {
+    const sdkHooks: Record<string, Array<{ hooks: Array<(input: Record<string, unknown>, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<Record<string, unknown>>> }>> = {};
+
+    // PreToolUse: always include sandbox guard when canUseTool is not provided
+    // (when canUseTool is provided, the guard runs inside canUseTool instead)
+    const preToolUseCallbacks: Array<(input: Record<string, unknown>, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<Record<string, unknown>>> = [];
+
+    // Only add PreToolUse sandbox guard as hook when canUseTool is NOT being used
+    if (!hasCanUseTool) {
+      preToolUseCallbacks.push(async (input: Record<string, unknown>) => {
+        const toolName = input.tool_name as string;
+        const toolInput = input.tool_input as Record<string, unknown>;
+        const result = mergedPreToolUse(toolName, toolInput);
+        if (result?.decision === 'block') {
+          return {
+            decision: 'block',
+            reason: result.reason,
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'deny',
+              permissionDecisionReason: result.reason,
+            },
+          };
+        }
+        return { continue: true };
+      });
+    }
+
+    if (preToolUseCallbacks.length > 0) {
+      sdkHooks.PreToolUse = [{ hooks: preToolUseCallbacks }];
+    }
+
+    // PostToolUse hook
+    if (hooks?.postToolUse) {
+      const postToolUseHandler = hooks.postToolUse;
+      sdkHooks.PostToolUse = [{
+        hooks: [async (input: Record<string, unknown>) => {
+          try {
+            const result = postToolUseHandler({
+              hookEventName: 'PostToolUse',
+              toolName: input.tool_name as string,
+              toolInput: input.tool_input,
+              toolResponse: input.tool_response,
+              toolUseId: input.tool_use_id as string,
+            });
+            if (result?.additionalContext) {
+              return {
+                continue: true,
+                hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: result.additionalContext },
+              };
+            }
+          } catch (err) {
+            log(`PostToolUse hook error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          return { continue: true };
+        }],
+      }];
+    }
+
+    // PostToolUseFailure hook
+    if (hooks?.postToolUseFailure) {
+      const failureHandler = hooks.postToolUseFailure;
+      sdkHooks.PostToolUseFailure = [{
+        hooks: [async (input: Record<string, unknown>) => {
+          try {
+            const result = failureHandler({
+              hookEventName: 'PostToolUseFailure',
+              toolName: input.tool_name as string,
+              toolInput: input.tool_input,
+              error: input.error as string,
+              toolUseId: input.tool_use_id as string,
+            });
+            if (result?.additionalContext) {
+              return {
+                continue: true,
+                hookSpecificOutput: { hookEventName: 'PostToolUseFailure', additionalContext: result.additionalContext },
+              };
+            }
+          } catch (err) {
+            log(`PostToolUseFailure hook error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          return { continue: true };
+        }],
+      }];
+    }
+
+    // Notification hook
+    if (hooks?.notification) {
+      const notifHandler = hooks.notification;
+      sdkHooks.Notification = [{
+        hooks: [async (input: Record<string, unknown>) => {
+          try {
+            notifHandler({
+              hookEventName: 'Notification',
+              message: input.message as string,
+              title: input.title as string | undefined,
+              notificationType: input.notification_type as string,
+            });
+          } catch (err) {
+            log(`Notification hook error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          return { continue: true };
+        }],
+      }];
+    }
+
+    // Stop hook
+    if (hooks?.stop) {
+      const stopHandler = hooks.stop;
+      sdkHooks.Stop = [{
+        hooks: [async (input: Record<string, unknown>) => {
+          try {
+            stopHandler({
+              hookEventName: 'Stop',
+              stopHookActive: input.stop_hook_active as boolean,
+            });
+          } catch (err) {
+            log(`Stop hook error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          return { continue: true };
+        }],
+      }];
+    }
+
+    // SubagentStart hook
+    if (hooks?.subagentStart) {
+      const startHandler = hooks.subagentStart;
+      sdkHooks.SubagentStart = [{
+        hooks: [async (input: Record<string, unknown>) => {
+          try {
+            const result = startHandler({
+              hookEventName: 'SubagentStart',
+              agentId: input.agent_id as string,
+              agentType: input.agent_type as string,
+            });
+            if (result?.additionalContext) {
+              return {
+                continue: true,
+                hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: result.additionalContext },
+              };
+            }
+          } catch (err) {
+            log(`SubagentStart hook error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          return { continue: true };
+        }],
+      }];
+    }
+
+    // SubagentStop hook
+    if (hooks?.subagentStop) {
+      const stopHandler = hooks.subagentStop;
+      sdkHooks.SubagentStop = [{
+        hooks: [async (input: Record<string, unknown>) => {
+          try {
+            stopHandler({
+              hookEventName: 'SubagentStop',
+              stopHookActive: input.stop_hook_active as boolean,
+              agentId: input.agent_id as string,
+              agentType: input.agent_type as string,
+            });
+          } catch (err) {
+            log(`SubagentStop hook error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          return { continue: true };
+        }],
+      }];
+    }
+
+    // PreCompact hook
+    if (hooks?.preCompact) {
+      const compactHandler = hooks.preCompact;
+      sdkHooks.PreCompact = [{
+        hooks: [async (input: Record<string, unknown>) => {
+          try {
+            compactHandler({
+              hookEventName: 'PreCompact',
+              trigger: input.trigger as 'manual' | 'auto',
+              customInstructions: input.custom_instructions as string | null,
+            });
+          } catch (err) {
+            log(`PreCompact hook error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          return { continue: true };
+        }],
+      }];
+    }
+
+    return sdkHooks;
   }
 
   private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<SdkUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {

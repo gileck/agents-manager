@@ -58,6 +58,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     summarizeChat,
     tokenUsage,
     perTurnUsage,
+    respondToPermission,
   } = useChat(currentSessionId);
 
   const [showSidebar, setShowSidebar] = useState(false);
@@ -250,6 +251,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               permissionMode={selectedPermissionMode}
               onPermissionModeChange={handlePermissionModeChange}
               sessionId={currentSessionId}
+              onPermissionResponse={respondToPermission}
               emptyState={(
                 <div className="text-center text-muted-foreground/80 py-20">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border border-border/70 bg-card/65 mb-5">

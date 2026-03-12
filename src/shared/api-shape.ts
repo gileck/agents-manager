@@ -235,6 +235,7 @@ export interface ApiShape {
     summarize(sessionId: string): Promise<ChatMessage[]>;
     costs(): Promise<{ inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; totalCostUsd: number }>;
     chatLiveMessages(sessionId: string): Promise<AgentChatMessage[]>;
+    permissionResponse(sessionId: string, requestId: string, allowed: boolean): Promise<void>;
     trackedTasks(sessionId: string): Promise<Task[]>;
     trackTask(sessionId: string, taskId: string): Promise<void>;
     answerQuestion(sessionId: string, questionId: string, answers: Record<string, string>): Promise<void>;
@@ -320,5 +321,6 @@ export interface ApiShape {
     devServerLog(callback: (taskId: string, data: { line: string }) => void): () => void;
     devServerStatus(callback: (taskId: string, info: DevServerInfo) => void): () => void;
     taskStatusChanged(callback: (taskId: string, task: Task) => void): () => void;
+    chatPermissionRequest(callback: (sessionId: string, request: AgentChatMessage) => void): () => void;
   };
 }

@@ -26,6 +26,7 @@ interface AgentChatProps {
   onPermissionModeChange?: (mode: PermissionMode) => void;
   inputRef?: React.Ref<HTMLTextAreaElement>;
   sessionId?: string | null;
+  onPermissionResponse?: (requestId: string, allowed: boolean) => void;
 }
 
 export function AgentChat({
@@ -49,6 +50,7 @@ export function AgentChat({
   onPermissionModeChange,
   inputRef,
   sessionId,
+  onPermissionResponse,
 }: AgentChatProps) {
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
 
@@ -91,7 +93,7 @@ export function AgentChat({
             {emptyState}
           </div>
         ) : (
-          <ChatMessageList messages={messages} isRunning={isRunning} onEditMessage={handleEditMessage} onResume={handleResume} />
+          <ChatMessageList messages={messages} isRunning={isRunning} onEditMessage={handleEditMessage} onResume={handleResume} onPermissionResponse={onPermissionResponse} />
         )}
         <TaskStatusBar sessionId={sessionId ?? null} />
         <ChatInput

@@ -6,7 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
-import type { AgentLibCallbacks, PromptPushHandle } from '../interfaces/agent-lib';
+import type { AgentLibCallbacks, PromptPushHandle, PermissionRequest, PermissionResponse } from '../interfaces/agent-lib';
 import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type {
   SDKMessage,
@@ -137,6 +137,9 @@ interface InjectedMessage {
 const DEFAULT_AGENT_LIB = 'claude-code';
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
+/** Timeout for permission requests — auto-deny if user doesn't respond within 5 minutes. */
+const PERMISSION_TIMEOUT_MS = 5 * 60 * 1000;
+
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   /** Prompt push handles for running sessions — allows mid-stream message injection. */
@@ -151,6 +154,8 @@ export class ChatAgentService {
     reject: (err: Error) => void;
     sessionId: string;
   }>();
+  /** Pending permission requests: requestId -> resolver. The promise blocks tool execution until resolved. */
+  private pendingPermissionRequests = new Map<string, { resolve: (response: PermissionResponse) => void; timer: ReturnType<typeof setTimeout> }>();
 
   constructor(
     private chatMessageStore: IChatMessageStore,
@@ -555,6 +560,9 @@ export class ChatAgentService {
       pending.reject(new Error('Agent stopped by user'));
     }
 
+    // Auto-deny all pending permission requests for this session
+    this.clearPendingPermissionRequests(sessionId);
+
     // Close the prompt push handle so the generator terminates cleanly
     const pushHandle = this.promptPushHandles.get(sessionId);
     if (pushHandle) {
@@ -603,6 +611,39 @@ export class ChatAgentService {
 
     this.pendingQuestions.delete(questionId);
     pending.resolve(answers);
+  }
+
+  /**
+   * Resolves a pending permission request from the UI.
+   * This unblocks the tool execution that is waiting for user approval.
+   */
+  resolvePermissionRequest(requestId: string, allowed: boolean): boolean {
+    const pending = this.pendingPermissionRequests.get(requestId);
+    if (!pending) {
+      getAppLogger().warn('ChatAgentService', `No pending permission request found for id: ${requestId}`);
+      return false;
+    }
+    clearTimeout(pending.timer);
+    pending.resolve({ allowed });
+    this.pendingPermissionRequests.delete(requestId);
+    getAppLogger().info('ChatAgentService', `Permission request ${requestId} resolved: ${allowed ? 'allowed' : 'denied'}`);
+    return true;
+  }
+
+  /**
+   * Clears all pending permission requests for a session (e.g., when the agent stops).
+   * Auto-denies all pending requests so they don't hang forever.
+   */
+  private clearPendingPermissionRequests(sessionId: string): void {
+    const prefix = `${sessionId}:`;
+    for (const [requestId, pending] of this.pendingPermissionRequests.entries()) {
+      if (requestId.startsWith(prefix)) {
+        clearTimeout(pending.timer);
+        pending.resolve({ allowed: false });
+        this.pendingPermissionRequests.delete(requestId);
+        getAppLogger().info('ChatAgentService', `Auto-denied permission request ${requestId} (session cleanup)`);
+      }
+    }
   }
 
   async getMessages(sessionId: string): Promise<ChatMessage[]> {
@@ -944,6 +985,61 @@ export class ChatAgentService {
         disallowedTools = [...WRITE_TOOL_NAMES, ...BASH_TOOL_NAMES];
       }
 
+      // Build onPermissionRequest callback that surfaces tool approval to the UI
+      const onPermissionRequest = (effectiveMode === 'full_access') ? undefined : async (request: PermissionRequest): Promise<PermissionResponse> => {
+        const requestId = `${sessionId}:${randomUUID()}`;
+        getAppLogger().info('ChatAgentService', `Permission request ${requestId}: tool=${request.toolName}`, { toolInput: JSON.stringify(request.toolInput).slice(0, 500) });
+
+        // Broadcast the permission request to the UI via WebSocket
+        const permissionMsg: AgentChatMessage = {
+          type: 'permission_request',
+          requestId,
+          toolName: request.toolName,
+          toolInput: request.toolInput,
+          timestamp: Date.now(),
+        };
+        emitMessage(permissionMsg);
+        emitEvent({ type: 'permission_request', request: permissionMsg });
+
+        // Wait for the user to respond (or timeout)
+        return new Promise<PermissionResponse>((resolve) => {
+          const timer = setTimeout(() => {
+            this.pendingPermissionRequests.delete(requestId);
+            getAppLogger().info('ChatAgentService', `Permission request ${requestId} timed out — auto-denying`);
+            // Emit a denial response message so the UI can update
+            emitMessage({ type: 'permission_response', requestId, allowed: false, timestamp: Date.now() });
+            resolve({ allowed: false });
+          }, PERMISSION_TIMEOUT_MS);
+
+          this.pendingPermissionRequests.set(requestId, { resolve, timer });
+        });
+      };
+
+      // Build hooks for the agent lib
+      const postToolUseHook = (input: import('../interfaces/agent-lib').PostToolUseHookInput) => {
+        getAppLogger().debug('ChatAgentService', `PostToolUse: ${input.toolName}`, {
+          toolUseId: input.toolUseId,
+          responsePreview: typeof input.toolResponse === 'string'
+            ? input.toolResponse.slice(0, 200)
+            : JSON.stringify(input.toolResponse).slice(0, 200),
+        });
+      };
+
+      const notificationHook = (input: import('../interfaces/agent-lib').NotificationHookInput) => {
+        getAppLogger().info('ChatAgentService', `Agent notification: ${input.title ?? ''} ${input.message}`);
+        // Forward notification to the UI as a message event
+        emitMessage({
+          type: 'notification',
+          title: input.title,
+          body: input.message,
+          timestamp: Date.now(),
+        });
+      };
+
+      const stopHook = (input: import('../interfaces/agent-lib').StopHookInput) => {
+        getAppLogger().info('ChatAgentService', `Agent stop hook: stopHookActive=${input.stopHookActive}`);
+      };
+
       // Build callbacks
       const callbacks: AgentLibCallbacks = {
         onOutput: (chunk: string) => {
@@ -977,6 +1073,7 @@ export class ChatAgentService {
           // Store the push handle so we can inject messages mid-stream (Phase 3+)
           this.promptPushHandles.set(sessionId, handle);
         },
+        onPermissionRequest,
       };
 
       // Build images array for libs that support native images
@@ -1090,6 +1187,11 @@ export class ChatAgentService {
         settingSources: ['project'] as Array<'user' | 'project' | 'local'>,
         ...(extra?.resumeSession ? { resumeSession: true } : {}),
         ...(disallowedTools ? { disallowedTools } : {}),
+        hooks: {
+          postToolUse: postToolUseHook,
+          notification: notificationHook,
+          stop: stopHook,
+        },
         ...(libImages ? { images: libImages } : {}),
         ...(mcpServers ? { mcpServers } : {}),
         canUseTool,
@@ -1165,6 +1267,7 @@ export class ChatAgentService {
     } finally {
       this.runningControllers.delete(sessionId);
       this.promptPushHandles.delete(sessionId);
+      this.clearPendingPermissionRequests(sessionId);
       this.liveTurnMessages.delete(sessionId);
 
       // Clean up any orphaned pending questions for this session (e.g. SDK timeout)

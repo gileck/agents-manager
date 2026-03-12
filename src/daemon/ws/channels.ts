@@ -20,4 +20,6 @@ export const WS_CHANNELS = {
   TASK_STATUS_CHANGED: 'task:status-changed',
   /** PUSH-ONLY: notification sent to chat session when a subscribed pipeline agent finishes */
   CHAT_AGENT_NOTIFICATION: 'chat:agent-notification',
+  /** PUSH-ONLY: permission request from agent needing user approval */
+  CHAT_PERMISSION_REQUEST: 'chat:permission-request',
 } as const;

@@ -208,6 +208,7 @@ export interface ApiClient {
     summarizeMessages(sessionId: string): Promise<unknown>;
     getCosts(): Promise<unknown>;
     getRunningAgents(): Promise<unknown[]>;
+    sendPermissionResponse(sessionId: string, requestId: string, allowed: boolean): Promise<void>;
     getTrackedTasks(sessionId: string): Promise<Task[]>;
     trackTask(sessionId: string, taskId: string): Promise<void>;
     answerQuestion(sessionId: string, questionId: string, answers: Record<string, string>): Promise<void>;
@@ -535,6 +536,8 @@ export function createApiClient(baseUrl: string): ApiClient {
         req('POST', `/api/chat/sessions/${sessionId}/summarize`),
       getCosts: () => req('GET', '/api/chat/costs'),
       getRunningAgents: () => req('GET', '/api/chat/agents'),
+      sendPermissionResponse: (sessionId, requestId, allowed) =>
+        req('POST', `/api/chat/sessions/${sessionId}/permission-response`, { requestId, allowed }),
       getTrackedTasks: (sessionId) => req('GET', `/api/chat/sessions/${sessionId}/tracked-tasks`),
       trackTask: (sessionId, taskId) => req('POST', `/api/chat/sessions/${sessionId}/track-task`, { taskId }),
       answerQuestion: (sessionId, questionId, answers) =>
