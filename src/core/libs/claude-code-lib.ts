@@ -293,6 +293,9 @@ export class ClaudeCodeLib implements IAgentLib {
     const cleanEnv = { ...process.env };
     delete cleanEnv.CLAUDECODE;
 
+    // Buffer for deduplicating partial assistant messages (includePartialMessages)
+    let pendingAssistantMsg: SdkAssistantMessage | null = null;
+
     try {
       for await (const message of query({
         prompt: sdkPrompt,
@@ -333,12 +336,13 @@ export class ClaudeCodeLib implements IAgentLib {
 
         if (message.type === 'assistant') {
           const assistantMsg = message as SdkAssistantMessage;
-          // With includePartialMessages, the SDK emits partial assistant messages as
-          // content builds up. Skip partials (no stop_reason) — stream deltas already
-          // provide live preview. Only process the final complete message.
-          const stopReason = (assistantMsg.message as { stop_reason?: string | null }).stop_reason;
-          if (!stopReason) continue;
-
+          // With includePartialMessages, the SDK emits multiple assistant messages
+          // as content builds up — each subsequent one is more complete. Buffer the
+          // latest version and only emit (onMessage + emit) when a non-assistant
+          // message arrives (e.g., result, user, tool). This ensures we only emit
+          // the most complete version of each assistant response.
+          //
+          // Usage tracking runs immediately (not deferred) for accurate running totals.
           if (assistantMsg.message.usage) {
             const msgId = assistantMsg.message.id;
             // Deduplicate: parallel tool calls emit multiple assistant messages with the same id and identical usage.
@@ -359,7 +363,14 @@ export class ClaudeCodeLib implements IAgentLib {
               + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
           }
-          for (const block of assistantMsg.message.content) {
+          // Buffer this assistant message — will be flushed when a non-assistant message arrives
+          pendingAssistantMsg = assistantMsg;
+          continue;
+        }
+
+        // Flush any buffered assistant message before processing non-assistant messages
+        if (pendingAssistantMsg) {
+          for (const block of pendingAssistantMsg.message.content) {
             if (block.type === 'text') {
               emit(block.text + '\n');
               onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
@@ -371,7 +382,10 @@ export class ClaudeCodeLib implements IAgentLib {
               onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input: input.slice(0, 2000), timestamp: Date.now() });
             }
           }
-        } else if (message.type === 'result') {
+          pendingAssistantMsg = null;
+        }
+
+        if (message.type === 'result') {
           const resultMsg = message as SdkResultMessage;
           if (resultMsg.subtype !== 'success') {
             isError = true;
@@ -467,6 +481,22 @@ export class ClaudeCodeLib implements IAgentLib {
             }
           }
         }
+      }
+      // Flush any remaining buffered assistant message after the loop ends
+      if (pendingAssistantMsg) {
+        for (const block of pendingAssistantMsg.message.content) {
+          if (block.type === 'text') {
+            emit(block.text + '\n');
+            onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
+          } else if (block.type === 'thinking') {
+            onMessage?.({ type: 'thinking', text: block.thinking, timestamp: Date.now() });
+          } else if (block.type === 'tool_use') {
+            const input = JSON.stringify(block.input ?? {});
+            stream(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
+            onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input: input.slice(0, 2000), timestamp: Date.now() });
+          }
+        }
+        pendingAssistantMsg = null;
       }
       log(`SDK message loop completed: ${state.messageCount} messages, hasStructuredOutput=${!!structuredOutput}, isError=${isError}`, {
         accumulatedInputTokens: state.accumulatedInputTokens,
