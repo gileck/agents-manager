@@ -92,20 +92,21 @@ export function TaskRow({
                 {featureName}
               </Badge>
             )}
-            {task.tags.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
-                {tag}
-              </Badge>
-            ))}
-            {task.tags.length > 3 && (
-              <span className="text-[10px] text-muted-foreground">+{task.tags.length - 3}</span>
-            )}
             {task.createdBy && task.createdBy !== 'user' && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 text-purple-500 border-purple-500/40">
                 {task.createdBy === 'workflow-reviewer' ? 'workflow' : 'agent'}
               </Badge>
             )}
           </div>
+          {task.tags.length > 0 && (
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              {task.tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {task.subtasks.length > 0 && (

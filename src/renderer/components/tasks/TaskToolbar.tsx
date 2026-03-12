@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '../ui/select';
-import { Search, SlidersHorizontal, ArrowUp, ArrowDown, List, LayoutGrid, X } from 'lucide-react';
+import { Search, SlidersHorizontal, ArrowUp, ArrowDown, List, LayoutGrid, X, CheckSquare } from 'lucide-react';
 import { countActiveFilters, PRIORITY_LABELS } from './task-helpers';
 import type { FilterState } from './TaskFilterBar';
 import type { SortField, SortDirection, GroupBy, ViewMode } from './task-helpers';
@@ -53,6 +53,9 @@ interface TaskToolbarProps {
   pipelines: Pipeline[];
   features?: Feature[];
   statusSummary?: React.ReactNode;
+  selectMode?: boolean;
+  onSelectModeToggle?: () => void;
+  hasTasks?: boolean;
 }
 
 export function TaskToolbar({
@@ -71,6 +74,9 @@ export function TaskToolbar({
   pipelines,
   features,
   statusSummary,
+  selectMode,
+  onSelectModeToggle,
+  hasTasks,
 }: TaskToolbarProps) {
   const [localSearch, setLocalSearch] = useState(filters.search);
   const filtersRef = useRef(filters);
@@ -203,6 +209,22 @@ export function TaskToolbar({
             <LayoutGrid className="h-3.5 w-3.5" />
           </Button>
         </div>
+
+        {/* Select tasks toggle */}
+        {!selectMode && hasTasks && onSelectModeToggle && (
+          <>
+            <div className="h-5 w-px bg-border" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 text-muted-foreground"
+              onClick={onSelectModeToggle}
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              Select
+            </Button>
+          </>
+        )}
 
         {/* Spacer to push right-side items to the end */}
         <div className="flex-1" />

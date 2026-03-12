@@ -389,6 +389,9 @@ export function TaskListPage() {
               ? <TaskStatusSummary tasks={sortedTasks} pipelineMap={pipelineMap} />
               : undefined
           }
+          selectMode={selectMode}
+          onSelectModeToggle={() => setSelectMode(true)}
+          hasTasks={tasks.length > 0}
         />
       </div>
 
@@ -432,17 +435,6 @@ export function TaskListPage() {
               onBatchEdit={() => setBatchEditOpen(true)}
               batchUpdating={batchUpdating}
             />
-          )}
-
-          {!selectMode && tasks.length > 0 && (
-            <div className="flex justify-end mb-2">
-              <button
-                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-                onClick={() => setSelectMode(true)}
-              >
-                Select tasks
-              </button>
-            </div>
           )}
 
           <TaskGroupedList
