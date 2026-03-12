@@ -1231,54 +1231,54 @@
   dependencies:
     semver "^7.3.5"
 
-"@openai/codex-darwin-arm64@npm:@openai/codex@0.103.0-darwin-arm64":
-  version "0.103.0-darwin-arm64"
-  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.103.0-darwin-arm64.tgz"
-  integrity sha512-TGMMiB/A8CxG7ghhimEBUCk8nTEXef9cCSh+wUuq3dizAS/PuuHHf6m8LUeZCtkl/XMUxxDqEv3+i/jcB0Jo4A==
+"@openai/codex-darwin-arm64@npm:@openai/codex@0.106.0-darwin-arm64":
+  version "0.106.0-darwin-arm64"
+  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.106.0-darwin-arm64.tgz#769d6c78ae964ecf3458791001e1066f8dd459fa"
+  integrity sha512-icTUe8ZKRH2RqO2qS/FPNLMP1TloxbfM/5RxGRjh2xkd8wXDvYFeEnP2siKKLISFT49+oIbT0phUeSPR2Tlg4A==
 
-"@openai/codex-darwin-x64@npm:@openai/codex@0.103.0-darwin-x64":
-  version "0.103.0-darwin-x64"
-  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.103.0-darwin-x64.tgz#51f90545b8f8ea16bebab692dd5b3e9c11f06224"
-  integrity sha512-1aJnXu6dYsu25fBX+76I150gh1BaKoni9wq6QWEPQ3x+FDqsCgGWG5G6G0v4uVMvTgXB0A6IhwPj88ZYi0BsWw==
+"@openai/codex-darwin-x64@npm:@openai/codex@0.106.0-darwin-x64":
+  version "0.106.0-darwin-x64"
+  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.106.0-darwin-x64.tgz#183376eaff09877b24b3afd0a293b7352a4ec4a2"
+  integrity sha512-i9/V2CEfH3QlhZkA/iG/Sw8eR8I8uvH23AoIrd91/LbFX77aAjzg7rSdshU6thhdy2fhiyPjKq23/bVk5cvh5g==
 
-"@openai/codex-linux-arm64@npm:@openai/codex@0.103.0-linux-arm64":
-  version "0.103.0-linux-arm64"
-  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.103.0-linux-arm64.tgz#2553640d19ce3d63e152ffeb389053aebebf2763"
-  integrity sha512-LdrBhfhV2ZiJBof5h1zxKgmEdt2vm5m8/xEtZShiqSDkgfsTUHNoOAb0WmgITF8+4kyWZtpMjBLw3XjkmNYQJw==
+"@openai/codex-linux-arm64@npm:@openai/codex@0.106.0-linux-arm64":
+  version "0.106.0-linux-arm64"
+  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.106.0-linux-arm64.tgz#de5679dce228f669d7339dd7caa87f936112060d"
+  integrity sha512-l/xmB0w+LTf9c/0CLEkQclUfPNsOlPENR0lxiATSv9vGaQdCi/P3MEI+L1iOMWn2Nx7o04foCfkSJiKV38n4DQ==
 
-"@openai/codex-linux-x64@npm:@openai/codex@0.103.0-linux-x64":
-  version "0.103.0-linux-x64"
-  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.103.0-linux-x64.tgz#fc8a09da88a4f2233a5c08caa0db9d0c2a031e91"
-  integrity sha512-wRjcldkssdCUFQ/YoHRAbgQhszhGyt14Qa/V5ouQp4i3j5dPItVwl/y64u2Fe6fc3OAJkw6W3MJCSO1F323y3g==
+"@openai/codex-linux-x64@npm:@openai/codex@0.106.0-linux-x64":
+  version "0.106.0-linux-x64"
+  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.106.0-linux-x64.tgz#6d73e18c5e012928eaeae67f6375037ea3b774c1"
+  integrity sha512-cVNGR8nlnW4V+2ofDt8+Q1mbR7JwxZGvSWjXJ+9GvEt0DBEO0Q5KRIsJa6iSYqTcH6V5oBcTFiK//+HDbTaFNQ==
 
-"@openai/codex-sdk@^0.103.0":
-  version "0.103.0"
-  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex-sdk/-/codex-sdk-0.103.0.tgz"
-  integrity sha512-wMuYUIs5ajZsE2mnacYQKubt61cykMCAyNhPHBINpf9AJkiuvpAHtuz7npXzk9z4wmfqXPMXIQ3x/v1QMmd0cQ==
+"@openai/codex-sdk@0.106.0":
+  version "0.106.0"
+  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex-sdk/-/codex-sdk-0.106.0.tgz#3cbf0ceff2f17b2fb8dcd23384ebfa2ca13b3205"
+  integrity sha512-at3XbAMrUKPF/cDBph9VS2V+P3CPxQpQt0tQD2oZb1Sju3N5OZJDpfhbRinwc0mzSssA1gw/0o2qNCHNghtfxw==
   dependencies:
-    "@openai/codex" "0.103.0"
+    "@openai/codex" "0.106.0"
 
-"@openai/codex-win32-arm64@npm:@openai/codex@0.103.0-win32-arm64":
-  version "0.103.0-win32-arm64"
-  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.103.0-win32-arm64.tgz#6adcb287e2e171723b7427f856cf4bf2dfbc9f27"
-  integrity sha512-d5yXLt9m4/3Wf3hiUcygr7voPXgLrvTgbtoYiAqZl/rtoNVRhChjt09EJKRlFQusq3aUGyQduqTLND2uF5dwBA==
+"@openai/codex-win32-arm64@npm:@openai/codex@0.106.0-win32-arm64":
+  version "0.106.0-win32-arm64"
+  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.106.0-win32-arm64.tgz#f13b23ca2d6bcd8b3220058c2319f781e1544bd7"
+  integrity sha512-8CBtM8Nr4gDqQNKl4VK/+vRv9Mj+Et0pMZqEKFXZ+3Vwovs3lFDsuDET4XQ1trk11UejFNpPCk9Tle9P99hGTw==
 
-"@openai/codex-win32-x64@npm:@openai/codex@0.103.0-win32-x64":
-  version "0.103.0-win32-x64"
-  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.103.0-win32-x64.tgz#7369050d0d9e29d3312c988963786e2424a90d28"
-  integrity sha512-WtR5y3KeaGjLeYWQnRhMYBptm+eRMvwVlHJpIlFSw7DzD1idvL6ALZ4+kBL1rXBZMJzzpXomax7vMNTlXFjCOg==
+"@openai/codex-win32-x64@npm:@openai/codex@0.106.0-win32-x64":
+  version "0.106.0-win32-x64"
+  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.106.0-win32-x64.tgz#6e7bc58179548dade2b03ce8405bbd3e77705aa5"
+  integrity sha512-fF1AKwRDf6t54OmEgMf3JyaJrFWUozeYBa3W/0P6LkaTfCz68zrajL5yO78mhf/rf9eAb83PIkvej0EHBzTheQ==
 
-"@openai/codex@0.103.0":
-  version "0.103.0"
-  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.103.0.tgz"
-  integrity sha512-kf7sytd/2mMUKYK8eKgNrwujgNjWrfWFMFfRCOVIFBeByQXmtxe2giVEo44paKDapaS7dQnxqwcUY2OOYrdfWA==
+"@openai/codex@0.106.0":
+  version "0.106.0"
+  resolved "https://npm.dev.wixpress.com/api/npm/npm-repos/@openai/codex/-/codex-0.106.0.tgz#abb4f4b5d5b3803ea7fb0c28eb61b567c95904c2"
+  integrity sha512-GgzVs+mOaJfAFalI+QqEXcuJuBODhIg217g+B5jg6HMujux3Q4yeSki57x8MD/DJ43hRq9X1DTyZL/345Bo0Ag==
   optionalDependencies:
-    "@openai/codex-darwin-arm64" "npm:@openai/codex@0.103.0-darwin-arm64"
-    "@openai/codex-darwin-x64" "npm:@openai/codex@0.103.0-darwin-x64"
-    "@openai/codex-linux-arm64" "npm:@openai/codex@0.103.0-linux-arm64"
-    "@openai/codex-linux-x64" "npm:@openai/codex@0.103.0-linux-x64"
-    "@openai/codex-win32-arm64" "npm:@openai/codex@0.103.0-win32-arm64"
-    "@openai/codex-win32-x64" "npm:@openai/codex@0.103.0-win32-x64"
+    "@openai/codex-darwin-arm64" "npm:@openai/codex@0.106.0-darwin-arm64"
+    "@openai/codex-darwin-x64" "npm:@openai/codex@0.106.0-darwin-x64"
+    "@openai/codex-linux-arm64" "npm:@openai/codex@0.106.0-linux-arm64"
+    "@openai/codex-linux-x64" "npm:@openai/codex@0.106.0-linux-x64"
+    "@openai/codex-win32-arm64" "npm:@openai/codex@0.106.0-win32-arm64"
+    "@openai/codex-win32-x64" "npm:@openai/codex@0.106.0-win32-x64"
 
 "@peculiar/asn1-cms@^2.6.0", "@peculiar/asn1-cms@^2.6.1":
   version "2.6.1"
