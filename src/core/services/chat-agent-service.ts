@@ -959,6 +959,7 @@ export class ChatAgentService {
           type: 'usage',
           inputTokens: result.costInputTokens ?? 0,
           outputTokens: result.costOutputTokens ?? 0,
+          ...(result.contextWindow ? { contextWindow: result.contextWindow } : {}),
           timestamp: Date.now(),
         });
       }
@@ -969,6 +970,10 @@ export class ChatAgentService {
       cacheCreationInputTokens = result.cacheCreationInputTokens;
       totalCostUsd = result.totalCostUsd;
       lastContextInputTokens = result.lastContextInputTokens;
+
+      if (result.durationMs != null || result.numTurns != null) {
+        getAppLogger().debug('ChatAgentService', `Session ${sessionId} telemetry: durationMs=${result.durationMs}, durationApiMs=${result.durationApiMs}, numTurns=${result.numTurns}, contextWindow=${result.contextWindow}`);
+      }
 
       if (result.error) {
         emitEvent({ type: 'text', text: `\n[Agent error: ${result.error}]\n` });

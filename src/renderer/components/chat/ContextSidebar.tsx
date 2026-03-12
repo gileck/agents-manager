@@ -5,13 +5,13 @@ import { getEffectiveCost } from '../../../shared/cost-utils';
 interface ContextSidebarProps {
   messages: AgentChatMessage[];
   run?: AgentRun | null;
-  tokenUsage?: { inputTokens: number; outputTokens: number; lastContextInputTokens?: number | null };
+  tokenUsage?: { inputTokens: number; outputTokens: number; lastContextInputTokens?: number | null; contextWindow?: number | null };
   agentLib?: string;
   model?: string;
   modelLabel?: string;
 }
 
-const CONTEXT_WINDOW = 200_000;
+const DEFAULT_CONTEXT_WINDOW = 200_000;
 
 export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, modelLabel }: ContextSidebarProps) {
   // Use the latest usage message (SDK reports cumulative totals)
@@ -47,10 +47,15 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
     cacheWriteTokens: run?.cacheCreationInputTokens,
     model: run?.model ?? undefined,
   });
+  // Derive the effective context window size from SDK modelUsage when available,
+  // falling back to the hardcoded default.
+  const effectiveContextWindow = (tokenUsage?.contextWindow && tokenUsage.contextWindow > 0)
+    ? tokenUsage.contextWindow
+    : DEFAULT_CONTEXT_WINDOW;
   // Use the last turn's context size (actual input to the last API call) when available,
   // since that reflects true context window utilization. Fall back to cumulative sum otherwise.
   const contextWindowTokens = tokenUsage?.lastContextInputTokens ?? totalInput;
-  const contextUsagePercent = Math.min((contextWindowTokens / CONTEXT_WINDOW) * 100, 100);
+  const contextUsagePercent = Math.min((contextWindowTokens / effectiveContextWindow) * 100, 100);
 
   // Cache token info from run
   const cacheRead = run?.cacheReadInputTokens ?? 0;
@@ -135,7 +140,7 @@ export function ContextSidebar({ messages, run, tokenUsage, agentLib, model, mod
             />
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            {formatNumber(contextWindowTokens)} / {formatNumber(CONTEXT_WINDOW)}
+            {formatNumber(contextWindowTokens)} / {formatNumber(effectiveContextWindow)}
           </div>
         </div>
       </div>

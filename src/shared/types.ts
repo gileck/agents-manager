@@ -695,6 +695,7 @@ export interface AgentChatMessageUsage {
   type: 'usage';
   inputTokens: number;
   outputTokens: number;
+  contextWindow?: number;
   timestamp: number;
 }
 
@@ -712,6 +713,19 @@ export interface AgentChatMessageRunInfo {
   taskId?: string;
 }
 
+export interface AgentChatMessageCompactBoundary {
+  type: 'compact_boundary';
+  trigger: string;
+  preTokens: number;
+  timestamp: number;
+}
+
+export interface AgentChatMessageCompacting {
+  type: 'compacting';
+  active: boolean;
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
@@ -720,7 +734,9 @@ export type AgentChatMessage =
   | AgentChatMessageStatus
   | AgentChatMessageUsage
   | AgentChatMessageThinking
-  | AgentChatMessageRunInfo;
+  | AgentChatMessageRunInfo
+  | AgentChatMessageCompactBoundary
+  | AgentChatMessageCompacting;
 
 export interface AgentConfig {
   model?: string;

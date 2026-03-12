@@ -215,6 +215,7 @@ export function useChat(sessionId: string | null) {
     let inputTokens = 0;
     let outputTokens = 0;
     let lastContextInputTokens: number | null = null;
+    let contextWindow: number | null = null;
     // Sum from DB messages (costInputTokens / costOutputTokens fields)
     for (const msg of dbMessages) {
       if (msg.costInputTokens != null) inputTokens += msg.costInputTokens;
@@ -230,12 +231,14 @@ export function useChat(sessionId: string | null) {
       if (msg.type === 'usage') {
         streamInput = msg.inputTokens;
         streamOutput = msg.outputTokens;
+        if (msg.contextWindow) contextWindow = msg.contextWindow;
       }
     }
     return {
       inputTokens: inputTokens + streamInput,
       outputTokens: outputTokens + streamOutput,
       lastContextInputTokens,
+      contextWindow,
     };
   }, [dbMessages, streamingMessages]);
 

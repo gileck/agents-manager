@@ -1,5 +1,5 @@
 import type { AgentChatMessage } from '../../shared/types';
-import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibFeatures, AgentLibRunOptions, AgentLibCallbacks, AgentLibResult, AgentLibTelemetry, AgentLibModelOption, ModelTokenUsage } from '../interfaces/agent-lib';
 import { SandboxGuard } from '../services/sandbox-guard';
 import { getAppLogger } from '../services/app-logger';
 
@@ -31,7 +31,10 @@ interface SdkResultMessage {
   structured_output?: Record<string, unknown>;
   usage?: SdkUsage;
   total_cost_usd?: number;
-  modelUsage?: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; costUSD: number }>;
+  duration_ms?: number;
+  duration_api_ms?: number;
+  num_turns?: number;
+  modelUsage?: Record<string, ModelTokenUsage>;
 }
 interface SdkUserMessage {
   type: 'user';
@@ -39,13 +42,20 @@ interface SdkUserMessage {
   parent_tool_use_id: string | null;
   session_id: string;
 }
+interface SdkSystemMessage {
+  type: 'system';
+  subtype: string;
+  trigger?: string;
+  pre_tokens?: number;
+  status?: string | null;
+}
 interface SdkOtherMessage {
   type: string;
   message?: { content?: SdkContentBlock[] };
   summary?: string;
   result?: string;
 }
-type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkUserMessage | SdkOtherMessage;
+type SdkStreamMessage = SdkAssistantMessage | SdkResultMessage | SdkUserMessage | SdkSystemMessage | SdkOtherMessage;
 
 interface RunState {
   abortController: AbortController;
@@ -140,6 +150,12 @@ export class ClaudeCodeLib implements IAgentLib {
     let isError = false;
     let errorMessage: string | undefined;
     let killReason: string | undefined;
+    let contextWindow: number | undefined;
+    let maxOutputTokens: number | undefined;
+    let durationMs: number | undefined;
+    let durationApiMs: number | undefined;
+    let numTurns: number | undefined;
+    let modelUsage: Record<string, ModelTokenUsage> | undefined;
 
     // Capture stderr from the Claude Code process for diagnostics
     const stderrChunks: string[] = [];
@@ -253,6 +269,8 @@ export class ClaudeCodeLib implements IAgentLib {
           hooks: { preToolUse: mergedPreToolUse },
           ...sessionOptions,
           ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
+          ...(options.maxBudgetUsd != null ? { maxBudgetUsd: options.maxBudgetUsd } : {}),
+          ...(options.betas?.length ? { betas: options.betas } : {}),
         },
       }) as AsyncIterable<SdkStreamMessage>) {
         // Skip replayed messages during session resume to avoid duplicate callbacks/tokens
@@ -313,6 +331,21 @@ export class ClaudeCodeLib implements IAgentLib {
           if (resultMsg.total_cost_usd != null) {
             totalCostUsd = resultMsg.total_cost_usd;
           }
+          // Extract telemetry fields from result
+          if (resultMsg.duration_ms != null) durationMs = resultMsg.duration_ms;
+          if (resultMsg.duration_api_ms != null) durationApiMs = resultMsg.duration_api_ms;
+          if (resultMsg.num_turns != null) numTurns = resultMsg.num_turns;
+          if (resultMsg.modelUsage) {
+            modelUsage = resultMsg.modelUsage;
+            // Extract contextWindow/maxOutputTokens from the primary model (first entry with contextWindow)
+            for (const usage of Object.values(resultMsg.modelUsage)) {
+              if (usage.contextWindow != null) {
+                contextWindow = usage.contextWindow;
+                maxOutputTokens = usage.maxOutputTokens;
+                break;
+              }
+            }
+          }
           // Prefer the result message's authoritative cumulative totals.
           // Fall back to accumulated counts only when the result has no usage data.
           costInputTokens = resultMsg.usage?.input_tokens
@@ -325,7 +358,23 @@ export class ClaudeCodeLib implements IAgentLib {
             ?? (state.accumulatedCacheCreationInputTokens >= 0 ? state.accumulatedCacheCreationInputTokens : undefined);
           lastContextInputTokens = state.lastInputTokens;
           if (costInputTokens != null || costOutputTokens != null) {
-            onMessage?.({ type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, timestamp: Date.now() } as AgentChatMessage);
+            const usageMsg: AgentChatMessage = { type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, contextWindow, timestamp: Date.now() };
+            onMessage?.(usageMsg);
+          }
+        } else if (message.type === 'system') {
+          const sysMsg = message as SdkSystemMessage;
+          if (sysMsg.subtype === 'compact_boundary') {
+            log(`Context compaction boundary: trigger=${sysMsg.trigger}, preTokens=${sysMsg.pre_tokens}`);
+            stream(`\n[Context compacted: ${sysMsg.trigger}, ${sysMsg.pre_tokens} tokens before compaction]\n`);
+            onMessage?.({ type: 'compact_boundary', trigger: sysMsg.trigger ?? 'unknown', preTokens: sysMsg.pre_tokens ?? 0, timestamp: Date.now() });
+          } else if (sysMsg.subtype === 'status') {
+            if (sysMsg.status === 'compacting') {
+              onMessage?.({ type: 'compacting', active: true, timestamp: Date.now() });
+            } else if (sysMsg.status === null) {
+              onMessage?.({ type: 'compacting', active: false, timestamp: Date.now() });
+            } else {
+              log(`Unhandled system status: ${sysMsg.status}`);
+            }
           }
         } else if (message.type === 'user') {
           // SDK emits tool results as user messages with tool_result content blocks
@@ -444,6 +493,12 @@ export class ClaudeCodeLib implements IAgentLib {
       structuredOutput,
       killReason,
       rawExitCode: exitCode,
+      contextWindow,
+      maxOutputTokens,
+      durationMs,
+      durationApiMs,
+      numTurns,
+      modelUsage,
     };
   }
 

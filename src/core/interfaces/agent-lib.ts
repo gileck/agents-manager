@@ -4,6 +4,16 @@ import type { AgentChatMessage } from '../../shared/types';
 // Agent Lib — Low-level engine interface
 // ============================================
 
+export interface ModelTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  costUSD: number;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+}
+
 export interface AgentLibFeatures {
   images: boolean;
   hooks: boolean;
@@ -32,6 +42,10 @@ export interface AgentLibRunOptions {
   taskId?: string;
   agentType?: string;
   mcpServers?: Record<string, unknown>;
+  /** Maximum spend allowed for this execution in USD. Supported by claude-code engine only. */
+  maxBudgetUsd?: number;
+  /** SDK beta feature flags to enable (e.g., extended context). Supported by claude-code engine only. */
+  betas?: string[];
 }
 
 export interface AgentLibCallbacks {
@@ -61,6 +75,18 @@ export interface AgentLibResult {
   killReason?: string;
   /** Original OS exit code (e.g. 143 for SIGTERM, 137 for SIGKILL). */
   rawExitCode?: number;
+  /** Context window size for the primary model (from SDK modelUsage). */
+  contextWindow?: number;
+  /** Maximum output tokens for the primary model (from SDK modelUsage). */
+  maxOutputTokens?: number;
+  /** Wall-clock duration of the SDK query in milliseconds. */
+  durationMs?: number;
+  /** Cumulative API call duration in milliseconds. */
+  durationApiMs?: number;
+  /** Number of agent turns (assistant messages) in the conversation. */
+  numTurns?: number;
+  /** Per-model token usage breakdown from the SDK. */
+  modelUsage?: Record<string, ModelTokenUsage>;
 }
 
 export interface AgentLibTelemetry {

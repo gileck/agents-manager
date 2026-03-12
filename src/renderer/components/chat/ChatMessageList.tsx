@@ -16,7 +16,7 @@ interface ChatMessageListProps {
 }
 
 // Message types that are "leaf" nodes rendered directly in the timeline
-const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status']);
+const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting']);
 // Message types that belong inside a ThinkingGroup (internal processing noise)
 const GROUP_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
 
@@ -268,6 +268,29 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
             )}
           </div>
         );
+      } else if (msg.type === 'compact_boundary') {
+        nodes.push(
+          <div key={i} className="flex justify-center py-3">
+            <span className="text-xs font-medium px-3 py-1 rounded-full border" style={{ borderColor: '#f59e0b', color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.08)' }}>
+              Context compacted &middot; {msg.trigger} &middot; {msg.preTokens.toLocaleString()} tokens before
+            </span>
+          </div>
+        );
+      } else if (msg.type === 'compacting' && msg.active) {
+        // Only show if no later compacting message supersedes this one
+        const hasLaterCompacting = messages.slice(i + 1).some(m => m.type === 'compacting');
+        if (!hasLaterCompacting) {
+          nodes.push(
+            <div key={i} className="flex items-center justify-center gap-2 py-3 text-muted-foreground text-sm">
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#f59e0b' }} />
+                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#f59e0b', animationDelay: '0.2s' }} />
+                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#f59e0b', animationDelay: '0.4s' }} />
+              </div>
+              <span className="text-xs" style={{ color: '#f59e0b' }}>Compacting context...</span>
+            </div>
+          );
+        }
       }
       // usage messages are skipped
     }
