@@ -191,7 +191,6 @@ Thread chat agents (`desktop`, `telegram`, `cli` sources) have access to the ful
 | CLAUDE.md auto-loading | `settingSources: ['project']` for automatic project context | Not set |
 | Plugins | Project-level plugins passed through from `project.config.plugins` | Not passed |
 | Slash commands | `/clear`, `/compact`, etc. forwarded to SDK natively | Not applicable |
-| Prompt push handle | `PromptPushHandle` stored per session for mid-stream message injection | Not used |
 
 Agent-chat (review) sessions share most features but do not receive default subagents.
 
