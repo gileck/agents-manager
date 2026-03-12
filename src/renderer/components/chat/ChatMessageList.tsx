@@ -7,6 +7,7 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
 import { AgentRunInfoCard } from './AgentRunInfoCard';
 import { ThinkingGroup } from './ThinkingGroup';
+import { AgentBlock } from './AgentBlock';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { useChatActions } from './ChatActionsContext';
 
@@ -27,7 +28,16 @@ const THINKING_TOOLS = new Set(['Read', 'Grep', 'Glob', 'Edit', 'Write']);
 
 type LeafSegment = { type: 'leaf'; msg: AgentChatMessage; index: number };
 type GroupSegment = { type: 'group'; messages: AgentChatMessage[]; startIndex: number };
-type Segment = LeafSegment | GroupSegment;
+export type AgentSegment = {
+  type: 'agent';
+  taskToolUse: AgentChatMessageToolUse;
+  taskToolResult?: AgentChatMessageToolResult;
+  startedActivity?: AgentChatMessageSubagentActivity;
+  completedActivity?: AgentChatMessageSubagentActivity;
+  internalMessages: AgentChatMessage[];
+  startIndex: number;
+};
+type Segment = LeafSegment | GroupSegment | AgentSegment;
 
 /** Check whether a message should be grouped into a ThinkingGroup. */
 function isGroupedMessage(msg: AgentChatMessage, toolIdToName: Map<string, string>): boolean {
@@ -55,10 +65,100 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
     }
   }
 
+  // ── Agent pre-pass: identify Task tool_use messages and collect related messages ──
+  // For each Task tool_use, find matching subagent_activity (started/completed),
+  // tool_result, and internal messages between start/stop by toolId/toolUseId.
+  const agentSegments = new Map<number, AgentSegment>(); // keyed by Task tool_use index
+  const consumedIndices = new Set<number>();
+
+  for (let idx = 0; idx < messages.length; idx++) {
+    const msg = messages[idx];
+    if (msg.type !== 'tool_use') continue;
+    const tu = msg as AgentChatMessageToolUse;
+    if (tu.toolName !== 'Task' && tu.toolName !== 'task') continue;
+    if (!tu.toolId) continue;
+
+    const toolId = tu.toolId;
+    let startedActivity: AgentChatMessageSubagentActivity | undefined;
+    let completedActivity: AgentChatMessageSubagentActivity | undefined;
+    let taskToolResult: AgentChatMessageToolResult | undefined;
+    let startedIdx = -1;
+    let completedIdx = -1;
+
+    // Find matching subagent_activity and tool_result
+    for (let j = idx + 1; j < messages.length; j++) {
+      const m = messages[j];
+      if (m.type === 'subagent_activity') {
+        const sa = m as AgentChatMessageSubagentActivity;
+        if (sa.toolUseId === toolId) {
+          if (sa.status === 'started' && !startedActivity) {
+            startedActivity = sa;
+            startedIdx = j;
+          } else if (sa.status === 'completed' && !completedActivity) {
+            completedActivity = sa;
+            completedIdx = j;
+          }
+        }
+      }
+      if (m.type === 'tool_result') {
+        const tr = m as AgentChatMessageToolResult;
+        if (tr.toolId === toolId && !taskToolResult) {
+          taskToolResult = tr;
+          consumedIndices.add(j);
+        }
+      }
+    }
+
+    // Collect internal messages between started and completed (or end of messages)
+    const internalMessages: AgentChatMessage[] = [];
+    if (startedIdx >= 0) {
+      consumedIndices.add(startedIdx);
+      const endIdx = completedIdx >= 0 ? completedIdx : messages.length;
+      for (let j = startedIdx + 1; j < endIdx; j++) {
+        // Don't consume messages that belong to a different agent segment
+        const m = messages[j];
+        if (m.type === 'subagent_activity') continue; // skip nested/other activity markers
+        if (m.type === 'tool_result' && (m as AgentChatMessageToolResult).toolId === toolId) continue;
+        internalMessages.push(m);
+        consumedIndices.add(j);
+      }
+    }
+    if (completedIdx >= 0) {
+      consumedIndices.add(completedIdx);
+    }
+
+    // Mark the Task tool_use itself as consumed (will be emitted as AgentSegment)
+    consumedIndices.add(idx);
+
+    agentSegments.set(idx, {
+      type: 'agent',
+      taskToolUse: tu,
+      taskToolResult,
+      startedActivity,
+      completedActivity,
+      internalMessages,
+      startIndex: idx,
+    });
+  }
+
+  // ── Main pass: build segments, emitting AgentSegments at Task positions ──
   const segments: Segment[] = [];
   let i = 0;
 
   while (i < messages.length) {
+    // Emit AgentSegment at Task tool_use positions
+    if (agentSegments.has(i)) {
+      segments.push(agentSegments.get(i)!);
+      i++;
+      continue;
+    }
+
+    // Skip consumed indices (subagent_activity, internal tool calls, tool_results)
+    if (consumedIndices.has(i)) {
+      i++;
+      continue;
+    }
+
     const msg = messages[i];
 
     if (LEAF_TYPES.has(msg.type)) {
@@ -67,11 +167,13 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
     } else if (isGroupedMessage(msg, toolIdToName)) {
       const startIndex = i;
       const groupMsgs: AgentChatMessage[] = [];
-      while (i < messages.length && isGroupedMessage(messages[i], toolIdToName)) {
+      while (i < messages.length && !consumedIndices.has(i) && isGroupedMessage(messages[i], toolIdToName)) {
         groupMsgs.push(messages[i]);
         i++;
       }
-      segments.push({ type: 'group', messages: groupMsgs, startIndex });
+      if (groupMsgs.length > 0) {
+        segments.push({ type: 'group', messages: groupMsgs, startIndex });
+      }
     } else {
       // User-facing tool or unknown type – render as leaf
       segments.push({ type: 'leaf', msg, index: i });
@@ -133,6 +235,18 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
     const nodes: React.ReactNode[] = [];
 
     for (const segment of segments) {
+      if (segment.type === 'agent') {
+        nodes.push(
+          <AgentBlock
+            key={`agent-${segment.startIndex}`}
+            segment={segment}
+            expandedTools={expandedTools}
+            onToggleTool={toggleTool}
+          />
+        );
+        continue;
+      }
+
       if (segment.type === 'group') {
         nodes.push(
           <ThinkingGroup

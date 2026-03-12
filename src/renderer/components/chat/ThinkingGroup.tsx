@@ -9,10 +9,12 @@ interface ThinkingGroupProps {
   startIndex: number;
   expandedTools: Set<number>;
   onToggleTool: (index: number) => void;
+  /** When true, the group is expanded by default (used when nested inside AgentBlock). */
+  defaultExpanded?: boolean;
 }
 
-export function ThinkingGroup({ messages, startIndex, expandedTools, onToggleTool }: ThinkingGroupProps) {
-  const [expanded, setExpanded] = useState(false);
+export function ThinkingGroup({ messages, startIndex, expandedTools, onToggleTool, defaultExpanded = false }: ThinkingGroupProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const { durationS, toolNames, totalTokens } = useMemo(() => {
     const first = messages[0];
