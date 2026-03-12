@@ -66,16 +66,21 @@ async function waitForHealth(timeoutMs = 15000): Promise<boolean> {
   return false;
 }
 
-/** Check if agents are currently running via the daemon API */
-function checkActiveAgents(): Promise<number> {
+/** Fetch a JSON array from a daemon endpoint, optionally filtering by a field value */
+function countJsonArray(urlPath: string, filterField?: string, filterValue?: string): Promise<number> {
   return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${PORT}/api/agent-runs/active`, (res) => {
+    const req = http.get(`http://127.0.0.1:${PORT}${urlPath}`, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
         try {
-          const runs = JSON.parse(data);
-          resolve(Array.isArray(runs) ? runs.length : 0);
+          const items = JSON.parse(data);
+          if (!Array.isArray(items)) return resolve(0);
+          if (filterField && filterValue) {
+            resolve(items.filter((i) => i[filterField] === filterValue).length);
+          } else {
+            resolve(items.length);
+          }
         } catch {
           resolve(0);
         }
@@ -84,6 +89,16 @@ function checkActiveAgents(): Promise<number> {
     req.on('error', () => resolve(0));
     req.setTimeout(2000, () => { req.destroy(); resolve(0); });
   });
+}
+
+/** Check if any agents (task pipeline or chat thread) are currently running */
+async function checkActiveAgents(): Promise<number> {
+  const [taskAgents, chatAgents] = await Promise.all([
+    countJsonArray('/api/agent-runs/active'),
+    // /api/chat/agents returns completed/failed agents too — filter to running only
+    countJsonArray('/api/chat/agents', 'status', 'running'),
+  ]);
+  return taskAgents + chatAgents;
 }
 
 /** Build daemon with esbuild (fast ~200ms) */
