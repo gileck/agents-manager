@@ -6,7 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
-import type { AgentLibCallbacks, PromptPushHandle, PermissionRequest, PermissionResponse } from '../interfaces/agent-lib';
+import type { AgentLibCallbacks, PromptPushHandle, PermissionRequest, PermissionResponse, SubagentDefinition } from '../interfaces/agent-lib';
 import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type {
   SDKMessage,
@@ -139,6 +139,35 @@ const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
 /** Timeout for permission requests — auto-deny if user doesn't respond within 5 minutes. */
 const PERMISSION_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Default subagent definitions for thread chat sessions.
+ * These specialized subagents are available via the Task tool when running in
+ * thread chat mode (desktop/telegram/cli sessions, not agent-chat or pipeline).
+ */
+const DEFAULT_CHAT_SUBAGENTS: Record<string, SubagentDefinition> = {
+  'code-reviewer': {
+    description: 'Specialized for reviewing code changes. Delegates to this agent when asked to review diffs, PRs, or code quality.',
+    prompt: 'You are a code review specialist. Analyze code changes for correctness, best practices, potential bugs, security issues, and readability. Provide specific, actionable feedback with file paths and line references.',
+    tools: ['Read', 'Glob', 'Grep', 'Bash'],
+    model: 'sonnet',
+    maxTurns: 15,
+  },
+  'researcher': {
+    description: 'Specialized for codebase exploration and research. Delegates to this agent for understanding architecture, finding patterns, or investigating how things work.',
+    prompt: 'You are a codebase research specialist. Explore the codebase to answer questions about architecture, patterns, dependencies, and implementation details. Be thorough in your search and provide comprehensive findings with relevant file paths.',
+    tools: ['Read', 'Glob', 'Grep'],
+    model: 'sonnet',
+    maxTurns: 20,
+  },
+  'test-runner': {
+    description: 'Specialized for running and analyzing tests. Delegates to this agent when asked to run tests, analyze test results, or investigate test failures.',
+    prompt: 'You are a test execution and analysis specialist. Run tests, analyze results, identify failures, and provide clear summaries. When tests fail, investigate the root cause and suggest fixes.',
+    tools: ['Read', 'Glob', 'Grep', 'Bash'],
+    model: 'haiku',
+    maxTurns: 10,
+  },
+};
 
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
@@ -1040,6 +1069,29 @@ export class ChatAgentService {
         getAppLogger().info('ChatAgentService', `Agent stop hook: stopHookActive=${input.stopHookActive}`);
       };
 
+      // Subagent lifecycle hooks — emit subagent_activity messages to the UI
+      const subagentStartHook = (input: import('../interfaces/agent-lib').SubagentStartHookInput) => {
+        getAppLogger().info('ChatAgentService', `Subagent started: ${input.agentType} (${input.agentId})`);
+        emitMessage({
+          type: 'subagent_activity',
+          agentName: input.agentType,
+          status: 'started',
+          toolUseId: input.agentId,
+          timestamp: Date.now(),
+        });
+      };
+
+      const subagentStopHook = (input: import('../interfaces/agent-lib').SubagentStopHookInput) => {
+        getAppLogger().info('ChatAgentService', `Subagent stopped: ${input.agentType} (${input.agentId})`);
+        emitMessage({
+          type: 'subagent_activity',
+          agentName: input.agentType,
+          status: 'completed',
+          toolUseId: input.agentId,
+          timestamp: Date.now(),
+        });
+      };
+
       // Build callbacks
       const callbacks: AgentLibCallbacks = {
         onOutput: (chunk: string) => {
@@ -1086,12 +1138,13 @@ export class ChatAgentService {
 
       // Build task MCP server for chat sessions (not pipeline agent runs)
       let mcpServers: Record<string, unknown> | undefined;
+      let chatSession: ChatSession | null = null;
       if (!extra?.pipelineSessionId) {
         try {
-          const session = await this.chatSessionStore.getSession(sessionId);
-          if (session?.projectId) {
+          chatSession = await this.chatSessionStore.getSession(sessionId);
+          if (chatSession?.projectId) {
             const daemonUrl = `http://127.0.0.1:${process.env.AM_DAEMON_PORT ?? 3847}`;
-            const mcpServer = await createTaskMcpServer(daemonUrl, { projectId: session.projectId, sessionId, subscriptionRegistry: this.subscriptionRegistry });
+            const mcpServer = await createTaskMcpServer(daemonUrl, { projectId: chatSession.projectId, sessionId, subscriptionRegistry: this.subscriptionRegistry });
             mcpServers = { taskManager: mcpServer };
           }
         } catch (mcpErr) {
@@ -1173,6 +1226,10 @@ export class ChatAgentService {
         }
       };
 
+      // Add default subagents for thread chat sessions (desktop/telegram/cli — not agent-chat or pipeline)
+      const isThreadChat = chatSession && chatSession.source !== 'agent-chat' && !extra?.pipelineSessionId;
+      const agents = isThreadChat ? DEFAULT_CHAT_SUBAGENTS : undefined;
+
       const executeOptions = {
         prompt,
         systemPrompt,
@@ -1191,10 +1248,13 @@ export class ChatAgentService {
           postToolUse: postToolUseHook,
           notification: notificationHook,
           stop: stopHook,
+          subagentStart: subagentStartHook,
+          subagentStop: subagentStopHook,
         },
         ...(libImages ? { images: libImages } : {}),
         ...(mcpServers ? { mcpServers } : {}),
         canUseTool,
+        ...(agents ? { agents } : {}),
       };
 
       let result = await lib.execute(executeSessionId, executeOptions, callbacks);

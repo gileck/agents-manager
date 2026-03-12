@@ -391,6 +391,7 @@ export class ClaudeCodeLib implements IAgentLib {
           ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
           ...(options.maxBudgetUsd != null ? { maxBudgetUsd: options.maxBudgetUsd } : {}),
           ...(options.betas?.length ? { betas: options.betas } : {}),
+          ...(options.agents && Object.keys(options.agents).length > 0 ? { agents: options.agents } : {}),
         },
       }) as AsyncIterable<SdkStreamMessage>) {
         // Skip replayed messages during session resume to avoid duplicate callbacks/tokens

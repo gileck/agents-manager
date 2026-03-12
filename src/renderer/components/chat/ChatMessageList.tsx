@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, ChevronDown, Play, AlertTriangle, ShieldCheck, ShieldX, Bell } from 'lucide-react';
-import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification } from '../../../shared/types';
+import { Pencil, ChevronDown, Play, AlertTriangle, ShieldCheck, ShieldX, Bell, Bot, CheckCircle2 } from 'lucide-react';
+import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification, AgentChatMessageSubagentActivity } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
@@ -19,7 +19,7 @@ interface ChatMessageListProps {
 }
 
 // Message types that are "leaf" nodes rendered directly in the timeline
-const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta', 'permission_request', 'permission_response', 'notification']);
+const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta', 'permission_request', 'permission_response', 'notification', 'subagent_activity']);
 // Message types that belong inside a ThinkingGroup (internal processing noise)
 const GROUP_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
 
@@ -359,6 +359,23 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
               {notif.title && <p className="font-medium text-foreground">{notif.title}</p>}
               <p className="text-muted-foreground">{notif.body}</p>
             </div>
+          </div>
+        );
+      } else if (msg.type === 'subagent_activity') {
+        const activity = msg as AgentChatMessageSubagentActivity;
+        const isStarted = activity.status === 'started';
+        nodes.push(
+          <div key={i} className="flex items-center gap-2 my-2 px-3 py-2 text-sm rounded-lg border" style={{ borderColor: isStarted ? '#8b5cf6' : '#22c55e', backgroundColor: isStarted ? 'rgba(139, 92, 246, 0.06)' : 'rgba(34, 197, 94, 0.06)' }}>
+            {isStarted
+              ? <Bot className="h-4 w-4 flex-shrink-0" style={{ color: '#8b5cf6' }} />
+              : <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: '#22c55e' }} />
+            }
+            <span style={{ color: isStarted ? '#8b5cf6' : '#22c55e' }} className="font-medium">
+              {activity.agentName}
+            </span>
+            <span className="text-muted-foreground">
+              {isStarted ? 'started' : 'completed'}
+            </span>
           </div>
         );
       }

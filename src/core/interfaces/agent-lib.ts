@@ -189,6 +189,26 @@ export interface AgentLibHooks {
   preCompact?: (input: PreCompactHookInput) => void;
 }
 
+// ============================================
+// Subagent Definition Types
+// ============================================
+
+/** Definition for a custom subagent that can be invoked via the Task tool. */
+export interface SubagentDefinition {
+  /** Natural language description of when to use this agent. */
+  description: string;
+  /** The agent's system prompt. */
+  prompt: string;
+  /** Array of allowed tool names. If omitted, inherits all tools from parent. */
+  tools?: string[];
+  /** Array of tool names to explicitly disallow for this agent. */
+  disallowedTools?: string[];
+  /** Model to use for this agent: 'sonnet', 'opus', 'haiku', or 'inherit' (default). */
+  model?: 'sonnet' | 'opus' | 'haiku' | 'inherit';
+  /** Maximum number of agentic turns before stopping. */
+  maxTurns?: number;
+}
+
 /** Preset-based system prompt: uses the SDK's built-in prompt with optional appended instructions. */
 export interface SystemPromptPreset {
   type: 'preset';
@@ -227,6 +247,8 @@ export interface AgentLibRunOptions {
   >;
   /** Control which filesystem settings to load (e.g., ['project'] to auto-load CLAUDE.md). Supported by claude-code engine only. */
   settingSources?: Array<'user' | 'project' | 'local'>;
+  /** Custom subagent definitions that the main agent can delegate tasks to via the Task tool. Supported by claude-code engine only. */
+  agents?: Record<string, SubagentDefinition>;
 }
 
 export interface AgentLibCallbacks {

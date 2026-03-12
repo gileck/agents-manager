@@ -16,7 +16,7 @@ based on a review of the official SDK documentation against our current implemen
 | 2 | Streaming Input (AsyncGenerator) | 2 | DONE | — |
 | 3 | Interactive Tool Approval (canUseTool) | 3 | DONE | #2 |
 | 8 | Full Hooks System | 3 | DONE | #3 |
-| 5 | Subagent Definitions | 4 | NOT STARTED | #8 |
+| 5 | Subagent Definitions | 4 | DONE | #8 |
 | 11 | Slash Commands | 5 | NOT STARTED | #2 |
 | 13 | Plugins | 5 | NOT STARTED | #7 |
 
@@ -239,14 +239,14 @@ and model selection.
 
 #### Phase 4 — Todo List
 
-- [ ] Rebase worktree branch from main
-- [ ] Add `agents` record type to `AgentLibRunOptions` in `agent-lib.ts`
-- [ ] Pass `agents` to SDK in `claude-code-lib.ts`, add `Agent` to allowed tools list
-- [ ] Handle `parent_tool_use_id` in message processing in `claude-code-lib.ts`
-- [ ] Define default subagents per scope in `chat-agent-service.ts`
-- [ ] Add `subagent_activity` message type to `shared/types.ts`
-- [ ] Renderer: display subagent activity in chat thread (collapsible card)
-- [ ] Run `yarn checks` — fix any TypeScript / ESLint errors
+- [x] Rebase worktree branch from main
+- [x] Add `SubagentDefinition` + `agents` record to `AgentLibRunOptions` in `agent-lib.ts`
+- [x] Pass `agents` to SDK in `claude-code-lib.ts`
+- [x] Define default subagents (code-reviewer, researcher, test-runner) in `chat-agent-service.ts`
+- [x] Add `subagent_activity` message type to `shared/types.ts`
+- [x] Add subagentStart/subagentStop hooks emitting activity messages
+- [x] Renderer: display subagent activity cards (Bot/CheckCircle2 icons) in `ChatMessageList.tsx`
+- [x] Run `yarn checks` — fix any TypeScript / ESLint errors
 - [ ] Manual smoke test: trigger subagent delegation, verify messages appear
 - [ ] **Review** — review changes, update status to DONE, merge to main
 

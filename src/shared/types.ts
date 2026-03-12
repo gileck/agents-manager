@@ -780,6 +780,16 @@ export interface AgentChatMessageNotification {
   timestamp: number;
 }
 
+/** Subagent lifecycle event — emitted when a subagent starts or completes. */
+export interface AgentChatMessageSubagentActivity {
+  type: 'subagent_activity';
+  agentName: string;
+  status: 'started' | 'completed';
+  toolUseId?: string;
+  result?: string;
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
@@ -795,7 +805,8 @@ export type AgentChatMessage =
   | AgentChatMessageStreamDelta
   | AgentChatMessagePermissionRequest
   | AgentChatMessagePermissionResponse
-  | AgentChatMessageNotification;
+  | AgentChatMessageNotification
+  | AgentChatMessageSubagentActivity;
 
 export interface AgentConfig {
   model?: string;
