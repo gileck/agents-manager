@@ -47,6 +47,22 @@ Error display patterns, user-facing error requirements, and error handling rules
 
 ---
 
+## Agent Lib Features
+
+Feature reference for the IAgentLib abstraction — interfaces, logic, and UX flows
+
+**Summary:** Documents each feature supported by the agent lib abstraction: interactive tool approval, streaming, hooks, subagents, system prompt customization, slash commands, plugins, images, session resume, and prompt injection. Each section covers the interface contract, service-layer logic, UX flow, and which libs implement it.
+
+**Key Points:**
+- All features are opt-in via AgentLibFeatures flags and optional fields on AgentLibRunOptions/AgentLibCallbacks
+- chat-agent-service.ts adapts behavior per lib using supportedFeatures() checks
+- Interface: src/core/interfaces/agent-lib.ts — Reference impl: src/core/libs/claude-code-lib.ts
+- Feature flags: images, hooks, thinking, nativeResume
+
+**Docs:** [agent-lib-features.md](docs/agent-lib-features.md)
+
+---
+
 ## Agent System
 
 Agent types, execution lifecycle, prompts, validation, and context accumulation
