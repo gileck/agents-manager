@@ -48,17 +48,21 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
     reader.readAsDataURL(file);
   }, []);
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) addImageFile(file);
-        return;
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) addImageFile(file);
+          return;
+        }
       }
-    }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
   }, [addImageFile]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -88,7 +92,6 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
 
   return (
     <div
-      onPaste={handlePaste}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
