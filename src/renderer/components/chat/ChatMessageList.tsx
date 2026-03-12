@@ -20,14 +20,41 @@ interface ChatMessageListProps {
 
 // Message types that are "leaf" nodes rendered directly in the timeline
 const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta', 'permission_request', 'permission_response', 'notification', 'subagent_activity', 'slash_command']);
-// Message types that belong inside a ThinkingGroup (internal processing noise)
-const GROUP_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
+// Message types that always belong inside a ThinkingGroup
+const ALWAYS_GROUPED_TYPES = new Set(['thinking', 'usage']);
+// Internal processing tools that should be grouped into ThinkingGroup
+const THINKING_TOOLS = new Set(['Read', 'Grep', 'Glob', 'Edit', 'Write']);
 
 type LeafSegment = { type: 'leaf'; msg: AgentChatMessage; index: number };
 type GroupSegment = { type: 'group'; messages: AgentChatMessage[]; startIndex: number };
 type Segment = LeafSegment | GroupSegment;
 
+/** Check whether a message should be grouped into a ThinkingGroup. */
+function isGroupedMessage(msg: AgentChatMessage, toolIdToName: Map<string, string>): boolean {
+  if (ALWAYS_GROUPED_TYPES.has(msg.type)) return true;
+  if (msg.type === 'tool_use') {
+    return THINKING_TOOLS.has((msg as AgentChatMessageToolUse).toolName);
+  }
+  if (msg.type === 'tool_result') {
+    const toolName = (msg as AgentChatMessageToolResult).toolId
+      ? toolIdToName.get((msg as AgentChatMessageToolResult).toolId!)
+      : undefined;
+    // If we can resolve the tool name, group only thinking tools; otherwise default inline
+    return toolName ? THINKING_TOOLS.has(toolName) : false;
+  }
+  return false;
+}
+
 function groupMessages(messages: AgentChatMessage[]): Segment[] {
+  // Build toolId → toolName map so tool_result messages can be classified
+  const toolIdToName = new Map<string, string>();
+  for (const msg of messages) {
+    if (msg.type === 'tool_use') {
+      const tu = msg as AgentChatMessageToolUse;
+      if (tu.toolId) toolIdToName.set(tu.toolId, tu.toolName);
+    }
+  }
+
   const segments: Segment[] = [];
   let i = 0;
 
@@ -37,16 +64,16 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
     if (LEAF_TYPES.has(msg.type)) {
       segments.push({ type: 'leaf', msg, index: i });
       i++;
-    } else if (GROUP_TYPES.has(msg.type)) {
+    } else if (isGroupedMessage(msg, toolIdToName)) {
       const startIndex = i;
       const groupMsgs: AgentChatMessage[] = [];
-      while (i < messages.length && GROUP_TYPES.has(messages[i].type)) {
+      while (i < messages.length && isGroupedMessage(messages[i], toolIdToName)) {
         groupMsgs.push(messages[i]);
         i++;
       }
       segments.push({ type: 'group', messages: groupMsgs, startIndex });
     } else {
-      // Unknown type – render as leaf
+      // User-facing tool or unknown type – render as leaf
       segments.push({ type: 'leaf', msg, index: i });
       i++;
     }
