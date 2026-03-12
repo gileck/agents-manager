@@ -518,18 +518,6 @@ export class ClaudeCodeLib implements IAgentLib {
           if (onStreamEvent && streamMsg.event) {
             onStreamEvent(streamMsg.event as { type: string; [key: string]: unknown });
           }
-          // Also extract text/thinking deltas and emit as onMessage for UI rendering
-          const evt = streamMsg.event;
-          if (evt?.type === 'content_block_delta' && evt.delta) {
-            const delta = evt.delta;
-            if (delta.type === 'text_delta' && typeof delta.text === 'string') {
-              onMessage?.({ type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() });
-            } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
-              onMessage?.({ type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() });
-            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-              onMessage?.({ type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() });
-            }
-          }
         } else {
           const otherMsg = message as SdkOtherMessage;
           if (otherMsg.message?.content) {
