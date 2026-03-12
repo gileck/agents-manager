@@ -144,6 +144,11 @@ export class ChatAgentService {
   private imageStorageDir: string;
   private injectedQueue = new Map<string, InjectedMessage[]>();
   private injectedEventHandler?: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined;
+  private pendingQuestions = new Map<string, {
+    resolve: (answers: Record<string, string>) => void;
+    reject: (err: Error) => void;
+    sessionId: string;
+  }>();
 
   constructor(
     private chatMessageStore: IChatMessageStore,
@@ -511,6 +516,14 @@ export class ChatAgentService {
     // Discard queued injected messages — session is being stopped
     this.injectedQueue.delete(sessionId);
 
+    // Reject any pending questions for this session
+    // Collect matching entries first to avoid delete-while-iterating
+    const toReject = [...this.pendingQuestions.entries()].filter(([, p]) => p.sessionId === sessionId);
+    for (const [questionId, pending] of toReject) {
+      this.pendingQuestions.delete(questionId);
+      pending.reject(new Error('Agent stopped by user'));
+    }
+
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
       getAppLogger().info('ChatAgentService', `Stopping chat agent for session ${sessionId}`);
@@ -525,6 +538,33 @@ export class ChatAgentService {
     } else {
       getAppLogger().warn('ChatAgentService', `No running controller found for session ${sessionId}`);
     }
+  }
+
+  answerQuestion(questionId: string, answers: Record<string, string>, sessionId?: string): void {
+    const pending = this.pendingQuestions.get(questionId);
+    if (!pending) {
+      throw Object.assign(new Error(`No pending question found for questionId: ${questionId}`), { status: 404 });
+    }
+
+    // Validate sessionId matches if provided (prevents cross-session answers)
+    if (sessionId && pending.sessionId !== sessionId) {
+      throw Object.assign(new Error(`Question ${questionId} does not belong to session ${sessionId}`), { status: 403 });
+    }
+
+    // Update the live turn message to mark as answered
+    const turnMessages = this.liveTurnMessages.get(pending.sessionId);
+    if (turnMessages) {
+      for (const msg of turnMessages) {
+        if (msg.type === 'ask_user_question' && msg.questionId === questionId) {
+          msg.answered = true;
+          msg.answers = answers;
+          break;
+        }
+      }
+    }
+
+    this.pendingQuestions.delete(questionId);
+    pending.resolve(answers);
   }
 
   async getMessages(sessionId: string): Promise<ChatMessage[]> {
@@ -922,6 +962,80 @@ export class ChatAgentService {
         }
       }
 
+      // Build canUseTool callback that intercepts AskUserQuestion tool calls
+      const canUseTool = async (toolName: string, input: Record<string, unknown>): Promise<
+        { behavior: 'allow'; updatedInput?: Record<string, unknown> } |
+        { behavior: 'deny'; message: string }
+      > => {
+        if (toolName !== 'AskUserQuestion') {
+          return { behavior: 'allow' };
+        }
+
+        const questionId = randomUUID();
+        const rawQuestions = Array.isArray(input.questions) ? input.questions : [];
+
+        // Validate and normalize question items from SDK input
+        const questions: import('../../shared/types').AskUserQuestionItem[] = rawQuestions
+          .filter((q: unknown): q is Record<string, unknown> => q != null && typeof q === 'object')
+          .map((q: Record<string, unknown>) => ({
+            question: typeof q.question === 'string' ? q.question : '',
+            header: typeof q.header === 'string' ? q.header : undefined,
+            multiSelect: typeof q.multiSelect === 'boolean' ? q.multiSelect : undefined,
+            options: Array.isArray(q.options)
+              ? (q.options as unknown[]).filter((o): o is Record<string, unknown> => o != null && typeof o === 'object').map((o: Record<string, unknown>) => ({
+                  label: typeof o.label === 'string' ? o.label : String(o.label ?? ''),
+                  description: typeof o.description === 'string' ? o.description : undefined,
+                }))
+              : [],
+          }));
+
+        if (questions.length === 0) {
+          return { behavior: 'deny', message: 'AskUserQuestion received no valid questions.' };
+        }
+
+        // Emit the ask_user_question message via the existing CHAT_MESSAGE WS channel
+        const askMsg: AgentChatMessage = {
+          type: 'ask_user_question',
+          questionId,
+          questions,
+          answered: false,
+          timestamp: Date.now(),
+        };
+        emitMessage(askMsg);
+
+        // Block the SDK by returning a Promise that resolves when the user answers
+        let onAbort: (() => void) | undefined;
+        try {
+          const answers = await new Promise<Record<string, string>>((resolve, reject) => {
+            this.pendingQuestions.set(questionId, { resolve, reject, sessionId });
+
+            // Also reject if the abort controller fires
+            onAbort = () => {
+              if (this.pendingQuestions.has(questionId)) {
+                this.pendingQuestions.delete(questionId);
+                reject(new Error('Agent stopped while waiting for user answer'));
+              }
+            };
+            abortController.signal.addEventListener('abort', onAbort, { once: true });
+          });
+
+          // Clean up abort listener now that we have an answer
+          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
+
+          // Return deny with the user's answers formatted as a message
+          // so the agent receives the answers as tool result text
+          const answerLines = Object.entries(answers).map(([q, a]) => `${q}: ${a}`).join('\n');
+          return { behavior: 'deny', message: `User answered:\n${answerLines}` };
+        } catch (err) {
+          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
+          // Log unexpected errors (not abort-related)
+          if (err instanceof Error && !err.message.includes('Agent stopped')) {
+            getAppLogger().warn('ChatAgentService', 'Unexpected error in canUseTool AskUserQuestion handler', { error: err.message });
+          }
+          return { behavior: 'deny', message: 'User did not answer (agent was stopped).' };
+        }
+      };
+
       const executeOptions = {
         prompt,
         systemPrompt,
@@ -937,6 +1051,7 @@ export class ChatAgentService {
         ...(preToolUse ? { hooks: { preToolUse } } : {}),
         ...(libImages ? { images: libImages } : {}),
         ...(mcpServers ? { mcpServers } : {}),
+        canUseTool,
       };
 
       let result = await lib.execute(executeSessionId, executeOptions, callbacks);
@@ -1009,6 +1124,13 @@ export class ChatAgentService {
     } finally {
       this.runningControllers.delete(sessionId);
       this.liveTurnMessages.delete(sessionId);
+
+      // Clean up any orphaned pending questions for this session (e.g. SDK timeout)
+      const orphaned = [...this.pendingQuestions.entries()].filter(([, p]) => p.sessionId === sessionId);
+      for (const [qId, pending] of orphaned) {
+        this.pendingQuestions.delete(qId);
+        pending.reject(new Error('Agent session ended'));
+      }
 
       // Clean up completed agent after a delay to allow UI to show completion status
       setTimeout(() => {

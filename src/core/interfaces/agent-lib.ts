@@ -46,6 +46,11 @@ export interface AgentLibRunOptions {
   maxBudgetUsd?: number;
   /** SDK beta feature flags to enable (e.g., extended context). Supported by claude-code engine only. */
   betas?: string[];
+  /** Intercept tool calls to allow, deny, or modify them. Used for AskUserQuestion handling. */
+  canUseTool?: (toolName: string, input: Record<string, unknown>) => Promise<
+    { behavior: 'allow'; updatedInput?: Record<string, unknown> } |
+    { behavior: 'deny'; message: string }
+  >;
 }
 
 export interface AgentLibCallbacks {

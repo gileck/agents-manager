@@ -210,6 +210,7 @@ export interface ApiClient {
     getRunningAgents(): Promise<unknown[]>;
     getTrackedTasks(sessionId: string): Promise<Task[]>;
     trackTask(sessionId: string, taskId: string): Promise<void>;
+    answerQuestion(sessionId: string, questionId: string, answers: Record<string, string>): Promise<void>;
   };
 
   // Task Chat
@@ -536,6 +537,8 @@ export function createApiClient(baseUrl: string): ApiClient {
       getRunningAgents: () => req('GET', '/api/chat/agents'),
       getTrackedTasks: (sessionId) => req('GET', `/api/chat/sessions/${sessionId}/tracked-tasks`),
       trackTask: (sessionId, taskId) => req('POST', `/api/chat/sessions/${sessionId}/track-task`, { taskId }),
+      answerQuestion: (sessionId, questionId, answers) =>
+        req('POST', `/api/chat/sessions/${sessionId}/answer-question`, { questionId, answers }),
     },
 
     // -- Task Chat -----------------------------------------------------------

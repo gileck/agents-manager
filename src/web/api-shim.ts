@@ -203,6 +203,7 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       chatLiveMessages: (sessionId) => api.chat.getLiveMessages(sessionId) as Promise<never>,
       trackedTasks: (sessionId) => api.chat.getTrackedTasks(sessionId),
       trackTask: (sessionId, taskId) => api.chat.trackTask(sessionId, taskId),
+      answerQuestion: (sessionId, questionId, answers) => api.chat.answerQuestion(sessionId, questionId, answers),
     },
 
     // ── Chat Sessions ─────────────────────────────────────────────────

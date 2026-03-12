@@ -282,6 +282,23 @@ export function useChat(sessionId: string | null) {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const answerQuestion = useCallback(async (questionId: string, answers: Record<string, string>) => {
+    if (!sessionId) return;
+    try {
+      await window.api.chat.answerQuestion(sessionId, questionId, answers);
+      // Optimistically update the streaming message to answered
+      setStreamingMessages((prev) =>
+        prev.map((msg) =>
+          msg.type === 'ask_user_question' && msg.questionId === questionId
+            ? { ...msg, answered: true, answers }
+            : msg,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [sessionId]);
+
   return {
     messages,
     isStreaming,
@@ -290,6 +307,7 @@ export function useChat(sessionId: string | null) {
     error,
     clearError,
     sendMessage,
+    answerQuestion,
     stopChat,
     cancelQueuedMessage,
     clearChat,

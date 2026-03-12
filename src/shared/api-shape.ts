@@ -237,6 +237,7 @@ export interface ApiShape {
     chatLiveMessages(sessionId: string): Promise<AgentChatMessage[]>;
     trackedTasks(sessionId: string): Promise<Task[]>;
     trackTask(sessionId: string, taskId: string): Promise<void>;
+    answerQuestion(sessionId: string, questionId: string, answers: Record<string, string>): Promise<void>;
   };
 
   // Chat session operations

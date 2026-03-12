@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pencil, ChevronDown, Play, AlertTriangle } from 'lucide-react';
-import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser } from '../../../shared/types';
+import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
 import { AgentRunInfoCard } from './AgentRunInfoCard';
 import { ThinkingGroup } from './ThinkingGroup';
+import { AskUserQuestionCard } from './AskUserQuestionCard';
+import { useChatActions } from './ChatActionsContext';
 
 interface ChatMessageListProps {
   messages: AgentChatMessage[];
@@ -16,7 +18,7 @@ interface ChatMessageListProps {
 }
 
 // Message types that are "leaf" nodes rendered directly in the timeline
-const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting']);
+const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question']);
 // Message types that belong inside a ThinkingGroup (internal processing noise)
 const GROUP_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
 
@@ -56,6 +58,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { answerQuestion } = useChatActions();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -276,6 +279,11 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
             </span>
           </div>
         );
+      } else if (msg.type === 'ask_user_question') {
+        const askMsg = msg as AgentChatMessageAskUserQuestion;
+        nodes.push(
+          <AskUserQuestionCard key={i} message={askMsg} onAnswer={answerQuestion} />
+        );
       } else if (msg.type === 'compacting' && msg.active) {
         // Only show if no later compacting message supersedes this one
         const hasLaterCompacting = messages.slice(i + 1).some(m => m.type === 'compacting');
@@ -295,7 +303,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume }
       // usage messages are skipped
     }
     return nodes;
-  }, [segments, messages, expandedTools, toggleTool, onEditMessage, onResume, isRunning, navigate]);
+  }, [segments, messages, expandedTools, toggleTool, onEditMessage, onResume, isRunning, navigate, answerQuestion]);
 
   return (
     <div className="relative flex-1 min-h-0">

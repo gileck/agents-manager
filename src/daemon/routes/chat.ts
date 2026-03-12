@@ -357,6 +357,24 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // POST /api/chat/sessions/:id/answer-question — answer a pending AskUserQuestion
+  router.post('/api/chat/sessions/:id/answer-question', (req, res, next) => {
+    try {
+      const sessionId = req.params.id;
+      const { questionId, answers } = req.body as { questionId?: string; answers?: Record<string, string> };
+      if (!questionId || typeof questionId !== 'string') {
+        res.status(400).json({ error: 'questionId is required and must be a string' });
+        return;
+      }
+      if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+        res.status(400).json({ error: 'answers is required and must be a plain object' });
+        return;
+      }
+      services.chatAgentService.answerQuestion(questionId, answers, sessionId);
+      res.json({ ok: true });
+    } catch (err) { next(err); }
+  });
+
   // GET /api/chat/costs — get cost summary
   router.get('/api/chat/costs', async (_req, res, next) => {
     try {

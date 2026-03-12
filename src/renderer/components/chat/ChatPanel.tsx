@@ -51,6 +51,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     error,
     clearError,
     sendMessage,
+    answerQuestion,
     stopChat,
     cancelQueuedMessage,
     clearChat,
@@ -130,7 +131,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   const showInlineTabs = scope.type === 'task';
 
   return (
-    <ChatActionsProvider sendMessage={sendMessage} sessionId={currentSessionId} isStreaming={isStreaming}>
+    <ChatActionsProvider sendMessage={sendMessage} answerQuestion={answerQuestion} sessionId={currentSessionId} isStreaming={isStreaming}>
     <div className="flex flex-col h-full bg-transparent">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-card/40 backdrop-blur-sm">
         <div className="flex items-center gap-2 min-w-0">

@@ -726,6 +726,27 @@ export interface AgentChatMessageCompacting {
   timestamp: number;
 }
 
+export interface AskUserQuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface AskUserQuestionItem {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: AskUserQuestionOption[];
+}
+
+export interface AgentChatMessageAskUserQuestion {
+  type: 'ask_user_question';
+  questionId: string;
+  questions: AskUserQuestionItem[];
+  answers?: Record<string, string>;
+  answered: boolean;
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
@@ -736,7 +757,8 @@ export type AgentChatMessage =
   | AgentChatMessageThinking
   | AgentChatMessageRunInfo
   | AgentChatMessageCompactBoundary
-  | AgentChatMessageCompacting;
+  | AgentChatMessageCompacting
+  | AgentChatMessageAskUserQuestion;
 
 export interface AgentConfig {
   model?: string;
