@@ -5,6 +5,8 @@ import type {
   AgentContext,
   AgentConfig,
   AgentChatMessage,
+  PostProcessingLogCategory,
+  AgentChatMessagePostProcessingLog,
 } from '../../shared/types';
 import type { IAgentFramework } from '../interfaces/agent-framework';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
@@ -778,11 +780,38 @@ export class AgentService implements IAgentService {
         data: { exitCode: result.exitCode, outcome: result.outcome, outputLength: result.output?.length ?? 0, ...(result.error ? { error: result.error } : {}) },
       }).catch(() => {});
 
+      // --- Post-processing logging infrastructure ---
+      const postProcessingStart = performance.now();
+      const categoryTimings: Record<string, number> = {};
+      const addTiming = (category: string, durationMs: number) => {
+        categoryTimings[category] = (categoryTimings[category] ?? 0) + durationMs;
+      };
+      const emitPostLog = (
+        category: PostProcessingLogCategory,
+        message: string,
+        details?: Record<string, unknown>,
+        durationMs?: number,
+      ) => {
+        const msg: AgentChatMessagePostProcessingLog = {
+          type: 'post_processing_log',
+          category,
+          message,
+          ...(details ? { details } : {}),
+          ...(durationMs != null ? { durationMs } : {}),
+          timestamp: Date.now(),
+        };
+        flusher.appendMessage(msg);
+        onMessage?.(msg);
+        if (durationMs != null) addTiming(category, durationMs);
+      };
+
       // Post-agent validation loop
       const validationCommands = ValidationRunner.getValidationCommands(agentType, context.project.config);
       const maxValidationRetries = (context.project.config?.maxValidationRetries as number | undefined) ?? 3;
 
       if (validationCommands.length > 0) {
+        emitPostLog('validation', `Running validation: ${validationCommands.length} command(s) configured`, { commands: validationCommands, maxRetries: maxValidationRetries });
+        const valStart = performance.now();
         result = await this.validationRunner.runWithRetries({
           agent, context, config, run, taskId,
           validationCommands, maxRetries: maxValidationRetries,
@@ -790,6 +819,10 @@ export class AgentService implements IAgentService {
           projectPath: context.project.path ?? undefined,
           wrappedOnOutput, onLog, onPromptBuilt, wrappedOnMessage,
         });
+        const valDuration = Math.round(performance.now() - valStart);
+        emitPostLog('validation', `Validation complete: exitCode=${result.exitCode}`, { exitCode: result.exitCode }, valDuration);
+      } else {
+        emitPostLog('validation', 'Validation skipped (no commands configured)');
       }
 
       // Stop periodic flushing and do a final flush with the complete result
@@ -799,6 +832,11 @@ export class AgentService implements IAgentService {
       const completedAt = now();
       const runStatus = result.exitCode === 0 ? 'completed' : 'failed';
       const finalMessageCount = 'lastMessageCount' in agent ? (agent as { lastMessageCount?: number }).lastMessageCount : undefined;
+      emitPostLog('system', 'Saving agent run results to database', {
+        status: runStatus, outcome: result.outcome, exitCode: result.exitCode,
+        costInputTokens: result.costInputTokens, costOutputTokens: result.costOutputTokens,
+      });
+      const dbUpdateStart = performance.now();
       await this.agentRunStore.updateRun(run.id, {
         status: runStatus,
         output: result.output,
@@ -817,6 +855,8 @@ export class AgentService implements IAgentService {
         messages: flusher.getBufferedMessages(),
         model: result.model,
       });
+      const dbUpdateDuration = Math.round(performance.now() - dbUpdateStart);
+      emitPostLog('system', `Agent run saved: status=${runStatus}, outcome=${result.outcome}`, { status: runStatus, outcome: result.outcome, exitCode: result.exitCode }, dbUpdateDuration);
       this.taskEventLog.log({
         taskId,
         category: 'agent_debug',
@@ -828,6 +868,7 @@ export class AgentService implements IAgentService {
       if (result.outcome) {
         const validation = validateOutcomePayload(result.outcome, result.payload);
         if (!validation.valid) {
+          emitPostLog('system', `Outcome payload validation failed: ${validation.error}`, { outcome: result.outcome, error: validation.error });
           await this.taskEventLog.log({
             taskId,
             category: 'agent',
@@ -836,6 +877,8 @@ export class AgentService implements IAgentService {
             data: { outcome: result.outcome, error: validation.error },
           });
           // Don't block — still attempt transition (warn-and-proceed for v1)
+        } else {
+          emitPostLog('system', `Outcome payload validated: outcome=${result.outcome}`, { outcome: result.outcome });
         }
       }
 
@@ -843,11 +886,14 @@ export class AgentService implements IAgentService {
       const postRunLog = (message: string) => {
         this.taskEventLog.log({ taskId, category: 'agent_debug', severity: 'debug', message }).catch(() => {});
       };
-      await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog, context.revisionReason, run.id);
-      await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog, context.revisionReason, run.id);
-      await this.postRunExtractor.extractTaskEstimates(taskId, result, agentType, postRunLog);
-      await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog);
-      await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog);
+      const extractionPostLog = (message: string, details?: Record<string, unknown>, durationMs?: number) => {
+        emitPostLog('extraction', message, details, durationMs);
+      };
+      await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
+      await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
+      await this.postRunExtractor.extractTaskEstimates(taskId, result, agentType, postRunLog, extractionPostLog);
+      await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog, extractionPostLog);
+      await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog, extractionPostLog);
 
       // Extract summary for outcome transition context (previously done by appendSummaryComment)
       const so = result.structuredOutput as { summary?: string; planSummary?: string; investigationSummary?: string; designSummary?: string } | undefined;
@@ -866,13 +912,19 @@ export class AgentService implements IAgentService {
       }).catch(() => {});
 
       // Handle outcome — resolve outcome and execute transitions
+      emitPostLog('git', `Starting outcome resolution: outcome=${result.outcome ?? 'none'}`, { outcome: result.outcome });
+      const outcomeStart = performance.now();
       await this.outcomeResolver.resolveAndTransition({
         taskId, result, run, worktree, worktreeManager, phase, context, summary: agentSummary,
+        onPostLog: emitPostLog,
       });
+      const outcomeDuration = Math.round(performance.now() - outcomeStart);
+      emitPostLog('git', 'Outcome resolution complete', { outcome: result.outcome }, outcomeDuration);
 
       // --- Notify subscribed chat sessions ---
       if (this.subscriptionRegistry) {
         const subscribers = this.subscriptionRegistry.getAndRemove(taskId);
+        emitPostLog('notification', `Subscription check: ${subscribers.length} subscriber(s) found`, { subscriberCount: subscribers.length });
         if (subscribers.length > 0) {
           const updatedTask = await this.taskStore.getTask(taskId);
           for (const sub of subscribers) {
@@ -967,6 +1019,8 @@ export class AgentService implements IAgentService {
           notifActions.push({ label: 'Restart Agent', callbackData: `ra|${taskId}` });
         }
 
+        emitPostLog('notification', `Sending native notification: channel=${run.id}`, { channel: run.id, status: finalStatus });
+        const notifStart = performance.now();
         await this.notificationRouter.send({
           taskId,
           title: `Agent ${finalStatus}`,
@@ -974,8 +1028,11 @@ export class AgentService implements IAgentService {
           channel: run.id,
           actions: notifActions,
         });
+        const notifDuration = Math.round(performance.now() - notifStart);
+        emitPostLog('notification', `Native notification sent`, { channel: run.id }, notifDuration);
       } catch (notifErr) {
         const notifMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+        emitPostLog('notification', `Native notification failed: ${notifMsg}`, { error: notifMsg });
         this.taskEventLog.log({
           taskId,
           category: 'system',
@@ -987,6 +1044,7 @@ export class AgentService implements IAgentService {
 
       // Check message queue for follow-up messages
       const pendingQueue = this.messageQueues.get(taskId);
+      emitPostLog('system', `Message queue check: ${pendingQueue?.length ?? 0} pending message(s)`, { pendingCount: pendingQueue?.length ?? 0 });
       if (pendingQueue && pendingQueue.length > 0) {
         try {
           // Defensive no-op: spawn lock already released before resolveAndTransition (line 565)
@@ -1003,6 +1061,23 @@ export class AgentService implements IAgentService {
             data: { agentRunId: run.id },
           }).catch(() => {});
         }
+      }
+
+      // --- Emit timing summary and persist post-processing messages ---
+      const postProcessingTotal = Math.round(performance.now() - postProcessingStart);
+      emitPostLog('system', `Post-agent processing complete (total: ${postProcessingTotal}ms)`, {
+        totalMs: postProcessingTotal,
+        timings: categoryTimings,
+      }, postProcessingTotal);
+
+      // Persist post-processing log messages that were appended after the initial DB save
+      try {
+        await this.agentRunStore.updateRun(run.id, {
+          messages: flusher.getBufferedMessages(),
+        });
+      } catch (persistErr) {
+        const persistMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+        getAppLogger().warn('AgentService', `Failed to persist post-processing messages: ${persistMsg}`, { taskId, agentRunId: run.id });
       }
     } catch (outerErr) {
       // FATAL: catch any unhandled error in post-agent processing to prevent silent hangs

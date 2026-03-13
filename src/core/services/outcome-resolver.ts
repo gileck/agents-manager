@@ -1,4 +1,4 @@
-import type { AgentRunResult, AgentContext, TransitionContext } from '../../shared/types';
+import type { AgentRunResult, AgentContext, TransitionContext, PostProcessingLogCategory } from '../../shared/types';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { ITaskStore } from '../interfaces/task-store';
@@ -7,6 +7,8 @@ import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import { now } from '../stores/utils';
+
+type OnPostLog = (category: PostProcessingLogCategory, message: string, details?: Record<string, unknown>, durationMs?: number) => void;
 
 export class OutcomeResolver {
   constructor(
@@ -27,8 +29,9 @@ export class OutcomeResolver {
     phase: { id: string };
     context: AgentContext;
     summary?: string;
+    onPostLog?: OnPostLog;
   }): Promise<void> {
-    const { taskId, result, run, worktree, worktreeManager, phase, context, summary } = params;
+    const { taskId, result, run, worktree, worktreeManager, phase, context, summary, onPostLog } = params;
     const completedAt = now();
 
     if (result.exitCode === 0) {
@@ -43,12 +46,12 @@ export class OutcomeResolver {
       let effectiveOutcome = result.outcome;
 
       if (effectiveOutcome === 'pr_ready') {
-        effectiveOutcome = await this.verifyBranchDiff(taskId, worktree);
+        effectiveOutcome = await this.verifyBranchDiff(taskId, worktree, onPostLog);
       }
 
       // Early conflict detection (skip for merge_failed revision)
       if (effectiveOutcome === 'pr_ready' && context.revisionReason !== 'merge_failed') {
-        effectiveOutcome = await this.detectConflicts(taskId, worktree);
+        effectiveOutcome = await this.detectConflicts(taskId, worktree, onPostLog);
       }
 
       if (effectiveOutcome) {
@@ -63,7 +66,7 @@ export class OutcomeResolver {
           payload: result.payload,
           branch: worktree.branch,
           ...(summary ? { summary } : {}),
-        });
+        }, onPostLog);
       }
     } else {
       await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
@@ -71,7 +74,11 @@ export class OutcomeResolver {
 
     // Cleanup — unlock before retry transition so the new agent can acquire the lock.
     try {
+      onPostLog?.('system', 'Unlocking worktree', { taskId });
+      const unlockStart = performance.now();
       await worktreeManager.unlock(taskId);
+      const unlockDuration = Math.round(performance.now() - unlockStart);
+      onPostLog?.('system', 'Worktree unlocked', { taskId }, unlockDuration);
       await this.taskEventLog.log({
         taskId,
         category: 'worktree',
@@ -80,16 +87,19 @@ export class OutcomeResolver {
         data: { taskId },
       });
     } catch {
+      onPostLog?.('system', 'Worktree unlock skipped (already deleted or not locked)');
       // Worktree may have been deleted by a transition hook — safe to ignore
     }
 
     // For failed runs, attempt failure transition (pipeline may retry via hooks)
     if (result.exitCode !== 0) {
-      await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id });
+      await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id }, onPostLog);
     }
   }
 
-  private async verifyBranchDiff(taskId: string, worktree: { branch: string; path: string }): Promise<'pr_ready' | 'no_changes' | 'already_on_main'> {
+  private async verifyBranchDiff(taskId: string, worktree: { branch: string; path: string }, onPostLog?: OnPostLog): Promise<'pr_ready' | 'no_changes' | 'already_on_main'> {
+    onPostLog?.('git', `Verifying branch diff: branch=${worktree.branch}`, { branch: worktree.branch });
+    const diffStart = performance.now();
     this.taskEventLog.log({
       taskId,
       category: 'agent_debug',
@@ -99,23 +109,30 @@ export class OutcomeResolver {
     try {
       const gitOps = this.createGitOps(worktree.path);
       const diffContent = await gitOps.diff('origin/main', worktree.branch);
+      const diffDuration = Math.round(performance.now() - diffStart);
+      const hasChanges = diffContent.trim().length > 0;
+      onPostLog?.('git', `git diff origin/main..${worktree.branch}: hasChanges=${hasChanges}, diffLength=${diffContent.length}`, { hasChanges, diffLength: diffContent.length }, diffDuration);
       this.taskEventLog.log({
         taskId,
         category: 'agent_debug',
         severity: 'debug',
-        message: `Branch diff result: hasChanges=${diffContent.trim().length > 0}, diffLength=${diffContent.length}`,
+        message: `Branch diff result: hasChanges=${hasChanges}, diffLength=${diffContent.length}`,
       }).catch(() => {});
-      if (diffContent.trim().length === 0) {
+      if (!hasChanges) {
         // Check whether the branch has unique commits beyond origin/main.
         // If HEAD equals origin/main, the work is already on main —
         // return already_on_main so the task transitions to done
         // instead of looping back to open via no_changes.
         try {
+          const revParseStart = performance.now();
           const [headSha, mainSha] = await Promise.all([
             gitOps.revParse('HEAD'),
             gitOps.revParse('origin/main'),
           ]);
+          const revParseDuration = Math.round(performance.now() - revParseStart);
+          onPostLog?.('git', `rev-parse HEAD=${headSha.slice(0, 8)}, origin/main=${mainSha.slice(0, 8)}`, { headSha, mainSha }, revParseDuration);
           if (headSha === mainSha) {
+            onPostLog?.('git', 'Branch HEAD equals origin/main — changes already on main');
             await this.taskEventLog.log({
               taskId,
               category: 'agent',
@@ -126,6 +143,7 @@ export class OutcomeResolver {
             return 'already_on_main';
           }
         } catch (revParseErr) {
+          onPostLog?.('git', `rev-parse failed: ${revParseErr instanceof Error ? revParseErr.message : String(revParseErr)}`);
           await this.taskEventLog.log({
             taskId,
             category: 'agent',
@@ -135,6 +153,7 @@ export class OutcomeResolver {
           });
           // Fall through to no_changes — diff is empty, just couldn't determine why
         }
+        onPostLog?.('git', 'No changes detected on branch — using no_changes outcome', { branch: worktree.branch });
         await this.taskEventLog.log({
           taskId,
           category: 'agent',
@@ -145,6 +164,8 @@ export class OutcomeResolver {
         return 'no_changes';
       }
     } catch (err) {
+      const diffDuration = Math.round(performance.now() - diffStart);
+      onPostLog?.('git', `Branch diff verification failed: ${err instanceof Error ? err.message : String(err)}`, { branch: worktree.branch, error: err instanceof Error ? err.message : String(err) }, diffDuration);
       await this.taskEventLog.log({
         taskId,
         category: 'agent',
@@ -156,17 +177,25 @@ export class OutcomeResolver {
     return 'pr_ready';
   }
 
-  private async detectConflicts(taskId: string, worktree: { branch: string; path: string }): Promise<'pr_ready' | 'conflicts_detected'> {
+  private async detectConflicts(taskId: string, worktree: { branch: string; path: string }, onPostLog?: OnPostLog): Promise<'pr_ready' | 'conflicts_detected'> {
     const gitOps = this.createGitOps(worktree.path);
+    onPostLog?.('git', 'Fetching origin for conflict detection');
+    const fetchStart = performance.now();
     await gitOps.fetch('origin');
+    const fetchDuration = Math.round(performance.now() - fetchStart);
+    onPostLog?.('git', 'git fetch origin complete', undefined, fetchDuration);
 
     // Fast-path: if branch is already rebased onto origin/main, skip the rebase attempt
     try {
+      const mergeBaseStart = performance.now();
       const [mergeBase, originMain] = await Promise.all([
         gitOps.mergeBase('HEAD', 'origin/main'),
         gitOps.revParse('origin/main'),
       ]);
+      const mergeBaseDuration = Math.round(performance.now() - mergeBaseStart);
+      onPostLog?.('git', `merge-base HEAD origin/main = ${mergeBase.slice(0, 8)}, origin/main = ${originMain.slice(0, 8)}`, { mergeBase, originMain }, mergeBaseDuration);
       if (mergeBase === originMain) {
+        onPostLog?.('git', 'Branch already rebased onto origin/main — skipping rebase');
         await this.taskEventLog.log({
           taskId,
           category: 'git',
@@ -176,11 +205,16 @@ export class OutcomeResolver {
         return 'pr_ready';
       }
     } catch {
+      onPostLog?.('git', 'merge-base check failed — falling through to rebase');
       // merge-base check failed — fall through to rebase
     }
 
     try {
+      onPostLog?.('git', 'Rebasing onto origin/main');
+      const rebaseStart = performance.now();
       await gitOps.rebase('origin/main');
+      const rebaseDuration = Math.round(performance.now() - rebaseStart);
+      onPostLog?.('git', 'Rebase onto origin/main succeeded', undefined, rebaseDuration);
       await this.taskEventLog.log({
         taskId,
         category: 'git',
@@ -191,6 +225,7 @@ export class OutcomeResolver {
       try {
         await gitOps.rebaseAbort();
       } catch { /* may not be in rebase state */ }
+      onPostLog?.('git', 'Merge conflicts detected — switching to conflicts_detected outcome', { branch: worktree.branch });
       await this.taskEventLog.log({
         taskId,
         category: 'git',
@@ -203,7 +238,7 @@ export class OutcomeResolver {
     return 'pr_ready';
   }
 
-  async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>): Promise<void> {
+  async tryOutcomeTransition(taskId: string, outcome: string, data?: Record<string, unknown>, onPostLog?: OnPostLog): Promise<void> {
     this.taskEventLog.log({
       taskId,
       category: 'agent_debug',
@@ -223,6 +258,10 @@ export class OutcomeResolver {
       ? [...candidates.filter(t => t.to === resumeTo), ...candidates.filter(t => t.to !== resumeTo)]
       : candidates;
 
+    onPostLog?.('pipeline', `Outcome transition: outcome=${outcome}, ${ordered.length} candidate(s) from status="${task.status}"`, {
+      outcome, taskStatus: task.status, candidateCount: ordered.length, candidates: ordered.map(t => t.to),
+    });
+
     // Try each candidate in order — fall through on guard failures to support
     // guarded transitions (e.g. multi-phase auto-merge) with ungarded fallbacks.
     for (const match of ordered) {
@@ -232,9 +271,13 @@ export class OutcomeResolver {
         severity: 'debug',
         message: `Found matching transition: ${task.status} → ${match.to}`,
       }).catch(() => {});
+      onPostLog?.('pipeline', `Attempting transition: ${task.status} → ${match.to}`, { from: task.status, to: match.to });
+      const transitionStart = performance.now();
       const ctx: TransitionContext = { trigger: 'agent', data: { outcome, ...data } };
-      const result = await this.pipelineEngine.executeTransition(task, match.to, ctx);
+      const result = await this.pipelineEngine.executeTransition(task, match.to, ctx, onPostLog);
+      const transitionDuration = Math.round(performance.now() - transitionStart);
       if (result.success) {
+        onPostLog?.('pipeline', `Transition succeeded: ${task.status} → ${match.to}`, { from: task.status, to: match.to }, transitionDuration);
         this.taskEventLog.log({
           taskId,
           category: 'agent_debug',
@@ -246,6 +289,9 @@ export class OutcomeResolver {
 
       // Guard failure — try next candidate
       if (result.guardFailures && result.guardFailures.length > 0) {
+        onPostLog?.('pipeline', `Transition ${task.status} → ${match.to} blocked by guards: ${result.guardFailures.map(g => g.reason).join(', ')}`, {
+          from: task.status, to: match.to, guardFailures: result.guardFailures,
+        }, transitionDuration);
         this.taskEventLog.log({
           taskId,
           category: 'agent_debug',
@@ -257,6 +303,9 @@ export class OutcomeResolver {
       }
 
       // Non-guard failure — this is an error, throw
+      onPostLog?.('pipeline', `Transition ${task.status} → ${match.to} failed: ${result.error ?? 'unknown'}`, {
+        from: task.status, to: match.to, error: result.error,
+      }, transitionDuration);
       await this.taskEventLog.log({
         taskId,
         category: 'system',
@@ -269,6 +318,7 @@ export class OutcomeResolver {
 
     // No candidate succeeded
     if (ordered.length > 0) {
+      onPostLog?.('pipeline', `All ${ordered.length} candidate transitions for outcome="${outcome}" blocked by guards`, { outcome, taskStatus: task.status });
       await this.taskEventLog.log({
         taskId,
         category: 'agent',
@@ -277,6 +327,7 @@ export class OutcomeResolver {
         data: { outcome, taskStatus: task.status, candidates: ordered.map(t => t.to) },
       });
     } else {
+      onPostLog?.('pipeline', `No matching transition for outcome="${outcome}" from status="${task.status}"`, { outcome, taskStatus: task.status });
       await this.taskEventLog.log({
         taskId,
         category: 'agent',

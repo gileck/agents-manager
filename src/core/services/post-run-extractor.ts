@@ -18,6 +18,7 @@ import type { INotificationRouter } from '../interfaces/notification-router';
 import { getAppLogger } from './app-logger';
 
 type OnLog = (message: string) => void;
+type OnPostLog = (message: string, details?: Record<string, unknown>, durationMs?: number) => void;
 
 const PHASE_LABELS: Record<string, string> = {
   investigating: '\u{1F50D} Investigate',
@@ -50,9 +51,14 @@ export class PostRunExtractor {
     onLog: OnLog,
     revisionReason?: RevisionReason,
     agentRunId?: string,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
     const isPlanMode = agentType === 'planner' || agentType === 'investigator';
-    if (result.exitCode !== 0 || !isPlanMode) return;
+    if (result.exitCode !== 0 || !isPlanMode) {
+      onPostLog?.('extractPlan skipped (not applicable)', { agentType, exitCode: result.exitCode });
+      return;
+    }
+    const _start = performance.now();
 
     const so = result.structuredOutput as {
       plan?: string;
@@ -103,6 +109,8 @@ export class PostRunExtractor {
         onLog(`Warning: failed to mark plan_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    const _duration = Math.round(performance.now() - _start);
+    onPostLog?.('extractPlan complete', { hasPlan: !!so?.plan, subtaskCount: so?.subtasks?.length ?? 0, phaseCount: so?.phases?.length ?? 0 }, _duration);
   }
 
   /**
@@ -115,9 +123,14 @@ export class PostRunExtractor {
     onLog: OnLog,
     revisionReason?: RevisionReason,
     agentRunId?: string,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
     const isTdMode = agentType === 'designer';
-    if (result.exitCode !== 0 || !isTdMode) return;
+    if (result.exitCode !== 0 || !isTdMode) {
+      onPostLog?.('extractTechnicalDesign skipped (not applicable)', { agentType, exitCode: result.exitCode });
+      return;
+    }
+    const _start = performance.now();
 
     const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string } | undefined;
     if (so?.technicalDesign) {
@@ -139,6 +152,8 @@ export class PostRunExtractor {
         onLog(`Warning: failed to mark design_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    const _duration = Math.round(performance.now() - _start);
+    onPostLog?.('extractTechnicalDesign complete', { hasDesign: !!so?.technicalDesign }, _duration);
   }
 
   /**
@@ -149,12 +164,20 @@ export class PostRunExtractor {
     result: AgentRunResult,
     agentType: string,
     onLog: OnLog,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
     const estimatingAgents = ['planner', 'designer', 'investigator'];
-    if (result.exitCode !== 0 || !estimatingAgents.includes(agentType)) return;
+    if (result.exitCode !== 0 || !estimatingAgents.includes(agentType)) {
+      onPostLog?.('extractTaskEstimates skipped (not applicable)', { agentType, exitCode: result.exitCode });
+      return;
+    }
 
+    const _start = performance.now();
     const so = result.structuredOutput as { size?: string; complexity?: string } | undefined;
-    if (!so) return;
+    if (!so) {
+      onPostLog?.('extractTaskEstimates skipped (no structured output)');
+      return;
+    }
 
     try {
       const updates: TaskUpdateInput = {};
@@ -169,9 +192,12 @@ export class PostRunExtractor {
         onLog(`Extracting task estimates: size=${updates.size ?? 'none'}, complexity=${updates.complexity ?? 'none'}`);
         await this.taskStore.updateTask(taskId, updates);
       }
+      const _duration = Math.round(performance.now() - _start);
+      onPostLog?.(`extractTaskEstimates complete: size=${updates.size ?? 'none'}, complexity=${updates.complexity ?? 'none'}`, { size: updates.size, complexity: updates.complexity }, _duration);
     } catch (err) {
       // Non-fatal — don't block pipeline on estimate extraction failure
       onLog(`Warning: failed to extract task estimates: ${err instanceof Error ? err.message : String(err)}`);
+      onPostLog?.(`extractTaskEstimates failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -185,8 +211,13 @@ export class PostRunExtractor {
     revisionReason: RevisionReason | undefined,
     result: AgentRunResult,
     onLog: OnLog,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
-    if (result.exitCode !== 0) return;
+    if (result.exitCode !== 0) {
+      onPostLog?.('saveContextEntry skipped (non-zero exit code)', { exitCode: result.exitCode });
+      return;
+    }
+    const _start = performance.now();
 
     try {
       // Use structured output summary when available, fall back to parsing
@@ -254,6 +285,8 @@ export class PostRunExtractor {
         onLog(`Warning: failed to mark implementation_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    const _duration = Math.round(performance.now() - _start);
+    onPostLog?.('saveContextEntry complete', { entryType: getContextEntryType(agentType, revisionReason, result.outcome) }, _duration);
   }
 
   /**
@@ -265,15 +298,23 @@ export class PostRunExtractor {
     agentType: string,
     result: AgentRunResult,
     onLog: OnLog,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
-    if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) return;
+    if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) {
+      onPostLog?.('createSuggestedTasks skipped (not applicable)', { agentType, exitCode: result.exitCode });
+      return;
+    }
+    const _start = performance.now();
 
     const wso = result.structuredOutput as {
       suggestedTasks?: Array<{ title: string; description: string; type?: string; debugInfo?: string; priority?: number; size?: string; complexity?: string; startPhase?: string }>;
     } | undefined;
 
     const tasks = wso?.suggestedTasks;
-    if (!tasks || tasks.length === 0) return;
+    if (!tasks || tasks.length === 0) {
+      onPostLog?.('createSuggestedTasks skipped (no suggested tasks)');
+      return;
+    }
 
     try {
       const reviewedTask = await this.taskStore.getTask(taskId);
@@ -352,6 +393,8 @@ export class PostRunExtractor {
         message: `Failed to create suggested tasks: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
+    const _duration = Math.round(performance.now() - _start);
+    onPostLog?.('createSuggestedTasks complete', { suggestedCount: tasks.length }, _duration);
   }
 
   // ------- Feedback addressing helper -------
