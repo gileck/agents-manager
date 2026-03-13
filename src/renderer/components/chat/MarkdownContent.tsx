@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { reportError } from '../../lib/error-handler';
+import { toScreenshotApiUrl } from '../../utils/screenshot-url';
 
 interface CopyableCodeBlockProps {
   children: React.ReactNode;
@@ -80,6 +81,14 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           <a href={href} className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">
             {children}
           </a>
+        ),
+        img: ({ src, alt, ...props }) => (
+          <img
+            src={src ? toScreenshotApiUrl(src) : src}
+            alt={alt}
+            className="max-w-full rounded my-2"
+            {...props}
+          />
         ),
         hr: () => <hr className="my-4 border-border" />,
       }}
