@@ -108,7 +108,7 @@ const WRITE_TOOL_NAMES = new Set([
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
 ]);
 
-const BASH_TOOL_NAMES = new Set(['Bash']);
+const _BASH_TOOL_NAMES = new Set(['Bash']);
 
 function isDefaultSessionName(name: string): boolean {
   return name === 'General' || /^Session \d+$/.test(name);
@@ -1076,11 +1076,10 @@ export class ChatAgentService {
         readOnly = false;
       } else if (effectiveMode === 'read_write') {
         readOnly = false;
-        disallowedTools = [...BASH_TOOL_NAMES];
       } else {
         // read_only (default)
         readOnly = true;
-        disallowedTools = [...WRITE_TOOL_NAMES, ...BASH_TOOL_NAMES];
+        disallowedTools = [...WRITE_TOOL_NAMES];
       }
 
       // Build onPermissionRequest callback that surfaces tool approval to the UI
