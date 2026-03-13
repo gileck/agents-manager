@@ -58,6 +58,10 @@ export function taskRoutes(services: AppServices, wsHolder: WsHolder = {}): Rout
       const { status: _status, ...safeInput } = input;
       const task = await services.workflowService.updateTask(req.params.id, safeInput);
       if (!task) { res.status(404).json({ error: 'Task not found' }); return; }
+      // Broadcast task update when subtasks or phases are modified
+      if (input.subtasks || input.phases) {
+        wsHolder.server?.broadcast(WS_CHANNELS.TASK_STATUS_CHANGED, task.id, task);
+      }
       res.json(task);
     } catch (err) { next(err); }
   });

@@ -1,4 +1,4 @@
-import type { AgentChatMessage, Subtask, SubtaskStatus, ImplementationPhase } from '../../shared/types';
+import type { AgentChatMessage, Subtask, SubtaskStatus, ImplementationPhase, Task } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 
 /**
@@ -18,6 +18,7 @@ export class SubtaskSyncInterceptor {
     private isMultiPhase: boolean,
     initialSubtasks: Subtask[],
     private onLog: (message: string) => void,
+    private onTaskUpdated?: (taskId: string, task: Task) => void,
   ) {
     this.currentSubtasks = [...initialSubtasks];
   }
@@ -90,12 +91,20 @@ export class SubtaskSyncInterceptor {
   }
 
   private persistSubtaskChanges(): void {
+    const broadcastUpdate = (task: Task | null) => {
+      if (task && this.onTaskUpdated) {
+        this.onTaskUpdated(this.taskId, task);
+      }
+    };
+
     if (this.isMultiPhase && this.activePhaseIndex >= 0 && this.phases) {
       if (this.activePhaseIndex >= this.phases.length) {
         this.onLog(`persistSubtaskChanges: phase index ${this.activePhaseIndex} out of bounds (${this.phases.length} phases)`);
-        this.taskStore.updateTask(this.taskId, { subtasks: [...this.currentSubtasks] }).catch((err) => {
-          this.onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
-        });
+        this.taskStore.updateTask(this.taskId, { subtasks: [...this.currentSubtasks] })
+          .then(broadcastUpdate)
+          .catch((err) => {
+            this.onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
+          });
         return;
       }
       const updatedPhases = [...this.phases];
@@ -103,13 +112,17 @@ export class SubtaskSyncInterceptor {
         ...updatedPhases[this.activePhaseIndex],
         subtasks: [...this.currentSubtasks],
       };
-      this.taskStore.updateTask(this.taskId, { phases: updatedPhases }).catch((err) => {
-        this.onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
-      });
+      this.taskStore.updateTask(this.taskId, { phases: updatedPhases })
+        .then(broadcastUpdate)
+        .catch((err) => {
+          this.onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
+        });
     } else {
-      this.taskStore.updateTask(this.taskId, { subtasks: [...this.currentSubtasks] }).catch((err) => {
-        this.onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
-      });
+      this.taskStore.updateTask(this.taskId, { subtasks: [...this.currentSubtasks] })
+        .then(broadcastUpdate)
+        .catch((err) => {
+          this.onLog(`Failed to persist subtask sync: ${err instanceof Error ? err.message : String(err)}`);
+        });
     }
   }
 }

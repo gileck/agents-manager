@@ -77,6 +77,7 @@ export class AgentService implements IAgentService {
       sessionId: string,
       payload: AgentNotificationPayload,
     ) => void,
+    private onTaskUpdated?: (taskId: string, task: import('../../shared/types').Task) => void,
   ) {
     this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter);
   }
@@ -669,6 +670,7 @@ export class AgentService implements IAgentService {
           isMultiPhase(task),
           effectiveSubtasks ?? [],
           (msg) => onLog(msg),
+          this.onTaskUpdated,
         )
       : null;
 
