@@ -215,11 +215,11 @@ export function RenderedOutputPanel({ messages, isRunning, startedAt, showTimest
       }
 
       // Check if this is a timing summary message
-      const isTimingSummary = logMsg.details?.timingSummary != null;
+      const isTimingSummary = logMsg.details?.categoryTimings != null;
 
       if (isTimingSummary) {
-        const summary = logMsg.details!.timingSummary as Record<string, number>;
-        const totalMs = logMsg.durationMs ?? 0;
+        const summary = logMsg.details!.categoryTimings as Record<string, number>;
+        const totalMs = (logMsg.details?.totalMs as number) ?? 0;
         nodes.push(
           <div key={`post-log-${i}`} className="py-1.5 px-2 my-1 rounded-md border border-border bg-muted/40">
             <div className="flex items-center gap-2 mb-1.5">
