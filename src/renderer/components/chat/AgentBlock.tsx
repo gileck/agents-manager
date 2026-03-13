@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Bot, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, Clock, Cpu, Zap, FileText } from 'lucide-react';
+import { Bot, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, Clock, Cpu, FileText } from 'lucide-react';
 import type { AgentSegment } from './ChatMessageList';
-import type { AgentChatMessageUsage } from '../../../shared/types';
+import type { AgentChatMessage, AgentChatMessageUsage } from '../../../shared/types';
 import { ThinkingGroup } from './ThinkingGroup';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { renderToolContent } from '../tool-renderers/renderUtils';
@@ -67,6 +67,42 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Parse the agent result to extract clean output, stripping metadata like agentId and <usage> tags. */
+function parseAgentResult(raw: string): { cleanResult: string; agentId?: string; totalTokens?: number; toolUses?: number; durationMs?: number } {
+  let cleanResult = raw;
+  let agentId: string | undefined;
+  let totalTokens: number | undefined;
+  let toolUses: number | undefined;
+  let durationMs: number | undefined;
+
+  // Extract agentId line: "agentId: abc123 (for resuming...)"
+  const agentIdMatch = cleanResult.match(/agentId:\s*(\S+)\s*\(for resuming[^)]*\)\n?/);
+  if (agentIdMatch) {
+    agentId = agentIdMatch[1];
+    cleanResult = cleanResult.replace(agentIdMatch[0], '');
+  }
+
+  // Extract <usage> block
+  const usageMatch = cleanResult.match(/<usage>\s*([\s\S]*?)\s*<\/usage>\n?/);
+  if (usageMatch) {
+    const usageContent = usageMatch[1];
+    const tokensMatch = usageContent.match(/total_tokens:\s*(\d+)/);
+    const toolUsesMatch = usageContent.match(/tool_uses:\s*(\d+)/);
+    const durationMatch = usageContent.match(/duration_ms:\s*(\d+)/);
+    if (tokensMatch) totalTokens = parseInt(tokensMatch[1], 10);
+    if (toolUsesMatch) toolUses = parseInt(toolUsesMatch[1], 10);
+    if (durationMatch) durationMs = parseInt(durationMatch[1], 10);
+    cleanResult = cleanResult.replace(usageMatch[0], '');
+  }
+
+  return { cleanResult: cleanResult.trim(), agentId, totalTokens, toolUses, durationMs };
+}
+
+/** Count tool_use messages in internal messages. */
+function countToolCalls(internalMessages: AgentChatMessage[]): number {
+  return internalMessages.filter(m => m.type === 'tool_use').length;
+}
+
 export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockProps) {
   const agentInput = useMemo(() => parseAgentInput(segment.taskToolUse.input), [segment.taskToolUse.input]);
   const status = getAgentStatus(segment);
@@ -116,6 +152,11 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
   const totalTokens = totalInputTokens + totalOutputTokens;
   const hasInternalMessages = segment.internalMessages.length > 0;
   const hasResult = !!segment.taskToolResult;
+  const toolCallCount = useMemo(() => countToolCalls(segment.internalMessages), [segment.internalMessages]);
+  const parsedResult = useMemo(() => segment.taskToolResult ? parseAgentResult(segment.taskToolResult.result) : null, [segment.taskToolResult]);
+  // Use parsed result tokens/tool_uses if internal messages don't have usage data
+  const displayTokens = totalTokens > 0 ? totalTokens : (parsedResult?.totalTokens ?? 0);
+  const displayToolUses = toolCallCount > 0 ? toolCallCount : (parsedResult?.toolUses ?? 0);
 
   // ── Status styling ──
   const statusConfig = {
@@ -141,8 +182,27 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-500">
           {capitalize(agentInput.subagentType)}
         </span>
+        {agentInput.model && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
+            <Cpu className="h-3 w-3" />
+            {agentInput.model}
+          </span>
+        )}
         <span className="text-sm text-foreground font-medium truncate flex-1">
           {agentInput.description}
+        </span>
+        {agentInput.resume && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium flex-shrink-0">
+            Resumed
+          </span>
+        )}
+        {/* Status badge */}
+        <span
+          className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border flex-shrink-0"
+          style={{ color: statusConfig.color, borderColor: statusConfig.color, backgroundColor: statusConfig.bgColor }}
+        >
+          {statusConfig.icon}
+          {statusConfig.label}
         </span>
         {elapsed && (
           <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
@@ -150,104 +210,9 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
             {elapsed}
           </span>
         )}
-        {agentInput.resume && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium flex-shrink-0">
-            Resumed
-          </span>
-        )}
       </div>
 
-      {/* ── Metadata row ── */}
-      <div className="flex items-center gap-3 px-3 py-1.5 text-[11px] text-muted-foreground border-t border-border/40">
-        {agentInput.model && (
-          <span className="flex items-center gap-1">
-            <Cpu className="h-3 w-3" />
-            {agentInput.model}
-          </span>
-        )}
-        {totalTokens > 0 && (
-          <span className="flex items-center gap-1">
-            <Zap className="h-3 w-3" />
-            {totalTokens.toLocaleString()} tokens
-          </span>
-        )}
-        {agentInput.maxTurns != null && (
-          <span>max {agentInput.maxTurns} turns</span>
-        )}
-        {agentInput.runInBackground && (
-          <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium">background</span>
-        )}
-        {/* Status badge */}
-        <span
-          className="flex items-center gap-1 ml-auto px-2 py-0.5 rounded-full text-[10px] font-medium border"
-          style={{ color: statusConfig.color, borderColor: statusConfig.color, backgroundColor: statusConfig.bgColor }}
-        >
-          {statusConfig.icon}
-          {statusConfig.label}
-        </span>
-      </div>
-
-      {/* ── Internal calls section (collapsible) ── */}
-      {hasInternalMessages && (
-        <div className="border-t border-border/40">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground/80 hover:bg-muted/30 transition-colors"
-            onClick={() => setInternalExpanded(v => !v)}
-          >
-            {internalExpanded
-              ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-              : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-            }
-            <span>Internal calls</span>
-          </button>
-          {internalExpanded && (
-            <div className="px-3 pb-2">
-              <ThinkingGroup
-                messages={segment.internalMessages}
-                startIndex={segment.startIndex + 1}
-                expandedTools={expandedTools}
-                onToggleTool={onToggleTool}
-                defaultExpanded
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Result section (collapsible) ── */}
-      {hasResult && (
-        <div className="border-t border-border/40">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground/80 hover:bg-muted/30 transition-colors"
-            onClick={() => setResultExpanded(v => !v)}
-          >
-            {resultExpanded
-              ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-              : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-            }
-            <span>Result</span>
-          </button>
-          {resultExpanded && segment.taskToolResult && (
-            <div className="px-3 pb-2">
-              <div className="bg-muted/30 rounded border border-border p-2 overflow-x-auto max-h-48 overflow-y-auto">
-                {renderToolContent(segment.taskToolResult.result, 3000)}
-              </div>
-              {segment.taskToolResult.result.length > 3000 && (
-                <button
-                  className="text-xs text-primary hover:underline mt-1"
-                  onClick={() => openDialog('Agent Result', segment.taskToolResult!.result)}
-                >
-                  View Full
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Prompt section (collapsible, hidden by default) ── */}
+      {/* ── Prompt section (at the top, below header) ── */}
       {agentInput.prompt && (
         <div className="border-t border-border/40">
           <button
@@ -273,6 +238,72 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
                 <button
                   className="text-xs text-primary hover:underline mt-1"
                   onClick={() => openDialog('Agent Prompt', agentInput.prompt)}
+                >
+                  View Full
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Internal calls section (collapsible) ── */}
+      {hasInternalMessages && (
+        <div className="border-t border-border/40">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground/80 hover:bg-muted/30 transition-colors"
+            onClick={() => setInternalExpanded(v => !v)}
+          >
+            {internalExpanded
+              ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+              : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+            }
+            <span>Internal calls</span>
+            <span className="text-muted-foreground/60 text-[10px] ml-1">
+              {[
+                displayToolUses > 0 ? `${displayToolUses} tool call${displayToolUses !== 1 ? 's' : ''}` : null,
+                displayTokens > 0 ? `${displayTokens.toLocaleString()} tokens` : null,
+              ].filter(Boolean).join(' · ')}
+            </span>
+          </button>
+          {internalExpanded && (
+            <div className="px-3 pb-2">
+              <ThinkingGroup
+                messages={segment.internalMessages}
+                startIndex={segment.startIndex + 1}
+                expandedTools={expandedTools}
+                onToggleTool={onToggleTool}
+                defaultExpanded
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Result section (collapsible) ── */}
+      {hasResult && parsedResult && (
+        <div className="border-t border-border/40">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground/80 hover:bg-muted/30 transition-colors"
+            onClick={() => setResultExpanded(v => !v)}
+          >
+            {resultExpanded
+              ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+              : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+            }
+            <span>Result</span>
+          </button>
+          {resultExpanded && (
+            <div className="px-3 pb-2">
+              <div className="bg-muted/30 rounded border border-border p-2 overflow-x-auto max-h-48 overflow-y-auto">
+                {renderToolContent(parsedResult.cleanResult, 3000)}
+              </div>
+              {parsedResult.cleanResult.length > 3000 && (
+                <button
+                  className="text-xs text-primary hover:underline mt-1"
+                  onClick={() => openDialog('Agent Result', parsedResult.cleanResult)}
                 >
                   View Full
                 </button>
