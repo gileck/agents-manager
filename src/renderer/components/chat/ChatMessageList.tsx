@@ -66,11 +66,30 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
   }
 
   // ── Agent pre-pass: identify Task tool_use messages and collect related messages ──
-  // For each Task tool_use, find matching subagent_activity (started/completed),
-  // tool_result, and internal messages between start/stop by toolId/toolUseId.
+  // The SDK's agent_id (stored as toolUseId on subagent_activity) does NOT match
+  // the tool_use content block id (stored as toolId on tool_use). However, the
+  // started and completed activities for the SAME agent always share the same
+  // toolUseId. So we pre-group activities by toolUseId, then assign each pair
+  // to the nearest preceding Task tool_use of the matching agent type.
   const agentSegments = new Map<number, AgentSegment>(); // keyed by Task tool_use index
   const consumedIndices = new Set<number>();
 
+  // Step 1: Pre-group subagent_activity messages by their toolUseId (SDK agent_id).
+  // This ensures started+completed from the same agent are always paired correctly,
+  // even when multiple same-type agents complete out of order.
+  const activityByAgentId = new Map<string, { startedIdx: number; completedIdx: number }>();
+  for (let j = 0; j < messages.length; j++) {
+    const m = messages[j];
+    if (m.type !== 'subagent_activity') continue;
+    const sa = m as AgentChatMessageSubagentActivity;
+    if (!sa.toolUseId) continue;
+    const entry = activityByAgentId.get(sa.toolUseId) ?? { startedIdx: -1, completedIdx: -1 };
+    if (sa.status === 'started') entry.startedIdx = j;
+    if (sa.status === 'completed') entry.completedIdx = j;
+    activityByAgentId.set(sa.toolUseId, entry);
+  }
+
+  // Step 2: For each Task tool_use, find the closest matching activity pair.
   for (let idx = 0; idx < messages.length; idx++) {
     const msg = messages[idx];
     if (msg.type !== 'tool_use') continue;
@@ -79,7 +98,6 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
     if (!tu.toolId) continue;
 
     const toolId = tu.toolId;
-    // Parse the subagent_type from the Task tool input for matching
     let subagentType: string | undefined;
     try {
       const parsed = JSON.parse(tu.input);
@@ -92,28 +110,28 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
     let startedIdx = -1;
     let completedIdx = -1;
 
-    // Find matching subagent_activity and tool_result.
-    // The SDK's agent_id (stored as toolUseId on subagent_activity) does NOT match
-    // the tool_use content block id (stored as toolId on tool_use). So we match by:
-    // 1. Position: the subagent_activity must appear after this Task tool_use
-    // 2. Agent type: the agentName must match the subagent_type from input
-    // 3. Not already consumed by another Task tool_use
+    // Find the best matching activity pair from the pre-built map.
+    // Pick the pair whose started index is closest to (and after) this tool_use.
+    for (const [, entry] of activityByAgentId) {
+      if (consumedIndices.has(entry.startedIdx)) continue; // already claimed
+      if (entry.startedIdx <= idx) continue; // must be after tool_use
+
+      const startedMsg = messages[entry.startedIdx] as AgentChatMessageSubagentActivity;
+      const typeMatches = !subagentType || startedMsg.agentName === subagentType;
+      if (!typeMatches) continue;
+
+      // Pick the closest matching pair (smallest startedIdx)
+      if (startedIdx === -1 || entry.startedIdx < startedIdx) {
+        startedActivity = startedMsg;
+        startedIdx = entry.startedIdx;
+        completedIdx = entry.completedIdx;
+        completedActivity = completedIdx >= 0 ? messages[completedIdx] as AgentChatMessageSubagentActivity : undefined;
+      }
+    }
+
+    // Find tool_result by toolId (this still works — tool_result.toolId matches tool_use.toolId)
     for (let j = idx + 1; j < messages.length; j++) {
       const m = messages[j];
-      if (m.type === 'subagent_activity') {
-        const sa = m as AgentChatMessageSubagentActivity;
-        // Match by agent type + not already consumed + positional order
-        const typeMatches = !subagentType || sa.agentName === subagentType;
-        if (typeMatches && !consumedIndices.has(j)) {
-          if (sa.status === 'started' && !startedActivity) {
-            startedActivity = sa;
-            startedIdx = j;
-          } else if (sa.status === 'completed' && !completedActivity) {
-            completedActivity = sa;
-            completedIdx = j;
-          }
-        }
-      }
       if (m.type === 'tool_result') {
         const tr = m as AgentChatMessageToolResult;
         if (tr.toolId === toolId && !taskToolResult) {
@@ -129,7 +147,6 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
       consumedIndices.add(startedIdx);
       const endIdx = completedIdx >= 0 ? completedIdx : messages.length;
       for (let j = startedIdx + 1; j < endIdx; j++) {
-        // Don't consume messages that belong to a different agent segment
         const m = messages[j];
         if (m.type === 'subagent_activity') continue; // skip nested/other activity markers
         if (m.type === 'tool_result' && (m as AgentChatMessageToolResult).toolId === toolId) continue;
