@@ -13,7 +13,7 @@ import type { ApiShape } from '../shared/api-shape';
 import type {
   AgentChatMessage, AgentRun, AgentRunStatus,
   ChatSession, InAppNotification, TelegramBotLogEntry,
-  DevServerInfo, Task,
+  DevServerInfo, Task, AgentNotificationPayload,
 } from '../shared/types';
 
 export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiShape {
@@ -346,6 +346,10 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       chatPermissionRequest: (callback) =>
         ws.subscribeGlobal(WS_CHANNELS.CHAT_PERMISSION_REQUEST, (sessionId, data) =>
           callback(sessionId as string, data as AgentChatMessage)),
+
+      chatAgentNotification: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.CHAT_AGENT_NOTIFICATION, (sessionId, data) =>
+          callback(sessionId as string, data as AgentNotificationPayload)),
     },
   };
 }

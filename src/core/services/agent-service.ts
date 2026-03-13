@@ -907,9 +907,11 @@ export class AgentService implements IAgentService {
                 this.enqueueInjectedMessage(sub.sessionId, content, {
                   injected: true,
                   taskId,
+                  taskTitle: updatedTask?.title ?? task.title,
                   outcome: result.outcome ?? 'unknown',
                   agentType,
                   agentRunId: run.id,
+                  autoNotify: sub.autoNotify,
                 });
               } catch (err) {
                 getAppLogger().warn('AgentService', 'Failed to enqueue injected message', {

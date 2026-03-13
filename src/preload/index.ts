@@ -45,6 +45,7 @@ import type {
   InAppNotificationFilter,
   PermissionMode,
   DevServerInfo,
+  AgentNotificationPayload,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -684,6 +685,11 @@ const api = {
       const listener = (_: IpcRendererEvent, sessionId: string, request: AgentChatMessage) => callback(sessionId, request);
       ipcRenderer.on(IPC_CHANNELS.CHAT_PERMISSION_REQUEST, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_PERMISSION_REQUEST, listener);
+    },
+    chatAgentNotification: (callback: (sessionId: string, payload: AgentNotificationPayload) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, payload: AgentNotificationPayload) => callback(sessionId, payload);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_AGENT_NOTIFICATION, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_AGENT_NOTIFICATION, listener);
     },
   },
 };

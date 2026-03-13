@@ -819,7 +819,8 @@ export class ChatAgentService {
    * If an agent is running, queues for delivery after the current turn completes.
    *
    * Delivery stores the notification as a `system` role message (not `user`)
-   * and emits a WS event — it does NOT trigger a new agent turn.
+   * and emits a WS notification event. When `metadata.autoNotify` is true,
+   * it also triggers a new agent turn (fire-and-forget) so the agent can react.
    */
   enqueueInjectedMessage(
     sessionId: string,
@@ -850,8 +851,8 @@ export class ChatAgentService {
 
   /**
    * Store the notification as a system message and emit via WS.
-   * Does NOT call send() — no agent turn is triggered, avoiding
-   * concurrent-send races and "user message masquerade" issues.
+   * When `metadata.autoNotify` is true, also triggers a new agent turn
+   * (fire-and-forget) so the agent can react to the notification.
    */
   private async deliverInjectedMessage(message: InjectedMessage): Promise<void> {
     const { sessionId, content, metadata } = message;
@@ -871,19 +872,58 @@ export class ChatAgentService {
       content: JSON.stringify({ text: content, metadata }),
     });
 
+    const taskTitle = typeof metadata.taskTitle === 'string' ? metadata.taskTitle : undefined;
+
     // Emit via WS so the UI can display the notification inline
     const onEvent = this.injectedEventHandler?.(sessionId);
     if (onEvent) {
       onEvent({
         type: 'message',
         message: {
-          type: 'status',
-          status: 'completed',
-          message: content,
+          type: 'notification',
+          title: taskTitle ? `Task "${taskTitle}" completed` : 'Agent task completed',
+          body: content,
           timestamp: Date.now(),
         },
       });
     }
+
+    // When autoNotify is enabled, trigger a new agent turn so the agent
+    // can react to the notification content (fire-and-forget).
+    if (metadata.autoNotify === true) {
+      this.triggerNotificationTurn(sessionId, content).catch(err => {
+        getAppLogger().warn('ChatAgentService',
+          `Failed to trigger notification turn for session ${sessionId}`,
+          { error: err instanceof Error ? err.message : String(err) });
+      });
+    }
+  }
+
+  /**
+   * Trigger a full agent turn for a notification message so the agent can
+   * react to subscription results. Uses the injectedEventHandler for WS
+   * routing. Errors are caught and logged — callers use fire-and-forget.
+   */
+  private async triggerNotificationTurn(sessionId: string, content: string): Promise<void> {
+    const ctx = await this.buildSendContext(sessionId);
+    const onEvent = this.injectedEventHandler?.(sessionId);
+    if (!onEvent) {
+      getAppLogger().warn('ChatAgentService',
+        `No injected event handler for session ${sessionId}; skipping notification turn`);
+      return;
+    }
+
+    getAppLogger().info('ChatAgentService',
+      `Triggering notification turn for session ${sessionId}`);
+
+    await this.send(sessionId, content, {
+      systemPrompt: ctx.systemPrompt,
+      onEvent,
+      pipelineSessionId: ctx.pipelineSessionId,
+      resumeSession: ctx.resumeSession,
+      isAgentChat: ctx.isAgentChat,
+      permissionMode: ctx.permissionMode,
+    });
   }
 
   /**
@@ -1426,8 +1466,9 @@ export class ChatAgentService {
       emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
 
       // Drain all queued injected messages for this session.
-      // Messages are stored as system messages (no agent turn triggered),
-      // so we can drain them all at once without delays.
+      // Messages are stored as system messages and emitted as notifications.
+      // When autoNotify is set, deliverInjectedMessage also triggers a new
+      // agent turn (fire-and-forget).
       const queued = this.injectedQueue.get(sessionId);
       if (queued && queued.length > 0) {
         this.injectedQueue.delete(sessionId);
