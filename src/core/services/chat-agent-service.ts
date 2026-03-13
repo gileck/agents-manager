@@ -1302,7 +1302,6 @@ export class ChatAgentService {
         cwd: projectPath,
         model,
         maxTurns: 50,
-        timeoutMs: 300000,
         allowedPaths: readOnly ? [] : [projectPath, imageDir],
         readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
         readOnly,

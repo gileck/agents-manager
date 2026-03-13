@@ -1,7 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Loader2, AlertCircle, CheckCircle2, X, Clock } from 'lucide-react';
 import { RunningAgent } from '../../../shared/types';
 import { Button } from '../ui/button';
+
+/** Real-time elapsed time display, updates every second. */
+function ElapsedTime({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const elapsed = Math.floor((now - startedAt) / 1000);
+  const minutes = Math.floor(elapsed / 60);
+  const hours = Math.floor(minutes / 60);
+  const seconds = elapsed % 60;
+
+  if (hours > 0) {
+    return <>{hours}h {minutes % 60}m</>;
+  }
+  if (minutes > 0) {
+    return <>{minutes}m {seconds}s</>;
+  }
+  return <>{seconds}s</>;
+}
 
 interface ActiveAgentsPanelProps {
   agents: RunningAgent[];
@@ -46,20 +69,6 @@ export function ActiveAgentsPanel({
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
     return `${days}d ago`;
-  };
-
-  const getElapsedTime = (startedAt: number) => {
-    const seconds = Math.floor((Date.now() - startedAt) / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m`;
-    }
-    if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    }
-    return `${seconds}s`;
   };
 
   if (agents.length === 0) {
@@ -107,7 +116,7 @@ export function ActiveAgentsPanel({
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {agent.status === 'running'
-                          ? getElapsedTime(agent.startedAt)
+                          ? <ElapsedTime startedAt={agent.startedAt} />
                           : getRelativeTime(agent.lastActivity)
                         }
                       </span>

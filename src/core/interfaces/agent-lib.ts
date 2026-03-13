@@ -210,7 +210,7 @@ export interface AgentLibRunOptions {
   cwd: string;
   model?: string;
   maxTurns: number;
-  timeoutMs: number;
+  timeoutMs?: number;
   outputFormat?: object;
   allowedPaths: string[];
   readOnlyPaths: string[];

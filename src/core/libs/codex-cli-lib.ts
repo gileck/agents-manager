@@ -404,7 +404,7 @@ export class CodexCliLib extends BaseAgentLib {
       const errorStack = err instanceof Error ? err.stack : undefined;
       if (state.stoppedReason === 'timeout') {
         killReason = 'timeout';
-        errorMessage = `codex-sdk timed out after ${Math.round(options.timeoutMs / 1000)}s`;
+        errorMessage = `codex-sdk timed out after ${Math.round((options.timeoutMs ?? 0) / 1000)}s`;
       } else if (state.abortController.signal.aborted) {
         killReason = state.stoppedReason ?? 'stopped';
         errorMessage = `codex-sdk run aborted [kill_reason=${killReason}]`;
