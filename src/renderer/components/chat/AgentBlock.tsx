@@ -119,11 +119,22 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
 
   // ── Status styling ──
   const statusConfig = {
-    initializing: { label: 'Initializing...', color: '#8b5cf6', bgColor: 'rgba(139, 92, 246, 0.06)', icon: <Clock className="h-3.5 w-3.5" style={{ color: '#8b5cf6' }} /> },
-    running: { label: 'Running', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.06)', icon: <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" /> },
-    completed: { label: 'Completed', color: '#22c55e', bgColor: 'rgba(34, 197, 94, 0.06)', icon: <CheckCircle2 className="h-3.5 w-3.5" style={{ color: '#22c55e' }} /> },
-    error: { label: 'Error', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.06)', icon: <AlertCircle className="h-3.5 w-3.5" style={{ color: '#ef4444' }} /> },
+    initializing: { label: 'Initializing...', color: '#8b5cf6', bgColor: 'rgba(139, 92, 246, 0.06)', icon: <Clock className="h-3.5 w-3.5" style={{ color: '#8b5cf6' }} />, borderColor: '#8b5cf6', bgTint: 'rgba(139, 92, 246, 0.03)' },
+    running: { label: 'Running', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.06)', icon: <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />, borderColor: '#6366f1', bgTint: 'rgba(59, 130, 246, 0.03)' },
+    completed: { label: 'Completed', color: '#22c55e', bgColor: 'rgba(34, 197, 94, 0.06)', icon: <CheckCircle2 className="h-3.5 w-3.5" style={{ color: '#22c55e' }} />, borderColor: '#22c55e', bgTint: 'rgba(34, 197, 94, 0.02)' },
+    error: { label: 'Error', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.06)', icon: <AlertCircle className="h-3.5 w-3.5" style={{ color: '#ef4444' }} />, borderColor: '#ef4444', bgTint: 'rgba(239, 68, 68, 0.02)' },
   }[status];
+
+  // ── Extract last tool call name for running indicator ──
+  const lastToolName = useMemo(() => {
+    for (let i = segment.internalMessages.length - 1; i >= 0; i--) {
+      const msg = segment.internalMessages[i] as unknown as Record<string, unknown>;
+      if (msg.type === 'tool_use' && typeof msg.name === 'string') {
+        return msg.name;
+      }
+    }
+    return null;
+  }, [segment.internalMessages]);
 
   const openDialog = (title: string, text: string) => {
     setDialogContent({ title, text });
@@ -132,29 +143,47 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
 
   return (
     <div
-      className="my-2 rounded-lg border-l-[3px] border border-border overflow-hidden"
-      style={{ borderLeftColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.02)' }}
+      className={`my-2 rounded-lg border-l-[3px] border border-border overflow-hidden${
+        status === 'running' ? ' agent-running-border agent-shimmer' : ''
+      }`}
+      style={{
+        borderLeftColor: statusConfig.borderColor,
+        backgroundColor: statusConfig.bgTint,
+        transition: 'border-color 0.5s ease, background-color 0.5s ease, box-shadow 0.5s ease',
+      }}
     >
       {/* ── Header ── */}
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <Bot className="h-4 w-4 flex-shrink-0" style={{ color: '#6366f1' }} />
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-500">
-          {capitalize(agentInput.subagentType)}
-        </span>
-        <span className="text-sm text-foreground font-medium truncate flex-1">
-          {agentInput.description}
-        </span>
-        {elapsed && (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-            <Clock className="h-3 w-3" />
-            {elapsed}
+      <div className="px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <Bot className="h-4 w-4 flex-shrink-0" style={{ color: statusConfig.borderColor, transition: 'color 0.5s ease' }} />
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-500">
+            {capitalize(agentInput.subagentType)}
           </span>
-        )}
-        {agentInput.resume && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium flex-shrink-0">
-            Resumed
+          <span className="text-sm text-foreground font-medium truncate flex-1">
+            {agentInput.description}
           </span>
-        )}
+          {elapsed && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+              <Clock className="h-3 w-3" />
+              {elapsed}
+            </span>
+          )}
+          {agentInput.resume && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium flex-shrink-0">
+              Resumed
+            </span>
+          )}
+        </div>
+        {/* Status indicator under title */}
+        <div className="flex items-center gap-1.5 mt-1.5 ml-6">
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+            style={{ color: statusConfig.color, backgroundColor: statusConfig.bgColor }}
+          >
+            {statusConfig.icon}
+            {statusConfig.label}
+          </span>
+        </div>
       </div>
 
       {/* ── Metadata row ── */}
@@ -177,14 +206,6 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
         {agentInput.runInBackground && (
           <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium">background</span>
         )}
-        {/* Status badge */}
-        <span
-          className="flex items-center gap-1 ml-auto px-2 py-0.5 rounded-full text-[10px] font-medium border"
-          style={{ color: statusConfig.color, borderColor: statusConfig.color, backgroundColor: statusConfig.bgColor }}
-        >
-          {statusConfig.icon}
-          {statusConfig.label}
-        </span>
       </div>
 
       {/* ── Internal calls section (collapsible) ── */}
@@ -286,11 +307,11 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
       {isRunning && !hasResult && (
         <div className="border-t border-border/40 px-3 py-2 flex items-center gap-2 text-xs text-muted-foreground">
           <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: statusConfig.borderColor }} />
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: statusConfig.borderColor, animationDelay: '0.2s' }} />
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: statusConfig.borderColor, animationDelay: '0.4s' }} />
           </div>
-          <span>Agent is working...</span>
+          <span>{lastToolName ? `Using ${lastToolName}...` : 'Agent is working...'}</span>
         </div>
       )}
 
