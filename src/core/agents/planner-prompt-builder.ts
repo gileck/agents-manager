@@ -22,10 +22,11 @@ const EFFICIENCY_RULES = [
   '',
   '## Efficiency Rules',
   '- FIRST classify the task, THEN scope your exploration proportionally.',
+  '- **Do NOT use the Agent/Task tool to spawn sub-agents.** Read files directly with Read, Grep, and Glob so their contents stay in your context. Sub-agents read files in isolation and force you to re-read everything.',
   '- Read each file AT MOST once. Do not re-read files you have already seen.',
-  '- Use direct Read/Grep for files mentioned by name — do not spawn search sub-agents for known paths.',
-  '- Do not explore files that are unlikely to appear in your change list or inform a key decision.',
+  '- Do not explore files that are unlikely to appear in your change list or inform a key decision (e.g., skip store implementations, daemon routes, and config files for a pure UI task).',
   '- Avoid redundant exploration: if the task description already describes a file\'s role, do not re-read it to confirm what was stated.',
+  '- **Turn budget:** Reserve your last 5-10 turns for producing the plan output. The plan is the deliverable — if you have explored enough to form a reasonable plan, stop exploring and write it. An imperfect plan produced on time is better than no plan at all.',
 ].join('\n');
 
 export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
@@ -44,7 +45,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
   }
 
   protected getTimeout(_context: AgentContext, config: AgentConfig): number {
-    return config.timeout || 5 * 60 * 1000;
+    return config.timeout || 7 * 60 * 1000;
   }
 
   protected getOutputFormat(): object {
