@@ -299,7 +299,7 @@ export class CodexCliLib extends BaseAgentLib {
                 type: 'tool_use',
                 toolName: 'bash',
                 toolId: item.id,
-                input: item.command.slice(0, 2000),
+                input: item.command,
                 timestamp: Date.now(),
               });
               stream(`\n> Tool: bash\n> Input: ${item.command}\n`);
@@ -317,7 +317,7 @@ export class CodexCliLib extends BaseAgentLib {
               onMessage?.({
                 type: 'tool_result',
                 toolId: item.id,
-                result: (item.aggregated_output ?? '').slice(0, 2000),
+                result: item.aggregated_output ?? '',
                 timestamp: Date.now(),
               });
             }
@@ -330,7 +330,7 @@ export class CodexCliLib extends BaseAgentLib {
                 type: 'tool_use',
                 toolName: `${item.server}.${item.tool}`,
                 toolId: item.id,
-                input: JSON.stringify(item.arguments ?? {}).slice(0, 2000),
+                input: JSON.stringify(item.arguments ?? {}),
                 timestamp: Date.now(),
               });
               stream(`\n> Tool: ${item.server}.${item.tool}\n`);
@@ -341,14 +341,14 @@ export class CodexCliLib extends BaseAgentLib {
                 const msg = item.error?.message ?? 'MCP tool call failed';
                 isError = true;
                 errorMessage = errorMessage ?? msg;
-                onMessage?.({ type: 'tool_result', toolId: item.id, result: msg.slice(0, 2000), timestamp: Date.now() });
+                onMessage?.({ type: 'tool_result', toolId: item.id, result: msg, timestamp: Date.now() });
               } else {
                 const resultTextValue = textFromMcpResult(item.result?.content)
                   || (item.result?.structured_content != null ? JSON.stringify(item.result.structured_content) : '');
                 onMessage?.({
                   type: 'tool_result',
                   toolId: item.id,
-                  result: resultTextValue.slice(0, 2000),
+                  result: resultTextValue,
                   timestamp: Date.now(),
                 });
               }
@@ -362,7 +362,7 @@ export class CodexCliLib extends BaseAgentLib {
                 type: 'tool_use',
                 toolName: 'web_search',
                 toolId: item.id,
-                input: item.query.slice(0, 2000),
+                input: item.query,
                 timestamp: Date.now(),
               });
             }

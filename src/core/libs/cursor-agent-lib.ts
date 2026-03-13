@@ -291,7 +291,7 @@ export class CursorAgentLib extends BaseAgentLib {
             const toolName = block.name ?? 'unknown';
             const input = JSON.stringify(block.input ?? {});
             stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
-            onMessage?.({ type: 'tool_use', toolName, toolId: block.id, input: input.slice(0, 2000), timestamp: Date.now() });
+            onMessage?.({ type: 'tool_use', toolName, toolId: block.id, input, timestamp: Date.now() });
           }
         }
         break;
@@ -326,7 +326,7 @@ export class CursorAgentLib extends BaseAgentLib {
         const input = JSON.stringify(msg.input ?? msg.arguments ?? {});
         const toolId = msg.id as string | undefined;
         stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
-        onMessage?.({ type: 'tool_use', toolName, toolId, input: input.slice(0, 2000), timestamp: Date.now() });
+        onMessage?.({ type: 'tool_use', toolName, toolId, input, timestamp: Date.now() });
         break;
       }
 
@@ -343,12 +343,12 @@ export class CursorAgentLib extends BaseAgentLib {
           const cleanArgs = CursorAgentLib.extractCleanArgs(toolName, toolData.args);
           const input = JSON.stringify(cleanArgs);
           stream(`\n> Tool: ${toolName}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
-          onMessage?.({ type: 'tool_use', toolName, toolId: callId, input: input.slice(0, 2000), timestamp: Date.now() });
+          onMessage?.({ type: 'tool_use', toolName, toolId: callId, input, timestamp: Date.now() });
         } else if (msg.subtype === 'completed') {
           const cleanResult = CursorAgentLib.extractCleanResult(toolName, toolData.result);
-          onMessage?.({ type: 'tool_result', toolId: callId, result: cleanResult.slice(0, 2000), timestamp: Date.now() });
+          onMessage?.({ type: 'tool_result', toolId: callId, result: cleanResult, timestamp: Date.now() });
           if (callId) {
-            onUserToolResult?.(callId, cleanResult.slice(0, 2000));
+            onUserToolResult?.(callId, cleanResult);
           }
         }
         break;
@@ -357,9 +357,9 @@ export class CursorAgentLib extends BaseAgentLib {
       case 'tool_result': {
         const toolId = (msg.tool_use_id ?? msg.call_id ?? msg.id) as string | undefined;
         const result = typeof msg.result === 'string' ? msg.result : JSON.stringify(msg.result ?? '');
-        onMessage?.({ type: 'tool_result', toolId, result: result.slice(0, 2000), timestamp: Date.now() });
+        onMessage?.({ type: 'tool_result', toolId, result, timestamp: Date.now() });
         if (toolId) {
-          onUserToolResult?.(toolId, result.slice(0, 2000));
+          onUserToolResult?.(toolId, result);
         }
         break;
       }
