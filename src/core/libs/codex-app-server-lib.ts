@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import type { AgentLibFeatures, AgentLibModelOption } from '../interfaces/agent-lib';
 import type { ISessionHistoryProvider } from '../interfaces/session-history-provider';
 import { BaseAgentLib, type BaseRunState, type EngineResult, type EngineRunOptions } from './base-agent-lib';
@@ -10,6 +13,10 @@ import {
 import { getShellEnv } from '../services/shell-env';
 
 type CodexAppServerClientFactory = (options: CodexAppServerClientOptions) => CodexAppServerClient;
+
+interface CodexAppServerLibOptions {
+  sessionMapPath?: string;
+}
 
 interface ActiveRun {
   client: CodexAppServerClient;
@@ -26,17 +33,25 @@ type CodexThreadItem =
   | { type: 'reasoning'; id: string; summary?: string[]; content?: string[] }
   | { type: string; id: string };
 
+const DEFAULT_SESSION_MAP_PATH = path.join(os.homedir(), '.agents-manager', 'codex-app-server-thread-map.json');
+
+type PersistedThreadMap = Record<string, { threadId: string; updatedAt: number }>;
+
 export class CodexAppServerLib extends BaseAgentLib {
   readonly name = 'codex-app-server';
 
   private readonly sessionThreadIds = new Map<string, string>();
   private readonly activeRuns = new Map<string, ActiveRun>();
+  private readonly sessionMapPath: string;
 
   constructor(
     sessionHistoryProvider?: ISessionHistoryProvider,
     private readonly createClient: CodexAppServerClientFactory = (options) => new CodexAppServerClient(options),
+    libOptions: CodexAppServerLibOptions = {},
   ) {
     super(sessionHistoryProvider);
+    this.sessionMapPath = libOptions.sessionMapPath ?? process.env.AM_CODEX_APP_SERVER_SESSION_MAP_PATH ?? DEFAULT_SESSION_MAP_PATH;
+    this.loadPersistedSessionThreadIds();
   }
 
   supportedFeatures(): AgentLibFeatures {
@@ -44,7 +59,7 @@ export class CodexAppServerLib extends BaseAgentLib {
       images: false,
       hooks: false,
       thinking: true,
-      nativeResume: false,
+      nativeResume: true,
     };
   }
 
@@ -123,7 +138,10 @@ export class CodexAppServerLib extends BaseAgentLib {
     let isError = false;
     let killReason: string | undefined;
     let contextWindow: number | undefined;
+    let lastContextInputTokens: number | undefined;
+    let structuredOutput: Record<string, unknown> | undefined;
     let emittedToolUse = new Set<string>();
+    const assistantSnapshots = new Map<string, string>();
     let turnDoneResolve!: () => void;
     const turnDone = new Promise<void>((resolve) => {
       turnDoneResolve = resolve;
@@ -166,7 +184,31 @@ export class CodexAppServerLib extends BaseAgentLib {
       threadId = thread.id;
       activeRun.threadId = thread.id;
       if (options.sessionId) {
-        this.sessionThreadIds.set(options.sessionId, thread.id);
+        this.rememberSessionThreadId(options.sessionId, thread.id);
+      }
+    };
+
+    const parseStructuredOutput = (text: string): Record<string, unknown> | undefined => {
+      if (!options.outputFormat || !text) return undefined;
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed as Record<string, unknown>;
+        }
+      } catch {
+        // Best-effort only.
+      }
+      return undefined;
+    };
+
+    const emitAssistantDelta = (itemId: string, delta: string): void => {
+      if (!delta) return;
+      finalAssistantText += delta;
+      emit(delta);
+      onMessage?.({ type: 'assistant_text', text: delta, timestamp: Date.now() });
+      onStreamEvent?.({ type: 'content_block_delta', delta: { type: 'text_delta', text: delta } });
+      if (itemId) {
+        assistantSnapshots.set(itemId, (assistantSnapshots.get(itemId) ?? '') + delta);
       }
     };
 
@@ -213,6 +255,15 @@ export class CodexAppServerLib extends BaseAgentLib {
           });
           break;
         }
+        case 'agentMessage': {
+          const agentItem = item as Extract<CodexThreadItem, { type: 'agentMessage' }>;
+          const previousText = assistantSnapshots.get(item.id) ?? '';
+          const nextText = agentItem.text ?? '';
+          const delta = nextText.startsWith(previousText) ? nextText.slice(previousText.length) : nextText;
+          emitAssistantDelta(item.id, delta);
+          assistantSnapshots.set(item.id, nextText);
+          break;
+        }
         default:
           break;
       }
@@ -220,6 +271,16 @@ export class CodexAppServerLib extends BaseAgentLib {
 
     const handleItemCompleted = (item: CodexThreadItem): void => {
       switch (item.type) {
+        case 'agentMessage': {
+          const agentItem = item as Extract<CodexThreadItem, { type: 'agentMessage' }>;
+          const previousText = assistantSnapshots.get(item.id) ?? '';
+          const nextText = agentItem.text ?? '';
+          if (!nextText) break;
+          const delta = nextText.startsWith(previousText) ? nextText.slice(previousText.length) : nextText;
+          emitAssistantDelta(item.id, delta);
+          assistantSnapshots.set(item.id, nextText);
+          break;
+        }
         case 'commandExecution': {
           const commandItem = item as Extract<CodexThreadItem, { type: 'commandExecution' }>;
           onMessage?.({
@@ -266,10 +327,7 @@ export class CodexAppServerLib extends BaseAgentLib {
         case 'item/agentMessage/delta': {
           const delta = typeof params.delta === 'string' ? params.delta : '';
           if (!delta) break;
-          finalAssistantText += delta;
-          emit(delta);
-          onMessage?.({ type: 'assistant_text', text: delta, timestamp: Date.now() });
-          onStreamEvent?.({ type: 'content_block_delta', delta: { type: 'text_delta', text: delta } });
+          emitAssistantDelta(typeof params.itemId === 'string' ? params.itemId : '', delta);
           break;
         }
         case 'item/reasoning/textDelta': {
@@ -297,6 +355,9 @@ export class CodexAppServerLib extends BaseAgentLib {
               cachedInputTokens?: number;
               outputTokens?: number;
             };
+            last?: {
+              totalTokens?: number;
+            };
             modelContextWindow?: number | null;
           } | undefined;
           if (!usage?.total) break;
@@ -304,10 +365,12 @@ export class CodexAppServerLib extends BaseAgentLib {
           state.accumulatedCacheReadInputTokens = Number(usage.total.cachedInputTokens) || 0;
           state.accumulatedOutputTokens = Number(usage.total.outputTokens) || 0;
           contextWindow = usage.modelContextWindow == null ? undefined : usage.modelContextWindow;
+          lastContextInputTokens = ((usage.last as { totalTokens?: number } | undefined)?.totalTokens) ?? lastContextInputTokens;
           onMessage?.({
             type: 'usage',
-            inputTokens: state.accumulatedInputTokens + state.accumulatedCacheReadInputTokens,
+            inputTokens: state.accumulatedInputTokens,
             outputTokens: state.accumulatedOutputTokens,
+            lastContextInputTokens,
             timestamp: Date.now(),
           });
           break;
@@ -411,6 +474,7 @@ export class CodexAppServerLib extends BaseAgentLib {
       }
 
       await turnDone;
+      structuredOutput = parseStructuredOutput(finalAssistantText);
     } catch (err) {
       if (state.abortController.signal.aborted) {
         killReason = state.stoppedReason ?? 'stopped';
@@ -432,10 +496,12 @@ export class CodexAppServerLib extends BaseAgentLib {
         killReason: killReason ?? state.stoppedReason ?? 'stopped',
         rawExitCode: 1,
         fallbackOutput: finalAssistantText || undefined,
-        costInputTokens: (state.accumulatedInputTokens + state.accumulatedCacheReadInputTokens) || undefined,
+        costInputTokens: state.accumulatedInputTokens || undefined,
         costOutputTokens: state.accumulatedOutputTokens || undefined,
         cacheReadInputTokens: state.accumulatedCacheReadInputTokens || undefined,
         contextWindow,
+        lastContextInputTokens,
+        structuredOutput,
       };
     }
 
@@ -444,10 +510,48 @@ export class CodexAppServerLib extends BaseAgentLib {
       errorMessage,
       rawExitCode: isError ? 1 : 0,
       fallbackOutput: finalAssistantText || undefined,
-      costInputTokens: (state.accumulatedInputTokens + state.accumulatedCacheReadInputTokens) || undefined,
+      costInputTokens: state.accumulatedInputTokens || undefined,
       costOutputTokens: state.accumulatedOutputTokens || undefined,
       cacheReadInputTokens: state.accumulatedCacheReadInputTokens || undefined,
       contextWindow,
+      lastContextInputTokens,
+      structuredOutput,
     };
+  }
+
+  private loadPersistedSessionThreadIds(): void {
+    try {
+      if (!fs.existsSync(this.sessionMapPath)) return;
+      const parsed = JSON.parse(fs.readFileSync(this.sessionMapPath, 'utf8')) as PersistedThreadMap;
+      for (const [sessionId, value] of Object.entries(parsed)) {
+        if (value?.threadId) {
+          this.sessionThreadIds.set(sessionId, value.threadId);
+        }
+      }
+    } catch {
+      // Best-effort only. Corrupt cache should not break the engine.
+    }
+  }
+
+  private rememberSessionThreadId(sessionId: string, threadId: string): void {
+    this.sessionThreadIds.set(sessionId, threadId);
+    this.persistSessionThreadIds();
+  }
+
+  private persistSessionThreadIds(): void {
+    try {
+      const dir = path.dirname(this.sessionMapPath);
+      fs.mkdirSync(dir, { recursive: true });
+      const serialized: PersistedThreadMap = {};
+      for (const [sessionId, threadId] of this.sessionThreadIds.entries()) {
+        serialized[sessionId] = {
+          threadId,
+          updatedAt: Date.now(),
+        };
+      }
+      fs.writeFileSync(this.sessionMapPath, JSON.stringify(serialized, null, 2), 'utf8');
+    } catch {
+      // Best-effort only. In-memory resume still works within the process.
+    }
   }
 }

@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentChatMessage } from '../../src/shared/types';
 import { CodexAppServerLib } from '../../src/core/libs/codex-app-server-lib';
@@ -11,6 +14,10 @@ import type {
   CodexAppServerTurnStartParams,
   CodexAppServerTurnStartResponse,
 } from '../../src/core/libs/codex-app-server-client';
+
+function makeSessionMapPath(): string {
+  return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'codex-app-server-lib-test-')), 'thread-map.json');
+}
 
 class FakeCodexAppServerClient {
   static instances: FakeCodexAppServerClient[] = [];
@@ -66,7 +73,9 @@ class FakeCodexAppServerClient {
 
 describe('CodexAppServerLib', () => {
   it('normalizes app-server deltas into assistant/thinking/usage messages', async () => {
-    const lib = new CodexAppServerLib(undefined, (options) => new FakeCodexAppServerClient(options) as never);
+    const lib = new CodexAppServerLib(undefined, (options) => new FakeCodexAppServerClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
     const chunks: string[] = [];
     const messages: AgentChatMessage[] = [];
 
@@ -87,7 +96,7 @@ describe('CodexAppServerLib', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain('hello world');
-    expect(result.costInputTokens).toBe(12);
+    expect(result.costInputTokens).toBe(10);
     expect(result.costOutputTokens).toBe(5);
     expect(result.cacheReadInputTokens).toBe(2);
     expect(result.contextWindow).toBe(128000);
@@ -99,7 +108,10 @@ describe('CodexAppServerLib', () => {
 
   it('reuses the mapped thread id on resume', async () => {
     FakeCodexAppServerClient.instances.length = 0;
-    const lib = new CodexAppServerLib(undefined, (options) => new FakeCodexAppServerClient(options) as never);
+    const sessionMapPath = makeSessionMapPath();
+    const lib = new CodexAppServerLib(undefined, (options) => new FakeCodexAppServerClient(options) as never, {
+      sessionMapPath,
+    });
 
     await lib.execute('run-1', {
       prompt: 'first',
@@ -132,6 +144,100 @@ describe('CodexAppServerLib', () => {
     }));
   });
 
+  it('persists thread mapping across lib instances and reports nativeResume', async () => {
+    FakeCodexAppServerClient.instances.length = 0;
+    const sessionMapPath = makeSessionMapPath();
+
+    const firstLib = new CodexAppServerLib(undefined, (options) => new FakeCodexAppServerClient(options) as never, {
+      sessionMapPath,
+    });
+    expect(firstLib.supportedFeatures().nativeResume).toBe(true);
+
+    await firstLib.execute('run-1', {
+      prompt: 'first',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: [],
+      readOnlyPaths: [],
+      readOnly: true,
+      sessionId: 'session-persisted',
+    }, {});
+
+    const secondLib = new CodexAppServerLib(undefined, (options) => new FakeCodexAppServerClient(options) as never, {
+      sessionMapPath,
+    });
+
+    await secondLib.execute('run-2', {
+      prompt: 'second',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: [],
+      readOnlyPaths: [],
+      readOnly: true,
+      sessionId: 'session-persisted',
+      resumeSession: true,
+    }, {});
+
+    expect(FakeCodexAppServerClient.instances).toHaveLength(2);
+    expect(FakeCodexAppServerClient.instances[1].threadResume).toHaveBeenCalledWith(expect.objectContaining({
+      threadId: 'thread-1',
+    }));
+  });
+
+  it('parses structured output from the final assistant text', async () => {
+    class StructuredOutputClient extends FakeCodexAppServerClient {
+      override readonly turnStart = vi.fn(async (): Promise<CodexAppServerTurnStartResponse> => {
+        this['options'].onNotification?.({
+          method: 'turn/started',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress', error: null } },
+        });
+        this['options'].onNotification?.({
+          method: 'item/completed',
+          params: {
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            item: { type: 'agentMessage', id: 'msg-1', text: '{"greeting":"hello","count":2}' },
+          },
+        });
+        this['options'].onNotification?.({
+          method: 'turn/completed',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed', error: null } },
+        });
+        return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
+      });
+    }
+
+    const lib = new CodexAppServerLib(undefined, (options) => new StructuredOutputClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+
+    const result = await lib.execute('run-json', {
+      prompt: 'return json',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: [],
+      readOnlyPaths: [],
+      readOnly: true,
+      outputFormat: {
+        type: 'object',
+        properties: {
+          greeting: { type: 'string' },
+          count: { type: 'number' },
+        },
+        required: ['greeting', 'count'],
+      },
+    }, {});
+
+    expect(result.exitCode).toBe(0);
+    expect(result.structuredOutput).toEqual({ greeting: 'hello', count: 2 });
+  });
+
   it('surfaces non-retryable server error notifications', async () => {
     class ErroringClient extends FakeCodexAppServerClient {
       override readonly turnStart = vi.fn(async (): Promise<CodexAppServerTurnStartResponse> => {
@@ -155,7 +261,9 @@ describe('CodexAppServerLib', () => {
       });
     }
 
-    const lib = new CodexAppServerLib(undefined, (options) => new ErroringClient(options) as never);
+    const lib = new CodexAppServerLib(undefined, (options) => new ErroringClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
     const result = await lib.execute('run-error', {
       prompt: 'fail',
       cwd: '/tmp/project',
