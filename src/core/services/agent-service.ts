@@ -274,13 +274,39 @@ export class AgentService implements IAgentService {
         data: { branch, baseBranch: baseBranch ?? 'origin/main', path: worktree.path, taskId },
       });
     } else {
-      await this.taskEventLog.log({
-        taskId,
-        category: 'worktree',
-        severity: 'info',
-        message: `Worktree reused at ${worktree.path}`,
-        data: { path: worktree.path },
-      });
+      // Worktree exists from a prior agent phase (e.g. planner).
+      // Checkout the expected branch so diff verification and artifact
+      // recording use the correct branch — not the stale one left behind.
+      if (worktree.branch !== branch) {
+        const gitOps = this.createGitOps(worktree.path);
+        try {
+          await gitOps.createBranch(branch, baseBranch ?? 'origin/main');
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/already exists/.test(msg)) {
+            // Branch already exists from a prior attempt — just checkout
+            await gitOps.checkout(branch);
+          } else {
+            throw new Error(`Failed to switch worktree to branch "${branch}": ${msg}`);
+          }
+        }
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'info',
+          message: `Worktree reused at ${worktree.path}, checked out branch ${branch} (was ${worktree.branch})`,
+          data: { path: worktree.path, previousBranch: worktree.branch, newBranch: branch },
+        });
+        worktree = { ...worktree, branch };
+      } else {
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'info',
+          message: `Worktree reused at ${worktree.path}`,
+          data: { path: worktree.path },
+        });
+      }
     }
 
     // Pre-check: verify worktree path actually exists on disk before proceeding
