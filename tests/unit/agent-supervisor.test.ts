@@ -418,8 +418,13 @@ describe('AgentSupervisor — stall detection', () => {
     vi.useRealTimers();
   });
 
-  it('calls workflowService.startAgent with correct agentType from latest run for a stalled task', async () => {
-    const pipeline = makePipeline();
+  it('calls workflowService.startAgent with correct agentType from pipeline transitions for a stalled task', async () => {
+    const pipeline = makePipeline({
+      transitions: [
+        { from: 'open', to: 'implementing', trigger: 'manual',
+          hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
+      ],
+    });
     pipelineStore.listPipelines.mockResolvedValue([pipeline]);
 
     const task = makeTask({ updatedAt: 1000 }); // updated long ago
@@ -442,6 +447,34 @@ describe('AgentSupervisor — stall detection', () => {
       severity: 'warning',
       message: expect.stringContaining('restarting implementor'),
     }));
+  });
+
+  it('uses pipeline-derived agentType even when latest run has a different agentType (bug fix: wrong agent restart)', async () => {
+    // Scenario: task is in "implementing" but the latest run was a "reviewer"
+    // (caused by hook failure rollback + fire_and_forget reviewer starting before rollback).
+    // The supervisor should restart "implementor" (from pipeline), NOT "reviewer" (from latest run).
+    const pipeline = makePipeline({
+      transitions: [
+        { from: 'open', to: 'implementing', trigger: 'manual',
+          hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
+      ],
+    });
+    pipelineStore.listPipelines.mockResolvedValue([pipeline]);
+
+    const task = makeTask({ updatedAt: 1000 });
+    taskStore.listTasks.mockResolvedValue([task]);
+
+    // Latest run is a REVIEWER (wrong agent type for "implementing" status)
+    const reviewerRun = makeRun({ id: 'run-reviewer', status: 'completed', completedAt: 1000, agentType: 'reviewer', mode: 'new' });
+    agentRunStore.getRunsForTask.mockResolvedValue([reviewerRun]);
+
+    mockedNow.mockReturnValue(200_000);
+
+    supervisor.start();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // Should restart implementor (from pipeline), NOT reviewer (from latest run)
+    expect(workflowService.startAgent).toHaveBeenCalledWith('task-stall-1', 'new', 'implementor');
   });
 
   it('does not trigger recovery when task has a running agent', async () => {
@@ -569,7 +602,8 @@ describe('AgentSupervisor — stall detection', () => {
     }));
   });
 
-  it('uses correct agentType from latest run when task has agentType implementor', async () => {
+  it('falls back to latest run agentType when pipeline has no start_agent hook for the status', async () => {
+    // Pipeline with no transitions defining start_agent for "implementing"
     pipelineStore.listPipelines.mockResolvedValue([makePipeline()]);
     taskStore.listTasks.mockResolvedValue([makeTask({ updatedAt: 1000 })]);
 

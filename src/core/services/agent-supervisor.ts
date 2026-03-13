@@ -129,18 +129,38 @@ export class AgentSupervisor {
             continue;
           }
 
-          // Use the latest run to determine which agent type to restart
+          // Derive the expected agent type from pipeline transitions into this status,
+          // rather than trusting the latest run (which may be a different agent type
+          // that ran after a hook failure / rollback — e.g. reviewer instead of implementor).
+          const pipeline = pipelines.find(p => p.id === task.pipelineId);
+          let expectedAgentType: string | undefined;
+          if (pipeline) {
+            for (const t of pipeline.transitions) {
+              if (t.to === status && t.hooks) {
+                const startHook = t.hooks.find(h => h.name === 'start_agent');
+                if (startHook?.params?.agentType) {
+                  expectedAgentType = startHook.params.agentType as string;
+                  break;
+                }
+              }
+            }
+          }
+
+          // Fall back to latest run when pipeline doesn't define the agent type
           const latestRun = runs[0]; // runs are ordered by started_at DESC
-          if (!latestRun) {
+          if (!expectedAgentType && !latestRun) {
             await this.taskEventLog.log({
               taskId: task.id,
               category: 'system',
               severity: 'warning',
-              message: `Stall detected for task ${task.id} in "${status}" but no previous agent runs found — skipping recovery`,
+              message: `Stall detected for task ${task.id} in "${status}" but no previous agent runs found and no pipeline agent type — skipping recovery`,
               data: { status },
             });
             continue;
           }
+
+          const agentType = expectedAgentType ?? latestRun?.agentType ?? 'implementor';
+          const mode = latestRun?.mode ?? 'new';
 
           // Check recovery cap
           const attempts = this.recoveryAttempts.get(task.id) ?? 0;
@@ -153,26 +173,26 @@ export class AgentSupervisor {
             taskId: task.id,
             category: 'system',
             severity: 'warning',
-            message: `Stall detected: task ${task.id} in "${status}" with no running agent — restarting ${latestRun.agentType} (attempt ${attempts + 1}/${MAX_STALL_RECOVERY_ATTEMPTS})`,
-            data: { status, agentType: latestRun.agentType, mode: latestRun.mode, recoveryAttempt: attempts + 1, maxAttempts: MAX_STALL_RECOVERY_ATTEMPTS },
+            message: `Stall detected: task ${task.id} in "${status}" with no running agent — restarting ${agentType} (attempt ${attempts + 1}/${MAX_STALL_RECOVERY_ATTEMPTS})`,
+            data: { status, agentType, mode, expectedAgentType, latestRunAgentType: latestRun?.agentType, recoveryAttempt: attempts + 1, maxAttempts: MAX_STALL_RECOVERY_ATTEMPTS },
           });
 
           try {
             // If the last run was interrupted by shutdown, set up session resume
             // so the restarted agent continues from where it left off.
-            if (latestRun.outcome === 'interrupted') {
+            if (latestRun?.outcome === 'interrupted') {
               this.agentService.setPendingResume(task.id, latestRun);
             }
-            await this.workflowService.startAgent(task.id, latestRun.mode, latestRun.agentType);
+            await this.workflowService.startAgent(task.id, mode, agentType);
             await this.taskEventLog.log({
               taskId: task.id,
               category: 'system',
               severity: 'info',
-              message: `Stall recovery succeeded for task ${task.id}: ${latestRun.outcome === 'interrupted' ? 'resumed' : 'restarted'} ${latestRun.agentType}`,
-              data: { agentType: latestRun.agentType, mode: latestRun.mode, recoveryAttempt: attempts + 1, resumed: latestRun.outcome === 'interrupted' },
+              message: `Stall recovery succeeded for task ${task.id}: ${latestRun?.outcome === 'interrupted' ? 'resumed' : 'restarted'} ${agentType}`,
+              data: { agentType, mode, recoveryAttempt: attempts + 1, resumed: latestRun?.outcome === 'interrupted' },
             });
           } catch (err) {
-            if (latestRun.outcome === 'interrupted') {
+            if (latestRun?.outcome === 'interrupted') {
               this.agentService.clearPendingResume(task.id);
             }
             const msg = err instanceof Error ? err.message : String(err);

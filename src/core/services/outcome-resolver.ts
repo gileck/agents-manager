@@ -6,6 +6,7 @@ import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
+import { isMultiPhase } from '../../shared/phase-utils';
 import { now } from '../stores/utils';
 
 type OnPostLog = (category: PostProcessingLogCategory, message: string, details?: Record<string, unknown>, durationMs?: number) => void;
@@ -45,13 +46,21 @@ export class OutcomeResolver {
 
       let effectiveOutcome = result.outcome;
 
+      // Resolve the correct base ref for diff/conflict checks.
+      // Multi-phase tasks use the integration branch; single-phase use origin/main.
+      const freshTask = await this.taskStore.getTask(taskId);
+      const taskBranch = (freshTask?.metadata?.taskBranch as string) || undefined;
+      const baseRef = freshTask && isMultiPhase(freshTask) && taskBranch
+        ? `origin/${taskBranch}`
+        : 'origin/main';
+
       if (effectiveOutcome === 'pr_ready') {
-        effectiveOutcome = await this.verifyBranchDiff(taskId, worktree, onPostLog);
+        effectiveOutcome = await this.verifyBranchDiff(taskId, worktree, baseRef, onPostLog);
       }
 
       // Early conflict detection (skip for merge_failed revision)
       if (effectiveOutcome === 'pr_ready' && context.revisionReason !== 'merge_failed') {
-        effectiveOutcome = await this.detectConflicts(taskId, worktree, onPostLog);
+        effectiveOutcome = await this.detectConflicts(taskId, worktree, baseRef, onPostLog);
       }
 
       if (effectiveOutcome) {
@@ -97,21 +106,21 @@ export class OutcomeResolver {
     }
   }
 
-  private async verifyBranchDiff(taskId: string, worktree: { branch: string; path: string }, onPostLog?: OnPostLog): Promise<'pr_ready' | 'no_changes' | 'already_on_main'> {
-    onPostLog?.('git', `Verifying branch diff: branch=${worktree.branch}`, { branch: worktree.branch });
+  private async verifyBranchDiff(taskId: string, worktree: { branch: string; path: string }, baseRef: string, onPostLog?: OnPostLog): Promise<'pr_ready' | 'no_changes' | 'already_on_main'> {
+    onPostLog?.('git', `Verifying branch diff: branch=${worktree.branch}, baseRef=${baseRef}`, { branch: worktree.branch, baseRef });
     const diffStart = performance.now();
     this.taskEventLog.log({
       taskId,
       category: 'agent_debug',
       severity: 'debug',
-      message: `Verifying branch diff for pr_ready: branch=${worktree.branch}`,
+      message: `Verifying branch diff for pr_ready: branch=${worktree.branch}, baseRef=${baseRef}`,
     }).catch(() => {});
     try {
       const gitOps = this.createGitOps(worktree.path);
-      const diffContent = await gitOps.diff('origin/main', worktree.branch);
+      const diffContent = await gitOps.diff(baseRef, worktree.branch);
       const diffDuration = Math.round(performance.now() - diffStart);
       const hasChanges = diffContent.trim().length > 0;
-      onPostLog?.('git', `git diff origin/main..${worktree.branch}: hasChanges=${hasChanges}, diffLength=${diffContent.length}`, { hasChanges, diffLength: diffContent.length }, diffDuration);
+      onPostLog?.('git', `git diff ${baseRef}..${worktree.branch}: hasChanges=${hasChanges}, diffLength=${diffContent.length}`, { hasChanges, diffLength: diffContent.length }, diffDuration);
       this.taskEventLog.log({
         taskId,
         category: 'agent_debug',
@@ -119,26 +128,26 @@ export class OutcomeResolver {
         message: `Branch diff result: hasChanges=${hasChanges}, diffLength=${diffContent.length}`,
       }).catch(() => {});
       if (!hasChanges) {
-        // Check whether the branch has unique commits beyond origin/main.
-        // If HEAD equals origin/main, the work is already on main —
+        // Check whether the branch has unique commits beyond the base ref.
+        // If HEAD equals the base ref, the work is already merged —
         // return already_on_main so the task transitions to done
         // instead of looping back to open via no_changes.
         try {
           const revParseStart = performance.now();
-          const [headSha, mainSha] = await Promise.all([
+          const [headSha, baseSha] = await Promise.all([
             gitOps.revParse('HEAD'),
-            gitOps.revParse('origin/main'),
+            gitOps.revParse(baseRef),
           ]);
           const revParseDuration = Math.round(performance.now() - revParseStart);
-          onPostLog?.('git', `rev-parse HEAD=${headSha.slice(0, 8)}, origin/main=${mainSha.slice(0, 8)}`, { headSha, mainSha }, revParseDuration);
-          if (headSha === mainSha) {
-            onPostLog?.('git', 'Branch HEAD equals origin/main — changes already on main');
+          onPostLog?.('git', `rev-parse HEAD=${headSha.slice(0, 8)}, ${baseRef}=${baseSha.slice(0, 8)}`, { headSha, baseSha, baseRef }, revParseDuration);
+          if (headSha === baseSha) {
+            onPostLog?.('git', `Branch HEAD equals ${baseRef} — changes already merged`);
             await this.taskEventLog.log({
               taskId,
               category: 'agent',
               severity: 'warning',
-              message: 'No diff detected and branch HEAD equals origin/main — changes likely already on main',
-              data: { branch: worktree.branch, headSha, mainSha },
+              message: `No diff detected and branch HEAD equals ${baseRef} — changes likely already merged`,
+              data: { branch: worktree.branch, headSha, baseSha, baseRef },
             });
             return 'already_on_main';
           }
@@ -148,8 +157,8 @@ export class OutcomeResolver {
             taskId,
             category: 'agent',
             severity: 'warning',
-            message: `Empty diff detected but failed to resolve HEAD/origin/main SHAs: ${revParseErr instanceof Error ? revParseErr.message : String(revParseErr)}`,
-            data: { branch: worktree.branch },
+            message: `Empty diff detected but failed to resolve HEAD/${baseRef} SHAs: ${revParseErr instanceof Error ? revParseErr.message : String(revParseErr)}`,
+            data: { branch: worktree.branch, baseRef },
           });
           // Fall through to no_changes — diff is empty, just couldn't determine why
         }
@@ -177,30 +186,30 @@ export class OutcomeResolver {
     return 'pr_ready';
   }
 
-  private async detectConflicts(taskId: string, worktree: { branch: string; path: string }, onPostLog?: OnPostLog): Promise<'pr_ready' | 'conflicts_detected'> {
+  private async detectConflicts(taskId: string, worktree: { branch: string; path: string }, baseRef: string, onPostLog?: OnPostLog): Promise<'pr_ready' | 'conflicts_detected'> {
     const gitOps = this.createGitOps(worktree.path);
-    onPostLog?.('git', 'Fetching origin for conflict detection');
+    onPostLog?.('git', `Fetching origin for conflict detection (baseRef=${baseRef})`);
     const fetchStart = performance.now();
     await gitOps.fetch('origin');
     const fetchDuration = Math.round(performance.now() - fetchStart);
     onPostLog?.('git', 'git fetch origin complete', undefined, fetchDuration);
 
-    // Fast-path: if branch is already rebased onto origin/main, skip the rebase attempt
+    // Fast-path: if branch is already rebased onto the base ref, skip the rebase attempt
     try {
       const mergeBaseStart = performance.now();
-      const [mergeBase, originMain] = await Promise.all([
-        gitOps.mergeBase('HEAD', 'origin/main'),
-        gitOps.revParse('origin/main'),
+      const [mergeBase, baseHead] = await Promise.all([
+        gitOps.mergeBase('HEAD', baseRef),
+        gitOps.revParse(baseRef),
       ]);
       const mergeBaseDuration = Math.round(performance.now() - mergeBaseStart);
-      onPostLog?.('git', `merge-base HEAD origin/main = ${mergeBase.slice(0, 8)}, origin/main = ${originMain.slice(0, 8)}`, { mergeBase, originMain }, mergeBaseDuration);
-      if (mergeBase === originMain) {
-        onPostLog?.('git', 'Branch already rebased onto origin/main — skipping rebase');
+      onPostLog?.('git', `merge-base HEAD ${baseRef} = ${mergeBase.slice(0, 8)}, ${baseRef} = ${baseHead.slice(0, 8)}`, { mergeBase, baseHead, baseRef }, mergeBaseDuration);
+      if (mergeBase === baseHead) {
+        onPostLog?.('git', `Branch already rebased onto ${baseRef} — skipping rebase`);
         await this.taskEventLog.log({
           taskId,
           category: 'git',
           severity: 'info',
-          message: 'Branch already rebased onto origin/main — skipping rebase',
+          message: `Branch already rebased onto ${baseRef} — skipping rebase`,
         });
         return 'pr_ready';
       }
@@ -210,28 +219,28 @@ export class OutcomeResolver {
     }
 
     try {
-      onPostLog?.('git', 'Rebasing onto origin/main');
+      onPostLog?.('git', `Rebasing onto ${baseRef}`);
       const rebaseStart = performance.now();
-      await gitOps.rebase('origin/main');
+      await gitOps.rebase(baseRef);
       const rebaseDuration = Math.round(performance.now() - rebaseStart);
-      onPostLog?.('git', 'Rebase onto origin/main succeeded', undefined, rebaseDuration);
+      onPostLog?.('git', `Rebase onto ${baseRef} succeeded`, undefined, rebaseDuration);
       await this.taskEventLog.log({
         taskId,
         category: 'git',
         severity: 'info',
-        message: 'Pre-transition rebase onto origin/main succeeded',
+        message: `Pre-transition rebase onto ${baseRef} succeeded`,
       });
     } catch {
       try {
         await gitOps.rebaseAbort();
       } catch { /* may not be in rebase state */ }
-      onPostLog?.('git', 'Merge conflicts detected — switching to conflicts_detected outcome', { branch: worktree.branch });
+      onPostLog?.('git', `Merge conflicts detected with ${baseRef} — switching to conflicts_detected outcome`, { branch: worktree.branch, baseRef });
       await this.taskEventLog.log({
         taskId,
         category: 'git',
         severity: 'warning',
-        message: 'Merge conflicts with origin/main detected — switching to conflicts_detected outcome',
-        data: { branch: worktree.branch },
+        message: `Merge conflicts with ${baseRef} detected — switching to conflicts_detected outcome`,
+        data: { branch: worktree.branch, baseRef },
       });
       return 'conflicts_detected';
     }

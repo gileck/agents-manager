@@ -102,6 +102,13 @@ export const BASELINE_MIGRATION_NAMES: string[] = [
   '102_reseed_pipelines_backlog_status',
   '103_add_cache_tokens_and_cost_usd_to_agent_runs',
   '104_add_cache_tokens_and_cost_usd_to_chat_messages',
+  '105_reseed_pipelines_status_colors',
+  '106_add_sidebar_hidden_to_chat_sessions',
+  '107_add_last_context_input_tokens_to_chat_messages',
+  '108_add_task_ids_to_chat_sessions',
+  '109_add_system_prompt_append_to_chat_sessions',
+  '110_reseed_pipelines_already_on_main',
+  '111_add_diagnostics_to_agent_runs',
 ];
 
 function escSql(s: string): string {
