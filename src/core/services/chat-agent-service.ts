@@ -1325,14 +1325,22 @@ export class ChatAgentService {
 
       // Fallback: if session resume failed (missing/corrupt session from before the fix),
       // retry without resume so existing threads don't permanently break.
-      if (extra?.resumeSession && result.exitCode !== 0 && !result.killReason &&
-          !result.costInputTokens && !result.costOutputTokens &&
-          (result.error?.includes('session') || result.output?.includes('session') || (!result.output && !result.error))) {
-        getAppLogger().info('ChatAgentService', `Session resume failed for ${executeSessionId}, retrying without resume`);
-        emitEvent({ type: 'text', text: '\n[Session resume failed — starting fresh session]\n' });
+      const errorLower = (result.error ?? '').toLowerCase();
+      const outputLower = (result.output ?? '').toLowerCase();
+      const isSessionError = errorLower.includes('session') || outputLower.includes('session');
+      const isEmptyResult = !result.output && !result.error;
+      const isZeroCost = !result.costInputTokens && !result.costOutputTokens;
+      const isSessionInUse = /session\s+id\s+\S+\s+is\s+already\s+in\s+use/i.test(result.error ?? '') ||
+                             /session\s+id\s+\S+\s+is\s+already\s+in\s+use/i.test(result.output ?? '');
+      if (result.exitCode !== 0 && !result.killReason && isZeroCost &&
+          ((extra?.resumeSession && (isSessionError || isEmptyResult)) || isSessionInUse)) {
+        getAppLogger().warn('ChatAgentService', `Session error for ${executeSessionId}, retrying without resume`, { originalError: result.error ?? '(empty)', isSessionInUse, isResume: !!extra?.resumeSession });
+        emitEvent({ type: 'text', text: '\n[Session error — starting fresh session]\n' });
         result = await lib.execute(executeSessionId, {
           ...executeOptions,
           resumeSession: false,
+          // Drop sessionId when the SDK rejected it as "already in use" to avoid the same conflict
+          ...(isSessionInUse ? { sessionId: undefined } : {}),
         }, callbacks);
       }
 
