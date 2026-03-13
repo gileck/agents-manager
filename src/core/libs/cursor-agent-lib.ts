@@ -179,7 +179,7 @@ export class CursorAgentLib extends BaseAgentLib {
         if (state.stoppedReason === 'timeout') {
           isError = true;
           killReason = 'timeout';
-          errorMessage = `cursor-agent timed out after ${Math.round(options.timeoutMs / 1000)}s`;
+          errorMessage = `cursor-agent timed out after ${Math.round((options.timeoutMs ?? 0) / 1000)}s`;
         } else if (isSignalExit) {
           killReason = state.stoppedReason ?? 'external_signal';
           isError = true;

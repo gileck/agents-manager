@@ -371,7 +371,7 @@ export class ClaudeCodeLib extends BaseAgentLib {
 
       if (state.stoppedReason === 'timeout') {
         killReason = 'timeout';
-        errorMessage = `Agent timed out after ${Math.round(elapsed / 1000)}s (timeout=${Math.round(options.timeoutMs / 1000)}s, ${state.messageCount} messages processed)`;
+        errorMessage = `Agent timed out after ${Math.round(elapsed / 1000)}s (timeout=${Math.round((options.timeoutMs ?? 0) / 1000)}s, ${state.messageCount} messages processed)`;
       } else if (state.abortController.signal.aborted) {
         killReason = state.stoppedReason ?? 'stopped';
         errorMessage = `Agent aborted after ${Math.round(elapsed / 1000)}s (${state.messageCount} messages processed) [kill_reason=${killReason}]`;

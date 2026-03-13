@@ -25,7 +25,7 @@ export interface BaseRunState {
   accumulatedCacheReadInputTokens: number;
   accumulatedCacheCreationInputTokens: number;
   messageCount: number;
-  readonly timeout: number;
+  readonly timeout?: number;
   readonly maxTurns: number;
   /** Set by the timeout handler or doStop() before aborting, so catch blocks can distinguish timeout from user-initiated stop. */
   stoppedReason?: string;
@@ -171,13 +171,15 @@ export abstract class BaseAgentLib implements IAgentLib {
     };
     this.runningStates.set(runId, state);
 
-    // Timeout handling
+    // Timeout handling (skip if no timeout configured)
     let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      state.stoppedReason = 'timeout';
-      abortController.abort();
-    }, options.timeoutMs);
+    const timer = options.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          state.stoppedReason = 'timeout';
+          abortController.abort();
+        }, options.timeoutMs)
+      : undefined;
 
     // Result text buffer
     let resultText = '';
@@ -239,7 +241,7 @@ export abstract class BaseAgentLib implements IAgentLib {
       return updatedInput ? { behavior: 'allow', updatedInput } : { behavior: 'allow' };
     };
 
-    log(`Starting agent run: cwd=${options.cwd}, timeout=${options.timeoutMs}ms, model=${options.model ?? 'default'}, engine=${this.name}`);
+    log(`Starting agent run: cwd=${options.cwd}, timeout=${options.timeoutMs ? `${options.timeoutMs}ms` : 'none'}, model=${options.model ?? 'default'}, engine=${this.name}`);
 
     try {
       const engineResult = await this.runEngine(runId, state, {
@@ -287,7 +289,7 @@ export abstract class BaseAgentLib implements IAgentLib {
 
       if (timedOut) {
         killReason = 'timeout';
-        errorMessage = `Agent timed out after ${Math.round(options.timeoutMs / 1000)}s`;
+        errorMessage = `Agent timed out after ${Math.round((options.timeoutMs ?? 0) / 1000)}s`;
       } else if (abortController.signal.aborted) {
         killReason = state.stoppedReason ?? 'stopped';
         errorMessage = `Agent aborted [kill_reason=${killReason}]`;
@@ -366,7 +368,7 @@ export abstract class BaseAgentLib implements IAgentLib {
       `cwd: ${options.cwd}`,
       `model: ${options.model ?? 'default'}`,
       `max_turns: ${options.maxTurns}`,
-      `timeout: ${Math.round(options.timeoutMs / 1000)}s`,
+      `timeout: ${options.timeoutMs ? `${Math.round(options.timeoutMs / 1000)}s` : 'none'}`,
       ...(options.resumeSession ? [`resume_session: ${options.sessionId}`] : []),
       `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
     ].join('\n');
