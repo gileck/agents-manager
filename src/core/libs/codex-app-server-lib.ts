@@ -10,6 +10,8 @@ import {
   type CodexAppServerNotification,
   type CodexAppServerServerRequest,
   type CodexAppServerThreadInfo,
+  type CodexAppServerUserLocalImageInput,
+  type CodexAppServerUserTextInput,
 } from './codex-app-server-client';
 import { getShellEnv } from '../services/shell-env';
 
@@ -37,6 +39,7 @@ type CodexThreadItem =
 const DEFAULT_SESSION_MAP_PATH = path.join(os.homedir(), '.agents-manager', 'codex-app-server-thread-map.json');
 
 type PersistedThreadMap = Record<string, { threadId: string; updatedAt: number }>;
+type CodexAppServerTurnInput = CodexAppServerUserTextInput | CodexAppServerUserLocalImageInput;
 
 export class CodexAppServerLib extends BaseAgentLib {
   readonly name = 'codex-app-server';
@@ -57,7 +60,7 @@ export class CodexAppServerLib extends BaseAgentLib {
 
   supportedFeatures(): AgentLibFeatures {
     return {
-      images: false,
+      images: true,
       hooks: false,
       thinking: true,
       nativeResume: true,
@@ -126,6 +129,7 @@ export class CodexAppServerLib extends BaseAgentLib {
     let contextWindow: number | undefined;
     let lastContextInputTokens: number | undefined;
     let structuredOutput: Record<string, unknown> | undefined;
+    let imageTempDir: string | undefined;
     let emittedToolUse = new Set<string>();
     const assistantSnapshots = new Map<string, string>();
     let turnDoneResolve!: () => void;
@@ -599,9 +603,12 @@ export class CodexAppServerLib extends BaseAgentLib {
         throw new Error('codex app-server did not return a thread id');
       }
 
+      const turnInput = await this.buildTurnInput(runId, effectivePrompt, options.images);
+      imageTempDir = turnInput.imageTempDir;
+
       const response = await activeRun.client.turnStart({
         threadId,
-        input: [{ type: 'text', text: effectivePrompt, text_elements: [] }],
+        input: turnInput.input,
         cwd: options.cwd,
         approvalPolicy: 'never',
         model: options.model ?? null,
@@ -631,6 +638,9 @@ export class CodexAppServerLib extends BaseAgentLib {
       state.abortController.signal.removeEventListener('abort', abortListener);
       this.activeRuns.delete(runId);
       await activeRun.client.close().catch(() => undefined);
+      if (imageTempDir) {
+        await fs.promises.rm(imageTempDir, { recursive: true, force: true }).catch(() => undefined);
+      }
     }
 
     if (state.abortController.signal.aborted) {
@@ -697,5 +707,48 @@ export class CodexAppServerLib extends BaseAgentLib {
     } catch {
       // Best-effort only. In-memory resume still works within the process.
     }
+  }
+
+  private mediaTypeToExtension(mediaType: string): string {
+    switch (mediaType) {
+      case 'image/png': return 'png';
+      case 'image/jpeg': return 'jpg';
+      case 'image/gif': return 'gif';
+      case 'image/webp': return 'webp';
+      default: return 'img';
+    }
+  }
+
+  private normalizeBase64(base64: string): string {
+    const marker = 'base64,';
+    const idx = base64.indexOf(marker);
+    return idx >= 0 ? base64.slice(idx + marker.length) : base64;
+  }
+
+  private async buildTurnInput(
+    runId: string,
+    prompt: string,
+    images?: Array<{ base64: string; mediaType: string }>,
+  ): Promise<{ input: CodexAppServerTurnInput[]; imageTempDir?: string }> {
+    if (!images || images.length === 0) {
+      return {
+        input: [{ type: 'text', text: prompt, text_elements: [] }],
+      };
+    }
+
+    const imageTempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `agents-manager-codex-app-server-${runId}-`));
+    const input: CodexAppServerTurnInput[] = [{ type: 'text', text: prompt, text_elements: [] }];
+
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      const ext = this.mediaTypeToExtension(image.mediaType);
+      const filePath = path.join(imageTempDir, `image-${i + 1}.${ext}`);
+      const normalized = this.normalizeBase64(image.base64);
+      const bytes = Buffer.from(normalized, 'base64');
+      await fs.promises.writeFile(filePath, bytes);
+      input.push({ type: 'localImage', path: filePath });
+    }
+
+    return { input, imageTempDir };
   }
 }

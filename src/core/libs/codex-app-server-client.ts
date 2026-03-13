@@ -61,6 +61,11 @@ export interface CodexAppServerUserTextInput {
   text_elements: Array<unknown>;
 }
 
+export interface CodexAppServerUserLocalImageInput {
+  type: 'localImage';
+  path: string;
+}
+
 export interface CodexAppServerThreadStartParams {
   model?: string | null;
   cwd?: string | null;
@@ -85,7 +90,7 @@ export interface CodexAppServerThreadResumeParams {
 
 export interface CodexAppServerTurnStartParams {
   threadId: string;
-  input: CodexAppServerUserTextInput[];
+  input: Array<CodexAppServerUserTextInput | CodexAppServerUserLocalImageInput>;
   cwd?: string | null;
   approvalPolicy?: 'never' | 'on-request' | 'on-failure' | 'untrusted' | null;
   sandboxPolicy?: Record<string, unknown> | null;

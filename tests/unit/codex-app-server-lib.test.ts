@@ -74,6 +74,57 @@ class FakeCodexAppServerClient {
 }
 
 describe('CodexAppServerLib', () => {
+  it('reports image support and passes chat images as localImage turn inputs', async () => {
+    class ImageClient extends FakeCodexAppServerClient {
+      seenImagePath?: string;
+
+      override readonly turnStart = vi.fn(async (params: CodexAppServerTurnStartParams): Promise<CodexAppServerTurnStartResponse> => {
+        expect(params.input[0]).toEqual({ type: 'text', text: 'describe image', text_elements: [] });
+        expect(params.input[1]).toMatchObject({ type: 'localImage' });
+        const imageInput = params.input[1] as { type: 'localImage'; path: string };
+        this.seenImagePath = imageInput.path;
+        expect(fs.existsSync(imageInput.path)).toBe(true);
+        this['options'].onNotification?.({
+          method: 'turn/started',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress', error: null } },
+        });
+        this['options'].onNotification?.({
+          method: 'item/agentMessage/delta',
+          params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'msg-1', delta: 'image ok' },
+        });
+        this['options'].onNotification?.({
+          method: 'turn/completed',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed', error: null } },
+        });
+        return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
+      });
+    }
+
+    FakeCodexAppServerClient.instances.length = 0;
+    const lib = new CodexAppServerLib(undefined, (options) => new ImageClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+
+    expect(lib.supportedFeatures().images).toBe(true);
+
+    const result = await lib.execute('run-image', {
+      prompt: 'describe image',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: [],
+      readOnlyPaths: [],
+      readOnly: true,
+      images: [{ base64: Buffer.from('fake-image-bytes').toString('base64'), mediaType: 'image/png' }],
+    }, {});
+
+    expect(result.exitCode).toBe(0);
+    const client = FakeCodexAppServerClient.instances[0] as ImageClient;
+    expect(client.seenImagePath).toBeDefined();
+    expect(fs.existsSync(client.seenImagePath as string)).toBe(false);
+  });
+
   it('normalizes app-server deltas into assistant/thinking/usage messages', async () => {
     const lib = new CodexAppServerLib(undefined, (options) => new FakeCodexAppServerClient(options) as never, {
       sessionMapPath: makeSessionMapPath(),
