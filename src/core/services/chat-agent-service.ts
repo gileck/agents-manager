@@ -1374,6 +1374,7 @@ export class ChatAgentService {
     } catch (err) {
       // Handle errors inside runAgent so the sentinel in finally is always the last event
       const errMsg = err instanceof Error ? err.message : String(err);
+      const errStack = err instanceof Error ? err.stack : undefined;
       // Use the abort controller signal as source of truth (works regardless of error type)
       if (abortController.signal.aborted) {
         getAppLogger().info('ChatAgentService', `Chat agent aborted for session ${sessionId}`);
@@ -1381,7 +1382,7 @@ export class ChatAgentService {
       } else {
         getAppLogger().logError('ChatAgentService', `Chat agent error for session ${sessionId}`, err);
         emitEvent({ type: 'text', text: `\nError: ${errMsg}\n` });
-        try { emitMessage({ type: 'status', status: 'failed', message: errMsg, timestamp: Date.now() }); } catch (emitErr) { getAppLogger().warn('ChatAgentService', 'Failed to emit error status', { error: emitErr instanceof Error ? emitErr.message : String(emitErr) }); }
+        try { emitMessage({ type: 'status', status: 'failed', message: errMsg, stack: errStack, timestamp: Date.now() }); } catch (emitErr) { getAppLogger().warn('ChatAgentService', 'Failed to emit error status', { error: emitErr instanceof Error ? emitErr.message : String(emitErr) }); }
       }
       const agent = this.runningAgents.get(sessionId);
       if (agent) {

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, ChevronDown, Play, AlertTriangle, ShieldCheck, ShieldX, Bell, Bot, CheckCircle2, Terminal } from 'lucide-react';
-import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification, AgentChatMessageSubagentActivity, AgentChatMessageSlashCommand, ChatImageRef } from '../../../shared/types';
+import { Pencil, ChevronDown, ChevronRight, Play, AlertTriangle, ShieldCheck, ShieldX, Bell, Bot, CheckCircle2, Terminal, Copy, Check } from 'lucide-react';
+import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageStatus, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification, AgentChatMessageSubagentActivity, AgentChatMessageSlashCommand, ChatImageRef } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
@@ -244,6 +244,54 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
   return segments;
 }
 
+/** Error details card with copy button and expandable stack trace. */
+function ErrorDetails({ message, stack }: { message: string; stack?: string }) {
+  const [copied, setCopied] = useState(false);
+  const [showStack, setShowStack] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    const text = stack ? `${message}\n\n${stack}` : message;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [message, stack]);
+
+  return (
+    <div className="max-w-[80%] w-full text-xs border border-red-200 dark:border-red-800/40 rounded-lg overflow-hidden bg-red-50 dark:bg-red-950/20">
+      <div className="flex items-start gap-2 px-3 py-2">
+        <span className="flex-1 text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">{message}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+          title="Copy error"
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          <span>{copied ? 'Copied' : 'Copy'}</span>
+        </button>
+      </div>
+      {stack && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowStack(s => !s)}
+            className="flex items-center gap-1 w-full px-3 py-1.5 text-red-500/70 dark:text-red-400/60 hover:bg-red-100/50 dark:hover:bg-red-900/20 transition-colors border-t border-red-200/60 dark:border-red-800/30"
+          >
+            <ChevronRight className={`h-3 w-3 transition-transform ${showStack ? 'rotate-90' : ''}`} />
+            <span>Stack Trace</span>
+          </button>
+          {showStack && (
+            <pre className="px-3 py-2 text-red-600/80 dark:text-red-400/70 whitespace-pre-wrap break-words max-h-48 overflow-y-auto border-t border-red-200/60 dark:border-red-800/30 font-mono text-[11px] leading-relaxed">
+              {stack}
+            </pre>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, onPermissionResponse }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -430,6 +478,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
           const lastUserMsg = [...messages].reverse().find((m): m is AgentChatMessageUser => m.type === 'user');
           const lastUserText = lastUserMsg?.text ?? null;
           const label = isStopped ? 'Agent Stopped' : msg.status === 'timed_out' ? 'Agent Timed Out' : 'Agent Error';
+          const statusMsg = msg as AgentChatMessageStatus;
 
           nodes.push(
             <div key={i} className="flex flex-col items-center py-4 gap-3">
@@ -441,6 +490,9 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
                 {isError && <AlertTriangle className="h-3 w-3" />}
                 {label}
               </div>
+              {isError && statusMsg.message && (
+                <ErrorDetails message={statusMsg.message} stack={statusMsg.stack} />
+              )}
               {!isRunning && (
                 <div className="flex gap-2">
                   {onResume && (

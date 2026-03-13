@@ -694,6 +694,7 @@ export interface AgentChatMessageStatus {
   type: 'status';
   status: AgentRunStatus;
   message: string;
+  stack?: string;
   timestamp: number;
 }
 
