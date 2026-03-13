@@ -236,7 +236,7 @@ export class ClaudeCodeLib extends BaseAgentLib {
             lastInputTokens = assistantMsg.message.usage.input_tokens
               + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
               + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
-            onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, timestamp: Date.now() });
+            onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, lastContextInputTokens: lastInputTokens, timestamp: Date.now() });
           }
           for (const block of assistantMsg.message.content) {
             if (block.type === 'text') {
@@ -284,7 +284,7 @@ export class ClaudeCodeLib extends BaseAgentLib {
           cacheCreationInputTokens = resultMsg.usage?.cache_creation_input_tokens
             ?? (state.accumulatedCacheCreationInputTokens >= 0 ? state.accumulatedCacheCreationInputTokens : undefined);
           if (costInputTokens != null || costOutputTokens != null) {
-            const usageMsg: AgentChatMessage = { type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, contextWindow, timestamp: Date.now() };
+            const usageMsg: AgentChatMessage = { type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, contextWindow, lastContextInputTokens: lastInputTokens, timestamp: Date.now() };
             onMessage?.(usageMsg);
           }
         } else if (message.type === 'system') {

@@ -696,6 +696,8 @@ export interface AgentChatMessageUsage {
   inputTokens: number;
   outputTokens: number;
   contextWindow?: number;
+  /** Input tokens from the last assistant message (input + cache_read + cache_creation) — actual context window utilization. */
+  lastContextInputTokens?: number;
   timestamp: number;
 }
 

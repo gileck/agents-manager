@@ -57,7 +57,7 @@ interface ChatInputProps {
   onStop?: () => void;
   isRunning: boolean;
   isQueued: boolean;
-  tokenUsage?: { inputTokens: number; outputTokens: number };
+  tokenUsage?: { inputTokens: number; outputTokens: number; lastContextInputTokens?: number | null; contextWindow?: number | null };
   agentLibs?: AgentLibOption[];
   selectedAgentLib?: string;
   onAgentLibChange?: (lib: string) => void;
@@ -209,8 +209,12 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     return () => document.removeEventListener('keydown', handleKey);
   }, [previewIndex, images.length]);
 
+  const effectiveContextWindow = (tokenUsage?.contextWindow && tokenUsage.contextWindow > 0)
+    ? tokenUsage.contextWindow
+    : CONTEXT_WINDOW;
+  const contextTokens = tokenUsage?.lastContextInputTokens ?? tokenUsage?.inputTokens ?? 0;
   const contextPercent = tokenUsage
-    ? Math.min((tokenUsage.inputTokens / CONTEXT_WINDOW) * 100, 100)
+    ? Math.min((contextTokens / effectiveContextWindow) * 100, 100)
     : 0;
   const circleRadius = 9;
   const circleCircumference = 2 * Math.PI * circleRadius;
@@ -433,7 +437,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
                 </svg>
                 <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 z-50 hidden group-hover:block w-52 rounded-lg border border-border bg-popover px-3 py-2.5 text-xs text-popover-foreground shadow-md">
                   <p className="font-semibold mb-1.5">Context Window</p>
-                  <p>{tokenUsage.inputTokens.toLocaleString()} / {CONTEXT_WINDOW.toLocaleString()} tokens</p>
+                  <p>{contextTokens.toLocaleString()} / {effectiveContextWindow.toLocaleString()} tokens</p>
                   <p className="text-muted-foreground mt-0.5">{contextPercent.toFixed(1)}% used</p>
                 </div>
               </div>

@@ -297,6 +297,7 @@ export function useChat(sessionId: string | null) {
         streamInput = msg.inputTokens;
         streamOutput = msg.outputTokens;
         if (msg.contextWindow) contextWindow = msg.contextWindow;
+        if (msg.lastContextInputTokens != null) lastContextInputTokens = msg.lastContextInputTokens;
       }
     }
     return {
