@@ -8,6 +8,7 @@ import {
   CodexAppServerClient,
   type CodexAppServerClientOptions,
   type CodexAppServerNotification,
+  type CodexAppServerServerRequest,
   type CodexAppServerThreadInfo,
 } from './codex-app-server-client';
 import { getShellEnv } from '../services/shell-env';
@@ -100,7 +101,7 @@ export class CodexAppServerLib extends BaseAgentLib {
     engineOpts: EngineRunOptions,
   ): Promise<EngineResult> {
     const { options, callbacks, prompt, log, emit, stream } = engineOpts;
-    const { onMessage, onStreamEvent } = callbacks;
+    const { onMessage, onStreamEvent, onUserToolResult } = callbacks;
 
     const shellEnv = getShellEnv();
     const env = Object.fromEntries(
@@ -114,22 +115,7 @@ export class CodexAppServerLib extends BaseAgentLib {
       ? prompt
       : await this.resolveSessionPrompt(prompt, options, log);
 
-    const activeRun: ActiveRun = {
-      client: this.createClient({
-        cwd: options.cwd,
-        env,
-        onNotification: (notification) => handleNotification(notification),
-        onServerRequest: (request) => {
-          log('Unsupported app-server request received during Phase 1', { method: request.method });
-        },
-        onStderr: (chunk) => {
-          log('codex app-server stderr', { chunk: chunk.trim().slice(0, 500) });
-        },
-        clientInfo: { name: 'agents-manager', version: '0.0.0' },
-      }),
-      interrupted: false,
-    };
-    this.activeRuns.set(runId, activeRun);
+    let activeRun!: ActiveRun;
 
     let threadId = resumeThreadId;
     let turnId: string | undefined;
@@ -411,6 +397,106 @@ export class CodexAppServerLib extends BaseAgentLib {
           break;
       }
     };
+
+    const requestApprovalDecision = async (
+      toolName: string,
+      toolInput: Record<string, unknown>,
+      toolUseId: string,
+    ): Promise<'accept' | 'decline'> => {
+      const decision = await engineOpts.canUseTool(toolName, toolInput, {
+        signal: state.abortController.signal,
+        toolUseID: toolUseId,
+      });
+      if (decision.behavior === 'allow') {
+        return 'accept';
+      }
+      log('Denied codex app-server approval request', {
+        toolName,
+        toolUseId,
+        reason: decision.message,
+      });
+      return 'decline';
+    };
+
+    const handleServerRequest = async (request: CodexAppServerServerRequest): Promise<unknown> => {
+      switch (request.method) {
+        case 'item/commandExecution/requestApproval': {
+          const params = request.params as {
+            itemId?: string;
+            command?: string | null;
+            cwd?: string | null;
+            reason?: string | null;
+            commandActions?: unknown;
+          };
+          return requestApprovalDecision('Bash', {
+            command: params.command ?? '',
+            cwd: params.cwd ?? options.cwd,
+            reason: params.reason ?? undefined,
+            commandActions: params.commandActions ?? undefined,
+          }, params.itemId ?? String(request.id));
+        }
+        case 'item/fileChange/requestApproval': {
+          const params = request.params as {
+            itemId?: string;
+            reason?: string | null;
+            grantRoot?: string | null;
+          };
+          return requestApprovalDecision('Write', {
+            file_path: params.grantRoot ?? undefined,
+            grantRoot: params.grantRoot ?? undefined,
+            reason: params.reason ?? undefined,
+          }, params.itemId ?? String(request.id));
+        }
+        case 'item/tool/call': {
+          const params = request.params as {
+            callId?: string;
+            tool?: string;
+            arguments?: unknown;
+          };
+          const toolName = typeof params.tool === 'string' ? params.tool : 'unknown_tool';
+          const toolId = typeof params.callId === 'string' ? params.callId : String(request.id);
+          const input = JSON.stringify(params.arguments ?? {}).slice(0, 2000);
+          const message = `Client-handled tool ${toolName} is not implemented yet in CodexAppServerLib.`;
+          onMessage?.({
+            type: 'tool_use',
+            toolName,
+            toolId,
+            input,
+            timestamp: Date.now(),
+          });
+          onMessage?.({
+            type: 'tool_result',
+            toolId,
+            result: message,
+            timestamp: Date.now(),
+          });
+          onUserToolResult?.(toolId, message);
+          return {
+            success: false,
+            contentItems: [{ type: 'inputText', text: message }],
+          };
+        }
+        case 'item/tool/requestUserInput':
+          throw new Error('Codex app-server requestUserInput is not implemented yet');
+        default:
+          throw new Error(`Unsupported codex app-server request: ${request.method}`);
+      }
+    };
+
+    activeRun = {
+      client: this.createClient({
+        cwd: options.cwd,
+        env,
+        onNotification: (notification) => handleNotification(notification),
+        onServerRequest: handleServerRequest,
+        onStderr: (chunk) => {
+          log('codex app-server stderr', { chunk: chunk.trim().slice(0, 500) });
+        },
+        clientInfo: { name: 'agents-manager', version: '0.0.0' },
+      }),
+      interrupted: false,
+    };
+    this.activeRuns.set(runId, activeRun);
 
     try {
       await activeRun.client.start();

@@ -21,6 +21,8 @@ function makeSessionMapPath(): string {
 
 class FakeCodexAppServerClient {
   static instances: FakeCodexAppServerClient[] = [];
+  approvalDecisions: unknown[] = [];
+  dynamicToolResponses: unknown[] = [];
 
   readonly start = vi.fn(async () => undefined);
   readonly close = vi.fn(async () => undefined);
@@ -66,7 +68,7 @@ class FakeCodexAppServerClient {
     return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
   });
 
-  constructor(private readonly options: CodexAppServerClientOptions) {
+  constructor(protected readonly options: CodexAppServerClientOptions) {
     FakeCodexAppServerClient.instances.push(this);
   }
 }
@@ -278,5 +280,131 @@ describe('CodexAppServerLib', () => {
     expect(result.exitCode).toBe(1);
     expect(result.error).toContain('turn failed');
     expect(result.error).toContain('details');
+  });
+
+  it('routes command approval requests through onPermissionRequest', async () => {
+    class ApprovalClient extends FakeCodexAppServerClient {
+      override readonly turnStart = vi.fn(async (): Promise<CodexAppServerTurnStartResponse> => {
+        this.options.onNotification?.({
+          method: 'turn/started',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress', error: null } },
+        });
+        const decision = await this.options.onServerRequest?.({
+          method: 'item/commandExecution/requestApproval',
+          id: 'request-1',
+          params: {
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            itemId: 'cmd-1',
+            command: 'ls /tmp/project',
+            cwd: '/tmp/project',
+            reason: 'Needs listing access',
+          },
+        });
+        this.approvalDecisions.push(decision);
+        this.options.onNotification?.({
+          method: 'turn/completed',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed', error: null } },
+        });
+        return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
+      });
+    }
+
+    FakeCodexAppServerClient.instances.length = 0;
+    const onPermissionRequest = vi.fn().mockResolvedValue({ allowed: false });
+    const lib = new CodexAppServerLib(undefined, (options) => new ApprovalClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+
+    const result = await lib.execute('run-approval', {
+      prompt: 'cleanup',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: ['/tmp/project'],
+      readOnlyPaths: [],
+      readOnly: false,
+    }, {
+      onPermissionRequest,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(onPermissionRequest).toHaveBeenCalledWith({
+      toolName: 'Bash',
+      toolInput: expect.objectContaining({
+        command: 'ls /tmp/project',
+        cwd: '/tmp/project',
+        reason: 'Needs listing access',
+      }),
+      toolUseId: 'cmd-1',
+    });
+    expect(FakeCodexAppServerClient.instances[0].approvalDecisions).toEqual(['decline']);
+  });
+
+  it('returns a structured failure result for unsupported dynamic tools', async () => {
+    class DynamicToolClient extends FakeCodexAppServerClient {
+      override readonly turnStart = vi.fn(async (): Promise<CodexAppServerTurnStartResponse> => {
+        this.options.onNotification?.({
+          method: 'turn/started',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress', error: null } },
+        });
+        const response = await this.options.onServerRequest?.({
+          method: 'item/tool/call',
+          id: 'request-2',
+          params: {
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            callId: 'tool-1',
+            tool: 'AskUserQuestion',
+            arguments: { question: 'continue?' },
+          },
+        });
+        this.dynamicToolResponses.push(response);
+        this.options.onNotification?.({
+          method: 'turn/completed',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed', error: null } },
+        });
+        return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
+      });
+    }
+
+    FakeCodexAppServerClient.instances.length = 0;
+    const messages: AgentChatMessage[] = [];
+    const userToolResults: Array<{ toolUseId: string; content: string }> = [];
+    const lib = new CodexAppServerLib(undefined, (options) => new DynamicToolClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+
+    await lib.execute('run-dynamic-tool', {
+      prompt: 'call dynamic tool',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: ['/tmp/project'],
+      readOnlyPaths: [],
+      readOnly: false,
+    }, {
+      onMessage: (message) => messages.push(message),
+      onUserToolResult: (toolUseId, content) => userToolResults.push({ toolUseId, content }),
+    });
+
+    expect(FakeCodexAppServerClient.instances[0].dynamicToolResponses).toEqual([
+      {
+        success: false,
+        contentItems: [{ type: 'inputText', text: 'Client-handled tool AskUserQuestion is not implemented yet in CodexAppServerLib.' }],
+      },
+    ]);
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'tool_use', toolName: 'AskUserQuestion', toolId: 'tool-1' }),
+      expect.objectContaining({ type: 'tool_result', toolId: 'tool-1' }),
+    ]));
+    expect(userToolResults).toEqual([
+      {
+        toolUseId: 'tool-1',
+        content: 'Client-handled tool AskUserQuestion is not implemented yet in CodexAppServerLib.',
+      },
+    ]);
   });
 });

@@ -12,6 +12,12 @@ export interface CodexAppServerServerRequest {
   params: Record<string, unknown>;
 }
 
+export interface CodexAppServerResponseError {
+  message?: string;
+  code?: number;
+  data?: unknown;
+}
+
 export interface CodexAppServerResponseEnvelope<T = unknown> {
   id: string | number;
   result?: T;
@@ -98,7 +104,7 @@ export interface CodexAppServerClientOptions {
   bin?: string;
   args?: string[];
   onNotification?: (notification: CodexAppServerNotification) => void;
-  onServerRequest?: (request: CodexAppServerServerRequest) => void;
+  onServerRequest?: (request: CodexAppServerServerRequest) => Promise<unknown> | unknown;
   onStderr?: (chunk: string) => void;
   spawnProcess?: typeof spawn;
   clientInfo?: { name: string; version: string };
@@ -228,10 +234,9 @@ export class CodexAppServerClient extends EventEmitter {
       throw new Error('codex app-server is not running');
     }
     const id = String(this.nextRequestId++);
-    const payload = JSON.stringify({ method, id, params });
     return new Promise<T>((resolve, reject) => {
       this.pendingRequests.set(id, { resolve: resolve as (value: unknown) => void, reject });
-      this.child?.stdin?.write(`${payload}\n`, (err?: Error | null) => {
+      this.writeMessage({ method, id, params }, (err?: Error | null) => {
         if (!err) return;
         this.pendingRequests.delete(id);
         reject(err instanceof Error ? err : new Error(String(err)));
@@ -270,7 +275,7 @@ export class CodexAppServerClient extends EventEmitter {
         id: message.id,
         params: message.params ?? {},
       };
-      this.options.onServerRequest?.(request);
+      void this.handleServerRequest(request);
       this.emit('server_request', request);
       return;
     }
@@ -301,5 +306,29 @@ export class CodexAppServerClient extends EventEmitter {
       pending.reject(error);
     }
     this.pendingRequests.clear();
+  }
+
+  private async handleServerRequest(request: CodexAppServerServerRequest): Promise<void> {
+    try {
+      const result = await this.options.onServerRequest?.(request);
+      this.writeMessage({ id: request.id, result: result ?? null });
+    } catch (error) {
+      const err = error instanceof Error
+        ? { message: error.message }
+        : { message: String(error) };
+      this.writeMessage({ id: request.id, error: err });
+    }
+  }
+
+  private writeMessage(
+    payload: { method?: string; id?: string | number; params?: object; result?: unknown; error?: CodexAppServerResponseError },
+    callback?: (err?: Error | null) => void,
+  ): void {
+    if (!this.child?.stdin) {
+      callback?.(new Error('codex app-server is not running'));
+      return;
+    }
+    const serialized = JSON.stringify(payload);
+    this.child.stdin.write(`${serialized}\n`, callback);
   }
 }
