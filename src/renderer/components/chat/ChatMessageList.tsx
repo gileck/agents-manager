@@ -279,6 +279,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
             segment={segment}
             expandedTools={expandedTools}
             onToggleTool={toggleTool}
+            sessionRunning={isRunning}
           />
         );
         continue;

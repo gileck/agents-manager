@@ -10,6 +10,8 @@ interface AgentBlockProps {
   segment: AgentSegment;
   expandedTools: Set<number>;
   onToggleTool: (index: number) => void;
+  /** Whether the parent chat session is still running. */
+  sessionRunning?: boolean;
 }
 
 /** Parse the Task tool_use input JSON to extract agent metadata. */
@@ -48,9 +50,8 @@ function formatDuration(ms: number): string {
 }
 
 /** Determine the agent's status from the segment data. */
-function getAgentStatus(segment: AgentSegment): 'initializing' | 'running' | 'completed' | 'error' {
+function getAgentStatus(segment: AgentSegment, sessionRunning?: boolean): 'initializing' | 'running' | 'completed' | 'stopped' | 'error' {
   if (segment.completedActivity) return 'completed';
-  if (segment.startedActivity && !segment.completedActivity) return 'running';
   // Check if tool_result indicates an error
   if (segment.taskToolResult) {
     const result = segment.taskToolResult.result;
@@ -59,6 +60,10 @@ function getAgentStatus(segment: AgentSegment): 'initializing' | 'running' | 'co
     }
     return 'completed';
   }
+  // If session is no longer running but agent has no completion, it was stopped
+  if (!sessionRunning && segment.startedActivity) return 'stopped';
+  if (!sessionRunning) return 'stopped';
+  if (segment.startedActivity) return 'running';
   return 'initializing';
 }
 
@@ -103,9 +108,9 @@ function countToolCalls(internalMessages: AgentChatMessage[]): number {
   return internalMessages.filter(m => m.type === 'tool_use').length;
 }
 
-export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockProps) {
+export function AgentBlock({ segment, expandedTools, onToggleTool, sessionRunning }: AgentBlockProps) {
   const agentInput = useMemo(() => parseAgentInput(segment.taskToolUse.input), [segment.taskToolUse.input]);
-  const status = getAgentStatus(segment);
+  const status = getAgentStatus(segment, sessionRunning);
   const isRunning = status === 'running' || status === 'initializing';
 
   // ── Collapsible section state ──
@@ -163,6 +168,7 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
     initializing: { label: 'Initializing...', color: '#8b5cf6', bgColor: 'rgba(139, 92, 246, 0.06)', icon: <Clock className="h-3.5 w-3.5" style={{ color: '#8b5cf6' }} /> },
     running: { label: 'Running', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.06)', icon: <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" /> },
     completed: { label: 'Completed', color: '#22c55e', bgColor: 'rgba(34, 197, 94, 0.06)', icon: <CheckCircle2 className="h-3.5 w-3.5" style={{ color: '#22c55e' }} /> },
+    stopped: { label: 'Stopped', color: '#f59e0b', bgColor: 'rgba(245, 158, 11, 0.06)', icon: <AlertCircle className="h-3.5 w-3.5" style={{ color: '#f59e0b' }} /> },
     error: { label: 'Error', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.06)', icon: <AlertCircle className="h-3.5 w-3.5" style={{ color: '#ef4444' }} /> },
   }[status];
 
