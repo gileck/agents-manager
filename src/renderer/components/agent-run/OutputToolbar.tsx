@@ -10,7 +10,10 @@ import {
   ChevronUp,
   ChevronDown,
   Clock,
+  Activity,
 } from 'lucide-react';
+import type { PostProcessingLogCategory } from '../../../shared/types';
+import { CATEGORY_LABELS } from './RenderedOutputPanel';
 
 export type OutputMode = 'raw' | 'rendered';
 
@@ -34,7 +37,23 @@ interface OutputToolbarProps {
   hasOutput?: boolean;
   showTimestamps?: boolean;
   onShowTimestampsToggle?: () => void;
+  hasPostProcessingLogs?: boolean;
+  showPostProcessingLogs?: boolean;
+  onTogglePostProcessingLogs?: () => void;
+  activePostLogCategories?: Set<PostProcessingLogCategory>;
+  onTogglePostLogCategory?: (category: PostProcessingLogCategory) => void;
 }
+
+const ALL_CATEGORIES: PostProcessingLogCategory[] = ['validation', 'git', 'pipeline', 'extraction', 'notification', 'system'];
+
+const CATEGORY_CHIP_COLORS: Record<PostProcessingLogCategory, string> = {
+  validation: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/25',
+  git: 'bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30 hover:bg-orange-500/25',
+  pipeline: 'bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/25',
+  extraction: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/25',
+  notification: 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30 hover:bg-green-500/25',
+  system: 'bg-slate-500/15 text-slate-700 dark:text-slate-400 border-slate-500/30 hover:bg-slate-500/25',
+};
 
 export function OutputToolbar({
   autoScroll,
@@ -56,6 +75,11 @@ export function OutputToolbar({
   hasOutput = false,
   showTimestamps = false,
   onShowTimestampsToggle,
+  hasPostProcessingLogs = false,
+  showPostProcessingLogs = false,
+  onTogglePostProcessingLogs,
+  activePostLogCategories,
+  onTogglePostLogCategory,
 }: OutputToolbarProps) {
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState('');
@@ -111,6 +135,42 @@ export function OutputToolbar({
         >
           <Clock className="h-3.5 w-3.5" />
         </Button>
+      )}
+
+      {outputMode === 'rendered' && hasPostProcessingLogs && onTogglePostProcessingLogs && (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn('h-7 gap-1 px-2 text-xs', showPostProcessingLogs && 'bg-accent text-accent-foreground')}
+            onClick={onTogglePostProcessingLogs}
+            title="Toggle post-processing logs"
+          >
+            <Activity className="h-3.5 w-3.5" />
+            Post-processing
+          </Button>
+          {showPostProcessingLogs && onTogglePostLogCategory && (
+            <div className="flex items-center gap-1">
+              {ALL_CATEGORIES.map((cat) => {
+                const isActive = !activePostLogCategories || activePostLogCategories.size === 0 || activePostLogCategories.has(cat);
+                return (
+                  <button
+                    key={cat}
+                    className={cn(
+                      'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer',
+                      CATEGORY_CHIP_COLORS[cat],
+                      !isActive && 'opacity-40'
+                    )}
+                    onClick={() => onTogglePostLogCategory(cat)}
+                    title={`Toggle ${CATEGORY_LABELS[cat]} logs`}
+                  >
+                    {CATEGORY_LABELS[cat]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       <Button
