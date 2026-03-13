@@ -122,16 +122,19 @@ export class CodexCliLib implements IAgentLib {
     };
   }
 
-  getDefaultModel(): string { return 'gpt-5.3-codex'; }
+  getDefaultModel(): string { return 'gpt-5.4'; }
 
   getSupportedModels(): AgentLibModelOption[] {
     return [
-      { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
-      { value: 'gpt-5.3-codex-spark', label: 'GPT-5.3 Codex Spark' },
-      { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex' },
-      { value: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max' },
-      { value: 'gpt-5.1-codex', label: 'GPT-5.1 Codex' },
-      { value: 'gpt-5-codex', label: 'GPT-5 Codex' },
+      { value: 'gpt-5.4', label: 'GPT-5.4' },
+      { value: 'gpt-5.4-2026-03-05', label: 'GPT-5.4 (2026-03-05 snapshot)' },
+      { value: 'gpt-5.4-pro', label: 'GPT-5.4 Pro' },
+      { value: 'gpt-5.4-pro-2026-03-05', label: 'GPT-5.4 Pro (2026-03-05 snapshot)' },
+      { value: 'codex-mini-latest', label: 'Codex Mini Latest' },
+      { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex (Legacy)' },
+      { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex (Legacy)' },
+      { value: 'gpt-5.1-codex', label: 'GPT-5.1 Codex (Legacy)' },
+      { value: 'gpt-5-codex', label: 'GPT-5 Codex (Legacy)' },
     ];
   }
 

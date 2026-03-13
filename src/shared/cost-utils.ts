@@ -37,16 +37,21 @@ export const MODEL_PRICING_TABLE: Array<{ pattern: string; pricing: ModelPricing
   { pattern: 'haiku',             pricing: { inputPerMTok: 1,    outputPerMTok: 5,     cacheReadPerMTok: 0.10,   cacheWritePerMTok: 1.25 } },
 
   // ── OpenAI Codex / GPT ──
-  // OpenAI cache: read = 50% of input, no write premium
-  { pattern: 'codex-mini',        pricing: { inputPerMTok: 1.50, outputPerMTok: 6,     cacheReadPerMTok: 0.75,   cacheWritePerMTok: 1.50 } },
-  { pattern: 'gpt-5.3-codex',     pricing: { inputPerMTok: 1.75, outputPerMTok: 14,    cacheReadPerMTok: 0.875,  cacheWritePerMTok: 1.75 } },
-  { pattern: 'gpt-5.2-codex',     pricing: { inputPerMTok: 1.75, outputPerMTok: 14,    cacheReadPerMTok: 0.875,  cacheWritePerMTok: 1.75 } },
-  { pattern: 'gpt-5.1-codex',     pricing: { inputPerMTok: 1.25, outputPerMTok: 10,    cacheReadPerMTok: 0.625,  cacheWritePerMTok: 1.25 } },
-  { pattern: 'gpt-5-codex',       pricing: { inputPerMTok: 1.25, outputPerMTok: 10,    cacheReadPerMTok: 0.625,  cacheWritePerMTok: 1.25 } },
-  { pattern: 'gpt-5.3',           pricing: { inputPerMTok: 1.75, outputPerMTok: 14,    cacheReadPerMTok: 0.875,  cacheWritePerMTok: 1.75 } },
-  { pattern: 'gpt-5.2',           pricing: { inputPerMTok: 1.75, outputPerMTok: 14,    cacheReadPerMTok: 0.875,  cacheWritePerMTok: 1.75 } },
-  { pattern: 'gpt-5.1',           pricing: { inputPerMTok: 1.25, outputPerMTok: 10,    cacheReadPerMTok: 0.625,  cacheWritePerMTok: 1.25 } },
-  { pattern: 'gpt-5',             pricing: { inputPerMTok: 1.25, outputPerMTok: 10,    cacheReadPerMTok: 0.625,  cacheWritePerMTok: 1.25 } },
+  // OpenAI publishes cached-input rates for some models. When a specific
+  // cached-input rate is not in the table, calculateCost() falls back to 10%
+  // of the input rate. We treat cache writes at the standard input rate
+  // because there is no separate cache-write price in the model docs.
+  { pattern: 'gpt-5.4-pro',       pricing: { inputPerMTok: 30,   outputPerMTok: 180,   cacheWritePerMTok: 30 } },
+  { pattern: 'gpt-5.4',           pricing: { inputPerMTok: 2.50, outputPerMTok: 15,    cacheReadPerMTok: 0.25,   cacheWritePerMTok: 2.50 } },
+  { pattern: 'codex-mini',        pricing: { inputPerMTok: 1.50, outputPerMTok: 6,     cacheReadPerMTok: 0.375,  cacheWritePerMTok: 1.50 } },
+  { pattern: 'gpt-5.3-codex',     pricing: { inputPerMTok: 1.75, outputPerMTok: 14,    cacheReadPerMTok: 0.175,  cacheWritePerMTok: 1.75 } },
+  { pattern: 'gpt-5.2-codex',     pricing: { inputPerMTok: 1.75, outputPerMTok: 14,    cacheReadPerMTok: 0.175,  cacheWritePerMTok: 1.75 } },
+  { pattern: 'gpt-5.1-codex',     pricing: { inputPerMTok: 1.25, outputPerMTok: 10,    cacheReadPerMTok: 0.125,  cacheWritePerMTok: 1.25 } },
+  { pattern: 'gpt-5-codex',       pricing: { inputPerMTok: 1.25, outputPerMTok: 10,    cacheReadPerMTok: 0.125,  cacheWritePerMTok: 1.25 } },
+  { pattern: 'gpt-5.3',           pricing: { inputPerMTok: 1.75, outputPerMTok: 14,    cacheReadPerMTok: 0.175,  cacheWritePerMTok: 1.75 } },
+  { pattern: 'gpt-5.2',           pricing: { inputPerMTok: 1.75, outputPerMTok: 14,    cacheReadPerMTok: 0.175,  cacheWritePerMTok: 1.75 } },
+  { pattern: 'gpt-5.1',           pricing: { inputPerMTok: 1.25, outputPerMTok: 10,    cacheReadPerMTok: 0.125,  cacheWritePerMTok: 1.25 } },
+  { pattern: 'gpt-5',             pricing: { inputPerMTok: 1.25, outputPerMTok: 10,    cacheReadPerMTok: 0.125,  cacheWritePerMTok: 1.25 } },
 
   // ── Google Gemini ──
   // Gemini cache: read = 25% of input, no write premium
