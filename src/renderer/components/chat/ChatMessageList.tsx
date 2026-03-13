@@ -141,7 +141,11 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
       }
     }
 
-    // Collect internal messages between started and completed (or end of messages)
+    // Collect internal messages between started and completed (or end of messages).
+    // Only consume messages that are internal to the subagent (thinking, tool_use,
+    // tool_result, usage). Never consume user-facing messages like assistant_text,
+    // user, or other leaf types — those belong in the main chat timeline.
+    const INTERNAL_TYPES = new Set(['thinking', 'tool_use', 'tool_result', 'usage']);
     const internalMessages: AgentChatMessage[] = [];
     if (startedIdx >= 0) {
       consumedIndices.add(startedIdx);
@@ -150,6 +154,8 @@ function groupMessages(messages: AgentChatMessage[]): Segment[] {
         const m = messages[j];
         if (m.type === 'subagent_activity') continue; // skip nested/other activity markers
         if (m.type === 'tool_result' && (m as AgentChatMessageToolResult).toolId === toolId) continue;
+        // Only consume internal processing messages — leave user-facing messages in the timeline
+        if (!INTERNAL_TYPES.has(m.type)) continue;
         internalMessages.push(m);
         consumedIndices.add(j);
       }
