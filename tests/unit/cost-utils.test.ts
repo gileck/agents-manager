@@ -3,6 +3,7 @@ import {
   calculateCost,
   formatCost,
   formatTokens,
+  findPricing,
   MODEL_PRICING_TABLE,
 } from '../../src/shared/cost-utils';
 
@@ -34,6 +35,21 @@ describe('cost-utils', () => {
     it('is case-insensitive for model matching', () => {
       const cost = calculateCost(1_000_000, 0, 'Claude-OPUS-4');
       expect(cost).toBe(15);
+    });
+
+    it('uses GPT-5.4 pricing for the latest Codex-capable default model', () => {
+      const cost = calculateCost(1_000_000, 1_000_000, 'gpt-5.4');
+      expect(cost).toBe(2.5 + 15);
+    });
+
+    it('matches GPT-5.4 Pro before the generic GPT-5.4 entry', () => {
+      const cost = calculateCost(1_000_000, 1_000_000, 'gpt-5.4-pro');
+      expect(cost).toBe(30 + 180);
+    });
+
+    it('uses published OpenAI cached-input pricing', () => {
+      const cost = calculateCost(0, 0, 'gpt-5.4', 1_000_000);
+      expect(cost).toBe(0.25);
     });
 
     it('falls back to default pricing for unknown models', () => {
@@ -115,6 +131,21 @@ describe('cost-utils', () => {
       const patterns = MODEL_PRICING_TABLE.map((e) => e.pattern);
       expect(patterns.indexOf('opus')).toBeLessThan(patterns.indexOf('sonnet'));
       expect(patterns.indexOf('sonnet')).toBeLessThan(patterns.indexOf('haiku'));
+    });
+
+    it('keeps GPT-5.4 Pro ahead of GPT-5.4 to avoid substring collisions', () => {
+      const patterns = MODEL_PRICING_TABLE.map((e) => e.pattern);
+      expect(patterns.indexOf('gpt-5.4-pro')).toBeLessThan(patterns.indexOf('gpt-5.4'));
+    });
+  });
+
+  describe('findPricing', () => {
+    it('returns the GPT-5.4 Pro entry for pro snapshots', () => {
+      expect(findPricing('gpt-5.4-pro-2026-03-05')).toEqual({
+        inputPerMTok: 30,
+        outputPerMTok: 180,
+        cacheWritePerMTok: 30,
+      });
     });
   });
 });
