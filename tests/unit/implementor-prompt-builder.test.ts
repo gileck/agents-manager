@@ -208,6 +208,58 @@ describe('ImplementorPromptBuilder', () => {
       expect(prompt).not.toContain('Interactive Questions');
     });
 
+    it('should include merge failure details from task context in merge_failed prompt', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'merge_failed' as RevisionReason,
+        taskContext: [
+          {
+            id: 'ctx-mf-1',
+            taskId: 'task-1',
+            agentRunId: null,
+            source: 'system',
+            entryType: 'merge_failure',
+            summary: 'PR merge failed: PR is not mergeable (likely has conflicts with base branch)',
+            data: {
+              errorMessage: 'PR is not mergeable',
+              prUrl: 'https://github.com/org/repo/pull/42',
+              mergeable: 'CONFLICTING',
+              mergeStateStatus: 'DIRTY',
+              failingChecks: [
+                { name: 'ci/build', status: 'FAILURE', url: 'https://ci.example.com/build/123' },
+              ],
+              timestamp: 1700000000000,
+            },
+            createdAt: 1700000000000,
+            addressed: false,
+            addressedByRunId: null,
+          },
+        ],
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Merge Failure Details');
+      expect(prompt).toContain('PR is not mergeable');
+      expect(prompt).toContain('https://github.com/org/repo/pull/42');
+      expect(prompt).toContain('CONFLICTING');
+      expect(prompt).toContain('DIRTY');
+      expect(prompt).toContain('ci/build');
+      expect(prompt).toContain('FAILURE');
+      expect(prompt).toContain('https://ci.example.com/build/123');
+    });
+
+    it('should produce valid merge_failed prompt without task context entries', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'merge_failed' as RevisionReason,
+        taskContext: [],
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('merge conflicts');
+      expect(prompt).toContain('git fetch origin');
+      expect(prompt).toContain('git rebase origin/main');
+      expect(prompt).not.toContain('Merge Failure Details');
+    });
+
     it('should append validation errors when present', () => {
       const ctx = createContext({ mode: 'new', validationErrors: 'ESLint: unused variable' });
       const prompt = builder.buildPrompt(ctx);

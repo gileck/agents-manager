@@ -179,5 +179,18 @@ describe('Ready to Merge Flow', () => {
       expect(result.success).toBe(true);
       expect(result.task?.status).toBe('ready_to_merge');
     });
+
+    it('should allow system-trigger transition from ready_to_merge to implementing (merge_failed auto-recovery)', async () => {
+      const task = await ctx.taskStore.createTask(
+        createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
+      );
+
+      // System trigger: auto-recovery when merge_pr hook fails
+      const result = await ctx.pipelineEngine.executeTransition(task, 'implementing', {
+        trigger: 'system',
+      });
+      expect(result.success).toBe(true);
+      expect(result.task?.status).toBe('implementing');
+    });
   });
 });

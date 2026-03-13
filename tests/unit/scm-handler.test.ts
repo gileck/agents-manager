@@ -329,6 +329,82 @@ describe('registerScmHandler', () => {
       expect(mockScmPlatform.mergePR).not.toHaveBeenCalled();
     });
 
+    it('returns followUpTransition to implementing on merge failure (not mergeable)', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockScmPlatform.isPRMergeable as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+      const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(result.success).toBe(false);
+      expect(result.followUpTransition).toEqual({ to: 'implementing', trigger: 'system' });
+    });
+
+    it('stores merge failure context entry when PR is not mergeable', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockScmPlatform.isPRMergeable as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+      await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(mockTaskContextStore.addEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: 'task-1',
+          source: 'system',
+          entryType: 'merge_failure',
+          summary: expect.stringContaining('not mergeable'),
+        }),
+      );
+    });
+
+    it('returns followUpTransition when mergePR throws a conflict error', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockScmPlatform.mergePR as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('Merge conflict detected'),
+      );
+
+      const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Merge conflict detected');
+      expect(result.followUpTransition).toEqual({ to: 'implementing', trigger: 'system' });
+    });
+
+    it('stores merge failure context when mergePR throws a conflict error', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockScmPlatform.mergePR as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('not mergeable: conflicts'),
+      );
+
+      await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(mockTaskContextStore.addEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: 'task-1',
+          source: 'system',
+          entryType: 'merge_failure',
+          summary: expect.stringContaining('not mergeable: conflicts'),
+        }),
+      );
+    });
+
+    it('fetches PR checks for detailed context on merge failure', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockScmPlatform.isPRMergeable as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+      await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(mockScmPlatform.getPRChecks).toHaveBeenCalledWith('https://github.com/owner/repo/pull/42');
+    });
+
     it('logs warning when worktree delete fails (non-fatal)', async () => {
       (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
         makeArtifact(),
