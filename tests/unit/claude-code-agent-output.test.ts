@@ -14,7 +14,7 @@ function createContext(taskId: string = 'test-task'): AgentContext {
   };
 }
 
-interface SdkStreamMessage { type: string; subtype?: string; message?: { content: { type: string; text?: string; name?: string; input?: unknown; id?: string }[] }; result?: string; errors?: string[]; structured_output?: Record<string, unknown>; usage?: { input_tokens: number; output_tokens: number }; summary?: string }
+interface SdkStreamMessage { type: string; subtype?: string; message?: { content: { type: string; text?: string; name?: string; input?: unknown; id?: string }[] }; result?: string; errors?: string[]; structured_output?: Record<string, unknown>; usage?: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }; summary?: string; modelUsage?: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; costUSD: number; contextWindow?: number; maxOutputTokens?: number }> }
 
 // Helper to create a mock async generator from an array of messages
 async function* mockQueryGenerator(messages: SdkStreamMessage[]) {
@@ -302,6 +302,129 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     // No assistant messages → accumulated is 0, so fall back to result values
     expect(result.costInputTokens).toBe(100);
     expect(result.costOutputTokens).toBe(50);
+  });
+
+  it('should sum tokens from modelUsage across multiple models (including subagent usage)', async () => {
+    const messages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Done' }],
+        },
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        usage: { input_tokens: 3000, output_tokens: 800 },
+        modelUsage: {
+          'claude-opus-4-6': {
+            inputTokens: 3000,
+            outputTokens: 800,
+            cacheReadInputTokens: 500,
+            cacheCreationInputTokens: 200,
+            costUSD: 0.10,
+            contextWindow: 200000,
+            maxOutputTokens: 16384,
+          },
+          'claude-haiku-4-5-20251001': {
+            inputTokens: 50000,
+            outputTokens: 12000,
+            cacheReadInputTokens: 8000,
+            cacheCreationInputTokens: 1000,
+            costUSD: 0.05,
+          },
+        },
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    // Should sum across all models: parent (opus) + subagent (haiku)
+    expect(result.costInputTokens).toBe(53000);
+    expect(result.costOutputTokens).toBe(12800);
+    expect(result.cacheReadInputTokens).toBe(8500);
+    expect(result.cacheCreationInputTokens).toBe(1200);
+  });
+
+  it('should prefer modelUsage over result.usage when both are present', async () => {
+    const messages = [
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        // result.usage has parent-only counts
+        usage: { input_tokens: 3000, output_tokens: 800 },
+        // modelUsage has comprehensive counts (parent + subagent)
+        modelUsage: {
+          'claude-opus-4-6': {
+            inputTokens: 3000,
+            outputTokens: 800,
+            cacheReadInputTokens: 100,
+            cacheCreationInputTokens: 50,
+            costUSD: 0.10,
+          },
+          'claude-sonnet-4-6': {
+            inputTokens: 7000,
+            outputTokens: 2200,
+            cacheReadInputTokens: 400,
+            cacheCreationInputTokens: 150,
+            costUSD: 0.08,
+          },
+        },
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    // modelUsage wins — includes subagent tokens
+    expect(result.costInputTokens).toBe(10000);
+    expect(result.costOutputTokens).toBe(3000);
+    expect(result.cacheReadInputTokens).toBe(500);
+    expect(result.cacheCreationInputTokens).toBe(200);
+  });
+
+  it('should fall back to result.usage when modelUsage is empty', async () => {
+    const messages = [
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        usage: { input_tokens: 2000, output_tokens: 600 },
+        modelUsage: {},
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    // Empty modelUsage → falls back to result.usage
+    expect(result.costInputTokens).toBe(2000);
+    expect(result.costOutputTokens).toBe(600);
+  });
+
+  it('should fall back to result.usage when modelUsage is not present', async () => {
+    const messages = [
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        usage: { input_tokens: 1500, output_tokens: 400 },
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    // No modelUsage → falls back to result.usage (existing behavior preserved)
+    expect(result.costInputTokens).toBe(1500);
+    expect(result.costOutputTokens).toBe(400);
   });
 
   it('should abort via stop()', async () => {

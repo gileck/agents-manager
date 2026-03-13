@@ -275,14 +275,23 @@ export class ClaudeCodeLib extends BaseAgentLib {
               }
             }
           }
-          costInputTokens = resultMsg.usage?.input_tokens
-            ?? (state.accumulatedInputTokens >= 0 ? state.accumulatedInputTokens : undefined);
-          costOutputTokens = resultMsg.usage?.output_tokens
-            ?? (state.accumulatedOutputTokens >= 0 ? state.accumulatedOutputTokens : undefined);
-          cacheReadInputTokens = resultMsg.usage?.cache_read_input_tokens
-            ?? (state.accumulatedCacheReadInputTokens >= 0 ? state.accumulatedCacheReadInputTokens : undefined);
-          cacheCreationInputTokens = resultMsg.usage?.cache_creation_input_tokens
-            ?? (state.accumulatedCacheCreationInputTokens >= 0 ? state.accumulatedCacheCreationInputTokens : undefined);
+          // Prefer modelUsage (includes subagent tokens) over usage (parent-only)
+          if (resultMsg.modelUsage && Object.keys(resultMsg.modelUsage).length > 0) {
+            const usageValues = Object.values(resultMsg.modelUsage);
+            costInputTokens = usageValues.reduce((sum, m) => sum + m.inputTokens, 0);
+            costOutputTokens = usageValues.reduce((sum, m) => sum + m.outputTokens, 0);
+            cacheReadInputTokens = usageValues.reduce((sum, m) => sum + m.cacheReadInputTokens, 0);
+            cacheCreationInputTokens = usageValues.reduce((sum, m) => sum + m.cacheCreationInputTokens, 0);
+          } else {
+            costInputTokens = resultMsg.usage?.input_tokens
+              ?? (state.accumulatedInputTokens >= 0 ? state.accumulatedInputTokens : undefined);
+            costOutputTokens = resultMsg.usage?.output_tokens
+              ?? (state.accumulatedOutputTokens >= 0 ? state.accumulatedOutputTokens : undefined);
+            cacheReadInputTokens = resultMsg.usage?.cache_read_input_tokens
+              ?? (state.accumulatedCacheReadInputTokens >= 0 ? state.accumulatedCacheReadInputTokens : undefined);
+            cacheCreationInputTokens = resultMsg.usage?.cache_creation_input_tokens
+              ?? (state.accumulatedCacheCreationInputTokens >= 0 ? state.accumulatedCacheCreationInputTokens : undefined);
+          }
           if (costInputTokens != null || costOutputTokens != null) {
             const usageMsg: AgentChatMessage = { type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, contextWindow, timestamp: Date.now() };
             onMessage?.(usageMsg);
