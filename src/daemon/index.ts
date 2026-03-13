@@ -60,6 +60,9 @@ async function main() {
     onAgentSubscriptionFired: (sessionId, payload) => {
       wsHolder.server?.broadcast(WS_CHANNELS.CHAT_AGENT_NOTIFICATION, sessionId, payload);
     },
+    onTaskUpdated: (taskId, task) => {
+      wsHolder.server?.broadcast(WS_CHANNELS.TASK_STATUS_CHANGED, taskId, task);
+    },
   });
 
   // Register in-app notification router (lazily broadcasts via WS once server is ready)

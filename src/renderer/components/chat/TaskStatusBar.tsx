@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Task } from '../../../shared/types';
+import { getAllSubtasksFromPhases } from '../../../shared/phase-utils';
 import { useTrackedTasks } from '../../hooks/useTrackedTasks';
 
 interface TaskStatusBarProps {
@@ -41,6 +42,15 @@ function buildSummary(tasks: Task[]): string {
   return `${tasks.length} task${tasks.length === 1 ? '' : 's'} · ${parts.join(' · ')}`;
 }
 
+function getSubtaskProgress(task: Task): { done: number; total: number } {
+  const subtasks = task.phases && task.phases.length > 0
+    ? getAllSubtasksFromPhases(task.phases)
+    : (task.subtasks ?? []);
+  const total = subtasks.length;
+  const done = subtasks.filter(s => s.status === 'done').length;
+  return { done, total };
+}
+
 export function TaskStatusBar({ sessionId }: TaskStatusBarProps) {
   const { tasks } = useTrackedTasks(sessionId);
   const [expanded, setExpanded] = useState(false);
@@ -67,22 +77,40 @@ export function TaskStatusBar({ sessionId }: TaskStatusBarProps) {
       {/* Expanded task list */}
       {expanded && (
         <div className="border-t border-border/40 max-h-52 overflow-y-auto">
-          {tasks.map((task) => (
-            <button
-              key={task.id}
-              onClick={() => navigate(`/tasks/${task.id}`)}
-              className="w-full flex items-center gap-3 px-4 py-2 text-xs hover:bg-accent/40 transition-colors text-left group"
-            >
-              <span
-                className={`shrink-0 px-1.5 py-0.5 rounded border text-[10px] font-medium leading-tight ${getStatusColor(task.status)}`}
-              >
-                {task.status}
-              </span>
-              <span className="flex-1 truncate text-foreground group-hover:text-foreground/90">
-                {task.title}
-              </span>
-            </button>
-          ))}
+          {tasks.map((task) => {
+            const progress = getSubtaskProgress(task);
+            const pct = progress.total > 0 ? (progress.done / progress.total) * 100 : 0;
+            return (
+              <div key={task.id}>
+                <button
+                  onClick={() => navigate(`/tasks/${task.id}`)}
+                  className="w-full flex items-center gap-3 px-4 py-2 text-xs hover:bg-accent/40 transition-colors text-left group"
+                >
+                  <span
+                    className={`shrink-0 px-1.5 py-0.5 rounded border text-[10px] font-medium leading-tight ${getStatusColor(task.status)}`}
+                  >
+                    {task.status}
+                  </span>
+                  <span className="flex-1 truncate text-foreground group-hover:text-foreground/90">
+                    {task.title}
+                  </span>
+                  {progress.total > 0 && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {progress.done}/{progress.total}
+                    </span>
+                  )}
+                </button>
+                {progress.total > 0 && (
+                  <div className="mx-4 mb-1 h-0.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 rounded-full transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

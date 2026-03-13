@@ -104,6 +104,7 @@ export interface AppServicesConfig {
   onMainDiverged?: (projectId: string) => void;
   devServerCallbacks?: DevServerManagerCallbacks;
   onAgentSubscriptionFired?: (sessionId: string, payload: AgentNotificationPayload) => void;
+  onTaskUpdated?: (taskId: string, task: import('../../shared/types').Task) => void;
 }
 
 export interface AppServices {
@@ -261,6 +262,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     validationRunner, outcomeResolver,
     scheduledAgentService, agentLibRegistry, devServerManager,
     subscriptionRegistry, config?.onAgentSubscriptionFired,
+    config?.onTaskUpdated,
   );
 
   // Workflow service
