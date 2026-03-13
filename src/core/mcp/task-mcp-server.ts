@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createApiClient } from '../../client/api-client';
-import type { TaskType } from '../../shared/types';
+import type { TaskType, TaskUpdateInput } from '../../shared/types';
 import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentSubscriptionRegistry } from '../services/agent-subscription-registry';
 
@@ -150,6 +150,67 @@ export async function createTaskMcpServer(
             tags: args.tags,
             featureId: args.featureId,
           });
+          return ok(task);
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // update_task
+    // -------------------------------------------------------------------------
+    {
+      name: 'update_task',
+      description:
+        'Update fields on an existing task. Only the provided fields will be changed; ' +
+        'omitted fields are left untouched. Pass null to clear optional fields.',
+      inputSchema: {
+        taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
+        title: z.string().optional().describe('Task title'),
+        description: z.string().nullable().optional().describe('Task description (null to clear)'),
+        type: z.string().optional().describe('Task type: "bug", "feature", or "improvement"'),
+        size: z.string().nullable().optional().describe('Task size: "xs", "sm", "md", "lg", or "xl" (null to clear)'),
+        complexity: z.string().nullable().optional().describe('Task complexity: "low", "medium", or "high" (null to clear)'),
+        priority: z.number().optional().describe('Numeric priority (lower = higher priority)'),
+        assignee: z.string().nullable().optional().describe('Assignee name (null to clear)'),
+        tags: z.array(z.string()).optional().describe('Array of tags'),
+        pipelineId: z.string().optional().describe('Pipeline ID'),
+        featureId: z.string().nullable().optional().describe('Feature ID (null to clear)'),
+        parentTaskId: z.string().nullable().optional().describe('Parent task ID (null to clear)'),
+        plan: z.string().nullable().optional().describe('Plan content (null to clear)'),
+        technicalDesign: z.string().nullable().optional().describe('Technical design content (null to clear)'),
+        debugInfo: z.string().nullable().optional().describe('Debug info (null to clear)'),
+        prLink: z.string().nullable().optional().describe('PR link (null to clear)'),
+        branchName: z.string().nullable().optional().describe('Branch name (null to clear)'),
+        metadata: z.record(z.unknown()).optional().describe('Metadata object, merged into existing metadata'),
+        phases: z.array(z.unknown()).nullable().optional().describe('Implementation phases JSON array (null to clear)'),
+      },
+      handler: async (args: {
+        taskId: string;
+        title?: string;
+        description?: string | null;
+        type?: string;
+        size?: string | null;
+        complexity?: string | null;
+        priority?: number;
+        assignee?: string | null;
+        tags?: string[];
+        pipelineId?: string;
+        featureId?: string | null;
+        parentTaskId?: string | null;
+        plan?: string | null;
+        technicalDesign?: string | null;
+        debugInfo?: string | null;
+        prLink?: string | null;
+        branchName?: string | null;
+        metadata?: Record<string, unknown>;
+        phases?: unknown[] | null;
+      }): Promise<CallToolResult> => {
+        try {
+          const taskId = await resolveTaskId(api, args.taskId);
+          const { taskId: _taskId, ...updateFields } = args;
+          const task = await api.tasks.update(taskId, updateFields as TaskUpdateInput);
           return ok(task);
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
