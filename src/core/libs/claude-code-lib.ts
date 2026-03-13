@@ -26,6 +26,7 @@ interface SdkUsage {
 interface SdkAssistantMessage {
   type: 'assistant';
   message: { id?: string; content: SdkContentBlock[]; usage?: SdkUsage };
+  parent_tool_use_id?: string | null;
 }
 interface SdkResultMessage {
   type: 'result';
@@ -224,6 +225,8 @@ export class ClaudeCodeLib extends BaseAgentLib {
 
         if (message.type === 'assistant') {
           const assistantMsg = message as SdkAssistantMessage;
+          // Subagent messages have a non-null parent_tool_use_id
+          const parentToolUseId = assistantMsg.parent_tool_use_id ?? undefined;
           if (assistantMsg.message.usage) {
             const msgId = assistantMsg.message.id;
             if (!msgId || !seenIds.has(msgId)) {
@@ -241,13 +244,13 @@ export class ClaudeCodeLib extends BaseAgentLib {
           for (const block of assistantMsg.message.content) {
             if (block.type === 'text') {
               emit(block.text + '\n');
-              onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now() });
+              onMessage?.({ type: 'assistant_text', text: block.text, timestamp: Date.now(), ...(parentToolUseId ? { parentToolUseId } : {}) });
             } else if (block.type === 'thinking') {
-              onMessage?.({ type: 'thinking', text: block.thinking, timestamp: Date.now() });
+              onMessage?.({ type: 'thinking', text: block.thinking, timestamp: Date.now(), ...(parentToolUseId ? { parentToolUseId } : {}) });
             } else if (block.type === 'tool_use') {
               const input = JSON.stringify(block.input ?? {});
               stream(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
-              onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input, timestamp: Date.now() });
+              onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input, timestamp: Date.now(), ...(parentToolUseId ? { parentToolUseId } : {}) });
             }
           }
         } else if (message.type === 'result') {
@@ -313,6 +316,7 @@ export class ClaudeCodeLib extends BaseAgentLib {
           }
         } else if (message.type === 'user') {
           const userMsg = message as SdkUserMessage;
+          const parentToolUseId = userMsg.parent_tool_use_id ?? undefined;
           const content = userMsg.message?.content;
           if (Array.isArray(content)) {
             for (const block of content) {
@@ -320,7 +324,13 @@ export class ClaudeCodeLib extends BaseAgentLib {
               if (b.type === 'tool_result' && b.tool_use_id) {
                 const resultContent = typeof b.content === 'string' ? b.content
                   : (Array.isArray(b.content) ? b.content.map((c: { text?: string }) => c.text || '').join('') : '(no output)');
-                onUserToolResult?.(b.tool_use_id, resultContent);
+                if (parentToolUseId) {
+                  // Subagent tool_result — emit via onMessage with parentToolUseId tag
+                  onMessage?.({ type: 'tool_result', toolId: b.tool_use_id, result: resultContent, timestamp: Date.now(), parentToolUseId });
+                } else {
+                  // Parent tool_result — use existing callback
+                  onUserToolResult?.(b.tool_use_id, resultContent);
+                }
               }
             }
           }
