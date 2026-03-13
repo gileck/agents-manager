@@ -3,6 +3,7 @@ import type { AppServices } from '../../core/providers/setup';
 import { buildDesktopSystemPrompt } from '../../core/services/chat-prompt-parts';
 import type { WsHolder } from '../server';
 import { WS_CHANNELS } from '../ws/channels';
+import { MAX_MESSAGE_LENGTH } from '../../shared/constants';
 
 export function taskChatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   const router = Router();
@@ -23,8 +24,8 @@ export function taskChatRoutes(services: AppServices, wsHolder: WsHolder): Route
         res.status(400).json({ error: 'Message text is required' });
         return;
       }
-      if (message.length > 10000) {
-        res.status(400).json({ error: 'Message is too long (max 10000 characters)' });
+      if (message.length > MAX_MESSAGE_LENGTH) {
+        res.status(400).json({ error: `Message is too long (max ${MAX_MESSAGE_LENGTH.toLocaleString()} characters)` });
         return;
       }
 

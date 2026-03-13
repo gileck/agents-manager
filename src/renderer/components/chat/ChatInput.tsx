@@ -3,6 +3,7 @@ import { Image, Square, Cpu, ArrowUp, Eye, Pencil, Shield, Zap, X } from 'lucide
 import { reportError } from '../../lib/error-handler';
 import type { ChatImage, PermissionMode } from '../../../shared/types';
 import { ImageAnnotationPanel } from '../ui/ImageAnnotationPanel';
+import { MAX_MESSAGE_LENGTH } from '../../../shared/constants';
 import {
   Select,
   SelectTrigger,
@@ -215,7 +216,10 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   const circleOffset = circleCircumference * (1 - contextPercent / 100);
   const circleColor = getContextColor(contextPercent);
 
-  const canSubmit = value.trim().length > 0 || images.length > 0;
+  const isOverLimit = value.length > MAX_MESSAGE_LENGTH;
+  const charPercent = value.length / MAX_MESSAGE_LENGTH;
+  const showCharCounter = charPercent >= 0.9;
+  const canSubmit = (value.trim().length > 0 || images.length > 0) && !isOverLimit;
 
   return (
     <div className="px-4 pb-5 pt-3">
@@ -271,6 +275,12 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
           onPaste={handlePaste}
           rows={1}
         />
+
+        {showCharCounter && (
+          <div className={`px-4 pb-1 text-xs text-right ${isOverLimit ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+            {value.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()}
+          </div>
+        )}
 
         <div className="flex items-center justify-between px-3.5 pb-3 pt-0.5">
           <div className="flex items-center gap-1.5 min-w-0">
