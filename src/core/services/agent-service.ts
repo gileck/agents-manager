@@ -944,14 +944,14 @@ export class AgentService implements IAgentService {
       }).catch(() => {});
 
       // Handle outcome — resolve outcome and execute transitions
-      emitPostLog('git', `Starting outcome resolution: outcome=${result.outcome ?? 'none'}`, { outcome: result.outcome });
+      emitPostLog('system', `Starting outcome resolution: outcome=${result.outcome ?? 'none'}`, { outcome: result.outcome });
       const outcomeStart = performance.now();
       await this.outcomeResolver.resolveAndTransition({
         taskId, result, run, worktree, worktreeManager, phase, context, summary: agentSummary,
         onPostLog: emitPostLog,
       });
       const outcomeDuration = Math.round(performance.now() - outcomeStart);
-      emitPostLog('git', 'Outcome resolution complete', { outcome: result.outcome }, outcomeDuration);
+      emitPostLog('system', 'Outcome resolution complete', { outcome: result.outcome }, outcomeDuration);
 
       // --- Notify subscribed chat sessions ---
       if (this.subscriptionRegistry) {
