@@ -35,7 +35,7 @@ async function captureAndReturnMergeFailure(
       mergeStateStatus: checks.mergeStateStatus,
       prState: checks.prState,
       failingChecks: checks.checks
-        .filter(c => c.conclusion !== 'SUCCESS' && c.state !== 'COMPLETED')
+        .filter(c => c.conclusion != null && c.conclusion !== 'SUCCESS')
         .map(c => ({ name: c.name, status: c.conclusion ?? c.state })),
     };
   } catch (err) {
