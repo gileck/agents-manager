@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { toScreenshotApiUrl } from '../../utils/screenshot-url';
 
 export function PlanMarkdown({ content }: { content: string }) {
   return (
@@ -69,6 +70,14 @@ export function PlanMarkdown({ content }: { content: string }) {
             <blockquote className="border-l-4 border-muted-foreground/30 pl-4 my-3 text-muted-foreground italic">
               {children}
             </blockquote>
+          ),
+          img: ({ src, alt, ...props }) => (
+            <img
+              src={src ? toScreenshotApiUrl(src) : src}
+              alt={alt}
+              className="max-w-full rounded my-2"
+              {...props}
+            />
           ),
           hr: () => <hr className="my-4 border-border" />,
         }}

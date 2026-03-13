@@ -53,7 +53,7 @@ export function screenshotRoutes(services: AppServices): Router {
         const filename = `${randomUUID()}.${ext}`;
         const filePath = path.join(storageDir, filename);
         await fs.promises.writeFile(filePath, buffer);
-        paths.push(filePath);
+        paths.push(`/api/screenshots?path=${encodeURIComponent(filePath)}`);
       }
 
       res.json({ paths });
