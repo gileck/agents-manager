@@ -48,11 +48,11 @@ export function TodoPanel({ todos }: TodoPanelProps) {
           return (
             <div key={i} className="flex items-center gap-1.5 text-xs">
               <StatusIcon status={s} />
-              <span className={
+              <span className={`truncate ${
                 s === 'completed' ? 'text-muted-foreground line-through' :
                 s === 'in_progress' ? 'text-foreground font-semibold' :
                 'text-foreground'
-              }>
+              }`}>
                 {todo.subject || todo.content || 'Untitled'}
               </span>
             </div>

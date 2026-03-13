@@ -214,7 +214,7 @@ export function AutomatedAgentRunPage() {
 
       {/* Main content — tabs + optional sidebar */}
       <div className="flex flex-1 min-h-0">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 px-6 pt-3">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 min-w-0 px-6 pt-3">
           <TabsList>
             <TabsTrigger value="output">
               Output
@@ -262,7 +262,9 @@ export function AutomatedAgentRunPage() {
 
         {/* Token usage sidebar */}
         {showSidebar && (isRunning || run.costInputTokens || run.costOutputTokens) && (
-          <ContextSidebar messages={displayMessages} run={run} />
+          <div className="w-64 flex-shrink-0 border-l border-border overflow-y-auto">
+            <ContextSidebar messages={displayMessages} run={run} />
+          </div>
         )}
       </div>
     </div>

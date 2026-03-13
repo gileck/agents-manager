@@ -159,7 +159,7 @@ export function RenderedOutputPanel({ messages, isRunning, startedAt, showTimest
   }, [messages, expandedTools, toggleTool, showTimestamps, startedAt]);
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <div className="flex flex-1 min-h-0 min-w-0">
       <div
         ref={containerRef}
         onScroll={handleScroll}
