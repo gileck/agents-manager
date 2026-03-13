@@ -166,6 +166,7 @@ export interface ApiShape {
     activeRuns(): Promise<AgentRun[]>;
     allRuns(): Promise<AgentRun[]>;
     sendMessage(taskId: string, message: string): Promise<void>;
+    computeDiagnostics(runId: string): Promise<AgentRun>;
   };
 
   // Event operations

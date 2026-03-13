@@ -12,6 +12,7 @@ import type {
   AgentChatMessage,
 } from '../../shared/types';
 import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
+import { analyzeRunMessages } from './run-diagnostics-analyzer';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IProjectStore } from '../interfaces/project-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
@@ -582,5 +583,16 @@ export class WorkflowService implements IWorkflowService {
         data: { error: cleanupMsg },
       }).catch(() => { /* best-effort logging */ });
     }
+  }
+
+  async computeRunDiagnostics(runId: string): Promise<AgentRun> {
+    const run = await this.agentRunStore.getRun(runId);
+    if (!run) throw new Error(`Agent run not found: ${runId}`);
+    if (!run.messages || run.messages.length === 0) {
+      throw new Error('No messages available for diagnostics');
+    }
+    const diagnostics = analyzeRunMessages(run.messages, run.outcome != null && run.outcome !== 'failed');
+    const updated = await this.agentRunStore.updateRun(runId, { diagnostics });
+    return updated!;
   }
 }

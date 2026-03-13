@@ -895,6 +895,12 @@ export class AgentService implements IAgentService {
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog, extractionPostLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog, extractionPostLog);
 
+      // Compute and persist run diagnostics
+      const diagnostics = this.postRunExtractor.computeRunDiagnostics(flusher.getBufferedMessages(), result);
+      if (diagnostics) {
+        await this.agentRunStore.updateRun(run.id, { diagnostics });
+      }
+
       // Extract summary for outcome transition context (previously done by appendSummaryComment)
       const so = result.structuredOutput as { summary?: string; planSummary?: string; investigationSummary?: string; designSummary?: string } | undefined;
       const agentSummary = so?.investigationSummary ?? so?.designSummary ?? so?.planSummary ?? so?.summary;

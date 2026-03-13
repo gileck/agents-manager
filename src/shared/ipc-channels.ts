@@ -66,6 +66,7 @@ export const IPC_CHANNELS = {
   /** PUSH-ONLY: main->renderer, do not invoke() */
   AGENT_STATUS: 'agent:status',
   AGENT_SEND_MESSAGE: 'agent:send-message',
+  AGENT_COMPUTE_DIAGNOSTICS: 'agent:compute-diagnostics',
 
   // Event operations
   EVENT_LIST: 'event:list',

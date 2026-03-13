@@ -479,6 +479,35 @@ export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 
 export type AgentMode = 'new' | 'revision';
 export type RevisionReason = 'changes_requested' | 'info_provided' | 'merge_failed';
 
+/** Diagnostic metrics computed from an agent run's message trace. */
+export interface RunDiagnostics {
+  wallTimeSec: number;
+  timeBreakdown: {
+    subagentSec: number;
+    directToolSec: number;
+    thinkingSec: number;
+  };
+  turnCount: number;
+  toolCalls: {
+    total: number;
+    byTool: Record<string, number>;
+    subagentSpawns: number;
+  };
+  fileReads: {
+    total: number;
+    uniqueFiles: number;
+    duplicates: Record<string, number>;
+    subagentReads: number;
+  };
+  subagents: Array<{
+    toolUseId: string;
+    durationSec: number;
+    description: string;
+  }>;
+  compactionCount: number;
+  producedOutput: boolean;
+}
+
 export interface AgentRun {
   id: string;
   taskId: string;
@@ -506,6 +535,7 @@ export interface AgentRun {
   model: string | null;
   engine: string | null;
   sessionId: string | null;
+  diagnostics: RunDiagnostics | null;
 }
 
 export interface AgentRunCreateInput {
@@ -536,6 +566,7 @@ export interface AgentRunUpdateInput {
   model?: string;
   engine?: string;
   sessionId?: string;
+  diagnostics?: RunDiagnostics;
 }
 
 export type ArtifactType = 'branch' | 'pr' | 'commit' | 'diff' | 'document';

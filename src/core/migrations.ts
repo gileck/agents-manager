@@ -128,5 +128,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '110_reseed_pipelines_already_on_main',
       sql: `UPDATE pipelines SET transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
     },
+    {
+      name: '111_add_diagnostics_to_agent_runs',
+      sql: `ALTER TABLE agent_runs ADD COLUMN diagnostics TEXT`,
+    },
   ];
 }

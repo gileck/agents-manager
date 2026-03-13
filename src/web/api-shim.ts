@@ -128,6 +128,7 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       activeRuns: () => api.agents.getActiveRuns() as Promise<never>,
       allRuns: () => api.agents.getAllRuns() as Promise<never>,
       sendMessage: (taskId, message) => api.agents.message(taskId, message) as Promise<never>,
+      computeDiagnostics: (runId) => api.agents.computeDiagnostics(runId) as Promise<never>,
     },
 
     // ── Events ────────────────────────────────────────────────────────

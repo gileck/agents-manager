@@ -17,6 +17,7 @@ import { AgentRunCostPanel } from '../components/agent-run/AgentRunCostPanel';
 import { AgentDetailsPanel } from '../components/agent-run/AgentDetailsPanel';
 import { AgentRunErrorBanner } from '../components/agent-run/AgentRunErrorBanner';
 import { DebugLogsPanel } from '../components/agent-run/DebugLogsPanel';
+import { DiagnosticsPanel } from '../components/agent-run/DiagnosticsPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
 import type { AgentRun, Task, AgentChatMessage } from '../../shared/types';
 import { messagesToRawText } from '../../shared/agent-message-utils';
@@ -287,6 +288,7 @@ export function AgentRunPage() {
             <TabsTrigger value="task">Task Details</TabsTrigger>
             <TabsTrigger value="agent-details">Agent Details</TabsTrigger>
             <TabsTrigger value="cost">Cost</TabsTrigger>
+            <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
             <TabsTrigger value="debug-logs">Debug Logs</TabsTrigger>
             <TabsTrigger value="json">JSON Output</TabsTrigger>
           </TabsList>
@@ -336,6 +338,10 @@ export function AgentRunPage() {
 
           <TabsContent value="cost" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
             <AgentRunCostPanel run={run} />
+          </TabsContent>
+
+          <TabsContent value="diagnostics" className="flex-1 min-h-0 overflow-auto border rounded-md pb-3">
+            <DiagnosticsPanel run={run} onDiagnosticsComputed={() => refetch()} />
           </TabsContent>
 
           <TabsContent value="debug-logs" className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden pb-3">

@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { AgentRun, AgentRunCreateInput, AgentRunUpdateInput, AgentChatMessage } from '../../shared/types';
+import type { AgentRun, AgentRunCreateInput, AgentRunUpdateInput, AgentChatMessage, RunDiagnostics } from '../../shared/types';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import { generateId, now, parseJson } from './utils';
 import { getAppLogger } from '../services/app-logger';
@@ -31,6 +31,7 @@ interface AgentRunRow {
   model: string | null;
   engine: string | null;
   session_id: string | null;
+  diagnostics: string | null;
 }
 
 function rowToRun(row: AgentRunRow): AgentRun {
@@ -61,6 +62,7 @@ function rowToRun(row: AgentRunRow): AgentRun {
     model: row.model ?? null,
     engine: row.engine ?? null,
     sessionId: row.session_id ?? null,
+    diagnostics: parseJson<RunDiagnostics | null>(row.diagnostics, null),
   };
 }
 
@@ -178,6 +180,10 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       if (input.sessionId !== undefined) {
         updates.push('session_id = ?');
         values.push(input.sessionId);
+      }
+      if (input.diagnostics !== undefined) {
+        updates.push('diagnostics = ?');
+        values.push(JSON.stringify(input.diagnostics));
       }
 
       if (updates.length === 0) return existing;

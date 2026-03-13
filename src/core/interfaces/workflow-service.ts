@@ -27,4 +27,5 @@ export interface IWorkflowService {
   getDashboardStats(now?: number): Promise<DashboardStats>;
   addContextEntry(taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry>;
   addTaskFeedback(taskId: string, entryType: string, content: string, source?: string, agentRunId?: string): Promise<TaskContextEntry>;
+  computeRunDiagnostics(runId: string): Promise<AgentRun>;
 }

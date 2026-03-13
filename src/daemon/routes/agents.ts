@@ -102,5 +102,14 @@ export function agentRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // POST /api/agent-runs/:runId/diagnostics — compute diagnostics for a completed run
+  router.post('/api/agent-runs/:runId/diagnostics', async (req, res, next) => {
+    try {
+      const { runId } = req.params;
+      const updated = await services.workflowService.computeRunDiagnostics(runId);
+      res.json(updated);
+    } catch (err) { next(err); }
+  });
+
   return router;
 }

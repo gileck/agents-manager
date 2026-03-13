@@ -3,6 +3,7 @@ import {
   VALID_TASK_COMPLEXITIES,
 } from '../../shared/types';
 import type {
+  AgentChatMessage,
   AgentRunResult,
   ImplementationPhase,
   RevisionReason,
@@ -16,6 +17,7 @@ import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import { getAppLogger } from './app-logger';
+import { analyzeRunMessages } from './run-diagnostics-analyzer';
 
 type OnLog = (message: string) => void;
 type OnPostLog = (message: string, details?: Record<string, unknown>, durationMs?: number) => void;
@@ -395,6 +397,22 @@ export class PostRunExtractor {
     }
     const _duration = Math.round(performance.now() - _start);
     onPostLog?.('createSuggestedTasks complete', { suggestedCount: tasks.length }, _duration);
+  }
+
+  /**
+   * Analyze an agent run's message trace and return diagnostics.
+   * Pure computation — caller is responsible for persisting the result.
+   */
+  computeRunDiagnostics(
+    messages: AgentChatMessage[] | null,
+    result: AgentRunResult,
+  ): import('../../shared/types').RunDiagnostics | undefined {
+    if (!messages || messages.length === 0) return undefined;
+    try {
+      return analyzeRunMessages(messages, !!result.structuredOutput);
+    } catch {
+      return undefined;
+    }
   }
 
   // ------- Feedback addressing helper -------

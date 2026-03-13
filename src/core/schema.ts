@@ -302,7 +302,8 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   max_turns INTEGER,
   message_count INTEGER,
   messages TEXT,
-  automated_agent_id TEXT
+  automated_agent_id TEXT,
+  diagnostics TEXT
 );
 
 CREATE TABLE IF NOT EXISTS task_artifacts (

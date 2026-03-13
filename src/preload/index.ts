@@ -97,6 +97,7 @@ const IPC_CHANNELS = {
   AGENT_MESSAGE: 'agent:message',
   AGENT_STATUS: 'agent:status',
   AGENT_SEND_MESSAGE: 'agent:send-message',
+  AGENT_COMPUTE_DIAGNOSTICS: 'agent:compute-diagnostics',
   EVENT_LIST: 'event:list',
   ACTIVITY_LIST: 'activity:list',
   PROMPT_LIST: 'prompt:list',
@@ -382,6 +383,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_ALL_RUNS),
     sendMessage: (taskId: string, message: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_SEND_MESSAGE, taskId, message),
+    computeDiagnostics: (runId: string): Promise<AgentRun> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_COMPUTE_DIAGNOSTICS, runId),
   },
 
   // Event operations

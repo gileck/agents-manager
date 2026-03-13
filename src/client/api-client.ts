@@ -118,6 +118,7 @@ export interface ApiClient {
     getActiveRuns(): Promise<unknown[]>;
     getActiveTaskIds(): Promise<string[]>;
     getAllRuns(): Promise<unknown[]>;
+    computeDiagnostics(runId: string): Promise<unknown>;
   };
 
   // Pipelines
@@ -403,6 +404,8 @@ export function createApiClient(baseUrl: string): ApiClient {
         req('GET', '/api/agent-runs/active-task-ids'),
       getAllRuns: () =>
         req('GET', '/api/agent-runs'),
+      computeDiagnostics: (runId) =>
+        req('POST', `/api/agent-runs/${runId}/diagnostics`),
     },
 
     // -- Pipelines -----------------------------------------------------------

@@ -41,4 +41,8 @@ export function registerAgentHandlers(api: ApiClient): void {
   registerIpcHandler(IPC_CHANNELS.AGENT_SEND_MESSAGE, async (_, taskId: string, message: string) => {
     return api.agents.message(taskId, message);
   });
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_COMPUTE_DIAGNOSTICS, async (_, runId: string) => {
+    return api.agents.computeDiagnostics(runId);
+  });
 }
