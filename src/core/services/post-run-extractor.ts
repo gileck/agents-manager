@@ -18,6 +18,7 @@ import type { INotificationRouter } from '../interfaces/notification-router';
 import { getAppLogger } from './app-logger';
 
 type OnLog = (message: string) => void;
+type OnPostLog = (message: string, durationMs?: number) => void;
 
 const PHASE_LABELS: Record<string, string> = {
   investigating: '\u{1F50D} Investigate',
@@ -50,9 +51,14 @@ export class PostRunExtractor {
     onLog: OnLog,
     revisionReason?: RevisionReason,
     agentRunId?: string,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
     const isPlanMode = agentType === 'planner' || agentType === 'investigator';
-    if (result.exitCode !== 0 || !isPlanMode) return;
+    if (result.exitCode !== 0 || !isPlanMode) {
+      onPostLog?.(`extractPlan: skipped (exitCode=${result.exitCode}, agentType=${agentType})`);
+      return;
+    }
+    const _start = Date.now();
 
     const so = result.structuredOutput as {
       plan?: string;
@@ -103,6 +109,7 @@ export class PostRunExtractor {
         onLog(`Warning: failed to mark plan_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    onPostLog?.('extractPlan complete', Date.now() - _start);
   }
 
   /**
@@ -115,9 +122,14 @@ export class PostRunExtractor {
     onLog: OnLog,
     revisionReason?: RevisionReason,
     agentRunId?: string,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
     const isTdMode = agentType === 'designer';
-    if (result.exitCode !== 0 || !isTdMode) return;
+    if (result.exitCode !== 0 || !isTdMode) {
+      onPostLog?.(`extractTechnicalDesign: skipped (exitCode=${result.exitCode}, agentType=${agentType})`);
+      return;
+    }
+    const _start = Date.now();
 
     const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string } | undefined;
     if (so?.technicalDesign) {
@@ -139,6 +151,7 @@ export class PostRunExtractor {
         onLog(`Warning: failed to mark design_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    onPostLog?.('extractTechnicalDesign complete', Date.now() - _start);
   }
 
   /**
@@ -149,12 +162,20 @@ export class PostRunExtractor {
     result: AgentRunResult,
     agentType: string,
     onLog: OnLog,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
     const estimatingAgents = ['planner', 'designer', 'investigator'];
-    if (result.exitCode !== 0 || !estimatingAgents.includes(agentType)) return;
+    if (result.exitCode !== 0 || !estimatingAgents.includes(agentType)) {
+      onPostLog?.(`extractTaskEstimates: skipped (exitCode=${result.exitCode}, agentType=${agentType})`);
+      return;
+    }
+    const _start = Date.now();
 
     const so = result.structuredOutput as { size?: string; complexity?: string } | undefined;
-    if (!so) return;
+    if (!so) {
+      onPostLog?.('extractTaskEstimates: no structured output', Date.now() - _start);
+      return;
+    }
 
     try {
       const updates: TaskUpdateInput = {};
@@ -173,6 +194,7 @@ export class PostRunExtractor {
       // Non-fatal — don't block pipeline on estimate extraction failure
       onLog(`Warning: failed to extract task estimates: ${err instanceof Error ? err.message : String(err)}`);
     }
+    onPostLog?.(`extractTaskEstimates complete: size=${so.size ?? 'none'}, complexity=${so.complexity ?? 'none'}`, Date.now() - _start);
   }
 
   /**
@@ -185,8 +207,13 @@ export class PostRunExtractor {
     revisionReason: RevisionReason | undefined,
     result: AgentRunResult,
     onLog: OnLog,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
-    if (result.exitCode !== 0) return;
+    if (result.exitCode !== 0) {
+      onPostLog?.(`saveContextEntry: skipped (exitCode=${result.exitCode})`);
+      return;
+    }
+    const _start = Date.now();
 
     try {
       // Use structured output summary when available, fall back to parsing
@@ -254,6 +281,7 @@ export class PostRunExtractor {
         onLog(`Warning: failed to mark implementation_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    onPostLog?.('saveContextEntry complete', Date.now() - _start);
   }
 
   /**
@@ -265,8 +293,13 @@ export class PostRunExtractor {
     agentType: string,
     result: AgentRunResult,
     onLog: OnLog,
+    onPostLog?: OnPostLog,
   ): Promise<void> {
-    if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) return;
+    if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) {
+      onPostLog?.(`createSuggestedTasks: skipped (agentType=${agentType}, exitCode=${result.exitCode})`);
+      return;
+    }
+    const _start = Date.now();
 
     const wso = result.structuredOutput as {
       suggestedTasks?: Array<{ title: string; description: string; type?: string; debugInfo?: string; priority?: number; size?: string; complexity?: string; startPhase?: string }>;
@@ -352,6 +385,7 @@ export class PostRunExtractor {
         message: `Failed to create suggested tasks: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
+    onPostLog?.('createSuggestedTasks complete', Date.now() - _start);
   }
 
   // ------- Feedback addressing helper -------

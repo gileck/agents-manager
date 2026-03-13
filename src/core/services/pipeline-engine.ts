@@ -18,7 +18,10 @@ import type {
   HookRetryResult,
   TransitionWithGuards,
   TransitionHook,
+  PostProcessingLogCategory,
 } from '../../shared/types';
+
+type OnPostLog = (category: PostProcessingLogCategory, message: string, details?: Record<string, unknown>, durationMs?: number) => void;
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
@@ -118,7 +121,7 @@ export class PipelineEngine implements IPipelineEngine {
     });
   }
 
-  async executeTransition(task: Task, toStatus: string, context?: TransitionContext): Promise<TransitionResult> {
+  async executeTransition(task: Task, toStatus: string, context?: TransitionContext, onPostLog?: OnPostLog): Promise<TransitionResult> {
     const ctx: TransitionContext = context ?? { trigger: 'manual' };
 
     const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
@@ -219,17 +222,20 @@ export class PipelineEngine implements IPipelineEngine {
     }
 
     if (guardFailures.length > 0) {
+      onPostLog?.('pipeline', `Guards blocked transition ${task.status} → ${toStatus}: ${guardFailures.map(g => `${g.guard}: ${g.reason}`).join('; ')}`, { guardFailures });
       lastGuardFailures = guardFailures;
       // Continue to the next candidate transition
       continue;
     }
+
+    onPostLog?.('pipeline', `Guards passed for transition ${task.status} → ${toStatus}`, { guardResults: Object.keys(guardResults) });
 
     if (!updatedTask) {
       return { success: false, error: 'Transaction completed but task was not updated' };
     }
 
     // Run hooks after transaction
-    const hookFailures = await this.executeHooks(transition.hooks, updatedTask, transition, ctx, task.id);
+    const hookFailures = await this.executeHooks(transition.hooks, updatedTask, transition, ctx, task.id, undefined, onPostLog);
 
     // If any required hook failed, roll back the status change transactionally
     const requiredFailures = hookFailures.filter(f => f.policy === 'required');
@@ -535,6 +541,7 @@ export class PipelineEngine implements IPipelineEngine {
     ctx: TransitionContext,
     taskId: string,
     forced?: boolean,
+    onPostLog?: OnPostLog,
   ): Promise<HookFailure[]> {
     const hookFailures: HookFailure[] = [];
     if (!hookDefs) return hookFailures;
@@ -576,6 +583,7 @@ export class PipelineEngine implements IPipelineEngine {
 
       if (policy === 'fire_and_forget') {
         // Log started event
+        onPostLog?.('pipeline', `Hook "${hook.name}" starting (fire_and_forget)`, { hookName: hook.name, policy });
         this.taskEventLog.log({
           taskId,
           category: 'hook_execution',
@@ -584,7 +592,9 @@ export class PipelineEngine implements IPipelineEngine {
           data: { ...hookEventBase, result: 'started' },
         }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
 
+        const ffStart = Date.now();
         hookFn(updatedTask, transition, ctx, hook.params).then(() => {
+          onPostLog?.('pipeline', `Hook "${hook.name}" succeeded (fire_and_forget)`, { hookName: hook.name }, Date.now() - ffStart);
           // Log hook_execution event for fire_and_forget success
           this.taskEventLog.log({
             taskId,
@@ -595,6 +605,7 @@ export class PipelineEngine implements IPipelineEngine {
           }).catch((logErr) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', logErr));
         }).catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
+          onPostLog?.('pipeline', `Hook "${hook.name}" failed (fire_and_forget): ${message}`, { hookName: hook.name, error: message }, Date.now() - ffStart);
           this.taskEventLog.log({
             taskId,
             category: 'system',
@@ -616,6 +627,7 @@ export class PipelineEngine implements IPipelineEngine {
 
       // required or best_effort: await the hook
       // Log started event
+      onPostLog?.('pipeline', `Hook "${hook.name}" starting (${policy})`, { hookName: hook.name, policy });
       await this.taskEventLog.log({
         taskId,
         category: 'hook_execution',
@@ -630,6 +642,7 @@ export class PipelineEngine implements IPipelineEngine {
         if (result && !result.success) {
           const failure: HookFailure = { hook: hook.name, error: result.error ?? 'Hook returned failure', policy, followUpTransition: result.followUpTransition };
           hookFailures.push(failure);
+          onPostLog?.('pipeline', `Hook "${hook.name}" failed (${policy}): ${failure.error}`, { hookName: hook.name, error: failure.error }, duration);
           const severity = policy === 'required' ? 'error' as const : forced ? 'error' as const : 'warning' as const;
           this.taskEventLog.log({
             taskId,
@@ -647,6 +660,7 @@ export class PipelineEngine implements IPipelineEngine {
             data: { ...hookEventBase, result: 'failure', error: failure.error, duration },
           }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
         } else {
+          onPostLog?.('pipeline', `Hook "${hook.name}" succeeded (${policy})`, { hookName: hook.name }, duration);
           // Log system event for success
           this.taskEventLog.log({
             taskId,
@@ -669,6 +683,7 @@ export class PipelineEngine implements IPipelineEngine {
         const message = err instanceof Error ? err.message : String(err);
         const failure: HookFailure = { hook: hook.name, error: message, policy };
         hookFailures.push(failure);
+        onPostLog?.('pipeline', `Hook "${hook.name}" threw (${policy}): ${message}`, { hookName: hook.name, error: message }, duration);
         const severity = policy === 'required' ? 'error' as const : forced ? 'error' as const : 'warning' as const;
         this.taskEventLog.log({
           taskId,
