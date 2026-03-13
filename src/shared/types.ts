@@ -810,6 +810,25 @@ export interface AgentChatMessageSlashCommand {
   timestamp: number;
 }
 
+/** Category for post-processing log messages emitted after agent execution. */
+export type PostProcessingLogCategory =
+  | 'validation'
+  | 'git'
+  | 'pipeline'
+  | 'extraction'
+  | 'notification'
+  | 'system';
+
+/** Post-processing log — emitted during the post-agent pipeline for visibility. */
+export interface AgentChatMessagePostProcessingLog {
+  type: 'post_processing_log';
+  category: PostProcessingLogCategory;
+  message: string;
+  details?: Record<string, unknown>;
+  durationMs?: number;
+  timestamp: number;
+}
+
 export type AgentChatMessage =
   | AgentChatMessageAssistantText
   | AgentChatMessageToolUse
@@ -827,7 +846,8 @@ export type AgentChatMessage =
   | AgentChatMessagePermissionResponse
   | AgentChatMessageNotification
   | AgentChatMessageSubagentActivity
-  | AgentChatMessageSlashCommand;
+  | AgentChatMessageSlashCommand
+  | AgentChatMessagePostProcessingLog;
 
 export interface AgentConfig {
   model?: string;

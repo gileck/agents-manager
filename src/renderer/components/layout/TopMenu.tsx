@@ -4,7 +4,7 @@ import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTheme } from '../../hooks/useTheme';
 import { usePipelines } from '../../hooks/usePipelines';
-import type { TelegramBotLogEntry, TaskCreateInput } from '../../../shared/types';
+import type { TelegramBotLogEntry, TaskCreateInput, ChatImage } from '../../../shared/types';
 import {
   Select,
   SelectTrigger,
@@ -63,9 +63,11 @@ export function TopMenu() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '', type: 'feature' });
   const [creating, setCreating] = useState(false);
+  const [dialogImages, setDialogImages] = useState<ChatImage[]>([]);
 
   const openCreateDialog = () => {
     setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
+    setDialogImages([]);
     setCreateDialogOpen(true);
   };
 
@@ -73,9 +75,26 @@ export function TopMenu() {
     if (!form.title.trim() || !currentProjectId || !form.pipelineId) return;
     setCreating(true);
     try {
-      const task = await window.api.tasks.create({ ...form, projectId: currentProjectId });
+      let description = form.description ?? '';
+
+      // Save screenshots if any
+      if (dialogImages.length > 0) {
+        try {
+          const { paths } = await window.api.screenshots.save(dialogImages);
+          if (paths.length > 0) {
+            const screenshotSection = '\n\n## Screenshots\n' +
+              paths.map((p, i) => `![screenshot-${i + 1}](${p})`).join('\n');
+            description = description + screenshotSection;
+          }
+        } catch (err) {
+          reportError(err, 'Save screenshots');
+        }
+      }
+
+      const task = await window.api.tasks.create({ ...form, description, projectId: currentProjectId });
       setCreateDialogOpen(false);
       setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
+      setDialogImages([]);
       navigate(`/tasks/${task.id}`);
     } catch (err) {
       reportError(err, 'Create task');
@@ -292,6 +311,8 @@ export function TopMenu() {
         onFormChange={setForm}
         onCreate={handleCreate}
         creating={creating}
+        images={dialogImages}
+        onImagesChange={setDialogImages}
       />
     </div>
   );
