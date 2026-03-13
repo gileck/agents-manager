@@ -4,6 +4,7 @@ import type { AppServices } from '../../core/providers/setup';
 import type { WsHolder } from '../server';
 import { WS_CHANNELS } from '../ws/channels';
 import type { ChatImage, PermissionMode } from '../../shared/types';
+import { MAX_MESSAGE_LENGTH } from '../../shared/constants';
 import { getAppLogger } from '../../core/services/app-logger';
 
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
@@ -179,8 +180,8 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(400).json({ error: 'Message text or images are required' });
         return;
       }
-      if (message.length > 10000) {
-        res.status(400).json({ error: 'Message is too long (max 10000 characters)' });
+      if (message.length > MAX_MESSAGE_LENGTH) {
+        res.status(400).json({ error: `Message is too long (max ${MAX_MESSAGE_LENGTH.toLocaleString()} characters)` });
         return;
       }
 
@@ -335,8 +336,8 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
           res.status(400).json({ error: 'systemPromptAppend must be a string or null' });
           return;
         }
-        if (input.systemPromptAppend !== null && input.systemPromptAppend.length > 10000) {
-          res.status(400).json({ error: 'systemPromptAppend must be 10000 characters or less' });
+        if (input.systemPromptAppend !== null && input.systemPromptAppend.length > MAX_MESSAGE_LENGTH) {
+          res.status(400).json({ error: `systemPromptAppend must be ${MAX_MESSAGE_LENGTH.toLocaleString()} characters or less` });
           return;
         }
         updateInput.systemPromptAppend = input.systemPromptAppend;
