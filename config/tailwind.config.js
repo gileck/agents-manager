@@ -74,10 +74,20 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "agent-border-glow": {
+          "0%, 100%": { borderLeftColor: "#6366f1", boxShadow: "inset 3px 0 12px -4px rgba(99, 102, 241, 0.3)" },
+          "50%": { borderLeftColor: "#3b82f6", boxShadow: "inset 3px 0 12px -4px rgba(59, 130, 246, 0.45)" },
+        },
+        "agent-shimmer": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "agent-border-glow": "agent-border-glow 2.5s ease-in-out infinite",
+        "agent-shimmer": "agent-shimmer 2.5s ease-in-out infinite",
       },
     },
   },

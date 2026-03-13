@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, AgentNotificationPayload } from '../../shared/types';
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
@@ -146,6 +146,29 @@ export function useChat(sessionId: string | null) {
     const unsubscribe = window.api.on.chatPermissionRequest((incomingSessionId: string, request: AgentChatMessage) => {
       if (incomingSessionId !== sessionId) return;
       setStreamingMessages((prev) => [...prev, request]);
+    });
+
+    return () => { unsubscribe(); };
+  }, [sessionId]);
+
+  // Subscribe to agent notification events (Tier 1 WS push)
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubscribe = window.api.on.chatAgentNotification((incomingSessionId: string, payload: AgentNotificationPayload) => {
+      if (incomingSessionId !== sessionId) return;
+      // Skip Tier 1 rendering when autoNotify is true — Tier 2 handles it
+      // via the injected event handler which triggers a full agent turn.
+      if (payload.autoNotify) return;
+
+      const notification: AgentChatMessage = {
+        type: 'notification',
+        title: `Task "${payload.taskTitle}" completed`,
+        body: `Agent ${payload.agentType} completed with outcome "${payload.outcome}".` +
+          (payload.summary ? ` Summary: ${payload.summary}` : ''),
+        timestamp: Date.now(),
+      };
+      setStreamingMessages((prev) => [...prev, notification]);
     });
 
     return () => { unsubscribe(); };
