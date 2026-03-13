@@ -19,6 +19,25 @@ interface ChatMessageListProps {
   onPermissionResponse?: (requestId: string, allowed: boolean) => void;
 }
 
+/** Real-time elapsed time display, updates every second. */
+function ElapsedTime({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const elapsed = Math.floor((now - startedAt) / 1000);
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+
+  if (minutes > 0) {
+    return <span className="text-xs text-muted-foreground tabular-nums">{minutes}m {seconds}s</span>;
+  }
+  return <span className="text-xs text-muted-foreground tabular-nums">{seconds}s</span>;
+}
+
 // Message types that are "leaf" nodes rendered directly in the timeline
 const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', 'status', 'compact_boundary', 'compacting', 'ask_user_question', 'stream_delta', 'permission_request', 'permission_response', 'notification', 'subagent_activity', 'slash_command']);
 // Message types that always belong inside a ThinkingGroup
@@ -230,6 +249,18 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
   const { answerQuestion } = useChatActions();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const [autoScroll, setAutoScroll] = useState(true);
+
+  // Track when the agent started running for elapsed time display
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const prevIsRunning = useRef(false);
+  useEffect(() => {
+    if (isRunning && !prevIsRunning.current) {
+      setStartedAt(Date.now());
+    } else if (!isRunning && prevIsRunning.current) {
+      setStartedAt(null);
+    }
+    prevIsRunning.current = !!isRunning;
+  }, [isRunning]);
 
   const toggleTool = useCallback((index: number) => {
     setExpandedTools((prev) => {
@@ -590,6 +621,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+              {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
           {rendered}
@@ -601,6 +633,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
                 <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
               </div>
               <span className="text-xs">Thinking...</span>
+              {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
           <div ref={endRef} />
