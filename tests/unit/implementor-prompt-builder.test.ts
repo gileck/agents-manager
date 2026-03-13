@@ -85,10 +85,10 @@ describe('ImplementorPromptBuilder', () => {
       expect(config.maxTurns).toBe(200);
     });
 
-    it('should return 50 for revision with conflicts_detected', () => {
-      const ctx = createContext({ mode: 'revision', revisionReason: 'conflicts_detected' });
+    it('should return 100 for revision with merge_failed', () => {
+      const ctx = createContext({ mode: 'revision', revisionReason: 'merge_failed' });
       const config = builder.buildExecutionConfig(ctx, defaultConfig);
-      expect(config.maxTurns).toBe(50);
+      expect(config.maxTurns).toBe(100);
     });
   });
 
@@ -105,10 +105,10 @@ describe('ImplementorPromptBuilder', () => {
       expect(config.timeoutMs).toBe(30 * 60 * 1000);
     });
 
-    it('should return 10 min for revision with conflicts_detected', () => {
-      const ctx = createContext({ mode: 'revision', revisionReason: 'conflicts_detected' });
+    it('should return 15 min for revision with merge_failed', () => {
+      const ctx = createContext({ mode: 'revision', revisionReason: 'merge_failed' });
       const config = builder.buildExecutionConfig(ctx, defaultConfig);
-      expect(config.timeoutMs).toBe(10 * 60 * 1000);
+      expect(config.timeoutMs).toBe(15 * 60 * 1000);
     });
 
     it('should respect config.timeout override', () => {
@@ -135,8 +135,8 @@ describe('ImplementorPromptBuilder', () => {
       expect(schema.required).toContain('summary');
     });
 
-    it('should return summary schema for revision with conflicts_detected', () => {
-      const ctx = createContext({ mode: 'revision', revisionReason: 'conflicts_detected' });
+    it('should return summary schema for revision with merge_failed', () => {
+      const ctx = createContext({ mode: 'revision', revisionReason: 'merge_failed' });
       const config = builder.buildExecutionConfig(ctx, defaultConfig);
       expect(config.outputFormat).toBeDefined();
       const schema = (config.outputFormat as { schema: { required: string[] } }).schema;
@@ -202,10 +202,62 @@ describe('ImplementorPromptBuilder', () => {
       expect(prompt).not.toContain('Interactive Questions');
     });
 
-    it('should not include interactive instructions for conflicts_detected', () => {
-      const ctx = createContext({ mode: 'revision', revisionReason: 'conflicts_detected' });
+    it('should not include interactive instructions for merge_failed', () => {
+      const ctx = createContext({ mode: 'revision', revisionReason: 'merge_failed' });
       const prompt = builder.buildPrompt(ctx);
       expect(prompt).not.toContain('Interactive Questions');
+    });
+
+    it('should include merge failure details from task context in merge_failed prompt', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'merge_failed' as RevisionReason,
+        taskContext: [
+          {
+            id: 'ctx-mf-1',
+            taskId: 'task-1',
+            agentRunId: null,
+            source: 'system',
+            entryType: 'merge_failure',
+            summary: 'PR merge failed: PR is not mergeable (likely has conflicts with base branch)',
+            data: {
+              errorMessage: 'PR is not mergeable',
+              prUrl: 'https://github.com/org/repo/pull/42',
+              mergeable: 'CONFLICTING',
+              mergeStateStatus: 'DIRTY',
+              failingChecks: [
+                { name: 'ci/build', status: 'FAILURE', url: 'https://ci.example.com/build/123' },
+              ],
+              timestamp: 1700000000000,
+            },
+            createdAt: 1700000000000,
+            addressed: false,
+            addressedByRunId: null,
+          },
+        ],
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Merge Failure Details');
+      expect(prompt).toContain('PR is not mergeable');
+      expect(prompt).toContain('https://github.com/org/repo/pull/42');
+      expect(prompt).toContain('CONFLICTING');
+      expect(prompt).toContain('DIRTY');
+      expect(prompt).toContain('ci/build');
+      expect(prompt).toContain('FAILURE');
+      expect(prompt).toContain('https://ci.example.com/build/123');
+    });
+
+    it('should produce valid merge_failed prompt without task context entries', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'merge_failed' as RevisionReason,
+        taskContext: [],
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('merge conflicts');
+      expect(prompt).toContain('git fetch origin');
+      expect(prompt).toContain('git rebase origin/main');
+      expect(prompt).not.toContain('Merge Failure Details');
     });
 
     it('should append validation errors when present', () => {
@@ -382,7 +434,7 @@ describe('ImplementorPromptBuilder', () => {
     const modeConfigs: Array<{ mode: AgentMode; revisionReason?: RevisionReason; label: string }> = [
       { mode: 'new', label: 'new (implement)' },
       { mode: 'revision', revisionReason: 'changes_requested', label: 'revision (changes_requested)' },
-      { mode: 'revision', revisionReason: 'conflicts_detected', label: 'revision (conflicts_detected)' },
+      { mode: 'revision', revisionReason: 'merge_failed', label: 'revision (merge_failed)' },
       { mode: 'revision', revisionReason: 'info_provided', label: 'revision (info_provided)' },
     ];
 

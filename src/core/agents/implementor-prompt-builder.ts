@@ -15,13 +15,13 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
   }
 
   protected getMaxTurns(context: AgentContext): number {
-    if (context.revisionReason === 'conflicts_detected') return 50;
+    if (context.revisionReason === 'merge_failed') return 100;
     return 200;
   }
 
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
     if (config.timeout) return config.timeout;
-    if (context.revisionReason === 'conflicts_detected') return 10 * 60 * 1000;
+    if (context.revisionReason === 'merge_failed') return 15 * 60 * 1000;
     return 30 * 60 * 1000;
   }
 
@@ -55,14 +55,14 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         },
       };
     }
-    if (mode === 'revision' && revisionReason === 'conflicts_detected') {
-      // resolve_conflicts
+    if (mode === 'revision' && revisionReason === 'merge_failed') {
+      // resolve merge failure (conflicts, failing checks, etc.)
       return {
         type: 'json_schema',
         schema: {
           type: 'object',
           properties: {
-            summary: { type: 'string', description: 'A short summary of how merge conflicts were resolved' },
+            summary: { type: 'string', description: 'A short summary of how the merge failure was resolved' },
           },
           required: ['summary'],
         },
@@ -141,23 +141,49 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues.`,
       );
       prompt = rcLines.join('\n');
-    } else if (mode === 'revision' && revisionReason === 'conflicts_detected') {
-      // resolve_conflicts
-      const conflictLines = [
-        `The branch for this task has merge conflicts with origin/main. Resolve them so the branch can be pushed cleanly.`,
+    } else if (mode === 'revision' && revisionReason === 'merge_failed') {
+      // resolve merge failure (conflicts, failing CI checks, etc.)
+      const mfLines = [
+        `The branch for this task has merge conflicts or the PR merge failed. Fix the issue so the branch can be merged cleanly.`,
         ``,
         `Task: ${task.title}.${desc}`,
-        ``,
-        `## Instructions`,
-        `1. Run \`git fetch origin\` to get the latest main.`,
-        `2. Read the conflicting files and understand both sides before rebasing — know what main changed and what this branch changed.`,
-        `3. Run \`git rebase origin/main\` to start the rebase.`,
-        `4. For each conflict, resolve by preserving the intent of both changes, then \`git add\` the resolved files.`,
-        `5. Run \`git rebase --continue\` after resolving each conflict.`,
-        `6. Once the rebase is complete, run \`yarn checks\` (or the project's equivalent). If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues.`,
-        `7. Do NOT push — the pipeline will handle pushing after you finish.`,
       ];
-      prompt = conflictLines.join('\n');
+
+      // Surface merge failure details from task context (if available — present when triggered from merge_pr hook)
+      const mergeFailures = (context.taskContext ?? [])
+        .filter(e => e.entryType === 'merge_failure')
+        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+
+      if (mergeFailures.length > 0) {
+        const latest = mergeFailures[0];
+        mfLines.push('', '## Merge Failure Details');
+        mfLines.push(`- **Error:** ${latest.summary}`);
+        if (latest.data.prUrl) mfLines.push(`- **PR:** ${latest.data.prUrl}`);
+        if (latest.data.mergeable) mfLines.push(`- **Mergeable status:** ${latest.data.mergeable}`);
+        if (latest.data.mergeStateStatus) mfLines.push(`- **Merge state:** ${latest.data.mergeStateStatus}`);
+
+        const failingChecks = latest.data.failingChecks as Array<{ name: string; status: string; url?: string }> | undefined;
+        if (failingChecks && failingChecks.length > 0) {
+          mfLines.push('', '### Failing CI Checks');
+          for (const check of failingChecks) {
+            mfLines.push(`- **${check.name}**: ${check.status}${check.url ? ` (${check.url})` : ''}`);
+          }
+        }
+      }
+
+      mfLines.push(
+        '',
+        '## Instructions',
+        '1. Run `git fetch origin` to get the latest main.',
+        '2. Read the conflicting files and understand both sides before rebasing — know what main changed and what this branch changed.',
+        '3. Run `git rebase origin/main` to start the rebase.',
+        '4. For each conflict, resolve by preserving the intent of both changes, then `git add` the resolved files.',
+        '5. Run `git rebase --continue` after resolving each conflict.',
+        '6. If the merge failure was caused by **failing CI checks** (see details above), investigate and fix the code issues.',
+        '7. Once the rebase is complete, run `yarn checks` (or the project equivalent). If checks fail, compare against `origin/main` — if the same failures exist on main, they are pre-existing and should be ignored.',
+        '8. Do NOT push — the pipeline will handle pushing after you finish.',
+      );
+      prompt = mfLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
       // implement_resume
       const irLines = context.sessionId

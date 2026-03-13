@@ -337,12 +337,12 @@ export class AgentService implements IAgentService {
       // Skip for resolve_conflicts — the agent handles the entire rebase itself.
       const rebaseTarget = baseBranch ?? 'origin/main';
       await gitOps.fetch('origin');
-      if (revisionReason === 'conflicts_detected') {
+      if (revisionReason === 'merge_failed') {
         await this.taskEventLog.log({
           taskId,
           category: 'worktree',
           severity: 'info',
-          message: 'Skipping pre-agent rebase for conflicts_detected (agent will rebase)',
+          message: 'Skipping pre-agent rebase for merge_failed (agent will rebase)',
           data: { taskId },
         });
       } else {
