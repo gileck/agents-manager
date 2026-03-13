@@ -660,6 +660,8 @@ export interface AgentChatMessageAssistantText {
   type: 'assistant_text';
   text: string;
   timestamp: number;
+  /** Non-null when this message originates from a subagent (Task tool). */
+  parentToolUseId?: string;
 }
 
 export interface AgentChatMessageToolUse {
@@ -668,6 +670,8 @@ export interface AgentChatMessageToolUse {
   toolId?: string;
   input: string;
   timestamp: number;
+  /** Non-null when this message originates from a subagent (Task tool). */
+  parentToolUseId?: string;
 }
 
 export interface AgentChatMessageToolResult {
@@ -675,6 +679,8 @@ export interface AgentChatMessageToolResult {
   toolId?: string;
   result: string;
   timestamp: number;
+  /** Non-null when this message originates from a subagent (Task tool). */
+  parentToolUseId?: string;
 }
 
 export interface AgentChatMessageUser {
@@ -705,6 +711,8 @@ export interface AgentChatMessageThinking {
   type: 'thinking';
   text: string;
   timestamp: number;
+  /** Non-null when this message originates from a subagent (Task tool). */
+  parentToolUseId?: string;
 }
 
 export interface AgentChatMessageRunInfo {
