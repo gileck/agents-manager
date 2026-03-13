@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { execFile as execFileCb } from 'child_process';
 import { promisify } from 'util';
-import { isAbsolute } from 'path';
+import { isAbsolute, dirname, join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { getShellEnv } from '../../shared/shell-env';
 
@@ -146,9 +146,17 @@ export function shellRoutes(): Router {
   // ── App version ───────────────────────────────────────────────────────
   router.get('/api/app/version', (_req, res, next) => {
     try {
-      const pkgPath = require.resolve('../../../package.json');
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-      res.json({ version: pkg.version || '0.0.0' });
+      let dir = __dirname;
+      while (dir !== dirname(dir)) {
+        const candidate = join(dir, 'package.json');
+        if (existsSync(candidate)) {
+          const pkg = JSON.parse(readFileSync(candidate, 'utf-8'));
+          res.json({ version: pkg.version || '0.0.0' });
+          return;
+        }
+        dir = dirname(dir);
+      }
+      res.json({ version: '0.0.0' });
     } catch (err) { next(err); }
   });
 
