@@ -36,7 +36,8 @@ function parseAgentInput(input: string): {
       resume: parsed.resume,
     };
   } catch {
-    return { subagentType: 'agent', description: input.slice(0, 60), prompt: '' };
+    console.error('[AgentBlock] Failed to parse agent input JSON — this is a bug, input should never be malformed:', input.slice(0, 200));
+    return { subagentType: 'agent', description: '[Error: failed to parse agent input]', prompt: '' };
   }
 }
 

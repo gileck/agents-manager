@@ -247,7 +247,7 @@ export class ClaudeCodeLib extends BaseAgentLib {
             } else if (block.type === 'tool_use') {
               const input = JSON.stringify(block.input ?? {});
               stream(`\n> Tool: ${block.name}\n> Input: ${input.slice(0, 2000)}${input.length > 2000 ? '...' : ''}\n`);
-              onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input: input.slice(0, 2000), timestamp: Date.now() });
+              onMessage?.({ type: 'tool_use', toolName: block.name, toolId: (block as unknown as { id?: string }).id, input, timestamp: Date.now() });
             }
           }
         } else if (message.type === 'result') {
