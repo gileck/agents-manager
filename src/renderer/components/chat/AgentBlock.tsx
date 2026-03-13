@@ -36,15 +36,8 @@ function parseAgentInput(input: string): {
       resume: parsed.resume,
     };
   } catch {
-    // Fallback: try to extract fields via regex from potentially malformed JSON
-    const descMatch = input.match(/"description"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-    const typeMatch = input.match(/"subagent_type"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-    const promptMatch = input.match(/"prompt"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-    return {
-      subagentType: typeMatch?.[1] || 'agent',
-      description: descMatch?.[1] || input.slice(0, 60),
-      prompt: promptMatch?.[1] || '',
-    };
+    console.error('[AgentBlock] Failed to parse agent input JSON — this is a bug, input should never be malformed:', input.slice(0, 200));
+    return { subagentType: 'agent', description: '[Error: failed to parse agent input]', prompt: '' };
   }
 }
 
