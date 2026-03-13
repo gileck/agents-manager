@@ -55,6 +55,7 @@ import type {
   InAppNotificationFilter,
   PermissionMode,
   DevServerInfo,
+  AgentNotificationPayload,
 } from './types';
 
 export interface ApiShape {
@@ -322,5 +323,6 @@ export interface ApiShape {
     devServerStatus(callback: (taskId: string, info: DevServerInfo) => void): () => void;
     taskStatusChanged(callback: (taskId: string, task: Task) => void): () => void;
     chatPermissionRequest(callback: (sessionId: string, request: AgentChatMessage) => void): () => void;
+    chatAgentNotification(callback: (sessionId: string, payload: AgentNotificationPayload) => void): () => void;
   };
 }
