@@ -424,7 +424,7 @@ export function getContextEntryType(agentType: string, revisionReason?: Revision
       return 'investigation_summary';
     case 'implementor':
       if (revisionReason === 'changes_requested') return 'fix_summary';
-      if (revisionReason === 'conflicts_detected') return 'conflict_resolution_summary';
+      if (revisionReason === 'merge_failed') return 'conflict_resolution_summary';
       return 'implementation_summary';
     case 'designer':
       return revisionReason === 'changes_requested' ? 'technical_design_revision_summary' : 'technical_design_summary';

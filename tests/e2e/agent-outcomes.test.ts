@@ -218,11 +218,11 @@ describe('Agent Outcome Transitions', () => {
         context: { workdir: '/tmp', mode: 'new' } as never,
       });
 
-      // Task should still be implementing (self-transition with conflicts_detected)
+      // Task should still be implementing (self-transition with conflicts_detected outcome)
       const updatedTask = await ctx.taskStore.getTask(task.id);
       expect(updatedTask!.status).toBe('implementing');
 
-      // Verify the start_agent hook was called with revision mode (conflicts_detected)
+      // Verify the start_agent hook was called with revision mode (merge_failed)
       expect(startAgentCalls.some((c) => c.mode === 'revision')).toBe(true);
 
       // Verify event log records the conflict detection

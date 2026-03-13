@@ -308,7 +308,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   registerNotificationHandler(pipelineEngine, { notificationRouter, taskStore });
   registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
   registerScmHandler(pipelineEngine, {
-    projectStore, taskStore, taskArtifactStore, taskEventLog,
+    projectStore, taskStore, taskArtifactStore, taskEventLog, taskContextStore,
     createWorktreeManager, createGitOps, createScmPlatform,
     onMainDiverged: config?.onMainDiverged,
   });

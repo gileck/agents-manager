@@ -6,6 +6,7 @@ import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import type { IGitOps } from '../interfaces/git-ops';
 import type { IScmPlatform } from '../interfaces/scm-platform';
+import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { Task, Transition, TransitionContext, HookResult } from '../../shared/types';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 
@@ -14,10 +15,46 @@ export interface ScmHandlerDeps {
   taskStore: ITaskStore;
   taskArtifactStore: ITaskArtifactStore;
   taskEventLog: ITaskEventLog;
+  taskContextStore: ITaskContextStore;
   createWorktreeManager: (projectPath: string) => IWorktreeManager;
   createGitOps: (cwd: string) => IGitOps;
   createScmPlatform: (repoPath: string) => IScmPlatform;
   onMainDiverged?: (projectId: string) => void;
+}
+
+async function captureAndReturnMergeFailure(
+  task: Task, error: string, prUrl: string, scmPlatform: IScmPlatform,
+  taskContextStore: ITaskContextStore, ghLog: (message: string, severity?: 'info' | 'warning' | 'error') => Promise<unknown>,
+): Promise<HookResult> {
+  // Try to get PR checks for detailed context
+  let checksInfo: Record<string, unknown> = {};
+  try {
+    const checks = await scmPlatform.getPRChecks(prUrl);
+    checksInfo = {
+      mergeable: checks.mergeable,
+      mergeStateStatus: checks.mergeStateStatus,
+      prState: checks.prState,
+      failingChecks: checks.checks
+        .filter(c => c.conclusion != null && c.conclusion !== 'SUCCESS')
+        .map(c => ({ name: c.name, status: c.conclusion ?? c.state })),
+    };
+  } catch (err) {
+    await ghLog(`Failed to fetch PR checks (non-fatal): ${err}`, 'warning');
+  }
+
+  try {
+    await taskContextStore.addEntry({
+      taskId: task.id,
+      source: 'system',
+      entryType: 'merge_failure',
+      summary: `PR merge failed: ${error}`,
+      data: { errorMessage: error, prUrl, ...checksInfo, timestamp: Date.now() },
+    });
+  } catch (err) {
+    await ghLog(`Failed to store merge failure context (non-fatal): ${err}`, 'warning');
+  }
+
+  return { success: false, error, followUpTransition: { to: 'implementing', trigger: 'system' as const } };
 }
 
 export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps): void {
@@ -50,7 +87,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       if (!mergeable) {
         const msg = 'PR is not mergeable (likely has conflicts with base branch)';
         await ghLog(msg, 'error', { url: prUrl });
-        return { success: false, error: msg, followUpTransition: { to: 'implementing', trigger: 'system' as const } };
+        return captureAndReturnMergeFailure(task, msg, prUrl, scmPlatform, deps.taskContextStore, ghLog);
       }
     } catch (err) {
       // If the mergeability check itself fails, log and continue
@@ -77,7 +114,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       const errMsg = err instanceof Error ? err.message : String(err);
       await ghLog(`Failed to merge PR: ${errMsg}`, 'error', { error: errMsg });
       if (/conflict|not mergeable/i.test(errMsg)) {
-        return { success: false, error: errMsg, followUpTransition: { to: 'implementing', trigger: 'system' as const } };
+        return captureAndReturnMergeFailure(task, errMsg, prUrl, scmPlatform, deps.taskContextStore, ghLog);
       }
       throw err; // Let pipeline engine log the hook failure
     }

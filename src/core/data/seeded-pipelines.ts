@@ -206,7 +206,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
     // === Merge conflict detection — self-loop to resolve conflicts ===
     { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'conflicts_detected',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'conflicts_detected' }, policy: 'fire_and_forget' }] },
+      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'merge_failed' }, policy: 'fire_and_forget' }] },
 
     // === PR push retry (handles conflicts arising after agent-service check or after request_changes) ===
     { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
@@ -250,6 +250,11 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'ready_to_merge', to: 'implementing', trigger: 'manual', label: 'Request Changes',
       guards: [{ name: 'no_running_agent' }],
       hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
+
+    // === Auto-recovery when merge_pr hook fails (conflicts, failing checks, etc.) ===
+    { from: 'ready_to_merge', to: 'implementing', trigger: 'system', label: 'Merge Failed - Auto Retry',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'merge_failed' }, policy: 'fire_and_forget' }] },
 
     // === Manual recovery if merge_pr safety net catches a conflict ===
     { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },
