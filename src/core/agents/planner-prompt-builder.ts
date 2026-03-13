@@ -45,7 +45,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
   }
 
   protected getTimeout(_context: AgentContext, config: AgentConfig): number {
-    return config.timeout || 7 * 60 * 1000;
+    return config.timeout || 10 * 60 * 1000;
   }
 
   protected getOutputFormat(): object {
