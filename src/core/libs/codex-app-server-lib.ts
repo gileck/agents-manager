@@ -101,7 +101,7 @@ export class CodexAppServerLib extends BaseAgentLib {
     engineOpts: EngineRunOptions,
   ): Promise<EngineResult> {
     const { options, callbacks, prompt, log, emit, stream } = engineOpts;
-    const { onMessage, onStreamEvent, onUserToolResult } = callbacks;
+    const { onMessage, onQuestionRequest, onStreamEvent, onUserToolResult } = callbacks;
 
     const shellEnv = getShellEnv();
     const env = Object.fromEntries(
@@ -476,8 +476,49 @@ export class CodexAppServerLib extends BaseAgentLib {
             contentItems: [{ type: 'inputText', text: message }],
           };
         }
-        case 'item/tool/requestUserInput':
-          throw new Error('Codex app-server requestUserInput is not implemented yet');
+        case 'item/tool/requestUserInput': {
+          if (!onQuestionRequest) {
+            throw new Error('Codex app-server requestUserInput callback is not configured');
+          }
+          const params = request.params as {
+            itemId?: string;
+            questions?: Array<{
+              id?: string;
+              header?: string;
+              question?: string;
+              options?: Array<{ label?: string; description?: string }> | null;
+            }>;
+          };
+          const questionId = typeof params.itemId === 'string' ? params.itemId : String(request.id);
+          const questions = Array.isArray(params.questions)
+            ? params.questions
+              .filter((question): question is {
+                id?: string;
+                header?: string;
+                question?: string;
+                options?: Array<{ label?: string; description?: string }> | null;
+              } => !!question && typeof question === 'object')
+              .map((question) => ({
+                question: typeof question.question === 'string' ? question.question : '',
+                header: typeof question.header === 'string' ? question.header : undefined,
+                options: Array.isArray(question.options)
+                  ? question.options
+                    .filter((option): option is { label?: string; description?: string } => !!option && typeof option === 'object')
+                    .map((option) => ({
+                      label: typeof option.label === 'string' ? option.label : '',
+                      description: typeof option.description === 'string' ? option.description : undefined,
+                    }))
+                  : [],
+              }))
+              .filter((question) => question.question.length > 0)
+            : [];
+          const answers = await onQuestionRequest({ questionId, questions });
+          return {
+            answers: Object.fromEntries(
+              Object.entries(answers).map(([key, values]) => [key, { answers: values }]),
+            ),
+          };
+        }
         default:
           throw new Error(`Unsupported codex app-server request: ${request.method}`);
       }

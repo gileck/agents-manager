@@ -407,4 +407,83 @@ describe('CodexAppServerLib', () => {
       },
     ]);
   });
+
+  it('maps requestUserInput server requests to onQuestionRequest answers', async () => {
+    class QuestionClient extends FakeCodexAppServerClient {
+      questionResponses: unknown[] = [];
+
+      override readonly turnStart = vi.fn(async (): Promise<CodexAppServerTurnStartResponse> => {
+        this.options.onNotification?.({
+          method: 'turn/started',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress', error: null } },
+        });
+        const response = await this.options.onServerRequest?.({
+          method: 'item/tool/requestUserInput',
+          id: 'request-3',
+          params: {
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            itemId: 'question-1',
+            questions: [
+              {
+                id: 'priority',
+                header: 'Priority',
+                question: 'Which priority should I use?',
+                options: [
+                  { label: 'High', description: 'Ship it now' },
+                  { label: 'Low', description: 'Can wait' },
+                ],
+              },
+            ],
+          },
+        });
+        this.questionResponses.push(response);
+        this.options.onNotification?.({
+          method: 'turn/completed',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed', error: null } },
+        });
+        return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
+      });
+    }
+
+    FakeCodexAppServerClient.instances.length = 0;
+    const onQuestionRequest = vi.fn().mockResolvedValue({ priority: ['High'] });
+    const lib = new CodexAppServerLib(undefined, (options) => new QuestionClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+
+    await lib.execute('run-question', {
+      prompt: 'ask a question',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: ['/tmp/project'],
+      readOnlyPaths: [],
+      readOnly: false,
+    }, {
+      onQuestionRequest,
+    });
+
+    expect(onQuestionRequest).toHaveBeenCalledWith({
+      questionId: 'question-1',
+      questions: [
+        {
+          question: 'Which priority should I use?',
+          header: 'Priority',
+          options: [
+            { label: 'High', description: 'Ship it now' },
+            { label: 'Low', description: 'Can wait' },
+          ],
+        },
+      ],
+    });
+    expect((FakeCodexAppServerClient.instances[0] as QuestionClient).questionResponses).toEqual([
+      {
+        answers: {
+          priority: { answers: ['High'] },
+        },
+      },
+    ]);
+  });
 });

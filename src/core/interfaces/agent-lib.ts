@@ -1,4 +1,4 @@
-import type { AgentChatMessage } from '../../shared/types';
+import type { AgentChatMessage, AskUserQuestionItem } from '../../shared/types';
 
 // ============================================
 // Permission Request/Response Types
@@ -248,6 +248,7 @@ export interface AgentLibCallbacks {
   onLog?: (message: string, data?: Record<string, unknown>) => void;
   onMessage?: (msg: AgentChatMessage) => void;
   onUserToolResult?: (toolUseId: string, content: string) => void;
+  onQuestionRequest?: (request: { questionId: string; questions: AskUserQuestionItem[] }) => Promise<Record<string, string[]>>;
   /** Called when a stream delta event is received (partial message streaming). */
   onStreamEvent?: (event: { type: string; [key: string]: unknown }) => void;
   /** Called when a tool needs user permission approval. Blocks tool execution until resolved. */

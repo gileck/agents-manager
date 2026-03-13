@@ -1160,6 +1160,43 @@ export class ChatAgentService {
         });
       };
 
+      const requestQuestionAnswers = async (
+        questionId: string,
+        questions: import('../../shared/types').AskUserQuestionItem[],
+      ): Promise<Record<string, string>> => {
+        emitMessage({
+          type: 'ask_user_question',
+          questionId,
+          questions,
+          answered: false,
+          timestamp: Date.now(),
+        });
+
+        let onAbort: (() => void) | undefined;
+        try {
+          const answers = await new Promise<Record<string, string>>((resolve, reject) => {
+            this.pendingQuestions.set(questionId, { resolve, reject, sessionId });
+
+            onAbort = () => {
+              if (this.pendingQuestions.has(questionId)) {
+                this.pendingQuestions.delete(questionId);
+                reject(new Error('Agent stopped while waiting for user answer'));
+              }
+            };
+            abortController.signal.addEventListener('abort', onAbort, { once: true });
+          });
+
+          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
+          return answers;
+        } catch (err) {
+          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
+          if (err instanceof Error && !err.message.includes('Agent stopped')) {
+            getAppLogger().warn('ChatAgentService', 'Unexpected error while waiting for user answer', { error: err.message });
+          }
+          throw err;
+        }
+      };
+
       // Build callbacks
       const callbacks: AgentLibCallbacks = {
         onOutput: (chunk: string) => {
@@ -1175,6 +1212,12 @@ export class ChatAgentService {
             result: content,
             timestamp: Date.now(),
           });
+        },
+        onQuestionRequest: async ({ questionId, questions }) => {
+          const answers = await requestQuestionAnswers(questionId, questions);
+          return Object.fromEntries(
+            Object.entries(answers).map(([key, value]) => [key, [value]]),
+          );
         },
         onStreamEvent: (event: { type: string; [key: string]: unknown }) => {
           // Forward raw stream events for partial message streaming
@@ -1247,45 +1290,13 @@ export class ChatAgentService {
           return { behavior: 'deny', message: 'AskUserQuestion received no valid questions.' };
         }
 
-        // Emit the ask_user_question message via the existing CHAT_MESSAGE WS channel
-        const askMsg: AgentChatMessage = {
-          type: 'ask_user_question',
-          questionId,
-          questions,
-          answered: false,
-          timestamp: Date.now(),
-        };
-        emitMessage(askMsg);
-
-        // Block the SDK by returning a Promise that resolves when the user answers
-        let onAbort: (() => void) | undefined;
         try {
-          const answers = await new Promise<Record<string, string>>((resolve, reject) => {
-            this.pendingQuestions.set(questionId, { resolve, reject, sessionId });
-
-            // Also reject if the abort controller fires
-            onAbort = () => {
-              if (this.pendingQuestions.has(questionId)) {
-                this.pendingQuestions.delete(questionId);
-                reject(new Error('Agent stopped while waiting for user answer'));
-              }
-            };
-            abortController.signal.addEventListener('abort', onAbort, { once: true });
-          });
-
-          // Clean up abort listener now that we have an answer
-          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
-
+          const answers = await requestQuestionAnswers(questionId, questions);
           // Return deny with the user's answers formatted as a message
           // so the agent receives the answers as tool result text
           const answerLines = Object.entries(answers).map(([q, a]) => `${q}: ${a}`).join('\n');
           return { behavior: 'deny', message: `User answered:\n${answerLines}` };
         } catch (err) {
-          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
-          // Log unexpected errors (not abort-related)
-          if (err instanceof Error && !err.message.includes('Agent stopped')) {
-            getAppLogger().warn('ChatAgentService', 'Unexpected error in canUseTool AskUserQuestion handler', { error: err.message });
-          }
           return { behavior: 'deny', message: 'User did not answer (agent was stopped).' };
         }
       };
