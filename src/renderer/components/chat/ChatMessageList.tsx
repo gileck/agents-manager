@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pencil, ChevronDown, Play, AlertTriangle, ShieldCheck, ShieldX, Bell, Bot, CheckCircle2, Terminal } from 'lucide-react';
-import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification, AgentChatMessageSubagentActivity, AgentChatMessageSlashCommand } from '../../../shared/types';
+import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification, AgentChatMessageSubagentActivity, AgentChatMessageSlashCommand, ChatImageRef } from '../../../shared/types';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getToolRenderer } from '../tool-renderers';
@@ -10,6 +10,8 @@ import { ThinkingGroup } from './ThinkingGroup';
 import { AgentBlock } from './AgentBlock';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { useChatActions } from './ChatActionsContext';
+import { ImageAnnotationPanel } from '../ui/ImageAnnotationPanel';
+import type { AnnotationImage } from '../ui/ImageAnnotationPanel';
 
 interface ChatMessageListProps {
   messages: AgentChatMessage[];
@@ -249,6 +251,8 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
   const { answerQuestion } = useChatActions();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const [autoScroll, setAutoScroll] = useState(true);
+  const [viewerImages, setViewerImages] = useState<AnnotationImage[] | null>(null);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   // Track when the agent started running for elapsed time display
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -384,14 +388,21 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
               {msg.images && msg.images.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
-                  {msg.images.map((img, j) => (
+                  {msg.images.map((img: ChatImageRef, j: number) => (
                     <img
                       key={j}
                       src={`/api/chat/images?path=${encodeURIComponent(img.path)}`}
                       alt={img.name || 'Attached image'}
                       className="rounded border border-primary-foreground/20 object-cover cursor-pointer"
                       style={{ maxHeight: 192, maxWidth: 256 }}
-                      onClick={() => window.open(`/api/chat/images?path=${encodeURIComponent(img.path)}`, '_blank')}
+                      onClick={() => {
+                        const annotationImages = msg.images!.map((im: ChatImageRef) => ({
+                          src: `/api/chat/images?path=${encodeURIComponent(im.path)}`,
+                          name: im.name,
+                        }));
+                        setViewerImages(annotationImages);
+                        setViewerIndex(j);
+                      }}
                       onError={(e) => {
                         const el = e.target as HTMLImageElement;
                         el.style.display = 'none';
@@ -651,6 +662,15 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
             Back to latest
           </button>
         </div>
+      )}
+
+      {viewerImages && (
+        <ImageAnnotationPanel
+          images={viewerImages}
+          initialIndex={viewerIndex}
+          onClose={() => setViewerImages(null)}
+          readOnly
+        />
       )}
     </div>
   );

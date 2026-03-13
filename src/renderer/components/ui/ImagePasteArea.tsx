@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import type { ChatImage } from '../../../shared/types';
+import { ImageAnnotationPanel } from './ImageAnnotationPanel';
 
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MAX_IMAGES = 5;
@@ -90,6 +90,11 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
     });
   }, []);
 
+  const handleAnnotationSave = useCallback((annotatedImage: ChatImage, idx: number) => {
+    setInternalImages((prev) => prev.map((img, i) => i === idx ? annotatedImage : img));
+    setPreviewIndex(null);
+  }, []);
+
   return (
     <div
       onDrop={handleDrop}
@@ -119,33 +124,16 @@ export function ImagePasteArea({ images, onImagesChange }: ImagePasteAreaProps) 
         </div>
       )}
 
-      {previewIndex !== null && internalImages[previewIndex] && createPortal(
-        <div
-          className="absolute inset-0 bg-black/80 flex items-center justify-center z-50"
-          onClick={() => setPreviewIndex(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Image preview"
-        >
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={`data:${internalImages[previewIndex].mediaType};base64,${internalImages[previewIndex].base64}`}
-              alt={internalImages[previewIndex].name || 'Preview'}
-              style={{ maxHeight: '80vh', maxWidth: '80vw' }}
-              className="rounded-lg"
-            />
-            <button
-              type="button"
-              onClick={() => setPreviewIndex(null)}
-              aria-label="Close preview"
-              className="absolute top-2 right-2 bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors"
-              style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
-            >
-              ×
-            </button>
-          </div>
-        </div>,
-        document.getElementById('root')!,
+      {previewIndex !== null && internalImages[previewIndex] && (
+        <ImageAnnotationPanel
+          images={internalImages.map((img) => ({
+            src: `data:${img.mediaType};base64,${img.base64}`,
+            name: img.name,
+          }))}
+          initialIndex={previewIndex}
+          onClose={() => setPreviewIndex(null)}
+          onSave={handleAnnotationSave}
+        />
       )}
 
       <div
