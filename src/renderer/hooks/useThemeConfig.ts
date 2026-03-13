@@ -22,7 +22,7 @@ function generateCssOverrides(config: ThemeConfig): string {
 
   rootVars.push(`  --radius: ${config.radius};`);
 
-  return `:root {\n${rootVars.join('\n')}\n}\n\n.dark {\n${darkVars.join('\n')}\n}`;
+  return `html:root {\n${rootVars.join('\n')}\n}\n\nhtml.dark {\n${darkVars.join('\n')}\n}`;
 }
 
 /**
@@ -33,9 +33,10 @@ function applyStyleOverrides(config: ThemeConfig): void {
   if (!styleEl) {
     styleEl = document.createElement('style');
     styleEl.id = STYLE_ID;
-    document.head.appendChild(styleEl);
   }
   styleEl.textContent = generateCssOverrides(config);
+  // Always (re-)append to end of <head> so overrides come after base stylesheets
+  document.head.appendChild(styleEl);
 }
 
 /**
