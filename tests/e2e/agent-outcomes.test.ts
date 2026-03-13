@@ -108,7 +108,7 @@ describe('Agent Outcome Transitions', () => {
 
       // Verify event log records the already_on_main detection
       const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'agent' });
-      expect(events.some((e) => e.message.includes('already on main'))).toBe(true);
+      expect(events.some((e) => e.message.includes('already merged'))).toBe(true);
     });
   });
 
@@ -227,6 +227,55 @@ describe('Agent Outcome Transitions', () => {
 
       // Verify event log records the conflict detection
       const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'git' });
+      expect(events.some((e) => e.message.includes('conflicts'))).toBe(true);
+    });
+
+    it('should detect conflicts against integration branch for multi-phase tasks', async () => {
+      // Bug fix: outcome resolver was always checking against origin/main,
+      // but multi-phase tasks need to check against origin/<taskBranch>.
+      // This caused conflicts between duplicate Phase 1 commits (original vs squash-merged)
+      // to be missed, leading to push_and_create_pr hook failure and a stuck task loop.
+      const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing', {
+        phases: [
+          { id: 'phase-1', name: 'Phase 1', status: 'completed', subtasks: [] },
+          { id: 'phase-2', name: 'Phase 2', status: 'in_progress', subtasks: [] },
+        ],
+        metadata: { taskBranch: 'task/test-task/integration' },
+      });
+
+      // Configure rebase to fail — simulates conflict between agent's main-based history
+      // and the integration branch's squash-merged Phase 1 commit
+      (ctx.gitOps as StubGitOps).setFailure('rebase', new Error('CONFLICT: rebase onto integration failed'));
+
+      await ctx.worktreeManager.create('task/test-branch', task.id);
+      await ctx.worktreeManager.lock(task.id);
+      const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 2' });
+      await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
+
+      const run = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'scripted',
+        mode: 'new',
+      });
+      await ctx.agentRunStore.updateRun(run.id, { status: 'completed', completedAt: now() });
+
+      await ctx.outcomeResolver.resolveAndTransition({
+        taskId: task.id,
+        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
+        run: { id: run.id },
+        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
+        worktreeManager: ctx.worktreeManager,
+        phase: { id: phase.id },
+        context: { workdir: '/tmp', mode: 'new' } as never,
+      });
+
+      // Conflict should be detected and task should self-transition via conflicts_detected
+      const updatedTask = await ctx.taskStore.getTask(task.id);
+      expect(updatedTask!.status).toBe('implementing');
+
+      // Verify the conflict log references the integration branch, not origin/main
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'git' });
+      expect(events.some((e) => e.message.includes('origin/task/test-task/integration'))).toBe(true);
       expect(events.some((e) => e.message.includes('conflicts'))).toBe(true);
     });
   });

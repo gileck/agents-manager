@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { OutputToolbar, type OutputMode } from './OutputToolbar';
 import { RenderedOutputPanel } from './RenderedOutputPanel';
 import { stripAnsi } from '../../lib/utils';
-import type { AgentChatMessage } from '../../../shared/types';
+import type { AgentChatMessage, PostProcessingLogCategory } from '../../../shared/types';
 
 interface OutputPanelProps {
   output: string;
@@ -22,8 +22,29 @@ export function OutputPanel({ output, messages = [], startedAt, isRunning, timeo
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [currentMatch, setCurrentMatch] = useState(0);
+  const [showPostProcessingLogs, setShowPostProcessingLogs] = useState(false);
+  const [activePostLogCategories, setActivePostLogCategories] = useState<Set<PostProcessingLogCategory>>(new Set());
   const preRef = useRef<HTMLPreElement>(null);
   const matchRefs = useRef<(HTMLElement | null)[]>([]);
+
+  // Check if there are any post-processing log messages
+  const hasPostProcessingLogs = useMemo(
+    () => messages.some((msg) => msg.type === 'post_processing_log'),
+    [messages]
+  );
+
+  const handleTogglePostLogs = useCallback(() => {
+    setShowPostProcessingLogs((prev) => !prev);
+  }, []);
+
+  const handleToggleCategory = useCallback((category: PostProcessingLogCategory) => {
+    setActivePostLogCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  }, []);
 
   const cleanOutput = useMemo(() => stripAnsi(output), [output]);
 
@@ -134,9 +155,14 @@ export function OutputPanel({ output, messages = [], startedAt, isRunning, timeo
         hasOutput={hasOutput}
         showTimestamps={showTimestamps}
         onShowTimestampsToggle={() => setShowTimestamps((s) => !s)}
+        hasPostProcessingLogs={hasPostProcessingLogs}
+        showPostProcessingLogs={showPostProcessingLogs}
+        onTogglePostProcessingLogs={handleTogglePostLogs}
+        activePostLogCategories={activePostLogCategories}
+        onTogglePostLogCategory={handleToggleCategory}
       />
       {outputMode === 'rendered' && messages.length > 0 ? (
-        <RenderedOutputPanel messages={messages} isRunning={isRunning} startedAt={startedAt} showTimestamps={showTimestamps} />
+        <RenderedOutputPanel messages={messages} isRunning={isRunning} startedAt={startedAt} showTimestamps={showTimestamps} showPostProcessingLogs={showPostProcessingLogs} activePostLogCategories={activePostLogCategories} />
       ) : (
         <pre
           ref={preRef}
