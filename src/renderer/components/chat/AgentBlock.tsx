@@ -176,21 +176,21 @@ export function AgentBlock({ segment, expandedTools, onToggleTool }: AgentBlockP
       className="my-2 rounded-lg border-l-[3px] border border-border overflow-hidden"
       style={{ borderLeftColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.02)' }}
     >
-      {/* ── Header ── */}
+      {/* ── Header: [Icon] [Title] [Type] [Model] ... [Status] [Duration] ── */}
       <div className="flex items-center gap-2 px-3 py-2.5">
         <Bot className="h-4 w-4 flex-shrink-0" style={{ color: '#6366f1' }} />
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-500">
+        <span className="text-sm text-foreground font-medium truncate flex-1">
+          {agentInput.description}
+        </span>
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-500 flex-shrink-0">
           {capitalize(agentInput.subagentType)}
         </span>
         {agentInput.model && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground flex-shrink-0">
             <Cpu className="h-3 w-3" />
             {agentInput.model}
           </span>
         )}
-        <span className="text-sm text-foreground font-medium truncate flex-1">
-          {agentInput.description}
-        </span>
         {agentInput.resume && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium flex-shrink-0">
             Resumed
