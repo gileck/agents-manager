@@ -179,6 +179,24 @@ const DEFAULT_CHAT_SUBAGENTS: Record<string, SubagentDefinition> = {
   },
 };
 
+function tagNestedSubagentMessage(message: AgentChatMessage, parentToolUseId: string): AgentChatMessage | null {
+  switch (message.type) {
+    case 'assistant_text':
+    case 'thinking':
+    case 'tool_use':
+    case 'tool_result':
+      return {
+        ...message,
+        parentToolUseId,
+      };
+    case 'status':
+    case 'agent_run_info':
+      return null;
+    default:
+      return message;
+  }
+}
+
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   private runningAgents = new Map<string, RunningAgent>();
@@ -1315,10 +1333,11 @@ export class ChatAgentService {
             disallowedTools: [...(disallowedTools ?? []), 'Task'],
           }, {
             onMessage: (msg: AgentChatMessage) => {
-              if (msg.type === 'assistant_text' || msg.type === 'status' || msg.type === 'agent_run_info') {
+              const taggedMessage = tagNestedSubagentMessage(msg, toolUseId);
+              if (!taggedMessage) {
                 return;
               }
-              emitMessage(msg);
+              emitMessage(taggedMessage);
             },
             onQuestionRequest: async ({ questionId, questions }) => {
               const answers = await requestQuestionAnswers(questionId, questions);

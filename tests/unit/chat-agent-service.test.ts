@@ -310,11 +310,15 @@ describe('ChatAgentService', () => {
   });
 
   describe('client tool calls', () => {
-    it('emits Task tool and subagent lifecycle messages without leaking nested assistant text', async () => {
+    it('emits tagged nested subagent messages for Task tool delegation', async () => {
       const execute = vi.fn().mockImplementation(async (runId: string, _options, callbacks) => {
         if (runId.includes(':task:')) {
           callbacks.onMessage?.({ type: 'thinking', text: 'subagent thinking', timestamp: Date.now() });
+          callbacks.onMessage?.({ type: 'tool_use', toolName: 'Read', toolId: `nested-${runId}`, input: 'file.ts', timestamp: Date.now() });
           callbacks.onMessage?.({ type: 'assistant_text', text: 'Subagent answer', timestamp: Date.now() });
+          callbacks.onMessage?.({ type: 'tool_result', toolId: `nested-${runId}`, result: 'contents', timestamp: Date.now() });
+          callbacks.onMessage?.({ type: 'status', status: 'running', message: 'ignore me', timestamp: Date.now() });
+          callbacks.onMessage?.({ type: 'agent_run_info', agentRunId: 'nested-run', timestamp: Date.now(), agentType: 'researcher' });
           return {
             exitCode: 0,
             output: 'Subagent answer',
@@ -359,11 +363,107 @@ describe('ChatAgentService', () => {
       expect(messages).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: 'tool_use', toolName: 'Task', toolId: 'task-tool-1' }),
         expect.objectContaining({ type: 'subagent_activity', agentName: 'researcher', status: 'started', toolUseId: 'task-tool-1' }),
-        expect.objectContaining({ type: 'thinking', text: 'subagent thinking' }),
+        expect.objectContaining({ type: 'thinking', text: 'subagent thinking', parentToolUseId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'tool_use', toolName: 'Read', parentToolUseId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'assistant_text', text: 'Subagent answer', parentToolUseId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'tool_result', result: 'contents', parentToolUseId: 'task-tool-1' }),
         expect.objectContaining({ type: 'subagent_activity', agentName: 'researcher', status: 'completed', toolUseId: 'task-tool-1' }),
         expect.objectContaining({ type: 'tool_result', toolId: 'task-tool-1', result: 'Subagent answer' }),
       ]));
-      expect(messages).not.toContainEqual(expect.objectContaining({ type: 'assistant_text', text: 'Subagent answer' }));
+      expect(messages).not.toContainEqual(expect.objectContaining({ type: 'status', message: 'ignore me' }));
+      expect(messages).not.toContainEqual(expect.objectContaining({ type: 'agent_run_info', agentRunId: 'nested-run' }));
+    });
+
+    it('keeps parallel same-type Task subagents correlated by parent tool id', async () => {
+      const execute = vi.fn().mockImplementation(async (runId: string, _options, callbacks) => {
+        if (runId.includes(':task:task-tool-1')) {
+          callbacks.onMessage?.({ type: 'assistant_text', text: 'Result from task 1', timestamp: Date.now() });
+          callbacks.onMessage?.({ type: 'thinking', text: 'thinking 1', timestamp: Date.now() });
+          return {
+            exitCode: 0,
+            output: 'task 1 done',
+            model: 'claude-opus-4-6',
+          };
+        }
+
+        if (runId.includes(':task:task-tool-2')) {
+          callbacks.onMessage?.({ type: 'assistant_text', text: 'Result from task 2', timestamp: Date.now() });
+          callbacks.onMessage?.({ type: 'thinking', text: 'thinking 2', timestamp: Date.now() });
+          return {
+            exitCode: 0,
+            output: 'task 2 done',
+            model: 'claude-opus-4-6',
+          };
+        }
+
+        await Promise.all([
+          callbacks.onClientToolCall?.({
+            toolName: 'Task',
+            toolUseId: 'task-tool-1',
+            toolInput: {
+              subagent_type: 'researcher',
+              prompt: 'Inspect area one',
+            },
+            signal: new AbortController().signal,
+          }),
+          callbacks.onClientToolCall?.({
+            toolName: 'task',
+            toolUseId: 'task-tool-2',
+            toolInput: {
+              subagent_type: 'researcher',
+              prompt: 'Inspect area two',
+            },
+            signal: new AbortController().signal,
+          }),
+        ]);
+
+        return {
+          exitCode: 0,
+          output: 'Parent done',
+          model: 'claude-opus-4-6',
+        };
+      });
+
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue({
+        ...createMockAgentLib(),
+        execute,
+      } satisfies IAgentLib);
+
+      const events: Array<{ type: string; message?: AgentChatMessage }> = [];
+      const result = await service.send('session-1', 'Run two subagents', {
+        systemPrompt: '',
+        onEvent: (event) => events.push(event as { type: string; message?: AgentChatMessage }),
+      });
+
+      await result.completion;
+
+      const messages = events
+        .filter((event): event is { type: 'message'; message: AgentChatMessage } => event.type === 'message' && !!event.message)
+        .map((event) => event.message);
+
+      expect(messages).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'tool_use', toolName: 'Task', toolId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'tool_use', toolName: 'Task', toolId: 'task-tool-2' }),
+        expect.objectContaining({ type: 'subagent_activity', agentName: 'researcher', status: 'started', toolUseId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'subagent_activity', agentName: 'researcher', status: 'started', toolUseId: 'task-tool-2' }),
+        expect.objectContaining({ type: 'assistant_text', text: 'Result from task 1', parentToolUseId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'assistant_text', text: 'Result from task 2', parentToolUseId: 'task-tool-2' }),
+        expect.objectContaining({ type: 'thinking', text: 'thinking 1', parentToolUseId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'thinking', text: 'thinking 2', parentToolUseId: 'task-tool-2' }),
+        expect.objectContaining({ type: 'tool_result', toolId: 'task-tool-1', result: 'task 1 done' }),
+        expect.objectContaining({ type: 'tool_result', toolId: 'task-tool-2', result: 'task 2 done' }),
+      ]));
+
+      expect(messages).not.toContainEqual(expect.objectContaining({
+        type: 'assistant_text',
+        text: 'Result from task 1',
+        parentToolUseId: 'task-tool-2',
+      }));
+      expect(messages).not.toContainEqual(expect.objectContaining({
+        type: 'assistant_text',
+        text: 'Result from task 2',
+        parentToolUseId: 'task-tool-1',
+      }));
     });
   });
 });
