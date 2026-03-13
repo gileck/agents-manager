@@ -408,6 +408,75 @@ describe('CodexAppServerLib', () => {
     ]);
   });
 
+  it('dispatches dynamic tool calls through onClientToolCall when configured', async () => {
+    class DynamicToolClient extends FakeCodexAppServerClient {
+      dynamicToolResponses: unknown[] = [];
+
+      override readonly turnStart = vi.fn(async (): Promise<CodexAppServerTurnStartResponse> => {
+        this.options.onNotification?.({
+          method: 'turn/started',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress', error: null } },
+        });
+        const response = await this.options.onServerRequest?.({
+          method: 'item/tool/call',
+          id: 'request-2',
+          params: {
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            callId: 'tool-1',
+            tool: 'Task',
+            arguments: { subagent_type: 'researcher', prompt: 'inspect the repo' },
+          },
+        });
+        this.dynamicToolResponses.push(response);
+        this.options.onNotification?.({
+          method: 'turn/completed',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed', error: null } },
+        });
+        return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
+      });
+    }
+
+    FakeCodexAppServerClient.instances.length = 0;
+    const onClientToolCall = vi.fn().mockResolvedValue({
+      handled: true,
+      success: true,
+      content: 'subagent completed',
+    });
+    const lib = new CodexAppServerLib(undefined, (options) => new DynamicToolClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+
+    await lib.execute('run-client-tool', {
+      prompt: 'call dynamic tool',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: ['/tmp/project'],
+      readOnlyPaths: [],
+      readOnly: false,
+    }, {
+      onClientToolCall,
+    });
+
+    expect(onClientToolCall).toHaveBeenCalledWith({
+      toolName: 'Task',
+      toolUseId: 'tool-1',
+      toolInput: {
+        subagent_type: 'researcher',
+        prompt: 'inspect the repo',
+      },
+      signal: expect.any(AbortSignal),
+    });
+    expect((FakeCodexAppServerClient.instances[0] as DynamicToolClient).dynamicToolResponses).toEqual([
+      {
+        success: true,
+        contentItems: [{ type: 'inputText', text: 'subagent completed' }],
+      },
+    ]);
+  });
+
   it('maps requestUserInput server requests to onQuestionRequest answers', async () => {
     class QuestionClient extends FakeCodexAppServerClient {
       questionResponses: unknown[] = [];

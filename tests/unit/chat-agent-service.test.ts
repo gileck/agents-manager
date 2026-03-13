@@ -8,7 +8,11 @@ import type { IPipelineStore } from '../../src/core/interfaces/pipeline-store';
 import type { AgentLibRegistry } from '../../src/core/services/agent-lib-registry';
 import type { IAgentLib } from '../../src/core/interfaces/agent-lib';
 import type { ChatSession } from '../../src/core/interfaces/chat-session-store';
-import type { Project } from '../../src/shared/types';
+import type { AgentChatMessage, Project } from '../../src/shared/types';
+
+vi.mock('../../src/core/mcp/task-mcp-server', () => ({
+  createTaskMcpServer: vi.fn().mockResolvedValue({}),
+}));
 
 // Mock the ESM import function (still needed for summarizeMessages which uses SDK directly)
 vi.mock('../../src/core/services/chat-agent-service', async (importOriginal) => {
@@ -302,6 +306,64 @@ describe('ChatAgentService', () => {
 
       expect(mockMessageStore.replaceAllMessages).toHaveBeenCalled();
       expect(summary).toBeDefined();
+    });
+  });
+
+  describe('client tool calls', () => {
+    it('emits Task tool and subagent lifecycle messages without leaking nested assistant text', async () => {
+      const execute = vi.fn().mockImplementation(async (runId: string, _options, callbacks) => {
+        if (runId.includes(':task:')) {
+          callbacks.onMessage?.({ type: 'thinking', text: 'subagent thinking', timestamp: Date.now() });
+          callbacks.onMessage?.({ type: 'assistant_text', text: 'Subagent answer', timestamp: Date.now() });
+          return {
+            exitCode: 0,
+            output: 'Subagent answer',
+            model: 'claude-opus-4-6',
+          };
+        }
+
+        await callbacks.onClientToolCall?.({
+          toolName: 'Task',
+          toolUseId: 'task-tool-1',
+          toolInput: {
+            subagent_type: 'researcher',
+            prompt: 'Inspect the codebase',
+          },
+          signal: new AbortController().signal,
+        });
+
+        return {
+          exitCode: 0,
+          output: 'Parent done',
+          model: 'claude-opus-4-6',
+        };
+      });
+
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue({
+        ...createMockAgentLib(),
+        execute,
+      } satisfies IAgentLib);
+
+      const events: Array<{ type: string; message?: AgentChatMessage }> = [];
+      const result = await service.send('session-1', 'Run a subagent', {
+        systemPrompt: '',
+        onEvent: (event) => events.push(event as { type: string; message?: AgentChatMessage }),
+      });
+
+      await result.completion;
+
+      const messages = events
+        .filter((event): event is { type: 'message'; message: AgentChatMessage } => event.type === 'message' && !!event.message)
+        .map((event) => event.message);
+
+      expect(messages).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'tool_use', toolName: 'Task', toolId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'subagent_activity', agentName: 'researcher', status: 'started', toolUseId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'thinking', text: 'subagent thinking' }),
+        expect.objectContaining({ type: 'subagent_activity', agentName: 'researcher', status: 'completed', toolUseId: 'task-tool-1' }),
+        expect.objectContaining({ type: 'tool_result', toolId: 'task-tool-1', result: 'Subagent answer' }),
+      ]));
+      expect(messages).not.toContainEqual(expect.objectContaining({ type: 'assistant_text', text: 'Subagent answer' }));
     });
   });
 });

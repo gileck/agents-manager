@@ -1197,44 +1197,6 @@ export class ChatAgentService {
         }
       };
 
-      // Build callbacks
-      const callbacks: AgentLibCallbacks = {
-        onOutput: (chunk: string) => {
-          emitEvent({ type: 'text', text: chunk });
-        },
-        onMessage: (msg: AgentChatMessage) => {
-          emitMessage(msg);
-        },
-        onUserToolResult: (toolUseId: string, content: string) => {
-          emitMessage({
-            type: 'tool_result',
-            toolId: toolUseId,
-            result: content,
-            timestamp: Date.now(),
-          });
-        },
-        onQuestionRequest: async ({ questionId, questions }) => {
-          const answers = await requestQuestionAnswers(questionId, questions);
-          return Object.fromEntries(
-            Object.entries(answers).map(([key, value]) => [key, [value]]),
-          );
-        },
-        onStreamEvent: (event: { type: string; [key: string]: unknown }) => {
-          // Forward raw stream events for partial message streaming
-          const delta = event.delta as { type?: string; text?: string; thinking?: string; partial_json?: string } | undefined;
-          if (event.type === 'content_block_delta' && delta) {
-            if (delta.type === 'text_delta' && typeof delta.text === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() } });
-            } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() } });
-            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() } });
-            }
-          }
-        },
-        onPermissionRequest,
-      };
-
       // Build images array for libs that support native images
       const libImages = (features.images && images && images.length > 0)
         ? images.map((img) => ({ base64: img.base64, mediaType: img.mediaType }))
@@ -1304,6 +1266,151 @@ export class ChatAgentService {
       // Add default subagents for thread chat sessions (desktop/telegram/cli — not agent-chat or pipeline)
       const isThreadChat = chatSession && chatSession.source !== 'agent-chat' && !extra?.pipelineSessionId;
       const agents = isThreadChat ? DEFAULT_CHAT_SUBAGENTS : undefined;
+
+      const onClientToolCall: AgentLibCallbacks['onClientToolCall'] = async ({ toolName, toolUseId, toolInput }) => {
+        if (toolName !== 'Task' && toolName !== 'task') {
+          return { handled: false, success: false, content: '' };
+        }
+
+        const subagentType = typeof toolInput.subagent_type === 'string' ? toolInput.subagent_type : undefined;
+        const subagentDef = subagentType ? agents?.[subagentType] : undefined;
+        const agentName = subagentType ?? 'subagent';
+        const taskPrompt = typeof toolInput.prompt === 'string'
+          ? toolInput.prompt
+          : typeof toolInput.description === 'string'
+            ? toolInput.description
+            : JSON.stringify(toolInput);
+        const taskInput = JSON.stringify(toolInput);
+
+        emitMessage({
+          type: 'tool_use',
+          toolName: 'Task',
+          toolId: toolUseId,
+          input: taskInput.slice(0, 2000),
+          timestamp: Date.now(),
+        });
+        emitMessage({
+          type: 'subagent_activity',
+          agentName,
+          status: 'started',
+          toolUseId,
+          timestamp: Date.now(),
+        });
+
+        try {
+          const nestedResult = await lib.execute(`${executeSessionId}:task:${toolUseId}`, {
+            prompt: taskPrompt,
+            systemPrompt: subagentDef?.prompt ?? systemPrompt,
+            cwd: projectPath,
+            model,
+            maxTurns: subagentDef?.maxTurns ?? 25,
+            timeoutMs: 300000,
+            allowedPaths: readOnly ? [] : [projectPath, imageDir],
+            readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
+            readOnly,
+            settingSources: ['project'] as Array<'user' | 'project' | 'local'>,
+            ...(mcpServers ? { mcpServers } : {}),
+            ...(extra?.plugins?.length ? { plugins: extra.plugins } : {}),
+            canUseTool,
+            disallowedTools: [...(disallowedTools ?? []), 'Task'],
+          }, {
+            onMessage: (msg: AgentChatMessage) => {
+              if (msg.type === 'assistant_text' || msg.type === 'status' || msg.type === 'agent_run_info') {
+                return;
+              }
+              emitMessage(msg);
+            },
+            onQuestionRequest: async ({ questionId, questions }) => {
+              const answers = await requestQuestionAnswers(questionId, questions);
+              return Object.fromEntries(
+                Object.entries(answers).map(([key, value]) => [key, [value]]),
+              );
+            },
+            onPermissionRequest,
+            onClientToolCall: async () => ({ handled: true, success: false, content: 'Nested Task delegation is not supported yet.' }),
+          });
+
+          const resultText = (nestedResult.output || nestedResult.error || `Subagent ${agentName} completed.`).slice(0, 4000);
+          emitMessage({
+            type: 'subagent_activity',
+            agentName,
+            status: 'completed',
+            toolUseId,
+            timestamp: Date.now(),
+          });
+          emitMessage({
+            type: 'tool_result',
+            toolId: toolUseId,
+            result: resultText.slice(0, 2000),
+            timestamp: Date.now(),
+          });
+
+          return {
+            handled: true,
+            success: nestedResult.exitCode === 0,
+            content: resultText,
+          };
+        } catch (err) {
+          const errorText = err instanceof Error ? err.message : String(err);
+          emitMessage({
+            type: 'subagent_activity',
+            agentName,
+            status: 'completed',
+            toolUseId,
+            timestamp: Date.now(),
+          });
+          emitMessage({
+            type: 'tool_result',
+            toolId: toolUseId,
+            result: errorText.slice(0, 2000),
+            timestamp: Date.now(),
+          });
+          return {
+            handled: true,
+            success: false,
+            content: errorText,
+          };
+        }
+      };
+
+      // Build callbacks
+      const callbacks: AgentLibCallbacks = {
+        onOutput: (chunk: string) => {
+          emitEvent({ type: 'text', text: chunk });
+        },
+        onMessage: (msg: AgentChatMessage) => {
+          emitMessage(msg);
+        },
+        onUserToolResult: (toolUseId: string, content: string) => {
+          emitMessage({
+            type: 'tool_result',
+            toolId: toolUseId,
+            result: content,
+            timestamp: Date.now(),
+          });
+        },
+        onQuestionRequest: async ({ questionId, questions }) => {
+          const answers = await requestQuestionAnswers(questionId, questions);
+          return Object.fromEntries(
+            Object.entries(answers).map(([key, value]) => [key, [value]]),
+          );
+        },
+        onClientToolCall,
+        onStreamEvent: (event: { type: string; [key: string]: unknown }) => {
+          // Forward raw stream events for partial message streaming
+          const delta = event.delta as { type?: string; text?: string; thinking?: string; partial_json?: string } | undefined;
+          if (event.type === 'content_block_delta' && delta) {
+            if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() } });
+            } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() } });
+            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() } });
+            }
+          }
+        },
+        onPermissionRequest,
+      };
 
       const executeOptions = {
         prompt,

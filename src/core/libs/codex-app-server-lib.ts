@@ -101,7 +101,7 @@ export class CodexAppServerLib extends BaseAgentLib {
     engineOpts: EngineRunOptions,
   ): Promise<EngineResult> {
     const { options, callbacks, prompt, log, emit, stream } = engineOpts;
-    const { onMessage, onQuestionRequest, onStreamEvent, onUserToolResult } = callbacks;
+    const { onClientToolCall, onMessage, onQuestionRequest, onStreamEvent, onUserToolResult } = callbacks;
 
     const shellEnv = getShellEnv();
     const env = Object.fromEntries(
@@ -455,7 +455,24 @@ export class CodexAppServerLib extends BaseAgentLib {
           };
           const toolName = typeof params.tool === 'string' ? params.tool : 'unknown_tool';
           const toolId = typeof params.callId === 'string' ? params.callId : String(request.id);
-          const input = JSON.stringify(params.arguments ?? {}).slice(0, 2000);
+          const toolInput = params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments)
+            ? params.arguments as Record<string, unknown>
+            : {};
+          if (onClientToolCall) {
+            const result = await onClientToolCall({
+              toolName,
+              toolUseId: toolId,
+              toolInput,
+              signal: state.abortController.signal,
+            });
+            if (result.handled) {
+              return {
+                success: result.success,
+                contentItems: [{ type: 'inputText', text: result.content }],
+              };
+            }
+          }
+          const input = JSON.stringify(toolInput).slice(0, 2000);
           const message = `Client-handled tool ${toolName} is not implemented yet in CodexAppServerLib.`;
           onMessage?.({
             type: 'tool_use',
