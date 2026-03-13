@@ -40,26 +40,26 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>
 
   // ── Load image ──────────────────────────────────────────────────────
   useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      let { naturalWidth: w, naturalHeight: h } = img;
+    const htmlImg = document.createElement('img');
+    htmlImg.crossOrigin = 'anonymous';
+    htmlImg.onload = () => {
+      let { naturalWidth: w, naturalHeight: h } = htmlImg;
       // Downscale if exceeds max dimension
       if (w > MAX_IMAGE_DIM || h > MAX_IMAGE_DIM) {
         const scale = MAX_IMAGE_DIM / Math.max(w, h);
         w = Math.round(w * scale);
         h = Math.round(h * scale);
       }
-      imgRef.current = img;
+      imgRef.current = htmlImg;
       setImgDims({ w, h });
       setImgLoaded(true);
       setImgError(false);
     };
-    img.onerror = () => {
+    htmlImg.onerror = () => {
       setImgError(true);
       setImgLoaded(false);
     };
-    img.src = imageSrc;
+    htmlImg.src = imageSrc;
     // Reset state when image src changes
     setImgLoaded(false);
     setImgError(false);
@@ -73,8 +73,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.width = imgDims.w;
-    canvas.height = imgDims.h;
+    // Only reset canvas dimensions when they actually change to avoid
+    // resetting the entire context state on every redraw during drawing.
+    if (canvas.width !== imgDims.w || canvas.height !== imgDims.h) {
+      canvas.width = imgDims.w;
+      canvas.height = imgDims.h;
+    }
     ctx.clearRect(0, 0, imgDims.w, imgDims.h);
 
     // Base image
@@ -133,7 +137,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing.current) return;
     const { x, y } = toImageCoords(e);
-    currentPoints.current = [...currentPoints.current, x, y];
+    currentPoints.current.push(x, y);
     redraw();
   }, [toImageCoords, redraw]);
 

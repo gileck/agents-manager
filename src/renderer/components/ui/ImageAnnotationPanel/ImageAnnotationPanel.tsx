@@ -38,8 +38,10 @@ export function ImageAnnotationPanel({
 
   const drawing = useDrawingState();
 
-  // Sync drawing state when index changes
+  // Extract stable callback references to avoid re-registering listeners on every render
   const switchImage = drawing.switchImage;
+  const drawingUndo = drawing.undo;
+  const drawingRedo = drawing.redo;
   useEffect(() => {
     switchImage(index);
     setZoom(1); // reset zoom when switching images
@@ -96,16 +98,16 @@ export function ImageAnnotationPanel({
       if (!readOnly && (e.metaKey || e.ctrlKey)) {
         if (e.key === 'z' && !e.shiftKey) {
           e.preventDefault();
-          drawing.undo();
+          drawingUndo();
         } else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
           e.preventDefault();
-          drawing.redo();
+          drawingRedo();
         }
       }
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [onClose, goPrev, goNext, zoomIn, zoomOut, zoomFit, readOnly, drawing]);
+  }, [onClose, goPrev, goNext, zoomIn, zoomOut, zoomFit, readOnly, drawingUndo, drawingRedo]);
 
   // ── Mouse wheel zoom ───────────────────────────────────────────────
   const handleWheel = useCallback((e: React.WheelEvent) => {
