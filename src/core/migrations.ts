@@ -124,5 +124,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '109_add_system_prompt_append_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN system_prompt_append TEXT DEFAULT NULL`,
     },
+    {
+      name: '110_reseed_pipelines_already_on_main',
+      sql: `UPDATE pipelines SET transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
+    },
   ];
 }

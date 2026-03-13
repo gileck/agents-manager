@@ -10,6 +10,7 @@ export class StubGitOps implements IGitOps {
   diffOverride?: string;
   mergeBaseOverride?: string;
   revParseOverride?: string;
+  revParseMap?: Map<string, string>;
 
   setFailure(method: string, error: Error): void {
     this.failures[method] = error;
@@ -20,6 +21,7 @@ export class StubGitOps implements IGitOps {
     this.diffOverride = undefined;
     this.mergeBaseOverride = undefined;
     this.revParseOverride = undefined;
+    this.revParseMap = undefined;
   }
 
   private throwIfConfigured(method: string): void {
@@ -125,8 +127,9 @@ export class StubGitOps implements IGitOps {
     return this.mergeBaseOverride ?? 'stub-merge-base';
   }
 
-  async revParse(_ref: string): Promise<string> {
+  async revParse(ref: string): Promise<string> {
     this.throwIfConfigured('revParse');
+    if (this.revParseMap?.has(ref)) return this.revParseMap.get(ref)!;
     return this.revParseOverride ?? 'stub-rev-parse';
   }
 

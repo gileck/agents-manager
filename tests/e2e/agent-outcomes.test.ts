@@ -33,11 +33,14 @@ describe('Agent Outcome Transitions', () => {
   });
 
   describe('no_changes outcome', () => {
-    it('should transition implementing → open when no diff detected', async () => {
+    it('should transition implementing → open when no diff detected but branch has unique commits', async () => {
       const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
 
       // Configure empty diff to trigger no_changes
-      (ctx.gitOps as StubGitOps).diffOverride = '';
+      const stub = ctx.gitOps as StubGitOps;
+      stub.diffOverride = '';
+      // Branch HEAD differs from origin/main — agent has commits but diff is empty (anomalous)
+      stub.revParseMap = new Map([['HEAD', 'aaa111'], ['origin/main', 'bbb222']]);
 
       // Create a worktree and phase to satisfy OutcomeResolver
       await ctx.worktreeManager.create('task/test-branch', task.id);
@@ -69,6 +72,43 @@ describe('Agent Outcome Transitions', () => {
       // Verify event log records the no_changes detection
       const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'agent' });
       expect(events.some((e) => e.message.includes('no changes detected'))).toBe(true);
+    });
+
+    it('should transition implementing → done when branch HEAD equals origin/main (already on main)', async () => {
+      const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
+
+      // Configure empty diff + same HEAD as origin/main (work already on main)
+      const stub = ctx.gitOps as StubGitOps;
+      stub.diffOverride = '';
+      stub.revParseOverride = 'same-sha';
+
+      await ctx.worktreeManager.create('task/test-branch', task.id);
+      await ctx.worktreeManager.lock(task.id);
+      const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1' });
+      await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
+
+      const run = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'scripted',
+        mode: 'new',
+      });
+
+      await ctx.outcomeResolver.resolveAndTransition({
+        taskId: task.id,
+        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
+        run: { id: run.id },
+        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
+        worktreeManager: ctx.worktreeManager,
+        phase: { id: phase.id },
+        context: { workdir: '/tmp', mode: 'new' } as never,
+      });
+
+      const updatedTask = await ctx.taskStore.getTask(task.id);
+      expect(updatedTask!.status).toBe('done');
+
+      // Verify event log records the already_on_main detection
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'agent' });
+      expect(events.some((e) => e.message.includes('already on main'))).toBe(true);
     });
   });
 

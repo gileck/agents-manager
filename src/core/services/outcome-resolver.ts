@@ -89,7 +89,7 @@ export class OutcomeResolver {
     }
   }
 
-  private async verifyBranchDiff(taskId: string, worktree: { branch: string; path: string }): Promise<'pr_ready' | 'no_changes'> {
+  private async verifyBranchDiff(taskId: string, worktree: { branch: string; path: string }): Promise<'pr_ready' | 'no_changes' | 'already_on_main'> {
     this.taskEventLog.log({
       taskId,
       category: 'agent_debug',
@@ -106,6 +106,35 @@ export class OutcomeResolver {
         message: `Branch diff result: hasChanges=${diffContent.trim().length > 0}, diffLength=${diffContent.length}`,
       }).catch(() => {});
       if (diffContent.trim().length === 0) {
+        // Check whether the branch has unique commits beyond origin/main.
+        // If HEAD equals origin/main, the work is already on main —
+        // return already_on_main so the task transitions to done
+        // instead of looping back to open via no_changes.
+        try {
+          const [headSha, mainSha] = await Promise.all([
+            gitOps.revParse('HEAD'),
+            gitOps.revParse('origin/main'),
+          ]);
+          if (headSha === mainSha) {
+            await this.taskEventLog.log({
+              taskId,
+              category: 'agent',
+              severity: 'warning',
+              message: 'No diff detected and branch HEAD equals origin/main — changes likely already on main',
+              data: { branch: worktree.branch, headSha, mainSha },
+            });
+            return 'already_on_main';
+          }
+        } catch (revParseErr) {
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'warning',
+            message: `Empty diff detected but failed to resolve HEAD/origin/main SHAs: ${revParseErr instanceof Error ? revParseErr.message : String(revParseErr)}`,
+            data: { branch: worktree.branch },
+          });
+          // Fall through to no_changes — diff is empty, just couldn't determine why
+        }
         await this.taskEventLog.log({
           taskId,
           category: 'agent',

@@ -48,6 +48,7 @@ export const OUTCOME_SCHEMAS: Record<string, OutcomeDefinition> = {
   failed: { description: 'Agent execution failed (timeout, error, or abort)', schema: null },
   interrupted: { description: 'Agent run interrupted (e.g. app shutdown)', schema: null },
   no_changes: { description: 'Agent completed but made no changes', schema: null },
+  already_on_main: { description: 'Implementation already exists on main branch', schema: null },
   conflicts_detected: { description: 'Merge conflicts detected on branch', schema: null },
   plan_complete: { description: 'Planning finished', schema: null },
   investigation_complete: { description: 'Investigation finished', schema: null },
