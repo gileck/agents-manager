@@ -14,17 +14,18 @@ export function KanbanEmptyState({ variant, onAction, isOver, colorTheme }: Kanb
   if (variant === 'column') {
     return (
       <div
-        className="text-center text-muted-foreground text-sm py-8 rounded-lg transition-all duration-200"
-        style={isOver ? { backgroundColor: 'rgba(59, 130, 246, 0.05)', border: '2px dashed rgba(59, 130, 246, 0.3)' } : {}}
+        className="text-center text-muted-foreground text-xs py-4 rounded-md transition-all duration-200"
+        style={isOver
+          ? { backgroundColor: 'rgba(59, 130, 246, 0.05)', border: '2px dashed rgba(59, 130, 246, 0.3)' }
+          : { border: '1px dashed rgba(128, 128, 128, 0.2)' }
+        }
       >
         {isOver ? (
-          <div className="space-y-2">
-            <div className="text-primary font-medium">Drop here</div>
-          </div>
+          <div className="text-primary font-medium text-sm">Drop here</div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Inbox
-              className="w-8 h-8 mx-auto"
+              className="w-5 h-5 mx-auto"
               style={colorTheme ? colorTheme.emptyIconStyle : { opacity: 0.5 }}
             />
             <div style={{ opacity: 0.6 }}>No tasks</div>

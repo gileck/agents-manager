@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import {
   Select,
   SelectContent,
@@ -11,7 +10,9 @@ import {
 } from '../ui/select';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
-import { Search, X, Filter } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
+import { ScrollArea } from '../ui/scroll-area';
+import { Search, X, Tag, Check } from 'lucide-react';
 import { getTagColor } from '../../utils/kanban-colors';
 import type { KanbanFilters as KanbanFiltersType } from '../../../shared/types';
 
@@ -34,11 +35,16 @@ export function KanbanFilters({
   hideEmptyColumns = false,
   onHideEmptyColumnsChange,
 }: KanbanFiltersProps) {
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
+
   const hasActiveFilters =
     filters.search ||
     filters.assignee ||
     (filters.tags && filters.tags.length > 0) ||
     filters.featureId;
+
+  const selectedTagCount = filters.tags?.length ?? 0;
 
   const handleSearchChange = (value: string) => {
     onFiltersChange({ ...filters, search: value || undefined });
@@ -61,23 +67,31 @@ export function KanbanFilters({
     onFiltersChange({ ...filters, tags: newTags.length > 0 ? newTags : undefined });
   };
 
+  const filteredTags = useMemo(() => {
+    if (!tagSearch) return availableTags;
+    const lower = tagSearch.toLowerCase();
+    return availableTags.filter(t => t.toLowerCase().includes(lower));
+  }, [availableTags, tagSearch]);
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search tasks..."
-            value={filters.search || ''}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div style={{ width: '180px' }}>
-          <Select value={filters.assignee || 'all'} onValueChange={handleAssigneeChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Assignees" />
-            </SelectTrigger>
+    <div className="flex items-center gap-2 flex-wrap">
+      {/* Search */}
+      <div className="relative" style={{ width: '220px' }}>
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        <Input
+          placeholder="Search tasks..."
+          value={filters.search || ''}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="pl-8 h-8 text-sm"
+        />
+      </div>
+
+      {/* Assignee */}
+      <div style={{ width: '160px' }}>
+        <Select value={filters.assignee || 'all'} onValueChange={handleAssigneeChange}>
+          <SelectTrigger className="h-8 text-sm">
+            <SelectValue placeholder="All Assignees" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Assignees</SelectItem>
             {availableAssignees.map((assignee) => (
@@ -86,86 +100,137 @@ export function KanbanFilters({
               </SelectItem>
             ))}
           </SelectContent>
-          </Select>
-        </div>
-        {hasActiveFilters && onClearFilters && (
-          <Button variant="outline" size="sm" onClick={onClearFilters}>
-            <X className="w-4 h-4 mr-2" />
-            Clear
-          </Button>
-        )}
-        {onHideEmptyColumnsChange && (
-          <div className="flex items-center gap-1.5 ml-2">
-            <Switch
-              id="hide-empty"
-              checked={hideEmptyColumns}
-              onCheckedChange={onHideEmptyColumnsChange}
-            />
-            <Label htmlFor="hide-empty" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-              Hide empty
-            </Label>
-          </div>
-        )}
+        </Select>
       </div>
 
-      {/* Tags Filter */}
+      {/* Tags Popover */}
       {availableTags.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <Filter className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Tags:</span>
-          {availableTags.map((tag) => {
-            const isSelected = filters.tags?.includes(tag);
+        <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-sm">
+              <Tag className="w-3.5 h-3.5" />
+              Tags
+              {selectedTagCount > 0 && (
+                <span
+                  className="inline-flex items-center justify-center text-[10px] font-bold rounded-full"
+                  style={{
+                    minWidth: '18px',
+                    height: '18px',
+                    padding: '0 4px',
+                    backgroundColor: 'hsl(var(--primary))',
+                    color: 'hsl(var(--primary-foreground))',
+                  }}
+                >
+                  {selectedTagCount}
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="p-0" style={{ width: '240px' }}>
+            {/* Tag search input */}
+            <div className="p-2 border-b">
+              <Input
+                placeholder="Search tags..."
+                value={tagSearch}
+                onChange={(e) => setTagSearch(e.target.value)}
+                className="h-7 text-sm"
+                autoFocus
+              />
+            </div>
+            {/* Scrollable tag list */}
+            <ScrollArea className="max-h-[240px] overflow-y-auto">
+              <div className="p-1">
+                {filteredTags.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-3">No tags found</div>
+                ) : (
+                  filteredTags.map((tag) => {
+                    const isSelected = filters.tags?.includes(tag);
+                    const tagColor = getTagColor(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-md hover:bg-accent transition-colors text-left"
+                        onClick={() => handleTagToggle(tag)}
+                      >
+                        <span
+                          className="flex items-center justify-center rounded-sm border"
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            borderColor: isSelected ? tagColor.style.color as string : 'hsl(var(--border))',
+                            backgroundColor: isSelected ? tagColor.style.backgroundColor as string : 'transparent',
+                          }}
+                        >
+                          {isSelected && <Check className="w-3 h-3" style={{ color: tagColor.style.color as string }} />}
+                        </span>
+                        <span className="flex-1 truncate">{tag}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+            {/* Quick actions */}
+            {selectedTagCount > 0 && (
+              <div className="p-2 border-t">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-7 text-xs"
+                  onClick={() => onFiltersChange({ ...filters, tags: undefined })}
+                >
+                  Clear all tags
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      )}
+
+      {/* Selected tags as inline removable chips */}
+      {filters.tags && filters.tags.length > 0 && (
+        <>
+          {filters.tags.map((tag) => {
             const tagColor = getTagColor(tag);
-            return isSelected ? (
+            return (
               <span
                 key={tag}
-                className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border cursor-pointer transition-all"
+                className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border cursor-pointer transition-all hover:opacity-80"
                 style={tagColor.style}
-                onClick={() => handleTagToggle(tag)}
+                onClick={() => handleRemoveTag(tag)}
               >
                 {tag}
-                <X
-                  className="w-3 h-3 ml-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveTag(tag);
-                  }}
-                />
+                <X className="w-3 h-3 ml-1" />
               </span>
-            ) : (
-              <Badge
-                key={tag}
-                variant="outline"
-                className="cursor-pointer hover:bg-accent transition-colors"
-                onClick={() => handleTagToggle(tag)}
-              >
-                {tag}
-              </Badge>
             );
           })}
+        </>
+      )}
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Hide empty toggle */}
+      {onHideEmptyColumnsChange && (
+        <div className="flex items-center gap-1.5">
+          <Switch
+            id="hide-empty"
+            checked={hideEmptyColumns}
+            onCheckedChange={onHideEmptyColumnsChange}
+          />
+          <Label htmlFor="hide-empty" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+            Hide empty
+          </Label>
         </div>
       )}
 
-      {/* Active Filters Summary */}
-      {hasActiveFilters && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Active filters:</span>
-          {filters.search && (
-            <Badge variant="secondary">
-              Search: &quot;{filters.search}&quot;
-            </Badge>
-          )}
-          {filters.assignee && (
-            <Badge variant="secondary">
-              Assignee: {filters.assignee}
-            </Badge>
-          )}
-          {filters.tags && filters.tags.length > 0 && (
-            <Badge variant="secondary">
-              {filters.tags.length} tag{filters.tags.length !== 1 ? 's' : ''}
-            </Badge>
-          )}
-        </div>
+      {/* Clear filters */}
+      {hasActiveFilters && onClearFilters && (
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onClearFilters}>
+          <X className="w-3.5 h-3.5 mr-1" />
+          Clear
+        </Button>
       )}
     </div>
   );

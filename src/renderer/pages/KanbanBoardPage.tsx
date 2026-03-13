@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { Button } from '../components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronsRight } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useKanbanBoard } from '../hooks/useKanbanBoard';
 import { useTasks } from '../hooks/useTasks';
@@ -33,7 +33,7 @@ export function KanbanBoardPage() {
   // Local filters state (initialized from board config)
   const [localFilters, setLocalFilters] = useState<KanbanFiltersType>(createEmptyFilters());
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
+  const [hideEmptyColumns, setHideEmptyColumns] = useState(true);
 
   // Setup drag and drop sensors
   const sensors = useSensors(
@@ -92,6 +92,36 @@ export function KanbanBoardPage() {
   const handleClearFilters = useCallback(() => {
     handleFiltersChange(createEmptyFilters());
   }, [handleFiltersChange]);
+
+  // Toggle column collapse state
+  const handleToggleCollapse = useCallback(async (columnId: string) => {
+    if (!board) return;
+
+    const updatedColumns = board.columns.map(col =>
+      col.id === columnId ? { ...col, collapsed: !col.collapsed } : col
+    );
+
+    try {
+      await window.api.kanbanBoards.update(board.id, { columns: updatedColumns });
+      await refetchBoard();
+    } catch (error) {
+      console.error('Failed to toggle column collapse:', error);
+    }
+  }, [board, refetchBoard]);
+
+  // Expand all columns
+  const handleExpandAll = useCallback(async () => {
+    if (!board) return;
+
+    const updatedColumns = board.columns.map(col => ({ ...col, collapsed: false }));
+
+    try {
+      await window.api.kanbanBoards.update(board.id, { columns: updatedColumns });
+      await refetchBoard();
+    } catch (error) {
+      console.error('Failed to expand columns:', error);
+    }
+  }, [board, refetchBoard]);
 
   // Define loading early
   const loading = projectLoading || boardLoading || tasksLoading;
@@ -271,6 +301,19 @@ export function KanbanBoardPage() {
   const hasFilters = hasActiveFilters(localFilters);
   const showEmptyState = filteredAndSortedTasks.length === 0;
 
+  // Determine visible columns
+  const visibleColumns = board.columns
+    .sort((a, b) => a.order - b.order)
+    .map((column, originalIndex) => ({ column, originalIndex, tasks: tasksByColumn.get(column.id) || [] }))
+    .filter(({ column, tasks: colTasks }) => {
+      // Always show collapsed columns (they take minimal space)
+      if (column.collapsed) return true;
+      return !hideEmptyColumns || colTasks.length > 0;
+    });
+
+  // Check if all visible columns are collapsed
+  const allCollapsed = visibleColumns.length > 0 && visibleColumns.every(({ column }) => column.collapsed);
+
   return (
     <DndContext
       sensors={sensors}
@@ -281,12 +324,12 @@ export function KanbanBoardPage() {
       <div className="h-full flex flex-col">
         {/* Header */}
         <div
-          className="flex items-center justify-between p-4 border-b"
-          style={{ background: `linear-gradient(to right, ${rgba('#3b82f6', 0.04)}, ${rgba('#8b5cf6', 0.04)})` }}
+          className="flex items-center justify-between px-4 py-3 border-b"
+          style={{ background: `linear-gradient(to right, ${rgba('#3b82f6', 0.02)}, ${rgba('#8b5cf6', 0.02)})` }}
         >
           <div>
-            <h1 className="text-2xl font-bold">{board.name}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 className="text-xl font-bold">{board.name}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {filteredAndSortedTasks.length} {filteredAndSortedTasks.length === 1 ? 'task' : 'tasks'}
               {hasFilters && ` (${tasks.length} total)`}
             </p>
@@ -294,17 +337,18 @@ export function KanbanBoardPage() {
           <div className="flex gap-2">
             <KanbanBoardConfigDialog board={board} onUpdate={handleBoardUpdate} />
             <Button
+              size="sm"
               onClick={handleCreateTask}
-              style={{ background: 'linear-gradient(to right, #2563eb, #7c3aed)', color: '#fff', border: 'none', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}
+              style={{ background: 'linear-gradient(to right, #2563eb, #7c3aed)', color: '#fff', border: 'none', boxShadow: '0 2px 4px -1px rgba(37, 99, 235, 0.2)' }}
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-4 h-4 mr-1" />
               New Task
             </Button>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="p-4 border-b" style={{ backgroundColor: rgba('#6b7280', 0.05) }}>
+        {/* Filters — compact single-row bar */}
+        <div className="px-3 py-2 border-b" style={{ backgroundColor: rgba('#6b7280', 0.03) }}>
           <KanbanFilters
             filters={localFilters}
             onFiltersChange={handleFiltersChange}
@@ -325,23 +369,30 @@ export function KanbanBoardPage() {
             />
           </div>
         ) : (
-          <div className="flex-1 overflow-x-auto p-4">
-            <div className="flex gap-4 h-full">
-              {board.columns
-                .sort((a, b) => a.order - b.order)
-                .map((column, originalIndex) => ({ column, originalIndex, tasks: tasksByColumn.get(column.id) || [] }))
-                .filter(({ tasks: colTasks }) => !hideEmptyColumns || colTasks.length > 0)
-                .map(({ column, originalIndex, tasks: colTasks }) => (
-                  <VirtualizedKanbanColumn
-                    key={column.id}
-                    column={column}
-                    tasks={colTasks}
-                    onCardClick={handleCardClick}
-                    selectedTaskIds={multiSelectState.selectedTaskIds}
-                    colorTheme={getColumnColor(originalIndex)}
-                  />
-                ))}
+          <div className="flex-1 overflow-x-auto p-3">
+            <div className="flex gap-3 h-full">
+              {visibleColumns.map(({ column, originalIndex, tasks: colTasks }) => (
+                <VirtualizedKanbanColumn
+                  key={column.id}
+                  column={column}
+                  tasks={colTasks}
+                  onCardClick={handleCardClick}
+                  selectedTaskIds={multiSelectState.selectedTaskIds}
+                  colorTheme={getColumnColor(originalIndex)}
+                  onToggleCollapse={() => handleToggleCollapse(column.id)}
+                />
+              ))}
             </div>
+
+            {/* All-collapsed hint */}
+            {allCollapsed && (
+              <div className="flex items-center justify-center mt-8">
+                <Button variant="outline" size="sm" onClick={handleExpandAll} className="gap-2">
+                  <ChevronsRight className="w-4 h-4" />
+                  Expand all columns
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

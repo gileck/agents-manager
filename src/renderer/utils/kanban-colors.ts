@@ -55,10 +55,10 @@ function buildColumnTheme(color: ColorDef): ColumnColorTheme {
     accent: color.borderClass,
     accentColor: hex,
     headerStyle: {
-      background: `linear-gradient(to right, ${rgba(hex, 0.15)}, ${rgba(hex, 0.05)})`,
+      background: `linear-gradient(to right, ${rgba(hex, 0.08)}, ${rgba(hex, 0.02)})`,
     },
     badgeStyle: {
-      backgroundColor: rgba(hex, 0.2),
+      backgroundColor: rgba(hex, 0.12),
       color: hex,
     },
     dropZoneStyle: {
@@ -131,4 +131,18 @@ export function getTagColor(tag: string): TagColorStyle {
   }
   const fallbackHex = FALLBACK_TAG_HEXES[hashString(lower) % FALLBACK_TAG_HEXES.length];
   return buildTagStyle(fallbackHex);
+}
+
+// ---- Priority border colors ----
+
+const PRIORITY_BORDER_COLORS: Record<number, string> = {
+  0: '#ef4444', // P0 — red (critical)
+  1: '#f59e0b', // P1 — amber (high)
+  2: '#3b82f6', // P2 — blue (medium)
+  3: '#94a3b8', // P3 — slate (low)
+};
+
+/** Get the left-border color for a task priority level */
+export function getPriorityBorderColor(priority: number): string {
+  return PRIORITY_BORDER_COLORS[priority] ?? '#e2e8f0';
 }
