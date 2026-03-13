@@ -477,7 +477,7 @@ export type HookFn = (task: Task, transition: Transition, context: TransitionCon
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
 export type AgentMode = 'new' | 'revision';
-export type RevisionReason = 'changes_requested' | 'info_provided' | 'conflicts_detected';
+export type RevisionReason = 'changes_requested' | 'info_provided' | 'merge_failed';
 
 export interface AgentRun {
   id: string;

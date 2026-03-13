@@ -85,10 +85,10 @@ describe('ImplementorPromptBuilder', () => {
       expect(config.maxTurns).toBe(200);
     });
 
-    it('should return 50 for revision with conflicts_detected', () => {
-      const ctx = createContext({ mode: 'revision', revisionReason: 'conflicts_detected' });
+    it('should return 100 for revision with merge_failed', () => {
+      const ctx = createContext({ mode: 'revision', revisionReason: 'merge_failed' });
       const config = builder.buildExecutionConfig(ctx, defaultConfig);
-      expect(config.maxTurns).toBe(50);
+      expect(config.maxTurns).toBe(100);
     });
   });
 
@@ -105,10 +105,10 @@ describe('ImplementorPromptBuilder', () => {
       expect(config.timeoutMs).toBe(30 * 60 * 1000);
     });
 
-    it('should return 10 min for revision with conflicts_detected', () => {
-      const ctx = createContext({ mode: 'revision', revisionReason: 'conflicts_detected' });
+    it('should return 15 min for revision with merge_failed', () => {
+      const ctx = createContext({ mode: 'revision', revisionReason: 'merge_failed' });
       const config = builder.buildExecutionConfig(ctx, defaultConfig);
-      expect(config.timeoutMs).toBe(10 * 60 * 1000);
+      expect(config.timeoutMs).toBe(15 * 60 * 1000);
     });
 
     it('should respect config.timeout override', () => {
@@ -135,8 +135,8 @@ describe('ImplementorPromptBuilder', () => {
       expect(schema.required).toContain('summary');
     });
 
-    it('should return summary schema for revision with conflicts_detected', () => {
-      const ctx = createContext({ mode: 'revision', revisionReason: 'conflicts_detected' });
+    it('should return summary schema for revision with merge_failed', () => {
+      const ctx = createContext({ mode: 'revision', revisionReason: 'merge_failed' });
       const config = builder.buildExecutionConfig(ctx, defaultConfig);
       expect(config.outputFormat).toBeDefined();
       const schema = (config.outputFormat as { schema: { required: string[] } }).schema;
@@ -202,8 +202,8 @@ describe('ImplementorPromptBuilder', () => {
       expect(prompt).not.toContain('Interactive Questions');
     });
 
-    it('should not include interactive instructions for conflicts_detected', () => {
-      const ctx = createContext({ mode: 'revision', revisionReason: 'conflicts_detected' });
+    it('should not include interactive instructions for merge_failed', () => {
+      const ctx = createContext({ mode: 'revision', revisionReason: 'merge_failed' });
       const prompt = builder.buildPrompt(ctx);
       expect(prompt).not.toContain('Interactive Questions');
     });
@@ -382,7 +382,7 @@ describe('ImplementorPromptBuilder', () => {
     const modeConfigs: Array<{ mode: AgentMode; revisionReason?: RevisionReason; label: string }> = [
       { mode: 'new', label: 'new (implement)' },
       { mode: 'revision', revisionReason: 'changes_requested', label: 'revision (changes_requested)' },
-      { mode: 'revision', revisionReason: 'conflicts_detected', label: 'revision (conflicts_detected)' },
+      { mode: 'revision', revisionReason: 'merge_failed', label: 'revision (merge_failed)' },
       { mode: 'revision', revisionReason: 'info_provided', label: 'revision (info_provided)' },
     ];
 

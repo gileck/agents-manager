@@ -6,6 +6,7 @@ import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
 import type { IWorktreeManager } from '../../src/core/interfaces/worktree-manager';
 import type { IGitOps } from '../../src/core/interfaces/git-ops';
 import type { IScmPlatform } from '../../src/core/interfaces/scm-platform';
+import type { ITaskContextStore } from '../../src/core/interfaces/task-context-store';
 import type { IPipelineEngine } from '../../src/core/interfaces/pipeline-engine';
 import type { Task, Transition, TransitionContext, HookResult, TaskArtifact, TaskEvent, Project } from '../../src/shared/types';
 import { registerScmHandler, type ScmHandlerDeps } from '../../src/core/handlers/scm-handler';
@@ -79,6 +80,7 @@ describe('registerScmHandler', () => {
   let mockWorktreeManager: IWorktreeManager;
   let mockGitOps: IGitOps;
   let mockScmPlatform: IScmPlatform;
+  let mockTaskContextStore: ITaskContextStore;
   let deps: ScmHandlerDeps;
 
   beforeEach(() => {
@@ -178,6 +180,13 @@ describe('registerScmHandler', () => {
       mergePR: vi.fn(),
       getPRStatus: vi.fn(),
       isPRMergeable: vi.fn().mockResolvedValue(true),
+      getPRChecks: vi.fn().mockResolvedValue({ prNumber: 42, prState: 'OPEN', mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN', checks: [], fetchedAt: Date.now() }),
+    };
+
+    mockTaskContextStore = {
+      addEntry: vi.fn().mockResolvedValue({ id: 'ctx-1', taskId: 'task-1', agentRunId: null, source: 'system', entryType: 'merge_failure', summary: '', data: {}, createdAt: Date.now(), addressed: false, addressedByRunId: null }),
+      getEntriesForTask: vi.fn().mockResolvedValue([]),
+      markEntriesAsAddressed: vi.fn().mockResolvedValue(0),
     };
 
     deps = {
@@ -185,6 +194,7 @@ describe('registerScmHandler', () => {
       taskStore: mockTaskStore,
       taskArtifactStore: mockTaskArtifactStore,
       taskEventLog: mockTaskEventLog,
+      taskContextStore: mockTaskContextStore,
       createWorktreeManager: vi.fn().mockReturnValue(mockWorktreeManager),
       createGitOps: vi.fn().mockReturnValue(mockGitOps),
       createScmPlatform: vi.fn().mockReturnValue(mockScmPlatform),
