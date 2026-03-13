@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '../ui/button';
 import { InlineError } from '../InlineError';
 import { MoreVertical, Check, Loader2, Copy, Trash2 } from 'lucide-react';
@@ -62,6 +63,40 @@ export function TaskItemMenu({ task, pipeline, onStatusChange, onDuplicate, onDe
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [open]);
+
+  // Dynamic position calculation for the portaled dropdown
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+
+  const updatePosition = useCallback(() => {
+    const trigger = buttonRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 8;
+    const gap = 4;
+    const estimatedMenuHeight = 320;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    const openUp = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+
+    setMenuStyle({
+      top: openUp ? 'auto' : rect.bottom + gap,
+      bottom: openUp ? window.innerHeight - rect.top + gap : 'auto',
+      right: window.innerWidth - rect.right,
+    });
+  }, []);
+
+  // Reposition on scroll / resize while open
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, updatePosition]);
 
   // Lazy-load transitions when menu opens
   useEffect(() => {
@@ -130,10 +165,11 @@ export function TaskItemMenu({ task, pipeline, onStatusChange, onDuplicate, onDe
         <MoreVertical className="h-3.5 w-3.5" />
       </Button>
 
-      {open && (
+      {open && createPortal(
         <div
           ref={menuRef}
-          className="absolute right-0 top-full mt-1 z-50 min-w-[200px] rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
+          style={menuStyle}
+          className="fixed z-[80] min-w-[200px] rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Status change section */}
@@ -220,7 +256,8 @@ export function TaskItemMenu({ task, pipeline, onStatusChange, onDuplicate, onDe
               <span>Delete</span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
