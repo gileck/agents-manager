@@ -11,7 +11,7 @@ import type { ChatSession } from '../../src/core/interfaces/chat-session-store';
 import type { AgentChatMessage, Project } from '../../src/shared/types';
 
 vi.mock('../../src/core/mcp/task-mcp-server', () => ({
-  createTaskMcpServer: vi.fn().mockResolvedValue({}),
+  createTaskMcpServer: vi.fn().mockResolvedValue([]),
 }));
 
 // Mock the ESM import function (still needed for summarizeMessages which uses SDK directly)

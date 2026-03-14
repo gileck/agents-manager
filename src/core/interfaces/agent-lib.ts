@@ -1,4 +1,5 @@
 import type { AgentChatMessage, AskUserQuestionItem } from '../../shared/types';
+import type { GenericMcpToolDefinition } from './mcp-tool';
 
 // ============================================
 // Permission Request/Response Types
@@ -237,6 +238,8 @@ export interface AgentLibRunOptions {
   taskId?: string;
   agentType?: string;
   mcpServers?: Record<string, unknown>;
+  /** In-process MCP tool definitions. Engine adapters convert these into their own native format. */
+  mcpTools?: GenericMcpToolDefinition[];
   /** Maximum spend allowed for this execution in USD. Supported by claude-code engine only. */
   maxBudgetUsd?: number;
   /** SDK beta feature flags to enable (e.g., extended context). Supported by claude-code engine only. */

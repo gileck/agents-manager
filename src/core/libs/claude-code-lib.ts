@@ -1,11 +1,29 @@
 import type { AgentChatMessage } from '../../shared/types';
 import type { AgentLibFeatures, AgentLibModelOption, AgentLibHooks, ModelTokenUsage } from '../interfaces/agent-lib';
+import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
+import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
 // but the SDK is ESM-only (.mjs). This bypasses that transformation.
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
+
+// Module-level cache for createSdkMcpServer — the SDK is ESM-only so the dynamic import is
+// expensive. Cache after the first load; subsequent calls return synchronously.
+let cachedCreateSdkMcpServer: ((opts: { name: string; version?: string; tools?: GenericMcpToolDefinition[] }) => McpSdkServerConfigWithInstance) | undefined;
+
+async function loadCreateSdkMcpServer(): Promise<(opts: { name: string; version?: string; tools?: GenericMcpToolDefinition[] }) => McpSdkServerConfigWithInstance> {
+  if (!cachedCreateSdkMcpServer) {
+    const sdk = await importESM('@anthropic-ai/claude-agent-sdk');
+    cachedCreateSdkMcpServer = sdk.createSdkMcpServer as (opts: {
+      name: string;
+      version?: string;
+      tools?: GenericMcpToolDefinition[];
+    }) => McpSdkServerConfigWithInstance;
+  }
+  return cachedCreateSdkMcpServer;
+}
 
 // ============================================
 // SDK message types (engine-specific)
@@ -168,6 +186,16 @@ export class ClaudeCodeLib extends BaseAgentLib {
     // Build SDK hooks from our AgentLibHooks (engine-specific format transformation)
     const sdkHooks = this.buildSdkHooks(hooks, log);
 
+    // Merge external mcpServers with in-process tool definitions (if any).
+    // In-process tools are converted to an SDK server config here, inside ClaudeCodeLib,
+    // keeping all Claude-SDK-specific wrapping out of the generic service layer.
+    let mergedMcpServers: Record<string, unknown> | undefined = options.mcpServers;
+    if (options.mcpTools?.length) {
+      const createSdkMcpServer = await loadCreateSdkMcpServer();
+      const inProcessServer = createSdkMcpServer({ name: 'task-manager', tools: options.mcpTools });
+      mergedMcpServers = { ...(options.mcpServers ?? {}), taskManager: inProcessServer };
+    }
+
     // Result tracking
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
@@ -205,7 +233,7 @@ export class ClaudeCodeLib extends BaseAgentLib {
           canUseTool,
           ...(Object.keys(sdkHooks).length > 0 ? { hooks: sdkHooks } : {}),
           ...sessionOptions,
-          ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
+          ...(mergedMcpServers ? { mcpServers: mergedMcpServers } : {}),
           ...(options.maxBudgetUsd != null ? { maxBudgetUsd: options.maxBudgetUsd } : {}),
           ...(options.betas?.length ? { betas: options.betas } : {}),
           ...(options.agents && Object.keys(options.agents).length > 0 ? { agents: options.agents } : {}),

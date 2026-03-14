@@ -7,6 +7,7 @@ import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks, SubagentDefinition } from '../interfaces/agent-lib';
+import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
 import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type {
   SDKMessage,
@@ -1151,16 +1152,15 @@ export class ChatAgentService {
       // When resuming a pipeline agent session, use its sessionId for the execute call
       const executeSessionId = extra?.pipelineSessionId ?? sessionId;
 
-      // Build task MCP server for chat sessions (not pipeline agent runs)
-      let mcpServers: Record<string, unknown> | undefined;
+      // Build task MCP tool definitions for chat sessions (not pipeline agent runs)
+      let mcpToolsDefs: GenericMcpToolDefinition[] | undefined;
       let chatSession: ChatSession | null = null;
       if (!extra?.pipelineSessionId) {
         try {
           chatSession = await this.chatSessionStore.getSession(sessionId);
           if (chatSession?.projectId) {
             const daemonUrl = `http://127.0.0.1:${process.env.AM_DAEMON_PORT ?? 3847}`;
-            const mcpServer = await createTaskMcpServer(daemonUrl, { projectId: chatSession.projectId, sessionId, subscriptionRegistry: this.subscriptionRegistry });
-            mcpServers = { taskManager: mcpServer };
+            mcpToolsDefs = await createTaskMcpServer(daemonUrl, { projectId: chatSession.projectId, sessionId, subscriptionRegistry: this.subscriptionRegistry });
           }
         } catch (mcpErr) {
           getAppLogger().warn('ChatAgentService', 'Failed to create task MCP server, continuing without it', { error: mcpErr instanceof Error ? mcpErr.message : String(mcpErr) });
@@ -1259,7 +1259,7 @@ export class ChatAgentService {
             readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
             readOnly,
             settingSources: ['project'] as Array<'user' | 'project' | 'local'>,
-            ...(mcpServers ? { mcpServers } : {}),
+            ...(mcpToolsDefs ? { mcpTools: mcpToolsDefs } : {}),
             ...(extra?.plugins?.length ? { plugins: extra.plugins } : {}),
             canUseTool,
             disallowedTools: [...(disallowedTools ?? []), 'Task'],
@@ -1382,7 +1382,7 @@ export class ChatAgentService {
           subagentStop: subagentStopHook,
         },
         ...(libImages ? { images: libImages } : {}),
-        ...(mcpServers ? { mcpServers } : {}),
+        ...(mcpToolsDefs ? { mcpTools: mcpToolsDefs } : {}),
         canUseTool,
         ...(agents ? { agents } : {}),
         ...(extra?.plugins?.length ? { plugins: extra.plugins } : {}),

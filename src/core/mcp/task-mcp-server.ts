@@ -1,13 +1,8 @@
 import { z } from 'zod';
 import { createApiClient } from '../../client/api-client';
 import type { TaskType, TaskUpdateInput } from '../../shared/types';
-import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
+import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
 import type { AgentSubscriptionRegistry } from '../services/agent-subscription-registry';
-
-// Use Function constructor to preserve dynamic import() at runtime.
-// TypeScript compiles `await import(...)` to `require()` under CommonJS,
-// but the SDK is ESM-only (.mjs). This bypasses that transformation.
-const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
 type CallToolResult = {
   content: Array<{ type: 'text'; text: string }>;
@@ -42,22 +37,6 @@ async function resolveTaskId(api: ReturnType<typeof createApiClient>, input: str
   return matches[0].id;
 }
 
-// Module-level cache: the SDK is ESM-only so the dynamic import is expensive.
-// Cache the createSdkMcpServer function after the first load.
-let cachedCreateSdkMcpServer: ((opts: { name: string; version?: string; tools?: unknown[] }) => McpSdkServerConfigWithInstance) | undefined;
-
-async function loadCreateSdkMcpServer(): Promise<(opts: { name: string; version?: string; tools?: unknown[] }) => McpSdkServerConfigWithInstance> {
-  if (!cachedCreateSdkMcpServer) {
-    const sdk = await importESM('@anthropic-ai/claude-agent-sdk');
-    cachedCreateSdkMcpServer = sdk.createSdkMcpServer as (opts: {
-      name: string;
-      version?: string;
-      tools?: unknown[];
-    }) => McpSdkServerConfigWithInstance;
-  }
-  return cachedCreateSdkMcpServer;
-}
-
 /**
  * Scans a parsed JSON value for objects that look like tasks (have `id` + `status`).
  * Handles direct task objects, arrays of tasks, and one level of nesting (e.g. TransitionResult.task).
@@ -89,16 +68,14 @@ function extractTaskIds(data: unknown): string[] {
 }
 
 /**
- * Creates an in-process MCP server that exposes task management tools to the chat agent.
- * Tools call the daemon API directly via api-client, scoped to the given projectId context.
- * The SDK module is cached after the first load — subsequent calls return quickly.
+ * Creates an array of generic in-process MCP tool definitions scoped to the given project context.
+ * Tools call the daemon API directly via api-client. The returned definitions are engine-agnostic —
+ * each engine adapter (e.g. ClaudeCodeLib) converts them into its own native server format.
  */
 export async function createTaskMcpServer(
   daemonUrl: string,
   context: { projectId: string; sessionId?: string; subscriptionRegistry?: AgentSubscriptionRegistry },
-): Promise<McpSdkServerConfigWithInstance> {
-  const createSdkMcpServer = await loadCreateSdkMcpServer();
-
+): Promise<GenericMcpToolDefinition[]> {
   const api = createApiClient(daemonUrl);
 
   const tools = [
@@ -458,5 +435,8 @@ export async function createTaskMcpServer(
       }))
     : tools;
 
-  return createSdkMcpServer({ name: 'task-manager', tools: trackedTools });
+  // Cast is required because individual tool handlers use specific arg types (a sound narrowing
+  // from GenericMcpToolDefinition.handler: (args: unknown) => Promise<unknown>). At runtime
+  // each engine passes correctly-typed args, so this is safe.
+  return trackedTools as unknown as GenericMcpToolDefinition[];
 }
