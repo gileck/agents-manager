@@ -40,7 +40,7 @@
     "lint": "eslint src/ template/ tests/",
     "typecheck": "tsc --noEmit -p config/tsconfig.main.json && tsc --noEmit -p config/tsconfig.preload.json && tsc --noEmit -p config/tsconfig.renderer.json && tsc --noEmit -p config/tsconfig.cli.json && tsc --noEmit -p config/tsconfig.daemon.json && tsc --noEmit -p config/tsconfig.web.json",
     "typecheck:web": "tsc --noEmit -p config/tsconfig.web.json",
-    "checks": "yarn typecheck && yarn lint",
+    "checks": "yarn typecheck && yarn lint && bash scripts/test-summary.sh",
     "build:claude": "npx tsx ~/.claude/skills/build-claude-md/index.ts CLAUDE.md",
     "test": "npm run ensure-native && BETTER_SQLITE3_BINDING=node_modules/better-sqlite3/build-node/Release/better_sqlite3.node vitest run",
     "test:watch": "npm run ensure-native && BETTER_SQLITE3_BINDING=node_modules/better-sqlite3/build-node/Release/better_sqlite3.node vitest",
