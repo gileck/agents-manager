@@ -90,6 +90,14 @@ export function SidebarRecentTasks({ runningTaskIds }: SidebarRecentTasksProps) 
     return unsubscribe;
   }, [currentProjectId]);
 
+  // Remove deleted tasks from local state
+  useEffect(() => {
+    const unsubscribe = window.api.on.taskDeleted((taskId) => {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    });
+    return unsubscribe;
+  }, []);
+
   // Collect unique statuses from the full task pool
   const allStatuses = useMemo(
     () => Array.from(new Set(tasks.map((t) => t.status))).sort(),

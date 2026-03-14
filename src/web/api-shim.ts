@@ -345,6 +345,10 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
         ws.subscribeGlobal(WS_CHANNELS.TASK_STATUS_CHANGED, (taskId, data) =>
           callback(taskId as string, data as Task)),
 
+      taskDeleted: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.TASK_DELETED, (taskId) =>
+          callback(taskId as string)),
+
       chatPermissionRequest: (callback) =>
         ws.subscribeGlobal(WS_CHANNELS.CHAT_PERMISSION_REQUEST, (sessionId, data) =>
           callback(sessionId as string, data as AgentChatMessage)),

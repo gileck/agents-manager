@@ -70,6 +70,7 @@ export function taskRoutes(services: AppServices, wsHolder: WsHolder = {}): Rout
     try {
       const deleted = await services.workflowService.deleteTask(req.params.id);
       if (!deleted) { res.status(404).json({ error: 'Task not found' }); return; }
+      wsHolder.server?.broadcast(WS_CHANNELS.TASK_DELETED, req.params.id, undefined);
       res.status(204).end();
     } catch (err) { next(err); }
   });

@@ -324,6 +324,7 @@ export interface ApiShape {
     devServerLog(callback: (taskId: string, data: { line: string }) => void): () => void;
     devServerStatus(callback: (taskId: string, info: DevServerInfo) => void): () => void;
     taskStatusChanged(callback: (taskId: string, task: Task) => void): () => void;
+    taskDeleted(callback: (taskId: string) => void): () => void;
     chatPermissionRequest(callback: (sessionId: string, request: AgentChatMessage) => void): () => void;
     chatAgentNotification(callback: (sessionId: string, payload: AgentNotificationPayload) => void): () => void;
   };

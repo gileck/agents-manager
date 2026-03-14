@@ -105,6 +105,16 @@ export function TaskDetailPage() {
     refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext,
   });
 
+  // Navigate away if the current task is deleted from another session
+  useEffect(() => {
+    const unsubscribe = window.api.on.taskDeleted((taskId) => {
+      if (taskId === id) {
+        navigate('/tasks');
+      }
+    });
+    return unsubscribe;
+  }, [id, navigate]);
+
   const initialTab = task?.status === 'plan_review' ? 'plan'
     : task?.status === 'design_review' ? 'design'
     : (task?.status === 'pr_review' || task?.status === 'ready_to_merge') ? 'implementation'

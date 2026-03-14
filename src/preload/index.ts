@@ -202,6 +202,7 @@ const IPC_CHANNELS = {
   DEV_SERVER_LOG: 'dev-server:log',
   DEV_SERVER_STATUS_CHANGED: 'dev-server:status-changed',
   TASK_STATUS_CHANGED: 'task:status-changed',
+  TASK_DELETED: 'task:deleted',
   CHAT_TRACKED_TASKS: 'chat:tracked-tasks',
   CHAT_TRACK_TASK: 'chat:track-task',
   CHAT_ANSWER_QUESTION: 'chat:answer-question',
@@ -686,6 +687,11 @@ const api = {
       const listener = (_: IpcRendererEvent, taskId: string, task: Task) => callback(taskId, task);
       ipcRenderer.on(IPC_CHANNELS.TASK_STATUS_CHANGED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_STATUS_CHANGED, listener);
+    },
+    taskDeleted: (callback: (taskId: string) => void) => {
+      const listener = (_: IpcRendererEvent, taskId: string) => callback(taskId);
+      ipcRenderer.on(IPC_CHANNELS.TASK_DELETED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_DELETED, listener);
     },
     chatPermissionRequest: (callback: (sessionId: string, request: AgentChatMessage) => void) => {
       const listener = (_: IpcRendererEvent, sessionId: string, request: AgentChatMessage) => callback(sessionId, request);

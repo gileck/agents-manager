@@ -234,6 +234,8 @@ export const IPC_CHANNELS = {
 
   /** PUSH-ONLY: main->renderer, do not invoke() */
   TASK_STATUS_CHANGED: 'task:status-changed',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  TASK_DELETED: 'task:deleted',
 
   // Chat session task tracking
   CHAT_TRACKED_TASKS: 'chat:tracked-tasks',
