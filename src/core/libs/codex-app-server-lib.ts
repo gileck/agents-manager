@@ -114,7 +114,7 @@ export class CodexAppServerLib extends BaseAgentLib {
     const resumeThreadId = options.resumeSession && options.sessionId
       ? this.sessionThreadIds.get(options.sessionId)
       : undefined;
-    const effectivePrompt = resumeThreadId
+    let effectivePrompt = resumeThreadId
       ? prompt
       : await this.resolveSessionPrompt(prompt, options, log);
 
@@ -133,9 +133,15 @@ export class CodexAppServerLib extends BaseAgentLib {
     let emittedToolUse = new Set<string>();
     const assistantSnapshots = new Map<string, string>();
     let turnDoneResolve!: () => void;
+    let turnDoneSettled = false;
     const turnDone = new Promise<void>((resolve) => {
       turnDoneResolve = resolve;
     });
+    const finishTurn = () => {
+      if (turnDoneSettled) return;
+      turnDoneSettled = true;
+      turnDoneResolve();
+    };
 
     const interruptActiveTurn = async (): Promise<void> => {
       if (activeRun.interrupted) return;
@@ -378,7 +384,7 @@ export class CodexAppServerLib extends BaseAgentLib {
           } else if (turn?.status === 'interrupted' && state.abortController.signal.aborted) {
             killReason = state.stoppedReason ?? 'stopped';
           }
-          turnDoneResolve();
+          finishTurn();
           break;
         }
         case 'error': {
@@ -394,7 +400,7 @@ export class CodexAppServerLib extends BaseAgentLib {
           isError = true;
           const details = err?.additionalDetails ? `\n${err.additionalDetails}` : '';
           errorMessage = `${err?.message ?? 'codex app-server error'}${details}`;
-          turnDoneResolve();
+          finishTurn();
           break;
         }
         default:
@@ -558,6 +564,21 @@ export class CodexAppServerLib extends BaseAgentLib {
       }),
       interrupted: false,
     };
+    const closeListener = ({ code, signal }: { code: number | null; signal: NodeJS.Signals | null }) => {
+      if (turnDoneSettled) return;
+      if (state.abortController.signal.aborted) {
+        killReason = state.stoppedReason ?? 'stopped';
+      } else {
+        isError = true;
+        errorMessage = `codex app-server exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`;
+      }
+      finishTurn();
+    };
+    const parseErrorListener = (line: string) => {
+      log('codex app-server emitted invalid JSON', { linePreview: line.slice(0, 500) });
+    };
+    activeRun.client.on('close', closeListener);
+    activeRun.client.on('parse_error', parseErrorListener);
     this.activeRuns.set(runId, activeRun);
 
     try {
@@ -574,18 +595,34 @@ export class CodexAppServerLib extends BaseAgentLib {
           sessionId: options.sessionId,
           threadId: resumeThreadId,
         });
-        const response = await activeRun.client.threadResume({
-          threadId: resumeThreadId,
-          model: options.model ?? null,
-          cwd: options.cwd,
-          approvalPolicy: 'never',
-          sandbox,
-          baseInstructions: systemPrompt ?? null,
-          developerInstructions,
-          persistExtendedHistory: true,
-        });
-        rememberThread(response.thread);
-      } else {
+        try {
+          const response = await activeRun.client.threadResume({
+            threadId: resumeThreadId,
+            model: options.model ?? null,
+            cwd: options.cwd,
+            approvalPolicy: 'never',
+            sandbox,
+            baseInstructions: systemPrompt ?? null,
+            developerInstructions,
+            persistExtendedHistory: true,
+          });
+          rememberThread(response.thread);
+        } catch (err) {
+          log('Failed to resume Codex app-server thread, starting a new thread instead', {
+            sessionId: options.sessionId,
+            threadId: resumeThreadId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          if (options.sessionId) {
+            this.forgetSessionThreadId(options.sessionId, resumeThreadId);
+          }
+          threadId = undefined;
+          activeRun.threadId = undefined;
+          effectivePrompt = await this.resolveSessionPrompt(prompt, options, log);
+        }
+      }
+
+      if (!threadId) {
         const response = await activeRun.client.threadStart({
           model: options.model ?? null,
           cwd: options.cwd,
@@ -621,7 +658,7 @@ export class CodexAppServerLib extends BaseAgentLib {
         isError = true;
         errorMessage = response.turn.error?.message ?? 'Codex turn failed';
       } else if (response.turn.status === 'completed') {
-        turnDoneResolve();
+        finishTurn();
       }
 
       await turnDone;
@@ -637,6 +674,8 @@ export class CodexAppServerLib extends BaseAgentLib {
     } finally {
       state.abortController.signal.removeEventListener('abort', abortListener);
       this.activeRuns.delete(runId);
+      activeRun.client.off('close', closeListener);
+      activeRun.client.off('parse_error', parseErrorListener);
       await activeRun.client.close().catch(() => undefined);
       if (imageTempDir) {
         await fs.promises.rm(imageTempDir, { recursive: true, force: true }).catch(() => undefined);
@@ -692,6 +731,13 @@ export class CodexAppServerLib extends BaseAgentLib {
     this.persistSessionThreadIds();
   }
 
+  private forgetSessionThreadId(sessionId: string, threadId?: string): void {
+    if (!this.sessionThreadIds.has(sessionId)) return;
+    if (threadId && this.sessionThreadIds.get(sessionId) !== threadId) return;
+    this.sessionThreadIds.delete(sessionId);
+    this.persistSessionThreadIds();
+  }
+
   private persistSessionThreadIds(): void {
     try {
       const dir = path.dirname(this.sessionMapPath);
@@ -738,15 +784,19 @@ export class CodexAppServerLib extends BaseAgentLib {
 
     const imageTempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `agents-manager-codex-app-server-${runId}-`));
     const input: CodexAppServerTurnInput[] = [{ type: 'text', text: prompt, text_elements: [] }];
-
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      const ext = this.mediaTypeToExtension(image.mediaType);
-      const filePath = path.join(imageTempDir, `image-${i + 1}.${ext}`);
-      const normalized = this.normalizeBase64(image.base64);
-      const bytes = Buffer.from(normalized, 'base64');
-      await fs.promises.writeFile(filePath, bytes);
-      input.push({ type: 'localImage', path: filePath });
+    try {
+      for (let i = 0; i < images.length; i++) {
+        const image = images[i];
+        const ext = this.mediaTypeToExtension(image.mediaType);
+        const filePath = path.join(imageTempDir, `image-${i + 1}.${ext}`);
+        const normalized = this.normalizeBase64(image.base64);
+        const bytes = Buffer.from(normalized, 'base64');
+        await fs.promises.writeFile(filePath, bytes);
+        input.push({ type: 'localImage', path: filePath });
+      }
+    } catch (err) {
+      await fs.promises.rm(imageTempDir, { recursive: true, force: true }).catch(() => undefined);
+      throw err;
     }
 
     return { input, imageTempDir };

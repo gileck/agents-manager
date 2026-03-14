@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { EventEmitter } from 'events';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentChatMessage } from '../../src/shared/types';
 import { CodexAppServerLib } from '../../src/core/libs/codex-app-server-lib';
@@ -19,7 +20,7 @@ function makeSessionMapPath(): string {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'codex-app-server-lib-test-')), 'thread-map.json');
 }
 
-class FakeCodexAppServerClient {
+class FakeCodexAppServerClient extends EventEmitter {
   static instances: FakeCodexAppServerClient[] = [];
   approvalDecisions: unknown[] = [];
   dynamicToolResponses: unknown[] = [];
@@ -69,6 +70,7 @@ class FakeCodexAppServerClient {
   });
 
   constructor(protected readonly options: CodexAppServerClientOptions) {
+    super();
     FakeCodexAppServerClient.instances.push(this);
   }
 }
@@ -121,6 +123,42 @@ describe('CodexAppServerLib', () => {
 
     expect(result.exitCode).toBe(0);
     const client = FakeCodexAppServerClient.instances[0] as ImageClient;
+    expect(client.seenImagePath).toBeDefined();
+    expect(fs.existsSync(client.seenImagePath as string)).toBe(false);
+  });
+
+  it('cleans up temporary image files when turnStart fails', async () => {
+    class FailingImageClient extends FakeCodexAppServerClient {
+      seenImagePath?: string;
+
+      override readonly turnStart = vi.fn(async (params: CodexAppServerTurnStartParams): Promise<CodexAppServerTurnStartResponse> => {
+        const imageInput = params.input[1] as { type: 'localImage'; path: string };
+        this.seenImagePath = imageInput.path;
+        expect(fs.existsSync(imageInput.path)).toBe(true);
+        throw new Error('turn start failed');
+      });
+    }
+
+    FakeCodexAppServerClient.instances.length = 0;
+    const lib = new CodexAppServerLib(undefined, (options) => new FailingImageClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+
+    const result = await lib.execute('run-image-fail', {
+      prompt: 'describe image',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: [],
+      readOnlyPaths: [],
+      readOnly: true,
+      images: [{ base64: Buffer.from('fake-image-bytes').toString('base64'), mediaType: 'image/png' }],
+    }, {});
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toContain('turn start failed');
+    const client = FakeCodexAppServerClient.instances[0] as FailingImageClient;
     expect(client.seenImagePath).toBeDefined();
     expect(fs.existsSync(client.seenImagePath as string)).toBe(false);
   });
@@ -195,6 +233,44 @@ describe('CodexAppServerLib', () => {
     expect(FakeCodexAppServerClient.instances[1].threadResume).toHaveBeenCalledWith(expect.objectContaining({
       threadId: 'thread-1',
     }));
+  });
+
+  it('falls back to a fresh thread when a persisted resume thread id is stale', async () => {
+    FakeCodexAppServerClient.instances.length = 0;
+    const sessionMapPath = makeSessionMapPath();
+    fs.writeFileSync(sessionMapPath, JSON.stringify({
+      'session-stale': { threadId: 'thread-stale', updatedAt: Date.now() },
+    }), 'utf8');
+
+    class StaleResumeClient extends FakeCodexAppServerClient {
+      override readonly threadResume = vi.fn(async (): Promise<CodexAppServerThreadResumeResponse> => {
+        throw new Error('thread not found');
+      });
+    }
+
+    const lib = new CodexAppServerLib(undefined, (options) => new StaleResumeClient(options) as never, {
+      sessionMapPath,
+    });
+
+    const result = await lib.execute('run-stale-resume', {
+      prompt: 'recover the session',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: [],
+      readOnlyPaths: [],
+      readOnly: true,
+      sessionId: 'session-stale',
+      resumeSession: true,
+    }, {});
+
+    expect(result.exitCode).toBe(0);
+    const client = FakeCodexAppServerClient.instances[0] as StaleResumeClient;
+    expect(client.threadResume).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'thread-stale' }));
+    expect(client.threadStart).toHaveBeenCalled();
+    const persisted = JSON.parse(fs.readFileSync(sessionMapPath, 'utf8')) as Record<string, { threadId: string }>;
+    expect(persisted['session-stale']?.threadId).toBe('thread-1');
   });
 
   it('persists thread mapping across lib instances and reports nativeResume', async () => {
@@ -331,6 +407,38 @@ describe('CodexAppServerLib', () => {
     expect(result.exitCode).toBe(1);
     expect(result.error).toContain('turn failed');
     expect(result.error).toContain('details');
+  });
+
+  it('fails the run if the app-server process closes during an active turn', async () => {
+    class ClosingClient extends FakeCodexAppServerClient {
+      override readonly turnStart = vi.fn(async (): Promise<CodexAppServerTurnStartResponse> => {
+        this['options'].onNotification?.({
+          method: 'turn/started',
+          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress', error: null } },
+        });
+        setTimeout(() => {
+          this.emit('close', { code: 9, signal: null });
+        }, 0);
+        return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
+      });
+    }
+
+    const lib = new CodexAppServerLib(undefined, (options) => new ClosingClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+    const result = await lib.execute('run-close', {
+      prompt: 'hang then close',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: [],
+      readOnlyPaths: [],
+      readOnly: true,
+    }, {});
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toContain('code=9');
   });
 
   it('routes command approval requests through onPermissionRequest', async () => {
