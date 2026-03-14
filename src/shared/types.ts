@@ -475,7 +475,14 @@ export interface TransitionHistoryEntry {
   createdAt: number;
 }
 
-export type GuardFn = (task: Task, transition: Transition, context: TransitionContext, db: unknown, params?: Record<string, unknown>) => GuardResult;
+export interface IGuardQueryContext {
+  countUnresolvedDependencies(taskId: string): number;
+  countFailedRuns(taskId: string): number;
+  countRunningRuns(taskId: string): number;
+  getUserRole(username: string): 'admin' | 'user' | null;
+}
+
+export type GuardFn = (task: Task, transition: Transition, context: TransitionContext, queryCtx: IGuardQueryContext, params?: Record<string, unknown>) => GuardResult;
 export type HookFn = (task: Task, transition: Transition, context: TransitionContext, params?: Record<string, unknown>) => Promise<HookResult | void>;
 
 // ============================================

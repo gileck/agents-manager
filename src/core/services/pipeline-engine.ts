@@ -19,6 +19,7 @@ import type {
   TransitionWithGuards,
   TransitionHook,
   PostProcessingLogCategory,
+  IGuardQueryContext,
 } from '../../shared/types';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ITaskStore } from '../interfaces/task-store';
@@ -192,7 +193,7 @@ export class PipelineEngine implements IPipelineEngine {
             guardFailures.push({ guard: guard.name, reason: result.reason! });
             continue;
           }
-          const result = guardFn(freshTask, transition, ctx, this.db, guard.params);
+          const result = guardFn(freshTask, transition, ctx, this.db as unknown as IGuardQueryContext, guard.params);
           guardResults[guard.name] = result;
           if (!result.allowed) {
             guardFailures.push({ guard: guard.name, reason: result.reason ?? 'Guard check failed' });
@@ -442,7 +443,7 @@ export class PipelineEngine implements IPipelineEngine {
           canTransition = false;
           continue;
         }
-        const result = guardFn(task, transition, { trigger }, this.db, guard.params);
+        const result = guardFn(task, transition, { trigger }, this.db as unknown as IGuardQueryContext, guard.params);
         results.push({ guard: guard.name, allowed: result.allowed, reason: result.reason });
         if (!result.allowed) canTransition = false;
       }
