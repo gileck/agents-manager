@@ -79,7 +79,7 @@ export function screenshotRoutes(services: AppServices): Router {
         res.status(404).json({ error: 'File not found' });
         return;
       }
-      res.sendFile(resolved);
+      res.sendFile(resolved, { dotfiles: 'allow' });
     } catch (err) { next(err); }
   });
 
