@@ -14,4 +14,5 @@ export interface IUserStore {
   createUser(username: string, role: 'admin' | 'user'): Promise<User>;
   updateUserRole(id: string, role: 'admin' | 'user'): Promise<User | null>;
   deleteUser(id: string): Promise<boolean>;
+  getUserRoleSync(username: string): 'admin' | 'user' | null;
 }

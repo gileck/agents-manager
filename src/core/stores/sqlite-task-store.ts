@@ -464,4 +464,12 @@ export class SqliteTaskStore implements ITaskStore {
       throw err;
     }
   }
+
+  getTaskSync(_id: string): import('../../shared/types').Task | null {
+    throw new Error('Not implemented');
+  }
+
+  countUnresolvedDependenciesSync(_taskId: string): number {
+    throw new Error('Not implemented');
+  }
 }

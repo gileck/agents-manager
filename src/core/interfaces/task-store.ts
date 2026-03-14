@@ -13,4 +13,6 @@ export interface ITaskStore {
   getDependents(taskId: string): Promise<Task[]>;
   getStatusCounts(): Promise<{ status: string; count: number }[]>;
   getTotalCount(): Promise<number>;
+  getTaskSync(id: string): Task | null;
+  countUnresolvedDependenciesSync(taskId: string): number;
 }

@@ -259,4 +259,12 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       throw err;
     }
   }
+
+  countFailedRunsSync(_taskId: string): number {
+    throw new Error('Not implemented');
+  }
+
+  countRunningRunsSync(_taskId: string): number {
+    throw new Error('Not implemented');
+  }
 }

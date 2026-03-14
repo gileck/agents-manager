@@ -96,4 +96,8 @@ export class SqliteUserStore implements IUserStore {
       throw err;
     }
   }
+
+  getUserRoleSync(_username: string): 'admin' | 'user' | null {
+    throw new Error('Not implemented');
+  }
 }

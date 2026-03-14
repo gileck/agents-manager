@@ -28,3 +28,6 @@ export type { IAgentDefinitionStore } from './agent-definition-store';
 export type { IAgentLib } from './agent-lib';
 export type { ISettingsStore } from './settings-store';
 export type { IDevServerManager } from './dev-server-manager';
+export type { IItemStore } from './item-store';
+export type { ITimelineStore } from './timeline-store';
+export type { TransitionRecord } from './pipeline-store';

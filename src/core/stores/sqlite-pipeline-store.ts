@@ -177,4 +177,12 @@ export class SqlitePipelineStore implements IPipelineStore {
       throw err;
     }
   }
+
+  recordTransitionSync(_record: import('../interfaces/pipeline-store').TransitionRecord): void {
+    throw new Error('Not implemented');
+  }
+
+  getLastFromStatusSync(_taskId: string): string | null {
+    throw new Error('Not implemented');
+  }
 }
