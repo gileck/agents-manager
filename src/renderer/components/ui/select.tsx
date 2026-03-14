@@ -19,6 +19,7 @@ interface SelectContextValue {
   setIsOpen: (open: boolean) => void;
   disabled: boolean;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
+  labelMap: Map<string, React.ReactNode>;
 }
 
 const SelectContext = React.createContext<SelectContextValue | null>(null);
@@ -41,8 +42,25 @@ function Select({ value, onValueChange, children, disabled = false, className }:
     }
   }, [disabled, isOpen]);
 
+  const labelMap = React.useMemo(() => {
+    const map = new Map<string, React.ReactNode>();
+    function traverse(nodes: React.ReactNode) {
+      React.Children.forEach(nodes, (child) => {
+        if (!React.isValidElement(child)) return;
+        if ((child as React.ReactElement).type === SelectItem) {
+          const el = child as React.ReactElement<SelectItemProps>;
+          map.set(el.props.value, el.props.children);
+        } else {
+          traverse((child.props as { children?: React.ReactNode }).children);
+        }
+      });
+    }
+    traverse(children);
+    return map;
+  }, [children]);
+
   return (
-    <SelectContext.Provider value={{ value, onValueChange, isOpen, setIsOpen, disabled, triggerRef }}>
+    <SelectContext.Provider value={{ value, onValueChange, isOpen, setIsOpen, disabled, triggerRef, labelMap }}>
       <div className={cn('relative', className)}>{children}</div>
     </SelectContext.Provider>
   );
@@ -85,12 +103,18 @@ interface SelectValueProps {
   children?: React.ReactNode;
 }
 
+// TODO: Add component tests for SelectValue label resolution once a frontend
+// testing framework (e.g. Vitest + Testing Library) is adopted. Key cases:
+//   - SelectValue displays the matching SelectItem label, not the raw value
+//   - SelectValue falls back to the raw value when no matching item exists
+//   - SelectValue renders placeholder when value is empty
 function SelectValue({ placeholder, children }: SelectValueProps) {
-  const { value } = useSelectContext();
+  const { value, labelMap } = useSelectContext();
   if (children) {
     return <span className={cn(!value && 'text-muted-foreground')}>{children}</span>;
   }
-  return <span className={cn(!value && 'text-muted-foreground')}>{value || placeholder}</span>;
+  const label = labelMap.get(value);
+  return <span className={cn(!value && 'text-muted-foreground')}>{label ?? value ?? placeholder}</span>;
 }
 
 interface SelectContentProps {
