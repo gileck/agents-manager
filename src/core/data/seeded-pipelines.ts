@@ -200,8 +200,8 @@ export const AGENT_PIPELINE: SeededPipeline = {
     // === No changes detected on branch after implementation ===
     { from: 'implementing', to: 'open', trigger: 'agent', agentOutcome: 'no_changes' },
 
-    // === Implementation already exists on main (e.g. committed outside the pipeline) ===
-    { from: 'implementing', to: 'done', trigger: 'agent', agentOutcome: 'already_on_main' },
+    // === Implementation already exists on main — return to human review gate ===
+    { from: 'implementing', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'already_on_main' },
 
     // === Merge conflict detection — self-loop to resolve conflicts ===
     { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'conflicts_detected',
