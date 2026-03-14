@@ -118,10 +118,7 @@ export class CodexAppServerLib extends BaseAgentLib {
       ? prompt
       : await this.resolveSessionPrompt(prompt, options, log);
 
-    let activeRun!: ActiveRun;
-
     let threadId = resumeThreadId;
-    let turnId: string | undefined;
     let finalAssistantText = '';
     let errorMessage: string | undefined;
     let isError = false;
@@ -130,7 +127,7 @@ export class CodexAppServerLib extends BaseAgentLib {
     let lastContextInputTokens: number | undefined;
     let structuredOutput: Record<string, unknown> | undefined;
     let imageTempDir: string | undefined;
-    let emittedToolUse = new Set<string>();
+    const emittedToolUse = new Set<string>();
     const assistantSnapshots = new Map<string, string>();
     let turnDoneResolve!: () => void;
     let turnDoneSettled = false;
@@ -315,7 +312,6 @@ export class CodexAppServerLib extends BaseAgentLib {
         case 'turn/started': {
           const turn = params.turn as { id?: string } | undefined;
           if (turn?.id) {
-            turnId = turn.id;
             activeRun.turnId = turn.id;
           }
           break;
@@ -374,7 +370,6 @@ export class CodexAppServerLib extends BaseAgentLib {
         case 'turn/completed': {
           const turn = params.turn as { id?: string; status?: string; error?: { message?: string | null; additionalDetails?: string | null } | null } | undefined;
           if (turn?.id) {
-            turnId = turn.id;
             activeRun.turnId = turn.id;
           }
           if (turn?.status === 'failed') {
@@ -551,7 +546,7 @@ export class CodexAppServerLib extends BaseAgentLib {
       }
     };
 
-    activeRun = {
+    const activeRun: ActiveRun = {
       client: this.createClient({
         cwd: options.cwd,
         env,
@@ -651,7 +646,6 @@ export class CodexAppServerLib extends BaseAgentLib {
         model: options.model ?? null,
         outputSchema: (options.outputFormat ?? null) as Record<string, unknown> | null,
       });
-      turnId = response.turn.id;
       activeRun.turnId = response.turn.id;
 
       if (response.turn.status === 'failed') {

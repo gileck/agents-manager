@@ -1276,7 +1276,7 @@ export class ChatAgentService {
           // so the agent receives the answers as tool result text
           const answerLines = Object.entries(answers).map(([q, a]) => `${q}: ${a}`).join('\n');
           return { behavior: 'deny', message: `User answered:\n${answerLines}` };
-        } catch (err) {
+        } catch {
           return { behavior: 'deny', message: 'User did not answer (agent was stopped).' };
         }
       };
