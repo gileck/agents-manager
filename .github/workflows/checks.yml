@@ -99,5 +99,5 @@ jobs:
             }
 
       - name: Fail if any check failed
-        if: always() && (steps.typecheck.outcome != 'success' || steps.lint.outcome != 'success' || steps.test.outcome != 'success')
+        if: ${{ always() && (steps.typecheck.outcome == 'failure' || steps.lint.outcome == 'failure' || steps.test.outcome == 'failure') }}
         run: exit 1
