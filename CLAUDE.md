@@ -4,6 +4,23 @@ This file provides Claude with context about the codebase. It is auto-generated 
 Run `yarn build:claude` to regenerate.
 
 
+## Abstractions & Separations
+
+All interface-based abstractions in the system — what each separates, why, and key files
+
+**Summary:** Documents every abstraction/separation in the codebase: what it decouples, why the separation exists, interface and implementation files, and how implementations are selected. Covers agent engine, prompt builders, pipeline engine, data stores, git/SCM operations, notifications, session history, workflow service, and more.
+
+**Key Points:**
+- Every abstraction follows the pattern: interface (src/core/interfaces/) → implementation(s) (src/core/services/ or src/core/stores/) → optional registry/factory
+- AgentLib separates agent domain logic from AI engine; PromptBuilder separates prompt construction from agent execution
+- GitOps (low-level git commands) and ScmPlatform (platform-level PR operations) are separate abstractions — do not merge them
+- All store interfaces decouple domain logic from SQLite — implementations are in src/core/stores/sqlite-*.ts
+- WorkflowService is the convergence abstraction — all clients (Electron, CLI, Web, Telegram) call the same interface
+
+**Docs:** [abstractions.md](docs/abstractions.md)
+
+---
+
 ## Architecture Overview
 
 System architecture, composition root, and the single-execution-engine principle
