@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  pull-requests: write
+
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -16,8 +19,85 @@ jobs:
 
       - run: yarn install --no-lockfile
 
-      - run: yarn typecheck
+      - name: TypeScript
+        id: typecheck
+        run: yarn typecheck 2>&1 | tee /tmp/typecheck.out
+        continue-on-error: true
 
-      - run: yarn lint
+      - name: ESLint
+        id: lint
+        run: yarn lint 2>&1 | tee /tmp/lint.out
+        continue-on-error: true
 
-      - run: yarn test
+      - name: Tests
+        id: test
+        run: yarn test 2>&1 | tee /tmp/test.out
+        continue-on-error: true
+
+      - name: Comment on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const tc = '${{ steps.typecheck.outcome }}';
+            const lint = '${{ steps.lint.outcome }}';
+            const test = '${{ steps.test.outcome }}';
+            const allPassed = tc === 'success' && lint === 'success' && test === 'success';
+
+            const icon = (s) => s === 'success' ? '✅' : '❌';
+
+            let body = allPassed
+              ? `## ✅ All checks passed\n\n`
+              : `## ❌ Checks failed\n\n`;
+
+            body += `| Check | Status |\n|-------|--------|\n`;
+            body += `| TypeScript | ${icon(tc)} |\n`;
+            body += `| ESLint | ${icon(lint)} |\n`;
+            body += `| Tests | ${icon(test)} |\n`;
+
+            // Append failure details
+            if (tc !== 'success') {
+              const out = fs.readFileSync('/tmp/typecheck.out', 'utf8').slice(-3000);
+              body += `\n### TypeScript errors\n\`\`\`\n${out}\n\`\`\`\n`;
+            }
+            if (lint !== 'success') {
+              const out = fs.readFileSync('/tmp/lint.out', 'utf8').slice(-3000);
+              body += `\n### ESLint errors\n\`\`\`\n${out}\n\`\`\`\n`;
+            }
+            if (test !== 'success') {
+              const out = fs.readFileSync('/tmp/test.out', 'utf8').slice(-3000);
+              body += `\n### Test failures\n\`\`\`\n${out}\n\`\`\`\n`;
+            }
+
+            // Find and update existing comment or create new one
+            const marker = '<!-- checks-bot -->';
+            body = marker + '\n' + body;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body?.startsWith(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if any check failed
+        if: steps.typecheck.outcome != 'success' || steps.lint.outcome != 'success' || steps.test.outcome != 'success'
+        run: exit 1
