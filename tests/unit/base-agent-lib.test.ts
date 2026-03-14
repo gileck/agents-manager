@@ -292,7 +292,7 @@ describe('BaseAgentLib', () => {
 
       await lib.execute('run1', makeOptions(), makeCallbacks());
 
-      expect(canUseToolResult).toEqual({ behavior: 'allow' });
+      expect(canUseToolResult).toEqual({ behavior: 'allow', updatedInput: { file_path: '/tmp/project/file.ts' } });
     });
 
     it('callerCanUseTool interceptor can deny', async () => {
@@ -373,7 +373,7 @@ describe('BaseAgentLib', () => {
 
       await lib.execute('run1', makeOptions(), makeCallbacks({ onPermissionRequest }));
 
-      expect(canUseToolResult).toEqual({ behavior: 'allow' });
+      expect(canUseToolResult).toEqual({ behavior: 'allow', updatedInput: { file_path: '/tmp/project/file.ts' } });
       expect(onPermissionRequest).toHaveBeenCalledWith({
         toolName: 'Write',
         toolInput: { file_path: '/tmp/project/file.ts' },
@@ -453,7 +453,7 @@ describe('BaseAgentLib', () => {
 
       await lib.execute('run1', makeOptions(), makeCallbacks({ onPermissionRequest: undefined }));
 
-      expect(canUseToolResult).toEqual({ behavior: 'allow' });
+      expect(canUseToolResult).toEqual({ behavior: 'allow', updatedInput: { file_path: '/tmp/project/file.ts' } });
     });
   });
 

@@ -106,6 +106,20 @@ The SDK `permissionMode` controls how tool calls are approved at the engine leve
 
 **Note:** `bypassPermissions` is never used. All agents use `'acceptEdits'` which ensures the SDK's `canUseTool` callback fires, enabling the SandboxGuard to enforce path restrictions.
 
+### canUseTool Return Value
+
+The `canUseTool` callback in `BaseAgentLib` builds a three-stage permission chain (sandbox guard → caller interceptor → UI approval). When returning an allow decision, the callback **must** always include `updatedInput` with the tool input — the SDK's runtime Zod validation requires it even though the TypeScript types mark it optional. Omitting `updatedInput` causes a ZodError that silently blocks tool execution.
+
+```typescript
+// Correct — always pass updatedInput when allowing
+return { behavior: 'allow', updatedInput: updatedInput ?? input };
+
+// Wrong — triggers SDK ZodError for write operations
+return { behavior: 'allow' };
+```
+
+**Note:** With `permissionMode: 'acceptEdits'`, read-only operations (git status, git diff, Read, Glob) are auto-approved by the SDK without calling `canUseTool`. Only write operations (git add, git commit, Write, Edit, Bash with write commands) go through the callback.
+
 ### Implemented By
 
 ClaudeCodeLib (via `canUseTool` SDK callback)

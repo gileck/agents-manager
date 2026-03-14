@@ -15,12 +15,14 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
   }
 
   protected getMaxTurns(context: AgentContext): number {
+    if (context.revisionReason === 'uncommitted_changes') return 50;
     if (context.revisionReason === 'merge_failed') return 100;
     return 200;
   }
 
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
     if (config.timeout) return config.timeout;
+    if (context.revisionReason === 'uncommitted_changes') return 5 * 60 * 1000;
     if (context.revisionReason === 'merge_failed') return 15 * 60 * 1000;
     return 30 * 60 * 1000;
   }
@@ -63,6 +65,19 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
           type: 'object',
           properties: {
             summary: { type: 'string', description: 'A short summary of how the merge failure was resolved' },
+          },
+          required: ['summary'],
+        },
+      };
+    }
+    if (mode === 'revision' && revisionReason === 'uncommitted_changes') {
+      // commit uncommitted work left by a prior run
+      return {
+        type: 'json_schema',
+        schema: {
+          type: 'object',
+          properties: {
+            summary: { type: 'string', description: 'A short summary of what was committed' },
           },
           required: ['summary'],
         },
@@ -184,6 +199,22 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         '8. Do NOT push — the pipeline will handle pushing after you finish.',
       );
       prompt = mfLines.join('\n');
+    } else if (mode === 'revision' && revisionReason === 'uncommitted_changes') {
+      // commit uncommitted work left by a prior run that failed to commit
+      const ucLines = [
+        `Your previous run edited files but failed to commit them. The worktree has uncommitted changes that need to be committed.`,
+        ``,
+        `Task: ${task.title}.${desc}`,
+        ``,
+        `## Instructions`,
+        `1. Run \`git status\` to see the uncommitted changes.`,
+        `2. Run \`git diff\` to review what was changed.`,
+        `3. If the changes look correct, stage and commit them with a descriptive message.`,
+        `4. If any changes look incomplete or broken, fix them first, then commit.`,
+        `5. Run \`yarn checks\` (or the project's equivalent) to verify TypeScript and lint pass. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored.`,
+        `6. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them, \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`.`,
+      ];
+      prompt = ucLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
       // implement_resume
       const irLines = context.sessionId

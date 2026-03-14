@@ -112,6 +112,116 @@ describe('Agent Outcome Transitions', () => {
     });
   });
 
+  describe('uncommitted_changes outcome', () => {
+    it('should self-transition implementing → implementing on first detection (resume agent)', async () => {
+      const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
+
+      // Configure: empty committed diff but worktree has uncommitted changes
+      const stub = ctx.gitOps as StubGitOps;
+      stub.diffOverride = '';
+      stub.statusOverride = 'M src/file.ts';
+      stub.revParseMap = new Map([['HEAD', 'aaa111'], ['origin/main', 'bbb222']]);
+
+      await ctx.worktreeManager.create('task/test-branch', task.id);
+      await ctx.worktreeManager.lock(task.id);
+      const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1' });
+      await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
+
+      const run = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'scripted',
+        mode: 'new',
+      });
+      await ctx.agentRunStore.updateRun(run.id, { status: 'completed', completedAt: now() });
+
+      await ctx.outcomeResolver.resolveAndTransition({
+        taskId: task.id,
+        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
+        run: { id: run.id },
+        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
+        worktreeManager: ctx.worktreeManager,
+        phase: { id: phase.id },
+        context: { workdir: '/tmp', mode: 'new' } as never,
+      });
+
+      // Task stays in implementing (self-transition) — agent will be resumed
+      const updatedTask = await ctx.taskStore.getTask(task.id);
+      expect(updatedTask!.status).toBe('implementing');
+
+      // Verify start_agent hook fired with revision mode
+      expect(startAgentCalls.some((c) => c.mode === 'revision')).toBe(true);
+
+      // Verify event log records the uncommitted changes detection
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'agent' });
+      expect(events.some((e) => e.message.includes('uncommitted changes'))).toBe(true);
+    });
+
+    it('should discard changes and transition to open on second detection (retry exhausted)', async () => {
+      const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
+
+      // Configure: empty committed diff but worktree has uncommitted changes
+      const stub = ctx.gitOps as StubGitOps;
+      stub.diffOverride = '';
+      stub.statusOverride = 'M src/file.ts';
+      stub.revParseMap = new Map([['HEAD', 'aaa111'], ['origin/main', 'bbb222']]);
+
+      await ctx.worktreeManager.create('task/test-branch', task.id);
+      await ctx.worktreeManager.lock(task.id);
+      const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1' });
+      await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
+
+      // First attempt — triggers self-transition (uses up the 1 allowed retry)
+      const run1 = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'scripted',
+        mode: 'new',
+      });
+      await ctx.agentRunStore.updateRun(run1.id, { status: 'completed', completedAt: now() });
+
+      await ctx.outcomeResolver.resolveAndTransition({
+        taskId: task.id,
+        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
+        run: { id: run1.id },
+        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
+        worktreeManager: ctx.worktreeManager,
+        phase: { id: phase.id },
+        context: { workdir: '/tmp', mode: 'new' } as never,
+      });
+
+      // First detection: self-transition succeeded
+      let updatedTask = await ctx.taskStore.getTask(task.id);
+      expect(updatedTask!.status).toBe('implementing');
+
+      // Second attempt — context.revisionReason='uncommitted_changes' triggers discard + no_changes
+      const run2 = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'scripted',
+        mode: 'revision',
+      });
+      await ctx.agentRunStore.updateRun(run2.id, { status: 'completed', completedAt: now() });
+      const phase2 = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1 retry' });
+      await ctx.taskPhaseStore.updatePhase(phase2.id, { status: 'active', startedAt: now() });
+
+      await ctx.outcomeResolver.resolveAndTransition({
+        taskId: task.id,
+        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
+        run: { id: run2.id },
+        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
+        worktreeManager: ctx.worktreeManager,
+        phase: { id: phase2.id },
+        context: { workdir: '/tmp', mode: 'revision', revisionReason: 'uncommitted_changes' } as never,
+      });
+
+      // Second detection: falls through to open
+      updatedTask = await ctx.taskStore.getTask(task.id);
+      expect(updatedTask!.status).toBe('open');
+
+      // Verify event log records the retry exhaustion
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'agent' });
+      expect(events.some((e) => e.message.includes('retry exhausted'))).toBe(true);
+    });
+  });
+
   describe('merge-base pre-check', () => {
     it('should skip rebase and return pr_ready when branch is already rebased', async () => {
       const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');

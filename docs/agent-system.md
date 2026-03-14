@@ -265,6 +265,7 @@ All pipeline agents use `sdkPermissionMode: 'acceptEdits'` — never `bypassPerm
 | `new` | — | 200 | 30 min | `{ summary }` + interactive fields |
 | `revision` | `changes_requested` | 200 | 30 min | `{ summary }` |
 | `revision` | `conflicts_detected` | 50 | 10 min | `{ summary }` |
+| `revision` | `uncommitted_changes` | 50 | 5 min | `{ summary }` |
 | `revision` | `info_provided` | 200 | 30 min | `{ summary }` + interactive fields |
 
 ### InvestigatorPromptBuilder
@@ -310,7 +311,7 @@ Test-only agent with a configurable script function. Built-in test scripts:
 
 ```typescript
 type AgentMode = 'new' | 'revision';
-type RevisionReason = 'changes_requested' | 'info_provided' | 'conflicts_detected';
+type RevisionReason = 'changes_requested' | 'info_provided' | 'merge_failed' | 'uncommitted_changes';
 ```
 
 Agent runs are identified by the combination of `agentType`, `mode`, and optionally `revisionReason`:
@@ -327,6 +328,7 @@ Agent runs are identified by the combination of `agentType`, `mode`, and optiona
 | `implementor` | `revision` | `changes_requested` | Address reviewer feedback | `pr_ready` |
 | `implementor` | `revision` | `info_provided` | Resume implementation with user answers | `pr_ready` |
 | `implementor` | `revision` | `conflicts_detected` | Resolve merge conflicts | `pr_ready` |
+| `implementor` | `revision` | `uncommitted_changes` | Commit uncommitted work from prior run | `pr_ready` |
 | `investigator` | `new` | — | Debug a bug report | `investigation_complete` |
 | `investigator` | `revision` | `info_provided` | Resume investigation with user answers | `investigation_complete` |
 | `reviewer` | `new` | — | PR code review | `approved` or `changes_requested` |

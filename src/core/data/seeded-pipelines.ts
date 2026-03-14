@@ -240,6 +240,9 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'conflicts_detected',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [startAgent('implementor', 'revision', 'merge_failed')] },
+    { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'uncommitted_changes',
+      guards: [{ name: 'max_retries', params: { max: 1 } }, { name: 'no_running_agent' }],
+      hooks: [startAgent('implementor', 'revision', 'uncommitted_changes')] },
 
     // ── PR push retry ───────────────────────────────────────────────
     { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',

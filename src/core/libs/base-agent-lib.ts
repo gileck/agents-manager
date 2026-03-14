@@ -228,7 +228,7 @@ export abstract class BaseAgentLib implements IAgentLib {
           const effectiveInput = updatedInput ?? input;
           const response = await onPermissionRequest({ toolName, toolInput: effectiveInput, toolUseId: sdkOptions.toolUseID });
           if (response.allowed) {
-            return updatedInput ? { behavior: 'allow', updatedInput } : { behavior: 'allow' };
+            return { behavior: 'allow', updatedInput: updatedInput ?? input };
           }
           return { behavior: 'deny', message: 'Denied by user' };
         } catch (err) {
@@ -240,7 +240,7 @@ export abstract class BaseAgentLib implements IAgentLib {
           return { behavior: 'deny', message: `Permission check failed: ${errMsg}` };
         }
       }
-      return updatedInput ? { behavior: 'allow', updatedInput } : { behavior: 'allow' };
+      return { behavior: 'allow', updatedInput: updatedInput ?? input };
     };
 
     log(`Starting agent run: cwd=${options.cwd}, allowedPaths=${JSON.stringify(options.allowedPaths)}, timeout=${options.timeoutMs ? `${options.timeoutMs}ms` : 'none'}, model=${options.model ?? 'default'}, engine=${this.name}`);

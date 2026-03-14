@@ -58,6 +58,34 @@ export class OutcomeResolver {
         effectiveOutcome = await this.verifyBranchDiff(taskId, worktree, baseRef, onPostLog);
       }
 
+      // If uncommitted_changes was detected but this is already the retry run,
+      // discard the changes and fall through to no_changes (→ open).
+      if (effectiveOutcome === 'uncommitted_changes' && context.revisionReason === 'uncommitted_changes') {
+        onPostLog?.('git', 'Uncommitted changes retry failed again — discarding and using no_changes', { branch: worktree.branch });
+        await this.taskEventLog.log({
+          taskId,
+          category: 'agent',
+          severity: 'warning',
+          message: 'Uncommitted changes retry exhausted — discarding uncommitted changes from worktree',
+          data: { branch: worktree.branch },
+        });
+        try {
+          const gitOps = this.createGitOps(worktree.path);
+          await gitOps.clean();
+        } catch (cleanErr) {
+          const cleanMsg = cleanErr instanceof Error ? cleanErr.message : String(cleanErr);
+          onPostLog?.('git', `Failed to clean worktree after retry exhaustion: ${cleanMsg}`, { branch: worktree.branch });
+          this.taskEventLog.log({
+            taskId,
+            category: 'git',
+            severity: 'warning',
+            message: `Best-effort worktree clean failed after uncommitted_changes retry exhausted: ${cleanMsg}`,
+            data: { branch: worktree.branch },
+          }).catch(() => {});
+        }
+        effectiveOutcome = 'no_changes';
+      }
+
       // Early conflict detection (skip for merge_failed revision)
       if (effectiveOutcome === 'pr_ready' && context.revisionReason !== 'merge_failed') {
         effectiveOutcome = await this.detectConflicts(taskId, worktree, baseRef, onPostLog);
@@ -106,7 +134,7 @@ export class OutcomeResolver {
     }
   }
 
-  private async verifyBranchDiff(taskId: string, worktree: { branch: string; path: string }, baseRef: string, onPostLog?: OnPostLog): Promise<'pr_ready' | 'no_changes' | 'already_on_main'> {
+  private async verifyBranchDiff(taskId: string, worktree: { branch: string; path: string }, baseRef: string, onPostLog?: OnPostLog): Promise<'pr_ready' | 'no_changes' | 'already_on_main' | 'uncommitted_changes'> {
     onPostLog?.('git', `Verifying branch diff: branch=${worktree.branch}, baseRef=${baseRef}`, { branch: worktree.branch, baseRef });
     const diffStart = performance.now();
     this.taskEventLog.log({
@@ -161,6 +189,35 @@ export class OutcomeResolver {
             data: { branch: worktree.branch, baseRef },
           });
           // Fall through to no_changes — diff is empty, just couldn't determine why
+        }
+        // Safety net: check for uncommitted changes in the worktree.
+        // If the agent edited files but failed to commit (e.g. SDK permission errors),
+        // the branch diff will be empty even though work was done.
+        // Return 'uncommitted_changes' to trigger a self-transition that resumes
+        // the agent so it can commit its work.
+        try {
+          const statusOutput = await gitOps.status();
+          if (statusOutput.trim().length > 0) {
+            onPostLog?.('git', 'No committed changes on branch but worktree has uncommitted modifications — using uncommitted_changes outcome', { branch: worktree.branch, statusLength: statusOutput.length });
+            await this.taskEventLog.log({
+              taskId,
+              category: 'agent',
+              severity: 'warning',
+              message: 'Agent reported pr_ready with uncommitted changes — resuming agent to commit',
+              data: { branch: worktree.branch, status: statusOutput.slice(0, 500) },
+            });
+            return 'uncommitted_changes';
+          }
+        } catch (statusErr) {
+          const statusMsg = statusErr instanceof Error ? statusErr.message : String(statusErr);
+          onPostLog?.('git', `git status failed in uncommitted changes check: ${statusMsg}`, { branch: worktree.branch });
+          this.taskEventLog.log({
+            taskId,
+            category: 'git',
+            severity: 'warning',
+            message: `Failed to check for uncommitted changes (git status): ${statusMsg} — falling through to no_changes`,
+            data: { branch: worktree.branch },
+          }).catch(() => {});
         }
         onPostLog?.('git', 'No changes detected on branch — using no_changes outcome', { branch: worktree.branch });
         await this.taskEventLog.log({

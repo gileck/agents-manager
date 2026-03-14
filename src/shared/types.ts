@@ -484,7 +484,7 @@ export type HookFn = (task: Task, transition: Transition, context: TransitionCon
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled';
 export type AgentMode = 'new' | 'revision';
-export type RevisionReason = 'changes_requested' | 'info_provided' | 'merge_failed';
+export type RevisionReason = 'changes_requested' | 'info_provided' | 'merge_failed' | 'uncommitted_changes';
 
 /** Diagnostic metrics computed from an agent run's message trace. */
 export interface RunDiagnostics {

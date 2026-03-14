@@ -349,15 +349,26 @@ export class AgentService implements IAgentService {
     try {
       const gitOps = this.createGitOps(worktree.path);
 
-      // Discard any uncommitted changes or untracked files left from prior runs
-      await gitOps.clean();
-      await this.taskEventLog.log({
-        taskId,
-        category: 'worktree',
-        severity: 'debug',
-        message: 'Worktree cleaned (reset uncommitted changes)',
-        data: { taskId },
-      });
+      // Discard any uncommitted changes or untracked files left from prior runs.
+      // Skip for uncommitted_changes — the agent needs those changes to commit them.
+      if (revisionReason === 'uncommitted_changes') {
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'info',
+          message: 'Skipping worktree clean for uncommitted_changes revision — agent needs to commit existing changes',
+          data: { taskId },
+        });
+      } else {
+        await gitOps.clean();
+        await this.taskEventLog.log({
+          taskId,
+          category: 'worktree',
+          severity: 'debug',
+          message: 'Worktree cleaned (reset uncommitted changes)',
+          data: { taskId },
+        });
+      }
 
       // Fetch and best-effort rebase so the agent starts from the latest base.
       // For multi-phase tasks, rebase onto the task integration branch (not main)

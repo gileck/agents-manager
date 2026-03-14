@@ -283,6 +283,7 @@ The unified agent-driven workflow with investigation, technical design, plan, im
 | `implementing` | `needs_info` | `needs_info` | `create_prompt` (required), `notify` |
 | `implementing` | `failed` | `implementing` | `start_agent` (retry, guarded) |
 | `implementing` | `no_changes` | `open` | — |
+| `implementing` | `uncommitted_changes` | `implementing` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'uncommitted_changes')` (guarded by `max_retries(1)` + `no_running_agent`) |
 | `implementing` | `conflicts_detected` | `implementing` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'conflicts_detected')` (guarded by `max_retries(3)` + `no_running_agent`) |
 | `pr_review` | `approved` | `ready_to_merge` | — |
 | `pr_review` | `changes_requested` | `implementing` | `start_agent(mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested')` |
@@ -351,7 +352,7 @@ When an agent reports `needs_info`:
 
 **Signal-only (no payload):**
 
-`plan_complete`, `investigation_complete`, `pr_ready`, `approved`, `design_ready`, `reproduced`, `cannot_reproduce`, `failed`, `no_changes`, `info_provided`, `conflicts_detected`
+`plan_complete`, `investigation_complete`, `pr_ready`, `approved`, `design_ready`, `reproduced`, `cannot_reproduce`, `failed`, `no_changes`, `info_provided`, `conflicts_detected`, `uncommitted_changes`, `already_on_main`
 
 ## Type Definitions
 
@@ -382,12 +383,12 @@ type HookExecutionPolicy = 'required' | 'best_effort' | 'fire_and_forget';
 
 ## Edge Cases
 
-- **Self-transitions** are used for retry loops: `planning → planning` on `failed` outcome, guarded by `max_retries`. Also used for `conflicts_detected` (resolve conflicts) and `pr_ready` on `pr_review` (PR push retry).
+- **Self-transitions** are used for retry loops: `planning → planning` on `failed` outcome, guarded by `max_retries`. Also used for `conflicts_detected` (resolve conflicts), `uncommitted_changes` (commit uncommitted work), and `pr_ready` on `pr_review` (PR push retry).
 - **`no_changes` outcome** overrides the normal flow: `implementing → open` instead of `pr_review`, skipping PR creation entirely.
 - **Guards run synchronously** inside a better-sqlite3 transaction — they cannot be async. The `dependencies_resolved` guard uses raw SQL with `json_each()` to inspect pipeline statuses.
 - **Hook failure behavior depends on policy** — `required` hooks trigger a transactional rollback with compensating history record; `best_effort` hooks log warnings; `fire_and_forget` hooks log errors asynchronously.
 - **Wildcard source** (`from: '*'`) allows transitions from any status, useful for recovery paths.
 - **TOCTOU protection** — both `executeTransition` and `executeForceTransition` re-fetch the task inside a synchronous transaction and verify the status has not changed since the caller read it.
-- The `pr_ready` outcome is verified by `AgentService` — it checks the branch actually has changes via `git diff`. If no changes exist, the outcome is overridden to `no_changes`.
+- The `pr_ready` outcome is verified by `OutcomeResolver.verifyBranchDiff()` — it checks the branch actually has changes via `git diff`. If no changes exist, the outcome is overridden to `no_changes`. If the diff is empty but `git status` shows uncommitted modifications (agent failed to commit), the outcome is overridden to `uncommitted_changes` — triggering a self-transition that resumes the agent to commit its work. If the retry also fails (context has `revisionReason === 'uncommitted_changes'`), changes are discarded and the outcome falls through to `no_changes`.
 - **Phase cycling** — after merge, `advance_phase` marks the current phase done and triggers `done → implementing` if more phases remain. This loop continues until all phases are complete. When all phases are done and a task integration branch exists, `advance_phase` creates a final PR (task branch → main) and triggers `done → pr_review`.
 - **`info_provided` multi-target routing** — four `info_provided` transitions exist (to `investigating`, `designing`, `planning`, `implementing`). `tryOutcomeTransition` uses `resumeToStatus` from `context.data` to select the correct target. A warning is logged if multiple candidates exist without a `resumeToStatus`.

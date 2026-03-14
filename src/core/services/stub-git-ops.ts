@@ -7,7 +7,8 @@ export class StubGitOps implements IGitOps {
   private commits: Array<{ hash: string; message: string }> = [];
   private commitCounter = 0;
   private failures: Partial<Record<string, Error>> = {};
-  diffOverride?: string;
+  diffOverride?: string | string[];
+  statusOverride?: string;
   mergeBaseOverride?: string;
   revParseOverride?: string;
   revParseMap?: Map<string, string>;
@@ -19,6 +20,7 @@ export class StubGitOps implements IGitOps {
   clearFailures(): void {
     this.failures = {};
     this.diffOverride = undefined;
+    this.statusOverride = undefined;
     this.mergeBaseOverride = undefined;
     this.revParseOverride = undefined;
     this.revParseMap = undefined;
@@ -59,6 +61,9 @@ export class StubGitOps implements IGitOps {
 
   async diff(_fromRef: string, _toRef?: string): Promise<string> {
     this.throwIfConfigured('diff');
+    if (Array.isArray(this.diffOverride)) {
+      return this.diffOverride.shift() ?? 'diff --git a/file.ts b/file.ts\n+stub change';
+    }
     if (this.diffOverride !== undefined) return this.diffOverride;
     return 'diff --git a/file.ts b/file.ts\n+stub change';
   }
@@ -110,7 +115,7 @@ export class StubGitOps implements IGitOps {
 
   async status(): Promise<string> {
     this.throwIfConfigured('status');
-    return '';
+    return this.statusOverride ?? '';
   }
 
   async resetFile(_filepath: string): Promise<void> {

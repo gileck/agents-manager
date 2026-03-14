@@ -1,7 +1,7 @@
 ---
 title: Known Issues & Fixes
 description: Documented solutions to common Electron + React + SQLite problems in this project
-summary: Eleven documented issues with known fixes covering Electron rendering, SQLite compatibility, Tailwind CSS quirks, macOS PATH resolution, native module ABI mismatches, and daemon logging.
+summary: Twelve documented issues with known fixes covering Electron rendering, SQLite compatibility, Tailwind CSS quirks, macOS PATH resolution, native module ABI mismatches, SDK permission validation, and daemon logging.
 priority: 2
 key_points:
   - "Blank screen: add backgroundColor '#ffffff' to BrowserWindow options"
@@ -208,7 +208,21 @@ See [cli-native-bindings.md](./cli-native-bindings.md) for full details and trou
 export BETTER_SQLITE3_BINDING=node_modules/better-sqlite3/build-node/Release/better_sqlite3.node
 ```
 
-## 11. Daemon Crash Logs Not Captured
+## 11. SDK canUseTool ZodError on Write Operations
+
+**Problem:** Agent write operations (git add, git commit, yarn) fail with a `ZodError` in the SDK's `canUseTool` permission callback. Read-only operations (git status, git diff) work fine. The agent edits files but can't commit, leading to "no changes detected" and the task moving back to open.
+
+**Root Cause:** The SDK's runtime Zod validation requires `updatedInput` to be a `Record<string, unknown>` in the `{ behavior: 'allow' }` response — even though the TypeScript types mark it optional. With `permissionMode: 'acceptEdits'`, read-only operations are auto-approved without calling `canUseTool`, so only write operations hit the validation.
+
+**Solution:** Always include `updatedInput` when returning an allow decision from the `canUseTool` callback:
+```typescript
+// In base-agent-lib.ts — pass through original input when no interceptor modified it
+return { behavior: 'allow', updatedInput: updatedInput ?? input };
+```
+
+**Safety net:** `OutcomeResolver.verifyBranchDiff()` now detects uncommitted changes in the worktree (via `git status`) when the branch diff is empty. If found, it returns `uncommitted_changes` outcome which triggers an agent resume to commit the work. On second failure, changes are discarded.
+
+## 12. Daemon Crash Logs Not Captured
 
 **Problem:** The daemon process is spawned detached by both Electron (`src/main/daemon-launcher.ts`) and CLI (`src/cli/ensure-daemon.ts`). Previously, `stdio` was set to `'ignore'`, discarding all stdout/stderr output. When the daemon crashed (unhandled exception, OOM, startup failure), there was no way to diagnose the cause.
 
