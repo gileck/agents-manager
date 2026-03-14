@@ -178,11 +178,26 @@ export class SqlitePipelineStore implements IPipelineStore {
     }
   }
 
-  recordTransitionSync(_record: import('../interfaces/pipeline-store').TransitionRecord): void {
-    throw new Error('Not implemented');
+  recordTransitionSync(record: import('../interfaces/pipeline-store').TransitionRecord): void {
+    this.db.prepare(`
+      INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      record.id,
+      record.taskId,
+      record.fromStatus,
+      record.toStatus,
+      record.trigger,
+      record.actor ?? null,
+      JSON.stringify(record.guardResults),
+      record.createdAt,
+    );
   }
 
-  getLastFromStatusSync(_taskId: string): string | null {
-    throw new Error('Not implemented');
+  getLastFromStatusSync(taskId: string): string | null {
+    const row = this.db.prepare(
+      'SELECT from_status FROM transition_history WHERE task_id = ? ORDER BY created_at DESC LIMIT 1'
+    ).get(taskId) as { from_status: string } | undefined;
+    return row?.from_status ?? null;
   }
 }
