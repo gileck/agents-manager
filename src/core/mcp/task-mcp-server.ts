@@ -488,8 +488,14 @@ export async function createTaskMcpServer(
                           autoNotify,
                           createdAt: Date.now(),
                         });
-                      } catch {
-                        // Subscription limit reached — silently skip
+                      } catch (e) {
+                        if (e instanceof Error && e.message.startsWith('Subscription limit reached')) {
+                          // Expected: per-session cap hit — silently skip
+                        } else {
+                          // Unexpected error — log at debug level so it remains visible during development
+                          // eslint-disable-next-line no-console
+                          console.debug('[auto-subscribe] unexpected subscription error:', e);
+                        }
                       }
                     }
                   }
