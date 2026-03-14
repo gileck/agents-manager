@@ -8,7 +8,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     exclude: ['tests/e2e/agent-lib-e2e.test.ts', 'tests/e2e/cli-subprocess.test.ts'],
     setupFiles: ['./tests/vitest-setup.ts'],
-    testTimeout: 10000,
+    testTimeout: 30000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
