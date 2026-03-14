@@ -45,7 +45,11 @@ class FakeCodexAppServerClient extends EventEmitter {
     });
     this.options.onNotification?.({
       method: 'item/agentMessage/delta',
-      params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'msg-1', delta: 'hello world' },
+      params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'msg-1', delta: 'hello ' },
+    });
+    this.options.onNotification?.({
+      method: 'item/agentMessage/delta',
+      params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'msg-1', delta: 'world' },
     });
     this.options.onNotification?.({
       method: 'thread/tokenUsage/updated',
@@ -60,6 +64,14 @@ class FakeCodexAppServerClient extends EventEmitter {
           },
           modelContextWindow: 128000,
         },
+      },
+    });
+    this.options.onNotification?.({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        item: { type: 'agentMessage', id: 'msg-1', text: 'hello world' },
       },
     });
     this.options.onNotification?.({
@@ -169,6 +181,7 @@ describe('CodexAppServerLib', () => {
     });
     const chunks: string[] = [];
     const messages: AgentChatMessage[] = [];
+    const streamEvents: Array<{ type: string; delta?: { type: string; text?: string; thinking?: string } }> = [];
 
     const result = await lib.execute('run-1', {
       prompt: 'say hello',
@@ -183,6 +196,7 @@ describe('CodexAppServerLib', () => {
     }, {
       onOutput: (chunk) => chunks.push(chunk),
       onMessage: (message) => messages.push(message),
+      onStreamEvent: (event) => streamEvents.push(event as { type: string; delta?: { type: string; text?: string; thinking?: string } }),
     });
 
     expect(result.exitCode).toBe(0);
@@ -193,8 +207,15 @@ describe('CodexAppServerLib', () => {
     expect(result.contextWindow).toBe(128000);
     expect(chunks.join('')).toBe('hello world');
     expect(messages.some((message) => message.type === 'thinking')).toBe(true);
-    expect(messages.some((message) => message.type === 'assistant_text')).toBe(true);
+    expect(messages.filter((message) => message.type === 'assistant_text')).toEqual([
+      expect.objectContaining({ type: 'assistant_text', text: 'hello world' }),
+    ]);
     expect(messages.some((message) => message.type === 'usage')).toBe(true);
+    expect(streamEvents.filter((event) => event.type === 'content_block_delta')).toEqual([
+      { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'thinking...' } },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hello ' } },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'world' } },
+    ]);
   });
 
   it('reuses the mapped thread id on resume', async () => {
