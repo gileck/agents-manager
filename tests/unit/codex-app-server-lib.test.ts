@@ -218,6 +218,30 @@ describe('CodexAppServerLib', () => {
     ]);
   });
 
+  it('passes danger-full-access sandbox through thread start', async () => {
+    FakeCodexAppServerClient.instances.length = 0;
+    const lib = new CodexAppServerLib(undefined, (options) => new FakeCodexAppServerClient(options) as never, {
+      sessionMapPath: makeSessionMapPath(),
+    });
+
+    const result = await lib.execute('run-full-access', {
+      prompt: 'say hello',
+      cwd: '/tmp/project',
+      model: 'gpt-5.4',
+      maxTurns: 4,
+      timeoutMs: 5000,
+      allowedPaths: [],
+      readOnlyPaths: [],
+      readOnly: false,
+      permissionMode: 'full_access',
+    }, {});
+
+    expect(result.exitCode).toBe(0);
+    expect(FakeCodexAppServerClient.instances[0].threadStart).toHaveBeenCalledWith(expect.objectContaining({
+      sandbox: 'danger-full-access',
+    }));
+  });
+
   it('reuses the mapped thread id on resume', async () => {
     FakeCodexAppServerClient.instances.length = 0;
     const sessionMapPath = makeSessionMapPath();

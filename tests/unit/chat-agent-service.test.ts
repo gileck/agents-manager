@@ -198,6 +198,42 @@ describe('ChatAgentService', () => {
       expect(result1.sessionId).toBe('session-1');
       expect(result2.sessionId).toBe('session-2');
     });
+
+    it('passes danger-full-access Codex sandbox mode for full_access sessions', async () => {
+      const execute = vi.fn().mockResolvedValue({
+        exitCode: 0,
+        output: 'ok',
+        model: 'gpt-5.4',
+      });
+
+      mockSessionStore.getSession = vi.fn().mockResolvedValue({
+        ...mockSession,
+        agentLib: 'codex-app-server',
+      });
+      mockAgentLibRegistry.listNames = vi.fn().mockReturnValue(['claude-code', 'codex-app-server']);
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue({
+        name: 'codex-app-server',
+        supportedFeatures: () => ({ images: true, hooks: false, thinking: true, nativeResume: true }),
+        getDefaultModel: () => 'gpt-5.4',
+        getSupportedModels: () => [{ value: 'gpt-5.4', label: 'GPT-5.4' }],
+        execute,
+        stop: vi.fn().mockResolvedValue(undefined),
+        isAvailable: vi.fn().mockResolvedValue(true),
+        getTelemetry: vi.fn().mockReturnValue(null),
+      } satisfies IAgentLib);
+
+      await service.send('session-1', 'Test message', { systemPrompt: '', permissionMode: 'full_access' });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(execute).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          permissionMode: 'full_access',
+          readOnly: false,
+        }),
+        expect.any(Object),
+      );
+    });
   });
 
   describe('getRunningAgents', () => {
