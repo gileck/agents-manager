@@ -33,7 +33,7 @@ export class ValidationRunner {
 
   static getValidationCommands(agentType: string, projectConfig?: Record<string, unknown>): string[] {
     if (NON_VALIDATABLE_AGENT_TYPES.has(agentType)) return [];
-    return (projectConfig?.validationCommands as string[] | undefined) ?? [];
+    return (projectConfig?.validationCommands as string[] | undefined) ?? ['yarn checks'];
   }
 
   async runWithRetries(params: {

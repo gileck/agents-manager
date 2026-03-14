@@ -22,7 +22,7 @@ describe('Project CRUD', () => {
     expect(project.id).toBeDefined();
     expect(project.name).toBe(input.name);
     expect(project.description).toBe(input.description!);
-    expect(project.config).toEqual({});
+    expect(project.config).toEqual({ validationCommands: [] });
     expect(project.createdAt).toBeGreaterThan(0);
     expect(project.updatedAt).toBeGreaterThan(0);
   });

@@ -16,6 +16,7 @@ export function createProjectInput(overrides?: Partial<ProjectCreateInput>): Pro
     name: `Test Project ${projectCounter}`,
     description: `Description for project ${projectCounter}`,
     path: '/tmp/test-project',
+    config: { validationCommands: [] },
     ...overrides,
   };
 }
