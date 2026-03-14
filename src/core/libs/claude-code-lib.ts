@@ -187,13 +187,16 @@ export class ClaudeCodeLib extends BaseAgentLib {
     const sdkHooks = this.buildSdkHooks(hooks, log);
 
     // Merge external mcpServers with in-process tool definitions (if any).
-    // In-process tools are converted to an SDK server config here, inside ClaudeCodeLib,
-    // keeping all Claude-SDK-specific wrapping out of the generic service layer.
+    // Each entry in mcpTools becomes its own SDK server — the key is used as both the
+    // server name and the mcpServers key, so adding new MCPs requires no changes here.
     let mergedMcpServers: Record<string, unknown> | undefined = options.mcpServers;
-    if (options.mcpTools?.length) {
+    if (options.mcpTools && Object.keys(options.mcpTools).length > 0) {
       const createSdkMcpServer = await loadCreateSdkMcpServer();
-      const inProcessServer = createSdkMcpServer({ name: 'task-manager', tools: options.mcpTools });
-      mergedMcpServers = { ...(options.mcpServers ?? {}), taskManager: inProcessServer };
+      const inProcessServers: Record<string, unknown> = {};
+      for (const [serverName, tools] of Object.entries(options.mcpTools)) {
+        inProcessServers[serverName] = createSdkMcpServer({ name: serverName, tools });
+      }
+      mergedMcpServers = { ...(options.mcpServers ?? {}), ...inProcessServers };
     }
 
     // Result tracking

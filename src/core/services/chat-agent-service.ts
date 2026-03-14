@@ -1152,15 +1152,17 @@ export class ChatAgentService {
       // When resuming a pipeline agent session, use its sessionId for the execute call
       const executeSessionId = extra?.pipelineSessionId ?? sessionId;
 
-      // Build task MCP tool definitions for chat sessions (not pipeline agent runs)
-      let mcpToolsDefs: GenericMcpToolDefinition[] | undefined;
+      // Build task MCP tool definitions for chat sessions (not pipeline agent runs).
+      // Keyed by server name so claude-code-lib can create one SDK server per entry generically.
+      let mcpToolsDefs: Record<string, GenericMcpToolDefinition[]> | undefined;
       let chatSession: ChatSession | null = null;
       if (!extra?.pipelineSessionId) {
         try {
           chatSession = await this.chatSessionStore.getSession(sessionId);
           if (chatSession?.projectId) {
             const daemonUrl = `http://127.0.0.1:${process.env.AM_DAEMON_PORT ?? 3847}`;
-            mcpToolsDefs = await createTaskMcpServer(daemonUrl, { projectId: chatSession.projectId, sessionId, subscriptionRegistry: this.subscriptionRegistry });
+            const taskTools = await createTaskMcpServer(daemonUrl, { projectId: chatSession.projectId, sessionId, subscriptionRegistry: this.subscriptionRegistry });
+            mcpToolsDefs = { 'task-manager': taskTools };
           }
         } catch (mcpErr) {
           getAppLogger().warn('ChatAgentService', 'Failed to create task MCP server, continuing without it', { error: mcpErr instanceof Error ? mcpErr.message : String(mcpErr) });
