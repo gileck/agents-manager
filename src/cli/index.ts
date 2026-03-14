@@ -38,8 +38,10 @@ async function main(): Promise<void> {
   // Peek at argv to see if the user is running a daemon sub-command.
   // If so, skip the ensureDaemon() step entirely.
   const isDaemonCommand = process.argv.length >= 3 && process.argv[2] === 'daemon';
+  const isHelpOrVersion = process.argv.includes('--help') || process.argv.includes('-h')
+    || process.argv.includes('--version') || process.argv.includes('-V');
 
-  if (!isDaemonCommand) {
+  if (!isDaemonCommand && !isHelpOrVersion) {
     // Ensure the daemon is running and create the API client
     const daemonUrl = await ensureDaemon();
     const api = createApiClient(daemonUrl);
