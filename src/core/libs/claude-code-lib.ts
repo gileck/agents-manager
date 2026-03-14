@@ -1,11 +1,29 @@
 import type { AgentChatMessage } from '../../shared/types';
 import type { AgentLibFeatures, AgentLibModelOption, AgentLibHooks, ModelTokenUsage } from '../interfaces/agent-lib';
+import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
+import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
 // but the SDK is ESM-only (.mjs). This bypasses that transformation.
 const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
+
+// Module-level cache for createSdkMcpServer — the SDK is ESM-only so the dynamic import is
+// expensive. Cache after the first load; subsequent calls return synchronously.
+let cachedCreateSdkMcpServer: ((opts: { name: string; version?: string; tools?: GenericMcpToolDefinition[] }) => McpSdkServerConfigWithInstance) | undefined;
+
+async function loadCreateSdkMcpServer(): Promise<(opts: { name: string; version?: string; tools?: GenericMcpToolDefinition[] }) => McpSdkServerConfigWithInstance> {
+  if (!cachedCreateSdkMcpServer) {
+    const sdk = await importESM('@anthropic-ai/claude-agent-sdk');
+    cachedCreateSdkMcpServer = sdk.createSdkMcpServer as (opts: {
+      name: string;
+      version?: string;
+      tools?: GenericMcpToolDefinition[];
+    }) => McpSdkServerConfigWithInstance;
+  }
+  return cachedCreateSdkMcpServer;
+}
 
 // ============================================
 // SDK message types (engine-specific)
@@ -168,6 +186,19 @@ export class ClaudeCodeLib extends BaseAgentLib {
     // Build SDK hooks from our AgentLibHooks (engine-specific format transformation)
     const sdkHooks = this.buildSdkHooks(hooks, log);
 
+    // Merge external mcpServers with in-process tool definitions (if any).
+    // Each entry in mcpTools becomes its own SDK server — the key is used as both the
+    // server name and the mcpServers key, so adding new MCPs requires no changes here.
+    let mergedMcpServers: Record<string, unknown> | undefined = options.mcpServers;
+    if (options.mcpTools && Object.keys(options.mcpTools).length > 0) {
+      const createSdkMcpServer = await loadCreateSdkMcpServer();
+      const inProcessServers: Record<string, unknown> = {};
+      for (const [serverName, tools] of Object.entries(options.mcpTools)) {
+        inProcessServers[serverName] = createSdkMcpServer({ name: serverName, tools });
+      }
+      mergedMcpServers = { ...(options.mcpServers ?? {}), ...inProcessServers };
+    }
+
     // Result tracking
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
@@ -205,7 +236,7 @@ export class ClaudeCodeLib extends BaseAgentLib {
           canUseTool,
           ...(Object.keys(sdkHooks).length > 0 ? { hooks: sdkHooks } : {}),
           ...sessionOptions,
-          ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
+          ...(mergedMcpServers ? { mcpServers: mergedMcpServers } : {}),
           ...(options.maxBudgetUsd != null ? { maxBudgetUsd: options.maxBudgetUsd } : {}),
           ...(options.betas?.length ? { betas: options.betas } : {}),
           ...(options.agents && Object.keys(options.agents).length > 0 ? { agents: options.agents } : {}),
