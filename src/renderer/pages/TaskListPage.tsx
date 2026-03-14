@@ -180,6 +180,19 @@ export function TaskListPage() {
   const toggleSelectAll = () => {
     setSelectedIds(allSelected ? new Set() : new Set(tasks.map((t) => t.id)));
   };
+  const handleToggleSelectGroup = (taskIds: string[]) => {
+    setSelectMode(true);
+    setSelectedIds((prev) => {
+      const allSelected_ = taskIds.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected_) {
+        taskIds.forEach((id) => next.delete(id));
+      } else {
+        taskIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
   const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
 
   const handleBulkDelete = async () => {
@@ -447,6 +460,7 @@ export function TaskListPage() {
             selectMode={selectMode}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
+            onToggleSelectGroup={handleToggleSelectGroup}
             onClickTask={(id) => navigate(`/tasks/${id}`)}
             onDeleteTask={setDeleteTarget}
             onDuplicateTask={handleDuplicate}

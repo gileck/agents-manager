@@ -17,6 +17,7 @@ interface TaskGroupedListProps {
   selectMode: boolean;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  onToggleSelectGroup: (taskIds: string[]) => void;
   onClickTask: (id: string) => void;
   onDeleteTask: (task: Task) => void;
   onDuplicateTask: (task: Task) => void;
@@ -39,6 +40,7 @@ export function TaskGroupedList({
   selectMode,
   selectedIds,
   onToggleSelect,
+  onToggleSelectGroup,
   onClickTask,
   onDeleteTask,
   onDuplicateTask,
@@ -97,13 +99,27 @@ export function TaskGroupedList({
         const isCollapsed = collapsed.has(groupKey);
         const isStatusGroup = groupBy === 'status';
 
+        const groupTaskIds = groupTasks_.map((t) => t.id);
+        const allGroupSelected = groupTaskIds.length > 0 && groupTaskIds.every((id) => selectedIds.has(id));
+        const someGroupSelected = groupTaskIds.some((id) => selectedIds.has(id));
+
         return (
           <div key={groupKey} className="rounded-lg border border-border/60 overflow-hidden">
             {/* Group header */}
             <button
-              className="flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors"
+              className="group flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors"
               onClick={() => toggleGroup(groupKey)}
             >
+              <input
+                type="checkbox"
+                checked={allGroupSelected}
+                ref={(el) => { if (el) el.indeterminate = someGroupSelected && !allGroupSelected; }}
+                onClick={(e) => e.stopPropagation()}
+                onChange={() => onToggleSelectGroup(groupTaskIds)}
+                className={`h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer transition-opacity shrink-0 ${
+                  selectMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+              />
               {isCollapsed ? (
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               ) : (
