@@ -97,7 +97,9 @@ export class SqliteUserStore implements IUserStore {
     }
   }
 
-  getUserRoleSync(_username: string): 'admin' | 'user' | null {
-    throw new Error('Not implemented');
+  getUserRoleSync(username: string): 'admin' | 'user' | null {
+    const row = this.db.prepare('SELECT role FROM users WHERE username = ?').get(username) as { role: string } | undefined;
+    if (!row) return null;
+    return row.role as 'admin' | 'user';
   }
 }
