@@ -38,7 +38,7 @@
     "dev:start": "npm run ensure-native && npx tsx scripts/dev-daemon.ts --web",
     "build:daemon": "esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api",
     "lint": "eslint src/ template/ tests/",
-    "typecheck": "tsc --noEmit -p config/tsconfig.main.json && tsc --noEmit -p config/tsconfig.preload.json && tsc --noEmit -p config/tsconfig.renderer.json && tsc --noEmit -p config/tsconfig.cli.json && tsc --noEmit -p config/tsconfig.daemon.json && tsc --noEmit -p config/tsconfig.web.json",
+    "typecheck": "bash scripts/typecheck.sh",
     "typecheck:web": "tsc --noEmit -p config/tsconfig.web.json",
     "checks": "bash scripts/checks.sh",
     "build:claude": "npx tsx ~/.claude/skills/build-claude-md/index.ts CLAUDE.md",
