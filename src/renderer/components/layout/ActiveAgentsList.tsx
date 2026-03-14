@@ -6,14 +6,18 @@ import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
 import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import type { AgentRunStatus } from '../../../shared/types';
 
+export function RunningIndicator() {
+  return (
+    <span className="relative flex h-2.5 w-2.5 shrink-0">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+    </span>
+  );
+}
+
 function StatusIndicator({ status }: { status: AgentRunStatus }) {
   if (status === 'running') {
-    return (
-      <span className="relative flex h-2.5 w-2.5 shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
-      </span>
-    );
+    return <RunningIndicator />;
   }
   if (status === 'completed') {
     return <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />;

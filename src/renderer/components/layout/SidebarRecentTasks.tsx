@@ -6,14 +6,39 @@ import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import { SidebarSection } from './SidebarSection';
 import { reportError } from '../../lib/error-handler';
 import type { Task } from '../../../shared/types';
+import { RunningIndicator } from './ActiveAgentsList';
 
 const RECENT_TASKS_LIMIT = 15;
+
+const STATUS_ICONS: Record<string, React.ReactNode> = {
+  done: (
+    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#22c55e" />
+      <path d="M4.5 8.5L7 11L11.5 5.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  open: (
+    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#3b82f6" />
+      <circle cx="8" cy="8" r="3" fill="white" />
+    </svg>
+  ),
+  closed: (
+    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#6b7280" />
+    </svg>
+  ),
+};
 
 function sortAndSlice(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, RECENT_TASKS_LIMIT);
 }
 
-export function SidebarRecentTasks() {
+interface SidebarRecentTasksProps {
+  runningTaskIds: Set<string>;
+}
+
+export function SidebarRecentTasks({ runningTaskIds }: SidebarRecentTasksProps) {
   const { currentProjectId } = useCurrentProject();
   const [tasks, setTasks] = useState<Task[]>([]);
   const navigate = useNavigate();
@@ -70,6 +95,7 @@ export function SidebarRecentTasks() {
                     : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
                 )}
               >
+                {runningTaskIds.has(task.id) ? <RunningIndicator /> : (STATUS_ICONS[task.status] ?? null)}
                 <span className="flex-1 min-w-0 truncate font-medium">{task.title}</span>
                 <span
                   className={cn(

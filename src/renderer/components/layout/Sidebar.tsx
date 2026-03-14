@@ -107,7 +107,7 @@ export function Sidebar({ onReportBug }: SidebarProps) {
 
       <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
         <SidebarSessions />
-        <SidebarRecentTasks />
+        <SidebarRecentTasks runningTaskIds={new Set(entries.filter(e => e.run.status === 'running').map(e => e.run.taskId))} />
         <SidebarAutomatedAgents />
         <SidebarSection
           title={`Active Agents${activeCount > 0 ? ` (${activeCount})` : ''}`}
