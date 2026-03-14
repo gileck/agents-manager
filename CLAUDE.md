@@ -275,12 +275,12 @@ SQLite schema, stores, and migrations
 
 Worktrees, git operations, PR lifecycle, and branch strategy
 
-**Summary:** LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<agentType> convention.
+**Summary:** LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id> convention.
 
 **Key Points:**
 - Interface: IWorktreeManager in src/core/interfaces/worktree-manager.ts
 - Implementation: LocalWorktreeManager in src/core/services/local-worktree-manager.ts
-- Branch naming: task/<taskId>/<agentType> (single-phase) or task/<taskId>/integration (multi-phase task branch)
+- Branch naming: task/<taskId> (single-phase) or task/<taskId>/phase-{n} (multi-phase) or task/<taskId>/integration (multi-phase task branch)
 
 **Docs:** [git-scm-integration.md](docs/git-scm-integration.md)
 

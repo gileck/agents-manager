@@ -62,7 +62,7 @@ function makeArtifact(overrides?: Partial<TaskArtifact>): TaskArtifact {
     id: 'art-1',
     taskId: 'task-1',
     type: 'pr',
-    data: { url: 'https://github.com/owner/repo/pull/42', branch: 'task/task-1/implement' },
+    data: { url: 'https://github.com/owner/repo/pull/42', branch: 'task/task-1' },
     createdAt: Date.now(),
     ...overrides,
   };
@@ -146,7 +146,7 @@ describe('registerScmHandler', () => {
 
     mockWorktreeManager = {
       create: vi.fn(),
-      get: vi.fn().mockResolvedValue({ path: '/home/test/project/.agent-worktrees/task-1', branch: 'task/task-1/implement', taskId: 'task-1', locked: false }),
+      get: vi.fn().mockResolvedValue({ path: '/home/test/project/.agent-worktrees/task-1', branch: 'task/task-1', taskId: 'task-1', locked: false }),
       list: vi.fn(),
       lock: vi.fn(),
       unlock: vi.fn(),
@@ -204,7 +204,7 @@ describe('registerScmHandler', () => {
   });
 
   describe('push_and_create_pr hook', () => {
-    const branch = 'task/task-1/implement';
+    const branch = 'task/task-1';
 
     it('aborts rebase on failure and returns error', async () => {
       (mockGitOps.rebase as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('merge conflict'));

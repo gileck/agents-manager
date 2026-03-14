@@ -255,11 +255,11 @@ export class AgentService implements IAgentService {
 
     // Determine base branch and phase branch name
     const baseBranch = multiPhase && taskBranch ? `origin/${taskBranch}` : undefined;
-    let branch = `task/${taskId}/${agentType}`;
+    let branch = `task/${taskId}`;
     if (multiPhase) {
       const phaseIdx = getActivePhaseIndex(task.phases);
       if (phaseIdx >= 0) {
-        branch = `task/${taskId}/${agentType}/phase-${phaseIdx + 1}`;
+        branch = `task/${taskId}/phase-${phaseIdx + 1}`;
       }
     }
 

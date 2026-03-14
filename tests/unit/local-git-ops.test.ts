@@ -209,11 +209,11 @@ describe('LocalGitOps', () => {
 
   describe('getCurrentBranch()', () => {
     it('returns the current branch name', async () => {
-      execFileHandler = () => 'task/abc/implement\n';
+      execFileHandler = () => 'task/abc\n';
 
       const branch = await ops.getCurrentBranch();
 
-      expect(branch).toBe('task/abc/implement');
+      expect(branch).toBe('task/abc');
     });
   });
 
