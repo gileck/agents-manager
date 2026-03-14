@@ -3,4 +3,5 @@ import type { TaskEvent, TaskEventCreateInput, TaskEventFilter } from '../../sha
 export interface ITaskEventLog {
   log(input: TaskEventCreateInput): Promise<TaskEvent>;
   getEvents(filter?: TaskEventFilter): Promise<TaskEvent[]>;
+  dismissEvent(eventId: string): Promise<void>;
 }

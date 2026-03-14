@@ -108,6 +108,7 @@ export interface ApiShape {
     hookRetry(taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string): Promise<HookRetryResult>;
     pipelineDiagnostics(taskId: string): Promise<PipelineDiagnostics | null>;
     advancePhase(taskId: string): Promise<TransitionResult>;
+    dismissEvent(taskId: string, eventId: string): Promise<void>;
     contextEntries(taskId: string): Promise<TaskContextEntry[]>;
     addContextEntry(taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry>;
     addFeedback(taskId: string, input: { entryType: string; content: string; source?: string; agentRunId?: string }): Promise<TaskContextEntry>;

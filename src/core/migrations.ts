@@ -136,5 +136,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '112_fix_already_on_main_to_ready_to_merge',
       sql: `UPDATE pipelines SET transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
     },
+    {
+      name: '113_add_dismissed_to_task_events',
+      sql: `ALTER TABLE task_events ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0`,
+    },
   ];
 }

@@ -94,6 +94,7 @@ export interface ApiClient {
     getPipelineDiagnostics(id: string): Promise<unknown>;
     retryHook(id: string, hookName: string, transitionFrom?: string, transitionTo?: string): Promise<unknown>;
     advancePhase(id: string): Promise<unknown>;
+    dismissEvent(id: string, eventId: string): Promise<void>;
     getDependencies(id: string): Promise<unknown[]>;
     getDependents(id: string): Promise<unknown[]>;
     addDependency(id: string, dependsOnTaskId: string): Promise<unknown>;
@@ -371,6 +372,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       retryHook: (id, hookName, transitionFrom?, transitionTo?) =>
         req('POST', `/api/tasks/${id}/hook-retry`, { hookName, transitionFrom, transitionTo }),
       advancePhase: (id) => req('POST', `/api/tasks/${id}/advance-phase`),
+      dismissEvent: (id, eventId) => req('POST', `/api/tasks/${id}/events/${eventId}/dismiss`),
       getDependencies: (id) => req('GET', `/api/tasks/${id}/dependencies`),
       getDependents: (id) => req('GET', `/api/tasks/${id}/dependents`),
       addDependency: (id, dependsOnTaskId) => req('POST', `/api/tasks/${id}/dependencies`, { dependsOnTaskId }),

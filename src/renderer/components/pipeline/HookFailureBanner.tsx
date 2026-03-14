@@ -6,7 +6,7 @@ interface HookFailureBannerProps {
   failures: HookFailureRecord[];
   retrying: string | null;
   onRetry: (hookName: string, transitionFrom: string, transitionTo: string) => void;
-  onDismiss: (failureId: string) => void;
+  onDismiss: (ids: string[]) => void;
   onReportBug?: (failure: HookFailureRecord) => void;
 }
 
@@ -119,7 +119,7 @@ export function HookFailureBanner({ failures, retrying, onRetry, onDismiss, onRe
                 </Button>
               )}
               <button
-                onClick={() => ids.forEach((id) => onDismiss(id))}
+                onClick={() => onDismiss(ids)}
                 style={{ color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
               >
                 &times;
