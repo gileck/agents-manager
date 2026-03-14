@@ -6,10 +6,11 @@ import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ColorPicker } from '../components/ColorPicker';
 import { useThemeConfig } from '../hooks/useThemeConfig';
+import { useTheme } from '../hooks/useTheme';
 import { THEME_PRESETS, COLOR_GROUPS, COLOR_LABELS, COLOR_VAR_MAP } from '../theme-presets';
 import type { ThemeColors } from '../../shared/types';
 import { Check, RotateCcw } from 'lucide-react';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useState } from 'react';
 import { cn } from '../lib/utils';
 
 const RADIUS_OPTIONS = ['0rem', '0.25rem', '0.5rem', '0.75rem', '1rem'];
@@ -23,7 +24,8 @@ export function ThemePage() {
     updateRadius,
   } = useThemeConfig();
 
-  const [colorMode, setColorMode] = useLocalStorage<'light' | 'dark'>('theme.colorMode', 'light');
+  const { resolvedTheme } = useTheme();
+  const [colorMode, setColorMode] = useState<'light' | 'dark'>(resolvedTheme);
 
   const currentColors = colorMode === 'light' ? themeConfig.colors : themeConfig.darkColors;
   const previewStyle = React.useMemo(() => {

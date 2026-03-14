@@ -61,6 +61,10 @@ export function useThemeConfig() {
   const [themeConfig, setThemeConfigState] = useState<ThemeConfig>(DEFAULT_THEME_CONFIG);
   const [isLoaded, setIsLoaded] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirror of themeConfig state accessible synchronously (React 18 batching
+  // defers state updater execution, so we can't read new state immediately
+  // after setState).
+  const configRef = useRef<ThemeConfig>(DEFAULT_THEME_CONFIG);
 
   /**
    * Debounce-persist a theme config to settings via IPC.
@@ -86,6 +90,7 @@ export function useThemeConfig() {
         const settings = await window.api.settings.get();
         if (settings.themeConfig) {
           const parsed = JSON.parse(settings.themeConfig) as ThemeConfig;
+          configRef.current = parsed;
           setThemeConfigState(parsed);
           applyStyleOverrides(parsed);
         }
@@ -103,6 +108,7 @@ export function useThemeConfig() {
    * Update the theme config, apply it immediately, and debounce-persist to settings.
    */
   const setThemeConfig = useCallback((config: ThemeConfig) => {
+    configRef.current = config;
     setThemeConfigState(config);
     applyStyleOverrides(config);
     debounceSave(config);
@@ -122,6 +128,7 @@ export function useThemeConfig() {
    * Reset to the default theme (remove all customizations).
    */
   const resetTheme = useCallback(async () => {
+    configRef.current = DEFAULT_THEME_CONFIG;
     setThemeConfigState(DEFAULT_THEME_CONFIG);
     removeStyleOverrides();
     try {
@@ -133,54 +140,43 @@ export function useThemeConfig() {
 
   /**
    * Update a single color in the current config (for either light or dark mode).
-   * Uses a functional state update to derive the next config from the latest state,
-   * then applies overrides and schedules a debounced save outside the updater
-   * to avoid stale-closure issues.
+   * Reads the latest config from a ref (not React state) so we can compute
+   * the next config and apply CSS overrides synchronously — React 18 batching
+   * defers setState updater execution, making the old pattern unreliable.
    */
   const updateColor = useCallback((
     key: keyof ThemeColors,
     value: string,
     mode: 'light' | 'dark'
   ) => {
-    let nextConfig: ThemeConfig | null = null;
-    setThemeConfigState(prev => {
-      const next: ThemeConfig = {
-        ...prev,
-        name: 'Custom',
-        colors: { ...prev.colors },
-        darkColors: { ...prev.darkColors },
-      };
-      if (mode === 'light') {
-        next.colors[key] = value;
-      } else {
-        next.darkColors[key] = value;
-      }
-      nextConfig = next;
-      return next;
-    });
-    // Apply overrides and schedule save outside the updater so React
-    // batching doesn't cause stale captures in the timeout closure.
-    // nextConfig is assigned synchronously by the updater above.
-    if (nextConfig) {
-      applyStyleOverrides(nextConfig);
-      debounceSave(nextConfig);
+    const prev = configRef.current;
+    const next: ThemeConfig = {
+      ...prev,
+      name: 'Custom',
+      colors: { ...prev.colors },
+      darkColors: { ...prev.darkColors },
+    };
+    if (mode === 'light') {
+      next.colors[key] = value;
+    } else {
+      next.darkColors[key] = value;
     }
+    configRef.current = next;
+    setThemeConfigState(next);
+    applyStyleOverrides(next);
+    debounceSave(next);
   }, [debounceSave]);
 
   /**
    * Update the border radius.
    */
   const updateRadius = useCallback((radius: string) => {
-    let nextConfig: ThemeConfig | null = null;
-    setThemeConfigState(prev => {
-      const next: ThemeConfig = { ...prev, name: 'Custom', radius };
-      nextConfig = next;
-      return next;
-    });
-    if (nextConfig) {
-      applyStyleOverrides(nextConfig);
-      debounceSave(nextConfig);
-    }
+    const prev = configRef.current;
+    const next: ThemeConfig = { ...prev, name: 'Custom', radius };
+    configRef.current = next;
+    setThemeConfigState(next);
+    applyStyleOverrides(next);
+    debounceSave(next);
   }, [debounceSave]);
 
   // Cleanup timeout on unmount
