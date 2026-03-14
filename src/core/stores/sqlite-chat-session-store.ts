@@ -144,11 +144,9 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       const sql = `
         SELECT cs.id, cs.project_id as projectId, cs.scope_type as scopeType, cs.scope_id as scopeId,
                cs.name, cs.agent_lib as agentLib, cs.model, cs.source, cs.agent_role as agentRole, cs.agent_run_id as agentRunId, cs.permission_mode as permissionMode, cs.sidebar_hidden as sidebarHidden, cs.system_prompt_append as systemPromptAppend, cs.created_at as createdAt, cs.updated_at as updatedAt,
-               COALESCE((SELECT COUNT(*) FROM chat_messages cm WHERE cm.session_id = cs.id), 0) as messageCount,
-               t.title as taskTitle
+               COALESCE((SELECT COUNT(*) FROM chat_messages cm WHERE cm.session_id = cs.id), 0) as messageCount
         FROM chat_sessions cs
-        LEFT JOIN tasks t ON cs.scope_type = 'task' AND cs.scope_id = t.id
-        WHERE cs.project_id = ?
+        WHERE cs.project_id = ? AND cs.scope_type = 'project'
         ORDER BY cs.updated_at DESC`;
 
       const stmt = this.db.prepare(sql);

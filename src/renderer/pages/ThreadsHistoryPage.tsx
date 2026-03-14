@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Search, MessageSquare, CheckSquare } from 'lucide-react';
+import { Trash2, Search, MessageSquare } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import {
@@ -43,7 +43,7 @@ export function ThreadsHistoryPage() {
     setLoading(true);
     window.api.chatSession
       .listAll(currentProjectId)
-      .then(setSessions)
+      .then((data) => setSessions(data.filter((s) => s.scopeType === 'project')))
       .catch((err) => reportError(err, 'Load threads history'))
       .finally(() => setLoading(false));
   }, [currentProjectId]);
@@ -160,24 +160,14 @@ export function ThreadsHistoryPage() {
               >
                 {/* Scope icon */}
                 <div className="shrink-0 text-muted-foreground">
-                  {session.scopeType === 'task' ? (
-                    <CheckSquare className="h-3.5 w-3.5" />
-                  ) : (
-                    <MessageSquare className="h-3.5 w-3.5" />
-                  )}
+                  <MessageSquare className="h-3.5 w-3.5" />
                 </div>
 
                 {/* Name + scope */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <button
-                      onClick={() => {
-                        if (session.scopeType === 'task') {
-                          navigate(`/tasks/${session.scopeId}`);
-                        } else {
-                          navigate('/chat');
-                        }
-                      }}
+                      onClick={() => navigate('/chat')}
                       className="text-sm font-medium truncate hover:underline text-left"
                     >
                       {session.name}
@@ -185,11 +175,6 @@ export function ThreadsHistoryPage() {
                     {session.sidebarHidden && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
                         hidden
-                      </span>
-                    )}
-                    {session.scopeType === 'task' && session.taskTitle && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0 truncate max-w-[120px]">
-                        {session.taskTitle}
                       </span>
                     )}
                   </div>
