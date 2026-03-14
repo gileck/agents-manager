@@ -6,7 +6,7 @@ describe('CodexCliLib', () => {
     const startThread = vi.fn();
 
     class FakeCodex {
-      startThread = startThread.mockImplementation((options) => ({
+      startThread = startThread.mockImplementation((_options) => ({
         id: 'thread-1',
         runStreamed: async () => ({
           events: (async function* () {
