@@ -1,4 +1,4 @@
-import type { PipelineStatus, Transition } from '../../shared/types';
+import type { PipelineStatus, Transition, TransitionHook } from '../../shared/types';
 
 export interface SeededPipeline {
   id: string;
@@ -8,6 +8,139 @@ export interface SeededPipeline {
   statuses: PipelineStatus[];
   transitions: Transition[];
 }
+
+// ── Agent Phase Data Table ─────────────────────────────────────────────
+// Cross-cutting transitions (start, complete, needs-info, retry, cancel)
+// are generated from this table rather than hand-written per phase.
+
+interface AgentPhase {
+  status: string;
+  agentType: string;
+  reviewStatus: string;
+  completionOutcome: string;
+  label: string;
+  /** Override default completion hooks (notify only). When set, these hooks are used instead. */
+  completionHooks?: TransitionHook[];
+}
+
+const PHASES: AgentPhase[] = [
+  { status: 'investigating', agentType: 'investigator', reviewStatus: 'investigation_review', completionOutcome: 'investigation_complete', label: 'Investigation' },
+  { status: 'designing',     agentType: 'designer',     reviewStatus: 'design_review',        completionOutcome: 'design_ready',           label: 'Tech Design' },
+  { status: 'planning',      agentType: 'planner',      reviewStatus: 'plan_review',          completionOutcome: 'plan_complete',           label: 'Planning' },
+  { status: 'implementing',  agentType: 'implementor',  reviewStatus: 'pr_review',            completionOutcome: 'pr_ready',                label: 'Implementation',
+    completionHooks: [
+      { name: 'push_and_create_pr', policy: 'required' },
+      notify('PR ready', 'PR ready: {taskTitle}\n\nSummary: {summary}'),
+      startAgent('reviewer', 'new'),
+    ] },
+];
+
+// ── Hook Helpers ───────────────────────────────────────────────────────
+
+function startAgent(agentType: string, mode: 'new' | 'revision', revisionReason?: string): TransitionHook {
+  const params: Record<string, string> = { mode, agentType };
+  if (revisionReason) params.revisionReason = revisionReason;
+  return { name: 'start_agent', params, policy: 'fire_and_forget' };
+}
+
+function notify(title: string, body: string): TransitionHook {
+  return { name: 'notify', params: { titleTemplate: title, bodyTemplate: body }, policy: 'best_effort' };
+}
+
+// ── Per-Phase Pattern Generators ───────────────────────────────────────
+// Each function generates one cross-cutting transition pattern for a phase.
+
+/** open → phase (manual start) */
+function startFromOpen(p: AgentPhase): Transition {
+  return {
+    from: 'open', to: p.status, trigger: 'manual', label: `Start ${p.label}`,
+    guards: [{ name: 'no_running_agent' }],
+    hooks: [startAgent(p.agentType, 'new')],
+  };
+}
+
+/** phase → reviewStatus (agent completes successfully) */
+function completion(p: AgentPhase): Transition {
+  const hooks = p.completionHooks ?? [
+    notify(`${p.label} ready`, `${p.label} ready: {taskTitle}\n\nSummary: {summary}`),
+  ];
+  return {
+    from: p.status, to: p.reviewStatus, trigger: 'agent', agentOutcome: p.completionOutcome,
+    hooks,
+  };
+}
+
+/** phase → needs_info (agent requests human input) */
+function needsInfo(p: AgentPhase): Transition {
+  return {
+    from: p.status, to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
+    hooks: [
+      { name: 'create_prompt', params: { resumeOutcome: 'info_provided' }, policy: 'required' },
+      notify('Info needed', 'Info needed: {taskTitle}'),
+    ],
+  };
+}
+
+/** needs_info → phase (human provides info, agent resumes) */
+function infoProvided(p: AgentPhase): Transition {
+  return {
+    from: 'needs_info', to: p.status, trigger: 'agent', agentOutcome: 'info_provided',
+    hooks: [startAgent(p.agentType, 'revision', 'info_provided')],
+  };
+}
+
+/** phase → phase self-loop (auto-retry on failure, max 3) */
+function autoRetry(p: AgentPhase): Transition {
+  return {
+    from: p.status, to: p.status, trigger: 'agent', agentOutcome: 'failed',
+    guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+    hooks: [startAgent(p.agentType, 'new')],
+  };
+}
+
+/** phase → open (manual cancel) */
+function cancelPhase(p: AgentPhase): Transition {
+  return { from: p.status, to: 'open', trigger: 'manual', label: `Cancel ${p.label}` };
+}
+
+// ── Generate all cross-cutting transitions ─────────────────────────────
+
+const perPhaseTransitions: Transition[] = PHASES.flatMap(p => [
+  startFromOpen(p),
+  completion(p),
+  needsInfo(p),
+  infoProvided(p),
+  autoRetry(p),
+  cancelPhase(p),
+]);
+
+// ── Multi-Phase PR Approve ─────────────────────────────────────────────
+// Three guarded variants handle intermediate phases, last phase, and
+// single-phase. Both manual and agent triggers share the same structure.
+
+function prApprove(trigger: 'manual' | 'agent'): Transition[] {
+  const outcome = trigger === 'agent' ? { agentOutcome: 'approved' } : {};
+  const lbl = trigger === 'manual' ? { label: 'Approve' } : {};
+  return [
+    // Intermediate phase: merge and cycle to next phase
+    { from: 'pr_review', to: 'done', trigger, ...outcome, ...lbl,
+      guards: [{ name: 'has_following_phases' }],
+      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
+    // Last phase: merge, create final PR, notify
+    { from: 'pr_review', to: 'ready_to_merge', trigger, ...outcome, ...lbl,
+      guards: [{ name: 'has_pending_phases' }],
+      hooks: [
+        { name: 'merge_pr', policy: 'required' },
+        { name: 'advance_phase', policy: 'best_effort' },
+        notify('Final PR ready to merge', 'All phases complete. Final integration PR ready to merge: {taskTitle}'),
+      ] },
+    // Single-phase: straight to ready_to_merge
+    { from: 'pr_review', to: 'ready_to_merge', trigger, ...outcome, ...lbl,
+      hooks: [notify('PR approved', 'PR approved: {taskTitle}')] },
+  ];
+}
+
+// ── Pipeline Definition ────────────────────────────────────────────────
 
 export const AGENT_PIPELINE: SeededPipeline = {
   id: 'pipeline-agent',
@@ -32,231 +165,123 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { name: 'closed', label: 'Closed', color: '#6b7280', isFinal: true, category: 'terminal', position: 13 },
   ],
   transitions: [
-    // === Manual transitions from open ===
+    // ── Generated per-phase transitions ──────────────────────────────
+    // For each phase: start from open, completion, needs_info,
+    // info_provided resume, auto-retry on failure, cancel to open.
+    ...perPhaseTransitions,
+
+    // ── Backlog ──────────────────────────────────────────────────────
     { from: 'open', to: 'backlog', trigger: 'manual', label: 'Move to Backlog',
       guards: [{ name: 'no_running_agent' }] },
     { from: 'backlog', to: 'open', trigger: 'manual', label: 'Move to Open',
       guards: [{ name: 'no_running_agent' }] },
-    { from: 'open', to: 'investigating', trigger: 'manual', label: 'Start Investigation',
-      guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'investigator' }, policy: 'fire_and_forget' }] },
-    { from: 'open', to: 'designing', trigger: 'manual', label: 'Start Tech Design',
-      guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'designer' }, policy: 'fire_and_forget' }] },
-    { from: 'open', to: 'planning', trigger: 'manual', label: 'Start Planning',
-      guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'planner' }, policy: 'fire_and_forget' }] },
-    { from: 'open', to: 'implementing', trigger: 'manual', label: 'Start Implementing',
-      guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
 
-    // === Investigation review transitions ===
+    // ── Review gate exits ───────────────────────────────────────────
+    // At each review gate the human chooses the next phase.
+    // This is where the flow becomes dynamic — simple tasks skip ahead,
+    // complex tasks go through more phases.
+
+    // Investigation review → implement (simple) / design (complex) / re-investigate
     { from: 'investigation_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('implementor', 'new')] },
     { from: 'investigation_review', to: 'designing', trigger: 'manual', label: 'Start Technical Design',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'designer' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('designer', 'new')] },
     { from: 'investigation_review', to: 'investigating', trigger: 'manual', label: 'Request Investigation Changes',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'investigator' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('investigator', 'new')] },
 
-    // === Plan review transitions ===
-    { from: 'plan_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
-      guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
-    { from: 'plan_review', to: 'planning', trigger: 'manual', label: 'Request Plan Changes',
-      guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'planner', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
-
-    // === Design review transitions ===
+    // Design review → plan / implement / re-design
     { from: 'design_review', to: 'planning', trigger: 'manual', label: 'Approve & Plan',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'planner' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('planner', 'new')] },
     { from: 'design_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('implementor', 'new')] },
     { from: 'design_review', to: 'designing', trigger: 'manual', label: 'Request Design Changes',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'designer', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('designer', 'revision', 'changes_requested')] },
 
-    // === PR review transitions ===
+    // Plan review → implement / re-plan
+    { from: 'plan_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('implementor', 'new')] },
+    { from: 'plan_review', to: 'planning', trigger: 'manual', label: 'Request Plan Changes',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('planner', 'revision', 'changes_requested')] },
+
+    // ── PR review (manual) ──────────────────────────────────────────
     { from: 'pr_review', to: 'implementing', trigger: 'manual', label: 'Request Changes',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
-    // Multi-phase intermediate approve: auto-merge and cycle when following phases remain
-    { from: 'pr_review', to: 'done', trigger: 'manual', label: 'Approve',
-      guards: [{ name: 'has_following_phases' }],
-      hooks: [
-        { name: 'merge_pr', policy: 'required' },
-        { name: 'advance_phase', policy: 'best_effort' },
-      ] },
-    // Last phase of multi-phase task: merge into integration branch, create final PR, notify
-    { from: 'pr_review', to: 'ready_to_merge', trigger: 'manual', label: 'Approve',
-      guards: [{ name: 'has_pending_phases' }],
-      hooks: [
-        { name: 'merge_pr', policy: 'required' },
-        { name: 'advance_phase', policy: 'best_effort' },
-        { name: 'notify', params: { titleTemplate: 'Final PR ready to merge', bodyTemplate: 'All phases complete. Final integration PR ready to merge: {taskTitle}' }, policy: 'best_effort' },
-      ] },
-    // Single-phase or no-phase task: go to ready_to_merge for manual merge
-    { from: 'pr_review', to: 'ready_to_merge', trigger: 'manual', label: 'Approve',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'PR approved', bodyTemplate: 'PR approved: {taskTitle}' }, policy: 'best_effort' }] },
+      hooks: [startAgent('implementor', 'revision', 'changes_requested')] },
+    ...prApprove('manual'),
     { from: 'pr_review', to: 'pr_review', trigger: 'manual', label: 'Re-run PR Review',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'reviewer' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('reviewer', 'new')] },
 
-    // === Merge ===
+    // ── PR review (agent outcomes) ──────────────────────────────────
+    ...prApprove('agent'),
+    { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('implementor', 'revision', 'changes_requested')] },
+    { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'failed',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [startAgent('reviewer', 'new')] },
+
+    // ── Merge ───────────────────────────────────────────────────────
     { from: 'ready_to_merge', to: 'done', trigger: 'manual', label: 'Merge',
       guards: [{ name: 'is_admin' }],
       hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
 
-    // === Agent outcome auto-transitions ===
-    { from: 'investigating', to: 'investigation_review', trigger: 'agent', agentOutcome: 'investigation_complete',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Investigation ready', bodyTemplate: 'Investigation ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' }] },
-    { from: 'designing', to: 'design_review', trigger: 'agent', agentOutcome: 'design_ready',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Design ready', bodyTemplate: 'Technical design ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' }] },
-    { from: 'planning', to: 'plan_review', trigger: 'agent', agentOutcome: 'plan_complete',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'Plan ready', bodyTemplate: 'Plan ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' }] },
-    { from: 'implementing', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
-      hooks: [
-        { name: 'push_and_create_pr', policy: 'required' },
-        { name: 'notify', params: { titleTemplate: 'PR ready', bodyTemplate: 'PR ready: {taskTitle}\n\nSummary: {summary}' }, policy: 'best_effort' },
-        { name: 'start_agent', params: { mode: 'new', agentType: 'reviewer' }, policy: 'fire_and_forget' },
-      ] },
-
-    // === Needs info transitions (from any agent phase) ===
-    { from: 'investigating', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
-      hooks: [
-        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' }, policy: 'required' },
-        { name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' }, policy: 'best_effort' },
-      ] },
-    { from: 'designing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
-      hooks: [
-        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' }, policy: 'required' },
-        { name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' }, policy: 'best_effort' },
-      ] },
-    { from: 'planning', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
-      hooks: [
-        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' }, policy: 'required' },
-        { name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' }, policy: 'best_effort' },
-      ] },
-    { from: 'implementing', to: 'needs_info', trigger: 'agent', agentOutcome: 'needs_info',
-      hooks: [
-        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' }, policy: 'required' },
-        { name: 'notify', params: { titleTemplate: 'Info needed', bodyTemplate: 'Info needed: {taskTitle}' }, policy: 'best_effort' },
-      ] },
-
-    // === Human-in-the-loop resume (auto-start agent after info provided) ===
-    { from: 'needs_info', to: 'investigating', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'investigator', revisionReason: 'info_provided' }, policy: 'fire_and_forget' }] },
-    { from: 'needs_info', to: 'designing', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'designer', revisionReason: 'info_provided' }, policy: 'fire_and_forget' }] },
-    { from: 'needs_info', to: 'planning', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'planner', revisionReason: 'info_provided' }, policy: 'fire_and_forget' }] },
-    { from: 'needs_info', to: 'implementing', trigger: 'agent', agentOutcome: 'info_provided',
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'info_provided' }, policy: 'fire_and_forget' }] },
-
-    // === Auto-retry on agent failure ===
-    { from: 'investigating', to: 'investigating', trigger: 'agent', agentOutcome: 'failed',
-      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'investigator' }, policy: 'fire_and_forget' }] },
-    { from: 'designing', to: 'designing', trigger: 'agent', agentOutcome: 'failed',
-      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'designer' }, policy: 'fire_and_forget' }] },
-    { from: 'planning', to: 'planning', trigger: 'agent', agentOutcome: 'failed',
-      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'planner' }, policy: 'fire_and_forget' }] },
-    { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'failed',
-      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
-
-    // === PR review agent outcomes ===
-    // Multi-phase intermediate auto-approve: merge immediately and cycle back when following phases remain
-    { from: 'pr_review', to: 'done', trigger: 'agent', agentOutcome: 'approved',
-      guards: [{ name: 'has_following_phases' }],
-      hooks: [
-        { name: 'merge_pr', policy: 'required' },
-        { name: 'advance_phase', policy: 'best_effort' },
-      ] },
-    // Last phase of multi-phase task: merge into integration branch, create final PR, notify
-    { from: 'pr_review', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'approved',
-      guards: [{ name: 'has_pending_phases' }],
-      hooks: [
-        { name: 'merge_pr', policy: 'required' },
-        { name: 'advance_phase', policy: 'best_effort' },
-        { name: 'notify', params: { titleTemplate: 'Final PR ready to merge', bodyTemplate: 'All phases complete. Final integration PR ready to merge: {taskTitle}' }, policy: 'best_effort' },
-      ] },
-    // Single-phase or no-phase task: go to ready_to_merge for manual merge
-    { from: 'pr_review', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'approved',
-      hooks: [{ name: 'notify', params: { titleTemplate: 'PR approved', bodyTemplate: 'PR approved: {taskTitle}' }, policy: 'best_effort' }] },
-    { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
-      guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
-    { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'failed',
-      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'reviewer' }, policy: 'fire_and_forget' }] },
-
-    // === No changes detected on branch after implementation ===
+    // ── Implementing special outcomes ───────────────────────────────
     { from: 'implementing', to: 'open', trigger: 'agent', agentOutcome: 'no_changes' },
-
-    // === Implementation already exists on main — return to human review gate ===
     { from: 'implementing', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'already_on_main' },
-
-    // === Merge conflict detection — self-loop to resolve conflicts ===
     { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'conflicts_detected',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'merge_failed' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('implementor', 'revision', 'merge_failed')] },
 
-    // === PR push retry (handles conflicts arising after agent-service check or after request_changes) ===
+    // ── PR push retry ───────────────────────────────────────────────
     { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'pr_ready',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [
         { name: 'push_and_create_pr', policy: 'required' },
-        { name: 'start_agent', params: { mode: 'new', agentType: 'reviewer' }, policy: 'fire_and_forget' },
+        startAgent('reviewer', 'new'),
       ] },
 
-    // === Phase cycling: done → implementing when more phases remain ===
+    // ── Phase cycling ───────────────────────────────────────────────
     { from: 'done', to: 'implementing', trigger: 'system',
       guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('implementor', 'new')] },
     { from: 'done', to: 'implementing', trigger: 'manual', label: 'Retry Next Phase',
       guards: [{ name: 'has_pending_phases' }, { name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'implementor' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('implementor', 'new')] },
 
-    // === Recovery: cancel agent phases back to open ===
-    { from: 'investigating', to: 'open', trigger: 'manual', label: 'Cancel Investigation' },
-    { from: 'planning', to: 'open', trigger: 'manual', label: 'Cancel Planning' },
-    { from: 'designing', to: 'open', trigger: 'manual', label: 'Cancel Design' },
-    { from: 'implementing', to: 'open', trigger: 'manual', label: 'Cancel Implementation' },
+    // ── Recovery: backtrack from implementing ───────────────────────
     { from: 'implementing', to: 'plan_review', trigger: 'manual', label: 'Back to Plan Review' },
     { from: 'implementing', to: 'design_review', trigger: 'manual', label: 'Back to Design Review' },
     { from: 'implementing', to: 'investigation_review', trigger: 'manual', label: 'Back to Investigation Review' },
     { from: 'design_review', to: 'open', trigger: 'manual', label: 'Cancel Design Review' },
 
-    // === Close / Reopen ===
+    // ── Close / Reopen ──────────────────────────────────────────────
     { from: '*', to: 'closed', trigger: 'manual', label: 'Close Task',
       guards: [{ name: 'no_running_agent' }] },
     { from: 'closed', to: 'open', trigger: 'manual', label: 'Reopen' },
 
-    // === Workflow review (manual trigger from done) ===
+    // ── Workflow review ─────────────────────────────────────────────
     { from: 'done', to: 'workflow_review', trigger: 'manual', label: 'Review Workflow',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'new', agentType: 'task-workflow-reviewer' }, policy: 'fire_and_forget' }] },
+      hooks: [startAgent('task-workflow-reviewer', 'new')] },
     { from: 'workflow_review', to: 'done', trigger: 'agent', agentOutcome: 'review_complete' },
     { from: 'workflow_review', to: 'done', trigger: 'agent', agentOutcome: 'failed' },
 
-    // === Request changes from ready_to_merge ===
+    // ── Ready-to-merge recovery ─────────────────────────────────────
     { from: 'ready_to_merge', to: 'implementing', trigger: 'manual', label: 'Request Changes',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'changes_requested' }, policy: 'fire_and_forget' }] },
-
-    // === Auto-recovery when merge_pr hook fails (conflicts, failing checks, etc.) ===
+      hooks: [startAgent('implementor', 'revision', 'changes_requested')] },
     { from: 'ready_to_merge', to: 'implementing', trigger: 'system', label: 'Merge Failed - Auto Retry',
       guards: [{ name: 'no_running_agent' }],
-      hooks: [{ name: 'start_agent', params: { mode: 'revision', agentType: 'implementor', revisionReason: 'merge_failed' }, policy: 'fire_and_forget' }] },
-
-    // === Manual recovery if merge_pr safety net catches a conflict ===
+      hooks: [startAgent('implementor', 'revision', 'merge_failed')] },
     { from: 'done', to: 'ready_to_merge', trigger: 'manual', label: 'Merge Failed - Retry' },
   ],
 };
