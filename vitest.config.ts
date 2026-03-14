@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import { builtinModules } from 'module';
 
 export default defineConfig({
   test: {
@@ -17,10 +18,14 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@shared': path.resolve(__dirname, 'src/shared'),
-      '@core': path.resolve(__dirname, 'src/core'),
-      '@template': path.resolve(__dirname, 'template'),
-    },
+    alias: [
+      { find: '@shared', replacement: path.resolve(__dirname, 'src/shared') },
+      { find: '@core', replacement: path.resolve(__dirname, 'src/core') },
+      { find: '@template', replacement: path.resolve(__dirname, 'template') },
+      ...builtinModules.map((mod) => ({
+        find: mod,
+        replacement: `node:${mod}`,
+      })),
+    ],
   },
 });

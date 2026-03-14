@@ -85,6 +85,7 @@ import { PhaseSource } from '../services/timeline/sources/phase-source';
 import { ArtifactSource } from '../services/timeline/sources/artifact-source';
 import { PromptSource } from '../services/timeline/sources/prompt-source';
 import { ContextSource } from '../services/timeline/sources/context-source';
+import { SqliteTimelineStore } from '../stores/sqlite-timeline-store';
 import { registerCoreGuards } from '../handlers/core-guards';
 import { registerAgentHandler, type StreamingCallbacks } from '../handlers/agent-handler';
 import { registerNotificationHandler } from '../handlers/notification-handler';
@@ -207,15 +208,16 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   } catch { /* Telegram not configured */ }
 
   // Timeline service (created before AgentService because TaskReviewReportBuilder needs it)
+  const timelineStore = new SqliteTimelineStore(db);
   const timelineService = new TimelineService([
-    new EventSource(db),
-    new ActivitySource(db),
-    new TransitionSource(db),
-    new AgentRunSource(db),
-    new PhaseSource(db),
-    new ArtifactSource(db),
-    new PromptSource(db),
-    new ContextSource(db),
+    new EventSource(timelineStore),
+    new ActivitySource(timelineStore),
+    new TransitionSource(timelineStore),
+    new AgentRunSource(timelineStore),
+    new PhaseSource(timelineStore),
+    new ArtifactSource(timelineStore),
+    new PromptSource(timelineStore),
+    new ContextSource(timelineStore),
   ]);
 
   // Agent lib registry — engines that execute prompts
