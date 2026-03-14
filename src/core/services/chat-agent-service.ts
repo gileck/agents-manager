@@ -1276,10 +1276,14 @@ export class ChatAgentService {
 
         try {
           const answers = await requestQuestionAnswers(questionId, questions);
-          // Return deny with the user's answers formatted as a message
-          // so the agent receives the answers as tool result text
-          const answerLines = Object.entries(answers).map(([q, a]) => `${q}: ${a}`).join('\n');
-          return { behavior: 'deny', message: `User answered:\n${answerLines}` };
+          // Official SDK pattern: allow the tool with answers injected into updatedInput
+          return {
+            behavior: 'allow',
+            updatedInput: {
+              questions: input.questions,
+              answers,
+            },
+          };
         } catch {
           return { behavior: 'deny', message: 'User did not answer (agent was stopped).' };
         }
