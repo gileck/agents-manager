@@ -1496,3 +1496,4 @@ export interface AgentNotificationPayload {
   summary?: string;
   autoNotify: boolean;
 }
+// CI checks test - this comment is harmless
