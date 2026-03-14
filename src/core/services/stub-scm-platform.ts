@@ -22,6 +22,10 @@ export class StubScmPlatform implements IScmPlatform {
     };
   }
 
+  async findPR(_params: { head: string; base: string }): Promise<PRInfo | null> {
+    return null;
+  }
+
   async mergePR(prUrl: string): Promise<void> {
     this.prStatuses.set(prUrl, 'merged');
   }
