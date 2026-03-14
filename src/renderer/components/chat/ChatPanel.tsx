@@ -59,10 +59,17 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     tokenUsage,
     perTurnUsage,
     respondToPermission,
+    rawEvents,
   } = useChat(currentSessionId);
 
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showRawView, setShowRawView] = useState(false);
   const [showActions, setShowActions] = useState(false);
+
+  // Reset raw view when session changes
+  useEffect(() => {
+    setShowRawView(false);
+  }, [currentSessionId]);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
 
@@ -168,6 +175,23 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
             </span>
           )}
 
+          <div className="flex items-center rounded-full border border-border/70 bg-card/65 overflow-hidden">
+            <button
+              onClick={() => setShowRawView(false)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${!showRawView ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'}`}
+              title="Chat view"
+            >
+              Chat
+            </button>
+            <button
+              onClick={() => setShowRawView(true)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${showRawView ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'}`}
+              title="Raw WebSocket events"
+            >
+              Raw
+            </button>
+          </div>
+
           <button
             onClick={() => setShowSidebar(!showSidebar)}
             className="p-2 rounded-full border border-border/70 bg-card/65 text-muted-foreground hover:text-foreground hover:bg-accent/65 transition-colors"
@@ -252,6 +276,8 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               onPermissionModeChange={handlePermissionModeChange}
               sessionId={currentSessionId}
               onPermissionResponse={respondToPermission}
+              rawEvents={rawEvents}
+              showRawView={showRawView}
               emptyState={(
                 <div className="text-center text-muted-foreground/80 py-20">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border border-border/70 bg-card/65 mb-5">
