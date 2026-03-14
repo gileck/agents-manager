@@ -238,6 +238,22 @@ async function main() {
   });
 
   log(`Watching ${SRC_DIR} for changes...`);
+  log('Press \x1b[1mr\x1b[0m to restart daemon');
+
+  // Listen for 'r' keypress to manually restart
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on('data', (data) => {
+      const key = data.toString();
+      if (key === 'r' || key === 'R') {
+        handleChange(null);
+      } else if (key === '\x03') {
+        // Ctrl+C
+        shutdown();
+      }
+    });
+  }
 
   if (WITH_WEB) {
     log('Waiting for daemon to be healthy...');
