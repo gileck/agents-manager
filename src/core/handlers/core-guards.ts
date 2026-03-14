@@ -12,7 +12,6 @@ export function registerCoreGuards(engine: IPipelineEngine): void {
 
   engine.registerGuard('dependencies_resolved', (task: Task, _transition: Transition, _context: TransitionContext, queryCtx: IGuardQueryContext): GuardResult => {
     const count = queryCtx.countUnresolvedDependencies(task.id);
-
     if (count === 0) {
       return { allowed: true };
     }
@@ -21,7 +20,6 @@ export function registerCoreGuards(engine: IPipelineEngine): void {
 
   engine.registerGuard('max_retries', (task: Task, _transition: Transition, _context: TransitionContext, queryCtx: IGuardQueryContext, params?: Record<string, unknown>): GuardResult => {
     const max = (params?.max as number) ?? 3;
-
     const count = queryCtx.countFailedRuns(task.id);
 
     // count includes the run that just failed; first failure = count 1.
@@ -61,7 +59,7 @@ export function registerCoreGuards(engine: IPipelineEngine): void {
 
     const role = queryCtx.getUserRole(context.actor);
 
-    if (role === null) {
+    if (!role) {
       return { allowed: false, reason: 'User not found' };
     }
 

@@ -1,9 +1,5 @@
-import type Database from 'better-sqlite3';
 import type {
   Task,
-  Subtask,
-  ImplementationPhase,
-  PlanComment,
   Transition,
   TransitionTrigger,
   TransitionContext,
@@ -25,125 +21,23 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
-import { generateId, now, parseJson } from '../stores/utils';
+import type { ITransactionRunner } from '../interfaces/transaction-runner';
+import { generateId, now } from '../stores/utils';
 import { getAppLogger } from './app-logger';
 
 type OnPostLog = (category: PostProcessingLogCategory, message: string, details?: Record<string, unknown>, durationMs?: number) => void;
 
-interface TaskRow {
-  id: string;
-  project_id: string;
-  pipeline_id: string;
-  title: string;
-  description: string | null;
-  type: string;
-  size: string | null;
-  complexity: string | null;
-  status: string;
-  priority: number;
-  tags: string;
-  parent_task_id: string | null;
-  assignee: string | null;
-  pr_link: string | null;
-  branch_name: string | null;
-  feature_id: string | null;
-  plan: string | null;
-  technical_design: string | null;
-  debug_info: string | null;
-  subtasks: string;
-  phases: string | null;
-  plan_comments: string;
-  technical_design_comments: string;
-  metadata: string;
-  created_at: number;
-  updated_at: number;
-  created_by: string | null;
-}
-
-function rowToTask(row: TaskRow): Task {
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    pipelineId: row.pipeline_id,
-    title: row.title,
-    description: row.description,
-    type: (row.type || 'feature') as Task['type'],
-    size: (row.size ?? null) as Task['size'],
-    complexity: (row.complexity ?? null) as Task['complexity'],
-    status: row.status,
-    priority: row.priority,
-    tags: parseJson<string[]>(row.tags, []),
-    parentTaskId: row.parent_task_id,
-    featureId: row.feature_id,
-    assignee: row.assignee,
-    prLink: row.pr_link,
-    branchName: row.branch_name,
-    plan: row.plan,
-    technicalDesign: row.technical_design,
-    debugInfo: row.debug_info,
-    subtasks: parseJson<Subtask[]>(row.subtasks, []),
-    phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
-    planComments: parseJson<PlanComment[]>(row.plan_comments, []),
-    technicalDesignComments: parseJson<PlanComment[]>(row.technical_design_comments, []),
-    metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    createdBy: (row.created_by as Task['createdBy']) ?? null,
-  };
-}
-
-class DbGuardQueryContext implements IGuardQueryContext {
-  constructor(private db: Database.Database) {}
-
-  countUnresolvedDependencies(taskId: string): number {
-    const row = this.db.prepare(`
-      SELECT COUNT(*) as count FROM task_dependencies td
-      JOIN tasks t ON t.id = td.depends_on_task_id
-      WHERE td.task_id = ?
-      AND t.status NOT IN (
-        SELECT json_extract(s.value, '$.name')
-        FROM pipelines p2, json_each(p2.statuses) s
-        WHERE p2.id = t.pipeline_id
-        AND json_extract(s.value, '$.isFinal') = 1
-      )
-    `).get(taskId) as { count: number };
-    return row.count;
-  }
-
-  countFailedRuns(taskId: string): number {
-    const row = this.db.prepare(
-      "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status IN ('failed', 'cancelled')"
-    ).get(taskId) as { count: number };
-    return row.count;
-  }
-
-  countRunningRuns(taskId: string): number {
-    const row = this.db.prepare(
-      "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status = 'running'"
-    ).get(taskId) as { count: number };
-    return row.count;
-  }
-
-  getUserRole(username: string): 'admin' | 'user' | null {
-    const row = this.db.prepare('SELECT role FROM users WHERE username = ?').get(username) as { role: string } | undefined;
-    if (!row) return null;
-    return row.role as 'admin' | 'user';
-  }
-}
-
 export class PipelineEngine implements IPipelineEngine {
   private guards = new Map<string, GuardFn>();
   private hooks = new Map<string, HookFn>();
-  private guardQueryContext: IGuardQueryContext;
 
   constructor(
     private pipelineStore: IPipelineStore,
     private taskStore: ITaskStore,
     private taskEventLog: ITaskEventLog,
-    private db: Database.Database,
-  ) {
-    this.guardQueryContext = new DbGuardQueryContext(db);
-  }
+    private txRunner: ITransactionRunner,
+    private guardContext: IGuardQueryContext,
+  ) {}
 
   registerGuard(name: string, fn: GuardFn): void {
     this.guards.set(name, fn);
@@ -154,10 +48,7 @@ export class PipelineEngine implements IPipelineEngine {
   }
 
   getPreviousStatus(taskId: string): string | null {
-    const row = this.db.prepare(
-      'SELECT from_status FROM transition_history WHERE task_id = ? ORDER BY created_at DESC LIMIT 1'
-    ).get(taskId) as { from_status: string } | undefined;
-    return row?.from_status ?? null;
+    return this.pipelineStore.getLastFromStatusSync(taskId);
   }
 
   async getValidTransitions(task: Task, trigger?: TransitionTrigger): Promise<Transition[]> {
@@ -208,65 +99,57 @@ export class PipelineEngine implements IPipelineEngine {
 
     for (const transition of candidateTransitions) {
     // Execute atomically within a sync transaction (better-sqlite3 requirement).
-    // Uses raw SQL inside the transaction — the async store interface can't be
-    // called from a synchronous callback.
     let updatedTask: Task | null = null;
     const guardResults: Record<string, GuardResult> = {};
     const guardFailures: Array<{ guard: string; reason: string }> = [];
 
-    const txn = this.db.transaction(() => {
-      // Re-fetch task inside transaction via raw SQL (TOCTOU protection)
-      const freshRow = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow | undefined;
-      if (!freshRow) {
-        throw new Error(`Task not found: ${task.id}`);
-      }
-      if (freshRow.status !== task.status) {
-        throw new Error(`Task status changed: expected "${task.status}", got "${freshRow.status}"`);
-      }
-      const freshTask = rowToTask(freshRow);
-
-      // Run guards synchronously
-      if (transition.guards) {
-        for (const guard of transition.guards) {
-          const guardFn = this.guards.get(guard.name);
-          if (!guardFn) {
-            const result: GuardResult = { allowed: false, reason: `Guard "${guard.name}" not registered` };
-            guardResults[guard.name] = result;
-            guardFailures.push({ guard: guard.name, reason: result.reason! });
-            continue;
-          }
-          const result = guardFn(freshTask, transition, ctx, this.guardQueryContext, guard.params);
-          guardResults[guard.name] = result;
-          if (!result.allowed) {
-            guardFailures.push({ guard: guard.name, reason: result.reason ?? 'Guard check failed' });
-          }
-        }
-        // Note: onPostLog is called outside the sync transaction below
-      }
-
-      if (guardFailures.length > 0) {
-        // Record the denied attempt so it's visible in the audit trail
-        this.db.prepare(`
-          INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          generateId(),
-          task.id,
-          task.status,
-          toStatus,
-          ctx.trigger,
-          ctx.actor ?? null,
-          JSON.stringify({ _denied: true, guardFailures }),
-          now(),
-        );
-        return;
-      }
-
-      updatedTask = this.applyStatusUpdate(freshTask, task.id, task.status, toStatus, ctx, guardResults);
-    });
-
     try {
-      txn();
+      this.txRunner.runTransaction(() => {
+        // Re-fetch task inside transaction via sync store method (TOCTOU protection)
+        const freshTask = this.taskStore.getTaskSync(task.id);
+        if (!freshTask) {
+          throw new Error(`Task not found: ${task.id}`);
+        }
+        if (freshTask.status !== task.status) {
+          throw new Error(`Task status changed: expected "${task.status}", got "${freshTask.status}"`);
+        }
+
+        // Run guards synchronously
+        if (transition.guards) {
+          for (const guard of transition.guards) {
+            const guardFn = this.guards.get(guard.name);
+            if (!guardFn) {
+              const result: GuardResult = { allowed: false, reason: `Guard "${guard.name}" not registered` };
+              guardResults[guard.name] = result;
+              guardFailures.push({ guard: guard.name, reason: result.reason! });
+              continue;
+            }
+            const result = guardFn(freshTask, transition, ctx, this.guardContext, guard.params);
+            guardResults[guard.name] = result;
+            if (!result.allowed) {
+              guardFailures.push({ guard: guard.name, reason: result.reason ?? 'Guard check failed' });
+            }
+          }
+          // Note: onPostLog is called outside the sync transaction below
+        }
+
+        if (guardFailures.length > 0) {
+          // Record the denied attempt so it's visible in the audit trail
+          this.pipelineStore.recordTransitionSync({
+            id: generateId(),
+            taskId: task.id,
+            fromStatus: task.status,
+            toStatus,
+            trigger: ctx.trigger,
+            actor: ctx.actor ?? null,
+            guardResults: { _denied: true, guardFailures },
+            createdAt: now(),
+          });
+          return;
+        }
+
+        updatedTask = this.applyStatusUpdate(freshTask, task.id, task.status, toStatus, ctx, guardResults);
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       return { success: false, error: message };
@@ -306,8 +189,8 @@ export class PipelineEngine implements IPipelineEngine {
       // After rollback, check if the failed hook requested a follow-up transition
       const followUp = requiredFailures.find(f => f.followUpTransition)?.followUpTransition;
       if (followUp) {
-        const freshRow = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow | undefined;
-        if (!freshRow) {
+        const freshTask = this.taskStore.getTaskSync(task.id);
+        if (!freshTask) {
           getAppLogger().error('PipelineEngine', `Follow-up transition skipped: task ${task.id} not found after rollback`);
         } else {
           this.taskEventLog.log({
@@ -318,7 +201,7 @@ export class PipelineEngine implements IPipelineEngine {
             data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger },
           }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
 
-          this.executeTransition(rowToTask(freshRow), followUp.to, { trigger: followUp.trigger, actor: ctx.actor })
+          this.executeTransition(freshTask, followUp.to, { trigger: followUp.trigger, actor: ctx.actor })
             .catch(err => {
               const msg = err instanceof Error ? err.message : String(err);
               this.taskEventLog.log({
@@ -416,22 +299,19 @@ export class PipelineEngine implements IPipelineEngine {
 
     let updatedTask: Task | null = null;
 
-    const txn = this.db.transaction(() => {
-      const freshRow = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow | undefined;
-      if (!freshRow) {
-        throw new Error(`Task not found: ${task.id}`);
-      }
-      if (freshRow.status !== task.status) {
-        throw new Error(`Task status changed: expected "${task.status}", got "${freshRow.status}"`);
-      }
-      const freshTask = rowToTask(freshRow);
-
-      // Skip guards — this is a force transition
-      updatedTask = this.applyStatusUpdate(freshTask, task.id, task.status, toStatus, ctx, { _forced: true });
-    });
-
     try {
-      txn();
+      this.txRunner.runTransaction(() => {
+        const freshTask = this.taskStore.getTaskSync(task.id);
+        if (!freshTask) {
+          throw new Error(`Task not found: ${task.id}`);
+        }
+        if (freshTask.status !== task.status) {
+          throw new Error(`Task status changed: expected "${task.status}", got "${freshTask.status}"`);
+        }
+
+        // Skip guards — this is a force transition
+        updatedTask = this.applyStatusUpdate(freshTask, task.id, task.status, toStatus, ctx, { _forced: true });
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       return { success: false, error: message };
@@ -485,7 +365,7 @@ export class PipelineEngine implements IPipelineEngine {
           canTransition = false;
           continue;
         }
-        const result = guardFn(task, transition, { trigger }, this.guardQueryContext, guard.params);
+        const result = guardFn(task, transition, { trigger }, this.guardContext, guard.params);
         results.push({ guard: guard.name, allowed: result.allowed, reason: result.reason });
         if (!result.allowed) canTransition = false;
       }
@@ -555,7 +435,7 @@ export class PipelineEngine implements IPipelineEngine {
 
   /**
    * Apply status update and insert transition history within an active transaction.
-   * Must be called inside a db.transaction() callback.
+   * Must be called inside a txRunner.runTransaction() callback.
    */
   private applyStatusUpdate(
     freshTask: Task,
@@ -566,21 +446,18 @@ export class PipelineEngine implements IPipelineEngine {
     guardResults: Record<string, unknown>,
   ): Task {
     const timestamp = now();
-    this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').run(toStatus, timestamp, taskId);
+    this.taskStore.updateTaskStatusSync(taskId, toStatus, timestamp);
 
-    this.db.prepare(`
-      INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      generateId(),
+    this.pipelineStore.recordTransitionSync({
+      id: generateId(),
       taskId,
       fromStatus,
       toStatus,
-      ctx.trigger,
-      ctx.actor ?? null,
-      JSON.stringify(guardResults),
-      timestamp,
-    );
+      trigger: ctx.trigger,
+      actor: ctx.actor ?? null,
+      guardResults,
+      createdAt: timestamp,
+    });
 
     return { ...freshTask, status: toStatus, updatedAt: timestamp };
   }
@@ -775,25 +652,20 @@ export class PipelineEngine implements IPipelineEngine {
     requiredFailures: HookFailure[],
   ): void {
     try {
-      const rollbackTxn = this.db.transaction(() => {
+      this.txRunner.runTransaction(() => {
         const rollbackTimestamp = now();
-        this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?')
-          .run(originalStatus, rollbackTimestamp, taskId);
-        this.db.prepare(`
-          INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          generateId(),
+        this.taskStore.updateTaskStatusSync(taskId, originalStatus, rollbackTimestamp);
+        this.pipelineStore.recordTransitionSync({
+          id: generateId(),
           taskId,
-          failedToStatus,
-          originalStatus,
-          ctx.trigger,
-          ctx.actor ?? null,
-          JSON.stringify({ _rollback: true, failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) }),
-          rollbackTimestamp,
-        );
+          fromStatus: failedToStatus,
+          toStatus: originalStatus,
+          trigger: ctx.trigger,
+          actor: ctx.actor ?? null,
+          guardResults: { _rollback: true, failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
+          createdAt: rollbackTimestamp,
+        });
       });
-      rollbackTxn();
     } catch (rollbackErr) {
       const rollbackMsg = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
       // Critical: rollback itself failed — log but continue returning the failure

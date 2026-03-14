@@ -470,6 +470,10 @@ export class SqliteTaskStore implements ITaskStore {
     return row ? rowToTask(row) : null;
   }
 
+  updateTaskStatusSync(id: string, status: string, updatedAt: number): void {
+    this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').run(status, updatedAt, id);
+  }
+
   countUnresolvedDependenciesSync(taskId: string): number {
     const row = this.db.prepare(`
       SELECT COUNT(*) as count FROM task_dependencies td

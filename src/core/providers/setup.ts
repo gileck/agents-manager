@@ -31,6 +31,8 @@ import { SqliteTaskStore } from '../stores/sqlite-task-store';
 import { SqliteTaskEventLog } from '../stores/sqlite-task-event-log';
 import { SqliteActivityLog } from '../stores/sqlite-activity-log';
 import { SqliteAgentRunStore } from '../stores/sqlite-agent-run-store';
+import { SqliteUserStore } from '../stores/sqlite-user-store';
+import { SqliteTransactionRunner } from '../stores/sqlite-transaction-runner';
 import { SqliteTaskArtifactStore } from '../stores/sqlite-task-artifact-store';
 import { SqliteTaskPhaseStore } from '../stores/sqlite-task-phase-store';
 import { SqlitePendingPromptStore } from '../stores/sqlite-pending-prompt-store';
@@ -157,7 +159,16 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const taskStore = new SqliteTaskStore(db, pipelineStore);
   const taskEventLog = new SqliteTaskEventLog(db);
   const activityLog = new SqliteActivityLog(db);
-  const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, db);
+  const agentRunStore = new SqliteAgentRunStore(db);
+  const userStore = new SqliteUserStore(db);
+  const txRunner = new SqliteTransactionRunner(db);
+  const guardContext: import('../../shared/types').IGuardQueryContext = {
+    countUnresolvedDependencies: (id: string) => taskStore.countUnresolvedDependenciesSync(id),
+    countFailedRuns: (id: string) => agentRunStore.countFailedRunsSync(id),
+    countRunningRuns: (id: string) => agentRunStore.countRunningRunsSync(id),
+    getUserRole: (username: string) => userStore.getUserRoleSync(username),
+  };
+  const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, txRunner, guardContext);
   const appDebugLog = new SqliteAppDebugLog(db);
   const appLogger = initAppLogger(appDebugLog, { verbose: process.env.AM_VERBOSE === '1' });
 
@@ -165,7 +176,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   registerCoreGuards(pipelineEngine);
 
   // Phase 2 stores
-  const agentRunStore = new SqliteAgentRunStore(db);
+  // agentRunStore is created above (needed for guardContext)
   const taskArtifactStore = new SqliteTaskArtifactStore(db);
   const taskPhaseStore = new SqliteTaskPhaseStore(db);
   const pendingPromptStore = new SqlitePendingPromptStore(db);
