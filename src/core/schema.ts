@@ -389,7 +389,10 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   scope_type TEXT NOT NULL DEFAULT 'project',
   scope_id TEXT NOT NULL DEFAULT '',
   agent_lib TEXT,
-  source TEXT NOT NULL DEFAULT 'desktop'
+  source TEXT NOT NULL DEFAULT 'desktop',
+  sidebar_hidden INTEGER NOT NULL DEFAULT 0,
+  system_prompt_append TEXT DEFAULT NULL,
+  task_ids TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS chat_messages (
@@ -402,7 +405,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   cost_output_tokens INTEGER,
   cache_read_input_tokens INTEGER,
   cache_creation_input_tokens INTEGER,
-  total_cost_usd REAL
+  total_cost_usd REAL,
+  last_context_input_tokens INTEGER DEFAULT NULL
 );
 
 -- ====== UI / boards ======
