@@ -24,6 +24,7 @@ import type { ISettingsStore } from '../interfaces/settings-store';
 import type { IAppDebugLog } from '../interfaces/app-debug-log';
 import type { IAutomatedAgentStore } from '../interfaces/automated-agent-store';
 import type { IInAppNotificationStore } from '../interfaces/in-app-notification-store';
+import type { IItemStore } from '../interfaces/item-store';
 import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -46,6 +47,7 @@ import { SqliteSettingsStore } from '../stores/settings-store';
 import { SqliteAppDebugLog } from '../stores/sqlite-app-debug-log';
 import { SqliteAutomatedAgentStore } from '../stores/sqlite-automated-agent-store';
 import { SqliteInAppNotificationStore } from '../stores/sqlite-in-app-notification-store';
+import { SqliteItemStore } from '../stores/sqlite-item-store';
 import { AppLogger, initAppLogger, getAppLogger } from '../services/app-logger';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
@@ -151,6 +153,7 @@ export interface AppServices {
   inAppNotificationStore: IInAppNotificationStore;
   devServerManager: IDevServerManager;
   subscriptionRegistry: AgentSubscriptionRegistry;
+  itemStore: IItemStore;
 }
 
 export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
@@ -253,6 +256,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   // Automated agent stores and services (created before AgentService so it can be passed in for stop delegation)
   const automatedAgentStore = new SqliteAutomatedAgentStore(db);
   const inAppNotificationStore = new SqliteInAppNotificationStore(db);
+  const itemStore = new SqliteItemStore(db);
   const triageBuilder = new TriageAgentPromptBuilder(taskStore, taskContextStore);
   const promptBuilders = new Map([[triageBuilder.templateId, triageBuilder]]);
   const scheduledAgentService = new ScheduledAgentService(
@@ -370,5 +374,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     inAppNotificationStore,
     devServerManager,
     subscriptionRegistry,
+    itemStore,
   };
 }
