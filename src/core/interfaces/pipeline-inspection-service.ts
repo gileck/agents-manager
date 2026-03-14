@@ -8,4 +8,5 @@ export interface IPipelineInspectionService {
   getPipelineDiagnostics(taskId: string): Promise<PipelineDiagnostics | null>;
   retryHook(taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string): Promise<HookRetryResult>;
   advancePhase(taskId: string): Promise<TransitionResult>;
+  dismissEvent(eventId: string): Promise<void>;
 }

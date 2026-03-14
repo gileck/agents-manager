@@ -382,6 +382,7 @@ export interface TaskEvent {
   message: string;
   data: Record<string, unknown>;
   createdAt: number;
+  dismissed?: boolean;
 }
 
 export interface TaskEventCreateInput {

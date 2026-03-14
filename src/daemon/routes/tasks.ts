@@ -206,6 +206,13 @@ export function taskRoutes(services: AppServices, wsHolder: WsHolder = {}): Rout
     } catch (err) { next(err); }
   });
 
+  router.post('/api/tasks/:id/events/:eventId/dismiss', async (req, res, next) => {
+    try {
+      await services.pipelineInspectionService.dismissEvent(req.params.eventId);
+      res.status(204).send();
+    } catch (err) { next(err); }
+  });
+
   // ============================================
   // Dependencies
   // ============================================

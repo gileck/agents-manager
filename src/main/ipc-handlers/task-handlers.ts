@@ -96,6 +96,10 @@ export function registerTaskHandlers(api: ApiClient): void {
     return api.tasks.advancePhase(taskId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.TASK_DISMISS_EVENT, async (_, taskId: string, eventId: string) => {
+    return api.tasks.dismissEvent(taskId, eventId);
+  });
+
   // ============================================
   // Event Operations
   // ============================================

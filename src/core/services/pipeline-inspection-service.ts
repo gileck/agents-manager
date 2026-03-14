@@ -52,6 +52,7 @@ export class PipelineInspectionService implements IPipelineInspectionService {
     }
 
     const hookFailures: HookFailureRecord[] = recentEvents
+      .filter((e) => !e.dismissed)
       .filter((e) => e.category === 'system' && (e.severity === 'error' || e.severity === 'warning')
         && e.data?.hookName && typeof e.data.hookName === 'string')
       .map((e) => {
@@ -219,5 +220,9 @@ export class PipelineInspectionService implements IPipelineInspectionService {
     }
 
     return result;
+  }
+
+  async dismissEvent(eventId: string): Promise<void> {
+    await this.taskEventLog.dismissEvent(eventId);
   }
 }

@@ -12,6 +12,7 @@ interface TaskEventRow {
   message: string;
   data: string;
   created_at: number;
+  dismissed: number;
 }
 
 function rowToEvent(row: TaskEventRow): TaskEvent {
@@ -23,6 +24,7 @@ function rowToEvent(row: TaskEventRow): TaskEvent {
     message: row.message,
     data: parseJson<Record<string, unknown>>(row.data, {}),
     createdAt: row.created_at,
+    dismissed: (row.dismissed ?? 0) === 1,
   };
 }
 
@@ -58,6 +60,15 @@ export class SqliteTaskEventLog implements ITaskEventLog {
       };
     } catch (err) {
       getAppLogger().logError('TaskEventLog', 'log failed', err);
+      throw err;
+    }
+  }
+
+  async dismissEvent(eventId: string): Promise<void> {
+    try {
+      this.db.prepare(`UPDATE task_events SET dismissed = 1 WHERE id = ?`).run(eventId);
+    } catch (err) {
+      getAppLogger().logError('TaskEventLog', 'dismissEvent failed', err);
       throw err;
     }
   }

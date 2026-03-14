@@ -156,7 +156,6 @@ export function TaskDetailPage() {
   // Diagnostics hooks lifted from PipelineControlPanel
   const { diagnostics, refetch: refetchDiagnostics, error: diagnosticsError } = usePipelineDiagnostics(id!, task?.status ?? '');
   const { retry, retrying } = useHookRetry();
-  const [dismissedFailureIds, setDismissedFailureIds] = useState<Set<string>>(new Set());
 
   // Auto-dismiss transition error after 15 seconds
   useEffect(() => {
@@ -329,9 +328,10 @@ export function TaskDetailPage() {
     }
   }, [id, retry, refetchDiagnostics]);
 
-  const handleDismissFailure = useCallback((failureId: string) => {
-    setDismissedFailureIds((prev) => new Set([...prev, failureId]));
-  }, []);
+  const handleDismissFailure = useCallback(async (failureIds: string[]) => {
+    await Promise.all(failureIds.map((eventId) => window.api.tasks.dismissEvent(id!, eventId)));
+    refetchDiagnostics();
+  }, [id, refetchDiagnostics]);
 
   const handleReportBugFromFailure = useCallback((failure: HookFailureRecord) => {
     try {
@@ -431,8 +431,7 @@ export function TaskDetailPage() {
     secondaryTransitions = allTransitions;
   }
 
-  const visibleDiagnosticFailures = (diagnostics?.recentHookFailures ?? [])
-    .filter((f) => !dismissedFailureIds.has(f.id));
+  const visibleDiagnosticFailures = diagnostics?.recentHookFailures ?? [];
   const hasVisibleBanners = transitionError !== null || diagnosticsError !== null || hookFailureAlerts.length > 0 || visibleDiagnosticFailures.length > 0;
 
   // Tab content indicators

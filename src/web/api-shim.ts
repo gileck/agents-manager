@@ -70,6 +70,7 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       hookRetry: (taskId, hookName, from?, to?) => api.tasks.retryHook(taskId, hookName, from, to) as Promise<never>,
       pipelineDiagnostics: (taskId) => api.tasks.getPipelineDiagnostics(taskId) as Promise<never>,
       advancePhase: (taskId) => api.tasks.advancePhase(taskId) as Promise<never>,
+      dismissEvent: (taskId, eventId) => api.tasks.dismissEvent(taskId, eventId),
       contextEntries: (taskId) => api.tasks.getContext(taskId) as Promise<never>,
       addContextEntry: (taskId, input) => api.tasks.addContext(taskId, input) as Promise<never>,
       addFeedback: (taskId, input) => api.tasks.addFeedback(taskId, input) as Promise<never>,

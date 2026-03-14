@@ -44,6 +44,7 @@ export const IPC_CHANNELS = {
   TASK_HOOK_RETRY: 'task:hook-retry',
   TASK_PIPELINE_DIAGNOSTICS: 'task:pipeline-diagnostics',
   TASK_ADVANCE_PHASE: 'task:advance-phase',
+  TASK_DISMISS_EVENT: 'task:dismiss-event',
 
   // Pipeline operations
   PIPELINE_LIST: 'pipeline:list',
