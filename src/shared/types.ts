@@ -1496,3 +1496,4 @@ export interface AgentNotificationPayload {
   summary?: string;
   autoNotify: boolean;
 }
+const brokenType: number = 'this should fail';
