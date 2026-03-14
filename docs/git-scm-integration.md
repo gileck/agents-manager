@@ -95,6 +95,15 @@ Uses `git worktree list --porcelain` output format. Extracts:
 - Lock status from `locked` lines
 - TaskId from the path segments: `.agent-worktrees/{taskId}`
 
+### Worktree Safety Guards
+
+Agents running in worktrees are prevented from escaping to the main repository by multiple defense layers:
+
+1. **Prompt-level instructions** — `BaseAgentPromptBuilder` prepends a `CRITICAL: WORKTREE SAFETY` section naming the worktree path and the forbidden main repo path. Instructs agents to use relative paths.
+2. **PreToolUse SDK hook** — `Agent.execute()` builds a `preToolUse` hook that hard-blocks Write/Edit/Bash targeting the main repo. Fires via SDK hooks (independent of `canUseTool`).
+3. **SandboxGuard** — Validates tool call paths against `allowedPaths: [worktreePath]` via the `canUseTool` callback. Catches `find`, `git`, `yarn`, `cd`, and other bash commands accessing paths outside the worktree.
+4. **SDK permission mode** — All agents use `sdkPermissionMode: 'acceptEdits'` (never `bypassPermissions`), ensuring `canUseTool` fires for every tool call.
+
 ## Git Operations
 
 **Interface:** `IGitOps` in `src/core/interfaces/git-ops.ts`

@@ -192,8 +192,7 @@ export class ClaudeCodeLib extends BaseAgentLib {
           cwd: options.cwd,
           ...(options.systemPrompt ? { systemPrompt: options.systemPrompt } : {}),
           abortController: state.abortController,
-          permissionMode: 'bypassPermissions',
-          allowDangerouslySkipPermissions: true,
+          permissionMode: options.sdkPermissionMode ?? 'acceptEdits',
           model: options.model,
           maxTurns: options.maxTurns,
           thinking: { type: 'adaptive' },
@@ -443,6 +442,29 @@ export class ClaudeCodeLib extends BaseAgentLib {
     log: (msg: string, data?: Record<string, unknown>) => void,
   ): Record<string, unknown> {
     const sdkHooks: Record<string, Array<{ hooks: Array<(input: Record<string, unknown>, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<Record<string, unknown>>> }>> = {};
+
+    // PreToolUse hook — used for worktree path guards and other pre-execution checks
+    if (hooks?.preToolUse) {
+      const preToolUseHandler = hooks.preToolUse;
+      sdkHooks.PreToolUse = [{
+        hooks: [async (input: Record<string, unknown>) => {
+          try {
+            const result = preToolUseHandler(
+              input.tool_name as string,
+              (input.tool_input ?? {}) as Record<string, unknown>,
+            );
+            if (result?.decision === 'block') {
+              log(`PreToolUse hook BLOCKED ${input.tool_name}: ${result.reason}`);
+              return { decision: 'block', reason: result.reason ?? 'Blocked by PreToolUse hook' };
+            }
+          } catch (err) {
+            log(`PreToolUse hook CRITICAL ERROR — blocking tool call: ${err instanceof Error ? err.message : String(err)}`);
+            return { decision: 'block', reason: `Worktree guard error (fail-closed): ${err instanceof Error ? err.message : String(err)}` };
+          }
+          return {};
+        }],
+      }];
+    }
 
     // PostToolUse hook
     if (hooks?.postToolUse) {

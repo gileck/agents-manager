@@ -1,3 +1,4 @@
+import { resolve } from 'path';
 import type { AgentContext, AgentConfig, AgentRunResult, TaskContextEntry } from '../../shared/types';
 import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
 import type { AgentLibResult } from '../interfaces/agent-lib';
@@ -96,6 +97,31 @@ export abstract class BaseAgentPromptBuilder {
 
     if (!context.workdir) {
       throw new Error(`AgentContext.workdir is required but was not set for task "${context.task.id}"`);
+    }
+
+    // Worktree safety: when the agent is working in a worktree (workdir != project path),
+    // prepend aggressive instructions to prevent the agent from escaping the worktree.
+    const projectPath = context.project?.path;
+    if (projectPath && resolve(context.workdir) !== resolve(projectPath)) {
+      const worktreeGuard = [
+        `## CRITICAL: WORKTREE SAFETY — READ THIS FIRST`,
+        ``,
+        `You are working in an isolated git worktree, NOT the main repository.`,
+        ``,
+        `YOUR WORKING DIRECTORY: \`${context.workdir}\``,
+        `MAIN REPOSITORY (FORBIDDEN): \`${projectPath}\``,
+        ``,
+        `MANDATORY RULES:`,
+        `- NEVER use absolute paths starting with \`${projectPath}/\` for ANY tool call (Read, Write, Edit, Bash, Glob, Grep, etc.)`,
+        `- NEVER \`cd\` to \`${projectPath}\` or any directory outside your worktree`,
+        `- NEVER run find, git, or any command targeting \`${projectPath}\``,
+        `- Use RELATIVE paths (e.g., \`src/...\`) — they resolve within your worktree automatically`,
+        `- If a plan or design references absolute paths from the main repo, translate them to relative paths first`,
+        `- All git operations (commit, rebase, push) must happen in your worktree, not the main repo`,
+        ``,
+        `Any operation touching the main repository instead of the worktree is a CRITICAL BUG.`,
+      ].join('\n');
+      prompt = worktreeGuard + '\n\n---\n\n' + prompt;
     }
 
     return {

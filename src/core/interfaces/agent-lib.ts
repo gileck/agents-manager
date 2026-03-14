@@ -239,6 +239,8 @@ export interface AgentLibRunOptions {
   agents?: Record<string, SubagentDefinition>;
   /** Plugins to load for this session. Each plugin extends the agent with custom commands, skills, hooks, etc. Supported by claude-code engine only. */
   plugins?: Array<{ type: 'local'; path: string }>;
+  /** SDK-level permission mode. Defaults to 'acceptEdits' if not specified. */
+  sdkPermissionMode?: string;
 }
 
 export interface AgentLibCallbacks {

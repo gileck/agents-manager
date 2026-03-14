@@ -1,6 +1,7 @@
+import { resolve } from 'path';
 import type { AgentContext, AgentConfig, AgentRunResult, AgentChatMessage } from '../../shared/types';
 import type { IAgent } from '../interfaces/agent';
-import type { IAgentLib, AgentLibTelemetry, AgentLibResult } from '../interfaces/agent-lib';
+import type { IAgentLib, AgentLibTelemetry, AgentLibResult, AgentLibHooks } from '../interfaces/agent-lib';
 import type { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import type { AgentLibRegistry } from '../services/agent-lib-registry';
 import { getAppLogger } from '../services/app-logger';
@@ -77,8 +78,51 @@ export class Agent implements IAgent {
     const allowedPaths = [context.workdir];
     const readOnlyPaths = execConfig.readOnly && context.project?.path ? [context.project.path] : [];
 
+    // For read-only agents (investigator, planner, reviewer), disallow all write tools
+    // so they cannot modify files even within the worktree.
+    const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
+    const disallowedTools = execConfig.readOnly ? WRITE_TOOLS : undefined;
+
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
-    log(`Starting agent run: mode=${context.mode}, workdir=${context.workdir}, timeout=${execConfig.timeoutMs}ms, model=${config.model ?? 'default'}`);
+    log(`Starting agent run: mode=${context.mode}, workdir=${context.workdir}, readOnly=${execConfig.readOnly}, timeout=${execConfig.timeoutMs}ms, model=${config.model ?? 'default'}`);
+
+    // Build worktree guard hook: hard-block Edit/Write/Bash operations targeting the main
+    // repo when the agent is working in an isolated worktree. This fires via SDK hooks
+    // (separate from canUseTool/permissions) so it cannot be bypassed by permissionMode.
+    const projectPath = context.project?.path;
+    const resolvedWorkdir = resolve(context.workdir);
+    const resolvedProjectPath = projectPath ? resolve(projectPath) : null;
+    const isWorktree = resolvedProjectPath && resolvedWorkdir !== resolvedProjectPath;
+
+    const worktreeHooks: AgentLibHooks | undefined = isWorktree ? {
+      preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
+        // Guard file-writing tools
+        if (toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit' || toolName === 'NotebookEdit') {
+          const filePath = (toolInput.file_path ?? toolInput.notebook_path) as string | undefined;
+          if (!filePath) {
+            return { decision: 'block' as const, reason: `WORKTREE GUARD: ${toolName} with no file path — blocked for safety.` };
+          }
+          const resolvedFile = resolve(resolvedWorkdir, filePath);
+          if ((resolvedFile === resolvedProjectPath || resolvedFile.startsWith(resolvedProjectPath + '/')) && !resolvedFile.startsWith(resolvedWorkdir + '/') && resolvedFile !== resolvedWorkdir) {
+            return { decision: 'block' as const, reason: `WORKTREE GUARD: Write to main repository path "${filePath}" is BLOCKED. Use a relative path (e.g., src/...) which resolves within your worktree "${context.workdir}".` };
+          }
+        }
+        // Guard bash commands that cd or operate on the main repo
+        if (toolName === 'Bash') {
+          const command = toolInput.command as string | undefined;
+          if (command) {
+            // Check ALL cd occurrences (not just the first) to prevent chained escapes
+            for (const cdMatch of command.matchAll(/\bcd\s+["']?([^\s"'|;&]+)/g)) {
+              const cdTarget = resolve(resolvedWorkdir, cdMatch[1]);
+              if ((cdTarget === resolvedProjectPath || cdTarget.startsWith(resolvedProjectPath + '/')) && !cdTarget.startsWith(resolvedWorkdir + '/') && cdTarget !== resolvedWorkdir) {
+                return { decision: 'block' as const, reason: `WORKTREE GUARD: "cd ${cdMatch[1]}" targets main repository. Stay in your worktree "${context.workdir}".` };
+              }
+            }
+          }
+        }
+        return undefined;
+      },
+    } : undefined;
 
     // For crash recovery resume with native-resume engines, use a short continuation
     // prompt instead of the full system prompt (the prior conversation is replayed by the SDK).
@@ -105,6 +149,9 @@ export class Agent implements IAgent {
         resumeSession: context.resumeSession ?? false,
         taskId: context.task.id,
         agentType: this.type,
+        sdkPermissionMode: 'acceptEdits',
+        ...(disallowedTools ? { disallowedTools } : {}),
+        ...(worktreeHooks ? { hooks: worktreeHooks } : {}),
       }, {
         onOutput,
         onLog,
@@ -136,6 +183,9 @@ export class Agent implements IAgent {
           resumeSession: false,
           taskId: context.task.id,
           agentType: this.type,
+          sdkPermissionMode: 'acceptEdits',
+          ...(disallowedTools ? { disallowedTools } : {}),
+          ...(worktreeHooks ? { hooks: worktreeHooks } : {}),
         }, {
           onOutput,
           onLog,

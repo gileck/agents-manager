@@ -202,8 +202,8 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     expect(typeof callArgs.prompt).toBe('string');
     expect(callArgs.prompt).toContain('Test task');
     expect(callArgs.options.cwd).toBe('/my/project');
-    expect(callArgs.options.permissionMode).toBe('bypassPermissions');
-    expect(callArgs.options.allowDangerouslySkipPermissions).toBe(true);
+    expect(callArgs.options.permissionMode).toBe('acceptEdits');
+    expect(callArgs.options.allowDangerouslySkipPermissions).toBeUndefined();
     expect(callArgs.options.abortController).toBeInstanceOf(AbortController);
   });
 

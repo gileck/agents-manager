@@ -173,7 +173,7 @@ The interface defines several supporting types used across the agent system:
   - `onStreamEvent` — Receives raw stream delta events for partial message streaming (text, thinking, input JSON deltas).
   - `onPermissionRequest` — Called when a tool needs user permission. Blocks tool execution until the returned promise resolves.
 
-- **`AgentLibRunOptions`** — Extended with: `agents` (subagent definitions), `plugins` (local plugin paths), `settingSources` (e.g., `['project']` for CLAUDE.md auto-loading), `canUseTool` (async tool interceptor for allow/deny/modify), `systemPrompt` (accepts string or `SystemPromptPreset`), `betas`, `maxBudgetUsd`.
+- **`AgentLibRunOptions`** — Extended with: `agents` (subagent definitions), `plugins` (local plugin paths), `settingSources` (e.g., `['project']` for CLAUDE.md auto-loading), `canUseTool` (async tool interceptor for allow/deny/modify), `systemPrompt` (accepts string or `SystemPromptPreset`), `betas`, `maxBudgetUsd`, `sdkPermissionMode` (SDK-level permission mode, defaults to `'acceptEdits'`), `disallowedTools` (tool names to completely remove from the model's context).
 
 ### BaseAgentPromptBuilder
 
@@ -198,6 +198,37 @@ The generic `Agent` class bridges prompt builder + lib registry → `IAgent`:
 4. Calls `promptBuilder.inferOutcome()` and `promptBuilder.buildResult()` on the result
 5. Polls `lib.getTelemetry()` every 500ms for live cost/progress reporting
 6. Tracks active libs per runId in a `Map` so `stop()` can delegate to the correct lib
+
+### Pipeline Agent Permissions & Worktree Safety
+
+Pipeline agents run in isolated git worktrees. Multiple layers prevent agents from escaping their worktree or writing when they shouldn't:
+
+**Read-only enforcement (`isReadOnly() = true`):**
+Read-only agents (investigator, planner, reviewer) receive `disallowedTools: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']`, which completely removes these tools from the SDK — the model cannot call them.
+
+**Worktree path guard (PreToolUse hook):**
+When an agent runs in a worktree (`workdir !== project.path`), `Agent.execute()` builds a `preToolUse` hook that hard-blocks:
+- Write/Edit/Bash operations targeting the main repository path
+- `cd` commands that would change to the main repo directory
+
+This fires via SDK hooks (separate from `canUseTool`/permissions) so it cannot be bypassed.
+
+**Prompt-level worktree instructions:**
+`BaseAgentPromptBuilder.buildExecutionConfig()` prepends a `CRITICAL: WORKTREE SAFETY` section to the prompt when the agent is in a worktree. This tells the agent its working directory, the forbidden main repo path, and mandatory rules (use relative paths, never cd to main repo).
+
+**SandboxGuard (canUseTool callback):**
+The `SandboxGuard` in `base-agent-lib.ts` validates tool call paths against `allowedPaths` and `readOnlyPaths`. It checks Write, Edit, Read, Glob, Grep, and Bash tools. Bash commands are parsed for path arguments (`cd`, `find`, `git`, `yarn`, etc.).
+
+**SDK permission mode:**
+All pipeline agents use `sdkPermissionMode: 'acceptEdits'` — never `bypassPermissions`. This ensures the SDK's `canUseTool` callback fires for every tool call, allowing the SandboxGuard to enforce path restrictions.
+
+| Agent | isReadOnly | disallowedTools | Can Write in Worktree |
+|-------|:----------:|:---------------:|:---------------------:|
+| Investigator | true | Write, Edit, MultiEdit, NotebookEdit | no |
+| Planner | true | Write, Edit, MultiEdit, NotebookEdit | no |
+| Reviewer | true | Write, Edit, MultiEdit, NotebookEdit | no |
+| Designer | false | — | yes |
+| Implementor | false | — | yes |
 
 ### PlannerPromptBuilder
 

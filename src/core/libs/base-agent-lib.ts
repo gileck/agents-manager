@@ -193,14 +193,16 @@ export abstract class BaseAgentLib implements IAgentLib {
 
     // Build sandbox guard
     const sandboxGuard = new SandboxGuard(options.allowedPaths, options.readOnlyPaths);
+    let sandboxGuardCallCount = 0;
 
     // Build unified permission chain: sandbox guard → callerCanUseTool → onPermissionRequest
     const callerCanUseTool = options.canUseTool;
     const canUseTool: CanUseToolCallback = async (toolName, input, sdkOptions) => {
+      sandboxGuardCallCount++;
       // 1. Sandbox guard (synchronous path check)
       const guardResult = sandboxGuard.evaluateToolCall(toolName, input);
       if (!guardResult.allow) {
-        log(`Sandbox guard blocked ${toolName}: ${guardResult.reason}`);
+        log(`Sandbox guard BLOCKED ${toolName}: ${guardResult.reason}`, { callCount: sandboxGuardCallCount });
         return { behavior: 'deny', message: guardResult.reason ?? 'Blocked by sandbox guard' };
       }
       // 2. Caller's canUseTool interceptor (e.g. AskUserQuestion handler)
@@ -241,7 +243,7 @@ export abstract class BaseAgentLib implements IAgentLib {
       return updatedInput ? { behavior: 'allow', updatedInput } : { behavior: 'allow' };
     };
 
-    log(`Starting agent run: cwd=${options.cwd}, timeout=${options.timeoutMs ? `${options.timeoutMs}ms` : 'none'}, model=${options.model ?? 'default'}, engine=${this.name}`);
+    log(`Starting agent run: cwd=${options.cwd}, allowedPaths=${JSON.stringify(options.allowedPaths)}, timeout=${options.timeoutMs ? `${options.timeoutMs}ms` : 'none'}, model=${options.model ?? 'default'}, engine=${this.name}`);
 
     try {
       const engineResult = await this.runEngine(runId, state, {
@@ -255,6 +257,13 @@ export abstract class BaseAgentLib implements IAgentLib {
         stream,
         getResultLength: () => resultText.length,
       });
+
+      // Warn if sandbox guard was never invoked — canUseTool may be bypassed by the SDK
+      if (sandboxGuardCallCount === 0 && state.messageCount > 0) {
+        log(`WARNING: Sandbox guard was NEVER called during ${state.messageCount} messages — canUseTool may be bypassed by SDK permissionMode`);
+      } else {
+        log(`Sandbox guard was invoked ${sandboxGuardCallCount} times during execution`);
+      }
 
       // Merge engine result with accumulated state
       const output = resultText || engineResult.fallbackOutput || engineResult.errorMessage || '';

@@ -95,6 +95,17 @@ Agent wants to use a tool
 - `permission_request` — broadcasted to UI: `{ requestId, toolName, toolInput, timestamp }`
 - `permission_response` — displayed in chat: `{ requestId, allowed, timestamp }`
 
+### SDK Permission Mode
+
+The SDK `permissionMode` controls how tool calls are approved at the engine level. The app passes `sdkPermissionMode` via `AgentLibRunOptions`:
+
+| Context | SDK Permission Mode | Enforcement |
+|---------|-------------------|-------------|
+| Pipeline agents | `'acceptEdits'` | Auto-accept file edits; read-only agents get `disallowedTools` for Write/Edit/MultiEdit/NotebookEdit |
+| Thread chat agents | `'acceptEdits'` (default) | App-level enforcement via `disallowedTools` + `onPermissionRequest` based on user's chosen PermissionMode |
+
+**Note:** `bypassPermissions` is never used. All agents use `'acceptEdits'` which ensures the SDK's `canUseTool` callback fires, enabling the SandboxGuard to enforce path restrictions.
+
 ### Implemented By
 
 ClaudeCodeLib (via `canUseTool` SDK callback)
@@ -203,14 +214,14 @@ The service wires default hooks when `supportedFeatures().hooks === true`:
 
 | Hook | Default Behavior |
 |------|-----------------|
-| `preToolUse` | Sandbox guard — blocks write tools based on permission mode (read_only, read_write) |
+| `preToolUse` | Worktree guard (pipeline agents) — hard-blocks Write/Edit/Bash targeting the main repo when agent is in a worktree. Also used as sandbox guard in chat agents. |
 | `postToolUse` | Audit logging — logs tool name and result summary to app logger |
 | `notification` | Forwards notifications to UI as `notification` messages via WebSocket |
 | `stop` | Logs agent stop reason |
 | `subagentStart` | Emits `subagent_activity` message with `status: 'started'` |
 | `subagentStop` | Emits `subagent_activity` message with `status: 'completed'` |
 
-The lib is responsible for transforming these hooks into whatever format its engine requires and calling them at the appropriate lifecycle points.
+The lib is responsible for transforming these hooks into whatever format its engine requires and calling them at the appropriate lifecycle points. `ClaudeCodeLib.buildSdkHooks()` transforms all hook types (including `preToolUse`) into the SDK's `HookCallbackMatcher[]` format.
 
 ### UX Flow
 

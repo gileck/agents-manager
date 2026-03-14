@@ -10,8 +10,8 @@ const SENSITIVE_PATTERNS = [
   '.env',
 ];
 
-/** Regex to extract file paths from common bash commands. */
-const BASH_PATH_REGEX = /(?:^|\s)(?:cat|less|head|tail|rm|mv|cp|mkdir|touch|chmod|chown|>|>>)\s+["']?([^\s"'|;&]+)/g;
+/** Regex to extract file paths from bash commands that accept path arguments. */
+const BASH_PATH_REGEX = /(?:^|\s)(?:cat|less|head|tail|rm|mv|cp|mkdir|touch|chmod|chown|find|ls|>|>>)\s+["']?([^\s"'|;&]+)/g;
 const BASH_CD_REGEX = /(?:^|\s)cd\s+["']?([^\s"'|;&]+)/g;
 
 export class SandboxGuard {
