@@ -153,7 +153,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         `4. In the \`summary\` field, describe what you changed and how you addressed the feedback.`,
         `5. Run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass.`,
         `6. Stage and commit with a descriptive message that references which feedback was addressed.`,
-        `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues.`,
+        `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues. If tests fail due to **timeouts**, retry with an extended timeout: \`TEST_TIMEOUT=60000 yarn checks\`.`,
       );
       prompt = rcLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'merge_failed') {
@@ -195,7 +195,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         '4. For each conflict, resolve by preserving the intent of both changes, then `git add` the resolved files.',
         '5. Run `git rebase --continue` after resolving each conflict.',
         '6. If the merge failure was caused by **failing CI checks** (see details above), investigate and fix the code issues.',
-        '7. Once the rebase is complete, run `yarn checks` (or the project equivalent). If checks fail, compare against `origin/main` — if the same failures exist on main, they are pre-existing and should be ignored.',
+        '7. Once the rebase is complete, run `yarn checks` (or the project equivalent). If checks fail, compare against `origin/main` — if the same failures exist on main, they are pre-existing and should be ignored. If tests fail due to **timeouts**, retry with an extended timeout: `TEST_TIMEOUT=60000 yarn checks`.',
         '8. Do NOT push — the pipeline will handle pushing after you finish.',
       );
       prompt = mfLines.join('\n');
@@ -211,7 +211,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         `2. Run \`git diff\` to review what was changed.`,
         `3. If the changes look correct, stage and commit them with a descriptive message.`,
         `4. If any changes look incomplete or broken, fix them first, then commit.`,
-        `5. Run \`yarn checks\` (or the project's equivalent) to verify TypeScript and lint pass. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored.`,
+        `5. Run \`yarn checks\` (or the project's equivalent) to verify TypeScript and lint pass. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. If tests fail due to **timeouts**, retry with an extended timeout: \`TEST_TIMEOUT=60000 yarn checks\`.`,
         `6. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them, \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`.`,
       ];
       prompt = ucLines.join('\n');
@@ -286,7 +286,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         `4. Make focused changes — only modify what is necessary for this task.`,
         `5. After making all changes, run \`yarn checks\` (or the project's equivalent) to ensure TypeScript and lint pass. Fix any errors before committing.`,
         `6. Stage and commit with a descriptive message (git add the relevant files, then git commit).`,
-        `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues.`,
+        `7. **Rebase onto origin/main before finishing:** run \`git fetch origin && git rebase origin/main\`. If there are merge conflicts, resolve them (preserve the intent of both sides), \`git add\` the resolved files, and \`git rebase --continue\`. After the rebase, re-run \`yarn checks\`. If checks fail, compare against \`origin/main\` — if the same failures exist on main, they are pre-existing and should be ignored. Do not spend time debugging pre-existing issues. If tests fail due to **timeouts**, retry with an extended timeout: \`TEST_TIMEOUT=60000 yarn checks\`.`,
       ];
       // Phase-aware subtask display
       const activePhase = getActivePhase(task.phases);
