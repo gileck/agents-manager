@@ -74,7 +74,7 @@ describe('Agent Outcome Transitions', () => {
       expect(events.some((e) => e.message.includes('no changes detected'))).toBe(true);
     });
 
-    it('should transition implementing → done when branch HEAD equals origin/main (already on main)', async () => {
+    it('should transition implementing → ready_to_merge when branch HEAD equals origin/main (already on main)', async () => {
       const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
 
       // Configure empty diff + same HEAD as origin/main (work already on main)
@@ -104,7 +104,7 @@ describe('Agent Outcome Transitions', () => {
       });
 
       const updatedTask = await ctx.taskStore.getTask(task.id);
-      expect(updatedTask!.status).toBe('done');
+      expect(updatedTask!.status).toBe('ready_to_merge');
 
       // Verify event log records the already_on_main detection
       const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'agent' });
