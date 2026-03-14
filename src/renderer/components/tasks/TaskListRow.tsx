@@ -80,7 +80,7 @@ export function TaskListRow({
           onChange={onToggleSelect}
           onClick={(e) => e.stopPropagation()}
           className={`h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer transition-opacity ${
-            selectMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            selectMode ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         />
       </div>

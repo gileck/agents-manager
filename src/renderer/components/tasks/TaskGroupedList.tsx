@@ -117,7 +117,7 @@ export function TaskGroupedList({
                 onClick={(e) => e.stopPropagation()}
                 onChange={() => onToggleSelectGroup(groupTaskIds)}
                 className={`h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer transition-opacity shrink-0 ${
-                  selectMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  selectMode ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
               />
               {isCollapsed ? (
