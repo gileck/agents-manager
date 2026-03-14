@@ -7,6 +7,8 @@ import {
   PanelRightOpen,
   MoreHorizontal,
   MessageSquare,
+  Zap,
+  ZapOff,
 } from 'lucide-react';
 import { InlineError } from '../InlineError';
 import { reportError } from '../../lib/error-handler';
@@ -135,6 +137,17 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     }
   }, [currentSessionId, updateSession]);
 
+  const streamingEnabled = currentSession?.enableStreaming ?? true;
+
+  const handleStreamingToggle = useCallback(async () => {
+    if (!currentSessionId) return;
+    try {
+      await updateSession(currentSessionId, { enableStreaming: !streamingEnabled });
+    } catch (err) {
+      reportError(err, 'ChatPanel: update streaming');
+    }
+  }, [currentSessionId, updateSession, streamingEnabled]);
+
   const estimatedCost = (tokenUsage.inputTokens / 1_000_000) * 3.0 + (tokenUsage.outputTokens / 1_000_000) * 15.0;
   const showInlineTabs = scope.type === 'task';
 
@@ -191,6 +204,14 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               Raw
             </button>
           </div>
+
+          <button
+            onClick={handleStreamingToggle}
+            className={`p-2 rounded-full border border-border/70 bg-card/65 transition-colors ${streamingEnabled ? 'text-foreground hover:bg-accent/65' : 'text-muted-foreground hover:text-foreground hover:bg-accent/65'}`}
+            title={streamingEnabled ? 'Streaming on — click to disable' : 'Streaming off — click to enable'}
+          >
+            {streamingEnabled ? <Zap className="h-4 w-4" /> : <ZapOff className="h-4 w-4" />}
+          </button>
 
           <button
             onClick={() => setShowSidebar(!showSidebar)}

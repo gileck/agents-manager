@@ -1234,6 +1234,8 @@ export interface ChatSession {
   sidebarHidden: boolean;
   /** Custom instructions appended to the system prompt for this session. */
   systemPromptAppend: string | null;
+  /** When true (default), stream deltas are forwarded to the UI in real-time. When false, the full response appears only when complete. */
+  enableStreaming: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -1254,6 +1256,7 @@ export interface ChatSessionCreateInput {
   permissionMode?: PermissionMode;
   /** The project this session belongs to. For project-scoped sessions this equals scopeId; for task-scoped sessions it is the task's projectId. */
   projectId: string;
+  enableStreaming?: boolean;
 }
 
 // Chat agent event types (used by ChatAgentService consumers)
@@ -1286,6 +1289,7 @@ export interface ChatSessionUpdateInput {
   agentRunId?: string | null;
   permissionMode?: PermissionMode | null;
   systemPromptAppend?: string | null;
+  enableStreaming?: boolean;
 }
 
 export interface TaskChatSessionWithTitle extends ChatSession {

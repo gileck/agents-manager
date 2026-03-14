@@ -593,7 +593,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, plugins: projectPlugins }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, plugins: projectPlugins, enableStreaming: session.enableStreaming }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -987,7 +987,7 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
-    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string; plugins?: Array<{ type: 'local'; path: string }> },
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string; plugins?: Array<{ type: 'local'; path: string }>; enableStreaming?: boolean },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -1326,6 +1326,10 @@ export class ChatAgentService {
         }
       };
 
+      // When enableStreaming is false, suppress stream deltas so the full message
+      // appears only when complete. Default is true (streaming on).
+      const enableStreaming = extra?.enableStreaming !== false;
+
       // Build callbacks
       const callbacks: AgentLibCallbacks = {
         onOutput: (chunk: string) => {
@@ -1349,19 +1353,21 @@ export class ChatAgentService {
           );
         },
         onClientToolCall,
-        onStreamEvent: (event: { type: string; [key: string]: unknown }) => {
-          // Forward raw stream events for partial message streaming
-          const delta = event.delta as { type?: string; text?: string; thinking?: string; partial_json?: string } | undefined;
-          if (event.type === 'content_block_delta' && delta) {
-            if (delta.type === 'text_delta' && typeof delta.text === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() } });
-            } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() } });
-            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() } });
+        ...(enableStreaming ? {
+          onStreamEvent: (event: { type: string; [key: string]: unknown }) => {
+            // Forward raw stream events for partial message streaming
+            const delta = event.delta as { type?: string; text?: string; thinking?: string; partial_json?: string } | undefined;
+            if (event.type === 'content_block_delta' && delta) {
+              if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+                emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() } });
+              } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+                emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() } });
+              } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+                emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() } });
+              }
             }
-          }
-        },
+          },
+        } : {}),
       };
 
       const executeOptions = {
