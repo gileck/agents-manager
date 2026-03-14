@@ -92,16 +92,58 @@ function rowToTask(row: TaskRow): Task {
   };
 }
 
+class DbGuardQueryContext implements IGuardQueryContext {
+  constructor(private db: Database.Database) {}
+
+  countUnresolvedDependencies(taskId: string): number {
+    const row = this.db.prepare(`
+      SELECT COUNT(*) as count FROM task_dependencies td
+      JOIN tasks t ON t.id = td.depends_on_task_id
+      WHERE td.task_id = ?
+      AND t.status NOT IN (
+        SELECT json_extract(s.value, '$.name')
+        FROM pipelines p2, json_each(p2.statuses) s
+        WHERE p2.id = t.pipeline_id
+        AND json_extract(s.value, '$.isFinal') = 1
+      )
+    `).get(taskId) as { count: number };
+    return row.count;
+  }
+
+  countFailedRuns(taskId: string): number {
+    const row = this.db.prepare(
+      "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status IN ('failed', 'cancelled')"
+    ).get(taskId) as { count: number };
+    return row.count;
+  }
+
+  countRunningRuns(taskId: string): number {
+    const row = this.db.prepare(
+      "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status = 'running'"
+    ).get(taskId) as { count: number };
+    return row.count;
+  }
+
+  getUserRole(username: string): 'admin' | 'user' | null {
+    const row = this.db.prepare('SELECT role FROM users WHERE username = ?').get(username) as { role: string } | undefined;
+    if (!row) return null;
+    return row.role as 'admin' | 'user';
+  }
+}
+
 export class PipelineEngine implements IPipelineEngine {
   private guards = new Map<string, GuardFn>();
   private hooks = new Map<string, HookFn>();
+  private guardQueryContext: IGuardQueryContext;
 
   constructor(
     private pipelineStore: IPipelineStore,
     private taskStore: ITaskStore,
     private taskEventLog: ITaskEventLog,
     private db: Database.Database,
-  ) {}
+  ) {
+    this.guardQueryContext = new DbGuardQueryContext(db);
+  }
 
   registerGuard(name: string, fn: GuardFn): void {
     this.guards.set(name, fn);
@@ -193,7 +235,7 @@ export class PipelineEngine implements IPipelineEngine {
             guardFailures.push({ guard: guard.name, reason: result.reason! });
             continue;
           }
-          const result = guardFn(freshTask, transition, ctx, this.db as unknown as IGuardQueryContext, guard.params);
+          const result = guardFn(freshTask, transition, ctx, this.guardQueryContext, guard.params);
           guardResults[guard.name] = result;
           if (!result.allowed) {
             guardFailures.push({ guard: guard.name, reason: result.reason ?? 'Guard check failed' });
@@ -443,7 +485,7 @@ export class PipelineEngine implements IPipelineEngine {
           canTransition = false;
           continue;
         }
-        const result = guardFn(task, transition, { trigger }, this.db as unknown as IGuardQueryContext, guard.params);
+        const result = guardFn(task, transition, { trigger }, this.guardQueryContext, guard.params);
         results.push({ guard: guard.name, allowed: result.allowed, reason: result.reason });
         if (!result.allowed) canTransition = false;
       }

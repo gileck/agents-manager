@@ -162,7 +162,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const appLogger = initAppLogger(appDebugLog, { verbose: process.env.AM_VERBOSE === '1' });
 
   // Register built-in guards
-  registerCoreGuards(pipelineEngine, db);
+  registerCoreGuards(pipelineEngine);
 
   // Phase 2 stores
   const agentRunStore = new SqliteAgentRunStore(db);
