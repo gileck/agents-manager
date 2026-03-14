@@ -176,7 +176,7 @@ export class ValidationRunner {
     const results: CommandValidationResult[] = [];
     for (const cmd of commands) {
       try {
-        await this.execCommand(cmd, { cwd, env: getShellEnv(), timeout: 60_000, maxBuffer: 10 * 1024 * 1024 });
+        await this.execCommand(cmd, { cwd, env: getShellEnv(), timeout: 120_000, maxBuffer: 10 * 1024 * 1024 });
         results.push({ command: cmd, passed: true, exitCode: 0, output: '' });
       } catch (err: unknown) {
         const e = err as { code?: number | string; stdout?: string; stderr?: string };

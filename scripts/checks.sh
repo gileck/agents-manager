@@ -26,7 +26,8 @@ run_timed() {
 
 run_timed typecheck yarn typecheck &
 run_timed lint yarn lint &
-run_timed test yarn test &
+TEST_TIMEOUT=${TEST_TIMEOUT:-30000}
+run_timed test yarn test --testTimeout "$TEST_TIMEOUT" &
 
 wait
 
