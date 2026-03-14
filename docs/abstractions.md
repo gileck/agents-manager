@@ -218,6 +218,7 @@ See [git-scm-integration.md](./git-scm-integration.md) for worktree directory co
 | **Interface** | `src/core/interfaces/notification-router.ts` — `INotificationRouter` |
 | **Composite** | `src/core/services/multi-channel-notification-router.ts` — `MultiChannelNotificationRouter` (dispatches to all registered routers via `Promise.allSettled`) |
 | **Implementations** | `src/core/services/telegram-notification-router.ts` — `TelegramNotificationRouter` |
+| | `src/core/services/in-app-notification-router.ts` — `InAppNotificationRouter` (persists to `IInAppNotificationStore` and emits a WebSocket event) |
 | **Stub** | `src/core/services/stub-notification-router.ts` — `StubNotificationRouter` (collects in-memory for tests) |
 
 **Key methods:** `send(notification)`
@@ -339,6 +340,45 @@ See [client-daemon-convergence.md](./client-daemon-convergence.md) for how all c
 
 ---
 
+## 18. IAgent — Agent Role vs Execution Infrastructure
+
+**What it separates:** Agent role identity and execution contract from the infrastructure that manages agent runs (tracking, recovery, telemetry).
+
+**Why:** `AgentService` and `AgentFramework` operate on agents through a common interface without knowing whether the agent is a real pipeline agent (backed by a PromptBuilder + AgentLib) or a test double. This also enables `ScriptedAgent` to stand in for any real agent in tests.
+
+| | |
+|---|---|
+| **Interface** | `src/core/interfaces/agent.ts` — `IAgent` |
+| **Implementations** | `src/core/agents/agent.ts` — `Agent` (production: combines a `BaseAgentPromptBuilder` with an `AgentLib` resolved from `AgentLibRegistry`) |
+| | `src/core/agents/scripted-agent.ts` — `ScriptedAgent` (test double: executes a configurable `AgentScript` function, no AI engine required) |
+
+**Key methods:** `execute()`, `stop()`, `isAvailable()`
+
+---
+
+## 19. ITimelineSource — Timeline Data Source vs Timeline Assembly
+
+**What it separates:** Individual data sources that contribute timeline entries (activity log, agent runs, transitions, prompts, etc.) from the service that assembles, deduplicates, sorts, and paginates them into a unified debug timeline.
+
+**Why:** The debug timeline aggregates entries from many store-backed sources. Each source is independent and queries one table. Adding a new source type requires only implementing `ITimelineSource` and registering it — no changes to `TimelineService`.
+
+| | |
+|---|---|
+| **Interface** | `src/core/services/timeline/types.ts` — `ITimelineSource` |
+| **Implementations** | `src/core/services/timeline/sources/activity-source.ts` — `ActivitySource` |
+| | `src/core/services/timeline/sources/agent-run-source.ts` — `AgentRunSource` |
+| | `src/core/services/timeline/sources/artifact-source.ts` — `ArtifactSource` |
+| | `src/core/services/timeline/sources/context-source.ts` — `ContextSource` |
+| | `src/core/services/timeline/sources/event-source.ts` — `EventSource` |
+| | `src/core/services/timeline/sources/phase-source.ts` — `PhaseSource` |
+| | `src/core/services/timeline/sources/prompt-source.ts` — `PromptSource` |
+| | `src/core/services/timeline/sources/transition-source.ts` — `TransitionSource` |
+| **Composite** | `src/core/services/timeline/timeline-service.ts` — `TimelineService` (collects entries from all sources, deduplicates by ID, sorts by timestamp descending, applies keyset pagination) |
+
+**Key methods:** `getEntries(taskId)` (on each source); `getTimeline(taskId, options)` (on `TimelineService`)
+
+---
+
 ## Summary Table
 
 | # | Abstraction | Separates | Benefit |
@@ -351,7 +391,7 @@ See [client-daemon-convergence.md](./client-daemon-convergence.md) for how all c
 | 6 | **GitOps** | Git semantics ↔ shell commands | Testable, mockable git |
 | 7 | **ScmPlatform** | SCM ops ↔ platform API | Platform-agnostic PR operations |
 | 8 | **WorktreeManager** | Worktree lifecycle ↔ git CLI | Testable worktree management |
-| 9 | **NotificationRouter** | Dispatch ↔ channel | Multiple channels, composite pattern |
+| 9 | **NotificationRouter** | Dispatch ↔ channel | Multiple channels, composite pattern (Telegram, InApp) |
 | 10 | **SessionHistoryProvider** | Resume logic ↔ message storage | Engine-agnostic history replay |
 | 11 | **WorkflowService** | Business logic ↔ client transport | All clients execute identical code |
 | 12 | **AgentService** | Agent lifecycle ↔ agent execution | Run tracking, recovery, limits |
@@ -360,3 +400,5 @@ See [client-daemon-convergence.md](./client-daemon-convergence.md) for how all c
 | 15 | **DevServerManager** | Server lifecycle ↔ subprocess | Clean start/stop interface |
 | 16 | **TelegramBotService** | Bot lifecycle ↔ business logic | Separate management from commands |
 | 17 | **AutomatedAgentPromptBuilder** | Prompt logic ↔ execution | Template-specific prompts |
+| 18 | **IAgent** | Agent role ↔ execution infrastructure | Testable with ScriptedAgent, uniform agent interface |
+| 19 | **ITimelineSource** | Data source ↔ timeline assembly | Add new sources without changing TimelineService |
