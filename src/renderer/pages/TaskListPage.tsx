@@ -170,7 +170,6 @@ export function TaskListPage() {
   const someSelected = selectedIds.size > 0 && selectedIds.size < tasks.length;
 
   const toggleSelect = (id: string) => {
-    setSelectMode(true); // auto-enter select mode when any checkbox is clicked
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -181,7 +180,6 @@ export function TaskListPage() {
     setSelectedIds(allSelected ? new Set() : new Set(tasks.map((t) => t.id)));
   };
   const handleToggleSelectGroup = (taskIds: string[]) => {
-    setSelectMode(true);
     setSelectedIds((prev) => {
       const allSelected_ = taskIds.every((id) => prev.has(id));
       const next = new Set(prev);
