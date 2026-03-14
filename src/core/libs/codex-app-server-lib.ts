@@ -129,6 +129,7 @@ export class CodexAppServerLib extends BaseAgentLib {
     let imageTempDir: string | undefined;
     const emittedToolUse = new Set<string>();
     const assistantSnapshots = new Map<string, string>();
+    const emittedAssistantMessages = new Set<string>();
     let turnDoneResolve!: () => void;
     let turnDoneSettled = false;
     const turnDone = new Promise<void>((resolve) => {
@@ -198,11 +199,16 @@ export class CodexAppServerLib extends BaseAgentLib {
       if (!delta) return;
       finalAssistantText += delta;
       emit(delta);
-      onMessage?.({ type: 'assistant_text', text: delta, timestamp: Date.now() });
       onStreamEvent?.({ type: 'content_block_delta', delta: { type: 'text_delta', text: delta } });
       if (itemId) {
         assistantSnapshots.set(itemId, (assistantSnapshots.get(itemId) ?? '') + delta);
       }
+    };
+
+    const emitFinalAssistantMessage = (itemId: string, text: string): void => {
+      if (!itemId || !text || emittedAssistantMessages.has(itemId)) return;
+      emittedAssistantMessages.add(itemId);
+      onMessage?.({ type: 'assistant_text', text, timestamp: Date.now() });
     };
 
     const handleItemStarted = (item: CodexThreadItem): void => {
@@ -267,11 +273,12 @@ export class CodexAppServerLib extends BaseAgentLib {
         case 'agentMessage': {
           const agentItem = item as Extract<CodexThreadItem, { type: 'agentMessage' }>;
           const previousText = assistantSnapshots.get(item.id) ?? '';
-          const nextText = agentItem.text ?? '';
+          const nextText = agentItem.text || previousText;
           if (!nextText) break;
           const delta = nextText.startsWith(previousText) ? nextText.slice(previousText.length) : nextText;
           emitAssistantDelta(item.id, delta);
           assistantSnapshots.set(item.id, nextText);
+          emitFinalAssistantMessage(item.id, nextText);
           break;
         }
         case 'commandExecution': {
@@ -371,6 +378,9 @@ export class CodexAppServerLib extends BaseAgentLib {
           const turn = params.turn as { id?: string; status?: string; error?: { message?: string | null; additionalDetails?: string | null } | null } | undefined;
           if (turn?.id) {
             activeRun.turnId = turn.id;
+          }
+          for (const [itemId, text] of assistantSnapshots) {
+            emitFinalAssistantMessage(itemId, text);
           }
           if (turn?.status === 'failed') {
             isError = true;
