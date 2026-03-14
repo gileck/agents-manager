@@ -99,5 +99,5 @@ jobs:
             }
 
       - name: Fail if any check failed
-        if: steps.typecheck.outcome != 'success' || steps.lint.outcome != 'success' || steps.test.outcome != 'success'
+        if: always() && (steps.typecheck.outcome != 'success' || steps.lint.outcome != 'success' || steps.test.outcome != 'success')
         run: exit 1
