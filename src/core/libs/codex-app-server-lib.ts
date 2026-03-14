@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { PermissionMode } from '../../shared/types';
 import type { AgentLibFeatures, AgentLibModelOption } from '../interfaces/agent-lib';
 import type { ISessionHistoryProvider } from '../interfaces/session-history-provider';
 import { BaseAgentLib, type BaseRunState, type EngineResult, type EngineRunOptions } from './base-agent-lib';
+import { resolveSandboxMode } from './codex-lib-utils';
 import {
   CodexAppServerClient,
   type CodexAppServerClientOptions,
@@ -41,22 +41,6 @@ const DEFAULT_SESSION_MAP_PATH = path.join(os.homedir(), '.agents-manager', 'cod
 
 type PersistedThreadMap = Record<string, { threadId: string; updatedAt: number }>;
 type CodexAppServerTurnInput = CodexAppServerUserTextInput | CodexAppServerUserLocalImageInput;
-
-function resolveSandboxMode(
-  permissionMode: PermissionMode | undefined,
-  readOnly: boolean,
-): 'read-only' | 'workspace-write' | 'danger-full-access' {
-  switch (permissionMode) {
-    case 'full_access':
-      return 'danger-full-access';
-    case 'read_write':
-      return 'workspace-write';
-    case 'read_only':
-      return 'read-only';
-    default:
-      return readOnly ? 'read-only' : 'workspace-write';
-  }
-}
 
 export class CodexAppServerLib extends BaseAgentLib {
   readonly name = 'codex-app-server';

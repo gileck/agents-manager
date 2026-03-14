@@ -114,6 +114,7 @@ describe('CodexAppServerLib', () => {
       cwd: '/tmp/project',
       model: 'gpt-5.4',
       maxTurns: 4,
+      timeoutMs: 20000,
       allowedPaths: [],
       readOnlyPaths: [],
       readOnly: true,

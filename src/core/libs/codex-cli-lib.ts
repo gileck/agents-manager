@@ -1,10 +1,10 @@
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import type { PermissionMode } from '../../shared/types';
 import type { AgentLibFeatures, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
+import { resolveSandboxMode, type SandboxMode } from './codex-lib-utils';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
@@ -15,25 +15,8 @@ const importESM = new Function('specifier', 'return import(specifier)') as (spec
 // Codex SDK types (engine-specific)
 // ============================================
 
-type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 type CodexInput = string | CodexUserInput[];
 type CodexUserInput = { type: 'text'; text: string } | { type: 'local_image'; path: string };
-
-function resolveSandboxMode(
-  permissionMode: PermissionMode | undefined,
-  readOnly: boolean,
-): SandboxMode {
-  switch (permissionMode) {
-    case 'full_access':
-      return 'danger-full-access';
-    case 'read_write':
-      return 'workspace-write';
-    case 'read_only':
-      return 'read-only';
-    default:
-      return readOnly ? 'read-only' : 'workspace-write';
-  }
-}
 
 interface CodexThreadLike {
   readonly id?: string | null;
