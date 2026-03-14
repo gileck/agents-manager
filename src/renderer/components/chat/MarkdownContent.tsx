@@ -52,7 +52,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         ul: ({ children }) => <ul className="list-disc pl-6 mb-2 space-y-1">{children}</ul>,
         ol: ({ children }) => <ol className="list-decimal pl-6 mb-2 space-y-1">{children}</ol>,
         li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-        code: ({ className, children, ...props }) => {
+        code: ({ className, children, node: _node, ...props }) => {
           const isBlock = className?.includes('language-');
           if (isBlock) {
             return <CopyableCodeBlock className={className} {...props}>{children}</CopyableCodeBlock>;
@@ -82,7 +82,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
             {children}
           </a>
         ),
-        img: ({ src, alt, ...props }) => (
+        img: ({ src, alt, node: _node, ...props }) => (
           <img
             src={src ? toScreenshotApiUrl(src) : src}
             alt={alt}
