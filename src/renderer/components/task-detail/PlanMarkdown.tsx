@@ -25,7 +25,7 @@ export function PlanMarkdown({ content }: { content: string }) {
           td: ({ children }) => (
             <td className="border border-border px-3 py-1.5">{children}</td>
           ),
-          code: ({ className, children, ...props }) => {
+          code: ({ className, children, node: _node, ...props }) => {
             const isInline = !className;
             if (isInline) {
               return (
@@ -71,7 +71,7 @@ export function PlanMarkdown({ content }: { content: string }) {
               {children}
             </blockquote>
           ),
-          img: ({ src, alt, ...props }) => (
+          img: ({ src, alt, node: _node, ...props }) => (
             <img
               src={src ? toScreenshotApiUrl(src) : src}
               alt={alt}
