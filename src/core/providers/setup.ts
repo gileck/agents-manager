@@ -66,6 +66,7 @@ import { ReviewerPromptBuilder } from '../agents/reviewer-prompt-builder';
 import { TaskWorkflowReviewerPromptBuilder } from '../agents/task-workflow-reviewer-prompt-builder';
 import { ClaudeCodeLib } from '../libs/claude-code-lib';
 import { CursorAgentLib } from '../libs/cursor-agent-lib';
+import { CodexAppServerLib } from '../libs/codex-app-server-lib';
 import { CodexCliLib } from '../libs/codex-cli-lib';
 import { AgentLibRegistry } from '../services/agent-lib-registry';
 import { AgentRunHistoryProvider } from '../services/agent-run-history-provider';
@@ -211,6 +212,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const agentLibRegistry = new AgentLibRegistry();
   agentLibRegistry.register(new ClaudeCodeLib());
   agentLibRegistry.register(new CursorAgentLib(historyProvider));
+  agentLibRegistry.register(new CodexAppServerLib(historyProvider));
   agentLibRegistry.register(new CodexCliLib(historyProvider));
 
   // Agent framework — each Agent combines a prompt builder with the lib registry

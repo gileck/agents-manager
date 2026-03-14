@@ -179,6 +179,24 @@ const DEFAULT_CHAT_SUBAGENTS: Record<string, SubagentDefinition> = {
   },
 };
 
+function tagNestedSubagentMessage(message: AgentChatMessage, parentToolUseId: string): AgentChatMessage | null {
+  switch (message.type) {
+    case 'assistant_text':
+    case 'thinking':
+    case 'tool_use':
+    case 'tool_result':
+      return {
+        ...message,
+        parentToolUseId,
+      };
+    case 'status':
+    case 'agent_run_info':
+      return null;
+    default:
+      return message;
+  }
+}
+
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   private runningAgents = new Map<string, RunningAgent>();
@@ -1160,36 +1178,41 @@ export class ChatAgentService {
         });
       };
 
-      // Build callbacks
-      const callbacks: AgentLibCallbacks = {
-        onOutput: (chunk: string) => {
-          emitEvent({ type: 'text', text: chunk });
-        },
-        onMessage: (msg: AgentChatMessage) => {
-          emitMessage(msg);
-        },
-        onUserToolResult: (toolUseId: string, content: string) => {
-          emitMessage({
-            type: 'tool_result',
-            toolId: toolUseId,
-            result: content,
-            timestamp: Date.now(),
+      const requestQuestionAnswers = async (
+        questionId: string,
+        questions: import('../../shared/types').AskUserQuestionItem[],
+      ): Promise<Record<string, string>> => {
+        emitMessage({
+          type: 'ask_user_question',
+          questionId,
+          questions,
+          answered: false,
+          timestamp: Date.now(),
+        });
+
+        let onAbort: (() => void) | undefined;
+        try {
+          const answers = await new Promise<Record<string, string>>((resolve, reject) => {
+            this.pendingQuestions.set(questionId, { resolve, reject, sessionId });
+
+            onAbort = () => {
+              if (this.pendingQuestions.has(questionId)) {
+                this.pendingQuestions.delete(questionId);
+                reject(new Error('Agent stopped while waiting for user answer'));
+              }
+            };
+            abortController.signal.addEventListener('abort', onAbort, { once: true });
           });
-        },
-        onStreamEvent: (event: { type: string; [key: string]: unknown }) => {
-          // Forward raw stream events for partial message streaming
-          const delta = event.delta as { type?: string; text?: string; thinking?: string; partial_json?: string } | undefined;
-          if (event.type === 'content_block_delta' && delta) {
-            if (delta.type === 'text_delta' && typeof delta.text === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() } });
-            } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() } });
-            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() } });
-            }
+
+          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
+          return answers;
+        } catch (err) {
+          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
+          if (err instanceof Error && !err.message.includes('Agent stopped')) {
+            getAppLogger().warn('ChatAgentService', 'Unexpected error while waiting for user answer', { error: err.message });
           }
-        },
-        onPermissionRequest,
+          throw err;
+        }
       };
 
       // Build images array for libs that support native images
@@ -1247,45 +1270,13 @@ export class ChatAgentService {
           return { behavior: 'deny', message: 'AskUserQuestion received no valid questions.' };
         }
 
-        // Emit the ask_user_question message via the existing CHAT_MESSAGE WS channel
-        const askMsg: AgentChatMessage = {
-          type: 'ask_user_question',
-          questionId,
-          questions,
-          answered: false,
-          timestamp: Date.now(),
-        };
-        emitMessage(askMsg);
-
-        // Block the SDK by returning a Promise that resolves when the user answers
-        let onAbort: (() => void) | undefined;
         try {
-          const answers = await new Promise<Record<string, string>>((resolve, reject) => {
-            this.pendingQuestions.set(questionId, { resolve, reject, sessionId });
-
-            // Also reject if the abort controller fires
-            onAbort = () => {
-              if (this.pendingQuestions.has(questionId)) {
-                this.pendingQuestions.delete(questionId);
-                reject(new Error('Agent stopped while waiting for user answer'));
-              }
-            };
-            abortController.signal.addEventListener('abort', onAbort, { once: true });
-          });
-
-          // Clean up abort listener now that we have an answer
-          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
-
+          const answers = await requestQuestionAnswers(questionId, questions);
           // Return deny with the user's answers formatted as a message
           // so the agent receives the answers as tool result text
           const answerLines = Object.entries(answers).map(([q, a]) => `${q}: ${a}`).join('\n');
           return { behavior: 'deny', message: `User answered:\n${answerLines}` };
-        } catch (err) {
-          if (onAbort) abortController.signal.removeEventListener('abort', onAbort);
-          // Log unexpected errors (not abort-related)
-          if (err instanceof Error && !err.message.includes('Agent stopped')) {
-            getAppLogger().warn('ChatAgentService', 'Unexpected error in canUseTool AskUserQuestion handler', { error: err.message });
-          }
+        } catch {
           return { behavior: 'deny', message: 'User did not answer (agent was stopped).' };
         }
       };
@@ -1293,6 +1284,152 @@ export class ChatAgentService {
       // Add default subagents for thread chat sessions (desktop/telegram/cli — not agent-chat or pipeline)
       const isThreadChat = chatSession && chatSession.source !== 'agent-chat' && !extra?.pipelineSessionId;
       const agents = isThreadChat ? DEFAULT_CHAT_SUBAGENTS : undefined;
+
+      const onClientToolCall: AgentLibCallbacks['onClientToolCall'] = async ({ toolName, toolUseId, toolInput }) => {
+        if (toolName !== 'Task' && toolName !== 'task') {
+          return { handled: false, success: false, content: '' };
+        }
+
+        const subagentType = typeof toolInput.subagent_type === 'string' ? toolInput.subagent_type : undefined;
+        const subagentDef = subagentType ? agents?.[subagentType] : undefined;
+        const agentName = subagentType ?? 'subagent';
+        const taskPrompt = typeof toolInput.prompt === 'string'
+          ? toolInput.prompt
+          : typeof toolInput.description === 'string'
+            ? toolInput.description
+            : JSON.stringify(toolInput);
+        const taskInput = JSON.stringify(toolInput);
+
+        emitMessage({
+          type: 'tool_use',
+          toolName: 'Task',
+          toolId: toolUseId,
+          input: taskInput.slice(0, 2000),
+          timestamp: Date.now(),
+        });
+        emitMessage({
+          type: 'subagent_activity',
+          agentName,
+          status: 'started',
+          toolUseId,
+          timestamp: Date.now(),
+        });
+
+        try {
+          const nestedResult = await lib.execute(`${executeSessionId}:task:${toolUseId}`, {
+            prompt: taskPrompt,
+            systemPrompt: subagentDef?.prompt ?? systemPrompt,
+            cwd: projectPath,
+            model,
+            maxTurns: subagentDef?.maxTurns ?? 25,
+            timeoutMs: 300000,
+            allowedPaths: readOnly ? [] : [projectPath, imageDir],
+            readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
+            readOnly,
+            settingSources: ['project'] as Array<'user' | 'project' | 'local'>,
+            ...(mcpServers ? { mcpServers } : {}),
+            ...(extra?.plugins?.length ? { plugins: extra.plugins } : {}),
+            canUseTool,
+            disallowedTools: [...(disallowedTools ?? []), 'Task'],
+          }, {
+            onMessage: (msg: AgentChatMessage) => {
+              const taggedMessage = tagNestedSubagentMessage(msg, toolUseId);
+              if (!taggedMessage) {
+                return;
+              }
+              emitMessage(taggedMessage);
+            },
+            onQuestionRequest: async ({ questionId, questions }) => {
+              const answers = await requestQuestionAnswers(questionId, questions);
+              return Object.fromEntries(
+                Object.entries(answers).map(([key, value]) => [key, [value]]),
+              );
+            },
+            onPermissionRequest,
+            onClientToolCall: async () => ({ handled: true, success: false, content: 'Nested Task delegation is not supported yet.' }),
+          });
+
+          const resultText = (nestedResult.output || nestedResult.error || `Subagent ${agentName} completed.`).slice(0, 4000);
+          emitMessage({
+            type: 'subagent_activity',
+            agentName,
+            status: 'completed',
+            toolUseId,
+            timestamp: Date.now(),
+          });
+          emitMessage({
+            type: 'tool_result',
+            toolId: toolUseId,
+            result: resultText.slice(0, 2000),
+            timestamp: Date.now(),
+          });
+
+          return {
+            handled: true,
+            success: nestedResult.exitCode === 0,
+            content: resultText,
+          };
+        } catch (err) {
+          const errorText = err instanceof Error ? err.message : String(err);
+          emitMessage({
+            type: 'subagent_activity',
+            agentName,
+            status: 'completed',
+            toolUseId,
+            timestamp: Date.now(),
+          });
+          emitMessage({
+            type: 'tool_result',
+            toolId: toolUseId,
+            result: errorText.slice(0, 2000),
+            timestamp: Date.now(),
+          });
+          return {
+            handled: true,
+            success: false,
+            content: errorText,
+          };
+        }
+      };
+
+      // Build callbacks
+      const callbacks: AgentLibCallbacks = {
+        onOutput: (chunk: string) => {
+          emitEvent({ type: 'text', text: chunk });
+        },
+        onMessage: (msg: AgentChatMessage) => {
+          emitMessage(msg);
+        },
+        onUserToolResult: (toolUseId: string, content: string) => {
+          emitMessage({
+            type: 'tool_result',
+            toolId: toolUseId,
+            result: content,
+            timestamp: Date.now(),
+          });
+        },
+        onQuestionRequest: async ({ questionId, questions }) => {
+          const answers = await requestQuestionAnswers(questionId, questions);
+          return Object.fromEntries(
+            Object.entries(answers).map(([key, value]) => [key, [value]]),
+          );
+        },
+        onClientToolCall,
+        onStreamEvent: (event: { type: string; [key: string]: unknown }) => {
+          // Forward raw stream events for partial message streaming
+          const delta = event.delta as { type?: string; text?: string; thinking?: string; partial_json?: string } | undefined;
+          if (event.type === 'content_block_delta' && delta) {
+            if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'text_delta', delta: delta.text, timestamp: Date.now() } });
+            } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'thinking_delta', delta: delta.thinking, timestamp: Date.now() } });
+            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+              emitEvent({ type: 'stream_delta', delta: { type: 'stream_delta', deltaType: 'input_json_delta', delta: delta.partial_json, timestamp: Date.now() } });
+            }
+          }
+        },
+        onPermissionRequest,
+      };
 
       const executeOptions = {
         prompt,
