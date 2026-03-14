@@ -140,5 +140,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '113_add_dismissed_to_task_events',
       sql: `ALTER TABLE task_events ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0`,
     },
+    {
+      name: '114_add_enable_streaming_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN enable_streaming INTEGER NOT NULL DEFAULT 1`,
+    },
   ];
 }
