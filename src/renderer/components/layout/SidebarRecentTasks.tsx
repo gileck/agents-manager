@@ -28,6 +28,11 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
       <circle cx="8" cy="8" r="8" fill="#6b7280" />
     </svg>
   ),
+  _default: (
+    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="#22c55e" strokeWidth="2" fill="white" />
+    </svg>
+  ),
 };
 
 function sortAndSlice(tasks: Task[]): Task[] {
@@ -95,7 +100,7 @@ export function SidebarRecentTasks({ runningTaskIds }: SidebarRecentTasksProps) 
                     : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
                 )}
               >
-                {runningTaskIds.has(task.id) ? <RunningIndicator /> : (STATUS_ICONS[task.status] ?? null)}
+                {runningTaskIds.has(task.id) ? <RunningIndicator /> : (STATUS_ICONS[task.status] ?? STATUS_ICONS._default)}
                 <span className="flex-1 min-w-0 truncate font-medium">{task.title}</span>
                 <span
                   className={cn(
