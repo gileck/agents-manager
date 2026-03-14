@@ -70,7 +70,7 @@ export class LocalWorktreeManager implements IWorktreeManager {
         // Branch already exists from a prior run — retry without -b
         await this.git(['worktree', 'add', wtPath, branch]);
       } else {
-        throw new Error(`Failed to create worktree for branch "${branch}" from base "${base}": ${msg}`);
+        throw new Error(`Failed to create worktree for branch "${branch}" from base "${base}": ${msg}`, { cause: err });
       }
     }
 

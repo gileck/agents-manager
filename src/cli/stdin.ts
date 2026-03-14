@@ -15,6 +15,6 @@ export async function readStdinOrValue(value: string | undefined): Promise<strin
     }
     return Buffer.concat(chunks).toString('utf-8').trimEnd();
   } catch (err) {
-    throw new Error(`Failed to read from stdin: ${err instanceof Error ? err.message : 'unknown error'}`);
+    throw new Error(`Failed to read from stdin: ${err instanceof Error ? err.message : 'unknown error'}`, { cause: err });
   }
 }

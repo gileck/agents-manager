@@ -115,7 +115,7 @@ export class ScheduledAgentService {
         sections.push('');
       } catch (err) {
         getAppLogger().logError('ScheduledAgentService', `Custom prompt builder for "${agent.templateId}" failed`, err);
-        throw new Error(`Prompt builder for template "${agent.templateId}" failed: ${err instanceof Error ? err.message : String(err)}`);
+        throw new Error(`Prompt builder for template "${agent.templateId}" failed: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
       }
     } else {
       await this.appendDefaultTaskContext(sections, project);

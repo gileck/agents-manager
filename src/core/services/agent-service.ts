@@ -237,7 +237,7 @@ export class AgentService implements IAgentService {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (!/already exists/.test(msg)) {
-          throw new Error(`Failed to create task integration branch "${taskBranch}": ${msg}`);
+          throw new Error(`Failed to create task integration branch "${taskBranch}": ${msg}`, { cause: err });
         }
       }
       await gitOpsRoot.push(taskBranch);
@@ -287,7 +287,7 @@ export class AgentService implements IAgentService {
             // Branch already exists from a prior attempt — just checkout
             await gitOps.checkout(branch);
           } else {
-            throw new Error(`Failed to switch worktree to branch "${branch}": ${msg}`);
+            throw new Error(`Failed to switch worktree to branch "${branch}": ${msg}`, { cause: err });
           }
         }
         await this.taskEventLog.log({

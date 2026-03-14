@@ -196,9 +196,9 @@ describe('Phase Cycling E2E', () => {
     await ctx.taskStore.updateTask(task.id, { phases: allCompletedPhases });
 
     // Get the task to implementing first, then to pr_review, then to done
-    let current = await ctx.transitionTo(task.id, 'implementing');
+    await ctx.transitionTo(task.id, 'implementing');
     await createPrArtifact(task.id, 'test-branch');
-    current = (await ctx.taskStore.getTask(task.id))!;
+    let current = (await ctx.taskStore.getTask(task.id))!;
     const prResult = await ctx.pipelineEngine.executeTransition(current, 'pr_review', {
       trigger: 'agent',
       data: { outcome: 'pr_ready', branch: 'test-branch' },
@@ -588,10 +588,10 @@ describe('Phase Cycling E2E', () => {
     // Create task WITHOUT phases
     const task = await ctx.taskStore.createTask(createTaskInput(projectId, AGENT_PIPELINE.id));
 
-    let current = await ctx.transitionTo(task.id, 'implementing');
+    await ctx.transitionTo(task.id, 'implementing');
 
     await createPrArtifact(task.id, 'branch-single');
-    current = (await ctx.taskStore.getTask(task.id))!;
+    let current = (await ctx.taskStore.getTask(task.id))!;
     await ctx.pipelineEngine.executeTransition(current, 'pr_review', {
       trigger: 'agent',
       data: { outcome: 'pr_ready', branch: 'branch-single' },
@@ -655,10 +655,10 @@ describe('Phase Cycling E2E', () => {
     ];
     await ctx.taskStore.updateTask(task.id, { phases: allDonePhases });
 
-    let current = await ctx.transitionTo(task.id, 'implementing');
+    await ctx.transitionTo(task.id, 'implementing');
 
     await createPrArtifact(task.id, 'branch-final');
-    current = (await ctx.taskStore.getTask(task.id))!;
+    let current = (await ctx.taskStore.getTask(task.id))!;
     await ctx.pipelineEngine.executeTransition(current, 'pr_review', {
       trigger: 'agent',
       data: { outcome: 'pr_ready', branch: 'branch-final' },

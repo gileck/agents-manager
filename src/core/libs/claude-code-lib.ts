@@ -367,7 +367,6 @@ export class ClaudeCodeLib extends BaseAgentLib {
       const sdkError = err instanceof Error ? err.message : String(err);
       const sdkStack = err instanceof Error ? err.stack : undefined;
       const elapsed = Date.now() - startTime;
-      errorMessage = sdkError;
 
       const stderrOutput = stderrChunks.join('').trim();
       const diagnostics = this.buildDiagnostics(state, options, {

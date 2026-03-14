@@ -65,7 +65,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return session;
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'createSession failed', error);
-      throw new Error(`Failed to create chat session: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to create chat session: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -81,7 +81,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return row ? toSession(row) : null;
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'getSession failed', error);
-      throw new Error(`Failed to get chat session: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to get chat session: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -106,7 +106,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return rows.map(toSession);
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'listSessionsForScope failed', error);
-      throw new Error(`Failed to list chat sessions: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to list chat sessions: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -135,7 +135,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return rows.map(toTaskSession);
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'listTaskSessionsForProject failed', error);
-      throw new Error(`Failed to list task chat sessions: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to list task chat sessions: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -156,7 +156,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return rows.map(toSessionWithDetails);
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'listAllForProject failed', error);
-      throw new Error(`Failed to list all chat sessions: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to list all chat sessions: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -213,7 +213,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return this.getSession(id);
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'updateSession failed', error);
-      throw new Error(`Failed to update chat session: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to update chat session: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -228,7 +228,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return result.changes > 0;
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'deleteSession failed', error);
-      throw new Error(`Failed to delete chat session: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to delete chat session: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -241,7 +241,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return result.changes > 0;
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'hideSession failed', error);
-      throw new Error(`Failed to hide chat session: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to hide chat session: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -254,7 +254,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return result.changes > 0;
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'hideAllSessions failed', error);
-      throw new Error(`Failed to hide all chat sessions: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to hide all chat sessions: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -269,7 +269,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       }
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'addTrackedTask failed', error);
-      throw new Error(`Failed to add tracked task: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to add tracked task: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
@@ -280,7 +280,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       return JSON.parse(row.task_ids || '[]');
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'getTrackedTaskIds failed', error);
-      throw new Error(`Failed to get tracked task IDs: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to get tracked task IDs: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 }

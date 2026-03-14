@@ -34,7 +34,8 @@ try {
     `(BETTER_SQLITE3_BINDING="${process.env.BETTER_SQLITE3_BINDING || '(unset, using default)'}"). ` +
     `Ensure the file exists and was built for the current Node ABI. ` +
     `Try running: yarn rebuild:node\n` +
-    `Original error: ${err instanceof Error ? err.message : err}`
+    `Original error: ${err instanceof Error ? err.message : err}`,
+    { cause: err }
   );
 }
 

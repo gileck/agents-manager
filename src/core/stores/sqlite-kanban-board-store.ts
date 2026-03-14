@@ -32,7 +32,7 @@ function rowToBoard(row: KanbanBoardRow): KanbanBoardConfig {
   } catch (error) {
     const errorMsg = `Corrupted kanban board data for board ${row.id}: invalid columns format. Raw data: ${row.columns}`;
     getAppLogger().logError('KanbanBoardStore', errorMsg, error);
-    throw new Error(errorMsg);
+    throw new Error(errorMsg, { cause: error });
   }
 
   try {
@@ -43,7 +43,7 @@ function rowToBoard(row: KanbanBoardRow): KanbanBoardConfig {
   } catch (error) {
     const errorMsg = `Corrupted kanban board data for board ${row.id}: invalid filters format. Raw data: ${row.filters}`;
     getAppLogger().logError('KanbanBoardStore', errorMsg, error);
-    throw new Error(errorMsg);
+    throw new Error(errorMsg, { cause: error });
   }
 
   return {
@@ -72,7 +72,7 @@ export class SqliteKanbanBoardStore implements IKanbanBoardStore {
       return row ? rowToBoard(row) : null;
     } catch (error) {
       getAppLogger().logError('KanbanBoardStore', 'Failed to get kanban board', error);
-      throw new Error(`Failed to get kanban board: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to get kanban board: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
     }
   }
 
@@ -82,7 +82,7 @@ export class SqliteKanbanBoardStore implements IKanbanBoardStore {
       return row ? rowToBoard(row) : null;
     } catch (error) {
       getAppLogger().logError('KanbanBoardStore', 'Failed to get kanban board by project', error);
-      throw new Error(`Failed to get kanban board by project: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to get kanban board by project: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
     }
   }
 
@@ -92,7 +92,7 @@ export class SqliteKanbanBoardStore implements IKanbanBoardStore {
       return rows.map(rowToBoard);
     } catch (error) {
       getAppLogger().logError('KanbanBoardStore', 'Failed to list kanban boards', error);
-      throw new Error(`Failed to list kanban boards: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to list kanban boards: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
     }
   }
 
@@ -135,7 +135,7 @@ export class SqliteKanbanBoardStore implements IKanbanBoardStore {
       return board;
     } catch (error) {
       getAppLogger().logError('KanbanBoardStore', 'Failed to create kanban board', error);
-      throw new Error(`Failed to create kanban board: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to create kanban board: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
     }
   }
 
@@ -189,7 +189,7 @@ export class SqliteKanbanBoardStore implements IKanbanBoardStore {
       return await this.getBoard(id);
     } catch (error) {
       getAppLogger().logError('KanbanBoardStore', 'Failed to update kanban board', error);
-      throw new Error(`Failed to update kanban board: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to update kanban board: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
     }
   }
 
@@ -199,7 +199,7 @@ export class SqliteKanbanBoardStore implements IKanbanBoardStore {
       return result.changes > 0;
     } catch (error) {
       getAppLogger().logError('KanbanBoardStore', 'Failed to delete kanban board', error);
-      throw new Error(`Failed to delete kanban board: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to delete kanban board: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
     }
   }
 }

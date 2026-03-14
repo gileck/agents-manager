@@ -14,7 +14,7 @@ export type ViewMode = 'list' | 'card';
 
 export function sortTasks(tasks: Task[], field: SortField, direction: SortDirection): Task[] {
   const sorted = [...tasks].sort((a, b) => {
-    let cmp = 0;
+    let cmp: number;
     switch (field) {
       case 'priority':
         cmp = a.priority - b.priority;
