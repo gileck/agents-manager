@@ -260,11 +260,17 @@ export class SqliteAgentRunStore implements IAgentRunStore {
     }
   }
 
-  countFailedRunsSync(_taskId: string): number {
-    throw new Error('Not implemented');
+  countFailedRunsSync(taskId: string): number {
+    const row = this.db.prepare(
+      "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status IN ('failed', 'cancelled')"
+    ).get(taskId) as { count: number };
+    return row.count;
   }
 
-  countRunningRunsSync(_taskId: string): number {
-    throw new Error('Not implemented');
+  countRunningRunsSync(taskId: string): number {
+    const row = this.db.prepare(
+      "SELECT COUNT(*) as count FROM agent_runs WHERE task_id = ? AND status = 'running'"
+    ).get(taskId) as { count: number };
+    return row.count;
   }
 }

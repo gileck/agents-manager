@@ -465,11 +465,24 @@ export class SqliteTaskStore implements ITaskStore {
     }
   }
 
-  getTaskSync(_id: string): import('../../shared/types').Task | null {
-    throw new Error('Not implemented');
+  getTaskSync(id: string): Task | null {
+    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined;
+    return row ? rowToTask(row) : null;
   }
 
-  countUnresolvedDependenciesSync(_taskId: string): number {
-    throw new Error('Not implemented');
+  countUnresolvedDependenciesSync(taskId: string): number {
+    const row = this.db.prepare(`
+      SELECT COUNT(*) as count FROM task_dependencies td
+      JOIN tasks t ON t.id = td.depends_on_task_id
+      JOIN pipelines p ON p.id = t.pipeline_id
+      WHERE td.task_id = ?
+      AND t.status NOT IN (
+        SELECT json_extract(s.value, '$.name')
+        FROM pipelines p2, json_each(p2.statuses) s
+        WHERE p2.id = t.pipeline_id
+        AND json_extract(s.value, '$.isFinal') = 1
+      )
+    `).get(taskId) as { count: number };
+    return row.count;
   }
 }
