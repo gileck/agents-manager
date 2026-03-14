@@ -3,6 +3,12 @@ import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, AgentNotif
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
+export interface RawEvent {
+  timestamp: string;
+  channel: string;
+  payload: unknown;
+}
+
 function convertDbMessages(dbMessages: ChatMessage[]): AgentChatMessage[] {
   const result: AgentChatMessage[] = [];
   for (const msg of dbMessages) {
@@ -53,6 +59,7 @@ export function useChat(sessionId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [queuedMessage, setQueuedMessage] = useState<QueuedMessage | null>(null);
+  const [rawEvents, setRawEvents] = useState<RawEvent[]>([]);
   const streamingRef = useRef(false);
   const doSendRef = useRef<(message: string, images?: ChatImage[]) => Promise<void>>(null);
 
@@ -65,6 +72,7 @@ export function useChat(sessionId: string | null) {
     setQueuedMessage(null);
     streamingRef.current = false;
     setError(null);
+    setRawEvents([]);
 
     if (!sessionId) {
       return;
@@ -94,6 +102,7 @@ export function useChat(sessionId: string | null) {
 
     const unsubscribe = window.api.on.chatOutput((incomingProjectId: string, chunk: string) => {
       if (incomingProjectId !== sessionId) return;
+      setRawEvents((prev) => [...prev, { timestamp: new Date().toISOString(), channel: 'chat:output', payload: chunk }]);
 
       if (chunk === CHAT_COMPLETE_SENTINEL) {
         streamingRef.current = false;
@@ -121,6 +130,7 @@ export function useChat(sessionId: string | null) {
 
     const unsubscribe = window.api.on.chatMessage((incomingProjectId: string, msg: AgentChatMessage) => {
       if (incomingProjectId !== sessionId) return;
+      setRawEvents((prev) => [...prev, { timestamp: new Date().toISOString(), channel: 'chat:message', payload: msg }]);
       setStreamingMessages((prev) => [...prev, msg]);
     });
 
@@ -133,6 +143,7 @@ export function useChat(sessionId: string | null) {
 
     const unsubscribe = window.api.on.chatStreamDelta((incomingSessionId: string, delta: AgentChatMessage) => {
       if (incomingSessionId !== sessionId) return;
+      setRawEvents((prev) => [...prev, { timestamp: new Date().toISOString(), channel: 'chat:stream-delta', payload: delta }]);
       setStreamingMessages((prev) => [...prev, delta]);
     });
 
@@ -145,6 +156,7 @@ export function useChat(sessionId: string | null) {
 
     const unsubscribe = window.api.on.chatPermissionRequest((incomingSessionId: string, request: AgentChatMessage) => {
       if (incomingSessionId !== sessionId) return;
+      setRawEvents((prev) => [...prev, { timestamp: new Date().toISOString(), channel: 'chat:permission-request', payload: request }]);
       setStreamingMessages((prev) => [...prev, request]);
     });
 
@@ -157,6 +169,7 @@ export function useChat(sessionId: string | null) {
 
     const unsubscribe = window.api.on.chatAgentNotification((incomingSessionId: string, payload: AgentNotificationPayload) => {
       if (incomingSessionId !== sessionId) return;
+      setRawEvents((prev) => [...prev, { timestamp: new Date().toISOString(), channel: 'chat:agent-notification', payload }]);
       // Skip Tier 1 rendering when autoNotify is true — Tier 2 handles it
       // via the injected event handler which triggers a full agent turn.
       if (payload.autoNotify) return;
@@ -412,5 +425,6 @@ export function useChat(sessionId: string | null) {
     tokenUsage,
     perTurnUsage,
     respondToPermission,
+    rawEvents,
   };
 }

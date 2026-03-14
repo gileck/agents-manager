@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import type { AgentChatMessage, AgentRun, ChatImage, PermissionMode } from '../../../shared/types';
+import type { RawEvent } from '../../hooks/useChat';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput, AgentLibOption, ModelOption } from './ChatInput';
 import { ContextSidebar } from './ContextSidebar';
 import { TaskStatusBar } from './TaskStatusBar';
+import { RawChatView } from './RawChatView';
 
 interface AgentChatProps {
   messages: AgentChatMessage[];
@@ -27,6 +29,8 @@ interface AgentChatProps {
   inputRef?: React.Ref<HTMLTextAreaElement>;
   sessionId?: string | null;
   onPermissionResponse?: (requestId: string, allowed: boolean) => void;
+  rawEvents?: RawEvent[];
+  showRawView?: boolean;
 }
 
 export function AgentChat({
@@ -51,6 +55,8 @@ export function AgentChat({
   inputRef,
   sessionId,
   onPermissionResponse,
+  rawEvents = [],
+  showRawView = false,
 }: AgentChatProps) {
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
 
@@ -88,7 +94,9 @@ export function AgentChat({
   return (
     <div className="flex-1 min-h-0 flex">
       <div className="flex-1 min-h-0 flex flex-col">
-        {messages.length === 0 && !isRunning && emptyState ? (
+        {showRawView ? (
+          <RawChatView rawEvents={rawEvents} />
+        ) : messages.length === 0 && !isRunning && emptyState ? (
           <div className="flex-1 flex items-center justify-center px-6 py-4">
             {emptyState}
           </div>
