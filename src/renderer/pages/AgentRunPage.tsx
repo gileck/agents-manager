@@ -19,9 +19,11 @@ import { AgentRunErrorBanner } from '../components/agent-run/AgentRunErrorBanner
 import { DebugLogsPanel } from '../components/agent-run/DebugLogsPanel';
 import { DiagnosticsPanel } from '../components/agent-run/DiagnosticsPanel';
 import { ContextSidebar } from '../components/chat/ContextSidebar';
-import type { AgentRun, Task, AgentChatMessage } from '../../shared/types';
+import { StopAgentDialog } from '../components/agent-run/StopAgentDialog';
+import type { AgentRun, Task, AgentChatMessage, StopAgentResult } from '../../shared/types';
 import { messagesToRawText } from '../../shared/agent-message-utils';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { reportError } from '../lib/error-handler';
 
 const OUTCOME_MESSAGES: Record<string, string> = {
   plan_complete: 'Plan is ready for review. Go to task to review and approve.',
@@ -149,11 +151,48 @@ export function AgentRunPage() {
   // --- Output mode (raw vs rendered) ---
   const [outputMode, setOutputMode] = useLocalStorage<OutputMode>('agentRun.outputMode', 'raw');
 
+  // --- Stop dialog state ---
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [stopResult, setStopResult] = useState<StopAgentResult | null>(null);
+
   // --- Actions ---
   const handleStop = async () => {
     if (!runId) return;
-    await window.api.agents.stop(runId);
-    await refetch();
+    try {
+      const result = await window.api.agents.stop(runId);
+      await refetch();
+      if (result && result.currentStatus) {
+        setStopResult(result);
+        setStopDialogOpen(true);
+      }
+    } catch (err) {
+      reportError(err, 'Stop agent');
+    }
+  };
+
+  const handleStopTransition = async (toStatus: string) => {
+    if (!run?.taskId) return;
+    const result = await window.api.tasks.transition(run.taskId, toStatus);
+    if (!result.success) {
+      throw new Error(result.error ?? 'Transition failed');
+    }
+    await refetchTask();
+  };
+
+  const [restarting, setRestarting] = useState(false);
+  const handleRestart = async () => {
+    if (!run?.taskId || !task) return;
+    setRestarting(true);
+    try {
+      // Force-transition to the same status triggers the start_agent hook
+      await window.api.tasks.forceTransition(run.taskId, task.status);
+      await refetch();
+      await refetchTask();
+    } catch (err) {
+      reportError(err, 'Restart agent');
+    } finally {
+      setRestarting(false);
+    }
   };
 
   // --- Loading / error states (only on initial load, not during refetches) ---
@@ -176,6 +215,7 @@ export function AgentRunPage() {
   if (!run) return null;
 
   const isRunning = run.status === 'running';
+  const isStopped = !isRunning && run.status !== 'completed';
   const displayMessages = isRunning ? streamMessages : (run?.messages ?? streamMessages);
   const displayOutput = displayMessages.length > 0 ? messagesToRawText(displayMessages) : (run.output || '');
   const outcomeMessage = run.outcome ? OUTCOME_MESSAGES[run.outcome] : null;
@@ -221,6 +261,11 @@ export function AgentRunPage() {
           )}
           {isRunning && (
             <Button variant="destructive" size="sm" onClick={handleStop}>Stop</Button>
+          )}
+          {isStopped && task && (
+            <Button variant="default" size="sm" onClick={handleRestart} disabled={restarting}>
+              {restarting ? 'Restarting...' : 'Restart'}
+            </Button>
           )}
         </div>
       </div>
@@ -363,6 +408,16 @@ export function AgentRunPage() {
           </div>
         )}
       </div>
+
+      {/* Post-stop dialog */}
+      {stopResult && (
+        <StopAgentDialog
+          open={stopDialogOpen}
+          onOpenChange={setStopDialogOpen}
+          stopResult={stopResult}
+          onTransition={handleStopTransition}
+        />
+      )}
     </div>
   );
 }

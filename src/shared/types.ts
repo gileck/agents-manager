@@ -458,6 +458,12 @@ export interface TransitionResult {
   hookFailures?: HookFailure[];
 }
 
+export interface StopAgentResult {
+  currentStatus: string;
+  previousStatus: string | null;
+  manualTransitions: Array<{ to: string; label: string }>;
+}
+
 export interface TransitionHistoryEntry {
   id: string;
   taskId: string;

@@ -56,6 +56,7 @@ import type {
   PermissionMode,
   DevServerInfo,
   AgentNotificationPayload,
+  StopAgentResult,
 } from './types';
 
 export interface ApiShape {
@@ -160,7 +161,7 @@ export interface ApiShape {
   // Agent operations
   agents: {
     start(taskId: string, mode: AgentMode, agentType: string): Promise<AgentRun>;
-    stop(runId: string): Promise<void>;
+    stop(runId: string): Promise<StopAgentResult>;
     runs(taskId: string): Promise<AgentRun[]>;
     get(runId: string): Promise<AgentRun | null>;
     activeTaskIds(): Promise<string[]>;

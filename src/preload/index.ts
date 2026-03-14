@@ -46,6 +46,7 @@ import type {
   PermissionMode,
   DevServerInfo,
   AgentNotificationPayload,
+  StopAgentResult,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -373,7 +374,7 @@ const api = {
   agents: {
     start: (taskId: string, mode: AgentMode, agentType: string): Promise<AgentRun> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_START, taskId, mode, agentType),
-    stop: (runId: string): Promise<void> =>
+    stop: (runId: string): Promise<StopAgentResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_STOP, runId),
     runs: (taskId: string): Promise<AgentRun[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUNS, taskId),

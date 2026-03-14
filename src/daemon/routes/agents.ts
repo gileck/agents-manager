@@ -22,8 +22,8 @@ export function agentRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(400).json({ error: 'runId is required in request body' });
         return;
       }
-      await services.workflowService.stopAgent(runId);
-      res.json({ ok: true });
+      const result = await services.workflowService.stopAgent(runId);
+      res.json({ ok: true, ...result });
     } catch (err) { next(err); }
   });
 

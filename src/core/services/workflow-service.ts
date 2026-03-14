@@ -10,6 +10,7 @@ import type {
   PendingPrompt,
   DashboardStats,
   AgentChatMessage,
+  StopAgentResult,
 } from '../../shared/types';
 import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
 import { analyzeRunMessages } from './run-diagnostics-analyzer';
@@ -287,7 +288,9 @@ export class WorkflowService implements IWorkflowService {
     return this.startAgent(taskId, mode, agentType, revisionReason, callbacks.onOutput, callbacks.onMessage, callbacks.onStatusChange);
   }
 
-  async stopAgent(runId: string): Promise<void> {
+  async stopAgent(runId: string): Promise<StopAgentResult> {
+    // Get the run to find the task before stopping
+    const run = await this.agentRunStore.getRun(runId);
     await this.agentService.stop(runId);
     await this.activityLog.log({
       action: 'agent_complete',
@@ -295,6 +298,21 @@ export class WorkflowService implements IWorkflowService {
       entityId: runId,
       summary: 'Agent stopped',
     });
+
+    // Build stop options for the post-stop dialog
+    if (!run) return { currentStatus: '', previousStatus: null, manualTransitions: [] };
+
+    const task = await this.taskStore.getTask(run.taskId);
+    if (!task) return { currentStatus: '', previousStatus: null, manualTransitions: [] };
+
+    const previousStatus = this.pipelineEngine.getPreviousStatus(task.id);
+    const manualTransitions = await this.pipelineEngine.getValidTransitions(task, 'manual');
+
+    return {
+      currentStatus: task.status,
+      previousStatus,
+      manualTransitions: manualTransitions.map(t => ({ to: t.to, label: t.label ?? t.to })),
+    };
   }
 
   async respondToPrompt(promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null> {

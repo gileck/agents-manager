@@ -110,6 +110,13 @@ export class PipelineEngine implements IPipelineEngine {
     this.hooks.set(name, fn);
   }
 
+  getPreviousStatus(taskId: string): string | null {
+    const row = this.db.prepare(
+      'SELECT from_status FROM transition_history WHERE task_id = ? ORDER BY created_at DESC LIMIT 1'
+    ).get(taskId) as { from_status: string } | undefined;
+    return row?.from_status ?? null;
+  }
+
   async getValidTransitions(task: Task, trigger?: TransitionTrigger): Promise<Transition[]> {
     const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
     if (!pipeline) return [];

@@ -11,4 +11,5 @@ export interface IPipelineEngine {
   retryHook(task: Task, hookName: string, transition: Transition, context?: TransitionContext): Promise<HookRetryResult>;
   registerGuard(name: string, fn: GuardFn): void;
   registerHook(name: string, fn: HookFn): void;
+  getPreviousStatus(taskId: string): string | null;
 }

@@ -118,8 +118,13 @@ export class AgentSupervisor {
           const hasRunning = runs.some(r => r.status === 'running');
           if (hasRunning) continue;
 
-          // Grace period: skip if an agent completed recently (may be finalizing transition)
+          // Skip recovery if the most recent run was explicitly cancelled by the user (via Stop button).
+          // runs are ordered by started_at DESC, so runs[0] is the latest.
+          if (runs[0]?.status === 'cancelled') continue;
+
           const latestCompleted = runs.find(r => r.completedAt != null);
+
+          // Grace period: skip if an agent completed recently (may be finalizing transition)
           if (latestCompleted?.completedAt && (currentTime - latestCompleted.completedAt) < STALL_GRACE_MS) {
             continue;
           }
