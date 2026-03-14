@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
+import type { PermissionMode } from '../../shared/types';
 import type { AgentLibFeatures, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
@@ -14,9 +15,25 @@ const importESM = new Function('specifier', 'return import(specifier)') as (spec
 // Codex SDK types (engine-specific)
 // ============================================
 
-type SandboxMode = 'read-only' | 'workspace-write';
+type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 type CodexInput = string | CodexUserInput[];
 type CodexUserInput = { type: 'text'; text: string } | { type: 'local_image'; path: string };
+
+function resolveSandboxMode(
+  permissionMode: PermissionMode | undefined,
+  readOnly: boolean,
+): SandboxMode {
+  switch (permissionMode) {
+    case 'full_access':
+      return 'danger-full-access';
+    case 'read_write':
+      return 'workspace-write';
+    case 'read_only':
+      return 'read-only';
+    default:
+      return readOnly ? 'read-only' : 'workspace-write';
+  }
+}
 
 interface CodexThreadLike {
   readonly id?: string | null;
@@ -163,7 +180,7 @@ export class CodexCliLib extends BaseAgentLib {
     const env = Object.fromEntries(
       Object.entries(shellEnv).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
     );
-    const sandboxMode: SandboxMode = options.readOnly ? 'read-only' : 'workspace-write';
+    const sandboxMode = resolveSandboxMode(options.permissionMode, options.readOnly);
     const { input: sdkInput, imageTempDir } = await this.buildSdkInput(runId, effectivePrompt, options.images);
     const additionalDirectories = Array.from(new Set([
       ...options.allowedPaths.filter(Boolean),

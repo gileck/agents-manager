@@ -1,4 +1,4 @@
-import type { AgentChatMessage, AskUserQuestionItem } from '../../shared/types';
+import type { AgentChatMessage, AskUserQuestionItem, PermissionMode } from '../../shared/types';
 import type { GenericMcpToolDefinition } from './mcp-tool';
 
 // ============================================
@@ -260,6 +260,8 @@ export interface AgentLibRunOptions {
   agents?: Record<string, SubagentDefinition>;
   /** Plugins to load for this session. Each plugin extends the agent with custom commands, skills, hooks, etc. Supported by claude-code engine only. */
   plugins?: Array<{ type: 'local'; path: string }>;
+  /** Generic permission mode selected by the caller. Engines may map this to engine-specific sandbox/approval settings. */
+  permissionMode?: PermissionMode;
   /** SDK-level permission mode. Defaults to 'acceptEdits' if not specified. */
   sdkPermissionMode?: string;
 }
