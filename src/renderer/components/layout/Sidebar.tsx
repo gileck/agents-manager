@@ -17,6 +17,7 @@ import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
 import { SidebarSection } from './SidebarSection';
 import { SidebarSessions } from './SidebarSessions';
 import { SidebarAutomatedAgents } from './SidebarAutomatedAgents';
+import { SidebarRecentTasks } from './SidebarRecentTasks';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { reportError } from '../../lib/error-handler';
@@ -106,6 +107,7 @@ export function Sidebar({ onReportBug }: SidebarProps) {
 
       <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
         <SidebarSessions />
+        <SidebarRecentTasks />
         <SidebarAutomatedAgents />
         <SidebarSection
           title={`Active Agents${activeCount > 0 ? ` (${activeCount})` : ''}`}
