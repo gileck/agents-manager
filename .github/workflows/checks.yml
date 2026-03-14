@@ -10,6 +10,9 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -21,18 +24,24 @@ jobs:
 
       - name: TypeScript
         id: typecheck
-        run: yarn typecheck 2>&1 | tee /tmp/typecheck.out
         continue-on-error: true
+        run: |
+          set -o pipefail
+          yarn typecheck 2>&1 | tee /tmp/typecheck.out
 
       - name: ESLint
         id: lint
-        run: yarn lint 2>&1 | tee /tmp/lint.out
         continue-on-error: true
+        run: |
+          set -o pipefail
+          yarn lint 2>&1 | tee /tmp/lint.out
 
       - name: Tests
         id: test
-        run: yarn test 2>&1 | tee /tmp/test.out
         continue-on-error: true
+        run: |
+          set -o pipefail
+          yarn test 2>&1 | tee /tmp/test.out
 
       - name: Comment on PR
         if: always()
