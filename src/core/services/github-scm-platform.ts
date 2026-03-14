@@ -32,17 +32,61 @@ export class GitHubScmPlatform implements IScmPlatform {
   }
 
   async createPR(params: CreatePRParams): Promise<PRInfo> {
-    // gh pr create outputs the PR URL to stdout
-    const url = await this.gh([
-      'pr', 'create',
-      '--title', params.title,
-      '--body', params.body,
-      '--head', params.head,
-      '--base', params.base,
-    ]);
+    try {
+      // gh pr create outputs the PR URL to stdout
+      const url = await this.gh([
+        'pr', 'create',
+        '--title', params.title,
+        '--body', params.body,
+        '--head', params.head,
+        '--base', params.base,
+      ]);
 
-    const number = this.extractPRNumber(url);
-    return { url, number, title: params.title };
+      const number = this.extractPRNumber(url);
+      return { url, number, title: params.title };
+    } catch (createErr) {
+      // Crash recovery: a previous run may have created the PR on GitHub
+      // but crashed before writing the artifact to the local DB. Check for
+      // an existing PR on the same head → base branch pair.
+      getAppLogger().warn('GitHubScmPlatform', `createPR failed, checking for existing PR on head=${params.head} base=${params.base}`, { error: String(createErr) });
+      const existing = await this.findPR({ head: params.head, base: params.base });
+      if (existing) {
+        getAppLogger().info('GitHubScmPlatform', `Found existing PR #${existing.number} — recovering from previous crashed run`);
+        return existing;
+      }
+      // No existing PR found — this is a genuine failure, re-throw.
+      throw createErr;
+    }
+  }
+
+  async findPR(params: { head: string; base: string }): Promise<PRInfo | null> {
+    let output: string;
+    try {
+      output = await this.gh([
+        'pr', 'list',
+        '--head', params.head,
+        '--base', params.base,
+        '--json', 'url,number,title',
+        '--limit', '1',
+      ]);
+    } catch {
+      // gh pr list failing (e.g. network error) should not mask the original error
+      return null;
+    }
+
+    let results: Array<{ url: string; number: number; title: string }>;
+    try {
+      results = JSON.parse(output);
+    } catch {
+      return null;
+    }
+
+    if (!Array.isArray(results) || results.length === 0) {
+      return null;
+    }
+
+    const { url, number, title } = results[0];
+    return { url, number, title };
   }
 
   async mergePR(prUrl: string): Promise<void> {
