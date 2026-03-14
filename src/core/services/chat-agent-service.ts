@@ -6,7 +6,7 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
-import type { AgentLibCallbacks, PermissionRequest, PermissionResponse, SubagentDefinition } from '../interfaces/agent-lib';
+import type { AgentLibCallbacks, SubagentDefinition } from '../interfaces/agent-lib';
 import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type {
   SDKMessage,
@@ -147,9 +147,6 @@ function parsePluginsConfig(raw: unknown): Array<{ type: 'local'; path: string }
 const DEFAULT_AGENT_LIB = 'claude-code';
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
-/** Timeout for permission requests — auto-deny if user doesn't respond within 5 minutes. */
-const PERMISSION_TIMEOUT_MS = 5 * 60 * 1000;
-
 /**
  * Default subagent definitions for thread chat sessions.
  * These specialized subagents are available via the Task tool when running in
@@ -209,9 +206,6 @@ export class ChatAgentService {
     reject: (err: Error) => void;
     sessionId: string;
   }>();
-  /** Pending permission requests: requestId -> resolver. The promise blocks tool execution until resolved. */
-  private pendingPermissionRequests = new Map<string, { resolve: (response: PermissionResponse) => void; timer: ReturnType<typeof setTimeout> }>();
-
   constructor(
     private chatMessageStore: IChatMessageStore,
     private chatSessionStore: IChatSessionStore,
@@ -640,9 +634,6 @@ export class ChatAgentService {
       pending.reject(new Error('Agent stopped by user'));
     }
 
-    // Auto-deny all pending permission requests for this session
-    this.clearPendingPermissionRequests(sessionId);
-
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
       getAppLogger().info('ChatAgentService', `Stopping chat agent for session ${sessionId}`);
@@ -684,39 +675,6 @@ export class ChatAgentService {
 
     this.pendingQuestions.delete(questionId);
     pending.resolve(answers);
-  }
-
-  /**
-   * Resolves a pending permission request from the UI.
-   * This unblocks the tool execution that is waiting for user approval.
-   */
-  resolvePermissionRequest(requestId: string, allowed: boolean): boolean {
-    const pending = this.pendingPermissionRequests.get(requestId);
-    if (!pending) {
-      getAppLogger().warn('ChatAgentService', `No pending permission request found for id: ${requestId}`);
-      return false;
-    }
-    clearTimeout(pending.timer);
-    pending.resolve({ allowed });
-    this.pendingPermissionRequests.delete(requestId);
-    getAppLogger().info('ChatAgentService', `Permission request ${requestId} resolved: ${allowed ? 'allowed' : 'denied'}`);
-    return true;
-  }
-
-  /**
-   * Clears all pending permission requests for a session (e.g., when the agent stops).
-   * Auto-denies all pending requests so they don't hang forever.
-   */
-  private clearPendingPermissionRequests(sessionId: string): void {
-    const prefix = `${sessionId}:`;
-    for (const [requestId, pending] of this.pendingPermissionRequests.entries()) {
-      if (requestId.startsWith(prefix)) {
-        clearTimeout(pending.timer);
-        pending.resolve({ allowed: false });
-        this.pendingPermissionRequests.delete(requestId);
-        getAppLogger().info('ChatAgentService', `Auto-denied permission request ${requestId} (session cleanup)`);
-      }
-    }
   }
 
   async getMessages(sessionId: string): Promise<ChatMessage[]> {
@@ -1100,40 +1058,6 @@ export class ChatAgentService {
         disallowedTools = [...WRITE_TOOL_NAMES];
       }
 
-      // Build onPermissionRequest callback that surfaces tool approval to the UI.
-      // Auto-approve all non-write tools — only file write/edit tools require user approval.
-      const onPermissionRequest = (effectiveMode === 'full_access') ? undefined : async (request: PermissionRequest): Promise<PermissionResponse> => {
-        if (!WRITE_TOOL_NAMES.has(request.toolName)) {
-          return { allowed: true };
-        }
-        const requestId = `${sessionId}:${randomUUID()}`;
-        getAppLogger().info('ChatAgentService', `Permission request ${requestId}: tool=${request.toolName}`, { toolInput: JSON.stringify(request.toolInput).slice(0, 500) });
-
-        // Broadcast the permission request to the UI via WebSocket
-        const permissionMsg: AgentChatMessage = {
-          type: 'permission_request',
-          requestId,
-          toolName: request.toolName,
-          toolInput: request.toolInput,
-          timestamp: Date.now(),
-        };
-        emitMessage(permissionMsg);
-        emitEvent({ type: 'permission_request', request: permissionMsg });
-
-        // Wait for the user to respond (or timeout)
-        return new Promise<PermissionResponse>((resolve) => {
-          const timer = setTimeout(() => {
-            this.pendingPermissionRequests.delete(requestId);
-            getAppLogger().info('ChatAgentService', `Permission request ${requestId} timed out — auto-denying`);
-            // Emit a denial response message so the UI can update
-            emitMessage({ type: 'permission_response', requestId, allowed: false, timestamp: Date.now() });
-            resolve({ allowed: false });
-          }, PERMISSION_TIMEOUT_MS);
-
-          this.pendingPermissionRequests.set(requestId, { resolve, timer });
-        });
-      };
-
       // Build hooks for the agent lib
       const postToolUseHook = (input: import('../interfaces/agent-lib').PostToolUseHookInput) => {
         getAppLogger().debug('ChatAgentService', `PostToolUse: ${input.toolName}`, {
@@ -1353,7 +1277,6 @@ export class ChatAgentService {
                 Object.entries(answers).map(([key, value]) => [key, [value]]),
               );
             },
-            onPermissionRequest,
             onClientToolCall: async () => ({ handled: true, success: false, content: 'Nested Task delegation is not supported yet.' }),
           });
 
@@ -1436,7 +1359,6 @@ export class ChatAgentService {
             }
           }
         },
-        onPermissionRequest,
       };
 
       const executeOptions = {
@@ -1544,7 +1466,6 @@ export class ChatAgentService {
       }
     } finally {
       this.runningControllers.delete(sessionId);
-      this.clearPendingPermissionRequests(sessionId);
       this.liveTurnMessages.delete(sessionId);
 
       // Clean up any orphaned pending questions for this session (e.g. SDK timeout)

@@ -216,7 +216,6 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
             if (event.type === 'text') ws?.broadcast(WS_CHANNELS.CHAT_OUTPUT, sessionId, event.text);
             else if (event.type === 'message') ws?.broadcast(WS_CHANNELS.CHAT_MESSAGE, sessionId, event.message);
             else if (event.type === 'stream_delta') ws?.broadcast(WS_CHANNELS.CHAT_STREAM_DELTA, sessionId, event.delta);
-            else if (event.type === 'permission_request') ws?.broadcast(WS_CHANNELS.CHAT_PERMISSION_REQUEST, sessionId, event.request);
           },
           images: validatedImages,
         },
@@ -394,28 +393,6 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
     try {
       const costs = await services.chatMessageStore.getCostSummary();
       res.json(costs);
-    } catch (err) { next(err); }
-  });
-
-  // POST /api/chat/sessions/:id/permission-response — respond to a tool permission request
-  router.post('/api/chat/sessions/:id/permission-response', (req, res, next) => {
-    try {
-      const { requestId, allowed } = req.body as { requestId?: string; allowed?: boolean };
-      if (!requestId || typeof requestId !== 'string') {
-        res.status(400).json({ error: 'requestId is required and must be a string' });
-        return;
-      }
-      if (typeof allowed !== 'boolean') {
-        res.status(400).json({ error: 'allowed is required and must be a boolean' });
-        return;
-      }
-      getAppLogger().info('ChatRoute', `POST /permission-response for session ${req.params.id}: requestId=${requestId}, allowed=${allowed}`);
-      const resolved = services.chatAgentService.resolvePermissionRequest(requestId, allowed);
-      if (!resolved) {
-        res.status(404).json({ error: 'Permission request not found or already resolved' });
-        return;
-      }
-      res.json({ ok: true });
     } catch (err) { next(err); }
   });
 

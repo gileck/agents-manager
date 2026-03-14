@@ -90,8 +90,6 @@ async function main() {
         wsServer.broadcast(WS_CHANNELS.CHAT_MESSAGE, sessionId, event.message);
       } else if (event.type === 'stream_delta') {
         wsServer.broadcast(WS_CHANNELS.CHAT_STREAM_DELTA, sessionId, event.delta);
-      } else if (event.type === 'permission_request') {
-        wsServer.broadcast(WS_CHANNELS.CHAT_PERMISSION_REQUEST, sessionId, event.request);
       }
     };
   });
