@@ -1100,8 +1100,12 @@ export class ChatAgentService {
         disallowedTools = [...WRITE_TOOL_NAMES];
       }
 
-      // Build onPermissionRequest callback that surfaces tool approval to the UI
+      // Build onPermissionRequest callback that surfaces tool approval to the UI.
+      // Auto-approve all non-write tools — only file write/edit tools require user approval.
       const onPermissionRequest = (effectiveMode === 'full_access') ? undefined : async (request: PermissionRequest): Promise<PermissionResponse> => {
+        if (!WRITE_TOOL_NAMES.has(request.toolName)) {
+          return { allowed: true };
+        }
         const requestId = `${sessionId}:${randomUUID()}`;
         getAppLogger().info('ChatAgentService', `Permission request ${requestId}: tool=${request.toolName}`, { toolInput: JSON.stringify(request.toolInput).slice(0, 500) });
 
