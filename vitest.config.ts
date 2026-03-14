@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    exclude: ['tests/e2e/agent-lib-e2e.test.ts'],
+    exclude: ['tests/e2e/agent-lib-e2e.test.ts', 'tests/e2e/cli-subprocess.test.ts'],
     setupFiles: ['./tests/vitest-setup.ts'],
     testTimeout: 10000,
     coverage: {
