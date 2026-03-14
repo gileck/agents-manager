@@ -11,7 +11,7 @@ const fakeWsHolder = { server: null } as Parameters<typeof telegramRoutes>[1];
 describe('POST /api/telegram/test', () => {
   let server: ReturnType<typeof createHttpServer>;
   let port: number;
-  const realFetch = globalThis.fetch.bind(globalThis);
+  let realFetch: typeof globalThis.fetch;
 
   function stubTelegramFetch(mockResponse: { ok: boolean; status?: number; body: unknown }) {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string | URL | Request, init?: RequestInit) => {
@@ -28,6 +28,8 @@ describe('POST /api/telegram/test', () => {
   }
 
   beforeEach(async () => {
+    vi.unstubAllGlobals();
+    realFetch = globalThis.fetch.bind(globalThis);
     const app = express();
     app.use(express.json());
     app.use(telegramRoutes(fakeServices, fakeWsHolder));
@@ -39,6 +41,7 @@ describe('POST /api/telegram/test', () => {
   afterEach(() => {
     server?.close();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('returns { ok: true } when Telegram API succeeds', async () => {

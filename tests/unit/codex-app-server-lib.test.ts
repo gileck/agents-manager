@@ -98,19 +98,7 @@ describe('CodexAppServerLib', () => {
         const imageInput = params.input[1] as { type: 'localImage'; path: string };
         this.seenImagePath = imageInput.path;
         expect(fs.existsSync(imageInput.path)).toBe(true);
-        this['options'].onNotification?.({
-          method: 'turn/started',
-          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress', error: null } },
-        });
-        this['options'].onNotification?.({
-          method: 'item/agentMessage/delta',
-          params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'msg-1', delta: 'image ok' },
-        });
-        this['options'].onNotification?.({
-          method: 'turn/completed',
-          params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed', error: null } },
-        });
-        return { turn: { id: 'turn-1', status: 'inProgress', error: null } };
+        return { turn: { id: 'turn-1', status: 'completed', error: null } };
       });
     }
 
@@ -126,7 +114,6 @@ describe('CodexAppServerLib', () => {
       cwd: '/tmp/project',
       model: 'gpt-5.4',
       maxTurns: 4,
-      timeoutMs: 5000,
       allowedPaths: [],
       readOnlyPaths: [],
       readOnly: true,
