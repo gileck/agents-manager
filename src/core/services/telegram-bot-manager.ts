@@ -106,7 +106,10 @@ export class TelegramBotManager {
   /** Stop all active bots — called during daemon shutdown. */
   async stopAll(): Promise<void> {
     for (const [, entry] of this.activeBots) {
-      try { await entry.botService.stop(); } catch (err) {
+      try {
+        this.deps.notificationRouter.removeRouter(entry.notificationRouter);
+        await entry.botService.stop();
+      } catch (err) {
         getAppLogger().warn('telegram', 'Failed to stop bot', { error: err instanceof Error ? err.message : String(err) });
       }
     }
