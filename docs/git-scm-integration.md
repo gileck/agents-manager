@@ -1,12 +1,12 @@
 ---
 title: Git & SCM Integration
 description: Worktrees, git operations, PR lifecycle, and branch strategy
-summary: LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id>/<agentType> convention.
+summary: LocalWorktreeManager manages git worktrees for isolated agent execution. PRs are created via gh CLI. Branch naming follows task/<id> convention.
 priority: 3
 key_points:
   - "Interface: IWorktreeManager in src/core/interfaces/worktree-manager.ts"
   - "Implementation: LocalWorktreeManager in src/core/services/local-worktree-manager.ts"
-  - "Branch naming: task/<taskId>/<agentType> (single-phase) or task/<taskId>/integration (multi-phase task branch)"
+  - "Branch naming: task/<taskId> (single-phase) or task/<taskId>/phase-{n} (multi-phase) or task/<taskId>/integration (multi-phase task branch)"
 ---
 # Git & SCM Integration
 
@@ -218,7 +218,7 @@ Phase N of M for task {taskId}
 - [ ] Subtask 2
 ```
 
-Each phase creates its own PR on a separate branch (`task/{taskId}/{agentType}/phase-{n}`). If a PR already exists for the same branch, a force-push updates it instead of creating a duplicate. If the existing PR is on a different branch (i.e. from a prior phase), a new PR is created for the current phase.
+Each phase creates its own PR on a separate branch (`task/{taskId}/phase-{n}`). If a PR already exists for the same branch, a force-push updates it instead of creating a duplicate. If the existing PR is on a different branch (i.e. from a prior phase), a new PR is created for the current phase.
 
 ### PR Merge
 
@@ -295,22 +295,22 @@ If the reviewer reports `changes_requested`:
 ### Single-phase tasks
 
 ```
-task/{taskId}/{agentType}
+task/{taskId}
 ```
 
-Example: `task/abc-123-def/implementor`
+Example: `task/abc-123-def`
 
-The branch is created when the first agent runs for a task. Subsequent agents for the same task reuse the same worktree (and branch).
+The branch is created when the first agent runs for a task. All agents for the same task share this branch, so reviewer and implementor always work from the same commit history.
 
 ### Multi-phase tasks
 
 For tasks with multiple implementation phases, the branch naming includes a phase index:
 
 ```
-task/{taskId}/{agentType}/phase-{n}
+task/{taskId}/phase-{n}
 ```
 
-Example: `task/abc-123-def/implementor/phase-1`, `task/abc-123-def/implementor/phase-2`
+Example: `task/abc-123-def/phase-1`, `task/abc-123-def/phase-2`
 
 Each phase gets its own branch (and worktree). The phase index is 1-based.
 

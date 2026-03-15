@@ -292,7 +292,7 @@ describe('Phase Cycling E2E', () => {
     expect(task.status).toBe('implementing');
 
     // Create worktree for the task (needed by push_and_create_pr hook)
-    const branch = `task/${task.id}/implement/phase-1`;
+    const branch = `task/${task.id}/phase-1`;
     await (ctx.worktreeManager as import('../../src/core/services/stub-worktree-manager').StubWorktreeManager).create(branch, task.id);
 
     // Use the actual push_and_create_pr hook by triggering the agent transition
@@ -353,7 +353,7 @@ describe('Phase Cycling E2E', () => {
     task = await ctx.transitionTo(task.id, 'implementing');
 
     // Create worktree for phase 1
-    const branch1 = `task/${task.id}/implement/phase-1`;
+    const branch1 = `task/${task.id}/phase-1`;
     const wm = ctx.worktreeManager as import('../../src/core/services/stub-worktree-manager').StubWorktreeManager;
     await wm.create(branch1, task.id);
 
@@ -405,7 +405,7 @@ describe('Phase Cycling E2E', () => {
     task = await ctx.transitionTo(task.id, 'implementing');
 
     // Create worktree and PR artifact for phase 1
-    const branch1 = `task/${task.id}/implement/phase-1`;
+    const branch1 = `task/${task.id}/phase-1`;
     const wm = ctx.worktreeManager as import('../../src/core/services/stub-worktree-manager').StubWorktreeManager;
     await wm.create(branch1, task.id);
     await createPrArtifact(task.id, branch1, 'Phase 1/3');

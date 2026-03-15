@@ -360,8 +360,8 @@ Links or creates a task phase for the current mode, marks it as active.
 Reuses an existing worktree or creates a new one:
 
 ```
-Branch naming: task/{taskId}/{agentType}
-Multi-phase:   task/{taskId}/{agentType}/phase-{n}
+Branch naming: task/{taskId}
+Multi-phase:   task/{taskId}/phase-{n}
 Worktree path: {projectPath}/.agent-worktrees/{taskId}
 ```
 

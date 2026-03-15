@@ -69,16 +69,16 @@ describe('LocalWorktreeManager', () => {
       });
       mockedFs.symlinkSync.mockReturnValue(undefined);
 
-      const result = await manager.create('task/abc/implement', 'abc');
+      const result = await manager.create('task/abc', 'abc');
 
       expect(result.path).toBe(`${PROJECT_PATH}/.agent-worktrees/abc`);
-      expect(result.branch).toBe('task/abc/implement');
+      expect(result.branch).toBe('task/abc');
       expect(result.taskId).toBe('abc');
       expect(result.locked).toBe(false);
 
       expect(gitCalls[0]).toEqual(['fetch', 'origin']);
       expect(gitCalls[1]).toEqual([
-        'worktree', 'add', '-b', 'task/abc/implement',
+        'worktree', 'add', '-b', 'task/abc',
         `${PROJECT_PATH}/.agent-worktrees/abc`, 'origin/main',
       ]);
     });
@@ -96,10 +96,10 @@ describe('LocalWorktreeManager', () => {
       };
       mockedFs.existsSync.mockReturnValue(false);
 
-      const result = await manager.create('task/abc/implement', 'abc');
+      const result = await manager.create('task/abc', 'abc');
 
       expect(firstAttempt).toBe(false);
-      expect(result.branch).toBe('task/abc/implement');
+      expect(result.branch).toBe('task/abc');
     });
   });
 
