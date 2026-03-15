@@ -10,11 +10,11 @@ import type { AgentLibCallbacks, SubagentDefinition } from '../interfaces/agent-
 import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
 import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type {
-  SDKMessage,
-  SDKAssistantMessage,
-  SDKResultMessage,
-  SDKUserMessage,
-} from '@anthropic-ai/claude-agent-sdk';
+  AgentQueryMessage,
+  AgentQueryAssistantMessage,
+  AgentQueryResultMessage,
+  AgentQueryUserMessage,
+} from './agent-query-types';
 import type { SessionScope } from './chat-prompt-parts';
 import { buildAgentChatSystemPrompt, buildDesktopSystemPrompt } from './chat-prompt-parts';
 import { createTaskMcpServer } from '../mcp/task-mcp-server';
@@ -32,7 +32,7 @@ interface SdkQueryCallbacks {
   onText?: (text: string) => void;
   onThinking?: (text: string) => void;
   onToolUse?: (block: { type: 'tool_use'; name: string; id?: string; input?: unknown }) => void;
-  onResult?: (msg: SDKResultMessage) => void;
+  onResult?: (msg: AgentQueryResultMessage) => void;
   onUserToolResult?: (toolUseId: string, content: string) => void;
 }
 
@@ -1573,7 +1573,7 @@ export class ChatAgentService {
    * Used by `summarizeMessages` for one-shot summarization queries.
    */
   private async runSdkQuery(
-    prompt: string | AsyncIterable<SDKUserMessage>,
+    prompt: string | AsyncIterable<AgentQueryUserMessage>,
     options: Record<string, unknown>,
     callbacks: SdkQueryCallbacks,
   ): Promise<void> {
@@ -1581,7 +1581,7 @@ export class ChatAgentService {
 
     for await (const message of query({ prompt, options })) {
       if (message.type === 'assistant') {
-        const assistantMsg = message as SDKAssistantMessage;
+        const assistantMsg = message as AgentQueryAssistantMessage;
         if (assistantMsg.error) {
           callbacks.onText?.(`\n[Agent error: ${assistantMsg.error}]\n`);
         }
@@ -1595,10 +1595,10 @@ export class ChatAgentService {
           }
         }
       } else if (message.type === 'result') {
-        callbacks.onResult?.(message as SDKResultMessage);
+        callbacks.onResult?.(message as AgentQueryResultMessage);
       } else if (message.type === 'user') {
-        // SDK emits tool results as SDKUserMessage with tool_result content blocks
-        const userMsg = message as SDKUserMessage;
+        // SDK emits tool results as user messages with tool_result content blocks
+        const userMsg = message as AgentQueryUserMessage;
         const content = userMsg.message?.content;
         if (!content || typeof content === 'string') {
           getAppLogger().warn('ChatAgentService', 'user message with unexpected structure', { preview: JSON.stringify(message).slice(0, 200) });
@@ -1617,11 +1617,11 @@ export class ChatAgentService {
     }
   }
 
-  private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<SDKUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SDKMessage>> {
+  private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<AgentQueryUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<AgentQueryMessage>> {
     const mod = await importESM('@anthropic-ai/claude-agent-sdk');
     if (typeof mod.query !== 'function') {
       throw new Error('Claude Agent SDK loaded but "query" export is missing. Ensure @anthropic-ai/claude-agent-sdk is installed and up to date.');
     }
-    return mod.query as (opts: { prompt: string | AsyncIterable<SDKUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SDKMessage>;
+    return mod.query as (opts: { prompt: string | AsyncIterable<AgentQueryUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<AgentQueryMessage>;
   }
 }
