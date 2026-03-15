@@ -867,7 +867,9 @@ export class AgentService implements IAgentService {
 
       // Update run
       const completedAt = now();
-      const runStatus = result.exitCode === 0 ? 'completed' : 'failed';
+      const runStatus = result.exitCode === 0
+        ? 'completed'
+        : result.killReason === 'stopped' ? 'cancelled' : 'failed';
       const finalMessageCount = 'lastMessageCount' in agent ? (agent as { lastMessageCount?: number }).lastMessageCount : undefined;
       emitPostLog('system', 'Saving agent run results to database', {
         status: runStatus, outcome: result.outcome, exitCode: result.exitCode,
@@ -1044,7 +1046,9 @@ export class AgentService implements IAgentService {
       getAppLogger()[completionLevel](`Agent:${agentType}`, `${completionMsg} for task "${task.title}"`, { taskId, ...completionData });
 
       // Emit status change
-      const finalStatus = result.exitCode === 0 ? 'completed' : 'failed';
+      const finalStatus = result.exitCode === 0
+        ? 'completed'
+        : result.killReason === 'stopped' ? 'cancelled' : 'failed';
       onStatusChange?.(finalStatus);
       const statusMessage = result.error ? `Agent ${finalStatus}: ${result.error}` : `Agent ${finalStatus}`;
       onMessage?.({ type: 'status', status: finalStatus, message: statusMessage, timestamp: Date.now() });

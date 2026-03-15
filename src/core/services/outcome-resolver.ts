@@ -128,9 +128,20 @@ export class OutcomeResolver {
       // Worktree may have been deleted by a transition hook — safe to ignore
     }
 
-    // For failed runs, attempt failure transition (pipeline may retry via hooks)
-    if (result.exitCode !== 0) {
+    // For failed runs, attempt failure transition (pipeline may retry via hooks).
+    // Skip this for user-stopped agents (killReason === 'stopped') — they should
+    // not trigger autoRetry; the run is already marked 'cancelled' by stop().
+    if (result.exitCode !== 0 && result.killReason !== 'stopped') {
       await this.tryOutcomeTransition(taskId, 'failed', { agentRunId: run.id }, onPostLog);
+    } else if (result.killReason === 'stopped') {
+      onPostLog?.('system', 'Agent was stopped by user — skipping failure transition');
+      await this.taskEventLog.log({
+        taskId,
+        category: 'agent',
+        severity: 'info',
+        message: 'Agent stopped by user — no auto-retry will be triggered',
+        data: { agentRunId: run.id, killReason: result.killReason },
+      });
     }
   }
 
