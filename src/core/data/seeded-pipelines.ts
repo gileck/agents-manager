@@ -223,7 +223,7 @@ export const AGENT_PIPELINE: SeededPipeline = {
     // ── PR review (agent outcomes) ──────────────────────────────────
     ...prApprove('agent'),
     { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
-      guards: [{ name: 'no_running_agent' }],
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [startAgent('implementor', 'revision', 'changes_requested')] },
     { from: 'pr_review', to: 'pr_review', trigger: 'agent', agentOutcome: 'failed',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
