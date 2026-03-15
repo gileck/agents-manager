@@ -101,16 +101,20 @@ import { TriageAgentPromptBuilder } from '../services/triage-agent-prompt-builde
 import { DevServerManager, type DevServerManagerCallbacks } from '../services/dev-server-manager';
 import type { IDevServerManager } from '../interfaces/dev-server-manager';
 import { AgentSubscriptionRegistry } from '../services/agent-subscription-registry';
+import { InAppNotificationRouter } from '../services/in-app-notification-router';
+import { TelegramBotManager, type TelegramBotManagerCallbacks } from '../services/telegram-bot-manager';
 import type { AgentNotificationPayload } from '../../shared/types';
 
 export interface AppServicesConfig {
   createStreamingCallbacks?: (taskId: string) => StreamingCallbacks;
   notificationRouters?: import('../interfaces/notification-router').INotificationRouter[];
   imageStorageDir?: string;
+  onInAppNotification?: (type: string, payload: unknown) => void;
   onMainDiverged?: (projectId: string) => void;
   devServerCallbacks?: DevServerManagerCallbacks;
   onAgentSubscriptionFired?: (sessionId: string, payload: AgentNotificationPayload) => void;
   onTaskUpdated?: (taskId: string, task: import('../../shared/types').Task) => void;
+  telegramBotManagerCallbacks?: TelegramBotManagerCallbacks;
 }
 
 export interface AppServices {
@@ -138,6 +142,7 @@ export interface AppServices {
   kanbanBoardStore: IKanbanBoardStore;
   createWorktreeManager: (path: string) => IWorktreeManager;
   createGitOps: (cwd: string) => import('../interfaces/git-ops').IGitOps;
+  createScmPlatform: (path: string) => import('../interfaces/scm-platform').IScmPlatform;
   agentSupervisor: AgentSupervisor;
   timelineService: TimelineService;
   chatMessageStore: IChatMessageStore;
@@ -154,6 +159,7 @@ export interface AppServices {
   devServerManager: IDevServerManager;
   subscriptionRegistry: AgentSubscriptionRegistry;
   itemStore: IItemStore;
+  telegramBotManager: TelegramBotManager;
 }
 
 export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
@@ -256,6 +262,10 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   // Automated agent stores and services (created before AgentService so it can be passed in for stop delegation)
   const automatedAgentStore = new SqliteAutomatedAgentStore(db);
   const inAppNotificationStore = new SqliteInAppNotificationStore(db);
+  notificationRouter.addRouter(new InAppNotificationRouter(
+    inAppNotificationStore,
+    (type, payload) => config?.onInAppNotification?.(type, payload),
+  ));
   const itemStore = new SqliteItemStore(db);
   const triageBuilder = new TriageAgentPromptBuilder(taskStore, taskContextStore);
   const promptBuilders = new Map([[triageBuilder.templateId, triageBuilder]]);
@@ -322,6 +332,16 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
       chatAgentService.enqueueInjectedMessage(sessionId, content, metadata),
   );
 
+  // Telegram bot manager — handles bot lifecycle and notification router registration
+  const telegramBotManager = new TelegramBotManager(
+    {
+      projectStore, taskStore, pipelineStore, pipelineEngine,
+      workflowService, chatSessionStore, chatAgentService,
+      agentRunStore, settingsStore, notificationRouter,
+    },
+    config?.telegramBotManagerCallbacks,
+  );
+
   // Register hooks (must be after workflowService is created)
   registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore, createStreamingCallbacks: config?.createStreamingCallbacks });
   registerNotificationHandler(pipelineEngine, { notificationRouter, taskStore });
@@ -359,6 +379,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     kanbanBoardStore,
     createWorktreeManager,
     createGitOps,
+    createScmPlatform,
     agentSupervisor,
     timelineService,
     chatMessageStore,
@@ -375,5 +396,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     devServerManager,
     subscriptionRegistry,
     itemStore,
+    telegramBotManager,
   };
 }

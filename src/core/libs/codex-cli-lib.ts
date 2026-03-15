@@ -1,10 +1,9 @@
 import * as fs from 'fs/promises';
-import * as os from 'os';
-import * as path from 'path';
 import type { AgentLibFeatures, AgentLibModelOption } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
 import { resolveSandboxMode, type SandboxMode } from './codex-lib-utils';
+import { writeImagesToTempDir } from './image-utils';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
@@ -483,22 +482,6 @@ export class CodexCliLib extends BaseAgentLib {
     return undefined;
   }
 
-  private mediaTypeToExtension(mediaType: string): string {
-    switch (mediaType) {
-      case 'image/png': return 'png';
-      case 'image/jpeg': return 'jpg';
-      case 'image/gif': return 'gif';
-      case 'image/webp': return 'webp';
-      default: return 'img';
-    }
-  }
-
-  private normalizeBase64(base64: string): string {
-    const marker = 'base64,';
-    const idx = base64.indexOf(marker);
-    return idx >= 0 ? base64.slice(idx + marker.length) : base64;
-  }
-
   private async buildSdkInput(
     runId: string,
     prompt: string,
@@ -508,19 +491,11 @@ export class CodexCliLib extends BaseAgentLib {
       return { input: prompt };
     }
 
-    const imageTempDir = await fs.mkdtemp(path.join(os.tmpdir(), `agents-manager-codex-${runId}-`));
-    const input: CodexUserInput[] = [{ type: 'text', text: prompt }];
-
-    for (let i = 0; i < images.length; i++) {
-      const img = images[i];
-      const ext = this.mediaTypeToExtension(img.mediaType);
-      const filePath = path.join(imageTempDir, `image-${i + 1}.${ext}`);
-      const normalized = this.normalizeBase64(img.base64);
-      const bytes = Buffer.from(normalized, 'base64');
-      await fs.writeFile(filePath, bytes);
-      input.push({ type: 'local_image', path: filePath });
-    }
-
-    return { input, imageTempDir };
+    const { tempDir, filePaths } = await writeImagesToTempDir(runId, 'agents-manager-codex', images);
+    const input: CodexUserInput[] = [
+      { type: 'text', text: prompt },
+      ...filePaths.map((filePath) => ({ type: 'local_image' as const, path: filePath })),
+    ];
+    return { input, imageTempDir: tempDir };
   }
 }

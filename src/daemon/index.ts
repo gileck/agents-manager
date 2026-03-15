@@ -4,8 +4,6 @@ import { createServer } from './server';
 import { DaemonWsServer } from './ws/ws-server';
 import { WS_CHANNELS } from './ws/channels';
 import { startSupervisors, stopSupervisors } from './lifecycle';
-import { stopAllBots, autoStartTelegramBots } from './routes/telegram';
-import { InAppNotificationRouter } from '../core/services/in-app-notification-router';
 import { getAppLogger } from '../core/services/app-logger';
 
 const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
@@ -63,14 +61,16 @@ async function main() {
     onTaskUpdated: (taskId, task) => {
       wsHolder.server?.broadcast(WS_CHANNELS.TASK_STATUS_CHANGED, taskId, task);
     },
+    onInAppNotification: (type, payload) => {
+      wsHolder.server?.broadcast(type, undefined, payload);
+    },
+    telegramBotManagerCallbacks: {
+      onBotLog: (projectId, entry) => wsHolder.server?.broadcast(WS_CHANNELS.TELEGRAM_BOT_LOG, projectId, entry),
+      onChatOutput: (sessionId, chunk) => wsHolder.server?.broadcast(WS_CHANNELS.CHAT_OUTPUT, sessionId, chunk),
+      onChatMessage: (sessionId, msg) => wsHolder.server?.broadcast(WS_CHANNELS.CHAT_MESSAGE, sessionId, msg),
+      onStatusChanged: (projectId, status) => wsHolder.server?.broadcast(WS_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, status),
+    },
   });
-
-  // Register in-app notification router (lazily broadcasts via WS once server is ready)
-  const inAppRouter = new InAppNotificationRouter(
-    services.inAppNotificationStore,
-    (type, payload) => { wsHolder.server?.broadcast(type, undefined, payload); },
-  );
-  services.notificationRouter.addRouter(inAppRouter);
 
   services.appLogger.info('daemon', 'Daemon starting');
 
@@ -133,7 +133,7 @@ async function main() {
   }
 
   // Auto-start Telegram bots for projects with config
-  autoStartTelegramBots(services, wsHolder).catch(err => {
+  services.telegramBotManager.autoStart().catch(err => {
     services.appLogger.logError('daemon', 'Failed to auto-start Telegram bots', err);
   });
 
@@ -148,7 +148,7 @@ async function main() {
     shutdownInProgress = true;
 
     services.appLogger.info('daemon', 'Daemon shutting down');
-    await stopAllBots().catch(err => {
+    await services.telegramBotManager.stopAll().catch(err => {
       services.appLogger.logError('daemon', 'Failed to stop Telegram bots', err);
     });
     stopSupervisors(services);

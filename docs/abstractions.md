@@ -139,6 +139,8 @@ See [pipeline-engine.md](./pipeline-engine.md) for guard/hook details.
 | `IPendingPromptStore` | `sqlite-pending-prompt-store.ts` |
 | `IKanbanBoardStore` | `sqlite-kanban-board-store.ts` |
 | `IUserStore` | `sqlite-user-store.ts` |
+| `IItemStore` | `sqlite-item-store.ts` |
+| `ITimelineStore` | `sqlite-timeline-store.ts` |
 
 All interfaces are in `src/core/interfaces/`. All implementations are in `src/core/stores/`.
 
@@ -337,6 +339,7 @@ See [client-daemon-convergence.md](./client-daemon-convergence.md) for how all c
 | | |
 |---|---|
 | **Interface** | `src/core/interfaces/automated-agent-prompt-builder.ts` — `IAutomatedAgentPromptBuilder` |
+| **Implementation** | `src/core/services/triage-agent-prompt-builder.ts` — `TriageAgentPromptBuilder` |
 
 ---
 

@@ -5,6 +5,7 @@ import type { AgentLibFeatures, AgentLibModelOption } from '../interfaces/agent-
 import type { ISessionHistoryProvider } from '../interfaces/session-history-provider';
 import { BaseAgentLib, type BaseRunState, type EngineResult, type EngineRunOptions } from './base-agent-lib';
 import { resolveSandboxMode } from './codex-lib-utils';
+import { writeImagesToTempDir } from './image-utils';
 import {
   CodexAppServerClient,
   type CodexAppServerClientOptions,
@@ -760,50 +761,20 @@ export class CodexAppServerLib extends BaseAgentLib {
     }
   }
 
-  private mediaTypeToExtension(mediaType: string): string {
-    switch (mediaType) {
-      case 'image/png': return 'png';
-      case 'image/jpeg': return 'jpg';
-      case 'image/gif': return 'gif';
-      case 'image/webp': return 'webp';
-      default: return 'img';
-    }
-  }
-
-  private normalizeBase64(base64: string): string {
-    const marker = 'base64,';
-    const idx = base64.indexOf(marker);
-    return idx >= 0 ? base64.slice(idx + marker.length) : base64;
-  }
-
   private async buildTurnInput(
     runId: string,
     prompt: string,
     images?: Array<{ base64: string; mediaType: string }>,
   ): Promise<{ input: CodexAppServerTurnInput[]; imageTempDir?: string }> {
     if (!images || images.length === 0) {
-      return {
-        input: [{ type: 'text', text: prompt, text_elements: [] }],
-      };
+      return { input: [{ type: 'text', text: prompt, text_elements: [] }] };
     }
 
-    const imageTempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `agents-manager-codex-app-server-${runId}-`));
-    const input: CodexAppServerTurnInput[] = [{ type: 'text', text: prompt, text_elements: [] }];
-    try {
-      for (let i = 0; i < images.length; i++) {
-        const image = images[i];
-        const ext = this.mediaTypeToExtension(image.mediaType);
-        const filePath = path.join(imageTempDir, `image-${i + 1}.${ext}`);
-        const normalized = this.normalizeBase64(image.base64);
-        const bytes = Buffer.from(normalized, 'base64');
-        await fs.promises.writeFile(filePath, bytes);
-        input.push({ type: 'localImage', path: filePath });
-      }
-    } catch (err) {
-      await fs.promises.rm(imageTempDir, { recursive: true, force: true }).catch(() => undefined);
-      throw err;
-    }
-
-    return { input, imageTempDir };
+    const { tempDir, filePaths } = await writeImagesToTempDir(runId, 'agents-manager-codex-app-server', images);
+    const input: CodexAppServerTurnInput[] = [
+      { type: 'text', text: prompt, text_elements: [] },
+      ...filePaths.map((filePath) => ({ type: 'localImage' as const, path: filePath })),
+    ];
+    return { input, imageTempDir: tempDir };
   }
 }

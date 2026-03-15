@@ -1,15 +1,13 @@
 import { Router } from 'express';
-import { LocalGitOps } from '../../core/services/local-git-ops';
-import { GitHubScmPlatform } from '../../core/services/github-scm-platform';
 import type { AppServices } from '../../core/providers/setup';
 import type { IGitOps } from '../../core/interfaces/git-ops';
 import { getAppLogger } from '../../core/services/app-logger';
 
 /**
- * Resolve a LocalGitOps instance scoped to the task's worktree.
+ * Resolve a IGitOps instance scoped to the task's worktree.
  * Returns null if the task or project is missing, or no worktree exists.
  */
-async function getTaskGitOps(services: AppServices, taskId: string): Promise<LocalGitOps | null> {
+async function getTaskGitOps(services: AppServices, taskId: string): Promise<IGitOps | null> {
   const task = await services.taskStore.getTask(taskId);
   if (!task) return null;
   const project = await services.projectStore.getProject(task.projectId);
@@ -17,7 +15,7 @@ async function getTaskGitOps(services: AppServices, taskId: string): Promise<Loc
   const wm = services.createWorktreeManager(project.path);
   const worktree = await wm.get(taskId);
   if (!worktree) return null;
-  return new LocalGitOps(worktree.path);
+  return services.createGitOps(worktree.path);
 }
 
 async function withProjectGit<T>(services: AppServices, projectId: string, fallback: T, fn: (git: IGitOps) => Promise<T>): Promise<T> {
@@ -213,7 +211,7 @@ export function gitRoutes(services: AppServices): Router {
         return;
       }
       try {
-        const scm = new GitHubScmPlatform(project.path);
+        const scm = services.createScmPlatform(project.path);
         const result = await scm.getPRChecks(task.prLink);
         res.json(result);
       } catch (err) {

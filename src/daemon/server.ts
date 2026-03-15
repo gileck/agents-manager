@@ -67,7 +67,7 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}): { 
   app.use(agentRoutes(services, wsHolder));
   app.use(chatRoutes(services, wsHolder));
   app.use(taskChatRoutes(services, wsHolder));
-  app.use(telegramRoutes(services, wsHolder));
+  app.use(telegramRoutes(services));
   app.use(gitRoutes(services));
   app.use(promptRoutes(services));
   app.use(artifactRoutes(services));
