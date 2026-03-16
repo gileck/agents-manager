@@ -123,6 +123,7 @@ export function AgentChat({
           prefill={prefill}
           lastUserMessage={lastUserMessage}
           onEditLastMessage={handleEditLastMessage}
+          sessionId={sessionId}
         />
       </div>
       {showSidebar && (
