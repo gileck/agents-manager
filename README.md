@@ -149,10 +149,10 @@ yarn pack           # Build without packaging (for testing)
 
 SQLite database is stored at:
 ```
-~/Library/Application Support/electron-macos-template/app.db
+~/Library/Application Support/agents-manager/agents-manager.db
 ```
 
-Migrations are defined in `src/main/migrations.ts` and run automatically on app start.
+Migrations are defined in `src/core/migrations.ts` and run automatically when the daemon opens the database.
 
 ## Menu Bar Behavior
 

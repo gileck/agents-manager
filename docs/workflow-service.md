@@ -7,6 +7,7 @@ key_points:
   - "File: src/core/services/workflow-service.ts"
   - "Interface: src/core/interfaces/workflow-service.ts"
   - "All business logic goes here — never in IPC handlers, CLI commands, or daemon route handlers"
+  - "Pipeline diagnostics, hook retry, phase advancement, and event dismissal live in PipelineInspectionService"
 ---
 # Workflow Service
 
@@ -98,11 +99,12 @@ Queues a user message and conditionally starts a new agent if none is running.
 
 This method consolidates the "send message to agent" business logic that was previously in the IPC handler.
 
-### `stopAgent(runId: string): Promise<void>`
+### `stopAgent(runId: string): Promise<StopAgentResult>`
 
 Stops a running agent.
 
 - Activity: `action='agent_complete', entityType='agent_run', summary="Agent stopped"`
+- Returns the task's current status, previous status, and available manual transitions for the post-stop UI
 
 ### `respondToPrompt(promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null>`
 
@@ -119,47 +121,6 @@ Answers a pending prompt and optionally triggers an auto-transition.
      - Falls back to first transition matching `agentOutcome === prompt.resumeOutcome`
      - If found: executes the transition (which may trigger hooks like `start_agent`)
      - If not found: logs a warning event
-
-### `getPipelineDiagnostics(taskId: string): Promise<PipelineDiagnostics | null>`
-
-Returns comprehensive diagnostic data for a task's pipeline state. Used by the pipeline inspector UI.
-
-**Five diagnostic areas:**
-
-1. **Status metadata** — label, category, isFinal, color for the current status
-2. **All transitions** — grouped by trigger (manual/agent/system), with guard pre-checks for manual transitions
-3. **Recent hook failures** — scans task events from the last 24 hours for system errors/warnings that reference a hook name. Each failure includes whether it is retryable (retryable hooks: `merge_pr`, `push_and_create_pr`, `advance_phase`, `delete_worktree`)
-4. **Agent state** — whether an agent is running, last run status/error, total failed runs
-5. **Stuck detection** — identifies two stuck scenarios:
-   - Task is in an `agent_running` phase but no agent is running (with a 30-second grace window after agent completion to avoid false positives during finalization)
-   - Task is in a terminal status with pending phases and a failed `advance_phase` hook
-
-Independent queries (transitions, events, agent runs) are executed in parallel via `Promise.all`.
-
-### `retryHook(taskId: string, hookName: string, transitionFrom?: string, transitionTo?: string): Promise<HookRetryResult>`
-
-Retries a previously failed hook.
-
-**Two-pass search algorithm:**
-1. **Exact match** — if `transitionFrom` and `transitionTo` are provided, searches for a transition matching those statuses (including wildcard `*` for `from`) that contains the specified hook
-2. **Fallback** — if no exact match, searches all transitions in the pipeline for any transition containing the hook
-
-**Retryable hooks:** `merge_pr`, `push_and_create_pr`, `advance_phase`, `delete_worktree`
-
-On success: Activity `action='system', summary="Retried hook \"{hookName}\" successfully"`
-
-### `advancePhase(taskId: string): Promise<TransitionResult>`
-
-Manually triggers phase advancement for a multi-phase task.
-
-**Two code paths:**
-
-1. **Primary** — finds a system transition from the current status that has an `advance_phase` hook, then executes it. This is the normal path where the pipeline defines an explicit `advance_phase` hook on a system transition.
-2. **Fallback** — if no transition with an `advance_phase` hook exists, finds any system transition from the current status and executes it. This handles pipelines where phase advancement is implicit in the system transition.
-
-On success: Activity `action='transition', summary="Manually advanced phase for task"`
-
-On failure (no matching transition): logs a warning to the task event log with the pipeline ID and current status, then returns `{ success: false }`.
 
 ### `mergePR(taskId: string): Promise<TransitionResult>`
 
@@ -184,6 +145,19 @@ Returns:
 - `tasksByStatus` — map of status to count (via `GROUP BY`)
 - `activeAgentRuns` — count of running agents
 - `recentActivityCount` — activity entries in the last 24 hours
+
+## Related Service: PipelineInspectionService
+
+Pipeline inspection and operator-recovery actions are intentionally split out of `WorkflowService`.
+
+**File:** `src/core/services/pipeline-inspection-service.ts`
+**Interface:** `src/core/interfaces/pipeline-inspection-service.ts`
+
+`PipelineInspectionService` owns:
+- `getPipelineDiagnostics(taskId)`
+- `retryHook(taskId, hookName, transitionFrom?, transitionTo?)`
+- `advancePhase(taskId)`
+- `dismissEvent(eventId)`
 
 ## Prompt Response and Resume Flow
 
@@ -254,7 +228,7 @@ Called in three scenarios:
 ## Edge Cases
 
 - **`transitionTask` uses `trigger: 'manual'` only.** Agent-triggered transitions are handled internally by `AgentService.tryOutcomeTransition()`, not through the workflow service's public API.
-- **Route handler strips `status`** from update payloads. The `TASK_UPDATE` IPC handler removes the `status` field before calling `workflowService.updateTask()` to force all status changes through `transitionTask()`.
+- **Route handlers strip `status`** from update payloads. Status changes are forced through `transitionTask()` rather than `updateTask()`.
 - **`respondToPrompt` can fail to find a matching transition** when `resumeOutcome` is set but no transition's `agentOutcome` matches the outcome from the current task status. This is logged as a warning event on the task timeline but does not throw.
 - **`mergePR` takes the most recent PR artifact** — `artifacts[artifacts.length - 1]`. If a task has multiple PR artifacts (from retries), only the latest is used.
 - **Worktree cleanup is best-effort** — all exceptions during cleanup are caught and ignored. This prevents cleanup failures from blocking task deletion or status transitions.

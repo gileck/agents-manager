@@ -134,7 +134,7 @@ The `src/core/interfaces/` directory defines every service boundary. Key interfa
 | `IScmPlatform` | `scm-platform.ts` | `createPR`, `mergePR`, `getPRStatus` |
 | `INotificationRouter` | `notification-router.ts` | `send` |
 | `IWorkflowService` | `workflow-service.ts` | `createTask`, `updateTask`, `deleteTask`, `resetTask`, `transitionTask`, `forceTransitionTask`, `startAgent`, `resumeAgent`, `stopAgent`, `respondToPrompt`, `mergePR`, `getDashboardStats` |
-| `IPipelineInspectionService` | `pipeline-inspection-service.ts` | `getPipelineDiagnostics`, `retryHook`, `advancePhase` |
+| `IPipelineInspectionService` | `pipeline-inspection-service.ts` | `getPipelineDiagnostics`, `retryHook`, `advancePhase`, `dismissEvent` |
 | `ITaskContextStore` | `task-context-store.ts` | `addEntry`, `getEntriesForTask` |
 | `IFeatureStore` | `feature-store.ts` | `getFeature`, `listFeatures`, `createFeature`, `updateFeature`, `deleteFeature` |
 | `IAgentDefinitionStore` | `agent-definition-store.ts` | `getDefinition`, `listDefinitions`, `getDefinitionByAgentType`, `getDefinitionByMode` |
