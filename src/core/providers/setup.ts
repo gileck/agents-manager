@@ -162,31 +162,27 @@ export interface AppServices {
   telegramBotManager: TelegramBotManager;
 }
 
-export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
+// ---------------------------------------------------------------------------
+// Domain installer functions (private — not exported)
+// ---------------------------------------------------------------------------
+
+/**
+ * createStores — All SQLite store and infrastructure instantiations.
+ * Depends on: db
+ * Produces: all stores (including userStore and txRunner used only internally)
+ */
+function createStores(db: Database.Database) {
   // Phase 1 stores
   const projectStore = new SqliteProjectStore(db);
   const pipelineStore = new SqlitePipelineStore(db);
-  const taskStore = new SqliteTaskStore(db, pipelineStore);
+  const taskStore = new SqliteTaskStore(db, pipelineStore); // depends on pipelineStore
   const taskEventLog = new SqliteTaskEventLog(db);
   const activityLog = new SqliteActivityLog(db);
   const agentRunStore = new SqliteAgentRunStore(db);
-  const userStore = new SqliteUserStore(db);
-  const txRunner = new SqliteTransactionRunner(db);
-  const guardContext: import('../../shared/types').IGuardQueryContext = {
-    countUnresolvedDependencies: (id: string) => taskStore.countUnresolvedDependenciesSync(id),
-    countFailedRuns: (id: string) => agentRunStore.countFailedRunsSync(id),
-    countRunningRuns: (id: string) => agentRunStore.countRunningRunsSync(id),
-    getUserRole: (username: string) => userStore.getUserRoleSync(username),
-  };
-  const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, txRunner, guardContext);
+  const userStore = new SqliteUserStore(db);     // used only for guardContext in createPipelineModule
+  const txRunner = new SqliteTransactionRunner(db); // used only by PipelineEngine
   const appDebugLog = new SqliteAppDebugLog(db);
-  const appLogger = initAppLogger(appDebugLog, { verbose: process.env.AM_VERBOSE === '1' });
-
-  // Register built-in guards
-  registerCoreGuards(pipelineEngine);
-
   // Phase 2 stores
-  // agentRunStore is created above (needed for guardContext)
   const taskArtifactStore = new SqliteTaskArtifactStore(db);
   const taskPhaseStore = new SqliteTaskPhaseStore(db);
   const pendingPromptStore = new SqlitePendingPromptStore(db);
@@ -197,11 +193,46 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const chatSessionStore = new SqliteChatSessionStore(db);
   const kanbanBoardStore = new SqliteKanbanBoardStore(db);
   const settingsStore = new SqliteSettingsStore(db);
+  const automatedAgentStore = new SqliteAutomatedAgentStore(db);
+  const inAppNotificationStore = new SqliteInAppNotificationStore(db);
+  const itemStore = new SqliteItemStore(db);
+  return {
+    projectStore, pipelineStore, taskStore, taskEventLog, activityLog,
+    agentRunStore, userStore, txRunner, appDebugLog,
+    taskArtifactStore, taskPhaseStore, pendingPromptStore, taskContextStore,
+    featureStore, agentDefinitionStore, chatMessageStore, chatSessionStore,
+    kanbanBoardStore, settingsStore, automatedAgentStore, inAppNotificationStore, itemStore,
+  };
+}
 
-  // Phase 2 infrastructure — factory functions create project-scoped instances
-  const createGitOps = (cwd: string) => new LocalGitOps(cwd);
-  const createWorktreeManager = (path: string) => new LocalWorktreeManager(path);
-  const createScmPlatform = (path: string) => new GitHubScmPlatform(path);
+/**
+ * createPipelineModule — PipelineEngine + core guard registration.
+ * Depends on: stores (pipelineStore, taskStore, taskEventLog, txRunner, agentRunStore, userStore)
+ * Produces: pipelineEngine
+ */
+function createPipelineModule(stores: ReturnType<typeof createStores>) {
+  const guardContext: import('../../shared/types').IGuardQueryContext = {
+    countUnresolvedDependencies: (id: string) => stores.taskStore.countUnresolvedDependenciesSync(id),
+    countFailedRuns: (id: string) => stores.agentRunStore.countFailedRunsSync(id),
+    countRunningRuns: (id: string) => stores.agentRunStore.countRunningRunsSync(id),
+    getUserRole: (username: string) => stores.userStore.getUserRoleSync(username),
+  };
+  const pipelineEngine = new PipelineEngine(
+    stores.pipelineStore, stores.taskStore, stores.taskEventLog, stores.txRunner, guardContext,
+  );
+  registerCoreGuards(pipelineEngine);
+  return { pipelineEngine };
+}
+
+/**
+ * createNotificationModule — MultiChannelNotificationRouter wired with external, Telegram, and in-app routers.
+ * Depends on: stores.inAppNotificationStore, config.notificationRouters, config.onInAppNotification
+ * Produces: notificationRouter
+ */
+function createNotificationModule(
+  stores: ReturnType<typeof createStores>,
+  config?: AppServicesConfig,
+) {
   const notificationRouter = new MultiChannelNotificationRouter();
   if (config?.notificationRouters) {
     for (const router of config.notificationRouters) {
@@ -215,8 +246,19 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     const bot = new TelegramBot(botToken); // no polling — send-only
     notificationRouter.addRouter(new TelegramNotificationRouter(bot, chatId));
   } catch { /* Telegram not configured */ }
+  notificationRouter.addRouter(new InAppNotificationRouter(
+    stores.inAppNotificationStore,
+    (type, payload) => config?.onInAppNotification?.(type, payload),
+  ));
+  return { notificationRouter };
+}
 
-  // Timeline service (created before AgentService because TaskReviewReportBuilder needs it)
+/**
+ * createTimelineModule — SqliteTimelineStore + TimelineService with all 8 event sources.
+ * Depends on: db
+ * Produces: timelineService
+ */
+function createTimelineModule(db: Database.Database) {
   const timelineStore = new SqliteTimelineStore(db);
   const timelineService = new TimelineService([
     new EventSource(timelineStore),
@@ -228,9 +270,29 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     new PromptSource(timelineStore),
     new ContextSource(timelineStore),
   ]);
+  return { timelineService };
+}
 
+/**
+ * createAgentModule — Agent lib registry, framework, report builder, validation, outcome,
+ *   scheduled agent service (created before AgentService as it is a hard dependency),
+ *   dev server, subscription registry, and AgentService.
+ * Depends on: stores, pipelineEngine, timelineService, notificationRouter,
+ *   createGitOps, createWorktreeManager, config
+ * Produces: agentService, agentFramework, agentLibRegistry, devServerManager,
+ *   subscriptionRegistry, scheduledAgentService
+ */
+function createAgentModule(
+  stores: ReturnType<typeof createStores>,
+  pipelineEngine: IPipelineEngine,
+  timelineService: TimelineService,
+  notificationRouter: MultiChannelNotificationRouter,
+  createGitOps: (cwd: string) => import('../interfaces/git-ops').IGitOps,
+  createWorktreeManager: (path: string) => IWorktreeManager,
+  config?: AppServicesConfig,
+) {
   // Agent lib registry — engines that execute prompts
-  const historyProvider = new AgentRunHistoryProvider(agentRunStore);
+  const historyProvider = new AgentRunHistoryProvider(stores.agentRunStore);
   const agentLibRegistry = new AgentLibRegistry();
   agentLibRegistry.register(new ClaudeCodeLib());
   agentLibRegistry.register(new CursorAgentLib(historyProvider));
@@ -248,45 +310,35 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
 
   // Report builder for workflow reviewer agent
   const taskReviewReportBuilder = new TaskReviewReportBuilder(
-    agentRunStore, taskEventLog, taskContextStore,
-    taskArtifactStore, taskStore, timelineService,
+    stores.agentRunStore, stores.taskEventLog, stores.taskContextStore,
+    stores.taskArtifactStore, stores.taskStore, timelineService,
   );
 
   // Validation runner + outcome resolver for agent post-processing
-  const validationRunner = new ValidationRunner(agentRunStore, taskEventLog);
+  const validationRunner = new ValidationRunner(stores.agentRunStore, stores.taskEventLog);
   const outcomeResolver = new OutcomeResolver(
-    createGitOps, pipelineEngine, taskStore,
-    taskPhaseStore, taskArtifactStore, taskEventLog,
+    createGitOps, pipelineEngine, stores.taskStore,
+    stores.taskPhaseStore, stores.taskArtifactStore, stores.taskEventLog,
   );
 
-  // Automated agent stores and services (created before AgentService so it can be passed in for stop delegation)
-  const automatedAgentStore = new SqliteAutomatedAgentStore(db);
-  const inAppNotificationStore = new SqliteInAppNotificationStore(db);
-  notificationRouter.addRouter(new InAppNotificationRouter(
-    inAppNotificationStore,
-    (type, payload) => config?.onInAppNotification?.(type, payload),
-  ));
-  const itemStore = new SqliteItemStore(db);
-  const triageBuilder = new TriageAgentPromptBuilder(taskStore, taskContextStore);
+  // Scheduled agent service (created before AgentService — it is passed in as a dependency)
+  const triageBuilder = new TriageAgentPromptBuilder(stores.taskStore, stores.taskContextStore);
   const promptBuilders = new Map([[triageBuilder.templateId, triageBuilder]]);
   const scheduledAgentService = new ScheduledAgentService(
-    automatedAgentStore, agentRunStore, projectStore, taskStore,
+    stores.automatedAgentStore, stores.agentRunStore, stores.projectStore, stores.taskStore,
     agentLibRegistry, notificationRouter, promptBuilders,
   );
-  const schedulerSupervisor = new SchedulerSupervisor(automatedAgentStore, scheduledAgentService);
 
-  // Dev server manager
+  // Dev server manager and in-memory subscription registry
   const devServerManager = new DevServerManager(config?.devServerCallbacks);
-
-  // Agent subscription registry (in-memory, single-fire + TTL)
   const subscriptionRegistry = new AgentSubscriptionRegistry();
 
   // Agent service
   const agentService = new AgentService(
-    agentFramework, agentRunStore, createWorktreeManager,
-    taskStore, projectStore,
-    taskEventLog, taskPhaseStore, pendingPromptStore,
-    createGitOps, taskContextStore, agentDefinitionStore,
+    agentFramework, stores.agentRunStore, createWorktreeManager,
+    stores.taskStore, stores.projectStore,
+    stores.taskEventLog, stores.taskPhaseStore, stores.pendingPromptStore,
+    createGitOps, stores.taskContextStore, stores.agentDefinitionStore,
     taskReviewReportBuilder, notificationRouter,
     validationRunner, outcomeResolver,
     scheduledAgentService, agentLibRegistry, devServerManager,
@@ -294,31 +346,24 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     config?.onTaskUpdated,
   );
 
-  // Workflow service
-  const workflowService = new WorkflowService(
-    taskStore, projectStore, pipelineEngine, pipelineStore,
-    taskEventLog, activityLog, agentRunStore, pendingPromptStore,
-    taskArtifactStore, agentService, createScmPlatform, createWorktreeManager,
-    createGitOps, taskContextStore, devServerManager,
-  );
+  return { agentService, agentFramework, agentLibRegistry, devServerManager, subscriptionRegistry, scheduledAgentService };
+}
 
-  // Pipeline inspection service (diagnostics, hook retry, phase advance)
-  const pipelineInspectionService = new PipelineInspectionService(
-    taskStore, pipelineEngine, pipelineStore,
-    taskEventLog, activityLog, agentRunStore,
-  );
-
-  // Supervisor for detecting timed-out agent runs + stall recovery
-  const agentSupervisor = new AgentSupervisor(
-    agentRunStore, agentService, taskEventLog,
-    undefined, undefined, // use default pollIntervalMs and defaultTimeoutMs
-    taskStore, pipelineStore, workflowService,
-  );
-
-  // Chat agent service (unified: handles both project and task scopes)
+/**
+ * createChatModule — ChatAgentService with settings-driven default lib resolution.
+ * Depends on: stores (chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore,
+ *   agentRunStore, settingsStore), agentLibRegistry, subscriptionRegistry, config.imageStorageDir
+ * Produces: chatAgentService
+ */
+function createChatModule(
+  stores: ReturnType<typeof createStores>,
+  agentLibRegistry: AgentLibRegistryType,
+  subscriptionRegistry: AgentSubscriptionRegistry,
+  config?: AppServicesConfig,
+) {
   const getDefaultAgentLib = () => {
     try {
-      return settingsStore.get('chat_default_agent_lib', 'claude-code');
+      return stores.settingsStore.get('chat_default_agent_lib', 'claude-code');
     } catch (err) {
       getAppLogger().logError('setup', 'Failed to read chat_default_agent_lib setting', err);
       return 'claude-code';
@@ -326,7 +371,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   };
   const getDefaultModel = (): string | null => {
     try {
-      return settingsStore.get('chat_default_model', '') || null;
+      return stores.settingsStore.get('chat_default_model', '') || null;
     } catch (err) {
       getAppLogger().logError('setup', 'Failed to read chat_default_model setting', err);
       return null;
@@ -334,85 +379,157 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   };
   const getDefaultPermissionMode = (): import('../../shared/types').PermissionMode | null => {
     try {
-      const value = settingsStore.get('chat_default_permission_mode', '');
+      const value = stores.settingsStore.get('chat_default_permission_mode', '');
       return (value as import('../../shared/types').PermissionMode) || null;
     } catch (err) {
       getAppLogger().logError('setup', 'Failed to read chat_default_permission_mode setting', err);
       return null;
     }
   };
-  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, agentRunStore, getDefaultAgentLib, getDefaultModel, getDefaultPermissionMode, config?.imageStorageDir, subscriptionRegistry);
+  const chatAgentService = new ChatAgentService(
+    stores.chatMessageStore, stores.chatSessionStore, stores.projectStore, stores.taskStore,
+    stores.pipelineStore, agentLibRegistry, stores.agentRunStore, getDefaultAgentLib,
+    getDefaultModel, getDefaultPermissionMode, config?.imageStorageDir, subscriptionRegistry,
+  );
+  return { chatAgentService };
+}
 
-  // Wire cross-service injected message handler (avoids circular deps)
+/**
+ * createAutomationModule — SchedulerSupervisor that supervises the scheduled agent service.
+ * Depends on: stores.automatedAgentStore, scheduledAgentService
+ * Produces: schedulerSupervisor
+ */
+function createAutomationModule(
+  stores: ReturnType<typeof createStores>,
+  scheduledAgentService: ScheduledAgentService,
+) {
+  const schedulerSupervisor = new SchedulerSupervisor(stores.automatedAgentStore, scheduledAgentService);
+  return { schedulerSupervisor };
+}
+
+// ---------------------------------------------------------------------------
+// Public factory
+// ---------------------------------------------------------------------------
+
+export function createAppServices(db: Database.Database, config?: AppServicesConfig): AppServices {
+  // 1. All SQLite stores
+  const stores = createStores(db);
+  const appLogger = initAppLogger(stores.appDebugLog, { verbose: process.env.AM_VERBOSE === '1' });
+
+  // 2. Pipeline engine (builds guardContext internally from stores)
+  const { pipelineEngine } = createPipelineModule(stores);
+
+  // 3. Factory lambdas — project-scoped instances, used by multiple modules and hook registrations
+  const createGitOps = (cwd: string) => new LocalGitOps(cwd);
+  const createWorktreeManager = (path: string) => new LocalWorktreeManager(path);
+  const createScmPlatform = (path: string) => new GitHubScmPlatform(path);
+
+  // 4. Notification routing
+  const { notificationRouter } = createNotificationModule(stores, config);
+
+  // 5. Timeline service (created before AgentService because TaskReviewReportBuilder needs it)
+  const { timelineService } = createTimelineModule(db);
+
+  // 6. Agent module (lib registry, framework, automation services, and agent service)
+  const {
+    agentService, agentFramework, agentLibRegistry,
+    devServerManager, subscriptionRegistry, scheduledAgentService,
+  } = createAgentModule(stores, pipelineEngine, timelineService, notificationRouter, createGitOps, createWorktreeManager, config);
+
+  // 7. Cross-cutting orchestration services (consume multiple domains — stay inline)
+  const workflowService = new WorkflowService(
+    stores.taskStore, stores.projectStore, pipelineEngine, stores.pipelineStore,
+    stores.taskEventLog, stores.activityLog, stores.agentRunStore, stores.pendingPromptStore,
+    stores.taskArtifactStore, agentService, createScmPlatform, createWorktreeManager,
+    createGitOps, stores.taskContextStore, devServerManager,
+  );
+  const pipelineInspectionService = new PipelineInspectionService(
+    stores.taskStore, pipelineEngine, stores.pipelineStore,
+    stores.taskEventLog, stores.activityLog, stores.agentRunStore,
+  );
+  const agentSupervisor = new AgentSupervisor(
+    stores.agentRunStore, agentService, stores.taskEventLog,
+    undefined, undefined, // use default pollIntervalMs and defaultTimeoutMs
+    stores.taskStore, stores.pipelineStore, workflowService,
+  );
+
+  // 8. Chat module
+  const { chatAgentService } = createChatModule(stores, agentLibRegistry, subscriptionRegistry, config);
+
+  // 9. Automation module (scheduler supervisor — scheduled agent service lives in agent module)
+  const { schedulerSupervisor } = createAutomationModule(stores, scheduledAgentService);
+
+  // 10. Wire cross-service injected message handler (avoids circular deps)
   agentService.setInjectedMessageHandler(
     (sessionId, content, metadata) =>
       chatAgentService.enqueueInjectedMessage(sessionId, content, metadata),
   );
 
-  // Telegram bot manager — handles bot lifecycle and notification router registration
+  // 11. Telegram bot manager — handles bot lifecycle and notification router registration
   const telegramBotManager = new TelegramBotManager(
     {
-      projectStore, taskStore, pipelineStore, pipelineEngine,
-      workflowService, chatSessionStore, chatAgentService,
-      agentRunStore, settingsStore, notificationRouter,
+      projectStore: stores.projectStore, taskStore: stores.taskStore, pipelineStore: stores.pipelineStore,
+      pipelineEngine, workflowService, chatSessionStore: stores.chatSessionStore, chatAgentService,
+      agentRunStore: stores.agentRunStore, settingsStore: stores.settingsStore, notificationRouter,
     },
     config?.telegramBotManagerCallbacks,
   );
 
-  // Register hooks (must be after workflowService is created)
-  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog, agentRunStore, createStreamingCallbacks: config?.createStreamingCallbacks });
-  registerNotificationHandler(pipelineEngine, { notificationRouter, taskStore });
-  registerPromptHandler(pipelineEngine, { pendingPromptStore, taskEventLog });
+  // 12. Register pipeline hooks (must be after workflowService is created)
+  registerAgentHandler(pipelineEngine, { workflowService, taskEventLog: stores.taskEventLog, agentRunStore: stores.agentRunStore, createStreamingCallbacks: config?.createStreamingCallbacks });
+  registerNotificationHandler(pipelineEngine, { notificationRouter, taskStore: stores.taskStore });
+  registerPromptHandler(pipelineEngine, { pendingPromptStore: stores.pendingPromptStore, taskEventLog: stores.taskEventLog });
   registerScmHandler(pipelineEngine, {
-    projectStore, taskStore, taskArtifactStore, taskEventLog, taskContextStore,
+    projectStore: stores.projectStore, taskStore: stores.taskStore, taskArtifactStore: stores.taskArtifactStore,
+    taskEventLog: stores.taskEventLog, taskContextStore: stores.taskContextStore,
     createWorktreeManager, createGitOps, createScmPlatform,
     onMainDiverged: config?.onMainDiverged,
   });
   registerPhaseHandler(pipelineEngine, {
-    taskStore, taskArtifactStore, taskEventLog, pipelineEngine,
-    projectStore, createScmPlatform,
+    taskStore: stores.taskStore, taskArtifactStore: stores.taskArtifactStore, taskEventLog: stores.taskEventLog,
+    pipelineEngine, projectStore: stores.projectStore, createScmPlatform,
   });
 
   return {
     db,
-    projectStore,
-    pipelineStore,
-    taskStore,
-    taskEventLog,
-    activityLog,
+    projectStore: stores.projectStore,
+    pipelineStore: stores.pipelineStore,
+    taskStore: stores.taskStore,
+    taskEventLog: stores.taskEventLog,
+    activityLog: stores.activityLog,
     pipelineEngine,
-    agentRunStore,
-    taskArtifactStore,
-    taskPhaseStore,
-    pendingPromptStore,
+    agentRunStore: stores.agentRunStore,
+    taskArtifactStore: stores.taskArtifactStore,
+    taskPhaseStore: stores.taskPhaseStore,
+    pendingPromptStore: stores.pendingPromptStore,
     agentFramework,
     notificationRouter,
     agentService,
     workflowService,
     pipelineInspectionService,
-    taskContextStore,
-    featureStore,
-    agentDefinitionStore,
-    kanbanBoardStore,
+    taskContextStore: stores.taskContextStore,
+    featureStore: stores.featureStore,
+    agentDefinitionStore: stores.agentDefinitionStore,
+    kanbanBoardStore: stores.kanbanBoardStore,
     createWorktreeManager,
     createGitOps,
     createScmPlatform,
     agentSupervisor,
     timelineService,
-    chatMessageStore,
-    chatSessionStore,
+    chatMessageStore: stores.chatMessageStore,
+    chatSessionStore: stores.chatSessionStore,
     chatAgentService,
     agentLibRegistry,
-    settingsStore,
-    appDebugLog,
+    settingsStore: stores.settingsStore,
+    appDebugLog: stores.appDebugLog,
     appLogger,
-    automatedAgentStore,
+    automatedAgentStore: stores.automatedAgentStore,
     scheduledAgentService,
     schedulerSupervisor,
-    inAppNotificationStore,
+    inAppNotificationStore: stores.inAppNotificationStore,
     devServerManager,
     subscriptionRegistry,
-    itemStore,
+    itemStore: stores.itemStore,
     telegramBotManager,
   };
 }
