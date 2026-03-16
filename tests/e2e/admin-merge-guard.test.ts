@@ -51,58 +51,67 @@ describe('Admin Merge Guard', () => {
       expect(result.guardFailures).toBeUndefined();
     });
 
-    it('should block regular users from performing admin-only transitions', async () => {
+    it('should allow regular users to merge (no admin guard on merge transition)', async () => {
       const task = await ctx.taskStore.createTask(
         createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
       );
+
+      // Create PR artifact so merge_pr hook succeeds
+      await ctx.taskArtifactStore.createArtifact({
+        taskId: task.id,
+        type: 'pr',
+        data: { url: 'https://github.com/org/repo/pull/1', number: 1, title: 'Test PR' }
+      });
 
       const result = await ctx.pipelineEngine.executeTransition(task, 'done', {
         trigger: 'manual',
         actor: 'regular-user'
       });
 
-      expect(result.success).toBe(false);
-      expect(result.guardFailures).toHaveLength(1);
-      expect(result.guardFailures![0]).toMatchObject({
-        guard: 'is_admin',
-        reason: 'Only administrators can perform this action'
-      });
+      expect(result.success).toBe(true);
+      expect(result.guardFailures).toBeUndefined();
     });
 
-    it('should block unknown users', async () => {
+    it('should allow any actor to merge including unlisted users', async () => {
       const task = await ctx.taskStore.createTask(
         createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
       );
+
+      // Create PR artifact so merge_pr hook succeeds
+      await ctx.taskArtifactStore.createArtifact({
+        taskId: task.id,
+        type: 'pr',
+        data: { url: 'https://github.com/org/repo/pull/1', number: 1, title: 'Test PR' }
+      });
 
       const result = await ctx.pipelineEngine.executeTransition(task, 'done', {
         trigger: 'manual',
         actor: 'unknown-user'
       });
 
-      expect(result.success).toBe(false);
-      expect(result.guardFailures).toHaveLength(1);
-      expect(result.guardFailures![0]).toMatchObject({
-        guard: 'is_admin',
-        reason: 'User not found'
-      });
+      expect(result.success).toBe(true);
+      expect(result.guardFailures).toBeUndefined();
     });
 
-    it('should block when no actor is provided', async () => {
+    it('should allow merge without an actor', async () => {
       const task = await ctx.taskStore.createTask(
         createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
       );
+
+      // Create PR artifact so merge_pr hook succeeds
+      await ctx.taskArtifactStore.createArtifact({
+        taskId: task.id,
+        type: 'pr',
+        data: { url: 'https://github.com/org/repo/pull/1', number: 1, title: 'Test PR' }
+      });
 
       const result = await ctx.pipelineEngine.executeTransition(task, 'done', {
         trigger: 'manual'
         // no actor provided
       });
 
-      expect(result.success).toBe(false);
-      expect(result.guardFailures).toHaveLength(1);
-      expect(result.guardFailures![0]).toMatchObject({
-        guard: 'is_admin',
-        reason: 'No actor provided - admin role required'
-      });
+      expect(result.success).toBe(true);
+      expect(result.guardFailures).toBeUndefined();
     });
 
     it('should work with default admin user from migration', async () => {
@@ -156,39 +165,42 @@ describe('Admin Merge Guard', () => {
       expect(history).toBeDefined();
       expect(history.actor).toBe('admin-user');
       expect(history.trigger).toBe('manual');
-
-      const guardResults = JSON.parse(history.guard_results);
-      expect(guardResults.is_admin).toMatchObject({
-        allowed: true
-      });
     });
 
-    it('should record guard failure in transition history for non-admin', async () => {
+    it('should record successful merge transition in history for non-admin', async () => {
       const task = await ctx.taskStore.createTask(
         createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
       );
 
-      await ctx.pipelineEngine.executeTransition(task, 'done', {
+      // Create PR artifact so merge_pr hook succeeds
+      await ctx.taskArtifactStore.createArtifact({
+        taskId: task.id,
+        type: 'pr',
+        data: { url: 'https://github.com/org/repo/pull/3', number: 3, title: 'Test PR' }
+      });
+
+      const result = await ctx.pipelineEngine.executeTransition(task, 'done', {
         trigger: 'manual',
         actor: 'regular-user'
       });
 
-      // Guard failure should be recorded in transition history with _denied flag
+      expect(result.success).toBe(true);
+
+      // Successful transition should be recorded in history without _denied flag
       const history = ctx.db.prepare(`
         SELECT * FROM transition_history
         WHERE task_id = ? AND from_status = ? AND to_status = ?
-      `).get(task.id, 'ready_to_merge', 'done') as { guard_results: string } | undefined;
+      `).get(task.id, 'ready_to_merge', 'done') as { actor: string; guard_results: string } | undefined;
 
       expect(history).toBeDefined();
+      expect(history!.actor).toBe('regular-user');
       const guardResults = JSON.parse(history!.guard_results);
-      expect(guardResults._denied).toBe(true);
-      expect(guardResults.guardFailures).toHaveLength(1);
-      expect(guardResults.guardFailures[0].guard).toBe('is_admin');
+      expect(guardResults._denied).toBeUndefined();
     });
   });
 
-  describe('admin guard round-trip', () => {
-    it('should block non-admin then allow admin on same task', async () => {
+  describe('merge without admin guard', () => {
+    it('should allow non-admin to merge directly without admin approval', async () => {
       const task = await ctx.taskStore.createTask(
         createTaskInput(projectId, 'pipeline-agent', {
           status: 'ready_to_merge',
@@ -196,27 +208,20 @@ describe('Admin Merge Guard', () => {
         })
       );
 
-      // Non-admin attempt
-      const result1 = await ctx.pipelineEngine.executeTransition(task, 'done', {
-        trigger: 'manual',
-        actor: 'regular-user'
-      });
-      expect(result1.success).toBe(false);
-      expect(result1.guardFailures![0].guard).toBe('is_admin');
-
-      // Create PR artifact for admin attempt
+      // Create PR artifact so merge_pr hook succeeds
       await ctx.taskArtifactStore.createArtifact({
         taskId: task.id,
         type: 'pr',
         data: { url: 'https://github.com/org/repo/pull/2', number: 2, title: 'Bug Fix PR' }
       });
 
-      // Admin attempt
-      const result2 = await ctx.pipelineEngine.executeTransition(task, 'done', {
+      // Non-admin merges directly — no admin guard blocks this
+      const result = await ctx.pipelineEngine.executeTransition(task, 'done', {
         trigger: 'manual',
-        actor: 'admin-user'
+        actor: 'regular-user'
       });
-      expect(result2.success).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.task?.status).toBe('done');
     });
   });
 });
