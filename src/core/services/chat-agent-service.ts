@@ -432,23 +432,23 @@ export class ChatAgentService {
   }
 
   /**
-   * If the session has custom append instructions, build a preset system prompt
-   * that includes both the built prompt and the user's custom instructions.
-   * Otherwise, return the base prompt string as-is for backward compatibility.
+   * Always uses the `preset: "claude_code"` SDK system prompt so thread chat
+   * retains the full Claude Code CLI behavioral context (git safety, tool usage,
+   * security rules, environment context, etc.).
+   *
+   * The built `basePrompt` (orchestrator/chat instructions) is placed in `append`
+   * so it follows the preset base. When the session also has a custom
+   * `systemPromptAppend`, that is appended last after a separator.
    */
   private buildSystemPromptWithAppend(
     basePrompt: string,
     systemPromptAppend: string | null,
-  ): string | { type: 'preset'; preset: 'claude_code'; append?: string } {
-    if (systemPromptAppend && systemPromptAppend.trim()) {
-      // Use preset with combined append: base prompt instructions + user's custom append
-      return {
-        type: 'preset',
-        preset: 'claude_code',
-        append: `${basePrompt}\n\n--- Custom Instructions ---\n${systemPromptAppend.trim()}`,
-      };
-    }
-    return basePrompt;
+  ): { type: 'preset'; preset: 'claude_code'; append?: string } {
+    const append = systemPromptAppend?.trim()
+      ? `${basePrompt}\n\n--- Custom Instructions ---\n${systemPromptAppend.trim()}`
+      : basePrompt;
+
+    return { type: 'preset', preset: 'claude_code', append };
   }
 
   async send(
