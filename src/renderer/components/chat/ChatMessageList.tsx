@@ -387,7 +387,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
 
       if (msg.type === 'assistant_text') {
         nodes.push(
-          <div key={i} className="py-2.5 max-w-none prose-sm text-[15px] leading-7 text-foreground/95">
+          <div key={i} className="py-2.5 max-w-none prose-sm leading-7 text-foreground/95">
             <MarkdownContent content={msg.text} />
           </div>
         );
@@ -433,7 +433,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
               </button>
             )}
             <div className="bg-primary/90 text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5 max-w-[82%] shadow-[0_8px_18px_hsl(var(--primary)/0.24)]">
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+              <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
               {msg.images && msg.images.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {msg.images.map((img: ChatImageRef, j: number) => (
