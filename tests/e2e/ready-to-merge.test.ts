@@ -67,7 +67,7 @@ describe('Ready to Merge Flow', () => {
       expect(result.task?.status).toBe('done');
     });
 
-    it('should block non-admin user from merging', async () => {
+    it('should allow non-admin user to merge (no admin guard on merge transition)', async () => {
       const task = await ctx.taskStore.createTask(
         createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
       );
@@ -76,34 +76,44 @@ describe('Ready to Merge Flow', () => {
       const userStore = new (await import('../../src/core/stores/sqlite-user-store')).SqliteUserStore(ctx.db);
       await userStore.createUser('regular-user', 'user');
 
-      // Non-admin tries to merge the PR
+      // Create PR artifact so merge_pr hook succeeds
+      await ctx.taskArtifactStore.createArtifact({
+        taskId: task.id,
+        type: 'pr',
+        data: { url: 'https://github.com/org/repo/pull/1', number: 1, title: 'Test PR' }
+      });
+
+      // Non-admin can now merge — admin guard has been removed from merge transition
       const result = await ctx.pipelineEngine.executeTransition(task, 'done', {
         trigger: 'manual',
         actor: 'regular-user'
       });
 
-      expect(result.success).toBe(false);
-      expect(result.guardFailures).toBeDefined();
-      expect(result.guardFailures).toHaveLength(1);
-      expect(result.guardFailures![0].guard).toBe('is_admin');
-      expect(result.guardFailures![0].reason).toContain('administrators');
+      expect(result.success).toBe(true);
+      expect(result.task?.status).toBe('done');
+      expect(result.guardFailures).toBeUndefined();
     });
 
-    it('should block merge when no actor is provided', async () => {
+    it('should allow merge without an actor', async () => {
       const task = await ctx.taskStore.createTask(
         createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
       );
 
-      // Try to merge without an actor
+      // Create PR artifact so merge_pr hook succeeds
+      await ctx.taskArtifactStore.createArtifact({
+        taskId: task.id,
+        type: 'pr',
+        data: { url: 'https://github.com/org/repo/pull/1', number: 1, title: 'Test PR' }
+      });
+
+      // Merge without an actor — no admin guard requires one
       const result = await ctx.pipelineEngine.executeTransition(task, 'done', {
         trigger: 'manual'
       });
 
-      expect(result.success).toBe(false);
-      expect(result.guardFailures).toBeDefined();
-      expect(result.guardFailures).toHaveLength(1);
-      expect(result.guardFailures![0].guard).toBe('is_admin');
-      expect(result.guardFailures![0].reason).toContain('No actor provided');
+      expect(result.success).toBe(true);
+      expect(result.task?.status).toBe('done');
+      expect(result.guardFailures).toBeUndefined();
     });
   });
 
@@ -143,7 +153,7 @@ describe('Ready to Merge Flow', () => {
       expect(result.task?.status).toBe('done');
     });
 
-    it('should block non-admin user from merging', async () => {
+    it('should allow non-admin user to merge (no admin guard on merge transition)', async () => {
       const task = await ctx.taskStore.createTask(
         createTaskInput(projectId, 'pipeline-agent', { status: 'ready_to_merge' })
       );
@@ -152,16 +162,22 @@ describe('Ready to Merge Flow', () => {
       const userStore = new (await import('../../src/core/stores/sqlite-user-store')).SqliteUserStore(ctx.db);
       await userStore.createUser('bug-fixer', 'user');
 
-      // Non-admin tries to merge the PR
+      // Create PR artifact so merge_pr hook succeeds
+      await ctx.taskArtifactStore.createArtifact({
+        taskId: task.id,
+        type: 'pr',
+        data: { url: 'https://github.com/org/repo/pull/1', number: 1, title: 'Test PR' }
+      });
+
+      // Non-admin can now merge — admin guard has been removed
       const result = await ctx.pipelineEngine.executeTransition(task, 'done', {
         trigger: 'manual',
         actor: 'bug-fixer'
       });
 
-      expect(result.success).toBe(false);
-      expect(result.guardFailures).toBeDefined();
-      expect(result.guardFailures).toHaveLength(1);
-      expect(result.guardFailures![0].guard).toBe('is_admin');
+      expect(result.success).toBe(true);
+      expect(result.task?.status).toBe('done');
+      expect(result.guardFailures).toBeUndefined();
     });
   });
 

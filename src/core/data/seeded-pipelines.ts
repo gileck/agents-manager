@@ -231,8 +231,8 @@ export const AGENT_PIPELINE: SeededPipeline = {
 
     // ── Merge ───────────────────────────────────────────────────────
     { from: 'ready_to_merge', to: 'done', trigger: 'manual', label: 'Merge',
-      guards: [{ name: 'is_admin' }],
-      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' }] },
+      hooks: [{ name: 'merge_pr', policy: 'required' }, { name: 'advance_phase', policy: 'best_effort' },
+        notify('Merged', 'Merged: {taskTitle}')] },
 
     // ── Implementing special outcomes ───────────────────────────────
     { from: 'implementing', to: 'open', trigger: 'agent', agentOutcome: 'no_changes' },
