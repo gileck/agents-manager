@@ -51,7 +51,10 @@ function getActionsForStatus(task: Task, toStatus: string): NotificationAction[]
       return actions;
     }
     case 'needs_info':
-      return [viewAction];
+      return [
+        viewAction,
+        { label: '\u{270F}\u{FE0F} Answer', callbackData: `qi|${task.id}` },
+      ];
     default:
       return [viewAction];
   }
@@ -65,6 +68,26 @@ function getNavigationUrlForStatus(taskId: string, toStatus: string): string {
   }
 }
 
+function formatQuestionsText(questions: unknown): string {
+  if (!Array.isArray(questions)) return '';
+  return questions
+    .filter((q): q is Record<string, unknown> => q != null && typeof q === 'object')
+    .map((q, idx) => {
+      const text = typeof q.question === 'string' ? q.question : '';
+      if (!text) return '';
+      const opts = Array.isArray(q.options)
+        ? (q.options as unknown[])
+            .filter((o): o is Record<string, unknown> => o != null && typeof o === 'object')
+            .map((o) => (typeof o.label === 'string' ? o.label : ''))
+            .filter(Boolean)
+        : [];
+      const optText = opts.length > 0 ? ` [${opts.join(' / ')}]` : '';
+      return `${idx + 1}. ${text}${optText}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
 export function registerNotificationHandler(
   engine: IPipelineEngine,
   deps: { notificationRouter: INotificationRouter; taskStore: ITaskStore },
@@ -73,12 +96,22 @@ export function registerNotificationHandler(
     const titleTemplate = (params?.titleTemplate as string) ?? 'Task update';
     const bodyTemplate = (params?.bodyTemplate as string) ?? '{taskTitle}: {fromStatus} → {toStatus}';
 
+    const payload = (context.data as { payload?: Record<string, unknown> } | undefined)?.payload;
+    const questionsText = formatQuestionsText(payload?.questions);
+
     const replacements: Record<string, string> = {
       '{taskTitle}': task.title,
       '{fromStatus}': transition.from,
       '{toStatus}': transition.to,
       '{summary}': (context.data?.summary as string) ?? '',
+      '{questions}': questionsText,
     };
+
+    // For needs_info, append question text to body if not already templated
+    let effectiveBodyTemplate = bodyTemplate;
+    if (transition.to === 'needs_info' && questionsText && !bodyTemplate.includes('{questions}')) {
+      effectiveBodyTemplate = `${bodyTemplate}\n\nQuestions:\n{questions}`;
+    }
 
     const applyTemplate = (template: string): string => {
       let result = template;
@@ -109,7 +142,7 @@ export function registerNotificationHandler(
       taskId: task.id,
       projectId: effectiveTask.projectId,
       title: applyTemplate(titleTemplate),
-      body: applyTemplate(bodyTemplate),
+      body: applyTemplate(effectiveBodyTemplate),
       channel: 'pipeline',
       navigationUrl,
       actions,

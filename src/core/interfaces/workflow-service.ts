@@ -24,6 +24,7 @@ export interface IWorkflowService {
   resumeAgent(taskId: string, message: string, callbacks: { onOutput?: (chunk: string) => void; onMessage?: (msg: AgentChatMessage) => void; onStatusChange?: (status: string) => void }): Promise<AgentRun | null>;
   stopAgent(runId: string): Promise<StopAgentResult>;
   respondToPrompt(promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null>;
+  listPendingPrompts(taskId: string): Promise<PendingPrompt[]>;
   mergePR(taskId: string): Promise<TransitionResult>;
   getDashboardStats(now?: number): Promise<DashboardStats>;
   addContextEntry(taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry>;

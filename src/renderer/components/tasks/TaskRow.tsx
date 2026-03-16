@@ -97,6 +97,15 @@ export function TaskRow({
                 {task.createdBy === 'workflow-reviewer' ? 'workflow' : 'agent'}
               </Badge>
             )}
+            {task.status === 'needs_info' && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 shrink-0 text-amber-600 border-amber-500/40 bg-amber-500/10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                ⚠ Needs Input
+              </Badge>
+            )}
           </div>
           {task.tags.length > 0 && (
             <div className="flex items-center gap-1 mt-1 flex-wrap">

@@ -99,6 +99,17 @@ export function TaskListRow({
         {task.title}
       </span>
 
+      {/* Needs Input badge */}
+      {task.status === 'needs_info' && (
+        <Badge
+          variant="outline"
+          className="text-[10px] px-1.5 py-0 shrink-0 text-amber-600 border-amber-500/40 bg-amber-500/10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          ⚠ Needs Input
+        </Badge>
+      )}
+
       {/* Tags: max 2 + overflow count */}
       <div className="hidden sm:flex items-center gap-1 shrink-0">
         {task.tags.slice(0, 2).map((tag) => (
