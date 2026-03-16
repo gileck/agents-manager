@@ -1251,6 +1251,8 @@ export interface ChatSession {
   systemPromptAppend: string | null;
   /** When true (default), stream deltas are forwarded to the UI in real-time. When false, the full response appears only when complete. */
   enableStreaming: boolean;
+  /** Unsent draft text for this session's chat input. Null when there is no pending draft. */
+  draft: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -1305,6 +1307,7 @@ export interface ChatSessionUpdateInput {
   permissionMode?: PermissionMode | null;
   systemPromptAppend?: string | null;
   enableStreaming?: boolean;
+  draft?: string | null;
 }
 
 export interface TaskChatSessionWithTitle extends ChatSession {

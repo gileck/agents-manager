@@ -71,10 +71,9 @@ interface ChatInputProps {
   prefill?: { text: string; seq: number } | null;
   lastUserMessage?: string;
   onEditLastMessage?: () => void;
-  sessionId?: string | null;
+  initialDraft?: string | null;
+  onDraftChange?: (draft: string) => void;
 }
-
-const DRAFT_STORAGE_KEY = (sessionId: string) => `chat.draft.${sessionId}`;
 
 export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
   onSend,
@@ -94,9 +93,10 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   prefill,
   lastUserMessage,
   onEditLastMessage,
-  sessionId,
+  initialDraft,
+  onDraftChange,
 }: ChatInputProps, forwardedRef) {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(initialDraft ?? '');
   const [images, setImages] = useState<ChatImage[]>([]);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,25 +109,14 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
 
-  // Restore draft when session changes
+  // Debounce-save draft to DB whenever value changes
   useEffect(() => {
-    if (!sessionId) {
-      setValue('');
-      return;
-    }
-    const draft = localStorage.getItem(DRAFT_STORAGE_KEY(sessionId));
-    setValue(draft ?? '');
-  }, [sessionId]);
-
-  // Persist draft whenever value changes
-  useEffect(() => {
-    if (!sessionId) return;
-    if (value) {
-      localStorage.setItem(DRAFT_STORAGE_KEY(sessionId), value);
-    } else {
-      localStorage.removeItem(DRAFT_STORAGE_KEY(sessionId));
-    }
-  }, [sessionId, value]);
+    if (!onDraftChange) return;
+    const t = setTimeout(() => {
+      onDraftChange(value);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [value, onDraftChange]);
 
   useEffect(() => {
     if (prefill) {
@@ -203,6 +192,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     onSend(trimmed, images.length > 0 ? images : undefined);
     setValue('');
     setImages([]);
+    onDraftChange?.('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

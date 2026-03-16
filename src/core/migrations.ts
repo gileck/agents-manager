@@ -144,5 +144,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '114_add_enable_streaming_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN enable_streaming INTEGER NOT NULL DEFAULT 1`,
     },
+    {
+      name: '115_add_draft_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN draft TEXT DEFAULT NULL`,
+    },
   ];
 }
