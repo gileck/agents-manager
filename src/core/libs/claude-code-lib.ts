@@ -1,5 +1,5 @@
 import type { AgentChatMessage } from '../../shared/types';
-import type { AgentLibFeatures, AgentLibModelOption, AgentLibHooks, ModelTokenUsage } from '../interfaces/agent-lib';
+import type { AgentLibFeatures, AgentLibModelOption, AgentLibHooks, ModelTokenUsage, QueryEvent } from '../interfaces/agent-lib';
 import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
 import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
@@ -653,6 +653,42 @@ export class ClaudeCodeLib extends BaseAgentLib {
     }
 
     return sdkHooks;
+  }
+
+  /**
+   * One-shot query for summarization or session naming.
+   * Reuses loadQuery() and yields QueryTextEvent / QueryResultEvent events.
+   */
+  async *query(prompt: string, options?: { model?: string; maxTokens?: number }): AsyncIterable<QueryEvent> {
+    const queryFn = await this.loadQuery();
+    for await (const message of queryFn({
+      prompt,
+      options: {
+        maxTurns: 1,
+        ...(options?.model ? { model: options.model } : {}),
+      },
+    }) as AsyncIterable<SdkStreamMessage>) {
+      if (message.type === 'assistant') {
+        const assistantMsg = message as SdkAssistantMessage;
+        for (const block of assistantMsg.message.content) {
+          if (block.type === 'text') {
+            yield { type: 'text', text: (block as SdkTextBlock).text };
+          }
+        }
+      } else if (message.type === 'result') {
+        const resultMsg = message as SdkResultMessage;
+        yield {
+          type: 'result',
+          usage: resultMsg.usage ? {
+            input_tokens: resultMsg.usage.input_tokens,
+            output_tokens: resultMsg.usage.output_tokens,
+            cache_read_input_tokens: resultMsg.usage.cache_read_input_tokens ?? undefined,
+            cache_creation_input_tokens: resultMsg.usage.cache_creation_input_tokens ?? undefined,
+          } : undefined,
+          total_cost_usd: resultMsg.total_cost_usd ?? undefined,
+        };
+      }
+    }
   }
 
   private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<SdkUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<SdkStreamMessage>> {

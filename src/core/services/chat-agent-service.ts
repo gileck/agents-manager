@@ -6,15 +6,9 @@ import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
-import type { AgentLibCallbacks, SubagentDefinition } from '../interfaces/agent-lib';
+import type { AgentLibCallbacks, SubagentDefinition, IAgentLib } from '../interfaces/agent-lib';
 import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
 import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
-import type {
-  AgentQueryMessage,
-  AgentQueryAssistantMessage,
-  AgentQueryResultMessage,
-  AgentQueryUserMessage,
-} from './agent-query-types';
 import type { SessionScope } from './chat-prompt-parts';
 import { buildAgentChatSystemPrompt, buildDesktopSystemPrompt } from './chat-prompt-parts';
 import { createTaskMcpServer } from '../mcp/task-mcp-server';
@@ -24,17 +18,6 @@ import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { getAppLogger } from './app-logger';
-
-const importESM = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
-
-/** Callbacks from runSdkQuery (used for summarization). */
-interface SdkQueryCallbacks {
-  onText?: (text: string) => void;
-  onThinking?: (text: string) => void;
-  onToolUse?: (block: { type: 'tool_use'; name: string; id?: string; input?: unknown }) => void;
-  onResult?: (msg: AgentQueryResultMessage) => void;
-  onUserToolResult?: (toolUseId: string, content: string) => void;
-}
 
 /** Parse a user message content field that may be a JSON envelope with images and/or metadata. */
 function parseUserContent(content: string): { text: string; images?: ChatImageRef[]; metadata?: Record<string, unknown> } {
@@ -724,16 +707,18 @@ export class ChatAgentService {
     let summaryCacheCreationInputTokens: number | undefined;
     let summaryTotalCostUsd: number | undefined;
     try {
-      await this.runSdkQuery(summaryPrompt, { maxTurns: 1 }, {
-        onText: (text) => { summaryText += text; },
-        onResult: (msg) => {
-          summaryCostInput = msg.usage?.input_tokens;
-          summaryCostOutput = msg.usage?.output_tokens;
-          summaryCacheReadInputTokens = msg.usage?.cache_read_input_tokens ?? undefined;
-          summaryCacheCreationInputTokens = msg.usage?.cache_creation_input_tokens ?? undefined;
-          summaryTotalCostUsd = msg.total_cost_usd ?? undefined;
-        },
-      });
+      const lib = await this.resolveLibForSession(sessionId);
+      for await (const event of lib.query!(summaryPrompt, { maxTokens: 1000 })) {
+        if (event.type === 'text') {
+          summaryText += event.text;
+        } else if (event.type === 'result') {
+          summaryCostInput = event.usage?.input_tokens;
+          summaryCostOutput = event.usage?.output_tokens;
+          summaryCacheReadInputTokens = event.usage?.cache_read_input_tokens ?? undefined;
+          summaryCacheCreationInputTokens = event.usage?.cache_creation_input_tokens ?? undefined;
+          summaryTotalCostUsd = event.total_cost_usd ?? undefined;
+        }
+      }
     } catch (err) {
       summaryText = `[Summary generation failed: ${err instanceof Error ? err.message : String(err)}]\n\nOriginal conversation had ${messages.length} messages.`;
     }
@@ -917,9 +902,10 @@ export class ChatAgentService {
 
       let generatedName = '';
       const start = Date.now();
-      await this.runSdkQuery(prompt, { model: 'claude-haiku-4-5-20251001', maxTurns: 1 }, {
-        onText: (text) => { generatedName += text; },
-      });
+      const lib = await this.resolveLibForSession(sessionId);
+      for await (const event of lib.query!(prompt)) {
+        if (event.type === 'text') generatedName += event.text;
+      }
       const elapsed = Date.now() - start;
 
       // Strip leading/trailing punctuation/whitespace; enforce 50-char max
@@ -933,7 +919,7 @@ export class ChatAgentService {
       const updatedSession = await this.chatSessionStore.updateSession(sessionId, { name: cleanedName });
       if (!updatedSession) return;
 
-      getAppLogger().info('ChatAgent', `Changed session name to "${cleanedName}" (runSdkQuery took ${elapsed}ms)`);
+      getAppLogger().info('ChatAgent', `Changed session name to "${cleanedName}" (query took ${elapsed}ms)`);
       onRenamed(updatedSession);
     } catch {
       // Silent failure — session retains its default name
@@ -1568,60 +1554,15 @@ export class ChatAgentService {
   }
 
   /**
-   * Loads the SDK `query()` function, iterates over the resulting async
-   * stream, and dispatches events to the provided callbacks.
-   * Used by `summarizeMessages` for one-shot summarization queries.
+   * Resolves the IAgentLib for a session, falling back to the default lib if the session's
+   * configured engine is unavailable or the session does not exist.
    */
-  private async runSdkQuery(
-    prompt: string | AsyncIterable<AgentQueryUserMessage>,
-    options: Record<string, unknown>,
-    callbacks: SdkQueryCallbacks,
-  ): Promise<void> {
-    const query = await this.loadQuery();
-
-    for await (const message of query({ prompt, options })) {
-      if (message.type === 'assistant') {
-        const assistantMsg = message as AgentQueryAssistantMessage;
-        if (assistantMsg.error) {
-          callbacks.onText?.(`\n[Agent error: ${assistantMsg.error}]\n`);
-        }
-        for (const block of assistantMsg.message.content) {
-          if (block.type === 'text') {
-            callbacks.onText?.((block as { text: string }).text);
-          } else if (block.type === 'thinking') {
-            callbacks.onThinking?.((block as { thinking: string }).thinking);
-          } else if (block.type === 'tool_use') {
-            callbacks.onToolUse?.(block as { type: 'tool_use'; name: string; id?: string; input?: unknown });
-          }
-        }
-      } else if (message.type === 'result') {
-        callbacks.onResult?.(message as AgentQueryResultMessage);
-      } else if (message.type === 'user') {
-        // SDK emits tool results as user messages with tool_result content blocks
-        const userMsg = message as AgentQueryUserMessage;
-        const content = userMsg.message?.content;
-        if (!content || typeof content === 'string') {
-          getAppLogger().warn('ChatAgentService', 'user message with unexpected structure', { preview: JSON.stringify(message).slice(0, 200) });
-        } else {
-          for (const block of content) {
-            const b = block as { type: string; tool_use_id?: string; content?: unknown };
-            if (b.type === 'tool_result' && b.tool_use_id) {
-              const resultContent = typeof b.content === 'string' ? b.content
-                : (Array.isArray(b.content) ? b.content.map((c: { text?: string }) => c.text || '').join('') : '(no output)');
-              callbacks.onUserToolResult?.(b.tool_use_id, resultContent);
-            }
-          }
-        }
-      }
-      // Other message types (status, system, etc.) are intentionally skipped
+  private async resolveLibForSession(sessionId: string): Promise<IAgentLib> {
+    const session = await this.chatSessionStore.getSession(sessionId);
+    let agentLibName = session?.agentLib || this.getDefaultAgentLib() || DEFAULT_AGENT_LIB;
+    if (!this.agentLibRegistry.listNames().includes(agentLibName)) {
+      agentLibName = DEFAULT_AGENT_LIB;
     }
-  }
-
-  private async loadQuery(): Promise<(opts: { prompt: string | AsyncIterable<AgentQueryUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<AgentQueryMessage>> {
-    const mod = await importESM('@anthropic-ai/claude-agent-sdk');
-    if (typeof mod.query !== 'function') {
-      throw new Error('Claude Agent SDK loaded but "query" export is missing. Ensure @anthropic-ai/claude-agent-sdk is installed and up to date.');
-    }
-    return mod.query as (opts: { prompt: string | AsyncIterable<AgentQueryUserMessage>; options?: Record<string, unknown> }) => AsyncIterable<AgentQueryMessage>;
+    return this.agentLibRegistry.getLib(agentLibName);
   }
 }

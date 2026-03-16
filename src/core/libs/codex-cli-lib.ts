@@ -1,5 +1,5 @@
 import * as fs from 'fs/promises';
-import type { AgentLibFeatures, AgentLibModelOption } from '../interfaces/agent-lib';
+import type { AgentLibFeatures, AgentLibModelOption, QueryEvent } from '../interfaces/agent-lib';
 import { getShellEnv } from '../services/shell-env';
 import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
 import { resolveSandboxMode, type SandboxMode } from './codex-lib-utils';
@@ -125,6 +125,62 @@ export class CodexCliLib extends BaseAgentLib {
   async isAvailable(): Promise<boolean> {
     const Codex = await this.tryLoadCodexConstructor();
     return !!Codex;
+  }
+
+  /**
+   * One-shot query for summarization or session naming.
+   * Starts a throw-away thread, runs the prompt, and yields QueryTextEvent / QueryResultEvent.
+   */
+  async *query(prompt: string, options?: { model?: string; maxTokens?: number }): AsyncIterable<QueryEvent> {
+    const Codex = await this.tryLoadCodexConstructor();
+    if (!Codex) {
+      throw new Error('Codex SDK not available. Install @openai/codex-sdk.');
+    }
+
+    const shellEnv = getShellEnv();
+    const env = Object.fromEntries(
+      Object.entries(shellEnv).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    );
+
+    const codex = new Codex({ env });
+    const thread = codex.startThread({
+      model: options?.model,
+      skipGitRepoCheck: true,
+    });
+
+    const { events } = await thread.runStreamed(prompt);
+
+    for await (const event of events) {
+      if (event.type === 'turn.completed') {
+        const usage = (event as CodexThreadTurnCompletedEvent).usage;
+        yield {
+          type: 'result',
+          usage: {
+            input_tokens: usage.input_tokens + usage.cached_input_tokens,
+            output_tokens: usage.output_tokens,
+            cache_read_input_tokens: usage.cached_input_tokens,
+          },
+        };
+        continue;
+      }
+
+      if (event.type === 'turn.failed') {
+        const fail = event as CodexThreadTurnFailedEvent;
+        throw new Error(fail.error?.message ?? 'Codex turn failed');
+      }
+
+      if (event.type === 'error') {
+        const errEvent = event as CodexThreadErrorEvent;
+        throw new Error(errEvent.message);
+      }
+
+      if (event.type === 'item.completed') {
+        const item = (event as CodexThreadItemEvent).item;
+        if (item.type === 'agent_message') {
+          yield { type: 'text', text: item.text };
+        }
+      }
+    }
   }
 
   protected async runEngine(
