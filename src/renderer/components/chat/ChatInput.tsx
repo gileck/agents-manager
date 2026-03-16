@@ -71,7 +71,10 @@ interface ChatInputProps {
   prefill?: { text: string; seq: number } | null;
   lastUserMessage?: string;
   onEditLastMessage?: () => void;
+  sessionId?: string | null;
 }
+
+const DRAFT_STORAGE_KEY = (sessionId: string) => `chat.draft.${sessionId}`;
 
 export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
   onSend,
@@ -91,6 +94,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   prefill,
   lastUserMessage,
   onEditLastMessage,
+  sessionId,
 }: ChatInputProps, forwardedRef) {
   const [value, setValue] = useState('');
   const [images, setImages] = useState<ChatImage[]>([]);
@@ -104,6 +108,26 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
+
+  // Restore draft when session changes
+  useEffect(() => {
+    if (!sessionId) {
+      setValue('');
+      return;
+    }
+    const draft = localStorage.getItem(DRAFT_STORAGE_KEY(sessionId));
+    setValue(draft ?? '');
+  }, [sessionId]);
+
+  // Persist draft whenever value changes
+  useEffect(() => {
+    if (!sessionId) return;
+    if (value) {
+      localStorage.setItem(DRAFT_STORAGE_KEY(sessionId), value);
+    } else {
+      localStorage.removeItem(DRAFT_STORAGE_KEY(sessionId));
+    }
+  }, [sessionId, value]);
 
   useEffect(() => {
     if (prefill) {
