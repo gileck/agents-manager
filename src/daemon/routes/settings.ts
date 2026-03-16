@@ -12,6 +12,9 @@ export function readCurrentSettings(services: AppServices): AppSettings {
     defaultPipelineId: settingsStore.get('default_pipeline_id', '') || null,
     themeConfig: settingsStore.get('theme_config', '') || null,
     chatDefaultAgentLib: settingsStore.get('chat_default_agent_lib', '') || null,
+    chatDefaultModel: settingsStore.get('chat_default_model', '') || null,
+    chatDefaultPermissionMode: (settingsStore.get('chat_default_permission_mode', '') || null) as AppSettings['chatDefaultPermissionMode'],
+    chatThreadTheme: settingsStore.get('chat_thread_theme', '') || null,
   };
 }
 
@@ -47,6 +50,15 @@ export function settingsRoutes(services: AppServices): Router {
       }
       if (updates.chatDefaultAgentLib !== undefined) {
         settingsStore.set('chat_default_agent_lib', updates.chatDefaultAgentLib ?? '');
+      }
+      if (updates.chatDefaultModel !== undefined) {
+        settingsStore.set('chat_default_model', updates.chatDefaultModel ?? '');
+      }
+      if (updates.chatDefaultPermissionMode !== undefined) {
+        settingsStore.set('chat_default_permission_mode', updates.chatDefaultPermissionMode ?? '');
+      }
+      if (updates.chatThreadTheme !== undefined) {
+        settingsStore.set('chat_thread_theme', updates.chatThreadTheme ?? '');
       }
 
       const settings = readCurrentSettings(services);
