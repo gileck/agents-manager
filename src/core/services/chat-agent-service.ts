@@ -1162,7 +1162,7 @@ export class ChatAgentService {
           if (chatSession?.projectId) {
             const daemonUrl = `http://127.0.0.1:${process.env.AM_DAEMON_PORT ?? 3847}`;
             const taskTools = await createTaskMcpServer(daemonUrl, { projectId: chatSession.projectId, sessionId, subscriptionRegistry: this.subscriptionRegistry });
-            mcpToolsDefs = { 'task-manager': taskTools };
+            mcpToolsDefs = { 'taskManager': taskTools };
           }
         } catch (mcpErr) {
           getAppLogger().warn('ChatAgentService', 'Failed to create task MCP server, continuing without it', { error: mcpErr instanceof Error ? mcpErr.message : String(mcpErr) });
