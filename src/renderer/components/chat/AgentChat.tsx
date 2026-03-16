@@ -28,6 +28,8 @@ interface AgentChatProps {
   onPermissionModeChange?: (mode: PermissionMode) => void;
   inputRef?: React.Ref<HTMLTextAreaElement>;
   sessionId?: string | null;
+  initialDraft?: string | null;
+  onDraftChange?: (draft: string) => void;
   onPermissionResponse?: (requestId: string, allowed: boolean) => void;
   rawEvents?: RawEvent[];
   showRawView?: boolean;
@@ -54,6 +56,8 @@ export function AgentChat({
   onPermissionModeChange,
   inputRef,
   sessionId,
+  initialDraft,
+  onDraftChange,
   onPermissionResponse,
   rawEvents = [],
   showRawView = false,
@@ -105,6 +109,7 @@ export function AgentChat({
         )}
         <TaskStatusBar sessionId={sessionId ?? null} />
         <ChatInput
+          key={sessionId ?? ''}
           ref={inputRef}
           onSend={onSend}
           onStop={onStop}
@@ -123,7 +128,8 @@ export function AgentChat({
           prefill={prefill}
           lastUserMessage={lastUserMessage}
           onEditLastMessage={handleEditLastMessage}
-          sessionId={sessionId}
+          initialDraft={initialDraft}
+          onDraftChange={onDraftChange}
         />
       </div>
       {showSidebar && (
