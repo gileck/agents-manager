@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import type { PermissionMode } from '../../../shared/types';
+import { useNavigate } from 'react-router-dom';
+import type { PermissionMode, ChatThreadTheme } from '../../../shared/types';
 import {
   Trash2,
   FileText,
@@ -9,6 +10,7 @@ import {
   MessageSquare,
   Zap,
   ZapOff,
+  Settings,
 } from 'lucide-react';
 import { InlineError } from '../InlineError';
 import { reportError } from '../../lib/error-handler';
@@ -28,6 +30,7 @@ export interface ChatPanelProps {
 }
 
 export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
+  const navigate = useNavigate();
   const localSessions = useChatSessions(sessionsOverride ? null : scope);
   const {
     sessions,
@@ -74,6 +77,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   }, [currentSessionId]);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
+  const [threadTheme, setThreadTheme] = useState<ChatThreadTheme | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -93,6 +97,17 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     });
     window.api.agentLibs.listModels().then(setAgentLibModels).catch((err) => {
       reportError(err, 'ChatPanel: load agent models');
+    });
+    window.api.settings.get().then((s) => {
+      if (s.chatThreadTheme) {
+        try {
+          setThreadTheme(JSON.parse(s.chatThreadTheme) as ChatThreadTheme);
+        } catch {
+          // ignore parse errors
+        }
+      }
+    }).catch((err) => {
+      reportError(err, 'ChatPanel: load thread theme');
     });
   }, []);
 
@@ -221,6 +236,14 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
             {showSidebar ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
           </button>
 
+          <button
+            onClick={() => navigate('/settings/threads')}
+            className="p-2 rounded-full border border-border/70 bg-card/65 text-muted-foreground hover:text-foreground hover:bg-accent/65 transition-colors"
+            title="Thread settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+
           <div className="relative">
             <button
               onClick={() => setShowActions(!showActions)}
@@ -269,7 +292,13 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
       )}
 
       <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-w-0">
+        <div
+          className="flex-1 flex flex-col min-w-0"
+          style={{
+            ...(threadTheme?.fontSize ? { fontSize: `${threadTheme.fontSize}px` } : {}),
+            ...(threadTheme?.backgroundColor ? { backgroundColor: threadTheme.backgroundColor } : {}),
+          }}
+        >
           {loading && messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="flex flex-col items-center gap-2">

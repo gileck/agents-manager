@@ -216,6 +216,8 @@ export class ChatAgentService {
     private agentLibRegistry: AgentLibRegistry,
     private agentRunStore: IAgentRunStore,
     private getDefaultAgentLib: () => string = () => DEFAULT_AGENT_LIB,
+    private getDefaultModel: () => string | null = () => null,
+    private getDefaultPermissionMode: () => PermissionMode | null = () => null,
     imageStorageDir?: string,
     private subscriptionRegistry?: AgentSubscriptionRegistry,
   ) {
@@ -279,7 +281,7 @@ export class ChatAgentService {
     }
 
     // Apply project-level default permission mode to new sessions
-    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? undefined;
+    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? this.getDefaultPermissionMode() ?? undefined;
 
     return this.chatSessionStore.createSession({
       scopeType: scopeType as 'project' | 'task',
@@ -303,7 +305,7 @@ export class ChatAgentService {
     const task = await this.taskStore.getTask(taskId);
     if (!task) throw Object.assign(new Error('Task not found'), { status: 404 });
     const project = await this.projectStore.getProject(task.projectId);
-    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? undefined;
+    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? this.getDefaultPermissionMode() ?? undefined;
     const session = await this.chatSessionStore.createSession({
       scopeType: 'task',
       scopeId: taskId,
@@ -327,7 +329,7 @@ export class ChatAgentService {
     if (!task) throw Object.assign(new Error('Task not found'), { status: 404 });
 
     const project = await this.projectStore.getProject(task.projectId);
-    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? undefined;
+    const defaultPermissionMode = (project?.config?.defaultPermissionMode as PermissionMode | undefined) ?? this.getDefaultPermissionMode() ?? undefined;
 
     const roleName = agentRole.charAt(0).toUpperCase() + agentRole.slice(1);
     return this.chatSessionStore.createSession({
@@ -510,8 +512,8 @@ export class ChatAgentService {
       agentLibName = DEFAULT_AGENT_LIB;
     }
 
-    // Resolve model: session > engine default
-    const sessionModel = session.model || undefined;
+    // Resolve model: session > global default > engine default
+    const sessionModel = session.model || this.getDefaultModel() || undefined;
 
     // Track running agent
     this.runningAgents.set(sessionId, {

@@ -324,7 +324,24 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
       return 'claude-code';
     }
   };
-  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, agentRunStore, getDefaultAgentLib, config?.imageStorageDir, subscriptionRegistry);
+  const getDefaultModel = (): string | null => {
+    try {
+      return settingsStore.get('chat_default_model', '') || null;
+    } catch (err) {
+      getAppLogger().logError('setup', 'Failed to read chat_default_model setting', err);
+      return null;
+    }
+  };
+  const getDefaultPermissionMode = (): import('../../shared/types').PermissionMode | null => {
+    try {
+      const value = settingsStore.get('chat_default_permission_mode', '');
+      return (value as import('../../shared/types').PermissionMode) || null;
+    } catch (err) {
+      getAppLogger().logError('setup', 'Failed to read chat_default_permission_mode setting', err);
+      return null;
+    }
+  };
+  const chatAgentService = new ChatAgentService(chatMessageStore, chatSessionStore, projectStore, taskStore, pipelineStore, agentLibRegistry, agentRunStore, getDefaultAgentLib, getDefaultModel, getDefaultPermissionMode, config?.imageStorageDir, subscriptionRegistry);
 
   // Wire cross-service injected message handler (avoids circular deps)
   agentService.setInjectedMessageHandler(

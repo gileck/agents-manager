@@ -49,6 +49,11 @@ export interface ThemeConfig {
 }
 
 // Settings types
+export interface ChatThreadTheme {
+  fontSize: number; // px, e.g. 14
+  backgroundColor: string; // CSS color string, e.g. '#ffffff'
+}
+
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   notificationsEnabled: boolean;
@@ -56,6 +61,9 @@ export interface AppSettings {
   defaultPipelineId: string | null;
   themeConfig: string | null;
   chatDefaultAgentLib: string | null;
+  chatDefaultModel: string | null;
+  chatDefaultPermissionMode: PermissionMode | null;
+  chatThreadTheme: string | null; // JSON-serialized ChatThreadTheme
 }
 
 // Log types (kept for template infrastructure)

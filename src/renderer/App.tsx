@@ -28,6 +28,7 @@ import { KanbanBoardPage } from './pages/KanbanBoardPage';
 import { DebugLogsPage } from './pages/DebugLogsPage';
 import { AgentRunsListPage } from './pages/AgentRunsListPage';
 import { KeyboardShortcutsPage } from './pages/KeyboardShortcutsPage';
+import { ThreadsSettingsPage } from './pages/ThreadsSettingsPage';
 import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
 import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
 import { AutomatedAgentDetailPage } from './pages/AutomatedAgentDetailPage';
@@ -184,6 +185,7 @@ function AppRoutes() {
           <Route path="agents" element={<AgentDefinitionsPage />} />
           <Route path="keyboard" element={<KeyboardShortcutsPage />} />
           <Route path="project" element={<ProjectConfigPage />} />
+          <Route path="threads" element={<ThreadsSettingsPage />} />
         </Route>
       </Route>
     </Routes>
