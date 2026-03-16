@@ -376,6 +376,10 @@ export class WorkflowService implements IWorkflowService {
     return prompt;
   }
 
+  async listPendingPrompts(taskId: string): Promise<PendingPrompt[]> {
+    return this.pendingPromptStore.getPendingForTask(taskId);
+  }
+
   async getDashboardStats(now?: number): Promise<DashboardStats> {
     const currentTime = now ?? Date.now();
 

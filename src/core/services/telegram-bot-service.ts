@@ -5,7 +5,7 @@ import type { IProjectStore } from '../interfaces/project-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IPipelineEngine } from '../interfaces/pipeline-engine';
 import type { IWorkflowService } from '../interfaces/workflow-service';
-import type { TaskUpdateInput, TelegramBotLogEntry } from '../../shared/types';
+import type { TaskUpdateInput, TelegramBotLogEntry, PendingPrompt } from '../../shared/types';
 import { statusEmoji } from './telegram-emoji';
 import { getAppLogger } from './app-logger';
 
@@ -19,10 +19,21 @@ const PENDING_ACTION_TTL_MS = 5 * 60 * 1000;
 /** Interval for cleaning up expired pending actions (60 seconds) */
 const PENDING_ACTION_CLEANUP_INTERVAL_MS = 60 * 1000;
 
+interface TelegramQuestion {
+  id: string;
+  question: string;
+  options?: Array<{ id: string; label: string }>;
+}
+
 interface PendingAction {
-  type: 'create_title' | 'edit_field';
+  type: 'create_title' | 'edit_field' | 'answer_prompt';
   taskId?: string;
   field?: string;
+  // For answer_prompt:
+  promptId?: string;
+  questionIndex?: number;
+  collectedAnswers?: string[];
+  questions?: TelegramQuestion[];
   createdAt: number;
 }
 
@@ -186,12 +197,17 @@ export class TelegramBotService implements ITelegramBotService {
         return;
       }
 
-      this.pendingActions.delete(msg.chat.id);
+      if (pending.type === 'answer_prompt' && pending.promptId && pending.questions && pending.taskId !== undefined) {
+        // Don't delete pending action here — advanceOrSubmitPrompt will manage it
+        this.handleAnswerPromptText(msg.chat.id, pending, text).catch(this.logError);
+      } else {
+        this.pendingActions.delete(msg.chat.id);
 
-      if (pending.type === 'create_title') {
-        this.handleCreateTask(msg.chat.id, text).catch(this.logError);
-      } else if (pending.type === 'edit_field' && pending.taskId && pending.field) {
-        this.handleEditFieldValue(msg.chat.id, pending.taskId, pending.field, text).catch(this.logError);
+        if (pending.type === 'create_title') {
+          this.handleCreateTask(msg.chat.id, text).catch(this.logError);
+        } else if (pending.type === 'edit_field' && pending.taskId && pending.field) {
+          this.handleEditFieldValue(msg.chat.id, pending.taskId, pending.field, text).catch(this.logError);
+        }
       }
     });
 
@@ -241,6 +257,14 @@ export class TelegramBotService implements ITelegramBotService {
       });
     } else if (data.startsWith('cd|')) {
       await this.handleDelete(chatId, data.slice(3));
+    } else if (data.startsWith('qi|')) {
+      await this.handleQueryInfo(chatId, data.slice(3));
+    } else if (data.startsWith('qo|')) {
+      // Format: qo|{taskId}|{qIdx}|{optIdx}
+      const parts = data.split('|');
+      if (parts.length >= 4) {
+        await this.handleQueryOptionSelected(chatId, parts[1], parseInt(parts[2], 10), parseInt(parts[3], 10));
+      }
     }
   }
 
@@ -398,6 +422,145 @@ export class TelegramBotService implements ITelegramBotService {
     }
   }
 
+  private async handleQueryInfo(chatId: number, taskId: string): Promise<void> {
+    const prompts = await this.deps.workflowService.listPendingPrompts(taskId);
+    if (prompts.length === 0) {
+      await this.send(chatId, 'No pending questions found for this task\\.');
+      return;
+    }
+    await this.startPromptAnswering(chatId, prompts[0]);
+  }
+
+  private async startPromptAnswering(chatId: number, prompt: PendingPrompt): Promise<void> {
+    const questions = extractTelegramQuestions(prompt.payload);
+    if (questions.length === 0) {
+      await this.send(chatId, 'No structured questions found\\. Please answer in the app\\.', {
+        parse_mode: 'MarkdownV2',
+      });
+      return;
+    }
+    await this.sendPromptQuestion(chatId, prompt.taskId, prompt.id, questions, 0, []);
+  }
+
+  private async sendPromptQuestion(
+    chatId: number,
+    taskId: string,
+    promptId: string,
+    questions: TelegramQuestion[],
+    qIdx: number,
+    collectedAnswers: string[],
+  ): Promise<void> {
+    const question = questions[qIdx];
+    if (!question) return;
+
+    const progressPrefix = questions.length > 1 ? `(${qIdx + 1}/${questions.length}) ` : '';
+
+    // Always store state so we can resume from either a callback or free-text reply
+    this.pendingActions.set(chatId, {
+      type: 'answer_prompt',
+      taskId,
+      promptId,
+      questionIndex: qIdx,
+      collectedAnswers,
+      questions,
+      createdAt: Date.now(),
+    });
+
+    if (question.options && question.options.length > 0) {
+      const buttons = question.options.map((opt, optIdx) => ([{
+        text: opt.label,
+        callback_data: `qo|${taskId}|${qIdx}|${optIdx}`,
+      }]));
+      await this.send(chatId, `${progressPrefix}${question.question}`, {
+        reply_markup: { inline_keyboard: buttons },
+      });
+    } else {
+      await this.send(chatId, `${progressPrefix}${question.question}\n\nType your answer:`);
+    }
+  }
+
+  private async handleQueryOptionSelected(
+    chatId: number,
+    taskId: string,
+    qIdx: number,
+    optIdx: number,
+  ): Promise<void> {
+    const pending = this.pendingActions.get(chatId);
+    if (!pending || pending.type !== 'answer_prompt' || !pending.promptId || !pending.questions) {
+      await this.send(chatId, 'Session expired\\. Use the Answer button to start again\\.', {
+        parse_mode: 'MarkdownV2',
+      });
+      return;
+    }
+
+    if (Date.now() - pending.createdAt > PENDING_ACTION_TTL_MS) {
+      this.pendingActions.delete(chatId);
+      await this.send(chatId, 'Session expired\\. Use the Answer button to start again\\.', {
+        parse_mode: 'MarkdownV2',
+      });
+      return;
+    }
+
+    const question = pending.questions[qIdx];
+    if (!question || !question.options) return;
+    const option = question.options[optIdx];
+    if (!option) return;
+
+    const updatedAnswers = [...(pending.collectedAnswers ?? [])];
+    updatedAnswers[qIdx] = option.id;
+
+    this.pendingActions.delete(chatId);
+    await this.advanceOrSubmitPrompt(chatId, taskId, pending.promptId, pending.questions, qIdx + 1, updatedAnswers);
+  }
+
+  private async handleAnswerPromptText(chatId: number, pending: PendingAction, text: string): Promise<void> {
+    if (!pending.promptId || !pending.questions || pending.taskId === undefined) return;
+
+    const qIdx = pending.questionIndex ?? 0;
+    const updatedAnswers = [...(pending.collectedAnswers ?? [])];
+    updatedAnswers[qIdx] = text;
+
+    this.pendingActions.delete(chatId);
+    await this.advanceOrSubmitPrompt(chatId, pending.taskId, pending.promptId, pending.questions, qIdx + 1, updatedAnswers);
+  }
+
+  private async advanceOrSubmitPrompt(
+    chatId: number,
+    taskId: string,
+    promptId: string,
+    questions: TelegramQuestion[],
+    nextQIdx: number,
+    collectedAnswers: string[],
+  ): Promise<void> {
+    if (nextQIdx < questions.length) {
+      await this.sendPromptQuestion(chatId, taskId, promptId, questions, nextQIdx, collectedAnswers);
+    } else {
+      // All questions answered — build response and submit
+      const responses = questions.map((q, idx) => ({
+        questionId: q.id,
+        ...(q.options && q.options.length > 0
+          ? { selectedOptionId: collectedAnswers[idx] }
+          : { answer: collectedAnswers[idx] }),
+      }));
+
+      try {
+        const result = await this.deps.workflowService.respondToPrompt(promptId, { answers: responses });
+        if (result) {
+          await this.send(chatId, '\u{2705} Answers submitted \u{2014} agent is resuming\u{2026}');
+        } else {
+          await this.send(chatId, 'Failed to submit answers \\(prompt may have expired\\)\\.', {
+            parse_mode: 'MarkdownV2',
+          });
+        }
+      } catch (err) {
+        await this.send(chatId, 'Error submitting answers\\. Please try again\\.', {
+          parse_mode: 'MarkdownV2',
+        });
+        this.logError(err);
+      }
+    }
+  }
+
   private log(direction: 'in' | 'out', message: string): void {
     if (this.onLog) {
       this.onLog({ timestamp: Date.now(), direction, message });
@@ -417,4 +580,21 @@ export class TelegramBotService implements ITelegramBotService {
 
 function esc(text: string): string {
   return text.replace(/([_*[\]()~`>#+\-=|{}.!])/g, '\\$1');
+}
+
+function extractTelegramQuestions(payload: Record<string, unknown>): TelegramQuestion[] {
+  if (!Array.isArray(payload.questions)) return [];
+  return payload.questions
+    .filter((q): q is Record<string, unknown> => q != null && typeof q === 'object')
+    .filter((q) => typeof q.id === 'string' && typeof q.question === 'string')
+    .map((q) => ({
+      id: q.id as string,
+      question: q.question as string,
+      options: Array.isArray(q.options)
+        ? (q.options as unknown[])
+            .filter((o): o is Record<string, unknown> => o != null && typeof o === 'object')
+            .filter((o) => typeof o.id === 'string' && typeof o.label === 'string')
+            .map((o) => ({ id: o.id as string, label: o.label as string }))
+        : undefined,
+    }));
 }

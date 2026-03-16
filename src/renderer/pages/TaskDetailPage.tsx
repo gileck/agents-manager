@@ -37,6 +37,7 @@ import { ChatPanel } from '../components/chat/ChatPanel';
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
 import type { QuestionResponse } from '../components/prompts/QuestionForm';
+import { AnswerQuestionsDialog } from '../components/prompts/AnswerQuestionsDialog';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useTaskPolling } from '../hooks/useTaskPolling';
 import { BugReportDialog } from '../components/bugs/BugReportDialog';
@@ -156,6 +157,10 @@ export function TaskDetailPage() {
   const [responding, setResponding] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
 
+  // Answer questions dialog
+  const [answerDialogOpen, setAnswerDialogOpen] = useState(false);
+  const autoOpenedRef = useRef(false);
+
   // Hook failure alerts from transitions
   const [hookFailureAlerts, setHookFailureAlerts] = useState<HookFailure[]>([]);
 
@@ -173,6 +178,15 @@ export function TaskDetailPage() {
     const timer = setTimeout(() => setTransitionError(null), 15000);
     return () => clearTimeout(timer);
   }, [transitionError]);
+
+  // Auto-open answer dialog once per mount when task is needs_info and has pending prompts
+  useEffect(() => {
+    if (autoOpenedRef.current) return;
+    if (task?.status === 'needs_info' && pendingPrompts && pendingPrompts.some(p => p.status === 'pending')) {
+      autoOpenedRef.current = true;
+      setAnswerDialogOpen(true);
+    }
+  }, [task?.status, pendingPrompts]);
 
   const openEdit = () => {
     if (task) {
@@ -533,6 +547,18 @@ export function TaskDetailPage() {
                 />
               </div>
             )}
+            {task.status === 'needs_info' && pendingPrompts && pendingPrompts.some(p => p.status === 'pending') && (
+              <button
+                onClick={() => setAnswerDialogOpen(true)}
+                style={{
+                  background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.4)',
+                  borderRadius: 6, padding: '2px 10px', cursor: 'pointer',
+                  color: '#d97706', fontSize: 12, fontWeight: 600,
+                }}
+              >
+                ⚠ Needs Input
+              </button>
+            )}
           </div>
         </div>
 
@@ -742,6 +768,19 @@ export function TaskDetailPage() {
         </TabsContent>
         </div>
       </Tabs>
+
+      {/* Answer Questions Dialog */}
+      {pendingPrompts && (
+        <AnswerQuestionsDialog
+          open={answerDialogOpen}
+          onOpenChange={setAnswerDialogOpen}
+          task={task}
+          pendingPrompts={pendingPrompts}
+          onSubmit={handleStructuredPromptRespond}
+          responding={responding}
+          error={promptError}
+        />
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
