@@ -328,6 +328,30 @@ export interface AgentLibModelOption {
   label: string;
 }
 
+// ============================================
+// Query Event Types — for one-shot summarization/naming queries
+// ============================================
+
+/** A text chunk emitted during a one-shot query. */
+export interface QueryTextEvent {
+  type: 'text';
+  text: string;
+}
+
+/** Final result event emitted at the end of a one-shot query. */
+export interface QueryResultEvent {
+  type: 'result';
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  total_cost_usd?: number;
+}
+
+export type QueryEvent = QueryTextEvent | QueryResultEvent;
+
 export interface IAgentLib {
   readonly name: string;
   supportedFeatures(): AgentLibFeatures;
@@ -337,4 +361,6 @@ export interface IAgentLib {
   stop(runId: string): Promise<void>;
   isAvailable(): Promise<boolean>;
   getTelemetry(runId: string): AgentLibTelemetry | null;
+  /** One-shot query for summarization or naming. Optional — engines that don't support it throw. */
+  query?(prompt: string, options?: { model?: string; maxTokens?: number }): AsyncIterable<QueryEvent>;
 }

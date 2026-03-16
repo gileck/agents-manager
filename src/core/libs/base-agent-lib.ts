@@ -8,6 +8,7 @@ import type {
   AgentLibModelOption,
   AgentLibHooks,
   ModelTokenUsage,
+  QueryEvent,
 } from '../interfaces/agent-lib';
 import type { ISessionHistoryProvider } from '../interfaces/session-history-provider';
 import { SessionHistoryFormatter } from '../services/session-history-formatter';
@@ -330,6 +331,11 @@ export abstract class BaseAgentLib implements IAgentLib {
       return;
     }
     this.doStop(runId, state);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async *query(_prompt: string, _options?: { model?: string; maxTokens?: number }): AsyncIterable<QueryEvent> {
+    throw new Error(`query() is not implemented for engine: ${this.name}`);
   }
 
   // ============================================
