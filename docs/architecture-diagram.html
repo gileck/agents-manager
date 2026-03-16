@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents Manager — Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1117; color: #e1e4e8; padding: 40px; min-height: 100vh; }
+  h1 { text-align: center; font-size: 28px; font-weight: 600; margin-bottom: 8px; color: #f0f3f6; }
+  .subtitle { text-align: center; font-size: 14px; color: #8b949e; margin-bottom: 48px; }
+
+  /* Layout */
+  .diagram { max-width: 1200px; margin: 0 auto; position: relative; }
+  .tier { margin-bottom: 24px; position: relative; }
+  .tier-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #8b949e; margin-bottom: 12px; padding-left: 4px;
+  }
+  .tier-content { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* Boxes */
+  .box {
+    border-radius: 10px; padding: 16px 20px; position: relative;
+    border: 1px solid; min-width: 140px; transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .box:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  .box-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .box-detail { font-size: 11px; line-height: 1.5; opacity: 0.75; }
+  .box-file { font-size: 10px; font-family: 'SF Mono', Consolas, monospace; opacity: 0.5; margin-top: 8px; }
+
+  /* Color themes */
+  .client { background: #1a1f35; border-color: #3b82f6; }
+  .client .box-title { color: #60a5fa; }
+
+  .transport { background: #1a2332; border-color: #2563eb; }
+  .transport .box-title { color: #93c5fd; }
+
+  .daemon-shell { background: #111827; border: 2px solid #374151; border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+  .daemon-header { font-size: 18px; font-weight: 600; color: #f9fafb; margin-bottom: 4px; }
+  .daemon-sub { font-size: 12px; color: #6b7280; margin-bottom: 20px; }
+
+  .orchestration { background: #1a2e1a; border-color: #22c55e; }
+  .orchestration .box-title { color: #4ade80; }
+
+  .engine { background: #2a1f1a; border-color: #f59e0b; }
+  .engine .box-title { color: #fbbf24; }
+
+  .agent { background: #2a1a2e; border-color: #a855f7; }
+  .agent .box-title { color: #c084fc; }
+
+  .data { background: #1a2a2a; border-color: #14b8a6; }
+  .data .box-title { color: #2dd4bf; }
+
+  .integration { background: #2a1a1a; border-color: #ef4444; }
+  .integration .box-title { color: #f87171; }
+
+  .infra { background: #1e1e2e; border-color: #6366f1; }
+  .infra .box-title { color: #818cf8; }
+
+  /* Connection arrows */
+  .arrow-section { display: flex; justify-content: center; padding: 8px 0; position: relative; }
+  .arrow-down {
+    display: flex; flex-direction: column; align-items: center; gap: 0;
+  }
+  .arrow-line { width: 2px; height: 20px; background: #374151; }
+  .arrow-head { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid #374151; }
+  .arrow-label { font-size: 10px; color: #6b7280; margin: 2px 0; letter-spacing: 0.5px; }
+
+  /* Multi-arrow row */
+  .arrows-row { display: flex; justify-content: center; gap: 120px; padding: 8px 0; }
+
+  /* Flex helpers */
+  .flex-1 { flex: 1; }
+  .flex-2 { flex: 2; }
+  .flex-3 { flex: 3; }
+  .w-full { width: 100%; }
+  .gap-sm { gap: 8px; }
+
+  /* Grid inside daemon */
+  .daemon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .daemon-col { display: flex; flex-direction: column; gap: 12px; }
+  .span-2 { grid-column: span 2; }
+
+  /* Legend */
+  .legend { display: flex; gap: 24px; justify-content: center; margin-top: 40px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #8b949e; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; border: 1px solid; }
+
+  /* Tooltip */
+  .box[data-tooltip]:hover::after {
+    content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%); background: #1f2937; color: #e5e7eb; padding: 8px 12px;
+    border-radius: 6px; font-size: 11px; white-space: nowrap; z-index: 10;
+    border: 1px solid #374151; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  /* Inner section divider */
+  .section-divider { border-top: 1px solid #1f2937; margin: 16px 0; }
+
+  /* Badge */
+  .badge {
+    display: inline-block; font-size: 9px; font-weight: 600; padding: 2px 6px;
+    border-radius: 4px; margin-left: 6px; vertical-align: middle;
+  }
+  .badge-sole { background: #1a2e1a; color: #4ade80; border: 1px solid #22c55e; }
+  .badge-thin { background: #1a1f35; color: #60a5fa; border: 1px solid #3b82f6; }
+</style>
+</head>
+<body>
+
+<h1>Agents Manager Architecture</h1>
+<p class="subtitle">Daemon-centric monolith with thin clients &mdash; all business logic in one process</p>
+
+<div class="diagram">
+
+  <!-- TIER: Clients -->
+  <div class="tier">
+    <div class="tier-label">Client Layer <span class="badge badge-thin">thin shells, zero business logic</span></div>
+    <div class="tier-content">
+      <div class="box client flex-1" data-tooltip="Electron main + React renderer">
+        <div class="box-title">Electron App</div>
+        <div class="box-detail">
+          Desktop shell<br>
+          IPC &rarr; API Client &rarr; daemon<br>
+          WS events &rarr; renderer
+        </div>
+        <div class="box-file">src/main/ &bull; src/renderer/ &bull; src/preload/</div>
+      </div>
+      <div class="box client flex-1" data-tooltip="Commander.js CLI tool">
+        <div class="box-title">CLI</div>
+        <div class="box-detail">
+          <code>npx agents-manager</code><br>
+          Commander &rarr; API Client &rarr; daemon
+        </div>
+        <div class="box-file">src/cli/</div>
+      </div>
+      <div class="box client flex-1" data-tooltip="Same React app, served by daemon">
+        <div class="box-title">Web UI</div>
+        <div class="box-detail">
+          Browser-based<br>
+          HTTP + WebSocket &rarr; daemon<br>
+          Shares renderer with Electron
+        </div>
+        <div class="box-file">src/web/</div>
+      </div>
+      <div class="box client flex-1" data-tooltip="Runs inside daemon process">
+        <div class="box-title">Telegram Bot</div>
+        <div class="box-detail">
+          In-process bot<br>
+          Direct service calls<br>
+          /tasks /create /help
+        </div>
+        <div class="box-file">src/core/services/telegram-bot-*</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Arrow: Clients -> Transport -->
+  <div class="arrow-section">
+    <div class="arrow-down">
+      <div class="arrow-line"></div>
+      <div class="arrow-label">HTTP REST + WebSocket &bull; port 3847</div>
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+
+  <!-- Transport -->
+  <div class="tier">
+    <div class="tier-content" style="justify-content: center;">
+      <div class="box transport" style="min-width: 340px; text-align: center;">
+        <div class="box-title">Shared API Client</div>
+        <div class="box-detail">Typed HTTP client + WebSocket client &mdash; used by Electron, CLI, and Web</div>
+        <div class="box-file">src/client/api-client.ts &bull; src/client/ws-client.ts</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-section">
+    <div class="arrow-down">
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+  </div>
+
+  <!-- DAEMON BOUNDARY -->
+  <div class="daemon-shell">
+    <div class="daemon-header">Daemon Process <span class="badge badge-sole">sole DB owner</span></div>
+    <div class="daemon-sub">src/daemon/ &mdash; Express server, 23 REST routes, WebSocket push events, background supervisors</div>
+
+    <!-- Orchestration Layer -->
+    <div class="tier">
+      <div class="tier-label">Orchestration &mdash; all business logic converges here</div>
+      <div class="tier-content">
+        <div class="box orchestration flex-2">
+          <div class="box-title">WorkflowService</div>
+          <div class="box-detail">
+            Task CRUD &bull; pipeline transitions<br>
+            Agent start/stop/resume<br>
+            Prompt response &bull; PR merge<br>
+            Worktree cleanup &bull; activity logging
+          </div>
+          <div class="box-file">src/core/services/workflow-service.ts (616 lines)</div>
+        </div>
+        <div class="box orchestration flex-1">
+          <div class="box-title">PipelineInspectionService</div>
+          <div class="box-detail">
+            Diagnostics &bull; hook retry<br>
+            Phase advance &bull; stuck detection
+          </div>
+          <div class="box-file">src/core/services/pipeline-inspection-service.ts</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Pipeline engine -->
+    <div class="tier">
+      <div class="tier-label">State Machine</div>
+      <div class="tier-content">
+        <div class="box engine w-full" style="max-width: 420px;">
+          <div class="box-title">PipelineEngine</div>
+          <div class="box-detail">
+            State machine driving task transitions<br>
+            Guards (sync, blocking) &bull; Hooks (async, 3 policies)<br>
+            TOCTOU-safe &bull; data-driven from seeded pipelines
+          </div>
+          <div class="box-file">src/core/services/pipeline-engine.ts</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Two agent execution paths -->
+    <div class="tier">
+      <div class="tier-label">Two Agent Execution Paths <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; completely separate, share only AgentLibRegistry</span></div>
+      <div class="tier-content">
+        <div class="box engine flex-1" style="border-color: #f59e0b;">
+          <div class="box-title" style="display: flex; align-items: center; gap: 6px;">AgentService <span class="badge" style="background:#2a1a2e; color:#c084fc; border:1px solid #a855f7;">pipeline agents</span></div>
+          <div class="box-detail">
+            Task-scoped &bull; worktree-isolated &bull; outcome-driven<br>
+            Triggered by <code>start_agent</code> hook on transitions<br>
+            Also: daemon restart recovery, supervisor stale-run<br>
+            recovery, Telegram restart, workflow review<br>
+            <span style="opacity:0.5;">(all execute the same pipeline agent types)</span>
+          </div>
+          <div class="box-file">src/core/services/agent-service.ts (1280 lines)</div>
+        </div>
+
+        <!-- Shared middle column -->
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:130px; gap:10px; padding: 0 4px;">
+          <div style="background:#1e1e2e; border:1px solid #6366f1; border-radius:8px; padding:10px 14px; text-align:center;">
+            <div style="color:#818cf8; font-size:12px; font-weight:600;">AgentLibRegistry</div>
+            <div style="color:#8b949e; font-size:10px; margin-top:4px;">Shared engine resolver<br>ClaudeCode, Codex,<br>Cursor</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="color:#374151; font-size:18px;">&lrarr;</div>
+            <div style="font-size:9px; color:#6b7280; max-width:120px; line-height:1.4;">Pipeline agent completion can inject notification into chat session</div>
+          </div>
+        </div>
+
+        <div class="box engine flex-1" style="border-color: #38bdf8;">
+          <div class="box-title" style="display: flex; align-items: center; gap: 6px; color: #38bdf8;">ChatAgentService <span class="badge" style="background:#1a2535; color:#38bdf8; border:1px solid #38bdf8;">thread chat</span></div>
+          <div class="box-detail">
+            Session-scoped &bull; interactive &bull; no pipeline<br>
+            Desktop, CLI, Telegram, agent-chat sources<br>
+            Summarization &bull; auto-naming &bull; subagents<br>
+            No imports from AgentService &mdash; fully independent
+          </div>
+          <div class="box-file">src/core/services/chat-agent-service.ts (1627 lines)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Agent system -->
+    <div class="tier">
+      <div class="tier-label">Agent System</div>
+      <div class="tier-content">
+        <div class="box agent flex-2">
+          <div class="box-title">Agent Framework</div>
+          <div class="box-detail">
+            <strong>Agent</strong> = PromptBuilder + AgentLib<br>
+            <strong>Roles:</strong> Investigator, Designer, Planner, Implementor, Reviewer<br>
+            <strong>Libs:</strong> ClaudeCode, CursorAgent, CodexCli, CodexAppServer<br>
+            Resolved at runtime via AgentLibRegistry + project config
+          </div>
+          <div class="box-file">src/core/agents/ &bull; src/core/libs/</div>
+        </div>
+        <div class="box agent flex-1">
+          <div class="box-title">Pipeline Handlers</div>
+          <div class="box-detail">
+            <strong>Guards:</strong> no_running_agent, max_retries<br>
+            <strong>Hooks:</strong> start_agent, push_and_create_pr,<br>
+            merge_pr, advance_phase, notify, create_prompt
+          </div>
+          <div class="box-file">src/core/handlers/</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="daemon-grid">
+      <!-- Data Layer -->
+      <div class="daemon-col">
+        <div class="tier-label">Data Layer</div>
+        <div class="box data w-full">
+          <div class="box-title">SQLite (better-sqlite3, WAL mode)</div>
+          <div class="box-detail">
+            25+ stores &mdash; tasks, projects, pipelines, agent runs,<br>
+            chat sessions, features, kanban, notifications, artifacts,<br>
+            phases, context, prompts, settings, timeline, debug log<br><br>
+            Baseline schema + incremental migrations<br>
+            FK constraints enforced &bull; sync API for ACID
+          </div>
+          <div class="box-file">src/core/stores/ &bull; src/core/schema.ts &bull; src/core/migrations.ts</div>
+        </div>
+      </div>
+
+      <!-- Integrations -->
+      <div class="daemon-col">
+        <div class="tier-label">Integrations</div>
+        <div class="box integration w-full">
+          <div class="box-title">Git / SCM</div>
+          <div class="box-detail">
+            <strong>GitOps</strong> &mdash; low-level git commands<br>
+            <strong>ScmPlatform</strong> &mdash; GitHub PRs via <code>gh</code> CLI<br>
+            <strong>WorktreeManager</strong> &mdash; isolated agent worktrees<br>
+            Branch: task/&lt;id&gt; &bull; .agent-worktrees/
+          </div>
+          <div class="box-file">src/core/services/local-git-ops.ts &bull; github-scm-platform.ts &bull; local-worktree-manager.ts</div>
+        </div>
+        <div class="box infra w-full">
+          <div class="box-title">Notifications &amp; Automation</div>
+          <div class="box-detail">
+            <strong>MultiChannelNotificationRouter</strong><br>
+            Channels: Telegram, In-App<br>
+            <strong>ScheduledAgentService</strong> &mdash; cron-like agent runs<br>
+            <strong>AgentSupervisor</strong> &mdash; stale run recovery
+          </div>
+          <div class="box-file">src/core/services/multi-channel-notification-router.ts</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Composition root -->
+    <div class="tier">
+      <div class="tier-label">Composition Root</div>
+      <div class="tier-content" style="justify-content: center;">
+        <div class="box infra" style="min-width: 500px; text-align: center;">
+          <div class="box-title">createAppServices(db)</div>
+          <div class="box-detail">
+            Single factory &mdash; 401 lines &bull; phased initialization<br>
+            Phase 1: stores + pipeline engine &rarr; Phase 2: services + agents &rarr; Phase 3: supervisors + wiring<br>
+            No DI framework &mdash; pure constructor injection
+          </div>
+          <div class="box-file">src/core/providers/setup.ts</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pipeline flow -->
+  <div class="tier" style="margin-top: 32px;">
+    <div class="tier-label">Task Pipeline &mdash; AGENT_PIPELINE (the only seeded pipeline)</div>
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; overflow-x: auto;">
+      <div style="display: flex; align-items: center; gap: 4px; min-width: 900px; font-size: 11px; flex-wrap: nowrap;">
+        <span style="background:#1a2e1a; color:#4ade80; padding:6px 10px; border-radius:6px; border:1px solid #22c55e; white-space:nowrap;">open</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#2a1a2e; color:#c084fc; padding:6px 10px; border-radius:6px; border:1px solid #a855f7; white-space:nowrap;">investigating</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#1a1f35; color:#60a5fa; padding:6px 10px; border-radius:6px; border:1px solid #3b82f6; white-space:nowrap;">investigation_review</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#2a1a2e; color:#c084fc; padding:6px 10px; border-radius:6px; border:1px solid #a855f7; white-space:nowrap;">designing</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#1a1f35; color:#60a5fa; padding:6px 10px; border-radius:6px; border:1px solid #3b82f6; white-space:nowrap;">design_review</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#2a1a2e; color:#c084fc; padding:6px 10px; border-radius:6px; border:1px solid #a855f7; white-space:nowrap;">planning</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#1a1f35; color:#60a5fa; padding:6px 10px; border-radius:6px; border:1px solid #3b82f6; white-space:nowrap;">plan_review</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#2a1a2e; color:#c084fc; padding:6px 10px; border-radius:6px; border:1px solid #a855f7; white-space:nowrap;">implementing</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#1a1f35; color:#60a5fa; padding:6px 10px; border-radius:6px; border:1px solid #3b82f6; white-space:nowrap;">pr_review</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#2a1f1a; color:#fbbf24; padding:6px 10px; border-radius:6px; border:1px solid #f59e0b; white-space:nowrap;">ready_to_merge</span>
+        <span style="color:#374151;">&rarr;</span>
+        <span style="background:#1a2e1a; color:#4ade80; padding:6px 10px; border-radius:6px; border:1px solid #22c55e; white-space:nowrap; font-weight:600;">done</span>
+      </div>
+      <div style="display: flex; gap: 16px; margin-top: 12px; font-size: 10px; color: #6b7280;">
+        <span><span style="display:inline-block;width:8px;height:8px;background:#1a2e1a;border:1px solid #22c55e;border-radius:2px;margin-right:4px;"></span>ready / terminal</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#2a1a2e;border:1px solid #a855f7;border-radius:2px;margin-right:4px;"></span>agent running</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#1a1f35;border:1px solid #3b82f6;border-radius:2px;margin-right:4px;"></span>human review</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#2a1f1a;border:1px solid #f59e0b;border-radius:2px;margin-right:4px;"></span>pending action</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key abstractions -->
+  <div class="tier" style="margin-top: 32px;">
+    <div class="tier-label">Key Abstractions &mdash; interface &rarr; implementation pattern</div>
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px;">
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 12px;">
+        <div>
+          <div style="color: #c084fc; font-weight: 600; margin-bottom: 6px;">IAgentLib</div>
+          <div style="color: #8b949e; font-size: 11px;">ClaudeCodeLib, CursorAgentLib,<br>CodexCliLib, CodexAppServerLib</div>
+        </div>
+        <div>
+          <div style="color: #f87171; font-weight: 600; margin-bottom: 6px;">IGitOps / IScmPlatform / IWorktreeManager</div>
+          <div style="color: #8b949e; font-size: 11px;">LocalGitOps, GitHubScmPlatform,<br>LocalWorktreeManager + stubs for tests</div>
+        </div>
+        <div>
+          <div style="color: #818cf8; font-weight: 600; margin-bottom: 6px;">INotificationRouter</div>
+          <div style="color: #8b949e; font-size: 11px;">TelegramNotificationRouter,<br>InAppNotificationRouter, StubRouter</div>
+        </div>
+        <div>
+          <div style="color: #4ade80; font-weight: 600; margin-bottom: 6px;">IWorkflowService</div>
+          <div style="color: #8b949e; font-size: 11px;">Single implementation &mdash;<br>all clients converge here</div>
+        </div>
+        <div>
+          <div style="color: #fbbf24; font-weight: 600; margin-bottom: 6px;">IPipelineEngine</div>
+          <div style="color: #8b949e; font-size: 11px;">Guards + hooks registered at startup,<br>data-driven transitions</div>
+        </div>
+        <div>
+          <div style="color: #2dd4bf; font-weight: 600; margin-bottom: 6px;">I*Store (25+ stores)</div>
+          <div style="color: #8b949e; font-size: 11px;">All SQLite-backed via better-sqlite3,<br>defined in src/core/interfaces/</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#1a1f35; border-color:#3b82f6;"></div> Client</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1a2e1a; border-color:#22c55e;"></div> Orchestration</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#2a1f1a; border-color:#f59e0b;"></div> Core Engine</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#2a1a2e; border-color:#a855f7;"></div> Agent System</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1a2a2a; border-color:#14b8a6;"></div> Data Layer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#2a1a1a; border-color:#ef4444;"></div> Integration</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1e1e2e; border-color:#6366f1;"></div> Infrastructure</div>
+  </div>
+
+</div>
+</body>
+</html>
