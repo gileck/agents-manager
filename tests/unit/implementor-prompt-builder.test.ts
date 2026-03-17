@@ -181,6 +181,65 @@ describe('ImplementorPromptBuilder', () => {
       expect(prompt).toContain('[ ] Add tests');
     });
 
+    it('should include CLAUDE.md instruction in new mode prompt', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Read CLAUDE.md');
+      expect(prompt).toContain('project rules');
+    });
+
+    it('should include architecture docs instruction in new mode prompt', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('architecture documentation');
+      expect(prompt).toContain('docs/architecture-overview.md');
+      expect(prompt).toContain('docs/abstractions.md');
+    });
+
+    it('should include security awareness instruction in new mode prompt', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('no hardcoded secrets');
+      expect(prompt).toContain('OWASP top 10');
+    });
+
+    it('should include test coverage instruction in new mode prompt', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Add or update tests for new code paths');
+    });
+
+    it('should include error handling instruction in new mode prompt', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Surface errors properly');
+      expect(prompt).toContain('empty catch blocks');
+    });
+
+    it('should include architecture compliance instruction in new mode prompt', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Respect architecture boundaries');
+      expect(prompt).toContain('src/core/services/');
+      expect(prompt).toContain('src/core/interfaces/');
+    });
+
+    it('should not include new review-aligned instructions in revision prompts', () => {
+      const revisionModes: Array<{ revisionReason: RevisionReason }> = [
+        { revisionReason: 'changes_requested' },
+        { revisionReason: 'merge_failed' },
+        { revisionReason: 'uncommitted_changes' },
+      ];
+      for (const { revisionReason } of revisionModes) {
+        const ctx = createContext({ mode: 'revision', revisionReason });
+        const prompt = builder.buildPrompt(ctx);
+        expect(prompt).not.toContain('Read CLAUDE.md');
+        expect(prompt).not.toContain('docs/architecture-overview.md');
+        expect(prompt).not.toContain('OWASP top 10');
+        expect(prompt).not.toContain('Respect architecture boundaries');
+      }
+    });
+
     it('should include technical design in new mode prompt', () => {
       const ctx = createContext({
         mode: 'new',
