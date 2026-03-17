@@ -90,6 +90,10 @@ export function registerChatSessionHandlers(api: ApiClient): void {
     return api.chat.trackTask(sessionId, taskId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.CHAT_UNTRACK_TASK, async (_, sessionId: string, taskId: string) => {
+    return api.chat.untrackTask(sessionId, taskId);
+  });
+
   registerIpcHandler(IPC_CHANNELS.CHAT_ANSWER_QUESTION, async (_, sessionId: string, questionId: string, answers: Record<string, string>) => {
     return api.chat.answerQuestion(sessionId, questionId, answers);
   });

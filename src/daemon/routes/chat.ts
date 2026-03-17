@@ -366,6 +366,14 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // DELETE /api/chat/sessions/:id/track-task/:taskId — remove a task from this session's tracked list
+  router.delete('/api/chat/sessions/:id/track-task/:taskId', async (req, res, next) => {
+    try {
+      await services.chatSessionStore.removeTrackedTask(req.params.id, req.params.taskId);
+      res.status(204).end();
+    } catch (err) { next(err); }
+  });
+
   // GET /api/chat/sessions/:id/tracked-tasks — return full task objects for all tracked task IDs
   router.get('/api/chat/sessions/:id/tracked-tasks', async (req, res, next) => {
     try {

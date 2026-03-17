@@ -96,5 +96,13 @@ export function useTrackedTasks(sessionId: string | null) {
     return () => { unsub(); };
   }, []);
 
-  return { tasks, isLoading };
+  function removeTask(taskId: string) {
+    if (!sessionId) return;
+    // Optimistic local remove
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    // Fire-and-forget server-side removal
+    window.api.chat.untrackTask(sessionId, taskId).catch(() => { /* ignore */ });
+  }
+
+  return { tasks, isLoading, removeTask };
 }

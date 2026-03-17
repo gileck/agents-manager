@@ -242,6 +242,7 @@ export interface ApiShape {
     permissionResponse(sessionId: string, requestId: string, allowed: boolean): Promise<void>;
     trackedTasks(sessionId: string): Promise<Task[]>;
     trackTask(sessionId: string, taskId: string): Promise<void>;
+    untrackTask(sessionId: string, taskId: string): Promise<void>;
     answerQuestion(sessionId: string, questionId: string, answers: Record<string, string>): Promise<void>;
   };
 
