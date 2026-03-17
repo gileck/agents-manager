@@ -13,14 +13,21 @@ const AGENT_BUTTONS: { label: string; agentType: string; mode: 'new' | 'revision
   { label: 'Review', agentType: 'reviewer', mode: 'new', variant: 'outline' },
 ];
 
-function parseTask(result: string): Task | null {
+export interface ParseTaskResult {
+  task: Task | null;
+  /** Non-null when we got valid JSON with some task-like fields but missing id or title */
+  partial: Record<string, unknown> | null;
+}
+
+export function parseTask(result: string): ParseTaskResult {
   try {
     const parsed = JSON.parse(result);
-    if (!parsed || typeof parsed !== 'object') return null;
-    if (typeof parsed.id === 'string' && typeof parsed.title === 'string') return parsed as Task;
-    return null;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { task: null, partial: null };
+    if (typeof parsed.id === 'string' && typeof parsed.title === 'string') return { task: parsed as Task, partial: null };
+    // Valid JSON object but missing required identity fields — return as partial
+    return { task: null, partial: parsed as Record<string, unknown> };
   } catch {
-    return null;
+    return { task: null, partial: null };
   }
 }
 
@@ -250,6 +257,25 @@ function TaskDetailBody({ task }: TaskDetailBodyProps) {
   );
 }
 
+function PartialTaskView({ data }: { data: Record<string, unknown> }) {
+  const displayFields = Object.entries(data).filter(
+    ([, v]) => v !== null && v !== undefined && v !== '',
+  );
+  return (
+    <div className="border border-border rounded p-3 my-1 bg-card space-y-1">
+      <p className="text-xs text-muted-foreground italic">Partial task data (missing id or title)</p>
+      {displayFields.map(([key, value]) => (
+        <div key={key} className="text-xs">
+          <span className="font-medium text-foreground">{key}:</span>{' '}
+          <span className="text-muted-foreground">
+            {typeof value === 'string' ? value : JSON.stringify(value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function TaskDetailCard({ toolResult }: ToolRendererProps) {
   if (!toolResult) {
     return (
@@ -259,15 +285,19 @@ export function TaskDetailCard({ toolResult }: ToolRendererProps) {
     );
   }
 
-  const task = parseTask(toolResult.result);
+  const { task, partial } = parseTask(toolResult.result);
 
-  if (!task) {
-    return (
-      <div className="border border-destructive/40 rounded p-3 my-1 bg-card text-xs text-destructive">
-        Failed to load task: {toolResult.result}
-      </div>
-    );
+  if (task) {
+    return <TaskDetailBody task={task} />;
   }
 
-  return <TaskDetailBody task={task} />;
+  if (partial) {
+    return <PartialTaskView data={partial} />;
+  }
+
+  return (
+    <div className="border border-destructive/40 rounded p-3 my-1 bg-card text-xs text-destructive">
+      Failed to load task: {toolResult.result}
+    </div>
+  );
 }

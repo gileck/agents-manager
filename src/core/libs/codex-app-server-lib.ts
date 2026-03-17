@@ -300,7 +300,7 @@ export class CodexAppServerLib extends BaseAgentLib {
           onMessage?.({
             type: 'tool_result',
             toolId: item.id,
-            result: resultText.slice(0, 2000),
+            result: resultText.slice(0, 10_000),
             timestamp: Date.now(),
           });
           break;
