@@ -27,7 +27,7 @@ import type { OutcomeResolver } from './outcome-resolver';
 import type { ScheduledAgentService } from './scheduled-agent-service';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { IDevServerManager } from '../interfaces/dev-server-manager';
-import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
+import { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type { AgentNotificationPayload } from '../../shared/types';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -968,7 +968,7 @@ export class AgentService implements IAgentService {
 
       // --- Notify subscribed chat sessions ---
       if (this.subscriptionRegistry) {
-        const subscribers = this.subscriptionRegistry.getAndRemove(taskId);
+        const subscribers = this.subscriptionRegistry.get(taskId);
         emitPostLog('notification', `Subscription check: ${subscribers.length} subscriber(s) found`, { subscriberCount: subscribers.length });
         if (subscribers.length > 0) {
           const updatedTask = await this.taskStore.getTask(taskId);
@@ -1019,6 +1019,12 @@ export class AgentService implements IAgentService {
                 });
               }
             }
+          }
+
+          // Clean up subscriptions when task reaches a terminal state
+          if (updatedTask && AgentSubscriptionRegistry.isTerminalStatus(updatedTask.status)) {
+            this.subscriptionRegistry.removeTask(taskId);
+            emitPostLog('notification', `Subscriptions cleaned up: task reached terminal state "${updatedTask.status}"`);
           }
         }
       }

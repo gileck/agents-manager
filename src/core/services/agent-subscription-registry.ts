@@ -7,15 +7,11 @@ export interface AgentSubscription {
 
 const MAX_SUBSCRIPTIONS_PER_SESSION = 50;
 
+/** Terminal task statuses that trigger subscription cleanup. */
+const TERMINAL_STATUSES = new Set(['done', 'closed', 'cancelled']);
+
 export class AgentSubscriptionRegistry {
   private subscriptions = new Map<string, AgentSubscription[]>();
-  private cleanupTimer: ReturnType<typeof setInterval>;
-  private readonly ttlMs: number;
-
-  constructor(ttlMs = 60 * 60 * 1000) {
-    this.ttlMs = ttlMs;
-    this.cleanupTimer = setInterval(() => this.cleanup(), 5 * 60 * 1000);
-  }
 
   subscribe(sub: AgentSubscription): void {
     const existing = this.subscriptions.get(sub.taskId) ?? [];
@@ -35,30 +31,26 @@ export class AgentSubscriptionRegistry {
     }
   }
 
-  /** Returns and removes all subscribers for a task (single-fire). */
-  getAndRemove(taskId: string): AgentSubscription[] {
-    const subs = this.subscriptions.get(taskId) ?? [];
+  /** Returns all subscribers for a task without removing them (persistent). */
+  get(taskId: string): AgentSubscription[] {
+    return this.subscriptions.get(taskId) ?? [];
+  }
+
+  /** Removes all subscriptions for a task (call when task reaches a terminal state). */
+  removeTask(taskId: string): void {
     this.subscriptions.delete(taskId);
-    return subs;
   }
 
   hasSubscribers(taskId: string): boolean {
     return (this.subscriptions.get(taskId)?.length ?? 0) > 0;
   }
 
-  private cleanup(): void {
-    const cutoff = Date.now() - this.ttlMs;
-    for (const [taskId, subs] of this.subscriptions) {
-      const alive = subs.filter(s => s.createdAt > cutoff);
-      if (alive.length === 0) {
-        this.subscriptions.delete(taskId);
-      } else {
-        this.subscriptions.set(taskId, alive);
-      }
-    }
+  /** Returns true if the given status is terminal (done, closed, cancelled). */
+  static isTerminalStatus(status: string): boolean {
+    return TERMINAL_STATUSES.has(status);
   }
 
   dispose(): void {
-    clearInterval(this.cleanupTimer);
+    // no-op — kept for interface compatibility
   }
 }
