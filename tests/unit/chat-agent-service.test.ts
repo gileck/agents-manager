@@ -504,7 +504,7 @@ describe('ChatAgentService', () => {
   });
 
   describe('completion status', () => {
-    it('emits a completed status message on successful agent completion', async () => {
+    it('does not emit a completed status message on successful agent completion', async () => {
       const execute = vi.fn().mockImplementation((_runId: string, _options: unknown, callbacks: { onOutput?: (s: string) => void; onMessage?: (m: AgentChatMessage) => void }) => {
         callbacks.onOutput?.('Test response\n');
         callbacks.onMessage?.({ type: 'assistant_text', text: 'Test response', timestamp: Date.now() });
@@ -514,42 +514,6 @@ describe('ChatAgentService', () => {
           costInputTokens: 10,
           costOutputTokens: 20,
           model: 'claude-opus-4-6',
-        });
-      });
-
-      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue({
-        ...createMockAgentLib(),
-        execute,
-      } satisfies IAgentLib);
-
-      const events: Array<{ type: string; message?: AgentChatMessage }> = [];
-      const result = await service.send('session-1', 'Test message', {
-        systemPrompt: '',
-        onEvent: (event) => events.push(event as { type: string; message?: AgentChatMessage }),
-      });
-
-      await result.completion;
-
-      const messages = events
-        .filter((event): event is { type: 'message'; message: AgentChatMessage } => event.type === 'message' && !!event.message)
-        .map((event) => event.message);
-
-      expect(messages).toEqual(expect.arrayContaining([
-        expect.objectContaining({ type: 'status', status: 'completed' }),
-      ]));
-    });
-
-    it('includes turn count in completed status when numTurns is available', async () => {
-      const execute = vi.fn().mockImplementation((_runId: string, _options: unknown, callbacks: { onOutput?: (s: string) => void; onMessage?: (m: AgentChatMessage) => void }) => {
-        callbacks.onOutput?.('Test response\n');
-        callbacks.onMessage?.({ type: 'assistant_text', text: 'Test response', timestamp: Date.now() });
-        return Promise.resolve({
-          exitCode: 0,
-          output: 'Test response',
-          costInputTokens: 10,
-          costOutputTokens: 20,
-          model: 'claude-opus-4-6',
-          numTurns: 5,
         });
       });
 
@@ -571,8 +535,7 @@ describe('ChatAgentService', () => {
         .map((event) => event.message);
 
       const statusMsg = messages.find((m) => m.type === 'status' && (m as { status?: string }).status === 'completed');
-      expect(statusMsg).toBeDefined();
-      expect((statusMsg as { message?: string }).message).toContain('after 5 turns');
+      expect(statusMsg).toBeUndefined();
     });
 
     it('emits a failed status with error message when agent returns an error', async () => {

@@ -1436,10 +1436,6 @@ export class ChatAgentService {
         const isTimeout = result.error.includes('kill_reason=timeout') || result.error.includes('timed out');
         const errorStatus: 'cancelled' | 'timed_out' | 'failed' = isStopped ? 'cancelled' : isTimeout ? 'timed_out' : 'failed';
         emitMessage({ type: 'status', status: errorStatus, message: result.error, timestamp: Date.now() });
-      } else {
-        // Emit completion status so the UI shows why the agent stopped
-        const turnsInfo = result.numTurns != null ? ` after ${result.numTurns} turns` : '';
-        emitMessage({ type: 'status', status: 'completed', message: `Agent completed${turnsInfo}`, timestamp: Date.now() });
       }
 
       // Mark as completed successfully
