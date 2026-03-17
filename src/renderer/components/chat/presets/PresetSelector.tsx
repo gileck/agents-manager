@@ -8,19 +8,14 @@
 import React, { useCallback } from 'react';
 import { getAllPresets } from './registry';
 import { usePreset } from './ChatPresetContext';
-import { reportError } from '../../../lib/error-handler';
 
 export function PresetSelector() {
   const presets = getAllPresets();
-  const { presetName } = usePreset();
+  const { presetName, setPreset } = usePreset();
 
-  const handleChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    try {
-      await window.api.settings.update({ chatPreset: e.target.value || null });
-    } catch (err) {
-      reportError(err, 'PresetSelector: update chatPreset');
-    }
-  }, []);
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setPreset(e.target.value);
+  }, [setPreset]);
 
   // Hide when there is only one preset — no choice to make.
   if (presets.length <= 1) {
