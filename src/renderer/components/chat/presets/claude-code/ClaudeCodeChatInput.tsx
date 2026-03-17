@@ -11,6 +11,7 @@ import React, { useRef, useCallback, useEffect } from 'react';
 import type { ChatInputPresetProps } from '../types';
 import type { PermissionMode } from '../../../../../shared/types';
 import { useDraftPersistence } from '../../hooks/useDraftPersistence';
+import { useImageInput } from '../../hooks/useImageInput';
 import { MAX_MESSAGE_LENGTH } from '../../../../../shared/constants';
 
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
@@ -54,6 +55,10 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
     forwardedRef,
   ) {
     const { draft: value, setDraft: setValue, clearDraft } = useDraftPersistence(initialDraft, onDraftChange);
+    const {
+      images, setImages,
+      handlePaste, handleDrop, handleDragOver, removeImage,
+    } = useImageInput();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Auto-resize textarea
@@ -75,9 +80,10 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       const trimmed = value.trim();
-      if (!trimmed) return;
-      onSend(trimmed);
+      if (!trimmed && images.length === 0) return;
+      onSend(trimmed, images.length > 0 ? images : undefined);
       setValue('');
+      setImages([]);
       clearDraft();
     };
 
@@ -128,7 +134,58 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
           backgroundColor: '#0d1117',
         }}
       >
-        <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+        {/* Image preview strip */}
+        {images.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, padding: '6px 16px 0', flexWrap: 'wrap' }}>
+            {images.map((img, i) => (
+              <div key={i} style={{ position: 'relative', display: 'inline-block' }}>
+                <img
+                  src={`data:${img.mediaType};base64,${img.base64}`}
+                  alt={img.name || 'Attached image'}
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 6,
+                    objectFit: 'cover',
+                    border: '1px solid #374151',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeImage(i)}
+                  style={{
+                    position: 'absolute',
+                    top: -6,
+                    right: -6,
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: 10,
+                    lineHeight: '16px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                  }}
+                  title="Remove image"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}
+        >
           {/* ❯ prompt */}
           <span
             style={{
@@ -150,6 +207,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             rows={1}
             placeholder={isRunning ? 'Type a message (will be queued)...' : 'Type a message...'}
             style={{
