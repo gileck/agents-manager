@@ -9,7 +9,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { PermissionMode, ChatThreadTheme, AgentChatMessageUser } from '../../../../../shared/types';
+import type { PermissionMode, AgentChatMessageUser } from '../../../../../shared/types';
 import { reportError } from '../../../../lib/error-handler';
 import { useChat } from '../../../../hooks/useChat';
 import { useChatSessions } from '../../../../hooks/useChatSessions';
@@ -87,6 +87,9 @@ function getContextColor(percent: number): string {
 }
 
 export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps) {
+  // TODO: extract shared orchestration hook (e.g. useChatPanelOrchestration(scope, sessionsOverride))
+  // to avoid drift with ChatPanel.tsx. The ~200 lines of hooks/state/callbacks below are
+  // duplicated from the default ChatPanel orchestrator.
   const navigate = useNavigate();
   const localSessions = useChatSessions(sessionsOverride ? null : scope);
   const {
@@ -129,8 +132,6 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
   const [showActions, setShowActions] = useState(false);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
-  const [_threadTheme, setThreadTheme] = useState<ChatThreadTheme | null>(null);
-
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Reset raw view on session change
@@ -149,11 +150,6 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
   useEffect(() => {
     window.api.agentLibs.list().then(setAgentLibs).catch((err) => reportError(err, 'ClaudeCodeChatPanel: load agent libs'));
     window.api.agentLibs.listModels().then(setAgentLibModels).catch((err) => reportError(err, 'ClaudeCodeChatPanel: load agent models'));
-    window.api.settings.get().then((s) => {
-      if (s.chatThreadTheme) {
-        try { setThreadTheme(JSON.parse(s.chatThreadTheme) as ChatThreadTheme); } catch { /* ignore */ }
-      }
-    }).catch((err) => reportError(err, 'ClaudeCodeChatPanel: load thread theme'));
   }, []);
 
   const scopeAgents = useMemo(
@@ -239,6 +235,20 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
 
   const showInlineTabs = scope.type === 'task';
 
+  // Inject terminal-scoped CSS once into document.head; clean up on unmount.
+  useEffect(() => {
+    const id = 'cc-terminal-styles';
+    if (!document.getElementById(id)) {
+      const style = document.createElement('style');
+      style.id = id;
+      style.textContent = TERMINAL_STYLES;
+      document.head.appendChild(style);
+    }
+    return () => {
+      document.getElementById(id)?.remove();
+    };
+  }, []);
+
   // Button style helper
   const btnStyle = (active?: boolean): React.CSSProperties => ({
     background: active ? '#1e293b' : 'transparent',
@@ -254,9 +264,6 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
 
   return (
     <ChatActionsProvider sendMessage={sendMessage} answerQuestion={answerQuestion} sessionId={currentSessionId} isStreaming={isStreaming}>
-      {/* Inject terminal-scoped styles */}
-      <style>{TERMINAL_STYLES}</style>
-
       <div
         className="cc-terminal-root"
         style={{

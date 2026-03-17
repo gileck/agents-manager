@@ -335,7 +335,7 @@ export function ClaudeCodeChatMessageList({
         const result = msg as AgentChatMessageToolResult;
         if (result.toolId && matchedResultIds.has(result.toolId)) continue;
         nodes.push(
-          <div key={i} style={{ paddingLeft: 20, padding: '2px 0' }}>
+          <div key={i} style={{ padding: '2px 0 2px 20px' }}>
             <span style={{ color: '#6b7280', fontSize: 12 }}>└ </span>
             <pre style={{ color: '#9ca3af', fontSize: 11, fontFamily: MONO, whiteSpace: 'pre-wrap', margin: 0, display: 'inline' }}>
               {result.result.length > 2000 ? result.result.slice(0, 2000) + '\n…' : result.result}
