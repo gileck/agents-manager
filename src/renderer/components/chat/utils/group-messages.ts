@@ -5,7 +5,7 @@ export const LEAF_TYPES = new Set(['user', 'assistant_text', 'agent_run_info', '
 // Message types that always belong inside a ThinkingGroup
 export const ALWAYS_GROUPED_TYPES = new Set(['thinking', 'usage']);
 // Internal processing tools that should be grouped into ThinkingGroup
-export const THINKING_TOOLS = new Set(['Read', 'Grep', 'Glob', 'Edit', 'Write']);
+export const THINKING_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 
 export type LeafSegment = { type: 'leaf'; msg: AgentChatMessage; index: number };
 export type GroupSegment = { type: 'group'; messages: AgentChatMessage[]; startIndex: number };
