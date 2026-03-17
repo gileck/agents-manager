@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PostRunExtractor } from '../../src/core/services/post-run-extractor';
+import { PostRunExtractor, getContextEntryType } from '../../src/core/services/post-run-extractor';
 import type { ITaskStore } from '../../src/core/interfaces/task-store';
 import type { ITaskContextStore } from '../../src/core/interfaces/task-context-store';
 import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
@@ -61,6 +61,7 @@ function createMockStores() {
   const taskContextStore: ITaskContextStore = {
     addEntry: vi.fn().mockResolvedValue({}),
     getEntriesForTask: vi.fn().mockResolvedValue([]),
+    markEntriesAsAddressed: vi.fn().mockResolvedValue(0),
   };
 
   const taskEventLog: ITaskEventLog = {
@@ -281,5 +282,107 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
     expect(stores.taskStore.createTask).toHaveBeenCalledTimes(1);
     // Warning was logged
     expect(onLog).toHaveBeenCalledWith(expect.stringContaining('notification failed'));
+  });
+});
+
+describe('getContextEntryType', () => {
+  it('should return review_feedback for reviewer with changes_requested outcome', () => {
+    expect(getContextEntryType('reviewer', undefined, 'changes_requested')).toBe('review_feedback');
+  });
+
+  it('should return review_feedback for reviewer with non-approved outcome', () => {
+    expect(getContextEntryType('reviewer', undefined, 'needs_work')).toBe('review_feedback');
+  });
+
+  it('should return review_approved for reviewer with approved outcome', () => {
+    expect(getContextEntryType('reviewer', undefined, 'approved')).toBe('review_approved');
+  });
+
+  it('should return plan_summary for planner without revision', () => {
+    expect(getContextEntryType('planner', undefined)).toBe('plan_summary');
+  });
+
+  it('should return plan_revision_summary for planner with changes_requested', () => {
+    expect(getContextEntryType('planner', 'changes_requested')).toBe('plan_revision_summary');
+  });
+
+  it('should return implementation_summary for implementor without revision', () => {
+    expect(getContextEntryType('implementor', undefined)).toBe('implementation_summary');
+  });
+
+  it('should return fix_summary for implementor with changes_requested', () => {
+    expect(getContextEntryType('implementor', 'changes_requested')).toBe('fix_summary');
+  });
+
+  it('should return workflow_review for task-workflow-reviewer', () => {
+    expect(getContextEntryType('task-workflow-reviewer')).toBe('workflow_review');
+  });
+});
+
+describe('PostRunExtractor.saveContextEntry', () => {
+  let extractor: PostRunExtractor;
+  let stores: ReturnType<typeof createMockStores>;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    stores = createMockStores();
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter);
+    onLog.mockClear();
+  });
+
+  it('should mark implementation_feedback and review_feedback as addressed when implementor finishes changes_requested revision', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Fixed the issues',
+      outcome: 'done',
+      structuredOutput: { summary: 'Applied fixes for reviewer comments' },
+    };
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'implementor', 'changes_requested', result, onLog);
+
+    expect(stores.taskContextStore.markEntriesAsAddressed).toHaveBeenCalledWith(
+      'task-1',
+      ['implementation_feedback', 'review_feedback'],
+      'run-1',
+    );
+  });
+
+  it('should not mark feedback as addressed for implementor without changes_requested', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Initial implementation',
+      outcome: 'done',
+      structuredOutput: { summary: 'Implemented feature' },
+    };
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'implementor', undefined, result, onLog);
+
+    expect(stores.taskContextStore.markEntriesAsAddressed).not.toHaveBeenCalled();
+  });
+
+  it('should not mark feedback as addressed for non-implementor agent types', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Review complete',
+      outcome: 'changes_requested',
+      structuredOutput: { summary: 'Found issues' },
+    };
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'reviewer', undefined, result, onLog);
+
+    expect(stores.taskContextStore.markEntriesAsAddressed).not.toHaveBeenCalled();
+  });
+
+  it('should skip context entry when exit code is non-zero', async () => {
+    const result: AgentRunResult = {
+      exitCode: 1,
+      output: 'Error',
+      outcome: 'failed',
+    };
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'implementor', 'changes_requested', result, onLog);
+
+    expect(stores.taskContextStore.addEntry).not.toHaveBeenCalled();
+    expect(stores.taskContextStore.markEntriesAsAddressed).not.toHaveBeenCalled();
   });
 });

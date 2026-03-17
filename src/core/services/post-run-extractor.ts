@@ -279,12 +279,12 @@ export class PostRunExtractor {
       });
     }
 
-    // When implementor addresses reviewer changes, mark implementation_feedback as addressed
+    // When implementor addresses reviewer changes, mark implementation & review feedback as addressed
     if (agentType === 'implementor' && revisionReason === 'changes_requested') {
       try {
-        await this.markFeedbackAsAddressed(taskId, ['implementation_feedback'], agentRunId, onLog);
+        await this.markFeedbackAsAddressed(taskId, ['implementation_feedback', 'review_feedback'], agentRunId, onLog);
       } catch (err) {
-        onLog(`Warning: failed to mark implementation_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
+        onLog(`Warning: failed to mark feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
     const _duration = Math.round(performance.now() - _start);
