@@ -168,5 +168,22 @@ describe('phase-utils', () => {
       const phases = [makePhase('1', 'pending')];
       expect(getAllSubtasksFromPhases(phases)).toEqual([]);
     });
+
+    it('handles phases where subtasks is undefined', () => {
+      const phases = [
+        { id: '1', name: 'Phase 1', status: 'pending' as const } as ImplementationPhase,
+      ];
+      expect(getAllSubtasksFromPhases(phases)).toEqual([]);
+    });
+
+    it('handles mix of phases with and without subtasks', () => {
+      const phases = [
+        { id: '1', name: 'Phase 1', status: 'pending' } as ImplementationPhase,
+        { id: '2', name: 'Phase 2', status: 'pending', subtasks: [{ name: 'a', status: 'open' }] } as ImplementationPhase,
+      ];
+      const result = getAllSubtasksFromPhases(phases);
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('a');
+    });
   });
 });

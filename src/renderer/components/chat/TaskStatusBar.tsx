@@ -47,7 +47,7 @@ function getSubtaskProgress(task: Task): { done: number; total: number } {
     ? getAllSubtasksFromPhases(task.phases)
     : (task.subtasks ?? []);
   const total = subtasks.length;
-  const done = subtasks.filter(s => s.status === 'done').length;
+  const done = subtasks.filter(s => s?.status === 'done').length;
   return { done, total };
 }
 

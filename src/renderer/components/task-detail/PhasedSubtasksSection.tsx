@@ -29,11 +29,11 @@ export function PhasedSubtasksSection({
   const cycleSubtaskStatus = async (phaseIdx: number, subtaskIdx: number) => {
     const order: SubtaskStatus[] = ['open', 'in_progress', 'done'];
     const phase = phases[phaseIdx];
-    const current = phase.subtasks[subtaskIdx].status;
+    const current = (phase.subtasks ?? [])[subtaskIdx].status;
     const next = order[(order.indexOf(current) + 1) % order.length];
     const updatedPhases = phases.map((p, pi) =>
       pi === phaseIdx
-        ? { ...p, subtasks: p.subtasks.map((s, si) => si === subtaskIdx ? { ...s, status: next } : s) }
+        ? { ...p, subtasks: (p.subtasks ?? []).map((s, si) => si === subtaskIdx ? { ...s, status: next } : s) }
         : p
     );
     try {
@@ -44,8 +44,8 @@ export function PhasedSubtasksSection({
     }
   };
 
-  const totalSubtasks = phases.reduce((sum, p) => sum + p.subtasks.length, 0);
-  const totalDone = phases.reduce((sum, p) => sum + p.subtasks.filter(s => s.status === 'done').length, 0);
+  const totalSubtasks = phases.reduce((sum, p) => sum + (p.subtasks ?? []).length, 0);
+  const totalDone = phases.reduce((sum, p) => sum + (p.subtasks ?? []).filter(s => s.status === 'done').length, 0);
   const completedPhases = phases.filter(p => p.status === 'completed').length;
 
   const phaseStatusColor = (status: string) => {
@@ -80,7 +80,7 @@ export function PhasedSubtasksSection({
 
         <div className="space-y-2">
           {phases.map((phase, phaseIdx) => {
-            const phaseDone = phase.subtasks.filter(s => s.status === 'done').length;
+            const phaseDone = (phase.subtasks ?? []).filter(s => s.status === 'done').length;
             const isExpanded = expandedPhases[phase.id] ?? false;
 
             return (
@@ -104,7 +104,7 @@ export function PhasedSubtasksSection({
                     {phase.status.replace('_', ' ')}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
-                    {phaseDone}/{phase.subtasks.length}
+                    {phaseDone}/{(phase.subtasks ?? []).length}
                   </span>
                   {phase.prLink && (
                     <button
@@ -116,9 +116,9 @@ export function PhasedSubtasksSection({
                   )}
                 </button>
 
-                {isExpanded && phase.subtasks.length > 0 && (
+                {isExpanded && (phase.subtasks ?? []).length > 0 && (
                   <div className="px-3 pb-2 space-y-1">
-                    {phase.subtasks.map((st, stIdx) => (
+                    {(phase.subtasks ?? []).map((st, stIdx) => (
                       <div key={stIdx} className="flex items-center gap-2 group py-1 pl-4">
                         <button
                           onClick={() => cycleSubtaskStatus(phaseIdx, stIdx)}
