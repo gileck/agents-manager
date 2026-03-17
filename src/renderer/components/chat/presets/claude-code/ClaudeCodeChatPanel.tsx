@@ -18,7 +18,6 @@ import { useActiveAgents } from '../../../../hooks/useActiveAgents';
 import { ContextSidebar } from '../../ContextSidebar';
 import { ActiveAgentsPanel } from '../../ActiveAgentsPanel';
 import { ChatActionsProvider } from '../../ChatActionsContext';
-import { PresetSelector } from '../PresetSelector';
 import { RawChatView } from '../../RawChatView';
 import { TaskStatusBar } from '../../TaskStatusBar';
 import type { ChatPanelPresetProps } from '../types';
@@ -321,8 +320,6 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
               {showSidebar ? '◧ hide' : '◧ info'}
             </button>
 
-            <PresetSelector />
-
             {/* Settings */}
             <button onClick={() => navigate('/settings/threads')} style={btnStyle()} title="Thread settings">
               ⚙
@@ -417,26 +414,6 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
             )}
 
             {!showRawView && <TaskStatusBar sessionId={currentSessionId ?? null} />}
-
-            {/* ── Status bar (token I/O only — engine/model/context moved to input config row) ── */}
-            {!showRawView && tokenUsage.inputTokens > 0 && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                padding: '2px 16px',
-                borderTop: `1px solid ${BORDER}`,
-                backgroundColor: BG_HEADER,
-                fontFamily: MONO,
-                fontSize: 11,
-                color: '#6b7280',
-                minHeight: 20,
-              }}>
-                <span>
-                  {tokenUsage.inputTokens.toLocaleString()}↓ {tokenUsage.outputTokens.toLocaleString()}↑
-                </span>
-              </div>
-            )}
 
             {/* ── Input ── */}
             {!showRawView && (

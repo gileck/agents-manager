@@ -4,6 +4,10 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { reportError } from '../lib/error-handler';
 import type { AppSettings, ChatThreadTheme, PermissionMode } from '../../shared/types';
+import { getAllPresets } from '../components/chat/presets/registry';
+// Ensure presets are registered before we call getAllPresets().
+import '../components/chat/presets/default';
+import '../components/chat/presets/claude-code';
 
 const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; description: string }[] = [
   { value: 'read_only', label: 'Read Only', description: 'Agent can only read files' },
@@ -74,6 +78,17 @@ export function ThreadsSettingsPage() {
     }
   };
 
+  // ── Chat Preset handler ────────────────────────────────────────────────────
+
+  const handlePresetChange = async (value: string) => {
+    try {
+      const updated = await window.api.settings.update({ chatPreset: value || null });
+      setSettings(updated);
+    } catch (err) {
+      reportError(err, 'Update chat preset');
+    }
+  };
+
   // ── Thread Theme handlers ─────────────────────────────────────────────────
 
   const saveTheme = useCallback((theme: ChatThreadTheme) => {
@@ -119,6 +134,7 @@ export function ThreadsSettingsPage() {
 
   const selectedAgentLib = settings.chatDefaultAgentLib || 'claude-code';
   const modelsForLib = agentLibModels[selectedAgentLib]?.models ?? [];
+  const presets = getAllPresets();
 
   return (
     <div className="p-8">
@@ -134,6 +150,33 @@ export function ThreadsSettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+
+              {/* Chat UI Preset */}
+              {presets.length > 1 && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="chatPreset">Chat UI Preset</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Visual style for the chat interface
+                    </p>
+                  </div>
+                  <Select
+                    value={settings.chatPreset || 'default'}
+                    onValueChange={handlePresetChange}
+                  >
+                    <SelectTrigger id="chatPreset" className="w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {presets.map((p) => (
+                        <SelectItem key={p.name} value={p.name}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Default Agent Lib */}
               <div className="flex items-center justify-between">

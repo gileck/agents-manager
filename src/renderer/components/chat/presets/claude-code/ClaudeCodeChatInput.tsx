@@ -2,21 +2,25 @@
  * Claude Code preset — ChatInput.
  *
  * Terminal-style input with `❯` prompt prefix, minimal dark textarea,
- * stop/send buttons, image attachment support, queued message indicator,
- * text-based context display, and a terminal-styled config row below the
- * input for engine/model selection and context usage.
+ * stop button, queued message indicator, and a terminal-styled config
+ * row below the input for engine/model/permission selection and context usage.
+ * Enter sends — no send button needed (CLI aesthetic).
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import type { ChatInputPresetProps } from '../types';
-import type { ChatImage } from '../../../../../shared/types';
-import { useImageInput } from '../../hooks/useImageInput';
+import type { PermissionMode } from '../../../../../shared/types';
 import { useDraftPersistence } from '../../hooks/useDraftPersistence';
-import { ImageAnnotationPanel } from '../../../ui/ImageAnnotationPanel';
 import { MAX_MESSAGE_LENGTH } from '../../../../../shared/constants';
 
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
 const CONTEXT_WINDOW = 200_000;
+
+const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string }[] = [
+  { value: 'read_only', label: 'read-only' },
+  { value: 'read_write', label: 'read-write' },
+  { value: 'full_access', label: 'full-access' },
+];
 
 function getContextColor(percent: number): string {
   if (percent > 80) return '#ef4444';
@@ -44,15 +48,12 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
       models,
       selectedModel,
       onModelChange,
+      permissionMode,
+      onPermissionModeChange,
     },
     forwardedRef,
   ) {
     const { draft: value, setDraft: setValue, clearDraft } = useDraftPersistence(initialDraft, onDraftChange);
-    const {
-      images, setImages, fileInputRef, addImageFile,
-      handlePaste, handleDrop, handleDragOver, removeImage,
-    } = useImageInput();
-    const [previewIndex, setPreviewIndex] = useState<number | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Auto-resize textarea
@@ -74,10 +75,9 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       const trimmed = value.trim();
-      if (!trimmed && images.length === 0) return;
-      onSend(trimmed, images.length > 0 ? images : undefined);
+      if (!trimmed) return;
+      onSend(trimmed);
       setValue('');
-      setImages([]);
       clearDraft();
     };
 
@@ -99,11 +99,6 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
       }
     };
 
-    const handleAnnotationSave = useCallback((annotatedImage: ChatImage, idx: number) => {
-      setImages((prev) => prev.map((img, i) => (i === idx ? annotatedImage : img)));
-      setPreviewIndex(null);
-    }, [setImages]);
-
     // Merge refs
     const mergedRef = useCallback(
       (node: HTMLTextAreaElement | null) => {
@@ -124,7 +119,6 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
       : 0;
 
     const isOverLimit = value.length > MAX_MESSAGE_LENGTH;
-    const canSubmit = (value.trim().length > 0 || images.length > 0) && !isOverLimit;
 
     return (
       <div
@@ -133,47 +127,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
           borderTop: '1px solid #1e293b',
           backgroundColor: '#0d1117',
         }}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
       >
-        {/* Image previews */}
-        {images.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-            {images.map((img, i) => (
-              <div key={i} style={{ position: 'relative' }}>
-                <img
-                  src={`data:${img.mediaType};base64,${img.base64}`}
-                  alt={img.name || 'Attached'}
-                  style={{ width: 48, height: 48, borderRadius: 4, objectFit: 'cover', border: '1px solid #374151', cursor: 'pointer' }}
-                  onClick={() => setPreviewIndex(i)}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeImage(i)}
-                  style={{
-                    position: 'absolute', top: -4, right: -4,
-                    width: 16, height: 16, borderRadius: '50%',
-                    backgroundColor: '#ef4444', color: '#fff',
-                    border: 'none', fontSize: 10, lineHeight: 1,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {previewIndex !== null && images[previewIndex] && (
-          <ImageAnnotationPanel
-            images={images.map((img) => ({ src: `data:${img.mediaType};base64,${img.base64}`, name: img.name }))}
-            initialIndex={previewIndex}
-            onClose={() => setPreviewIndex(null)}
-            onSave={handleAnnotationSave}
-          />
-        )}
-
         <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
           {/* ❯ prompt */}
           <span
@@ -196,7 +150,6 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
             rows={1}
             placeholder={isRunning ? 'Type a message (will be queued)...' : 'Type a message...'}
             style={{
@@ -218,20 +171,6 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
 
           {/* Right-side controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {/* Context usage text */}
-            {tokenUsage !== undefined && contextPercent > 0 && (
-              <span
-                style={{
-                  fontFamily: MONO,
-                  fontSize: 11,
-                  color: getContextColor(contextPercent),
-                }}
-                title={`${contextTokens.toLocaleString()} / ${effectiveContextWindow.toLocaleString()} tokens`}
-              >
-                {Math.round(contextPercent)}%
-              </span>
-            )}
-
             {/* Queued indicator */}
             {isQueued && (
               <span style={{ fontFamily: MONO, fontSize: 11, color: '#f59e0b' }}>
@@ -258,34 +197,6 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
               </span>
             )}
 
-            {/* Image attach button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                background: 'transparent', border: 'none',
-                color: '#6b7280', cursor: 'pointer', fontSize: 14,
-                padding: 2,
-              }}
-              title="Attach image"
-            >
-              📎
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp"
-              multiple
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const files = e.target.files;
-                if (files) {
-                  for (const file of Array.from(files)) addImageFile(file);
-                }
-                e.target.value = '';
-              }}
-            />
-
             {/* Stop button */}
             {isRunning && onStop && (
               <button
@@ -302,31 +213,11 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
                 {isQueued ? '⚡ send' : '■ stop'}
               </button>
             )}
-
-            {/* Send button */}
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              style={{
-                background: canSubmit ? '#e3b341' : '#374151',
-                color: canSubmit ? '#0d1117' : '#6b7280',
-                border: 'none',
-                cursor: canSubmit ? 'pointer' : 'not-allowed',
-                fontFamily: MONO,
-                fontSize: 11,
-                fontWeight: 600,
-                padding: '3px 10px',
-                borderRadius: 4,
-              }}
-              title={isRunning ? 'Queue message' : 'Send'}
-            >
-              {isRunning ? 'queue' : 'send'}
-            </button>
           </div>
         </form>
 
         {/* Terminal-styled config row below input */}
-        {(agentLibs || models) && (
+        {(agentLibs || models || onPermissionModeChange) && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -391,6 +282,37 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
                   {models.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {/* Permission mode selector */}
+            {onPermissionModeChange && (
+              <>
+                {(agentLibs?.length || (models && models.length > 0)) && (
+                  <span style={{ color: '#374151', margin: '0 2px' }}>|</span>
+                )}
+                <span>perms:</span>
+                <select
+                  value={permissionMode || 'full_access'}
+                  onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
+                  style={{
+                    background: '#161b22',
+                    color: '#d1d5db',
+                    border: '1px solid #374151',
+                    borderRadius: 3,
+                    fontFamily: MONO,
+                    fontSize: 11,
+                    padding: '1px 4px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  {PERMISSION_MODE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
                     </option>
                   ))}
                 </select>
