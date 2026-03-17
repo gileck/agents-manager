@@ -247,7 +247,7 @@ export class PipelineEngine implements IPipelineEngine {
       message: `Transition ${task.status} → ${toStatus} blocked by guards: ${lastGuardFailures.map(g => `${g.guard}: ${g.reason}`).join('; ')}`,
       data: { fromStatus: task.status, toStatus, trigger: ctx.trigger, guardFailures: lastGuardFailures },
     }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
-    return { success: false, guardFailures: lastGuardFailures };
+    return { success: false, error: lastGuardFailures.map(g => `${g.guard}: ${g.reason}`).join('; '), guardFailures: lastGuardFailures };
   }
 
   async getAllTransitions(task: Task): Promise<AllTransitionsResult> {
