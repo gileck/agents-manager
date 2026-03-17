@@ -221,9 +221,17 @@ export function useChat(sessionId: string | null) {
       // Optimistically add user message
       setDbMessages((prev) => [...prev, userMessage]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setIsStreaming(false);
-      streamingRef.current = false;
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('agent is already running')) {
+        // Race condition: server still has an agent running but React isStreaming was stale.
+        // Queue the message silently; the auto-send effect will retry when streaming ends.
+        setQueuedMessage({ text: message, images });
+        // Keep isStreaming=true (set above); the chatOutput sentinel will clear it when done.
+      } else {
+        setError(errMsg);
+        setIsStreaming(false);
+        streamingRef.current = false;
+      }
     }
   }, [sessionId]);
 
