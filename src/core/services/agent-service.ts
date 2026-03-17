@@ -1020,13 +1020,12 @@ export class AgentService implements IAgentService {
               }
             }
           }
-        }
 
-        // Clean up subscriptions when task reaches a terminal state
-        const updatedTaskForCleanup = await this.taskStore.getTask(taskId);
-        if (updatedTaskForCleanup && AgentSubscriptionRegistry.isTerminalStatus(updatedTaskForCleanup.status)) {
-          this.subscriptionRegistry.removeTask(taskId);
-          emitPostLog('notification', `Subscriptions cleaned up: task reached terminal state "${updatedTaskForCleanup.status}"`);
+          // Clean up subscriptions when task reaches a terminal state
+          if (updatedTask && AgentSubscriptionRegistry.isTerminalStatus(updatedTask.status)) {
+            this.subscriptionRegistry.removeTask(taskId);
+            emitPostLog('notification', `Subscriptions cleaned up: task reached terminal state "${updatedTask.status}"`);
+          }
         }
       }
 
