@@ -9,8 +9,9 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import type { ChatPreset } from './ChatPreset';
 import { getPreset, DEFAULT_PRESET_NAME } from './registry';
 
-// Ensure the default preset is registered before any context usage.
+// Ensure presets are registered before any context usage.
 import './default';
+import './claude-code';
 
 interface ChatPresetContextValue {
   /** The currently active preset object. */
