@@ -45,5 +45,5 @@ export function hasFollowingPhases(phases: ImplementationPhase[] | null | undefi
 /** Flattens all subtasks from all phases into a single array. */
 export function getAllSubtasksFromPhases(phases: ImplementationPhase[] | null | undefined): Subtask[] {
   if (!phases || phases.length === 0) return [];
-  return phases.flatMap(p => p.subtasks);
+  return phases.flatMap(p => p.subtasks ?? []);
 }
