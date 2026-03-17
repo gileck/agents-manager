@@ -427,6 +427,48 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     expect(result.costOutputTokens).toBe(400);
   });
 
+  it('should include turn limit in error message for error_max_turns', async () => {
+    const messages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Working on it...' }],
+        },
+      },
+      {
+        type: 'result',
+        subtype: 'error_max_turns',
+        usage: { input_tokens: 500, output_tokens: 200 },
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    expect(result.exitCode).toBe(1);
+    expect(result.outcome).toBe('failed');
+    expect(result.error).toContain('maximum turn limit');
+    expect(result.error).toContain('turns');
+  });
+
+  it('should provide descriptive error message for non-success subtypes', async () => {
+    const messages = [
+      {
+        type: 'result',
+        subtype: 'error_during_execution',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+    ];
+
+    mockQuery.mockReturnValue(mockQueryGenerator(messages));
+
+    const result = await agent.execute(createContext(), {});
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toContain('error_during_execution');
+  });
+
   it('should abort via stop()', async () => {
     let resolveQuery: () => void;
     const queryPromise = new Promise<void>((r) => { resolveQuery = r; });

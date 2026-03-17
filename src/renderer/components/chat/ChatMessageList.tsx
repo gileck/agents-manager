@@ -271,8 +271,21 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
       } else if (msg.type === 'status') {
         const isStopped = msg.status === 'cancelled';
         const isError = msg.status === 'failed' || msg.status === 'timed_out';
+        const isCompleted = msg.status === 'completed';
 
-        if (isStopped || isError) {
+        if (isCompleted) {
+          nodes.push(
+            <div key={i} className="flex flex-col items-center py-4 gap-3">
+              <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800/50">
+                <CheckCircle2 className="h-3 w-3" />
+                Agent Completed
+              </div>
+              {msg.message && (
+                <span className="text-xs text-muted-foreground">{msg.message}</span>
+              )}
+            </div>
+          );
+        } else if (isStopped || isError) {
           const lastUserMsg = [...messages].reverse().find((m): m is AgentChatMessageUser => m.type === 'user');
           const lastUserText = lastUserMsg?.text ?? null;
           const label = isStopped ? 'Agent Stopped' : msg.status === 'timed_out' ? 'Agent Timed Out' : 'Agent Error';

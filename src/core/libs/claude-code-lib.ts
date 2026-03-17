@@ -287,7 +287,11 @@ export class ClaudeCodeLib extends BaseAgentLib {
           const resultMsg = message as SdkResultMessage;
           if (resultMsg.subtype !== 'success') {
             isError = true;
-            errorMessage = resultMsg.errors?.join('\n') || 'Agent execution failed';
+            if (resultMsg.subtype === 'error_max_turns') {
+              errorMessage = `Agent reached the maximum turn limit (${options.maxTurns ?? 'unknown'} turns). You can continue the conversation to pick up where it left off.`;
+            } else {
+              errorMessage = resultMsg.errors?.join('\n') || `Agent execution ended with status: ${resultMsg.subtype}`;
+            }
           }
           if (resultMsg.structured_output) {
             structuredOutput = resultMsg.structured_output;
