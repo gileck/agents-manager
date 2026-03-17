@@ -216,6 +216,28 @@ describe('SqliteChatSessionStore', () => {
       expect(updated!.agentLib).toBeNull();
     });
 
+    it('should update enableStreaming', async () => {
+      const created = await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Chat',
+        projectId: testProjectId,
+      });
+
+      // Default should be true
+      expect(created.enableStreaming).toBe(true);
+
+      const updated = await store.updateSession(created.id, { enableStreaming: false });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.enableStreaming).toBe(false);
+
+      // Toggle back to true
+      const updated2 = await store.updateSession(created.id, { enableStreaming: true });
+      expect(updated2).not.toBeNull();
+      expect(updated2!.enableStreaming).toBe(true);
+    });
+
     it('should return null when updating a non-existent session', async () => {
       const result = await store.updateSession('non-existent-id', { name: 'New Name' });
       expect(result).toBeNull();

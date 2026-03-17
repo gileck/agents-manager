@@ -251,7 +251,7 @@ export interface ApiShape {
     list(scopeType: 'project' | 'task', scopeId: string): Promise<ChatSession[]>;
     listTaskSessions(projectId: string): Promise<TaskChatSessionWithTitle[]>;
     listAll(projectId: string): Promise<ChatSessionWithDetails[]>;
-    update(sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null }): Promise<ChatSession | null>;
+    update(sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreaming?: boolean }): Promise<ChatSession | null>;
     delete(sessionId: string): Promise<boolean>;
     hide(sessionId: string): Promise<boolean>;
     hideAll(projectId: string): Promise<boolean>;
