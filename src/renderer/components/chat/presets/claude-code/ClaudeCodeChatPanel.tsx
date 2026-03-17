@@ -40,11 +40,34 @@ const TERMINAL_STYLES = `
 }
 .cc-terminal-root .cc-markdown-override p,
 .cc-terminal-root .cc-markdown-override li,
-.cc-terminal-root .cc-markdown-override h1,
-.cc-terminal-root .cc-markdown-override h2,
-.cc-terminal-root .cc-markdown-override h3,
 .cc-terminal-root .cc-markdown-override span {
   color: #d1d5db;
+}
+.cc-terminal-root .cc-markdown-override h1,
+.cc-terminal-root .cc-markdown-override h2,
+.cc-terminal-root .cc-markdown-override h3 {
+  color: #e5e7eb;
+}
+.cc-terminal-root .cc-markdown-override strong,
+.cc-terminal-root .cc-markdown-override b {
+  font-weight: 700;
+  color: #f3f4f6;
+}
+.cc-terminal-root .cc-markdown-override em,
+.cc-terminal-root .cc-markdown-override i {
+  font-style: italic;
+  color: #d1d5db;
+}
+.cc-terminal-root .cc-markdown-override ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+}
+.cc-terminal-root .cc-markdown-override ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+}
+.cc-terminal-root .cc-markdown-override li::marker {
+  color: #6b7280;
 }
 .cc-terminal-root .cc-markdown-override code {
   background-color: #1e293b;
@@ -52,11 +75,19 @@ const TERMINAL_STYLES = `
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 12px;
+  font-family: ${MONO};
 }
 .cc-terminal-root .cc-markdown-override pre {
   background-color: #111827;
   border: 1px solid #1e293b;
   border-radius: 4px;
+  padding: 8px 12px;
+  overflow-x: auto;
+}
+.cc-terminal-root .cc-markdown-override pre code {
+  background-color: transparent;
+  padding: 0;
+  font-size: 12px;
 }
 .cc-terminal-root .cc-markdown-override a {
   color: #60a5fa;
@@ -65,6 +96,10 @@ const TERMINAL_STYLES = `
 .cc-terminal-root .cc-markdown-override blockquote {
   border-left-color: #374151;
   color: #9ca3af;
+}
+.cc-terminal-root .cc-markdown-override hr {
+  border-color: #374151;
+  margin: 8px 0;
 }
 .cc-terminal-root .cc-markdown-override table {
   border-color: #374151;
@@ -76,6 +111,15 @@ const TERMINAL_STYLES = `
 }
 .cc-terminal-root .cc-markdown-override thead {
   background-color: #1e293b;
+}
+.cc-terminal-root .cc-markdown-override .group button {
+  background-color: #1e293b;
+  border-color: #374151;
+  color: #9ca3af;
+}
+.cc-terminal-root .cc-markdown-override .group button:hover {
+  background-color: #374151;
+  color: #d1d5db;
 }
 `;
 
