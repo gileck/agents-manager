@@ -3,10 +3,17 @@ import type { AgentLibResult } from '../interfaces/agent-lib';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 
+export interface ReviewComment {
+  file: string;
+  severity: 'must_fix' | 'should_fix' | 'nit';
+  issue: string;
+  suggestion: string;
+}
+
 interface ReviewStructuredOutput {
   verdict: 'approved' | 'changes_requested';
   summary: string;
-  comments: string[];
+  comments: ReviewComment[];
 }
 
 export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
@@ -37,8 +44,17 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
           },
           comments: {
             type: 'array',
-            items: { type: 'string' },
-            description: 'Specific review comments or issues found. Empty array if approved.',
+            items: {
+              type: 'object',
+              properties: {
+                file: { type: 'string', description: 'File path the comment refers to' },
+                severity: { type: 'string', enum: ['must_fix', 'should_fix', 'nit'], description: 'Severity level of the issue' },
+                issue: { type: 'string', description: 'What is wrong' },
+                suggestion: { type: 'string', description: 'What to change to fix it' },
+              },
+              required: ['file', 'severity', 'issue', 'suggestion'],
+            },
+            description: 'Structured review comments. Empty array if approved.',
           },
         },
         required: ['verdict', 'summary', 'comments'],
@@ -177,33 +193,35 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
 
     // Steps section — simplified when session provides context
     if (context.resumeSession) {
+      let step = 1;
       lines.push(
         '## Steps',
-        `1. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
-        '2. Review the diff using the criteria below.',
+        `${step++}. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
+        `${step++}. For each changed file, read the full file to understand surrounding context. Check that changes are consistent with how the modified code is used elsewhere (imports, call sites, type contracts).`,
+        `${step++}. Review the diff using the criteria below.`,
       );
       if ((multiPhase && activePhase) || (task.subtasks && task.subtasks.length > 0)) {
-        lines.push('3. Verify each subtask is implemented by finding corresponding code changes in the diff.');
-        lines.push('4. **Make every comment actionable** — say what to change, not just what is wrong.');
-      } else {
-        lines.push('3. **Make every comment actionable** — say what to change, not just what is wrong.');
+        lines.push(`${step++}. Verify each subtask is implemented by finding corresponding code changes in the diff.`);
       }
+      lines.push(`${step}. **Make every comment actionable** — say what to change, not just what is wrong.`);
     } else {
+      let step = 1;
       lines.push(
         '## Steps',
-        '1. Read CLAUDE.md or project conventions to understand project rules (package manager, restricted directories, code patterns).',
-        `2. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
-        '3. Review the diff using the criteria below.',
+        `${step++}. Read CLAUDE.md or project conventions to understand project rules (package manager, restricted directories, code patterns).`,
+        `${step++}. Read the architecture documentation in docs/ (especially docs/architecture-overview.md and docs/abstractions.md) to understand the system's layer boundaries, abstraction contracts, and separation of concerns.`,
+        `${step++}. Run \`git diff origin/${defaultBranch}..HEAD\` to see all changes made in this branch.`,
+        `${step++}. For each changed file, read the full file to understand surrounding context. Check that changes are consistent with how the modified code is used elsewhere (imports, call sites, type contracts).`,
+        `${step++}. Review the diff using the criteria below.`,
       );
 
       if ((multiPhase && activePhase) || (task.subtasks && task.subtasks.length > 0)) {
-        lines.push(
-          '4. Verify each subtask is implemented by finding corresponding code changes in the diff.',
-          '5. **Make every comment actionable** — say what to change, not just what is wrong.',
-        );
-      } else {
-        lines.push('4. **Make every comment actionable** — say what to change, not just what is wrong.');
+        lines.push(`${step++}. Verify each subtask is implemented by finding corresponding code changes in the diff.`);
       }
+      lines.push(
+        `${step++}. Check that all changes comply with CLAUDE.md conventions. Flag any violation as a must-fix issue.`,
+        `${step}. **Make every comment actionable** — say what to change, not just what is wrong.`,
+      );
     }
 
     lines.push(
@@ -229,11 +247,19 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
     lines.push(
       '- Security — no hardcoded secrets, no SQL injection, no path traversal, no XSS',
       '- Data integrity — no silent data loss, no unhandled nulls in critical paths',
+      '- CLAUDE.md compliance — any violation of documented project conventions is blocking',
+      '- Architecture compliance — new code must respect documented architecture:',
+      '  - Layer boundaries (no business logic outside services)',
+      '  - Abstraction contracts (use interfaces, not implementation details)',
+      '  - No leaking abstractions across documented boundaries',
+      '  - New implementations registered through documented patterns',
+      '  - Separation of concerns maintained as documented in docs/abstractions.md',
       '',
       '**Should-check (block if significant):**',
       '- Error handling — are failures surfaced, not swallowed?',
       '- Test coverage — are new code paths tested?',
       '- Code quality — duplication, overly complex logic, missing types',
+      '- Context consistency — do changes fit with how the modified code is used in the rest of the codebase?',
       '',
       '**Nice-to-have (mention but do not block):**',
       '- Style nits, naming preferences, minor formatting',
@@ -260,8 +286,8 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
       '',
       '## Output Fields',
       '- **verdict** — "approved" or "changes_requested"',
-      '- **summary** — concise summary of review findings',
-      '- **comments** — array of specific issues found. Each comment should be actionable (say what to change and where). Empty array if approved.',
+      '- **summary** — concise summary: how many files changed, how many issues found, how many blocking',
+      '- **comments** — array of structured comment objects. Each comment has: `file` (path), `severity` ("must_fix" | "should_fix" | "nit"), `issue` (what is wrong), `suggestion` (what to change to fix it). Empty array if approved.',
     );
 
     if (context.devServerUrl) {
