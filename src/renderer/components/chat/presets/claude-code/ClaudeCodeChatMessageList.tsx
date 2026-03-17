@@ -2,7 +2,7 @@
  * Claude Code preset — ChatMessageList.
  *
  * Terminal-style message timeline rendering all segment types:
- * - User messages: yellow ❯ prefix
+ * - User messages: white text with muted gray ❯ prefix
  * - Assistant text: white ● + MarkdownContent
  * - Tool calls: colored ● + bold name + collapsible └ results
  * - Thinking groups: ✻ Crunched for Xs
@@ -26,7 +26,7 @@ import type {
   ChatImageRef,
 } from '../../../../../shared/types';
 import { MarkdownContent } from '../../MarkdownContent';
-import { getToolRenderer } from '../../../tool-renderers';
+import { getTerminalToolRenderer } from './tool-renderers';
 import { AgentRunInfoCard } from '../../AgentRunInfoCard';
 import { AskUserQuestionCard } from '../../AskUserQuestionCard';
 import { useChatActions } from '../../ChatActionsContext';
@@ -144,7 +144,7 @@ function TerminalThinkingGroup({
             if (msg.type === 'tool_use') {
               const toolUse = msg as AgentChatMessageToolUse;
               const toolResult = toolUse.toolId ? resultMap.get(toolUse.toolId) : undefined;
-              const Renderer = getToolRenderer(toolUse.toolName);
+              const Renderer = getTerminalToolRenderer(toolUse.toolName);
               return (
                 <Renderer
                   key={i}
@@ -259,9 +259,9 @@ export function ClaudeCodeChatMessageList({
         const userMsg = msg as AgentChatMessageUser;
         nodes.push(
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', lineHeight: '22px' }}>
-            <span style={{ color: '#e3b341', fontWeight: 700, fontSize: 14, flexShrink: 0, userSelect: 'none' }}>❯</span>
+            <span style={{ color: '#6b7280', fontWeight: 700, fontSize: 14, flexShrink: 0, userSelect: 'none' }}>❯</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ color: '#e3b341', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{userMsg.text}</span>
+              <span style={{ color: '#e5e7eb', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{userMsg.text}</span>
               {userMsg.images && userMsg.images.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
                   {userMsg.images.map((img: ChatImageRef, j: number) => (
@@ -317,7 +317,7 @@ export function ClaudeCodeChatMessageList({
         const toolUse = msg as AgentChatMessageToolUse;
         const toolResult = toolUse.toolId ? resultMap.get(toolUse.toolId) : undefined;
         if (toolResult?.toolId) matchedResultIds.add(toolResult.toolId);
-        const Renderer = getToolRenderer(toolUse.toolName);
+        const Renderer = getTerminalToolRenderer(toolUse.toolName);
         nodes.push(
           <div key={i} style={{ padding: '2px 0' }}>
             <Renderer
