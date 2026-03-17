@@ -202,6 +202,86 @@ function TerminalThinkingGroup({
   );
 }
 
+/** Terminal-style SearchGroup summary (green ●, expandable). */
+function TerminalSearchGroup({
+  messages,
+  startIndex,
+  expandedTools,
+  onToggleTool,
+}: {
+  messages: AgentChatMessage[];
+  startIndex: number;
+  expandedTools: Set<number>;
+  onToggleTool: (index: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const { searchCount, readCount, resultMap } = useMemo(() => {
+    let search = 0;
+    let read = 0;
+    const map = new Map<string, AgentChatMessageToolResult>();
+    for (const msg of messages) {
+      if (msg.type === 'tool_use') {
+        const tu = msg as AgentChatMessageToolUse;
+        if (tu.toolName === 'Grep' || tu.toolName === 'Glob') search++;
+        if (tu.toolName === 'Read') read++;
+      }
+      if (msg.type === 'tool_result' && msg.toolId) {
+        map.set(msg.toolId, msg as AgentChatMessageToolResult);
+      }
+    }
+    return { searchCount: search, readCount: read, resultMap: map };
+  }, [messages]);
+
+  const summary = useMemo(() => {
+    const parts: string[] = [];
+    if (searchCount > 0) parts.push(`Searched for ${searchCount} pattern${searchCount === 1 ? '' : 's'}`);
+    if (readCount > 0) parts.push(`read ${readCount} file${readCount === 1 ? '' : 's'}`);
+    return parts.length > 0 ? parts.join(', ') : 'Searched';
+  }, [searchCount, readCount]);
+
+  return (
+    <div style={{ margin: '4px 0' }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          color: '#6b7280', fontFamily: MONO, fontSize: 12, padding: '2px 0',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}
+      >
+        <span style={{ color: '#22c55e' }}>●</span>
+        <span>{summary}</span>
+        {!expanded && <span style={{ color: '#4b5563', fontSize: 11 }}>(expand)</span>}
+        <span>{expanded ? '▾' : '▸'}</span>
+      </button>
+      {expanded && (
+        <div style={{ marginLeft: 16, paddingLeft: 8, borderLeft: '1px solid #1e293b' }}>
+          {messages.map((msg, i) => {
+            const globalIndex = startIndex + i;
+            if (msg.type === 'tool_use') {
+              const toolUse = msg as AgentChatMessageToolUse;
+              const toolResult = toolUse.toolId ? resultMap.get(toolUse.toolId) : undefined;
+              const Renderer = getTerminalToolRenderer(toolUse.toolName);
+              return (
+                <Renderer
+                  key={i}
+                  toolUse={toolUse}
+                  toolResult={toolResult}
+                  expanded={expandedTools.has(globalIndex)}
+                  onToggle={() => onToggleTool(globalIndex)}
+                />
+              );
+            }
+            return null;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ClaudeCodeChatMessageList({
   messages,
   isRunning,
@@ -279,15 +359,35 @@ export function ClaudeCodeChatMessageList({
       }
 
       if (segment.type === 'group') {
-        nodes.push(
-          <TerminalThinkingGroup
-            key={`group-${segment.startIndex}`}
-            messages={segment.messages}
-            startIndex={segment.startIndex}
-            expandedTools={expandedTools}
-            onToggleTool={toggleTool}
-          />,
-        );
+        const hasThinking = segment.messages.some((m) => m.type === 'thinking');
+        const grpSearchCount = segment.messages.filter(
+          (m) => m.type === 'tool_use' && (m.toolName === 'Grep' || m.toolName === 'Glob'),
+        ).length;
+        const grpReadCount = segment.messages.filter(
+          (m) => m.type === 'tool_use' && m.toolName === 'Read',
+        ).length;
+        const useSearchGroup = !hasThinking && (grpSearchCount + grpReadCount) > 0;
+        if (useSearchGroup) {
+          nodes.push(
+            <TerminalSearchGroup
+              key={`group-${segment.startIndex}`}
+              messages={segment.messages}
+              startIndex={segment.startIndex}
+              expandedTools={expandedTools}
+              onToggleTool={toggleTool}
+            />,
+          );
+        } else {
+          nodes.push(
+            <TerminalThinkingGroup
+              key={`group-${segment.startIndex}`}
+              messages={segment.messages}
+              startIndex={segment.startIndex}
+              expandedTools={expandedTools}
+              onToggleTool={toggleTool}
+            />,
+          );
+        }
         continue;
       }
 
