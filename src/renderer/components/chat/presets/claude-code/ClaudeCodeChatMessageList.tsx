@@ -55,6 +55,40 @@ function ElapsedTime({ startedAt }: { startedAt: number }) {
   );
 }
 
+/** Collapsed system notification with expand toggle. */
+function CollapsedSystemNotification({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const summary = text.length > 80 ? text.slice(0, 80).trimEnd() + '…' : text;
+
+  return (
+    <div style={{ margin: '2px 0', fontFamily: MONO, fontSize: 12 }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '2px 0', width: '100%', textAlign: 'left',
+        }}
+      >
+        <span style={{ color: '#60a5fa', flexShrink: 0 }}>ⓘ</span>
+        <span style={{ color: '#60a5fa', fontWeight: 600, flexShrink: 0, fontFamily: MONO }}>System Notification</span>
+        {!expanded && (
+          <span style={{ color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+            {summary}
+          </span>
+        )}
+        <span style={{ color: '#6b7280', flexShrink: 0, marginLeft: 'auto' }}>{expanded ? '▼' : '▶'}</span>
+      </button>
+      {expanded && (
+        <div style={{ paddingLeft: 16, color: '#9ca3af', whiteSpace: 'pre-wrap', wordBreak: 'break-word', paddingTop: 2, fontFamily: MONO }}>
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Terminal-style ThinkingGroup summary. */
 function TerminalThinkingGroup({
   messages,
@@ -544,20 +578,7 @@ export function ClaudeCodeChatMessageList({
         if (isSystemNotification) {
           const displayText = notif.body.replace(/^\[System Notification\]\s*/, '');
           nodes.push(
-            <div key={i} style={{
-              margin: '4px 0', padding: '6px 10px',
-              backgroundColor: 'rgba(107,114,128,0.08)',
-              borderLeft: '2px solid #4b5563',
-              borderRadius: 2,
-              fontFamily: MONO, fontSize: 12,
-            }}>
-              <span style={{ color: '#6b7280', fontWeight: 600, fontSize: 11, userSelect: 'none' }}>
-                ⓘ System Notification
-              </span>
-              <div style={{ color: '#9ca3af', marginTop: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {displayText}
-              </div>
-            </div>,
+            <CollapsedSystemNotification key={i} text={displayText} />,
           );
         } else {
           nodes.push(
