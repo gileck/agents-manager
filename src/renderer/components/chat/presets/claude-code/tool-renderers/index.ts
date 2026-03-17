@@ -15,6 +15,14 @@ import { TerminalGrepRenderer } from './TerminalGrepRenderer';
 import { TerminalGlobRenderer } from './TerminalGlobRenderer';
 import { TerminalTodoWriteRenderer } from './TerminalTodoWriteRenderer';
 import { TerminalGenericRenderer } from './TerminalGenericRenderer';
+import {
+  TerminalCreateTaskRenderer,
+  TerminalUpdateTaskRenderer,
+  TerminalListTasksRenderer,
+  TerminalGetTaskRenderer,
+  TerminalTransitionTaskRenderer,
+  TerminalListAgentRunsRenderer,
+} from './TerminalTaskManagerRenderers';
 
 const TERMINAL_TOOL_RENDERERS: Record<string, React.ComponentType<ToolRendererProps>> = {
   // Standard tool names (PascalCase)
@@ -45,17 +53,19 @@ const TERMINAL_TOOL_RENDERERS: Record<string, React.ComponentType<ToolRendererPr
   task: TerminalGenericRenderer,
   askuserquestion: TerminalGenericRenderer,
 
-  // MCP task-manager tools (both formats) — all use generic in terminal mode
-  'mcp__taskManager__create_task': TerminalGenericRenderer,
-  'mcp__taskManager__transition_task': TerminalGenericRenderer,
-  'mcp__taskManager__get_task': TerminalGenericRenderer,
-  'mcp__taskManager__list_tasks': TerminalGenericRenderer,
-  'mcp__taskManager__list_agent_runs': TerminalGenericRenderer,
-  'taskManager.create_task': TerminalGenericRenderer,
-  'taskManager.transition_task': TerminalGenericRenderer,
-  'taskManager.get_task': TerminalGenericRenderer,
-  'taskManager.list_tasks': TerminalGenericRenderer,
-  'taskManager.list_agent_runs': TerminalGenericRenderer,
+  // MCP task-manager tools (both formats) — dedicated renderers
+  'mcp__taskManager__create_task': TerminalCreateTaskRenderer,
+  'mcp__taskManager__update_task': TerminalUpdateTaskRenderer,
+  'mcp__taskManager__list_tasks': TerminalListTasksRenderer,
+  'mcp__taskManager__get_task': TerminalGetTaskRenderer,
+  'mcp__taskManager__transition_task': TerminalTransitionTaskRenderer,
+  'mcp__taskManager__list_agent_runs': TerminalListAgentRunsRenderer,
+  'taskManager.create_task': TerminalCreateTaskRenderer,
+  'taskManager.update_task': TerminalUpdateTaskRenderer,
+  'taskManager.list_tasks': TerminalListTasksRenderer,
+  'taskManager.get_task': TerminalGetTaskRenderer,
+  'taskManager.transition_task': TerminalTransitionTaskRenderer,
+  'taskManager.list_agent_runs': TerminalListAgentRunsRenderer,
 };
 
 /** Get a terminal-specific tool renderer by tool name. Falls back to TerminalGenericRenderer. */
