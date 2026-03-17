@@ -7,6 +7,10 @@
 import type { ChatPreset } from '../ChatPreset';
 import { registerPreset } from '../registry';
 import { DefaultChatPanel } from './DefaultChatPanel';
+import { DefaultChatMessageList } from './DefaultChatMessageList';
+import { DefaultChatInput } from './DefaultChatInput';
+import { DefaultAgentBlock } from './DefaultAgentBlock';
+import { DefaultSessionTabs } from './DefaultSessionTabs';
 
 export { DefaultChatPanel } from './DefaultChatPanel';
 export { DefaultChatMessageList } from './DefaultChatMessageList';
@@ -18,6 +22,10 @@ const defaultPreset: ChatPreset = {
   name: 'default',
   label: 'Default',
   ChatPanel: DefaultChatPanel,
+  ChatMessageList: DefaultChatMessageList,
+  ChatInput: DefaultChatInput,
+  AgentBlock: DefaultAgentBlock,
+  SessionTabs: DefaultSessionTabs,
 };
 
 registerPreset(defaultPreset);

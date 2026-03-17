@@ -7,15 +7,12 @@
 
 import React, { useCallback } from 'react';
 import { getAllPresets } from './registry';
+import { usePreset } from './ChatPresetContext';
 import { reportError } from '../../../lib/error-handler';
 
 export function PresetSelector() {
   const presets = getAllPresets();
-
-  // Hide when there is only one preset — no choice to make.
-  if (presets.length <= 1) {
-    return null;
-  }
+  const { presetName } = usePreset();
 
   const handleChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
     try {
@@ -25,8 +22,14 @@ export function PresetSelector() {
     }
   }, []);
 
+  // Hide when there is only one preset — no choice to make.
+  if (presets.length <= 1) {
+    return null;
+  }
+
   return (
     <select
+      value={presetName}
       onChange={handleChange}
       className="text-xs bg-card/65 border border-border/70 rounded-full px-2 py-1 text-muted-foreground hover:text-foreground transition-colors"
       title="Chat preset"

@@ -6,7 +6,13 @@
  */
 
 import type React from 'react';
-import type { ChatPanelPresetProps } from './types';
+import type {
+  ChatPanelPresetProps,
+  ChatMessageListPresetProps,
+  ChatInputPresetProps,
+  AgentBlockPresetProps,
+  SessionTabsPresetProps,
+} from './types';
 
 /** A chat preset is a named collection of component slots for the chat UI. */
 export interface ChatPreset {
@@ -16,4 +22,12 @@ export interface ChatPreset {
   label: string;
   /** Top-level chat panel component. */
   ChatPanel: React.ComponentType<ChatPanelPresetProps>;
+  /** Message timeline renderer. */
+  ChatMessageList?: React.ComponentType<ChatMessageListPresetProps>;
+  /** Message composition area. */
+  ChatInput?: React.ComponentType<ChatInputPresetProps>;
+  /** Single agent (Task) segment renderer. */
+  AgentBlock?: React.ComponentType<AgentBlockPresetProps>;
+  /** Session tab bar. */
+  SessionTabs?: React.ComponentType<SessionTabsPresetProps>;
 }
