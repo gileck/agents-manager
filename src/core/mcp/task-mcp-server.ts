@@ -94,8 +94,8 @@ export async function createTaskMcpServer(
         'Create a new task in the current project. If pipelineId is not provided, ' +
         'the application default pipeline is used. Returns the created task object. ' +
         'Automatically subscribes this session for agent-completion notifications on the ' +
-        'created task. Pass autoNotify: true to have the agent automatically start a new ' +
-        'turn when the notification arrives; omit it (or pass false) for a UI-only ' +
+        'created task. By default (autoNotify: true) the agent automatically starts a new ' +
+        'turn when the notification arrives. Pass autoNotify: false for a UI-only ' +
         'notification with no automatic agent turn.',
       inputSchema: {
         title: z.string().describe('Task title'),
@@ -106,8 +106,8 @@ export async function createTaskMcpServer(
         featureId: z.string().optional().describe('Feature ID to associate this task with'),
         pipelineId: z.string().optional().describe('Pipeline ID. If omitted, the default pipeline from app settings is used.'),
         autoNotify: z.boolean().optional().describe(
-          'If true, the agent will automatically start a new turn when the agent-completion ' +
-          'notification arrives for this task. If false (default), only a UI notification is ' +
+          'If true (default), the agent will automatically start a new turn when the agent-completion ' +
+          'notification arrives for this task. If false, only a UI notification is ' +
           'shown and the user can choose to engage. This is equivalent to calling ' +
           'subscribe_for_agent after the task is created.',
         ),
@@ -160,8 +160,8 @@ export async function createTaskMcpServer(
         'Update fields on an existing task. Only the provided fields will be changed; ' +
         'omitted fields are left untouched. Pass null to clear optional fields. ' +
         'Automatically subscribes this session for agent-completion notifications on the ' +
-        'updated task. Pass autoNotify: true to have the agent automatically start a new ' +
-        'turn when the notification arrives; omit it (or pass false) for a UI-only ' +
+        'updated task. By default (autoNotify: true) the agent automatically starts a new ' +
+        'turn when the notification arrives. Pass autoNotify: false for a UI-only ' +
         'notification with no automatic agent turn.',
       inputSchema: {
         taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
@@ -184,8 +184,8 @@ export async function createTaskMcpServer(
         metadata: z.record(z.unknown()).optional().describe('Metadata object, merged into existing metadata'),
         phases: z.array(z.unknown()).nullable().optional().describe('Implementation phases JSON array (null to clear)'),
         autoNotify: z.boolean().optional().describe(
-          'If true, the agent will automatically start a new turn when the agent-completion ' +
-          'notification arrives for this task. If false (default), only a UI notification is ' +
+          'If true (default), the agent will automatically start a new turn when the agent-completion ' +
+          'notification arrives for this task. If false, only a UI notification is ' +
           'shown and the user can choose to engage. This is equivalent to calling ' +
           'subscribe_for_agent after the update.',
         ),
@@ -233,15 +233,15 @@ export async function createTaskMcpServer(
         'plan, technical design, tags, and other metadata). Use the fields parameter to request ' +
         'only specific fields (e.g. ["plan", "status", "title"]) to reduce token usage. ' +
         'Automatically subscribes this session for agent-completion notifications on the task. ' +
-        'Pass autoNotify: true to have the agent automatically start a new turn when the ' +
-        'notification arrives; omit it (or pass false) for a UI-only notification with no ' +
+        'By default (autoNotify: true) the agent automatically starts a new turn when the ' +
+        'notification arrives. Pass autoNotify: false for a UI-only notification with no ' +
         'automatic agent turn.',
       inputSchema: {
         taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
         fields: z.array(z.string()).optional().describe('Specific fields to include in the response. When omitted, all fields are returned.'),
         autoNotify: z.boolean().optional().describe(
-          'If true, the agent will automatically start a new turn when the agent-completion ' +
-          'notification arrives for this task. If false (default), only a UI notification is ' +
+          'If true (default), the agent will automatically start a new turn when the agent-completion ' +
+          'notification arrives for this task. If false, only a UI notification is ' +
           'shown and the user can choose to engage. This is equivalent to calling ' +
           'subscribe_for_agent after fetching the task.',
         ),
@@ -338,15 +338,15 @@ export async function createTaskMcpServer(
         'Never auto-select a status — always use an explicit value confirmed with the user. ' +
         'Use get_task to inspect valid transitions before calling this tool. ' +
         'Automatically subscribes this session for agent-completion notifications on the task. ' +
-        'Pass autoNotify: true to have the agent automatically start a new turn when the ' +
-        'notification arrives; omit it (or pass false) for a UI-only notification with no ' +
+        'By default (autoNotify: true) the agent automatically starts a new turn when the ' +
+        'notification arrives. Pass autoNotify: false for a UI-only notification with no ' +
         'automatic agent turn.',
       inputSchema: {
         taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
         status: z.string().describe('The exact target status to transition the task to'),
         autoNotify: z.boolean().optional().describe(
-          'If true, the agent will automatically start a new turn when the agent-completion ' +
-          'notification arrives for this task. If false (default), only a UI notification is ' +
+          'If true (default), the agent will automatically start a new turn when the agent-completion ' +
+          'notification arrives for this task. If false, only a UI notification is ' +
           'shown and the user can choose to engage. This is equivalent to calling ' +
           'subscribe_for_agent after the transition.',
         ),
@@ -422,8 +422,8 @@ export async function createTaskMcpServer(
           'Task ID to watch (full UUID or 8-char short prefix)',
         ),
         autoNotify: z.boolean().optional().describe(
-          'If true, the agent will automatically start a new turn to process ' +
-          'the notification. If false (default), only a client-side UI ' +
+          'If true (default), the agent will automatically start a new turn to process ' +
+          'the notification. If false, only a client-side UI ' +
           'notification is shown and the user can choose to engage.',
         ),
       },
@@ -442,14 +442,14 @@ export async function createTaskMcpServer(
           context.subscriptionRegistry.subscribe({
             sessionId: context.sessionId,
             taskId,
-            autoNotify: args.autoNotify ?? false,
+            autoNotify: args.autoNotify ?? true,
             createdAt: Date.now(),
           });
           return ok({
             subscribed: true,
             taskId,
             sessionId: context.sessionId,
-            autoNotify: args.autoNotify ?? false,
+            autoNotify: args.autoNotify ?? true,
           });
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
@@ -463,7 +463,7 @@ export async function createTaskMcpServer(
   // 2. Auto-subscribes for agent-completion notifications for tools in AUTO_SUBSCRIBE_TOOLS.
   //    list_tasks is excluded — subscribing to every task in a list doesn't make sense.
   //    The autoNotify flag from the tool args controls whether the subscription triggers an
-  //    automatic agent turn (true) or just a UI notification (false, default).
+  //    automatic agent turn (true, default) or just a UI notification (false).
   const trackedTools = context.sessionId
     ? tools.map((tool) => ({
         ...tool,
@@ -484,7 +484,7 @@ export async function createTaskMcpServer(
                   }
                   // Auto-subscribe for agent-completion notifications
                   if (AUTO_SUBSCRIBE_TOOLS.has(tool.name) && context.subscriptionRegistry && taskIds.length > 0) {
-                    const autoNotify = (args as Record<string, unknown>).autoNotify === true;
+                    const autoNotify = (args as Record<string, unknown>).autoNotify !== false;
                     for (const taskId of taskIds) {
                       try {
                         context.subscriptionRegistry.subscribe({
