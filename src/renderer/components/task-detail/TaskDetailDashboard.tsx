@@ -15,7 +15,6 @@ import { SubtasksSection } from './SubtasksSection';
 import { DependenciesSection } from './DependenciesSection';
 import { PlanMarkdown } from './PlanMarkdown';
 import { TaskCommentsCard } from './TaskCommentsCard';
-import { QuestionForm } from '../prompts/QuestionForm';
 import type {
   Task, AgentRun, TaskArtifact, PendingPrompt, DebugTimelineEntry,
   TaskContextEntry, Transition,
@@ -47,15 +46,11 @@ export function TaskDetailDashboard({
   taskId,
   agentRuns,
   artifacts,
-  pendingPrompts,
   debugTimeline,
   contextEntries,
   secondaryTransitions,
   transitioning,
-  responding,
-  promptError,
   onTransition,
-  onPromptRespond,
   onRefetch,
   onContextRefetch,
 }: TaskDetailDashboardProps) {
@@ -234,26 +229,6 @@ export function TaskDetailDashboard({
 
         {/* Comments */}
         <TaskCommentsCard taskId={taskId} contextEntries={contextEntries ?? []} onCommentAdded={onContextRefetch} />
-
-        {/* Pending Prompts */}
-        {pendingPrompts && pendingPrompts.some(p => p.status === 'pending') && (
-          <Card className="border-amber-400">
-            <CardHeader className="py-3">
-              <CardTitle className="text-base text-amber-600">Agent needs your input</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {pendingPrompts.filter((p) => p.status === 'pending').map((prompt) => (
-                <QuestionForm
-                  key={prompt.id}
-                  prompt={prompt}
-                  onSubmit={(responses) => onPromptRespond(prompt.id, responses)}
-                  submitting={responding}
-                  error={promptError}
-                />
-              ))}
-            </CardContent>
-          </Card>
-        )}
 
         {/* Timeline (collapsible) */}
         <TimelineCard entries={debugTimeline ?? []} />

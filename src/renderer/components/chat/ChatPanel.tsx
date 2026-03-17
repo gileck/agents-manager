@@ -163,6 +163,15 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     }
   }, [currentSessionId, updateSession, streamingEnabled]);
 
+  const handleDraftChange = useCallback(async (draft: string) => {
+    if (!currentSessionId) return;
+    try {
+      await updateSession(currentSessionId, { draft: draft || null });
+    } catch (err) {
+      reportError(err, 'ChatPanel: update draft');
+    }
+  }, [currentSessionId, updateSession]);
+
   const estimatedCost = (tokenUsage.inputTokens / 1_000_000) * 3.0 + (tokenUsage.outputTokens / 1_000_000) * 15.0;
   const showInlineTabs = scope.type === 'task';
 
@@ -325,6 +334,8 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               permissionMode={selectedPermissionMode}
               onPermissionModeChange={handlePermissionModeChange}
               sessionId={currentSessionId}
+              initialDraft={currentSession?.draft ?? null}
+              onDraftChange={handleDraftChange}
               onPermissionResponse={respondToPermission}
               rawEvents={rawEvents}
               showRawView={showRawView}

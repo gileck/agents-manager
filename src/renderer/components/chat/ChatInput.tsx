@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Image, Square, Cpu, ArrowUp, Eye, Pencil, Shield, Zap, X } from 'lucide-react';
-import { reportError } from '../../lib/error-handler';
 import type { ChatImage, PermissionMode } from '../../../shared/types';
 import { ImageAnnotationPanel } from '../ui/ImageAnnotationPanel';
 import { MAX_MESSAGE_LENGTH } from '../../../shared/constants';
@@ -11,6 +10,8 @@ import {
   SelectContent,
   SelectItem,
 } from '../ui/select';
+import { useImageInput } from './hooks/useImageInput';
+import { useDraftPersistence } from './hooks/useDraftPersistence';
 
 function mergeRefs<T>(
   ...refs: Array<React.Ref<T> | undefined>
@@ -25,9 +26,6 @@ function mergeRefs<T>(
     }
   };
 }
-
-const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-const MAX_IMAGES = 5;
 
 const CONTEXT_WINDOW = 200_000;
 
@@ -71,10 +69,9 @@ interface ChatInputProps {
   prefill?: { text: string; seq: number } | null;
   lastUserMessage?: string;
   onEditLastMessage?: () => void;
-  sessionId?: string | null;
+  initialDraft?: string | null;
+  onDraftChange?: (draft: string) => void;
 }
-
-const DRAFT_STORAGE_KEY = (sessionId: string) => `chat.draft.${sessionId}`;
 
 export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
   onSend,
@@ -94,12 +91,15 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   prefill,
   lastUserMessage,
   onEditLastMessage,
-  sessionId,
+  initialDraft,
+  onDraftChange,
 }: ChatInputProps, forwardedRef) {
-  const [value, setValue] = useState('');
-  const [images, setImages] = useState<ChatImage[]>([]);
+  const { draft: value, setDraft: setValue, clearDraft } = useDraftPersistence(initialDraft, onDraftChange);
+  const {
+    images, setImages, fileInputRef, addImageFile,
+    handlePaste, handleDrop, handleDragOver, removeImage: hookRemoveImage,
+  } = useImageInput();
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -109,26 +109,6 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
 
-  // Restore draft when session changes
-  useEffect(() => {
-    if (!sessionId) {
-      setValue('');
-      return;
-    }
-    const draft = localStorage.getItem(DRAFT_STORAGE_KEY(sessionId));
-    setValue(draft ?? '');
-  }, [sessionId]);
-
-  // Persist draft whenever value changes
-  useEffect(() => {
-    if (!sessionId) return;
-    if (value) {
-      localStorage.setItem(DRAFT_STORAGE_KEY(sessionId), value);
-    } else {
-      localStorage.removeItem(DRAFT_STORAGE_KEY(sessionId));
-    }
-  }, [sessionId, value]);
-
   useEffect(() => {
     if (prefill) {
       setValue(prefill.text);
@@ -136,65 +116,15 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     }
   }, [prefill?.seq]); // intentionally only tracks seq so a new prefill object with same seq doesn't re-fire
 
-  const addImageFile = useCallback((file: File) => {
-    if (!VALID_IMAGE_TYPES.has(file.type)) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(',')[1];
-      if (!base64) return;
-      setImages((curr) => {
-        if (curr.length >= MAX_IMAGES) return curr;
-        return [...curr, {
-          mediaType: file.type as ChatImage['mediaType'],
-          base64,
-          name: file.name,
-        }];
-      });
-    };
-    reader.onerror = () => {
-      reportError(reader.error, `ChatInput: read file "${file.name}"`);
-    };
-    reader.readAsDataURL(file);
-  }, []);
-
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) addImageFile(file);
-        return;
-      }
-    }
-  }, [addImageFile]);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const files = e.dataTransfer?.files;
-    if (!files) return;
-    for (const file of Array.from(files)) {
-      if (file.type.startsWith('image/')) {
-        addImageFile(file);
-      }
-    }
-  }, [addImageFile]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-  }, []);
-
   const removeImage = useCallback((index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    hookRemoveImage(index);
     setPreviewIndex((prev) => {
       if (prev === null) return null;
       if (prev === index) return null;
       if (prev > index) return prev - 1;
       return prev;
     });
-  }, []);
+  }, [hookRemoveImage]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,6 +133,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     onSend(trimmed, images.length > 0 ? images : undefined);
     setValue('');
     setImages([]);
+    clearDraft();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
