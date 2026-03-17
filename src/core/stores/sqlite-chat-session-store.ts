@@ -282,6 +282,19 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     }
   }
 
+  async removeTrackedTask(sessionId: string, taskId: string): Promise<void> {
+    try {
+      const row = this.db.prepare(`SELECT task_ids FROM chat_sessions WHERE id = ?`).get(sessionId) as { task_ids: string } | undefined;
+      if (!row) return;
+      const ids: string[] = JSON.parse(row.task_ids || '[]');
+      const filtered = ids.filter((id) => id !== taskId);
+      this.db.prepare(`UPDATE chat_sessions SET task_ids = ? WHERE id = ?`).run(JSON.stringify(filtered), sessionId);
+    } catch (error) {
+      getAppLogger().logError('ChatSessionStore', 'removeTrackedTask failed', error);
+      throw new Error(`Failed to remove tracked task: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  }
+
   async getTrackedTaskIds(sessionId: string): Promise<string[]> {
     try {
       const row = this.db.prepare(`SELECT task_ids FROM chat_sessions WHERE id = ?`).get(sessionId) as { task_ids: string } | undefined;

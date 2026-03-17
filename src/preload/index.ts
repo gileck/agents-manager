@@ -206,6 +206,7 @@ const IPC_CHANNELS = {
   TASK_DELETED: 'task:deleted',
   CHAT_TRACKED_TASKS: 'chat:tracked-tasks',
   CHAT_TRACK_TASK: 'chat:track-task',
+  CHAT_UNTRACK_TASK: 'chat:untrack-task',
   CHAT_ANSWER_QUESTION: 'chat:answer-question',
   SCREENSHOT_SAVE: 'screenshot:save',
   CHAT_PERMISSION_REQUEST: 'chat:permission-request',
@@ -501,6 +502,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_TRACKED_TASKS, sessionId),
     trackTask: (sessionId: string, taskId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_TRACK_TASK, sessionId, taskId),
+    untrackTask: (sessionId: string, taskId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_UNTRACK_TASK, sessionId, taskId),
     answerQuestion: (sessionId: string, questionId: string, answers: Record<string, string>): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_ANSWER_QUESTION, sessionId, questionId, answers),
   },

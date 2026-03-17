@@ -240,6 +240,7 @@ export const IPC_CHANNELS = {
   // Chat session task tracking
   CHAT_TRACKED_TASKS: 'chat:tracked-tasks',
   CHAT_TRACK_TASK: 'chat:track-task',
+  CHAT_UNTRACK_TASK: 'chat:untrack-task',
 
   // Chat question answering
   CHAT_ANSWER_QUESTION: 'chat:answer-question',
