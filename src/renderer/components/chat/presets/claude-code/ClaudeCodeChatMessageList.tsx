@@ -54,7 +54,7 @@ function ElapsedTime({ startedAt }: { startedAt: number }) {
   const m = Math.floor(elapsed / 60);
   const s = elapsed % 60;
   return (
-    <span style={{ color: '#6b7280', fontSize: 12, fontFamily: MONO }}>
+    <span style={{ color: '#6b7280', fontSize: '0.923em', fontFamily: MONO }}>
       {m > 0 ? `${m}m ${s}s` : `${s}s`}
     </span>
   );
@@ -66,7 +66,7 @@ function CollapsedSystemNotification({ text }: { text: string }) {
   const summary = text.length > 80 ? text.slice(0, 80).trimEnd() + '…' : text;
 
   return (
-    <div style={{ margin: '2px 0', fontFamily: MONO, fontSize: 12 }}>
+    <div style={{ margin: '2px 0', fontFamily: MONO, fontSize: '0.923em' }}>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -149,7 +149,7 @@ function TerminalThinkingGroup({
         onClick={() => setExpanded((v) => !v)}
         style={{
           background: 'transparent', border: 'none', cursor: 'pointer',
-          color: '#6b7280', fontFamily: MONO, fontSize: 12, padding: '2px 0',
+          color: '#6b7280', fontFamily: MONO, fontSize: '0.923em', padding: '2px 0',
           display: 'flex', alignItems: 'center', gap: 6,
         }}
       >
@@ -175,8 +175,8 @@ function TerminalThinkingGroup({
             const globalIndex = startIndex + i;
             if (msg.type === 'thinking') {
               return (
-                <div key={i} style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic', padding: '2px 0' }}>
-                  {msg.text.length > 500 ? msg.text.slice(0, 500) + '…' : msg.text}
+                <div key={i} style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic', padding: '2px 0' }}>
+                  {msg.text.length > 500 ? msg.text.slice(0, 500) + '\u2026' : msg.text}
                 </div>
               );
             }
@@ -298,7 +298,7 @@ export function ClaudeCodeChatMessageList({
         const userMsg = msg as AgentChatMessageUser;
         nodes.push(
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', lineHeight: '22px', backgroundColor: '#161b22', marginLeft: -16, marginRight: -16, paddingLeft: 16, paddingRight: 16 }}>
-            <span style={{ color: '#6b7280', fontWeight: 700, fontSize: 14, flexShrink: 0, userSelect: 'none' }}>❯</span>
+            <span style={{ color: '#6b7280', fontWeight: 700, fontSize: '1.077em', flexShrink: 0, userSelect: 'none' }}>❯</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={{ color: '#e5e7eb', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{userMsg.text}</span>
               {userMsg.images && userMsg.images.length > 0 && (
@@ -327,7 +327,7 @@ export function ClaudeCodeChatMessageList({
                 onClick={() => onEditMessage(userMsg.text)}
                 style={{
                   background: 'transparent', border: 'none', color: '#6b7280',
-                  cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: 11,
+                  cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '0.846em',
                   fontFamily: MONO, opacity: 0.5, flexShrink: 0,
                 }}
                 title="Edit & resend"
@@ -343,7 +343,7 @@ export function ClaudeCodeChatMessageList({
       else if (msg.type === 'assistant_text') {
         nodes.push(
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0', lineHeight: '22px' }}>
-            <span style={{ color: '#d1d5db', fontSize: 10, flexShrink: 0, userSelect: 'none', marginTop: 2 }}>●</span>
+            <span style={{ color: '#d1d5db', fontSize: '0.77em', flexShrink: 0, userSelect: 'none', marginTop: 2 }}>●</span>
             <div style={{ flex: 1, minWidth: 0, color: '#d1d5db' }} className="cc-markdown-override">
               <MarkdownContent content={stripThinkingBlocks(msg.text)} />
             </div>
@@ -375,9 +375,9 @@ export function ClaudeCodeChatMessageList({
         if (result.toolId && matchedResultIds.has(result.toolId)) continue;
         nodes.push(
           <div key={i} style={{ padding: '2px 0 2px 20px' }}>
-            <span style={{ color: '#6b7280', fontSize: 12 }}>└ </span>
-            <pre style={{ color: '#9ca3af', fontSize: 11, fontFamily: MONO, whiteSpace: 'pre-wrap', margin: 0, display: 'inline' }}>
-              {result.result.length > 2000 ? result.result.slice(0, 2000) + '\n…' : result.result}
+            <span style={{ color: '#6b7280', fontSize: '0.923em' }}>└ </span>
+            <pre style={{ color: '#9ca3af', fontSize: '0.846em', fontFamily: MONO, whiteSpace: 'pre-wrap', margin: 0, display: 'inline' }}>
+              {result.result.length > 2000 ? result.result.slice(0, 2000) + '\n\u2026' : result.result}
             </pre>
           </div>,
         );
@@ -386,8 +386,8 @@ export function ClaudeCodeChatMessageList({
       // ── Thinking (orphan) ──
       else if (msg.type === 'thinking') {
         nodes.push(
-          <div key={i} style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic', padding: '2px 0', paddingLeft: 16 }}>
-            {msg.text.length > 300 ? msg.text.slice(0, 300) + '…' : msg.text}
+          <div key={i} style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic', padding: '2px 0', paddingLeft: 16 }}>
+            {msg.text.length > 300 ? msg.text.slice(0, 300) + '\u2026' : msg.text}
           </div>,
         );
       }
@@ -407,7 +407,7 @@ export function ClaudeCodeChatMessageList({
             <div key={i} style={{ padding: '8px 0', textAlign: 'center' }}>
               <span style={{
                 color: isError ? '#ef4444' : '#6b7280',
-                fontFamily: MONO, fontSize: 12,
+                fontFamily: MONO, fontSize: '0.923em',
                 padding: '2px 12px',
                 border: `1px solid ${isError ? '#7f1d1d' : '#374151'}`,
                 borderRadius: 4,
@@ -423,7 +423,7 @@ export function ClaudeCodeChatMessageList({
                       style={{
                         background: 'transparent', border: '1px solid #374151',
                         color: '#22c55e', cursor: 'pointer', fontFamily: MONO,
-                        fontSize: 11, padding: '2px 10px', borderRadius: 4,
+                        fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
                       }}
                     >
                       ▶ {lastUserText ? 'continue' : 'retry'}
@@ -436,7 +436,7 @@ export function ClaudeCodeChatMessageList({
                       style={{
                         background: 'transparent', border: '1px solid #374151',
                         color: '#d1d5db', cursor: 'pointer', fontFamily: MONO,
-                        fontSize: 11, padding: '2px 10px', borderRadius: 4,
+                        fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
                       }}
                     >
                       ✎ edit & retry
@@ -449,7 +449,7 @@ export function ClaudeCodeChatMessageList({
         } else {
           nodes.push(
             <div key={i} style={{ padding: '4px 0', textAlign: 'center' }}>
-              <span style={{ color: '#6b7280', fontFamily: MONO, fontSize: 11 }}>
+              <span style={{ color: '#6b7280', fontFamily: MONO, fontSize: '0.846em' }}>
                 — {statusMsg.message} —
               </span>
             </div>,
@@ -469,7 +469,7 @@ export function ClaudeCodeChatMessageList({
                 style={{
                   background: 'transparent', border: '1px solid #374151',
                   color: '#6b7280', cursor: 'pointer', fontFamily: MONO,
-                  fontSize: 11, padding: '2px 10px', borderRadius: 4,
+                  fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
                 }}
               >
                 Agent Run → View details
@@ -483,7 +483,7 @@ export function ClaudeCodeChatMessageList({
       else if (msg.type === 'compact_boundary') {
         nodes.push(
           <div key={i} style={{ padding: '6px 0', textAlign: 'center' }}>
-            <span style={{ color: '#f59e0b', fontFamily: MONO, fontSize: 11, border: '1px solid rgba(245,158,11,0.3)', padding: '2px 12px', borderRadius: 4 }}>
+            <span style={{ color: '#f59e0b', fontFamily: MONO, fontSize: '0.846em', border: '1px solid rgba(245,158,11,0.3)', padding: '2px 12px', borderRadius: 4 }}>
               ✂ context compacted · {msg.trigger} · {msg.preTokens.toLocaleString()} tokens before
             </span>
           </div>,
@@ -503,7 +503,7 @@ export function ClaudeCodeChatMessageList({
         if (!hasLater) {
           nodes.push(
             <div key={i} style={{ padding: '6px 0', textAlign: 'center' }}>
-              <span style={{ color: '#f59e0b', fontFamily: MONO, fontSize: 11, fontStyle: 'italic' }}>
+              <span style={{ color: '#f59e0b', fontFamily: MONO, fontSize: '0.846em', fontStyle: 'italic' }}>
                 ⠿ compacting context…
               </span>
             </div>,
@@ -524,11 +524,11 @@ export function ClaudeCodeChatMessageList({
             border: '1px solid #f59e0b', borderRadius: 4,
             backgroundColor: 'rgba(245,158,11,0.05)',
           }}>
-            <div style={{ color: '#f59e0b', fontSize: 12, fontFamily: MONO, fontWeight: 600, marginBottom: 4 }}>
+            <div style={{ color: '#f59e0b', fontSize: '0.923em', fontFamily: MONO, fontWeight: 600, marginBottom: 4 }}>
               🛡 Permission Request: {permReq.toolName}
             </div>
             <pre style={{
-              color: '#9ca3af', fontSize: 11, fontFamily: MONO, whiteSpace: 'pre-wrap',
+              color: '#9ca3af', fontSize: '0.846em', fontFamily: MONO, whiteSpace: 'pre-wrap',
               maxHeight: 100, overflowY: 'auto', margin: 0, padding: '4px 8px',
               backgroundColor: '#111827', borderRadius: 4,
             }}>
@@ -537,7 +537,7 @@ export function ClaudeCodeChatMessageList({
                 : JSON.stringify(permReq.toolInput, null, 2).slice(0, 2000)}
             </pre>
             {responseMsg ? (
-              <div style={{ marginTop: 6, color: responseMsg.allowed ? '#22c55e' : '#ef4444', fontSize: 11, fontFamily: MONO }}>
+              <div style={{ marginTop: 6, color: responseMsg.allowed ? '#22c55e' : '#ef4444', fontSize: '0.846em', fontFamily: MONO }}>
                 {responseMsg.allowed ? '✓ allowed' : '✗ denied'}
               </div>
             ) : (
@@ -548,7 +548,7 @@ export function ClaudeCodeChatMessageList({
                   style={{
                     background: 'transparent', border: '1px solid #22c55e',
                     color: '#22c55e', cursor: 'pointer', fontFamily: MONO,
-                    fontSize: 11, padding: '2px 10px', borderRadius: 4,
+                    fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
                   }}
                 >
                   ✓ allow
@@ -559,7 +559,7 @@ export function ClaudeCodeChatMessageList({
                   style={{
                     background: 'transparent', border: '1px solid #ef4444',
                     color: '#ef4444', cursor: 'pointer', fontFamily: MONO,
-                    fontSize: 11, padding: '2px 10px', borderRadius: 4,
+                    fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
                   }}
                 >
                   ✗ deny
@@ -587,7 +587,7 @@ export function ClaudeCodeChatMessageList({
           );
         } else {
           nodes.push(
-            <div key={i} style={{ padding: '4px 0', color: '#60a5fa', fontFamily: MONO, fontSize: 12 }}>
+            <div key={i} style={{ padding: '4px 0', color: '#60a5fa', fontFamily: MONO, fontSize: '0.923em' }}>
               <span style={{ marginRight: 6 }}>🔔</span>
               {notif.title && <span style={{ fontWeight: 600 }}>{notif.title}: </span>}
               <span>{notif.body}</span>
@@ -601,7 +601,7 @@ export function ClaudeCodeChatMessageList({
         const act = msg as AgentChatMessageSubagentActivity;
         const started = act.status === 'started';
         nodes.push(
-          <div key={i} style={{ padding: '2px 0', fontFamily: MONO, fontSize: 12 }}>
+          <div key={i} style={{ padding: '2px 0', fontFamily: MONO, fontSize: '0.923em' }}>
             <span style={{ color: started ? '#8b5cf6' : '#22c55e', marginRight: 6 }}>
               {started ? '▶' : '✓'}
             </span>
@@ -615,12 +615,12 @@ export function ClaudeCodeChatMessageList({
       else if (msg.type === 'slash_command') {
         const cmd = msg as AgentChatMessageSlashCommand;
         nodes.push(
-          <div key={i} style={{ padding: '2px 0', fontFamily: MONO, fontSize: 12 }}>
+          <div key={i} style={{ padding: '2px 0', fontFamily: MONO, fontSize: '0.923em' }}>
             <span style={{ color: '#6366f1', marginRight: 4 }}>$</span>
             <span style={{ color: '#6366f1', fontWeight: 600 }}>{cmd.command}</span>
             {cmd.args && <span style={{ color: '#9ca3af' }}> {cmd.args}</span>}
-            <span style={{ color: '#6b7280', marginLeft: 8, fontSize: 10 }}>
-              {cmd.status === 'completed' ? '✓' : '…'}
+            <span style={{ color: '#6b7280', marginLeft: 8, fontSize: '0.77em' }}>
+              {cmd.status === 'completed' ? '✓' : '\u2026'}
             </span>
           </div>,
         );
@@ -637,18 +637,18 @@ export function ClaudeCodeChatMessageList({
         style={{ height: '100%', overflowY: 'auto' }}
         onScroll={handleScroll}
       >
-        <div style={{ padding: '16px 16px 8px', fontFamily: MONO, fontSize: 13 }}>
+        <div style={{ padding: '16px 16px 8px', fontFamily: MONO, fontSize: '1em' }}>
           {rendered.length === 0 && isRunning && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 8 }}>
-              <span style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic' }}>⠿ working…</span>
+              <span style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic' }}>⠿ working…</span>
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
           {rendered}
           {isRunning && rendered.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
-              <span style={{ color: '#8b5cf6', fontSize: 12 }}>✻</span>
-              <span style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic' }}>thinking…</span>
+              <span style={{ color: '#8b5cf6', fontSize: '0.923em' }}>✻</span>
+              <span style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic' }}>thinking…</span>
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
@@ -663,7 +663,7 @@ export function ClaudeCodeChatMessageList({
             onClick={scrollToLatest}
             style={{
               background: '#1e293b', color: '#d1d5db', border: '1px solid #374151',
-              fontFamily: MONO, fontSize: 11, padding: '4px 12px', borderRadius: 4,
+              fontFamily: MONO, fontSize: '0.846em', padding: '4px 12px', borderRadius: 4,
               cursor: 'pointer',
             }}
           >

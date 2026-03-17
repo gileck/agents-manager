@@ -33,7 +33,7 @@ export function TerminalTodoWriteRenderer({ toolUse }: ToolRendererProps) {
   const inProgress = todos.find((t) => t.status === 'in_progress');
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={{ ...headerStyle, cursor: 'default' }}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>Todos</span>
@@ -42,18 +42,18 @@ export function TerminalTodoWriteRenderer({ toolUse }: ToolRendererProps) {
         <span style={{ color: '#6b7280' }}>/{todos.length}</span>
         <span style={argStyle}>)</span>
         {inProgress && (
-          <span style={{ color: '#3b82f6', fontSize: 11, fontStyle: 'italic', marginLeft: 4 }}>
+          <span style={{ color: '#3b82f6', fontSize: '0.846em', fontStyle: 'italic', marginLeft: 4 }}>
             {inProgress.activeForm || inProgress.content}
           </span>
         )}
       </div>
 
-      <div style={{ paddingLeft: 20, fontSize: 11 }}>
+      <div style={{ paddingLeft: 20, fontSize: '0.846em' }}>
         {todos.map((todo, i) => {
           const { icon, color } = STATUS_ICON[todo.status] || STATUS_ICON.pending;
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '1px 0', color }}>
-              <span style={{ fontSize: 10, width: 12, textAlign: 'center' }}>{icon}</span>
+              <span style={{ fontSize: '0.77em', width: 12, textAlign: 'center' }}>{icon}</span>
               <span style={{ color: todo.status === 'completed' ? '#6b7280' : '#d1d5db' }}>
                 {todo.content}
               </span>

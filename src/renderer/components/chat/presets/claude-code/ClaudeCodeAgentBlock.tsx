@@ -25,7 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  initializing: 'initializing…',
+  initializing: 'initializing\u2026',
   running: 'running',
   completed: 'completed',
   stopped: 'stopped',
@@ -75,10 +75,10 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
   const hasResult = !!segment.taskToolResult && !!parsedResult;
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13, margin: '4px 0', paddingLeft: 8 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em', margin: '4px 0', paddingLeft: 8 }}>
       {/* Header line: ● Task(description) — running 1m 23s */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: '20px' }}>
-        <span style={{ color, fontSize: 14 }}>●</span>
+        <span style={{ color, fontSize: '1.077em' }}>●</span>
         <span style={{ color: '#a78bfa', fontWeight: 600 }}>Task</span>
         <span style={{ color: '#9ca3af' }}>(</span>
         <span style={{ color: '#d1d5db', maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -86,18 +86,18 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
         </span>
         <span style={{ color: '#9ca3af' }}>)</span>
         <span style={{ color: '#4b5563' }}>—</span>
-        <span style={{ color, fontSize: 11 }}>{STATUS_LABELS[status]}</span>
-        {elapsed && <span style={{ color: '#6b7280', fontSize: 11 }}>{elapsed}</span>}
-        {agentInput.model && <span style={{ color: '#6b7280', fontSize: 10 }}>[{agentInput.model}]</span>}
+        <span style={{ color, fontSize: '0.846em' }}>{STATUS_LABELS[status]}</span>
+        {elapsed && <span style={{ color: '#6b7280', fontSize: '0.846em' }}>{elapsed}</span>}
+        {agentInput.model && <span style={{ color: '#6b7280', fontSize: '0.77em' }}>[{agentInput.model}]</span>}
       </div>
 
       {/* Metadata line */}
       {(displayToolUses > 0 || displayTokens > 0) && (
-        <div style={{ paddingLeft: 20, color: '#4b5563', fontSize: 11, lineHeight: '18px' }}>
+        <div style={{ paddingLeft: 20, color: '#4b5563', fontSize: '0.846em', lineHeight: '18px' }}>
           {[
             displayToolUses > 0 ? `${displayToolUses} tool call${displayToolUses !== 1 ? 's' : ''}` : null,
             displayTokens > 0 ? `${displayTokens.toLocaleString()} tokens` : null,
-          ].filter(Boolean).join(' · ')}
+          ].filter(Boolean).join(' \u00b7 ')}
         </div>
       )}
 
@@ -109,19 +109,19 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
             onClick={() => setPromptExpanded((v) => !v)}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
-              color: '#6b7280', fontSize: 11, fontFamily: MONO, padding: '2px 0',
+              color: '#6b7280', fontSize: '0.846em', fontFamily: MONO, padding: '2px 0',
               display: 'flex', alignItems: 'center', gap: 4,
             }}
           >
-            <span>{promptExpanded ? '└' : '├'}</span>
-            <span>prompt {promptExpanded ? '▾' : '▸'}</span>
+            <span>{promptExpanded ? '\u2514' : '\u251c'}</span>
+            <span>prompt {promptExpanded ? '\u25be' : '\u25b8'}</span>
           </button>
           {promptExpanded && (
             <div style={{
               marginLeft: 12, padding: '4px 8px', borderLeft: '1px solid #1e293b',
               backgroundColor: '#111827', borderRadius: 4, maxHeight: 200, overflowY: 'auto',
             }}>
-              <pre style={{ color: '#9ca3af', fontSize: 11, whiteSpace: 'pre-wrap', margin: 0, fontFamily: MONO }}>
+              <pre style={{ color: '#9ca3af', fontSize: '0.846em', whiteSpace: 'pre-wrap', margin: 0, fontFamily: MONO }}>
                 {agentInput.prompt.length > 3000 ? agentInput.prompt.slice(0, 3000) + '\n... (truncated)' : agentInput.prompt}
               </pre>
             </div>
@@ -137,12 +137,12 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
             onClick={() => setInternalExpanded((v) => !v)}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
-              color: '#6b7280', fontSize: 11, fontFamily: MONO, padding: '2px 0',
+              color: '#6b7280', fontSize: '0.846em', fontFamily: MONO, padding: '2px 0',
               display: 'flex', alignItems: 'center', gap: 4,
             }}
           >
-            <span>{hasResult || isRunning ? '├' : '└'}</span>
-            <span>internal calls {internalExpanded ? '▾' : '▸'}</span>
+            <span>{hasResult || isRunning ? '\u251c' : '\u2514'}</span>
+            <span>internal calls {internalExpanded ? '\u25be' : '\u25b8'}</span>
           </button>
           {internalExpanded && (
             <div style={{ marginLeft: 12, paddingLeft: 8, borderLeft: '1px solid #1e293b' }}>
@@ -157,7 +157,7 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
                   const globalIdx = segment.startIndex + 1 + idx;
                   if (m.type === 'thinking') {
                     return (
-                      <div key={idx} style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic', padding: '2px 0' }}>
+                      <div key={idx} style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic', padding: '2px 0' }}>
                         {m.text.length > 500 ? m.text.slice(0, 500) + '\u2026' : m.text}
                       </div>
                     );
@@ -192,7 +192,7 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
             onClick={() => setResultExpanded((v) => !v)}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
-              color: '#6b7280', fontSize: 11, fontFamily: MONO, padding: '2px 0',
+              color: '#6b7280', fontSize: '0.846em', fontFamily: MONO, padding: '2px 0',
               display: 'flex', alignItems: 'center', gap: 4,
             }}
           >
@@ -212,7 +212,7 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
 
       {/* Running indicator — thinking phase (no internal messages yet) */}
       {isRunning && !hasInternalMessages && !hasResult && (
-        <div style={{ paddingLeft: 20, color: '#6b7280', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+        <div style={{ paddingLeft: 20, color: '#6b7280', fontSize: '0.846em', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
           <span style={{ color }}>└</span>
           <span style={{ color: '#8b5cf6' }}>✻</span>
           <span style={{ fontStyle: 'italic' }}>thinking…</span>
@@ -222,7 +222,7 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
 
       {/* Running indicator — working phase (has internal messages) */}
       {isRunning && hasInternalMessages && !hasResult && (
-        <div style={{ paddingLeft: 20, color: '#6b7280', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+        <div style={{ paddingLeft: 20, color: '#6b7280', fontSize: '0.846em', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
           <span style={{ color }}>└</span>
           <span style={{ animation: 'pulse 1.5s infinite' }}>⠿</span>
           <span>working…</span>
