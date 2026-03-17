@@ -210,12 +210,23 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
         </div>
       )}
 
-      {/* Running indicator */}
-      {isRunning && !hasResult && (
+      {/* Running indicator — thinking phase (no internal messages yet) */}
+      {isRunning && !hasInternalMessages && !hasResult && (
+        <div style={{ paddingLeft: 20, color: '#6b7280', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <span style={{ color }}>└</span>
+          <span style={{ color: '#8b5cf6' }}>✻</span>
+          <span style={{ fontStyle: 'italic' }}>thinking…</span>
+          {elapsed && <span style={{ color: '#6b7280' }}>{elapsed}</span>}
+        </div>
+      )}
+
+      {/* Running indicator — working phase (has internal messages) */}
+      {isRunning && hasInternalMessages && !hasResult && (
         <div style={{ paddingLeft: 20, color: '#6b7280', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
           <span style={{ color }}>└</span>
           <span style={{ animation: 'pulse 1.5s infinite' }}>⠿</span>
           <span>working…</span>
+          {elapsed && <span style={{ color: '#6b7280' }}>{elapsed}</span>}
         </div>
       )}
     </div>

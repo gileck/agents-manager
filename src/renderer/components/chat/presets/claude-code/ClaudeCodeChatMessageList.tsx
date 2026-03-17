@@ -38,6 +38,11 @@ import { ClaudeCodeAgentBlock } from './ClaudeCodeAgentBlock';
 
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
 
+/** Strip <thinking>…</thinking> XML blocks from assistant text before rendering. */
+function stripThinkingBlocks(text: string): string {
+  return text.replace(/<thinking[^>]*>[\s\S]*?<\/thinking>/g, '').trim();
+}
+
 /** Real-time elapsed time display. */
 function ElapsedTime({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(Date.now());
@@ -306,7 +311,7 @@ export function ClaudeCodeChatMessageList({
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0', lineHeight: '22px' }}>
             <span style={{ color: '#d1d5db', fontSize: 10, flexShrink: 0, userSelect: 'none', marginTop: 2 }}>●</span>
             <div style={{ flex: 1, minWidth: 0, color: '#d1d5db' }} className="cc-markdown-override">
-              <MarkdownContent content={msg.text} />
+              <MarkdownContent content={stripThinkingBlocks(msg.text)} />
             </div>
           </div>,
         );
@@ -621,7 +626,8 @@ export function ClaudeCodeChatMessageList({
           {rendered}
           {isRunning && rendered.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
-              <span style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic' }}>⠿ thinking…</span>
+              <span style={{ color: '#8b5cf6', fontSize: 12 }}>✻</span>
+              <span style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic' }}>thinking…</span>
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
