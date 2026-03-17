@@ -38,6 +38,19 @@ import { ClaudeCodeAgentBlock } from './ClaudeCodeAgentBlock';
 
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
 
+/** Attempt to parse a user message as an injected system notification. */
+function parseInjectedNotification(text: string): { text: string; metadata: { injected: true; taskId?: string; agentType?: string; outcome?: string } } | null {
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && parsed.metadata?.injected === true && typeof parsed.text === 'string') {
+      return parsed as { text: string; metadata: { injected: true; taskId?: string; agentType?: string; outcome?: string } };
+    }
+  } catch {
+    // Not JSON — regular user message
+  }
+  return null;
+}
+
 /** Real-time elapsed time display. */
 function ElapsedTime({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(Date.now());
@@ -257,47 +270,69 @@ export function ClaudeCodeChatMessageList({
       // ── User message ──
       if (msg.type === 'user') {
         const userMsg = msg as AgentChatMessageUser;
-        nodes.push(
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', lineHeight: '22px' }}>
-            <span style={{ color: '#6b7280', fontWeight: 700, fontSize: 14, flexShrink: 0, userSelect: 'none' }}>❯</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ color: '#e5e7eb', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{userMsg.text}</span>
-              {userMsg.images && userMsg.images.length > 0 && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                  {userMsg.images.map((img: ChatImageRef, j: number) => (
-                    <img
-                      key={j}
-                      src={`/api/chat/images?path=${encodeURIComponent(img.path)}`}
-                      alt={img.name || 'Image'}
-                      style={{ maxHeight: 160, maxWidth: 240, borderRadius: 4, border: '1px solid #374151', cursor: 'pointer' }}
-                      onClick={() => {
-                        const imgs = userMsg.images!.map((im: ChatImageRef) => ({ src: `/api/chat/images?path=${encodeURIComponent(im.path)}`, name: im.name }));
-                        setViewerImages(imgs);
-                        setViewerIndex(j);
-                      }}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  ))}
-                </div>
+        const injected = parseInjectedNotification(userMsg.text);
+
+        if (injected) {
+          // Render as styled system notification — no ❯ prefix, muted appearance
+          nodes.push(
+            <div key={i} style={{
+              margin: '4px 0', padding: '6px 10px',
+              backgroundColor: 'rgba(107,114,128,0.08)',
+              borderLeft: '2px solid #4b5563',
+              borderRadius: 2,
+              fontFamily: MONO, fontSize: 12,
+            }}>
+              <span style={{ color: '#6b7280', fontWeight: 600, fontSize: 11, userSelect: 'none' }}>
+                ⓘ System Notification
+              </span>
+              <div style={{ color: '#9ca3af', marginTop: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {injected.text.replace(/^\[System Notification\]\s*/, '')}
+              </div>
+            </div>,
+          );
+        } else {
+          nodes.push(
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', lineHeight: '22px' }}>
+              <span style={{ color: '#6b7280', fontWeight: 700, fontSize: 14, flexShrink: 0, userSelect: 'none' }}>❯</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ color: '#e5e7eb', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{userMsg.text}</span>
+                {userMsg.images && userMsg.images.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                    {userMsg.images.map((img: ChatImageRef, j: number) => (
+                      <img
+                        key={j}
+                        src={`/api/chat/images?path=${encodeURIComponent(img.path)}`}
+                        alt={img.name || 'Image'}
+                        style={{ maxHeight: 160, maxWidth: 240, borderRadius: 4, border: '1px solid #374151', cursor: 'pointer' }}
+                        onClick={() => {
+                          const imgs = userMsg.images!.map((im: ChatImageRef) => ({ src: `/api/chat/images?path=${encodeURIComponent(im.path)}`, name: im.name }));
+                          setViewerImages(imgs);
+                          setViewerIndex(j);
+                        }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              {onEditMessage && (
+                <button
+                  type="button"
+                  disabled={isRunning}
+                  onClick={() => onEditMessage(userMsg.text)}
+                  style={{
+                    background: 'transparent', border: 'none', color: '#6b7280',
+                    cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: 11,
+                    fontFamily: MONO, opacity: 0.5, flexShrink: 0,
+                  }}
+                  title="Edit & resend"
+                >
+                  ✎
+                </button>
               )}
-            </div>
-            {onEditMessage && (
-              <button
-                type="button"
-                disabled={isRunning}
-                onClick={() => onEditMessage(userMsg.text)}
-                style={{
-                  background: 'transparent', border: 'none', color: '#6b7280',
-                  cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: 11,
-                  fontFamily: MONO, opacity: 0.5, flexShrink: 0,
-                }}
-                title="Edit & resend"
-              >
-                ✎
-              </button>
-            )}
-          </div>,
-        );
+            </div>,
+          );
+        }
       }
 
       // ── Assistant text ──
