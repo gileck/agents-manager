@@ -251,9 +251,11 @@ export async function createTaskMcpServer(
           const taskId = await resolveTaskId(api, args.taskId);
           const task = await api.tasks.get(taskId);
           if (args.fields) {
+            const essentialFields = ['id', 'title', 'status'];
+            const allFields = [...new Set([...essentialFields, ...args.fields])];
             const t = task as unknown as Record<string, unknown>;
             const result: Record<string, unknown> = {};
-            for (const key of args.fields) {
+            for (const key of allFields) {
               if (key in t) result[key] = t[key];
             }
             return ok(result);
@@ -307,7 +309,10 @@ export async function createTaskMcpServer(
             'createdAt', 'updatedAt', 'pipelineId', 'featureId', 'size',
             'complexity', 'branchName', 'prLink',
           ]);
-          const fieldList = args.fields ?? [...SUMMARY_FIELDS];
+          const essentialFields = ['id', 'title', 'status'];
+          const fieldList = args.fields
+            ? [...new Set([...essentialFields, ...args.fields])]
+            : [...SUMMARY_FIELDS];
           const projected = sliced.map((task) => {
             const t = task as unknown as Record<string, unknown>;
             const result: Record<string, unknown> = {};
