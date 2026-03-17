@@ -539,13 +539,35 @@ export function ClaudeCodeChatMessageList({
       // ── Notification ──
       else if (msg.type === 'notification') {
         const notif = msg as AgentChatMessageNotification;
-        nodes.push(
-          <div key={i} style={{ padding: '4px 0', color: '#60a5fa', fontFamily: MONO, fontSize: 12 }}>
-            <span style={{ marginRight: 6 }}>🔔</span>
-            {notif.title && <span style={{ fontWeight: 600 }}>{notif.title}: </span>}
-            <span>{notif.body}</span>
-          </div>,
-        );
+        const isSystemNotification = notif.body?.startsWith('[System Notification]');
+
+        if (isSystemNotification) {
+          const displayText = notif.body.replace(/^\[System Notification\]\s*/, '');
+          nodes.push(
+            <div key={i} style={{
+              margin: '4px 0', padding: '6px 10px',
+              backgroundColor: 'rgba(107,114,128,0.08)',
+              borderLeft: '2px solid #4b5563',
+              borderRadius: 2,
+              fontFamily: MONO, fontSize: 12,
+            }}>
+              <span style={{ color: '#6b7280', fontWeight: 600, fontSize: 11, userSelect: 'none' }}>
+                ⓘ System Notification
+              </span>
+              <div style={{ color: '#9ca3af', marginTop: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {displayText}
+              </div>
+            </div>,
+          );
+        } else {
+          nodes.push(
+            <div key={i} style={{ padding: '4px 0', color: '#60a5fa', fontFamily: MONO, fontSize: 12 }}>
+              <span style={{ marginRight: 6 }}>🔔</span>
+              {notif.title && <span style={{ fontWeight: 600 }}>{notif.title}: </span>}
+              <span>{notif.body}</span>
+            </div>,
+          );
+        }
       }
 
       // ── Subagent activity ──

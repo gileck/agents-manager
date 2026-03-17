@@ -29,8 +29,29 @@ function convertDbMessages(dbMessages: ChatMessage[]): AgentChatMessage[] {
           console.warn('[useChat] User message starts with { but failed JSON parse:', err);
         }
       }
-      result.push({ type: 'user' as const, text, images, timestamp: msg.createdAt });
+      // Detect injected notification user messages (plain text from triggerNotificationTurn)
+      if (text.startsWith('[System Notification]')) {
+        result.push({ type: 'notification' as const, title: 'System Notification', body: text, timestamp: msg.createdAt });
+      } else {
+        result.push({ type: 'user' as const, text, images, timestamp: msg.createdAt });
+      }
     } else if (msg.role === 'system') {
+      // Detect injected system notification JSON (from deliverInjectedMessage)
+      if (msg.content.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(msg.content);
+          if (parsed?.metadata?.injected === true && typeof parsed.text === 'string') {
+            const taskTitle = typeof parsed.metadata.taskTitle === 'string' ? parsed.metadata.taskTitle : undefined;
+            result.push({
+              type: 'notification' as const,
+              title: taskTitle ? `Task "${taskTitle}" completed` : 'System Notification',
+              body: parsed.text,
+              timestamp: msg.createdAt,
+            });
+            continue;
+          }
+        } catch { /* not injected notification JSON — fall through */ }
+      }
       result.push({ type: 'status' as const, status: 'completed' as const, message: msg.content, timestamp: msg.createdAt });
     } else if (msg.role === 'assistant') {
       // Try to parse JSON array of structured messages; fall back to legacy plain text
