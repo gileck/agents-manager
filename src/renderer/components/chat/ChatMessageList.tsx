@@ -288,7 +288,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
                 {isError && <AlertTriangle className="h-3 w-3" />}
                 {label}
               </div>
-              {isError && statusMsg.message && (
+              {(isError || isStopped) && statusMsg.message && (
                 <ErrorDetails message={statusMsg.message} stack={statusMsg.stack} />
               )}
               {!isRunning && (
