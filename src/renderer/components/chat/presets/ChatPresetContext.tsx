@@ -5,7 +5,7 @@
  * available to any descendant via `usePreset()`.
  */
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import type { ChatPreset } from './ChatPreset';
 import { getPreset, DEFAULT_PRESET_NAME } from './registry';
 
@@ -18,6 +18,8 @@ interface ChatPresetContextValue {
   preset: ChatPreset;
   /** The raw preset name persisted in settings. */
   presetName: string;
+  /** Update the active preset (persists to settings and updates UI state). */
+  setPreset: (name: string) => void;
 }
 
 const ChatPresetCtx = createContext<ChatPresetContextValue | null>(null);
@@ -47,10 +49,18 @@ export function ChatPresetProvider({ children }: ChatPresetProviderProps) {
     });
   }, []);
 
+  const setPreset = useCallback((name: string) => {
+    setPresetName(name);
+    window.api.settings.update({ chatPreset: name || null }).catch(() => {
+      // Ignore — UI state is already updated.
+    });
+  }, []);
+
   const value = useMemo<ChatPresetContextValue>(() => ({
     preset: getPreset(presetName),
     presetName,
-  }), [presetName]);
+    setPreset,
+  }), [presetName, setPreset]);
 
   return (
     <ChatPresetCtx.Provider value={value}>
