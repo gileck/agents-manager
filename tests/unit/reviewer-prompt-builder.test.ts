@@ -30,7 +30,7 @@ describe('ReviewerPromptBuilder', () => {
   });
 
   describe('getOutputFormat', () => {
-    it('returns correct schema shape with enum-restricted verdict', () => {
+    it('returns correct schema shape with enum-restricted verdict and structured comments', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const format = (promptBuilder as any).getOutputFormat(createContext()) as { type: string; schema: Record<string, unknown> } | undefined;
       expect(format).toBeDefined();
@@ -39,6 +39,11 @@ describe('ReviewerPromptBuilder', () => {
       expect(format.schema.required).toEqual(['verdict', 'summary', 'comments']);
       expect(format.schema.properties.verdict.enum).toEqual(['approved', 'changes_requested']);
       expect(format.schema.properties.comments.type).toBe('array');
+      // Verify structured comment schema
+      const commentItems = format.schema.properties.comments.items;
+      expect(commentItems.type).toBe('object');
+      expect(commentItems.required).toEqual(['file', 'severity', 'issue', 'suggestion']);
+      expect(commentItems.properties.severity.enum).toEqual(['must_fix', 'should_fix', 'nit']);
     });
   });
 
@@ -50,6 +55,44 @@ describe('ReviewerPromptBuilder', () => {
       expect(prompt).toContain('Nice-to-have');
       expect(prompt).toContain('Approval Threshold');
       expect(prompt).not.toContain('REVIEW_VERDICT');
+    });
+
+    it('includes architecture compliance and CLAUDE.md compliance criteria', () => {
+      const prompt = promptBuilder.buildPrompt(createContext());
+      expect(prompt).toContain('CLAUDE.md compliance');
+      expect(prompt).toContain('Architecture compliance');
+      expect(prompt).toContain('Layer boundaries');
+      expect(prompt).toContain('docs/abstractions.md');
+    });
+
+    it('includes architecture docs step in non-resume mode', () => {
+      const prompt = promptBuilder.buildPrompt(createContext());
+      expect(prompt).toContain('architecture documentation in docs/');
+      expect(prompt).toContain('docs/architecture-overview.md');
+    });
+
+    it('includes code exploration step', () => {
+      const prompt = promptBuilder.buildPrompt(createContext());
+      expect(prompt).toContain('read the full file to understand surrounding context');
+      expect(prompt).toContain('imports, call sites, type contracts');
+    });
+
+    it('includes context consistency should-check', () => {
+      const prompt = promptBuilder.buildPrompt(createContext());
+      expect(prompt).toContain('Context consistency');
+    });
+
+    it('includes enriched summary description in output fields', () => {
+      const prompt = promptBuilder.buildPrompt(createContext());
+      expect(prompt).toContain('how many files changed, how many issues found, how many blocking');
+    });
+
+    it('includes structured comment fields in output description', () => {
+      const prompt = promptBuilder.buildPrompt(createContext());
+      expect(prompt).toContain('`file`');
+      expect(prompt).toContain('`severity`');
+      expect(prompt).toContain('`issue`');
+      expect(prompt).toContain('`suggestion`');
     });
 
     it('includes re-review notice when prior review exists', () => {
@@ -179,13 +222,17 @@ describe('ReviewerPromptBuilder', () => {
 
   describe('buildResult', () => {
     it('uses structuredOutput.verdict as authoritative outcome', () => {
-      const so = { verdict: 'changes_requested', summary: 'Issues found', comments: ['Fix imports'] };
+      const so = {
+        verdict: 'changes_requested',
+        summary: 'Issues found',
+        comments: [{ file: 'src/index.ts', severity: 'must_fix', issue: 'Fix imports', suggestion: 'Use named imports' }],
+      };
       const libResult = { exitCode: 0, output: 'output text', costInputTokens: 100, costOutputTokens: 50, structuredOutput: so };
       const result = promptBuilder.buildResult(createContext(), libResult, 'approved', 'the prompt');
       expect(result.outcome).toBe('changes_requested');
       expect(result.payload).toBeDefined();
       expect(result.payload!.summary).toBe('Issues found');
-      expect(result.payload!.comments).toEqual(['Fix imports']);
+      expect(result.payload!.comments).toEqual([{ file: 'src/index.ts', severity: 'must_fix', issue: 'Fix imports', suggestion: 'Use named imports' }]);
     });
 
     it('attaches payload only for changes_requested', () => {
@@ -204,7 +251,7 @@ describe('ReviewerPromptBuilder', () => {
     });
 
     it('falls back to output slice when structured output partial (no summary)', () => {
-      const so = { verdict: 'changes_requested' } as Partial<{ verdict: string; summary: string; comments: string[] }>;
+      const so = { verdict: 'changes_requested' } as Partial<{ verdict: string; summary: string; comments: Array<{ file: string; severity: string; issue: string; suggestion: string }> }>;
       const libResult = { exitCode: 0, output: 'a'.repeat(600), costInputTokens: 10, costOutputTokens: 5, structuredOutput: so };
       const result = promptBuilder.buildResult(createContext(), libResult, 'approved', 'the prompt');
       expect(result.outcome).toBe('changes_requested');
@@ -264,6 +311,10 @@ describe('ReviewerPromptBuilder', () => {
     });
 
     it('handles changes_requested path with structured output', async () => {
+      const structuredComments = [
+        { file: 'src/api/foo.ts', severity: 'must_fix', issue: 'Fix naming', suggestion: 'Use camelCase' },
+        { file: 'tests/foo.test.ts', severity: 'should_fix', issue: 'Add tests', suggestion: 'Cover edge cases' },
+      ];
       const messages = [
         {
           type: 'assistant',
@@ -275,7 +326,7 @@ describe('ReviewerPromptBuilder', () => {
           structured_output: {
             verdict: 'changes_requested',
             summary: 'Several issues',
-            comments: ['Fix naming', 'Add tests'],
+            comments: structuredComments,
           },
           usage: { input_tokens: 200, output_tokens: 100 },
         },
@@ -287,7 +338,7 @@ describe('ReviewerPromptBuilder', () => {
       expect(result.outcome).toBe('changes_requested');
       expect(result.payload).toBeDefined();
       expect(result.payload!.summary).toBe('Several issues');
-      expect(result.payload!.comments).toEqual(['Fix naming', 'Add tests']);
+      expect(result.payload!.comments).toEqual(structuredComments);
     });
 
     it('handles error path', async () => {

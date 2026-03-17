@@ -4,6 +4,19 @@ import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
 import type { AgentLibResult } from '../interfaces/agent-lib';
 import { PromptRenderer } from '../services/prompt-renderer';
 
+/** Format a single review comment — supports both structured objects and legacy strings. */
+function formatReviewComment(c: unknown): string {
+  if (typeof c === 'object' && c !== null && 'file' in c && 'severity' in c && 'issue' in c) {
+    const comment = c as { file: string; severity: string; issue: string; suggestion?: string };
+    let line = `- **[${comment.severity}]** \`${comment.file}\`: ${comment.issue}`;
+    if (comment.suggestion) {
+      line += ` → ${comment.suggestion}`;
+    }
+    return line;
+  }
+  return `- ${String(c)}`;
+}
+
 /** Format a context entry for inclusion in the prompt, including reviewer comments when present. */
 function formatContextEntry(e: TaskContextEntry): string {
   const ts = new Date(e.createdAt).toISOString();
@@ -12,7 +25,7 @@ function formatContextEntry(e: TaskContextEntry): string {
   if (Array.isArray(comments) && comments.length > 0) {
     text += '\n\n**Review Comments:**';
     for (const c of comments) {
-      text += `\n- ${String(c)}`;
+      text += `\n${formatReviewComment(c)}`;
     }
   }
   return text;
