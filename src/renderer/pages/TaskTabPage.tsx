@@ -4,7 +4,8 @@ import { TaskSubPageLayout } from '../components/task-detail/TaskSubPageLayout';
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
 import { ImplementationTab } from '../components/tasks/ImplementationTab';
 import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
-import { ChatPanel } from '../components/chat/ChatPanel';
+import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext';
+import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
 import { InlineError } from '../components/InlineError';
 import { useTask } from '../hooks/useTasks';
 import { usePipeline } from '../hooks/usePipelines';
@@ -215,7 +216,9 @@ function ImplementationContent({ id }: { id: string }) {
 function ChatContent({ id }: { id: string }) {
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <ChatPanel scope={{ type: 'task', id }} />
+      <ChatPresetProvider>
+        <PresetChatPanel scope={{ type: 'task', id }} />
+      </ChatPresetProvider>
     </div>
   );
 }

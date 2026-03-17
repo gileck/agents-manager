@@ -23,6 +23,7 @@ import { ContextSidebar } from './ContextSidebar';
 import { SessionTabs } from './SessionTabs';
 import { ActiveAgentsPanel } from './ActiveAgentsPanel';
 import { ChatActionsProvider } from './ChatActionsContext';
+import { PresetSelector } from './presets/PresetSelector';
 
 export interface ChatPanelProps {
   scope: ChatScope;
@@ -244,6 +245,8 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
           >
             {showSidebar ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
           </button>
+
+          <PresetSelector />
 
           <button
             onClick={() => navigate('/settings/threads')}

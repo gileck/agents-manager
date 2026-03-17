@@ -2,7 +2,8 @@ import React from 'react';
 import { MessageSquare } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useProjectChatSessions } from '../contexts/ProjectChatSessionsContext';
-import { ChatPanel } from '../components/chat/ChatPanel';
+import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext';
+import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
 
 export function ChatPage() {
   const { currentProjectId } = useCurrentProject();
@@ -23,9 +24,11 @@ export function ChatPage() {
   }
 
   return (
-    <ChatPanel
-      scope={{ type: 'project', id: currentProjectId }}
-      sessionsOverride={sessions}
-    />
+    <ChatPresetProvider>
+      <PresetChatPanel
+        scope={{ type: 'project', id: currentProjectId }}
+        sessionsOverride={sessions}
+      />
+    </ChatPresetProvider>
   );
 }

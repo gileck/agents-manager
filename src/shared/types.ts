@@ -64,6 +64,7 @@ export interface AppSettings {
   chatDefaultModel: string | null;
   chatDefaultPermissionMode: PermissionMode | null;
   chatThreadTheme: string | null; // JSON-serialized ChatThreadTheme
+  chatPreset: string | null; // Active chat UI preset name (null = "default")
 }
 
 // Log types (kept for template infrastructure)
