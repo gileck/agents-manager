@@ -148,5 +148,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '115_add_draft_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN draft TEXT DEFAULT NULL`,
     },
+    {
+      name: '116_reseed_pipelines_merge_guard_removal',
+      sql: `UPDATE pipelines SET transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
+    },
   ];
 }

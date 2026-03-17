@@ -344,7 +344,8 @@ export class TelegramBotService implements ITelegramBotService {
       await this.send(chatId, `Transitioned to \`${status}\``, { parse_mode: 'MarkdownV2' });
       await this.handleTaskDetail(chatId, taskId);
     } else {
-      await this.send(chatId, `Transition failed: ${result.error}`);
+      const errMsg = result.guardFailures?.map(g => g.reason).join('; ') ?? result.error ?? 'Unknown error';
+      await this.send(chatId, `Transition failed: ${errMsg}`);
     }
   }
 
