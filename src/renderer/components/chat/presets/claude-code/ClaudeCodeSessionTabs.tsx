@@ -53,7 +53,7 @@ export function ClaudeCodeSessionTabs({
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace', fontSize: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace', fontSize: '0.923em' }}>
       {sessions.map((s) => {
         const active = s.id === currentSessionId;
         const { running, completed } = getAgentStatus(s.id);
@@ -83,7 +83,7 @@ export function ClaudeCodeSessionTabs({
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3b82f6', animation: 'pulse 1.5s infinite' }} />
             )}
             {completed > 0 && running === 0 && (
-              <span style={{ color: '#22c55e', fontSize: 10 }}>✓</span>
+              <span style={{ color: '#22c55e', fontSize: '0.77em' }}>✓</span>
             )}
             {renameId === s.id ? (
               <form
@@ -100,7 +100,7 @@ export function ClaudeCodeSessionTabs({
                     background: 'transparent',
                     border: '1px solid #4b5563',
                     color: '#e5e7eb',
-                    fontSize: 12,
+                    fontSize: '1em',
                     fontFamily: 'inherit',
                     width: 80,
                     padding: '1px 4px',
@@ -124,7 +124,7 @@ export function ClaudeCodeSessionTabs({
             {sessions.length > 1 && (
               <span
                 onClick={(e) => { e.stopPropagation(); onSessionDelete(s.id); }}
-                style={{ opacity: 0.4, cursor: 'pointer', fontSize: 10, lineHeight: 1 }}
+                style={{ opacity: 0.4, cursor: 'pointer', fontSize: '0.77em', lineHeight: 1 }}
                 title="Close"
               >
                 ×
@@ -141,7 +141,7 @@ export function ClaudeCodeSessionTabs({
           border: '1px solid #374151',
           color: '#6b7280',
           cursor: 'pointer',
-          fontSize: 14,
+          fontSize: '1.077em',
           padding: '2px 8px',
           borderRadius: 4,
           lineHeight: 1,
@@ -165,7 +165,7 @@ export function ClaudeCodeSessionTabs({
             zIndex: 9999,
             minWidth: 120,
             fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-            fontSize: 12,
+            fontSize: '0.923em',
           }}
         >
           <button

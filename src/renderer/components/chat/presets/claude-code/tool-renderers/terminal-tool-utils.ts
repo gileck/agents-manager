@@ -34,7 +34,7 @@ export function shortPath(path: string): string {
 /** Green bullet style for the `●` prefix. */
 export const bulletStyle: React.CSSProperties = {
   color: '#22c55e',
-  fontSize: 14,
+  fontSize: '1.077em',
   flexShrink: 0,
   userSelect: 'none',
 };
@@ -42,7 +42,7 @@ export const bulletStyle: React.CSSProperties = {
 /** Muted `└` connector style. */
 export const connectorStyle: React.CSSProperties = {
   color: '#4b5563',
-  fontSize: 12,
+  fontSize: '0.923em',
   marginRight: 4,
   userSelect: 'none',
 };
@@ -60,7 +60,7 @@ export const headerStyle: React.CSSProperties = {
 /** Result row container style. */
 export const resultRowStyle: React.CSSProperties = {
   paddingLeft: 20,
-  fontSize: 12,
+  fontSize: '0.923em',
   lineHeight: '18px',
   display: 'flex',
   alignItems: 'flex-start',
@@ -82,7 +82,7 @@ export const expandedContentStyle: React.CSSProperties = {
 /** Pre-formatted content style. */
 export const preStyle: React.CSSProperties = {
   color: '#9ca3af',
-  fontSize: 11,
+  fontSize: '0.846em',
   fontFamily: MONO,
   whiteSpace: 'pre-wrap',
   margin: 0,
@@ -103,6 +103,6 @@ export const argStyle: React.CSSProperties = {
 /** Running indicator style. */
 export const runningStyle: React.CSSProperties = {
   color: '#6b7280',
-  fontSize: 11,
+  fontSize: '0.846em',
   fontStyle: 'italic',
 };

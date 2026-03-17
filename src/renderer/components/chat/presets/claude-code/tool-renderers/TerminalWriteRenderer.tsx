@@ -21,7 +21,7 @@ export function TerminalWriteRenderer({ toolUse, toolResult, expanded, onToggle 
   const hasResult = !!toolResult;
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={headerStyle} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>Write</span>
@@ -40,7 +40,7 @@ export function TerminalWriteRenderer({ toolUse, toolResult, expanded, onToggle 
       {hasResult && (
         <div style={resultRowStyle}>
           <span style={connectorStyle}>└ </span>
-          <span style={{ color: '#22c55e', fontSize: 12 }}>
+          <span style={{ color: '#22c55e', fontSize: '0.923em' }}>
             Wrote {lineCount} line{lineCount !== 1 ? 's' : ''}
           </span>
         </div>

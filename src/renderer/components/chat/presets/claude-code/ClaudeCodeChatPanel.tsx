@@ -9,7 +9,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { PermissionMode, AgentChatMessageUser } from '../../../../../shared/types';
+import type { PermissionMode, AgentChatMessageUser, ChatThreadTheme } from '../../../../../shared/types';
 import { reportError } from '../../../../lib/error-handler';
 import { useChat } from '../../../../hooks/useChat';
 import { useChatSessions } from '../../../../hooks/useChatSessions';
@@ -74,7 +74,7 @@ const TERMINAL_STYLES = `
   color: #e5e7eb;
   padding: 1px 4px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: 0.923em;
   font-family: ${MONO};
 }
 .cc-terminal-root .cc-markdown-override pre {
@@ -169,6 +169,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
   const [showActions, setShowActions] = useState(false);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
+  const [threadTheme, setThreadTheme] = useState<ChatThreadTheme | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Reset raw view on session change
@@ -187,6 +188,17 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
   useEffect(() => {
     window.api.agentLibs.list().then(setAgentLibs).catch((err) => reportError(err, 'ClaudeCodeChatPanel: load agent libs'));
     window.api.agentLibs.listModels().then(setAgentLibModels).catch((err) => reportError(err, 'ClaudeCodeChatPanel: load agent models'));
+    window.api.settings.get().then((s) => {
+      if (s.chatThreadTheme) {
+        try {
+          setThreadTheme(JSON.parse(s.chatThreadTheme) as ChatThreadTheme);
+        } catch {
+          // ignore parse errors
+        }
+      }
+    }).catch((err) => {
+      reportError(err, 'ClaudeCodeChatPanel: load thread theme');
+    });
   }, []);
 
   const scopeAgents = useMemo(
@@ -285,7 +297,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
     color: active ? '#e5e7eb' : '#6b7280',
     cursor: 'pointer',
     fontFamily: MONO,
-    fontSize: 11,
+    fontSize: '0.846em',
     padding: '3px 10px',
     borderRadius: 4,
     whiteSpace: 'nowrap',
@@ -302,6 +314,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
           backgroundColor: BG,
           color: '#d1d5db',
           fontFamily: MONO,
+          ...(threadTheme?.fontSize ? { fontSize: `${threadTheme.fontSize}px` } : {}),
         }}
       >
         {/* ── Terminal Header ── */}
@@ -328,7 +341,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
                 onSessionDelete={deleteSession}
               />
             ) : (
-              <span style={{ color: '#e5e7eb', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ color: '#e5e7eb', fontSize: '1em', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {currentSession?.name || 'New thread'}
               </span>
             )}
@@ -381,7 +394,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
                     position: 'absolute', right: 0, top: '100%', marginTop: 4,
                     backgroundColor: '#1f2937', border: `1px solid ${BORDER}`,
                     borderRadius: 6, padding: 4, zIndex: 50, minWidth: 150,
-                    fontFamily: MONO, fontSize: 12,
+                    fontFamily: MONO, fontSize: '0.923em',
                   }}>
                     <button
                       onClick={() => { summarizeChat(); setShowActions(false); }}
@@ -414,15 +427,15 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
 
         {/* ── Errors ── */}
         {sessionsError && (
-          <div style={{ padding: '6px 16px', color: '#ef4444', fontFamily: MONO, fontSize: 12, borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ padding: '6px 16px', color: '#ef4444', fontFamily: MONO, fontSize: '0.923em', borderBottom: `1px solid ${BORDER}` }}>
             ⚠ Sessions: {sessionsError}
-            <button onClick={clearSessionsError} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', marginLeft: 8, fontFamily: MONO, fontSize: 11 }}>dismiss</button>
+            <button onClick={clearSessionsError} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', marginLeft: 8, fontFamily: MONO, fontSize: '0.846em' }}>dismiss</button>
           </div>
         )}
         {error && (
-          <div style={{ padding: '6px 16px', color: '#ef4444', fontFamily: MONO, fontSize: 12, borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ padding: '6px 16px', color: '#ef4444', fontFamily: MONO, fontSize: '0.923em', borderBottom: `1px solid ${BORDER}` }}>
             ⚠ Chat: {error}
-            <button onClick={clearError} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', marginLeft: 8, fontFamily: MONO, fontSize: 11 }}>dismiss</button>
+            <button onClick={clearError} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', marginLeft: 8, fontFamily: MONO, fontSize: '0.846em' }}>dismiss</button>
           </div>
         )}
 
@@ -431,18 +444,18 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             {loading && messages.length === 0 ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
-                <span style={{ fontFamily: MONO, fontSize: 12, fontStyle: 'italic' }}>⠿ loading messages…</span>
+                <span style={{ fontFamily: MONO, fontSize: '0.923em', fontStyle: 'italic' }}>⠿ loading messages…</span>
               </div>
             ) : showRawView ? (
               <RawChatView rawEvents={rawEvents} />
             ) : messages.length === 0 && !isStreaming ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
                 <div style={{ textAlign: 'center', fontFamily: MONO }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>❯</div>
-                  <div style={{ color: '#e5e7eb', fontSize: 16, fontWeight: 600 }}>
+                  <div style={{ fontSize: '2.46em', marginBottom: 12 }}>❯</div>
+                  <div style={{ color: '#e5e7eb', fontSize: '1.23em', fontWeight: 600 }}>
                     {scope.type === 'task' ? 'Ready to work' : 'What shall we build?'}
                   </div>
-                  <div style={{ color: '#6b7280', fontSize: 12, marginTop: 8 }}>
+                  <div style={{ color: '#6b7280', fontSize: '0.923em', marginTop: 8 }}>
                     Ask about code, implementation details, or execution plans.
                   </div>
                 </div>

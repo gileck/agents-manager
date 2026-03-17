@@ -23,7 +23,7 @@ export function TerminalEditRenderer({ toolUse, toolResult, expanded, onToggle }
   const hasResult = !!toolResult;
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={headerStyle} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>Edit</span>
@@ -42,7 +42,7 @@ export function TerminalEditRenderer({ toolUse, toolResult, expanded, onToggle }
       {hasResult && (
         <div style={resultRowStyle}>
           <span style={connectorStyle}>└ </span>
-          <span style={{ fontSize: 12 }}>
+          <span style={{ fontSize: '0.923em' }}>
             <span style={{ color: '#22c55e' }}>+{addedLines}</span>
             <span style={{ color: '#6b7280' }}>/</span>
             <span style={{ color: '#ef4444' }}>-{removedLines}</span>
@@ -56,7 +56,7 @@ export function TerminalEditRenderer({ toolUse, toolResult, expanded, onToggle }
           {oldStr && (
             <div style={{ marginBottom: 4 }}>
               {oldStr.split('\n').map((line, i) => (
-                <div key={`old-${i}`} style={{ color: '#ef4444', fontSize: 11, fontFamily: MONO, whiteSpace: 'pre-wrap', backgroundColor: 'rgba(239,68,68,0.08)' }}>
+                <div key={`old-${i}`} style={{ color: '#ef4444', fontSize: '0.846em', fontFamily: MONO, whiteSpace: 'pre-wrap', backgroundColor: 'rgba(239,68,68,0.08)' }}>
                   - {line}
                 </div>
               ))}
@@ -65,7 +65,7 @@ export function TerminalEditRenderer({ toolUse, toolResult, expanded, onToggle }
           {newStr && (
             <div>
               {newStr.split('\n').map((line, i) => (
-                <div key={`new-${i}`} style={{ color: '#22c55e', fontSize: 11, fontFamily: MONO, whiteSpace: 'pre-wrap', backgroundColor: 'rgba(34,197,94,0.08)' }}>
+                <div key={`new-${i}`} style={{ color: '#22c55e', fontSize: '0.846em', fontFamily: MONO, whiteSpace: 'pre-wrap', backgroundColor: 'rgba(34,197,94,0.08)' }}>
                   + {line}
                 </div>
               ))}

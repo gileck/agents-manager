@@ -191,7 +191,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             style={{
               color: '#e3b341',
               fontFamily: MONO,
-              fontSize: 16,
+              fontSize: '1.23em',
               fontWeight: 700,
               lineHeight: '24px',
               flexShrink: 0,
@@ -216,7 +216,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
               backgroundColor: 'transparent',
               color: '#e5e7eb',
               fontFamily: MONO,
-              fontSize: 14,
+              fontSize: '1.077em',
               lineHeight: '24px',
               border: 'none',
               outline: 'none',
@@ -231,7 +231,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             {/* Queued indicator */}
             {isQueued && (
-              <span style={{ fontFamily: MONO, fontSize: 11, color: '#f59e0b' }}>
+              <span style={{ fontFamily: MONO, fontSize: '0.846em', color: '#f59e0b' }}>
                 queued
                 {onCancelQueue && (
                   <button
@@ -239,7 +239,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
                     onClick={onCancelQueue}
                     style={{
                       background: 'transparent', border: 'none', color: '#f59e0b',
-                      cursor: 'pointer', fontSize: 11, marginLeft: 4,
+                      cursor: 'pointer', fontSize: '0.846em', marginLeft: 4,
                     }}
                     title="Cancel queue"
                   >
@@ -250,7 +250,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             )}
 
             {isOverLimit && (
-              <span style={{ fontFamily: MONO, fontSize: 10, color: '#ef4444' }}>
+              <span style={{ fontFamily: MONO, fontSize: '0.77em', color: '#ef4444' }}>
                 {value.length.toLocaleString()}/{MAX_MESSAGE_LENGTH.toLocaleString()}
               </span>
             )}
@@ -263,7 +263,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
                 style={{
                   background: 'transparent', border: '1px solid #374151',
                   color: isQueued ? '#f59e0b' : '#ef4444',
-                  cursor: 'pointer', fontFamily: MONO, fontSize: 11,
+                  cursor: 'pointer', fontFamily: MONO, fontSize: '0.846em',
                   padding: '2px 8px', borderRadius: 4,
                 }}
                 title={isQueued ? 'Stop & send queued' : 'Stop'}
@@ -282,7 +282,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             gap: 4,
             paddingTop: 6,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: '0.846em',
             color: '#6b7280',
           }}>
             {/* Engine selector */}
@@ -298,7 +298,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
                     border: '1px solid #374151',
                     borderRadius: 3,
                     fontFamily: MONO,
-                    fontSize: 11,
+                    fontSize: '1em',
                     padding: '1px 4px',
                     cursor: 'pointer',
                     outline: 'none',
@@ -331,7 +331,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
                     border: '1px solid #374151',
                     borderRadius: 3,
                     fontFamily: MONO,
-                    fontSize: 11,
+                    fontSize: '1em',
                     padding: '1px 4px',
                     cursor: 'pointer',
                     outline: 'none',
@@ -362,7 +362,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
                     border: '1px solid #374151',
                     borderRadius: 3,
                     fontFamily: MONO,
-                    fontSize: 11,
+                    fontSize: '1em',
                     padding: '1px 4px',
                     cursor: 'pointer',
                     outline: 'none',
