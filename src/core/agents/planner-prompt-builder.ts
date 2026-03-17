@@ -2,13 +2,29 @@ import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions, getTaskEstimationFields, getTaskEstimationInstructions } from './prompt-utils';
 
-const COMPLEXITY_AND_ESTIMATION = [
+const PLAN_HEADER_FORMAT = [
   '',
-  '## Complexity & Effort',
-  'Include these right after the plan title:',
-  '- **Complexity** (code difficulty, NOT file count): Low (straightforward) / Medium (some architectural decisions or tricky logic) / High (significant unknowns or redesign)',
-  '- **Effort** (breadth of changes, NOT difficulty): XS (<1 file) / SM (1-2) / MD (3-5) / LG (6-10) / XL (10+)',
-  'Example: Adding a field across 12 files → Low complexity, XL effort.',
+  '## Plan Header Format',
+  'The plan MUST begin with this exact structure:',
+  '',
+  '```',
+  '[Plan Title]',
+  '[1-2 sentence description of what the plan does]',
+  'Complexity: [Low / Medium / High] - [brief explanation of why]',
+  'Effort: [XS / SM / MD / LG / XL] - [brief explanation of why]',
+  'Confidence: [High / Medium / Low] - [brief explanation of why]',
+  'Main Risks: None | or numbered list:',
+  '  1. [Risk description - where the approach could go wrong or unknowns]',
+  '  2. [Risk description]',
+  '```',
+  '',
+  '**Confidence** = how confident you are that implementing this plan as described will fully accomplish the task.',
+  '- **High** — approach is well-understood, no significant unknowns.',
+  '- **Medium** — approach is reasonable but some aspects are unverified or depend on assumptions.',
+  '- **Low** — significant unknowns remain; the approach may need revision during implementation.',
+  '',
+  'Main Risks are ONLY major risks — places where the plan could go wrong or there are unknowns about whether the approach will work.',
+  'Use "None" when there are no significant risks. Do NOT list minor edge cases here — those belong in the "Edge cases & risks" section later in the plan.',
 ].join('\n');
 
 const MULTI_PHASE_INSTRUCTIONS = [
@@ -99,7 +115,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       prompt = this.buildNewPlanPrompt(context, task.title, desc);
     }
 
-    prompt += COMPLEXITY_AND_ESTIMATION;
+    prompt += PLAN_HEADER_FORMAT;
     prompt += getTaskEstimationInstructions();
     prompt += getInteractiveInstructions(this.type);
 
@@ -133,7 +149,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       `1. **Current state** — what exists today and what needs to change.`,
       `2. **Approach** — high-level strategy, key decisions, and alternatives considered.`,
       `3. **Files to modify** — each file with a short description of the change.`,
-      `4. **Edge cases & risks** — and whether each requires a code change (if so, include the file above).`,
+      `4. **Edge cases & risks** — detailed edge cases and minor risks, and whether each requires a code change (if so, include the file above). Major risks that could derail the approach should already be listed in the plan header.`,
       `5. **Assumptions** — mark each VERIFIED (cite file:line) or UNVERIFIED (implementor will verify).`,
       `6. **Subtasks** — 3-8 concrete, independently testable steps ordered by dependency.`,
       MULTI_PHASE_INSTRUCTIONS,
