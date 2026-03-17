@@ -515,7 +515,7 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_TASK_SESSIONS, projectId),
     listAll: (projectId: string): Promise<ChatSessionWithDetails[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_ALL, projectId),
-    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null }): Promise<ChatSession | null> =>
+    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null; enableStreaming?: boolean }): Promise<ChatSession | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
