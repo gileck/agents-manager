@@ -32,7 +32,8 @@ import type {
   DebugTimelineEntry, Worktree, TaskContextEntry, HookFailure,
 } from '../../shared/types';
 import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
-import { ChatPanel } from '../components/chat/ChatPanel';
+import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext';
+import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
 
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
@@ -754,7 +755,9 @@ export function TaskDetailPage() {
           flexDirection: 'column',
           overflow: 'hidden',
         }}>
-          <ChatPanel scope={{ type: 'task', id: id! }} />
+          <ChatPresetProvider>
+            <PresetChatPanel scope={{ type: 'task', id: id! }} />
+          </ChatPresetProvider>
         </TabsContent>
 
         <TabsContent value="review" style={{ padding: '12px 24px', overflowY: 'auto' }}>
