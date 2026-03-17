@@ -80,12 +80,6 @@ const TERMINAL_STYLES = `
 }
 `;
 
-function getContextColor(percent: number): string {
-  if (percent > 80) return '#ef4444';
-  if (percent > 50) return '#f59e0b';
-  return '#22c55e';
-}
-
 export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps) {
   // TODO: extract shared orchestration hook (e.g. useChatPanelOrchestration(scope, sessionsOverride))
   // to avoid drift with ChatPanel.tsx. The ~200 lines of hooks/state/callbacks below are
@@ -224,14 +218,6 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
   const handleEditLastMessage = useCallback(() => {
     if (lastUserMessage) handleEditMessage(lastUserMessage);
   }, [lastUserMessage, handleEditMessage]);
-
-  // Context usage for status bar
-  const CONTEXT_WINDOW = 200_000;
-  const effectiveContextWindow = (tokenUsage.contextWindow && tokenUsage.contextWindow > 0)
-    ? tokenUsage.contextWindow
-    : CONTEXT_WINDOW;
-  const contextTokens = tokenUsage?.lastContextInputTokens ?? tokenUsage.inputTokens ?? 0;
-  const contextPercent = Math.min((contextTokens / effectiveContextWindow) * 100, 100);
 
   const showInlineTabs = scope.type === 'task';
 
@@ -432,41 +418,23 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
 
             {!showRawView && <TaskStatusBar sessionId={currentSessionId ?? null} />}
 
-            {/* ── Status bar ── */}
-            {!showRawView && (
+            {/* ── Status bar (token I/O only — engine/model/context moved to input config row) ── */}
+            {!showRawView && tokenUsage.inputTokens > 0 && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '4px 16px',
+                justifyContent: 'flex-end',
+                padding: '2px 16px',
                 borderTop: `1px solid ${BORDER}`,
                 backgroundColor: BG_HEADER,
                 fontFamily: MONO,
                 fontSize: 11,
                 color: '#6b7280',
-                minHeight: 24,
+                minHeight: 20,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span>{selectedAgentLib}</span>
-                  {selectedModel && (
-                    <>
-                      <span style={{ color: '#374151' }}>·</span>
-                      <span>{currentModels.find((m) => m.value === selectedModel)?.label ?? selectedModel}</span>
-                    </>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {contextPercent > 0 && (
-                    <span style={{ color: getContextColor(contextPercent) }}>
-                      {Math.round(contextPercent)}% context
-                    </span>
-                  )}
-                  {tokenUsage.inputTokens > 0 && (
-                    <span>
-                      {tokenUsage.inputTokens.toLocaleString()}↓ {tokenUsage.outputTokens.toLocaleString()}↑
-                    </span>
-                  )}
-                </div>
+                <span>
+                  {tokenUsage.inputTokens.toLocaleString()}↓ {tokenUsage.outputTokens.toLocaleString()}↑
+                </span>
               </div>
             )}
 

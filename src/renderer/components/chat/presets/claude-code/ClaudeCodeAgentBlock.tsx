@@ -9,9 +9,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { AgentBlockPresetProps } from '../types';
 import type { AgentChatMessageUsage } from '../../../../../shared/types';
-import { ThinkingGroup } from '../../ThinkingGroup';
+import type { AgentChatMessageToolUse, AgentChatMessageToolResult } from '../../../../../shared/types';
 import { renderToolContent } from '../../../tool-renderers/renderUtils';
 import { parseAgentInput, parseAgentResult, getAgentStatus, formatDuration, countToolCalls } from '../../utils/agent-parsing';
+import { getTerminalToolRenderer } from './tool-renderers';
 
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
 
@@ -145,13 +146,39 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
           </button>
           {internalExpanded && (
             <div style={{ marginLeft: 12, paddingLeft: 8, borderLeft: '1px solid #1e293b' }}>
-              <ThinkingGroup
-                messages={segment.internalMessages}
-                startIndex={segment.startIndex + 1}
-                expandedTools={expandedTools}
-                onToggleTool={onToggleTool}
-                defaultExpanded
-              />
+              {(() => {
+                const resultMap = new Map<string, AgentChatMessageToolResult>();
+                for (const m of segment.internalMessages) {
+                  if (m.type === 'tool_result' && m.toolId) {
+                    resultMap.set(m.toolId, m as AgentChatMessageToolResult);
+                  }
+                }
+                return segment.internalMessages.map((m, idx) => {
+                  const globalIdx = segment.startIndex + 1 + idx;
+                  if (m.type === 'thinking') {
+                    return (
+                      <div key={idx} style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic', padding: '2px 0' }}>
+                        {m.text.length > 500 ? m.text.slice(0, 500) + '\u2026' : m.text}
+                      </div>
+                    );
+                  }
+                  if (m.type === 'tool_use') {
+                    const tu = m as AgentChatMessageToolUse;
+                    const tr = tu.toolId ? resultMap.get(tu.toolId) : undefined;
+                    const Renderer = getTerminalToolRenderer(tu.toolName);
+                    return (
+                      <Renderer
+                        key={idx}
+                        toolUse={tu}
+                        toolResult={tr}
+                        expanded={expandedTools.has(globalIdx)}
+                        onToggle={() => onToggleTool(globalIdx)}
+                      />
+                    );
+                  }
+                  return null;
+                });
+              })()}
             </div>
           )}
         </div>

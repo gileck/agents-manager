@@ -1,9 +1,10 @@
 /**
  * Claude Code preset — ChatInput.
  *
- * Terminal-style input with `❯` prompt prefix in yellow/gold, minimal dark
- * textarea, no inline model/agent selectors, stop/send buttons, image
- * attachment support, queued message indicator, and text-based context display.
+ * Terminal-style input with `❯` prompt prefix, minimal dark textarea,
+ * stop/send buttons, image attachment support, queued message indicator,
+ * text-based context display, and a terminal-styled config row below the
+ * input for engine/model selection and context usage.
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -37,6 +38,12 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
       onEditLastMessage,
       initialDraft,
       onDraftChange,
+      agentLibs,
+      selectedAgentLib,
+      onAgentLibChange,
+      models,
+      selectedModel,
+      onModelChange,
     },
     forwardedRef,
   ) {
@@ -317,6 +324,90 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             </button>
           </div>
         </form>
+
+        {/* Terminal-styled config row below input */}
+        {(agentLibs || models) && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            paddingTop: 6,
+            fontFamily: MONO,
+            fontSize: 11,
+            color: '#6b7280',
+          }}>
+            {/* Engine selector */}
+            {agentLibs && agentLibs.length > 0 && onAgentLibChange && (
+              <>
+                <span>engine:</span>
+                <select
+                  value={selectedAgentLib || ''}
+                  onChange={(e) => onAgentLibChange(e.target.value)}
+                  style={{
+                    background: '#161b22',
+                    color: '#d1d5db',
+                    border: '1px solid #374151',
+                    borderRadius: 3,
+                    fontFamily: MONO,
+                    fontSize: 11,
+                    padding: '1px 4px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  {agentLibs.map((lib) => (
+                    <option key={lib.name} value={lib.name} disabled={!lib.available}>
+                      {lib.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {/* Separator */}
+            {agentLibs && agentLibs.length > 0 && models && models.length > 0 && (
+              <span style={{ color: '#374151', margin: '0 2px' }}>|</span>
+            )}
+
+            {/* Model selector */}
+            {models && models.length > 0 && onModelChange && (
+              <>
+                <span>model:</span>
+                <select
+                  value={selectedModel || ''}
+                  onChange={(e) => onModelChange(e.target.value)}
+                  style={{
+                    background: '#161b22',
+                    color: '#d1d5db',
+                    border: '1px solid #374151',
+                    borderRadius: 3,
+                    fontFamily: MONO,
+                    fontSize: 11,
+                    padding: '1px 4px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  {models.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {/* Context usage */}
+            {tokenUsage !== undefined && contextPercent > 0 && (
+              <>
+                <span style={{ color: '#374151', margin: '0 2px' }}>|</span>
+                <span style={{ color: getContextColor(contextPercent) }}>
+                  {Math.round(contextPercent)}% context
+                </span>
+              </>
+            )}
+          </div>
+        )}
       </div>
     );
   },
