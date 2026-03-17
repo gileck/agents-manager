@@ -74,7 +74,7 @@ function CollapsedSystemNotification({ text }: { text: string }) {
         <span style={{ color: '#60a5fa', flexShrink: 0 }}>ⓘ</span>
         <span style={{ color: '#60a5fa', fontWeight: 600, flexShrink: 0, fontFamily: MONO }}>System Notification</span>
         {!expanded && (
-          <span style={{ color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          <span style={{ color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
             {summary}
           </span>
         )}
