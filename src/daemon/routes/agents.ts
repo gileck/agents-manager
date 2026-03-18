@@ -73,6 +73,26 @@ export function agentRoutes(services: AppServices, wsHolder: WsHolder): Router {
         linkedBugDescriptions?: string[];
       };
 
+      // Input validation
+      if (postMortemInput !== undefined && typeof postMortemInput !== 'string') {
+        res.status(400).json({ error: 'postMortemInput must be a string' });
+        return;
+      }
+      if (postMortemInput && postMortemInput.length > 50_000) {
+        res.status(400).json({ error: 'postMortemInput exceeds maximum length of 50 000 characters' });
+        return;
+      }
+      if (bodyLinkedBugDescriptions !== undefined) {
+        if (!Array.isArray(bodyLinkedBugDescriptions) || !bodyLinkedBugDescriptions.every((v) => typeof v === 'string')) {
+          res.status(400).json({ error: 'linkedBugDescriptions must be an array of strings' });
+          return;
+        }
+        if (bodyLinkedBugDescriptions.length > 100) {
+          res.status(400).json({ error: 'linkedBugDescriptions exceeds maximum of 100 items' });
+          return;
+        }
+      }
+
       // Persist postMortemInput to task metadata if provided
       if (postMortemInput) {
         const task = await services.taskStore.getTask(taskId);

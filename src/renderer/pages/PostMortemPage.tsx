@@ -74,7 +74,8 @@ function TriggerPostMortemDialog({
 
   useEffect(() => {
     if (!open) return;
-    setPostMortemInput((task.metadata?.postMortemInput as string | undefined) ?? '');
+    const rawInput = task.metadata?.postMortemInput;
+    setPostMortemInput(typeof rawInput === 'string' ? rawInput : '');
     setLoadingBugs(true);
     window.api.tasks.list({ type: 'bug' }).then((bugs) => {
       const linked = bugs.filter(
@@ -240,7 +241,7 @@ function PostMortemResults({
             {data.severity} severity
           </span>
         )}
-        {data.responsibleAgents && data.responsibleAgents.length > 0 && (
+        {Array.isArray(data.responsibleAgents) && data.responsibleAgents.length > 0 && (
           <span className="text-xs text-muted-foreground">
             Should have been caught by:{' '}
             <span className="font-medium text-foreground">
@@ -259,7 +260,7 @@ function PostMortemResults({
       )}
 
       {/* Prompt improvements */}
-      {data.promptImprovements && data.promptImprovements.length > 0 && (
+      {Array.isArray(data.promptImprovements) && data.promptImprovements.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
             Prompt Improvements
@@ -276,7 +277,7 @@ function PostMortemResults({
       )}
 
       {/* Process improvements */}
-      {data.processImprovements && data.processImprovements.length > 0 && (
+      {Array.isArray(data.processImprovements) && data.processImprovements.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
             Process Improvements
@@ -293,7 +294,7 @@ function PostMortemResults({
       )}
 
       {/* Suggested tasks */}
-      {data.suggestedTasks && data.suggestedTasks.length > 0 && (
+      {Array.isArray(data.suggestedTasks) && data.suggestedTasks.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             Suggested Tasks
@@ -371,6 +372,7 @@ function DefectiveTaskRow({ task, pendingReview, onRefresh }: DefectiveTaskRowPr
         setLinkedBugCount(bugs.length);
       } catch (err) {
         reportError(err, 'Load post-mortem context');
+        setExpanded(false);
       } finally {
         setLoadingContext(false);
       }

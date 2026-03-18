@@ -68,6 +68,13 @@ export function ReportBugForTaskDialog({
     }
   }, [open, initialSourceTaskId]);
 
+  // Clear debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
   // Close dropdown on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -148,9 +155,10 @@ export function ReportBugForTaskDialog({
         createdBy: 'user',
       });
 
-      // Add 'defective' tag to the source task (de-duped)
+      // Add 'defective' tag to the source task (re-fetch to avoid stale tags)
       try {
-        const existingTags = selectedTask.tags ?? [];
+        const freshTask = await window.api.tasks.get(selectedTask.id);
+        const existingTags = freshTask?.tags ?? [];
         if (!existingTags.includes('defective')) {
           await window.api.tasks.update(selectedTask.id, {
             tags: [...existingTags, 'defective'],

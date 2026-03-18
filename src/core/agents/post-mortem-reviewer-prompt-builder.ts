@@ -79,9 +79,12 @@ export class PostMortemReviewerPromptBuilder extends BaseAgentPromptBuilder {
   buildPrompt(context: AgentContext): string {
     const task = context.task;
     const additionalCtx = context.additionalContext ?? {};
-    const linkedBugDescriptions = additionalCtx.linkedBugDescriptions as string[] | undefined;
-    const postMortemInput = (task.metadata?.postMortemInput as string | undefined)
-      ?? (additionalCtx.postMortemInput as string | undefined);
+    const rawLinked = additionalCtx.linkedBugDescriptions;
+    const linkedBugDescriptions = Array.isArray(rawLinked) && rawLinked.every((v) => typeof v === 'string')
+      ? (rawLinked as string[])
+      : undefined;
+    const rawPostMortemInput = task.metadata?.postMortemInput ?? additionalCtx.postMortemInput;
+    const postMortemInput = typeof rawPostMortemInput === 'string' ? rawPostMortemInput : undefined;
 
     const lines: string[] = [
       'You are a post-mortem reviewer. Your job is to analyse a completed task that produced one or more defects',
