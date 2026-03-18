@@ -125,6 +125,9 @@ export const IPC_CHANNELS = {
   // Workflow review
   TASK_WORKFLOW_REVIEW: 'task:workflow-review',
 
+  // Post-mortem review
+  TASK_POST_MORTEM: 'task:post-mortem',
+
   // Dashboard
   DASHBOARD_STATS: 'dashboard:stats',
 

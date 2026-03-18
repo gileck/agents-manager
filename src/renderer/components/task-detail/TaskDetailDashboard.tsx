@@ -13,6 +13,7 @@ import { ContextCard } from './ContextCard';
 import { PhasedSubtasksSection } from './PhasedSubtasksSection';
 import { SubtasksSection } from './SubtasksSection';
 import { DependenciesSection } from './DependenciesSection';
+import { LinkedBugsSection } from './LinkedBugsSection';
 import { PlanMarkdown } from './PlanMarkdown';
 import { TaskCommentsCard } from './TaskCommentsCard';
 import type {
@@ -226,6 +227,9 @@ export function TaskDetailDashboard({
 
         {/* Dependencies */}
         <DependenciesSection taskId={taskId} projectId={task.projectId} />
+
+        {/* Linked Bugs */}
+        <LinkedBugsSection taskId={taskId} />
 
         {/* Comments */}
         <TaskCommentsCard taskId={taskId} contextEntries={contextEntries ?? []} onCommentAdded={onContextRefetch} />

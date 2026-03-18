@@ -36,6 +36,7 @@ const navItems = [
   { to: '/threads', icon: Clock, label: 'Thread History' },
   { to: '/projects', icon: FolderOpen, label: 'Projects' },
   { to: '/automated-agents', icon: Bot, label: 'Automations' },
+  { to: '/post-mortem', icon: Bug, label: 'Post-Mortem' },
 ];
 
 interface SidebarProps {

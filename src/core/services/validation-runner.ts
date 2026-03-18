@@ -9,7 +9,7 @@ import { getShellEnv } from './shell-env';
 const execAsync = promisify(exec);
 
 const NON_VALIDATABLE_AGENT_TYPES = new Set([
-  'planner', 'designer', 'investigator', 'reviewer', 'task-workflow-reviewer',
+  'planner', 'designer', 'investigator', 'reviewer', 'task-workflow-reviewer', 'post-mortem-reviewer',
 ]);
 
 export interface CommandValidationResult {

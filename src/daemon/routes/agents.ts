@@ -64,6 +64,46 @@ export function agentRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // POST /api/tasks/:taskId/agent/post-mortem — start post-mortem review agent
+  router.post('/api/tasks/:taskId/agent/post-mortem', async (req, res, next) => {
+    try {
+      const { taskId } = req.params;
+      const { postMortemInput, linkedBugDescriptions: bodyLinkedBugDescriptions } = req.body as {
+        postMortemInput?: string;
+        linkedBugDescriptions?: string[];
+      };
+
+      // Persist postMortemInput to task metadata if provided
+      if (postMortemInput) {
+        const task = await services.taskStore.getTask(taskId);
+        if (task) {
+          await services.taskStore.updateTask(taskId, {
+            metadata: { ...(task.metadata ?? {}), postMortemInput },
+          });
+        }
+      }
+
+      // If linkedBugDescriptions not supplied, query linked bugs from DB
+      let linkedBugDescriptions = bodyLinkedBugDescriptions;
+      if (!linkedBugDescriptions) {
+        const allBugs = await services.taskStore.listTasks({ type: 'bug' });
+        const linkedBugs = allBugs.filter(
+          (t) => (t.metadata as Record<string, unknown> | undefined)?.sourceTaskId === taskId,
+        );
+        linkedBugDescriptions = linkedBugs.map(
+          (bug) => `Title: ${bug.title}\n${bug.description ?? ''}`.trim(),
+        );
+      }
+
+      const result = await services.workflowService.startAgent(
+        taskId, 'new', 'post-mortem-reviewer',
+        undefined, undefined, undefined, undefined,
+        { linkedBugDescriptions, postMortemInput },
+      );
+      res.json(result);
+    } catch (err) { next(err); }
+  });
+
   // GET /api/agent-runs/active — list active agent runs
   router.get('/api/agent-runs/active', async (_req, res, next) => {
     try {
