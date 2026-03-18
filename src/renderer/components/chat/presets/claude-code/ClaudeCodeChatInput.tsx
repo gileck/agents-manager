@@ -280,7 +280,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            paddingTop: 6,
+            paddingTop: 12,
             fontFamily: MONO,
             fontSize: '0.846em',
             color: '#6b7280',
