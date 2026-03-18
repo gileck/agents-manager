@@ -32,6 +32,7 @@ import { ThreadsSettingsPage } from './pages/ThreadsSettingsPage';
 import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
 import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
 import { AutomatedAgentDetailPage } from './pages/AutomatedAgentDetailPage';
+import { PostMortemPage } from './pages/PostMortemPage';
 import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useRouteRestore } from './hooks/useRouteRestore';
@@ -174,6 +175,7 @@ function AppRoutes() {
         <Route path="automated-agents" element={<AutomatedAgentsPage />} />
         <Route path="automated-agents/:id" element={<AutomatedAgentDetailPage />} />
         <Route path="automated-agents/runs/:runId" element={<AutomatedAgentRunPage />} />
+        <Route path="post-mortem" element={<PostMortemPage />} />
         <Route path="cost" element={<CostPage />} />
         <Route path="source-control" element={<SourceControlPage />} />
         <Route path="debug-logs" element={<DebugLogsPage />} />

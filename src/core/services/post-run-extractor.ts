@@ -260,14 +260,55 @@ export class PostRunExtractor {
         entryData.executionSummary = wso?.executionSummary;
         entryData.suggestedTasks = wso?.suggestedTasks;
       }
+      if (agentType === 'post-mortem-reviewer') {
+        interface PostMortemReviewerOutput {
+          rootCause?: string;
+          severity?: string;
+          responsibleAgents?: string[];
+          analysis?: string;
+          promptImprovements?: string[];
+          processImprovements?: string[];
+          suggestedTasks?: Array<{ title: string; description: string }>;
+        }
+        const pmso = result.structuredOutput as PostMortemReviewerOutput | undefined;
+        entryData.rootCause = pmso?.rootCause;
+        entryData.severity = pmso?.severity;
+        entryData.responsibleAgents = pmso?.responsibleAgents;
+        entryData.analysis = pmso?.analysis;
+        entryData.promptImprovements = pmso?.promptImprovements;
+        entryData.processImprovements = pmso?.processImprovements;
+        entryData.suggestedTasks = pmso?.suggestedTasks;
+      }
       const entrySource = agentType === 'reviewer' ? 'reviewer'
         : agentType === 'task-workflow-reviewer' ? 'workflow-reviewer'
+        : agentType === 'post-mortem-reviewer' ? 'post-mortem-reviewer'
         : 'agent';
       await this.taskContextStore.addEntry({
         taskId, agentRunId,
         source: entrySource,
         entryType, summary, data: entryData,
       });
+
+      // When a post-mortem review completes, add the 'post-mortem-done' tag to the task
+      if (agentType === 'post-mortem-reviewer') {
+        try {
+          const reviewedTask = await this.taskStore.getTask(taskId);
+          if (reviewedTask) {
+            const existingTags = reviewedTask.tags ?? [];
+            if (!existingTags.includes('post-mortem-done')) {
+              await this.taskStore.updateTask(taskId, { tags: [...existingTags, 'post-mortem-done'] });
+            }
+          }
+        } catch (tagErr) {
+          // Non-fatal — tag update failure should not block context entry
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'warning',
+            message: `Failed to add post-mortem-done tag: ${tagErr instanceof Error ? tagErr.message : String(tagErr)}`,
+          });
+        }
+      }
 
     } catch (err) {
       // Non-fatal -- don't block pipeline on context entry failure
@@ -302,7 +343,7 @@ export class PostRunExtractor {
     onLog: OnLog,
     onPostLog?: OnPostLog,
   ): Promise<void> {
-    if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) {
+    if ((agentType !== 'task-workflow-reviewer' && agentType !== 'post-mortem-reviewer') || result.exitCode !== 0) {
       onPostLog?.('createSuggestedTasks skipped (not applicable)', { agentType, exitCode: result.exitCode });
       return;
     }
@@ -337,6 +378,7 @@ export class PostRunExtractor {
           ? suggested.size as TaskSize : undefined;
         const taskComplexity = suggested.complexity && (VALID_TASK_COMPLEXITIES as readonly string[]).includes(suggested.complexity)
           ? suggested.complexity as TaskComplexity : undefined;
+        const isPostMortem = agentType === 'post-mortem-reviewer';
         const createdTask = await this.taskStore.createTask({
           projectId: reviewedTask.projectId,
           pipelineId: AGENT_PIPELINE_ID,
@@ -347,8 +389,8 @@ export class PostRunExtractor {
           complexity: taskComplexity,
           debugInfo: suggested.debugInfo || undefined,
           priority,
-          tags: ['workflow-review'],
-          createdBy: 'workflow-reviewer',
+          tags: isPostMortem ? ['post-mortem'] : ['workflow-review'],
+          createdBy: isPostMortem ? 'post-mortem-reviewer' : 'workflow-reviewer',
         });
         created++;
 
@@ -359,11 +401,13 @@ export class PostRunExtractor {
           const phaseLabel = PHASE_LABELS[phase];
           const truncatedDesc = suggested.description.length > 200
             ? suggested.description.slice(0, 200) + '...' : suggested.description;
+          const notifTitle = isPostMortem ? 'Post-Mortem: New Task' : 'Workflow Review: New Task';
+          const notifChannel = isPostMortem ? `post-mortem-${createdTask.id}` : `workflow-review-${createdTask.id}`;
           await this.notificationRouter.send({
             taskId: createdTask.id,
-            title: 'Workflow Review: New Task',
+            title: notifTitle,
             body: `${suggested.title}\n\n${truncatedDesc}`,
-            channel: `workflow-review-${createdTask.id}`,
+            channel: notifChannel,
             actions: [
               { label: phaseLabel, callbackData: `t|${createdTask.id}|${phase}` },
               { label: '\u274C Close', callbackData: `t|${createdTask.id}|closed` },
@@ -377,12 +421,13 @@ export class PostRunExtractor {
       }
 
       if (created > 0) {
-        onLog(`Created ${created} suggested task(s) from workflow review`);
+        const reviewerLabel = agentType === 'post-mortem-reviewer' ? 'post-mortem review' : 'workflow review';
+        onLog(`Created ${created} suggested task(s) from ${reviewerLabel}`);
         await this.taskEventLog.log({
           taskId,
           category: 'agent',
           severity: 'info',
-          message: `Workflow reviewer suggested ${created} task(s) — auto-created in agent pipeline`,
+          message: `${agentType === 'post-mortem-reviewer' ? 'Post-mortem' : 'Workflow'} reviewer suggested ${created} task(s) — auto-created in agent pipeline`,
           data: { createdCount: created, titles: tasks.map(t => t.title) },
         });
       }
@@ -477,6 +522,7 @@ export class PostRunExtractor {
 /** Maps (agentType, revisionReason, outcome) to a context entry type string. */
 export function getContextEntryType(agentType: string, revisionReason?: RevisionReason, outcome?: string): string {
   if (agentType === 'task-workflow-reviewer') return 'workflow_review';
+  if (agentType === 'post-mortem-reviewer') return 'post_mortem';
   if (agentType === 'reviewer') return outcome === 'approved' ? 'review_approved' : 'review_feedback';
   switch (agentType) {
     case 'planner':

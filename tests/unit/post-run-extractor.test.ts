@@ -283,6 +283,65 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
     // Warning was logged
     expect(onLog).toHaveBeenCalledWith(expect.stringContaining('notification failed'));
   });
+
+  it('should create tasks with post-mortem tags and createdBy for post-mortem-reviewer', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'post-mortem output',
+      outcome: 'review_complete',
+      structuredOutput: {
+        rootCause: 'design_flaw',
+        severity: 'major',
+        responsibleAgents: ['planner'],
+        analysis: 'Missed edge case in sorting',
+        promptImprovements: [],
+        processImprovements: [],
+        suggestedTasks: [
+          {
+            title: 'Add edge case checklist to planner prompt',
+            description: '**Where**: planner-prompt-builder.ts\n**Problem**: No edge case guidance',
+            priority: 1,
+            startPhase: 'planning',
+          },
+        ],
+      },
+    };
+
+    await extractor.createSuggestedTasks('task-1', 'post-mortem-reviewer', result, onLog);
+
+    expect(stores.taskStore.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Add edge case checklist to planner prompt',
+        tags: ['post-mortem'],
+        createdBy: 'post-mortem-reviewer',
+        priority: 1,
+      }),
+    );
+
+    // Notification should use post-mortem title and channel
+    expect(stores.notificationRouter.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Post-Mortem: New Task',
+        channel: expect.stringContaining('post-mortem-'),
+      }),
+    );
+  });
+
+  it('should allow post-mortem-reviewer to create suggested tasks (not skipped)', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'output',
+      outcome: 'review_complete',
+      structuredOutput: {
+        suggestedTasks: [
+          { title: 'Improve review prompt', description: 'Add checklist', priority: 2 },
+        ],
+      },
+    };
+
+    await extractor.createSuggestedTasks('task-1', 'post-mortem-reviewer', result, onLog);
+    expect(stores.taskStore.createTask).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('getContextEntryType', () => {
@@ -316,6 +375,10 @@ describe('getContextEntryType', () => {
 
   it('should return workflow_review for task-workflow-reviewer', () => {
     expect(getContextEntryType('task-workflow-reviewer')).toBe('workflow_review');
+  });
+
+  it('should return post_mortem for post-mortem-reviewer', () => {
+    expect(getContextEntryType('post-mortem-reviewer')).toBe('post_mortem');
   });
 });
 
@@ -384,5 +447,95 @@ describe('PostRunExtractor.saveContextEntry', () => {
 
     expect(stores.taskContextStore.addEntry).not.toHaveBeenCalled();
     expect(stores.taskContextStore.markEntriesAsAddressed).not.toHaveBeenCalled();
+  });
+
+  it('should extract post-mortem-reviewer structured output fields into context entry data', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Post-mortem analysis complete',
+      outcome: 'review_complete',
+      structuredOutput: {
+        rootCause: 'design_flaw',
+        severity: 'major',
+        responsibleAgents: ['planner', 'reviewer'],
+        analysis: 'The planner missed an edge case in the sorting logic.',
+        promptImprovements: ['Add edge case checklist to planner prompt'],
+        processImprovements: ['Add a guard that checks for edge case coverage'],
+        suggestedTasks: [{ title: 'Improve planner prompt', description: 'Add edge case checklist' }],
+      },
+    };
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>).mockResolvedValue(createMockTask({ tags: ['defective'] }));
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'post-mortem-reviewer', undefined, result, onLog);
+
+    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        source: 'post-mortem-reviewer',
+        entryType: 'post_mortem',
+        data: expect.objectContaining({
+          rootCause: 'design_flaw',
+          severity: 'major',
+          responsibleAgents: ['planner', 'reviewer'],
+          analysis: 'The planner missed an edge case in the sorting logic.',
+          promptImprovements: ['Add edge case checklist to planner prompt'],
+          processImprovements: ['Add a guard that checks for edge case coverage'],
+          suggestedTasks: [{ title: 'Improve planner prompt', description: 'Add edge case checklist' }],
+        }),
+      }),
+    );
+  });
+
+  it('should add post-mortem-done tag when post-mortem-reviewer context entry is saved', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Post-mortem analysis complete',
+      outcome: 'review_complete',
+      structuredOutput: {
+        rootCause: 'missed_edge_case',
+        severity: 'minor',
+        responsibleAgents: ['implementor'],
+        analysis: 'Minor edge case missed.',
+        promptImprovements: [],
+        processImprovements: [],
+        suggestedTasks: [],
+      },
+    };
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>).mockResolvedValue(createMockTask({ tags: ['defective'] }));
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'post-mortem-reviewer', undefined, result, onLog);
+
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+      tags: ['defective', 'post-mortem-done'],
+    });
+  });
+
+  it('should not duplicate post-mortem-done tag if already present', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Post-mortem analysis complete',
+      outcome: 'review_complete',
+      structuredOutput: {
+        rootCause: 'other',
+        severity: 'minor',
+        responsibleAgents: [],
+        analysis: 'Unknown cause.',
+        promptImprovements: [],
+        processImprovements: [],
+        suggestedTasks: [],
+      },
+    };
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>).mockResolvedValue(
+      createMockTask({ tags: ['defective', 'post-mortem-done'] }),
+    );
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'post-mortem-reviewer', undefined, result, onLog);
+
+    // updateTask should NOT be called for tag update since 'post-mortem-done' already exists
+    // (addEntry was called, but updateTask for tags was skipped)
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
   });
 });

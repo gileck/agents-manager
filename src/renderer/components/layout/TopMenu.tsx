@@ -43,6 +43,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith('/cost')) return 'Cost';
   if (pathname.startsWith('/source-control')) return 'Source control';
   if (pathname.startsWith('/debug-logs')) return 'Debug logs';
+  if (pathname.startsWith('/post-mortem')) return 'Post-Mortem';
   if (pathname.startsWith('/settings')) return 'Settings';
   return 'Agents Manager';
 }

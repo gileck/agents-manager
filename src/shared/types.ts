@@ -272,7 +272,7 @@ export type TaskSize = typeof VALID_TASK_SIZES[number];
 export const VALID_TASK_COMPLEXITIES = ['low', 'medium', 'high'] as const;
 export type TaskComplexity = typeof VALID_TASK_COMPLEXITIES[number];
 
-export type TaskCreatedBy = 'user' | 'workflow-reviewer' | 'session-agent';
+export type TaskCreatedBy = 'user' | 'workflow-reviewer' | 'post-mortem-reviewer' | 'session-agent';
 
 export interface Task {
   id: string;
@@ -704,6 +704,8 @@ export interface AgentContext {
   resumedFromRunId?: string;
   /** URL of the dev server running in the task's worktree, if any. */
   devServerUrl?: string;
+  /** Additional context data passed by the caller (e.g. linked bug descriptions for post-mortem review). */
+  additionalContext?: Record<string, unknown>;
 }
 
 // ============================================

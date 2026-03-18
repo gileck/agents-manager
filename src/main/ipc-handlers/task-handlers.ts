@@ -177,6 +177,14 @@ export function registerTaskHandlers(api: ApiClient): void {
   });
 
   // ============================================
+  // Post-Mortem Review
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.TASK_POST_MORTEM, async (_, taskId: string, input?: { postMortemInput?: string; linkedBugDescriptions?: string[] }) => {
+    return api.agents.postMortem(taskId, input);
+  });
+
+  // ============================================
   // Dashboard Operations
   // ============================================
 
