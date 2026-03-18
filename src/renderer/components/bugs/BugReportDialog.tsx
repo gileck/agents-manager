@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { reportError } from '../../lib/error-handler';
@@ -13,6 +13,7 @@ import {
 import { X } from 'lucide-react';
 import { ImagePasteArea } from '../ui/ImagePasteArea';
 import type { ChatImage } from '../../../shared/types';
+import type { Task } from '../../../shared/types';
 
 export interface BugReportInitialValues {
   title?: string;
@@ -24,9 +25,11 @@ interface BugReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialValues?: BugReportInitialValues;
+  /** Pre-select the source task that introduced the bug */
+  initialSourceTaskId?: string;
 }
 
-export function BugReportDialog({ open, onOpenChange, initialValues }: BugReportDialogProps) {
+export function BugReportDialog({ open, onOpenChange, initialValues, initialSourceTaskId }: BugReportDialogProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
@@ -37,10 +40,33 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<ChatImage[]>([]);
 
+  // Task search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Task[]>([]);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // Extract task ID from route if on a task page
   const taskIdMatch = location.pathname.match(/\/tasks\/([^/]+)/);
   const currentTaskId = taskIdMatch?.[1] ?? null;
   const currentRoute = location.pathname;
+
+  // Load the pre-filled task if initialSourceTaskId is provided
+  useEffect(() => {
+    if (open && initialSourceTaskId) {
+      window.api.tasks.get(initialSourceTaskId).then((task) => {
+        if (task) {
+          setSelectedTask(task);
+          setSearchQuery(task.title);
+        }
+      }).catch((err) => {
+        reportError(err, 'Pre-fill source task');
+      });
+    }
+  }, [open, initialSourceTaskId]);
 
   // Reset form when dialog opens, pre-fill from initialValues if provided
   useEffect(() => {
@@ -51,8 +77,14 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
       setError(null);
       setLoadingLogs(null);
       setImages([]);
+      if (!initialSourceTaskId) {
+        setSelectedTask(null);
+        setSearchQuery('');
+      }
+      setSearchResults([]);
+      setShowDropdown(false);
     }
-  }, [open, initialValues]);
+  }, [open, initialValues, initialSourceTaskId]);
 
   // Auto-load debug logs when opened with autoLoadDebugLogs
   useEffect(() => {
@@ -98,6 +130,65 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
     })();
     return () => { cancelled = true; };
   }, [open, initialValues?.autoLoadDebugLogs, currentTaskId]);
+
+  // Clear debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    setSelectedTask(null);
+    setShowDropdown(true);
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (!value.trim()) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const tasks = await window.api.tasks.list({ search: value });
+        setSearchResults(tasks.slice(0, 20));
+        setShowDropdown(true);
+      } catch (err) {
+        reportError(err, 'Task search');
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }, []);
+
+  const handleSelectTask = useCallback((task: Task) => {
+    setSelectedTask(task);
+    setSearchQuery(task.title);
+    setShowDropdown(false);
+    setSearchResults([]);
+  }, []);
+
+  const handleClearSourceTask = useCallback(() => {
+    setSelectedTask(null);
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowDropdown(false);
+  }, []);
 
   const handleLoadTimeline = async () => {
     if (!currentTaskId || loadingLogs) return;
@@ -197,6 +288,9 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
       if (currentTaskId) {
         sections.push(`- **Related Task:** \`${currentTaskId}\``);
       }
+      if (selectedTask) {
+        sections.push(`- **Source Task:** \`${selectedTask.id}\` — ${selectedTask.title}`);
+      }
 
       const task = await window.api.tasks.create({
         projectId,
@@ -204,14 +298,33 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
         title: `[Bug] ${title.trim()}`,
         description: sections.join('\n'),
         debugInfo: debugLogs.trim() || undefined,
+        type: 'bug',
         tags: ['bug'],
         metadata: {
           ...(currentTaskId ? { relatedTaskId: currentTaskId } : {}),
+          ...(selectedTask ? { sourceTaskId: selectedTask.id } : {}),
           route: currentRoute,
         },
       });
 
+      // Add 'defective' tag to the source task if one was selected (de-duplicated)
+      if (selectedTask) {
+        try {
+          const freshTask = await window.api.tasks.get(selectedTask.id);
+          const existingTags = freshTask?.tags ?? [];
+          if (!existingTags.includes('defective')) {
+            await window.api.tasks.update(selectedTask.id, {
+              tags: [...existingTags, 'defective'],
+            });
+          }
+        } catch (tagErr) {
+          // Non-fatal: bug task was already created
+          reportError(tagErr, 'Add defective tag');
+        }
+      }
+
       toast.success('Bug report created', {
+        ...(selectedTask ? { description: `Linked to "${selectedTask.title}"` } : {}),
         action: {
           label: 'View Task',
           onClick: () => navigate(`/tasks/${task.id}`),
@@ -219,7 +332,7 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
       });
       onOpenChange(false);
     } catch (err) {
-      console.error('[BugReportDialog]', err);
+      reportError(err, 'Create bug report');
       setError(err instanceof Error ? err.message : 'Failed to create bug report');
     } finally {
       setSubmitting(false);
@@ -233,13 +346,68 @@ export function BugReportDialog({ open, onOpenChange, initialValues }: BugReport
           <DialogTitle>Report Bug</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          {/* Source task picker */}
+          <div className="space-y-2">
+            <Label>Source Task</Label>
+            <div className="relative" ref={dropdownRef}>
+              <Input
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search for the task that introduced the bug…"
+                onFocus={() => {
+                  if (searchResults.length > 0) setShowDropdown(true);
+                }}
+              />
+              {searching && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  Searching…
+                </div>
+              )}
+              {showDropdown && searchResults.length > 0 && (
+                <div
+                  className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md"
+                  style={{ maxHeight: 240, overflowY: 'auto' }}
+                >
+                  {searchResults.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-accent text-sm"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectTask(task);
+                      }}
+                    >
+                      <span className="truncate">{task.title}</span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{task.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedTask && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>
+                  Selected: <span className="font-medium text-foreground">{selectedTask.title}</span>
+                  {' '}— will be tagged <span className="font-mono">defective</span>
+                </span>
+                <button
+                  onClick={handleClearSourceTask}
+                  className="ml-auto text-muted-foreground hover:text-destructive"
+                  title="Clear selection"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label>Title</Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Brief description of the bug"
-              autoFocus
+              autoFocus={!initialSourceTaskId}
             />
           </div>
 

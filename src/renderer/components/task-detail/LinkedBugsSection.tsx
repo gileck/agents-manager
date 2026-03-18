@@ -4,7 +4,7 @@ import { Bug } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { ReportBugForTaskDialog } from '../bugs/ReportBugForTaskDialog';
+import { BugReportDialog } from '../bugs/BugReportDialog';
 import { reportError } from '../../lib/error-handler';
 import type { Task } from '../../../shared/types';
 
@@ -102,7 +102,7 @@ export function LinkedBugsSection({ taskId }: LinkedBugsSectionProps) {
         </CardContent>
       </Card>
 
-      <ReportBugForTaskDialog
+      <BugReportDialog
         open={reportDialogOpen}
         onOpenChange={handleReportDialogClose}
         initialSourceTaskId={taskId}
