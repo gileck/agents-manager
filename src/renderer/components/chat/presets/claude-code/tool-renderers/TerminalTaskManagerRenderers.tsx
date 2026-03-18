@@ -37,7 +37,7 @@ export function TerminalCreateTaskRenderer({ toolUse, toolResult, expanded, onTo
   const result = safeParseResult(toolResult?.result);
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={headerStyle} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>create_task</span>
@@ -63,13 +63,18 @@ export function TerminalCreateTaskRenderer({ toolUse, toolResult, expanded, onTo
       {hasResult && expanded && (
         <div style={expandedContentStyle}>
           <div style={{ ...preStyle }}>
+            {result.id != null && <FieldRow label="id" value={String(result.id).slice(0, 12)} />}
             {result.title != null && <FieldRow label="title" value={String(result.title)} />}
+            {result.status != null && <FieldRow label="status" value={String(result.status)} />}
             {result.type != null && <FieldRow label="type" value={String(result.type)} />}
             {result.priority != null && <FieldRow label="priority" value={String(result.priority)} />}
-            {result.tags != null && Array.isArray(result.tags) && (
+            {result.description != null && (
+              <FieldRow label="desc" value={truncateInline(String(result.description), 200)} />
+            )}
+            {result.tags != null && Array.isArray(result.tags) && (result.tags as string[]).length > 0 && (
               <FieldRow label="tags" value={(result.tags as string[]).join(', ')} />
             )}
-            {result.status != null && <FieldRow label="status" value={String(result.status)} />}
+            {result.pipelineId != null && <FieldRow label="pipeline" value={String(result.pipelineId)} />}
           </div>
         </div>
       )}
@@ -84,9 +89,10 @@ export function TerminalUpdateTaskRenderer({ toolUse, toolResult, expanded, onTo
   const taskId = (input.taskId as string) || '';
   const updatedFields = Object.keys(input).filter((k) => k !== 'taskId');
   const hasResult = !!toolResult;
+  const result = safeParseResult(toolResult?.result);
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={headerStyle} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>update_task</span>
@@ -108,9 +114,13 @@ export function TerminalUpdateTaskRenderer({ toolUse, toolResult, expanded, onTo
       {hasResult && expanded && (
         <div style={expandedContentStyle}>
           <div style={{ ...preStyle }}>
+            {result.id != null && <FieldRow label="id" value={String(result.id).slice(0, 12)} />}
             {updatedFields.map((field) => (
               <FieldRow key={field} label={field} value={truncateInline(String(input[field]), 100)} />
             ))}
+            {result.title != null && !updatedFields.includes('title') && (
+              <FieldRow label="title" value={truncateInline(String(result.title), 80)} />
+            )}
           </div>
         </div>
       )}
@@ -124,6 +134,9 @@ interface TaskSummary {
   title?: string;
   status?: string;
   id?: string;
+  priority?: string;
+  type?: string;
+  assignee?: string;
 }
 
 export function TerminalListTasksRenderer({ toolUse, toolResult, expanded, onToggle }: ToolRendererProps) {
@@ -140,7 +153,7 @@ export function TerminalListTasksRenderer({ toolUse, toolResult, expanded, onTog
   }
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={headerStyle} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>list_tasks</span>
@@ -169,7 +182,19 @@ export function TerminalListTasksRenderer({ toolUse, toolResult, expanded, onTog
             {tasks.map((task, i) => (
               <div key={i} style={{ padding: '1px 0', color: '#d1d5db' }}>
                 <span style={{ color: '#6b7280' }}>[{task.status || '?'}]</span>{' '}
-                {truncateInline(task.title || task.id || '(untitled)', 60)}
+                {truncateInline(task.title || '(untitled)', 55)}
+                {(task.priority || task.type || task.assignee || task.id) && (
+                  <span style={{ color: '#6b7280' }}>
+                    {' ('}
+                    {[
+                      task.priority,
+                      task.type,
+                      task.assignee,
+                      task.id ? task.id.slice(0, 8) : undefined,
+                    ].filter(Boolean).join(', ')}
+                    {')'}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -189,7 +214,7 @@ export function TerminalGetTaskRenderer({ toolUse, toolResult, expanded, onToggl
   const taskTitle = (result.title as string) || '';
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={headerStyle} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>get_task</span>
@@ -213,13 +238,27 @@ export function TerminalGetTaskRenderer({ toolUse, toolResult, expanded, onToggl
           <div style={{ ...preStyle }}>
             {result.title != null && <FieldRow label="title" value={String(result.title)} />}
             {result.status != null && <FieldRow label="status" value={String(result.status)} />}
+            {result.type != null && <FieldRow label="type" value={String(result.type)} />}
             {result.priority != null && <FieldRow label="priority" value={String(result.priority)} />}
-            {result.plan != null && (
-              <div style={{ padding: '1px 0' }}>
-                <span style={{ color: '#6b7280' }}>plan: </span>
-                <span style={{ color: '#d1d5db' }}>{truncateInline(String(result.plan), 200)}</span>
-              </div>
+            {result.size != null && <FieldRow label="size" value={String(result.size)} />}
+            {result.complexity != null && <FieldRow label="complexity" value={String(result.complexity)} />}
+            {result.assignee != null && <FieldRow label="assignee" value={String(result.assignee)} />}
+            {result.tags != null && Array.isArray(result.tags) && (result.tags as string[]).length > 0 && (
+              <FieldRow label="tags" value={(result.tags as string[]).join(', ')} />
             )}
+            {result.branchName != null && <FieldRow label="branch" value={String(result.branchName)} />}
+            {result.prLink != null && <FieldRow label="prLink" value={String(result.prLink)} />}
+            {result.description != null && (
+              <FieldRow label="desc" value={truncateInline(String(result.description), 200)} />
+            )}
+            {result.plan != null && (
+              <FieldRow label="plan" value={truncateInline(String(result.plan), 200)} />
+            )}
+            {result.subtasks != null && Array.isArray(result.subtasks) && (
+              <FieldRow label="subtasks" value={`${(result.subtasks as unknown[]).length} subtask${(result.subtasks as unknown[]).length !== 1 ? 's' : ''}`} />
+            )}
+            {result.createdAt != null && <FieldRow label="created" value={String(result.createdAt)} />}
+            {result.updatedAt != null && <FieldRow label="updated" value={String(result.updatedAt)} />}
           </div>
         </div>
       )}
@@ -238,7 +277,7 @@ export function TerminalTransitionTaskRenderer({ toolUse, toolResult, expanded, 
   const succeeded = hasResult && !result.error;
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={headerStyle} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>transition_task</span>
@@ -263,6 +302,8 @@ export function TerminalTransitionTaskRenderer({ toolUse, toolResult, expanded, 
       {hasResult && expanded && (
         <div style={expandedContentStyle}>
           <div style={{ ...preStyle }}>
+            {taskId && <FieldRow label="taskId" value={taskId.slice(0, 12)} />}
+            {targetStatus && <FieldRow label="target" value={targetStatus} />}
             {result.error
               ? <span style={{ color: '#ef4444' }}>{String(result.error)}</span>
               : <span style={{ color: '#22c55e' }}>
@@ -283,6 +324,12 @@ interface AgentRunSummary {
   taskId?: string;
   agentType?: string;
   id?: string;
+  model?: string;
+  engine?: string;
+  duration?: number;
+  messageCount?: number;
+  cost?: number;
+  outcome?: string;
 }
 
 export function TerminalListAgentRunsRenderer({ toolResult, expanded, onToggle }: ToolRendererProps) {
@@ -297,7 +344,7 @@ export function TerminalListAgentRunsRenderer({ toolResult, expanded, onToggle }
   }
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 13 }}>
+    <div style={{ fontFamily: MONO, fontSize: '1em' }}>
       <div style={headerStyle} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}>
         <span style={bulletStyle}>●</span>
         <span style={toolNameStyle}>list_agent_runs</span>
@@ -317,10 +364,24 @@ export function TerminalListAgentRunsRenderer({ toolResult, expanded, onToggle }
         <div style={expandedContentStyle}>
           <div style={preStyle}>
             {runs.map((run, i) => (
-              <div key={i} style={{ padding: '1px 0', color: '#d1d5db' }}>
+              <div key={i} style={{ padding: '2px 0', color: '#d1d5db' }}>
                 <span style={{ color: '#6b7280' }}>[{run.status || '?'}]</span>{' '}
-                {truncateInline(run.taskId || '?', 30)}{' '}
+                {truncateInline(run.taskId || '?', 20)}{' '}
                 <span style={{ color: '#9ca3af' }}>{run.agentType || ''}</span>
+                {(run.model || run.engine || run.duration != null || run.messageCount != null || run.cost != null || run.outcome) && (
+                  <span style={{ color: '#6b7280' }}>
+                    {' ('}
+                    {[
+                      run.model,
+                      run.engine,
+                      run.duration != null ? `${Math.round(run.duration / 1000)}s` : undefined,
+                      run.messageCount != null ? `${run.messageCount} msgs` : undefined,
+                      run.cost != null ? `$${run.cost.toFixed(2)}` : undefined,
+                      run.outcome,
+                    ].filter(Boolean).join(', ')}
+                    {')'}
+                  </span>
+                )}
               </div>
             ))}
           </div>
