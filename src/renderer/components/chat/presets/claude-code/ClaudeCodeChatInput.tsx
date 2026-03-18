@@ -129,7 +129,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
     return (
       <div
         style={{
-          padding: '8px 16px 12px',
+          padding: '16px 16px 12px',
           borderTop: '1px solid #1e293b',
           backgroundColor: '#0d1117',
         }}
@@ -280,7 +280,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            paddingTop: 12,
+            paddingTop: 22,
             fontFamily: MONO,
             fontSize: '0.846em',
             color: '#6b7280',
