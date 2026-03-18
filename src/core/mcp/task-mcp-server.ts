@@ -71,7 +71,7 @@ function extractTaskIds(data: unknown): string[] {
  * Tools that automatically subscribe the session for agent-completion notifications.
  * list_tasks is intentionally excluded — subscribing to every task in a list doesn't make sense.
  */
-const AUTO_SUBSCRIBE_TOOLS = new Set(['get_task', 'create_task', 'update_task', 'transition_task']);
+const AUTO_SUBSCRIBE_TOOLS = new Set(['get_task', 'create_task', 'update_task', 'transition_task', 'request_changes']);
 
 /**
  * Creates an array of generic in-process MCP tool definitions scoped to the given project context.
@@ -398,6 +398,79 @@ export async function createTaskMcpServer(
             return result;
           });
           return ok(projected);
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // request_changes
+    // -------------------------------------------------------------------------
+    {
+      name: 'request_changes',
+      description:
+        'Submit feedback and request changes for a task in a review stage. ' +
+        'This is an atomic operation: it creates a TaskContextEntry with the feedback, ' +
+        'then transitions the task back to the revision stage (e.g. plan_review → planning). ' +
+        'Use this instead of manually calling transition_task when you want to send feedback ' +
+        'that the revision agent can read. ' +
+        'Automatically subscribes this session for agent-completion notifications on the task.',
+      inputSchema: {
+        taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
+        feedback: z.string().describe(
+          'Feedback content describing the requested changes. If empty, a default message is used.',
+        ),
+        feedbackType: z
+          .enum(['plan_feedback', 'design_feedback', 'implementation_feedback'])
+          .describe(
+            'Type of feedback. Determines the target revision stage: ' +
+            'plan_feedback → planning, design_feedback → designing, implementation_feedback → implementing',
+          ),
+        autoNotify: z.boolean().optional().describe(
+          'If true (default), the agent will automatically start a new turn when the agent-completion ' +
+          'notification arrives for this task. If false, only a UI notification is ' +
+          'shown and the user can choose to engage.',
+        ),
+      },
+      handler: async (args: {
+        taskId: string;
+        feedback: string;
+        feedbackType: 'plan_feedback' | 'design_feedback' | 'implementation_feedback';
+        autoNotify?: boolean;
+      }): Promise<CallToolResult> => {
+        try {
+          const taskId = await resolveTaskId(api, args.taskId);
+
+          // Determine target status from feedback type
+          const TARGET_STATUS: Record<string, string> = {
+            plan_feedback: 'planning',
+            design_feedback: 'designing',
+            implementation_feedback: 'implementing',
+          };
+          const targetStatus = TARGET_STATUS[args.feedbackType];
+          if (!targetStatus) {
+            return fail(`Unknown feedbackType: ${args.feedbackType}`);
+          }
+
+          // Default feedback message if empty
+          const DEFAULT_MESSAGES: Record<string, string> = {
+            plan_feedback: 'Changes requested to the plan.',
+            design_feedback: 'Changes requested to the design.',
+            implementation_feedback: 'Changes requested to the implementation.',
+          };
+          const feedbackContent = args.feedback?.trim() || DEFAULT_MESSAGES[args.feedbackType];
+
+          // Step 1: Submit feedback as a TaskContextEntry
+          await api.tasks.addFeedback(taskId, {
+            entryType: args.feedbackType,
+            content: feedbackContent,
+            source: 'orchestrator',
+          });
+
+          // Step 2: Transition task back to the revision stage
+          const result = await api.tasks.transition(taskId, targetStatus);
+          return ok(result);
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
         }
