@@ -133,6 +133,8 @@ function getAgentDefinitionsSeedSql(now: number): string {
       engine: 'claude-code', modes: [{ mode: 'new', promptTemplate: '' }, { mode: 'revision', promptTemplate: '' }] },
     { id: 'agent-def-task-workflow-reviewer', name: 'Workflow Reviewer', description: 'Reviews completed task execution end-to-end',
       engine: 'claude-code', modes: [{ mode: 'new', promptTemplate: '' }] },
+    { id: 'agent-def-post-mortem-reviewer', name: 'Post-Mortem Reviewer', description: 'Analyses defective tasks to find root causes and suggest workflow improvements',
+      engine: 'claude-code', modes: [{ mode: 'new', promptTemplate: '' }] },
     { id: 'agent-def-planner', name: 'Planner', description: 'Creates and revises implementation plans',
       engine: 'claude-code', modes: [{ mode: 'new', promptTemplate: '' }, { mode: 'revision', promptTemplate: '' }] },
     { id: 'agent-def-designer', name: 'Designer', description: 'Creates and revises technical designs',

@@ -116,6 +116,7 @@ export interface ApiShape {
     debugTimeline(taskId: string): Promise<DebugTimelineEntry[]>;
     worktree(taskId: string): Promise<Worktree | null>;
     workflowReview(taskId: string): Promise<AgentRun>;
+    postMortem(taskId: string, input?: { postMortemInput?: string; linkedBugDescriptions?: string[] }): Promise<AgentRun>;
   };
 
   // Feature operations

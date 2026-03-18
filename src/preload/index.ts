@@ -133,6 +133,7 @@ const IPC_CHANNELS = {
   GIT_SYNC_MAIN: 'git:sync-main',
   MAIN_DIVERGED: 'git:main-diverged',
   TASK_WORKFLOW_REVIEW: 'task:workflow-review',
+  TASK_POST_MORTEM: 'task:post-mortem',
   DASHBOARD_STATS: 'dashboard:stats',
   TELEGRAM_TEST: 'telegram:test',
   TELEGRAM_BOT_START: 'telegram:bot-start',
@@ -309,6 +310,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE, taskId),
     workflowReview: (taskId: string): Promise<AgentRun> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKFLOW_REVIEW, taskId),
+    postMortem: (taskId: string, input?: { postMortemInput?: string; linkedBugDescriptions?: string[] }): Promise<AgentRun> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_POST_MORTEM, taskId, input),
   },
 
   // Feature operations

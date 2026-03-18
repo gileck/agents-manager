@@ -115,6 +115,7 @@ export interface ApiClient {
     message(taskId: string, message: string): Promise<unknown>;
     runs(taskId: string): Promise<unknown[]>;
     workflowReview(taskId: string): Promise<unknown>;
+    postMortem(taskId: string, input?: { postMortemInput?: string; linkedBugDescriptions?: string[] }): Promise<unknown>;
     getRun(runId: string): Promise<unknown>;
     getActiveRuns(): Promise<unknown[]>;
     getActiveTaskIds(): Promise<string[]>;
@@ -399,6 +400,8 @@ export function createApiClient(baseUrl: string): ApiClient {
         req('GET', `/api/tasks/${taskId}/agent/runs`),
       workflowReview: (taskId) =>
         req('POST', `/api/tasks/${taskId}/agent/workflow-review`),
+      postMortem: (taskId, input?) =>
+        req('POST', `/api/tasks/${taskId}/agent/post-mortem`, input ?? {}),
       getRun: (runId) =>
         req('GET', `/api/agent-runs/${runId}`),
       getActiveRuns: () =>

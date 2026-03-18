@@ -153,13 +153,13 @@ describe('schema-baseline', () => {
     db.close();
   });
 
-  it('should seed all 8 agent definitions', () => {
+  it('should seed all 9 agent definitions', () => {
     const db = openBaselineDb();
     const defs = db.prepare('SELECT id, name, engine, is_built_in FROM agent_definitions ORDER BY id').all() as { id: string; name: string; engine: string; is_built_in: number }[];
-    expect(defs.length).toBe(8);
+    expect(defs.length).toBe(9);
 
     const builtIn = defs.filter(d => d.is_built_in === 1);
-    expect(builtIn.length).toBe(6);
+    expect(builtIn.length).toBe(7);
 
     const ids = defs.map(d => d.id);
     expect(ids).toContain('agent-def-implementor');
@@ -168,6 +168,7 @@ describe('schema-baseline', () => {
     expect(ids).toContain('agent-def-investigator');
     expect(ids).toContain('agent-def-reviewer');
     expect(ids).toContain('agent-def-task-workflow-reviewer');
+    expect(ids).toContain('agent-def-post-mortem-reviewer');
     expect(ids).toContain('agent-def-cursor-agent');
     expect(ids).toContain('agent-def-codex-cli');
     db.close();

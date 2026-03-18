@@ -77,6 +77,7 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       debugTimeline: (taskId) => api.tasks.getTimeline(taskId) as Promise<never>,
       worktree: (taskId) => api.tasks.getWorktree(taskId) as Promise<never>,
       workflowReview: (taskId) => api.agents.workflowReview(taskId) as Promise<never>,
+      postMortem: (taskId, input?) => api.agents.postMortem(taskId, input) as Promise<never>,
     },
 
     // ── Features ──────────────────────────────────────────────────────

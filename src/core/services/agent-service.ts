@@ -173,7 +173,7 @@ export class AgentService implements IAgentService {
     this.pendingResumes.delete(taskId);
   }
 
-  async execute(taskId: string, mode: AgentMode, agentType: string, revisionReason?: RevisionReason, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void): Promise<AgentRun> {
+  async execute(taskId: string, mode: AgentMode, agentType: string, revisionReason?: RevisionReason, onOutput?: (chunk: string) => void, onMessage?: (msg: AgentChatMessage) => void, onStatusChange?: (status: string) => void, additionalContext?: Record<string, unknown>): Promise<AgentRun> {
     // Pre-spawn guard: prevent duplicate agent launches for the same task
     if (this.spawningTasks.has(taskId)) {
       throw new Error(`Agent already spawning for task ${taskId} — duplicate launch prevented`);
@@ -479,6 +479,7 @@ export class AgentService implements IAgentService {
       revisionReason,
       customPrompt,
       devServerUrl: devServer?.status === 'ready' ? devServer.url : undefined,
+      additionalContext,
     };
 
     // Session ID management:

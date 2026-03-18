@@ -68,6 +68,7 @@ import { ImplementorPromptBuilder } from '../agents/implementor-prompt-builder';
 import { InvestigatorPromptBuilder } from '../agents/investigator-prompt-builder';
 import { ReviewerPromptBuilder } from '../agents/reviewer-prompt-builder';
 import { TaskWorkflowReviewerPromptBuilder } from '../agents/task-workflow-reviewer-prompt-builder';
+import { PostMortemReviewerPromptBuilder } from '../agents/post-mortem-reviewer-prompt-builder';
 import { ClaudeCodeLib } from '../libs/claude-code-lib';
 import { CursorAgentLib } from '../libs/cursor-agent-lib';
 import { CodexAppServerLib } from '../libs/codex-app-server-lib';
@@ -307,6 +308,7 @@ function createAgentModule(
   agentFramework.registerAgent(new Agent('investigator', new InvestigatorPromptBuilder(), agentLibRegistry));
   agentFramework.registerAgent(new Agent('reviewer', new ReviewerPromptBuilder(), agentLibRegistry));
   agentFramework.registerAgent(new Agent('task-workflow-reviewer', new TaskWorkflowReviewerPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('post-mortem-reviewer', new PostMortemReviewerPromptBuilder(), agentLibRegistry));
 
   // Report builder for workflow reviewer agent
   const taskReviewReportBuilder = new TaskReviewReportBuilder(
