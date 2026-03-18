@@ -12,6 +12,7 @@ import { getPreset, DEFAULT_PRESET_NAME } from './registry';
 // Ensure presets are registered before any context usage.
 import './default';
 import './claude-code';
+import './codex';
 
 interface ChatPresetContextValue {
   /** The currently active preset object. */
