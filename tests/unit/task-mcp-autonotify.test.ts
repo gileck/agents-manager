@@ -43,6 +43,7 @@ const mockApi = {
     create: vi.fn().mockResolvedValue({ ...FULL_TASK }),
     update: vi.fn().mockResolvedValue({ ...FULL_TASK }),
     transition: vi.fn().mockResolvedValue({ task: { ...FULL_TASK, status: 'in_progress' } }),
+    addFeedback: vi.fn().mockResolvedValue({ id: 'ctx-1', entryType: 'plan_feedback' }),
   },
   settings: { get: vi.fn().mockResolvedValue({ defaultPipelineId: 'pipe-1' }) },
   agents: { runs: vi.fn(), getActiveRuns: vi.fn(), getAllRuns: vi.fn() },
@@ -459,5 +460,141 @@ describe('Tier 2 delivery — autoNotify flag determines agent trigger', () => {
     expect(subs).toHaveLength(1);
     expect(subs[0].autoNotify).toBe(false);
     // agent-service.ts would skip Tier 2 for this subscription
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. request_changes tool tests
+// ---------------------------------------------------------------------------
+
+describe('request_changes — submit feedback and transition', () => {
+  let registry: AgentSubscriptionRegistry;
+  let tools: Awaited<ReturnType<typeof createTaskMcpServer>>;
+  let handler: ToolHandler;
+
+  beforeEach(async () => {
+    registry = new AgentSubscriptionRegistry();
+    tools = await createTaskMcpServer('http://localhost:0', {
+      projectId: 'proj-1',
+      sessionId: SESSION_ID,
+      subscriptionRegistry: registry,
+    });
+    const tool = tools.find((t) => t.name === 'request_changes');
+    expect(tool).toBeDefined();
+    handler = tool!.handler as ToolHandler;
+
+    // Reset mock call counts
+    mockApi.tasks.addFeedback.mockClear();
+    mockApi.tasks.transition.mockClear();
+  });
+
+  afterEach(() => {
+    registry.dispose();
+  });
+
+  it('calls addFeedback with correct entryType and source, then transitions', async () => {
+    const result = await handler({
+      taskId: TASK_ID,
+      feedback: 'Please add error handling to step 3',
+      feedbackType: 'plan_feedback',
+    });
+    expect(result.isError).toBeFalsy();
+
+    // Verify addFeedback was called with the right arguments
+    expect(mockApi.tasks.addFeedback).toHaveBeenCalledWith(TASK_ID, {
+      entryType: 'plan_feedback',
+      content: 'Please add error handling to step 3',
+      source: 'orchestrator',
+    });
+
+    // Verify transition was called with the mapped target status
+    expect(mockApi.tasks.transition).toHaveBeenCalledWith(TASK_ID, 'planning');
+  });
+
+  it('maps design_feedback → designing', async () => {
+    await handler({
+      taskId: TASK_ID,
+      feedback: 'Use Redis instead of in-memory cache',
+      feedbackType: 'design_feedback',
+    });
+
+    expect(mockApi.tasks.addFeedback).toHaveBeenCalledWith(TASK_ID, {
+      entryType: 'design_feedback',
+      content: 'Use Redis instead of in-memory cache',
+      source: 'orchestrator',
+    });
+    expect(mockApi.tasks.transition).toHaveBeenCalledWith(TASK_ID, 'designing');
+  });
+
+  it('maps implementation_feedback → implementing', async () => {
+    await handler({
+      taskId: TASK_ID,
+      feedback: 'Fix the failing test in auth module',
+      feedbackType: 'implementation_feedback',
+    });
+
+    expect(mockApi.tasks.addFeedback).toHaveBeenCalledWith(TASK_ID, {
+      entryType: 'implementation_feedback',
+      content: 'Fix the failing test in auth module',
+      source: 'orchestrator',
+    });
+    expect(mockApi.tasks.transition).toHaveBeenCalledWith(TASK_ID, 'implementing');
+  });
+
+  it('uses default feedback message when feedback is empty', async () => {
+    await handler({
+      taskId: TASK_ID,
+      feedback: '',
+      feedbackType: 'plan_feedback',
+    });
+
+    expect(mockApi.tasks.addFeedback).toHaveBeenCalledWith(TASK_ID, {
+      entryType: 'plan_feedback',
+      content: 'Changes requested to the plan.',
+      source: 'orchestrator',
+    });
+  });
+
+  it('auto-subscribes with autoNotify: true by default', async () => {
+    await handler({
+      taskId: TASK_ID,
+      feedback: 'Some feedback',
+      feedbackType: 'plan_feedback',
+    });
+
+    // The auto-subscribe wrapper should register a subscription
+    const subs = registry.get(TASK_ID);
+    expect(subs).toHaveLength(1);
+    expect(subs[0].autoNotify).toBe(true);
+  });
+
+  it('returns error when addFeedback fails', async () => {
+    mockApi.tasks.addFeedback.mockRejectedValueOnce(new Error('Task not found'));
+
+    const result = await handler({
+      taskId: TASK_ID,
+      feedback: 'Some feedback',
+      feedbackType: 'plan_feedback',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Task not found');
+    // transition should not have been called
+    expect(mockApi.tasks.transition).not.toHaveBeenCalled();
+  });
+
+  it('returns error when transition fails', async () => {
+    mockApi.tasks.transition.mockRejectedValueOnce(new Error('Invalid transition'));
+
+    const result = await handler({
+      taskId: TASK_ID,
+      feedback: 'Some feedback',
+      feedbackType: 'plan_feedback',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Invalid transition');
+    // addFeedback should still have been called
+    expect(mockApi.tasks.addFeedback).toHaveBeenCalled();
   });
 });

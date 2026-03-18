@@ -82,6 +82,20 @@ describe('getToolRenderer — MCP task-manager tools (codex-cli format)', () => 
   });
 });
 
+describe('getToolRenderer — request_changes tool', () => {
+  it('mcp__taskManager__request_changes → TaskEventCard (not GenericToolRenderer)', () => {
+    const renderer = getToolRenderer('mcp__taskManager__request_changes');
+    expect(renderer).toBe(TaskEventCard);
+    expect(renderer).not.toBe(GenericToolRenderer);
+  });
+
+  it('taskManager.request_changes → TaskEventCard (not GenericToolRenderer)', () => {
+    const renderer = getToolRenderer('taskManager.request_changes');
+    expect(renderer).toBe(TaskEventCard);
+    expect(renderer).not.toBe(GenericToolRenderer);
+  });
+});
+
 describe('getToolRenderer — broken hyphenated key variants (regression guard)', () => {
   it('mcp__task-manager__create_task → GenericToolRenderer (no custom renderer registered)', () => {
     // These are the tool names that were accidentally generated after commit f847111

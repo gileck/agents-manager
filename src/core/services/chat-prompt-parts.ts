@@ -32,7 +32,7 @@ function capabilitiesSection(): string {
   return [
     '## Capabilities',
     '- Read and explore project files (Read, Glob, Grep, LS tools)',
-    '- Use MCP tools for task management: create_task, get_task, list_tasks, transition_task, list_agent_runs',
+    '- Use MCP tools for task management: create_task, get_task, list_tasks, transition_task, request_changes, list_agent_runs',
     '- Run the `npx agents-manager` CLI via Bash for operations not covered by MCP (subtasks, deps, events, prompts, pipelines, projects)',
     '- Answer questions about code, architecture, and project state',
   ].join('\n');
@@ -90,6 +90,7 @@ function mcpToolsSection(): string {
     '- **get_task** — Get full task details including plan, technical design, status, and valid transitions. Use this to inspect a task before calling transition_task.',
     '- **list_tasks** — List tasks with optional filters (status, assignee, priority). Returns a compact summary; use get_task for full details on a specific task.',
     '- **transition_task** — Move a task to a new status. You MUST supply the exact status string. Never auto-select a status — always confirm the target status with the user before calling this tool.',
+    '- **request_changes** — Submit feedback and request changes for a task in a review stage. Accepts taskId, feedback text, and feedbackType (plan_feedback, design_feedback, or implementation_feedback). Creates a TaskContextEntry with the feedback, then transitions the task back to the revision stage (e.g. plan_review → planning). Use this instead of transition_task when you have feedback for the revision agent.',
     '- **list_agent_runs** — List agent runs. Filter by task, active flag, or retrieve the most recent runs.',
   ].join('\n');
 }
@@ -105,8 +106,9 @@ function orchestratorBehaviorSection(): string {
     '1. **Create** — use `create_task` to create a task for the work described.',
     '2. **Plan** — once the planning pipeline has run, use `get_task` to retrieve the plan and present it to the user.',
     '3. **Review** — discuss the plan with the user. Ask for feedback. Do NOT transition until the user approves.',
-    '4. **Approve** — once the user explicitly approves ("looks good", "proceed", etc.), use `transition_task` to advance the task to the next status.',
-    '5. **Monitor** — use `list_agent_runs` to track agent progress; use `list_tasks` for overall project awareness.',
+    '4. **Request Changes** — if the user requests changes, use `request_changes` with the appropriate feedbackType (plan_feedback, design_feedback, or implementation_feedback) and the user\'s feedback. This sends feedback to the revision agent and transitions the task back to the revision stage.',
+    '5. **Approve** — once the user explicitly approves ("looks good", "proceed", etc.), use `transition_task` to advance the task to the next status.',
+    '6. **Monitor** — use `list_agent_runs` to track agent progress; use `list_tasks` for overall project awareness.',
     '',
     '### When to Skip Planning',
     'Not every task needs a full planning cycle. Use these guidelines when deciding whether to route a task directly to `implementing` or through `planning → plan_review → implementing`:',

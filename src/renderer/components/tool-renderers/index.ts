@@ -46,6 +46,7 @@ const TOOL_RENDERERS: Record<string, React.ComponentType<ToolRendererProps>> = {
   // Note: serverKey comes from the mcpServers record key in chat-agent-service.ts ('taskManager')
   'mcp__taskManager__create_task': TaskEventCard,
   'mcp__taskManager__transition_task': TaskEventCard,
+  'mcp__taskManager__request_changes': TaskEventCard,
   'mcp__taskManager__get_task': TaskDetailCard,
   'mcp__taskManager__list_tasks': TaskListCard,
   'mcp__taskManager__list_agent_runs': AgentRunningCard,
@@ -53,6 +54,7 @@ const TOOL_RENDERERS: Record<string, React.ComponentType<ToolRendererProps>> = {
   // MCP task-manager tools — codex-cli lib format (<serverKey>.<toolName>)
   'taskManager.create_task': TaskEventCard,
   'taskManager.transition_task': TaskEventCard,
+  'taskManager.request_changes': TaskEventCard,
   'taskManager.get_task': TaskDetailCard,
   'taskManager.list_tasks': TaskListCard,
   'taskManager.list_agent_runs': AgentRunningCard,
