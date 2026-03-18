@@ -48,7 +48,7 @@ export function ReportBugForTaskDialog({
           setSearchQuery(task.title);
         }
       }).catch((err) => {
-        console.warn('ReportBugForTaskDialog: failed to pre-fill task', err);
+        reportError(err, 'Pre-fill source task');
       });
     }
   }, [open, initialSourceTaskId]);
@@ -99,7 +99,7 @@ export function ReportBugForTaskDialog({
         setSearchResults(tasks.slice(0, 20));
         setShowDropdown(true);
       } catch (err) {
-        console.error('Task search failed:', err);
+        reportError(err, 'Task search');
       } finally {
         setSearching(false);
       }
@@ -170,7 +170,7 @@ export function ReportBugForTaskDialog({
       });
       onOpenChange(false);
     } catch (err) {
-      console.error('[ReportBugForTaskDialog]', err);
+      reportError(err, 'Create bug task');
       setError(err instanceof Error ? err.message : 'Failed to create bug task');
     } finally {
       setSubmitting(false);

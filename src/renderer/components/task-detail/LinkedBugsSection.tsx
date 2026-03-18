@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ReportBugForTaskDialog } from '../bugs/ReportBugForTaskDialog';
+import { reportError } from '../../lib/error-handler';
 import type { Task } from '../../../shared/types';
 
 interface LinkedBugsSectionProps {
@@ -26,7 +27,7 @@ export function LinkedBugsSection({ taskId }: LinkedBugsSectionProps) {
       );
       setLinkedBugs(linked);
     } catch (err) {
-      console.error('LinkedBugsSection: failed to fetch linked bugs', err);
+      reportError(err, 'Load linked bugs');
     } finally {
       setLoading(false);
     }

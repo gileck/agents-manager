@@ -370,7 +370,7 @@ function DefectiveTaskRow({ task, pendingReview, onRefresh }: DefectiveTaskRowPr
         setContextEntries(entries);
         setLinkedBugCount(bugs.length);
       } catch (err) {
-        console.error('DefectiveTaskRow: failed to load context', err);
+        reportError(err, 'Load post-mortem context');
       } finally {
         setLoadingContext(false);
       }
