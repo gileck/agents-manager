@@ -397,7 +397,7 @@ export function ClaudeCodeChatMessageList({
       if (msg.type === 'user') {
         const userMsg = msg as AgentChatMessageUser;
         nodes.push(
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', lineHeight: '22px', backgroundColor: '#161b22', marginLeft: -16, marginRight: -16, paddingLeft: 16, paddingRight: 16 }}>
+          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 0', lineHeight: '22px', backgroundColor: '#161b22', marginLeft: -16, marginRight: -16, paddingLeft: 16, paddingRight: 16 }}>
             <span style={{ color: '#6b7280', fontWeight: 700, fontSize: '1.077em', flexShrink: 0, userSelect: 'none' }}>❯</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={{ color: '#e5e7eb', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{userMsg.text}</span>
