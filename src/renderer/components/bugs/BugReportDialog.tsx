@@ -346,61 +346,6 @@ export function BugReportDialog({ open, onOpenChange, initialValues, initialSour
           <DialogTitle>Report Bug</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          {/* Source task picker */}
-          <div className="space-y-2">
-            <Label>Source Task</Label>
-            <div className="relative" ref={dropdownRef}>
-              <Input
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search for the task that introduced the bug…"
-                onFocus={() => {
-                  if (searchResults.length > 0) setShowDropdown(true);
-                }}
-              />
-              {searching && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                  Searching…
-                </div>
-              )}
-              {showDropdown && searchResults.length > 0 && (
-                <div
-                  className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md"
-                  style={{ maxHeight: 240, overflowY: 'auto' }}
-                >
-                  {searchResults.map((task) => (
-                    <div
-                      key={task.id}
-                      className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-accent text-sm"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleSelectTask(task);
-                      }}
-                    >
-                      <span className="truncate">{task.title}</span>
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{task.status}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedTask && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>
-                  Selected: <span className="font-medium text-foreground">{selectedTask.title}</span>
-                  {' '}— will be tagged <span className="font-mono">defective</span>
-                </span>
-                <button
-                  onClick={handleClearSourceTask}
-                  className="ml-auto text-muted-foreground hover:text-destructive"
-                  title="Clear selection"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
           <div className="space-y-2">
             <Label>Title</Label>
             <Input
@@ -471,6 +416,61 @@ export function BugReportDialog({ open, onOpenChange, initialValues, initialSour
               >
                 <X className="h-3 w-3 mr-1" /> Clear logs
               </Button>
+            )}
+          </div>
+
+          {/* Source task picker */}
+          <div className="space-y-2">
+            <Label>Source Task</Label>
+            <div className="relative" ref={dropdownRef}>
+              <Input
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search for the task that introduced the bug…"
+                onFocus={() => {
+                  if (searchResults.length > 0) setShowDropdown(true);
+                }}
+              />
+              {searching && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  Searching…
+                </div>
+              )}
+              {showDropdown && searchResults.length > 0 && (
+                <div
+                  className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md"
+                  style={{ maxHeight: 240, overflowY: 'auto' }}
+                >
+                  {searchResults.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-accent text-sm"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectTask(task);
+                      }}
+                    >
+                      <span className="truncate">{task.title}</span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{task.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedTask && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>
+                  Selected: <span className="font-medium text-foreground">{selectedTask.title}</span>
+                  {' '}— will be tagged <span className="font-mono">defective</span>
+                </span>
+                <button
+                  onClick={handleClearSourceTask}
+                  className="ml-auto text-muted-foreground hover:text-destructive"
+                  title="Clear selection"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
             )}
           </div>
 
