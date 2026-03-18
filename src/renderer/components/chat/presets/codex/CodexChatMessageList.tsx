@@ -1,13 +1,12 @@
 /**
  * Codex preset — ChatMessageList.
  *
- * Terminal-style message timeline matching the Codex CLI aesthetic:
- * - User messages: dark bubbles, right-aligned
- * - Assistant text: left-aligned with monospace code rendering
- * - Collapsible "N previous messages" groups
- * - Inline file references as clickable links
- * - Commit result display blocks
- * - Agent messages with code blocks and numbered lists
+ * Chat-app style message timeline matching the Codex CLI aesthetic:
+ * - User messages: right-aligned dark pill bubbles (#2a2a3e)
+ * - Assistant text: left-aligned, proportional font, no bullet prefix
+ * - Collapsible "N previous messages" with centered HR-style dividers
+ * - Scroll-to-bottom: centered ↓ arrow in circle
+ * - Tool calls: clean collapsible sections (not terminal-style)
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -27,7 +26,6 @@ import type {
   ChatImageRef,
 } from '../../../../../shared/types';
 import { MarkdownContent } from '../../MarkdownContent';
-import { getTerminalToolRenderer } from '../claude-code/tool-renderers';
 import { AgentRunInfoCard } from '../../AgentRunInfoCard';
 import { AskUserQuestionCard } from '../../AskUserQuestionCard';
 import { useChatActions } from '../../ChatActionsContext';
@@ -37,7 +35,9 @@ import { groupMessages } from '../../utils/group-messages';
 import type { ChatMessageListPresetProps } from '../types';
 import { CodexAgentBlock } from './CodexAgentBlock';
 
+const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
+const ACCENT = '#f59e0b';
 
 /** Strip <thinking>…</thinking> XML blocks from assistant text before rendering. */
 function stripThinkingBlocks(text: string): string {
@@ -55,7 +55,7 @@ function ElapsedTime({ startedAt }: { startedAt: number }) {
   const m = Math.floor(elapsed / 60);
   const s = elapsed % 60;
   return (
-    <span style={{ color: '#6b7280', fontSize: '0.923em', fontFamily: MONO }}>
+    <span style={{ color: '#888', fontSize: '0.85em', fontFamily: SANS }}>
       {m > 0 ? `${m}m ${s}s` : `${s}s`}
     </span>
   );
@@ -67,7 +67,7 @@ function CollapsedSystemNotification({ text }: { text: string }) {
   const summary = text.length > 80 ? text.slice(0, 80).trimEnd() + '…' : text;
 
   return (
-    <div style={{ margin: '2px 0', fontFamily: MONO, fontSize: '0.923em' }}>
+    <div style={{ margin: '2px 0', fontFamily: SANS, fontSize: '0.875em' }}>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -78,16 +78,16 @@ function CollapsedSystemNotification({ text }: { text: string }) {
         }}
       >
         <span style={{ color: '#60a5fa', flexShrink: 0 }}>ⓘ</span>
-        <span style={{ color: '#60a5fa', fontWeight: 600, flexShrink: 0, fontFamily: MONO }}>System Notification</span>
+        <span style={{ color: '#60a5fa', fontWeight: 600, flexShrink: 0, fontFamily: SANS }}>System Notification</span>
         {!expanded && (
           <span style={{ color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
             {summary}
           </span>
         )}
-        <span style={{ color: '#6b7280', flexShrink: 0, marginLeft: 'auto' }}>{expanded ? '▼' : '▶'}</span>
+        <span style={{ color: '#888', flexShrink: 0, marginLeft: 'auto' }}>{expanded ? '▼' : '▶'}</span>
       </button>
       {expanded && (
-        <div style={{ paddingLeft: 16, color: '#9ca3af', whiteSpace: 'pre-wrap', wordBreak: 'break-word', paddingTop: 2, fontFamily: MONO }}>
+        <div style={{ paddingLeft: 16, color: '#9ca3af', whiteSpace: 'pre-wrap', wordBreak: 'break-word', paddingTop: 2, fontFamily: SANS }}>
           {text}
         </div>
       )}
@@ -95,7 +95,95 @@ function CollapsedSystemNotification({ text }: { text: string }) {
   );
 }
 
-/** Codex-style collapsible message group ("N previous messages"). */
+/** Clean collapsible tool call rendering (non-terminal style). */
+function CodexToolCall({
+  toolUse,
+  toolResult,
+  expanded,
+  onToggle,
+}: {
+  toolUse: AgentChatMessageToolUse;
+  toolResult?: AgentChatMessageToolResult;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div style={{ padding: '2px 0' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 0',
+          fontFamily: SANS,
+          fontSize: '0.875em',
+          width: '100%',
+          textAlign: 'left',
+        }}
+      >
+        <span style={{
+          color: '#888',
+          fontSize: '0.7em',
+          transition: 'transform 0.15s',
+          transform: expanded ? 'rotate(90deg)' : 'none',
+        }}>▶</span>
+        <span style={{ color: '#d1d5db' }}>{toolUse.toolName}</span>
+        {toolResult && <span style={{ color: '#888', fontSize: '0.85em' }}>✓</span>}
+      </button>
+      {expanded && (
+        <div style={{ marginLeft: 20, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {/* Input */}
+          <div style={{
+            padding: '6px 10px',
+            backgroundColor: '#1a1a28',
+            borderRadius: 6,
+            maxHeight: 200,
+            overflowY: 'auto',
+          }}>
+            <pre style={{
+              color: '#9ca3af',
+              fontSize: '0.8em',
+              fontFamily: MONO,
+              whiteSpace: 'pre-wrap',
+              margin: 0,
+            }}>
+              {typeof toolUse.input === 'string'
+                ? (toolUse.input.length > 2000 ? toolUse.input.slice(0, 2000) + '\n…' : toolUse.input)
+                : JSON.stringify(toolUse.input, null, 2).slice(0, 2000)}
+            </pre>
+          </div>
+          {/* Result */}
+          {toolResult && (
+            <div style={{
+              padding: '6px 10px',
+              backgroundColor: '#1a1a28',
+              borderRadius: 6,
+              maxHeight: 200,
+              overflowY: 'auto',
+            }}>
+              <pre style={{
+                color: '#9ca3af',
+                fontSize: '0.8em',
+                fontFamily: MONO,
+                whiteSpace: 'pre-wrap',
+                margin: 0,
+              }}>
+                {toolResult.result.length > 2000 ? toolResult.result.slice(0, 2000) + '\n…' : toolResult.result}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Codex-style collapsible message group ("N previous messages") with centered HR dividers. */
 function CodexCollapsibleGroup({
   messages,
   startIndex,
@@ -123,39 +211,38 @@ function CodexCollapsibleGroup({
   const count = messages.length;
 
   return (
-    <div style={{ margin: '8px 0' }}>
+    <div style={{ margin: '12px 0' }}>
+      {/* Centered HR-style divider with text */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         style={{
           background: 'transparent',
-          border: '1px solid #2d3748',
+          border: 'none',
           cursor: 'pointer',
-          color: '#6b7280',
-          fontFamily: MONO,
-          fontSize: '0.846em',
-          padding: '4px 12px',
-          borderRadius: 4,
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 16,
           width: '100%',
-          justifyContent: 'center',
+          padding: '4px 0',
+          fontFamily: SANS,
         }}
       >
-        <span style={{ color: '#4b5563' }}>{expanded ? '▾' : '▸'}</span>
-        <span>{count} previous message{count !== 1 ? 's' : ''}</span>
+        <div style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
+        <span style={{ color: '#888', fontSize: '0.8em', whiteSpace: 'nowrap' }}>
+          {count} previous message{count !== 1 ? 's' : ''} {expanded ? '▾' : '▸'}
+        </span>
+        <div style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
       </button>
       {expanded && (
-        <div style={{ marginTop: 4, paddingLeft: 8, borderLeft: '2px solid #1e293b' }}>
+        <div style={{ marginTop: 8, paddingLeft: 8, borderLeft: '2px solid #2a2a3e' }}>
           {messages.map((msg, i) => {
             const globalIndex = startIndex + i;
             if (msg.type === 'tool_use') {
               const toolUse = msg as AgentChatMessageToolUse;
               const toolResult = toolUse.toolId ? resultMap.get(toolUse.toolId) : undefined;
-              const Renderer = getTerminalToolRenderer(toolUse.toolName);
               return (
-                <Renderer
+                <CodexToolCall
                   key={i}
                   toolUse={toolUse}
                   toolResult={toolResult}
@@ -166,8 +253,8 @@ function CodexCollapsibleGroup({
             }
             if (msg.type === 'thinking') {
               return (
-                <div key={i} style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic', padding: '2px 0' }}>
-                  {msg.text.length > 500 ? msg.text.slice(0, 500) + '\u2026' : msg.text}
+                <div key={i} style={{ color: '#888', fontSize: '0.85em', fontStyle: 'italic', padding: '2px 0', fontFamily: SANS }}>
+                  {msg.text.length > 500 ? msg.text.slice(0, 500) + '…' : msg.text}
                 </div>
               );
             }
@@ -256,7 +343,6 @@ export function CodexChatMessageList({
       }
 
       if (segment.type === 'group') {
-        // Codex-style: show as "N previous messages" collapsible
         nodes.push(
           <CodexCollapsibleGroup
             key={`group-${segment.startIndex}`}
@@ -271,7 +357,7 @@ export function CodexChatMessageList({
 
       const { msg, index: i } = segment;
 
-      // ── User message (right-aligned dark bubble) ──
+      // ── User message (right-aligned dark pill bubble) ──
       if (msg.type === 'user') {
         const userMsg = msg as AgentChatMessageUser;
         nodes.push(
@@ -288,10 +374,11 @@ export function CodexChatMessageList({
               gap: 4,
             }}>
               <div style={{
-                backgroundColor: '#1e293b',
-                borderRadius: '12px 12px 4px 12px',
-                padding: '10px 14px',
+                backgroundColor: '#2a2a3e',
+                borderRadius: '18px 18px 4px 18px',
+                padding: '10px 16px',
                 color: '#e5e7eb',
+                fontFamily: SANS,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
                 lineHeight: '22px',
@@ -306,7 +393,7 @@ export function CodexChatMessageList({
                       key={j}
                       src={`/api/chat/images?path=${encodeURIComponent(img.path)}`}
                       alt={img.name || 'Image'}
-                      style={{ maxHeight: 120, maxWidth: 180, borderRadius: 4, border: '1px solid #374151', cursor: 'pointer' }}
+                      style={{ maxHeight: 120, maxWidth: 180, borderRadius: 8, border: '1px solid #3a3a4e', cursor: 'pointer' }}
                       onClick={() => {
                         const imgs = userMsg.images!.map((im: ChatImageRef) => ({ src: `/api/chat/images?path=${encodeURIComponent(im.path)}`, name: im.name }));
                         setViewerImages(imgs);
@@ -323,9 +410,9 @@ export function CodexChatMessageList({
                   disabled={isRunning}
                   onClick={() => onEditMessage(userMsg.text)}
                   style={{
-                    background: 'transparent', border: 'none', color: '#6b7280',
-                    cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '0.77em',
-                    fontFamily: MONO, opacity: 0.4,
+                    background: 'transparent', border: 'none', color: '#888',
+                    cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '0.75em',
+                    fontFamily: SANS, opacity: 0.5,
                   }}
                   title="Edit & resend"
                 >
@@ -337,33 +424,34 @@ export function CodexChatMessageList({
         );
       }
 
-      // ── Assistant text ──
+      // ── Assistant text (left-aligned, no bubble, proportional font) ──
       else if (msg.type === 'assistant_text') {
         nodes.push(
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', lineHeight: '22px' }}>
-            <span style={{ color: '#10b981', fontSize: '0.77em', flexShrink: 0, userSelect: 'none', marginTop: 3 }}>●</span>
-            <div style={{ flex: 1, minWidth: 0, color: '#d1d5db' }} className="codex-markdown-override">
+          <div key={i} style={{
+            padding: '6px 0',
+            lineHeight: '24px',
+            fontFamily: SANS,
+          }}>
+            <div style={{ color: '#d1d5db' }} className="codex-markdown-override">
               <MarkdownContent content={stripThinkingBlocks(msg.text)} />
             </div>
           </div>,
         );
       }
 
-      // ── Tool use (top-level) ──
+      // ── Tool use (top-level — clean collapsible) ──
       else if (msg.type === 'tool_use') {
         const toolUse = msg as AgentChatMessageToolUse;
         const toolResult = toolUse.toolId ? resultMap.get(toolUse.toolId) : undefined;
         if (toolResult?.toolId) matchedResultIds.add(toolResult.toolId);
-        const Renderer = getTerminalToolRenderer(toolUse.toolName);
         nodes.push(
-          <div key={i} style={{ padding: '2px 0' }}>
-            <Renderer
-              toolUse={toolUse}
-              toolResult={toolResult}
-              expanded={expandedTools.has(i)}
-              onToggle={() => toggleTool(i)}
-            />
-          </div>,
+          <CodexToolCall
+            key={i}
+            toolUse={toolUse}
+            toolResult={toolResult}
+            expanded={expandedTools.has(i)}
+            onToggle={() => toggleTool(i)}
+          />,
         );
       }
 
@@ -373,9 +461,11 @@ export function CodexChatMessageList({
         if (result.toolId && matchedResultIds.has(result.toolId)) continue;
         nodes.push(
           <div key={i} style={{ padding: '2px 0 2px 20px' }}>
-            <span style={{ color: '#6b7280', fontSize: '0.923em' }}>└ </span>
-            <pre style={{ color: '#9ca3af', fontSize: '0.846em', fontFamily: MONO, whiteSpace: 'pre-wrap', margin: 0, display: 'inline' }}>
-              {result.result.length > 2000 ? result.result.slice(0, 2000) + '\n\u2026' : result.result}
+            <pre style={{
+              color: '#9ca3af', fontSize: '0.8em', fontFamily: MONO,
+              whiteSpace: 'pre-wrap', margin: 0, display: 'inline',
+            }}>
+              {result.result.length > 2000 ? result.result.slice(0, 2000) + '\n…' : result.result}
             </pre>
           </div>,
         );
@@ -384,8 +474,8 @@ export function CodexChatMessageList({
       // ── Thinking (orphan) ──
       else if (msg.type === 'thinking') {
         nodes.push(
-          <div key={i} style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic', padding: '2px 0', paddingLeft: 16 }}>
-            {msg.text.length > 300 ? msg.text.slice(0, 300) + '\u2026' : msg.text}
+          <div key={i} style={{ color: '#888', fontSize: '0.85em', fontStyle: 'italic', padding: '2px 0', paddingLeft: 16, fontFamily: SANS }}>
+            {msg.text.length > 300 ? msg.text.slice(0, 300) + '…' : msg.text}
           </div>,
         );
       }
@@ -399,18 +489,20 @@ export function CodexChatMessageList({
         if (isStopped || isError) {
           const lastUserMsg = [...messages].reverse().find((m): m is AgentChatMessageUser => m.type === 'user');
           const lastUserText = lastUserMsg?.text ?? null;
-          const label = isStopped ? 'stopped' : statusMsg.status === 'timed_out' ? 'timed out' : 'error';
+          const label = isStopped ? 'Stopped' : statusMsg.status === 'timed_out' ? 'Timed out' : 'Error';
 
           nodes.push(
             <div key={i} style={{ padding: '8px 0', textAlign: 'center' }}>
               <span style={{
-                color: isError ? '#ef4444' : '#6b7280',
-                fontFamily: MONO, fontSize: '0.923em',
-                padding: '2px 12px',
-                border: `1px solid ${isError ? '#7f1d1d' : '#374151'}`,
-                borderRadius: 4,
+                color: isError ? '#ef4444' : '#888',
+                fontFamily: SANS,
+                fontSize: '0.875em',
+                padding: '4px 14px',
+                border: `1px solid ${isError ? '#7f1d1d' : '#3a3a4e'}`,
+                borderRadius: 8,
+                display: 'inline-block',
               }}>
-                ■ {label}{statusMsg.message ? `: ${statusMsg.message}` : ''}
+                {label}{statusMsg.message ? `: ${statusMsg.message}` : ''}
               </span>
               {!isRunning && (
                 <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 8 }}>
@@ -419,12 +511,12 @@ export function CodexChatMessageList({
                       type="button"
                       onClick={() => onResume(lastUserText ?? 'continue')}
                       style={{
-                        background: 'transparent', border: '1px solid #374151',
-                        color: '#10b981', cursor: 'pointer', fontFamily: MONO,
-                        fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
+                        background: 'transparent', border: `1px solid ${ACCENT}`,
+                        color: ACCENT, cursor: 'pointer', fontFamily: SANS,
+                        fontSize: '0.8em', padding: '4px 12px', borderRadius: 6,
                       }}
                     >
-                      ▶ {lastUserText ? 'continue' : 'retry'}
+                      ▶ {lastUserText ? 'Continue' : 'Retry'}
                     </button>
                   )}
                   {onEditMessage && lastUserText && (
@@ -432,12 +524,12 @@ export function CodexChatMessageList({
                       type="button"
                       onClick={() => onEditMessage(lastUserText)}
                       style={{
-                        background: 'transparent', border: '1px solid #374151',
-                        color: '#d1d5db', cursor: 'pointer', fontFamily: MONO,
-                        fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
+                        background: 'transparent', border: '1px solid #3a3a4e',
+                        color: '#d1d5db', cursor: 'pointer', fontFamily: SANS,
+                        fontSize: '0.8em', padding: '4px 12px', borderRadius: 6,
                       }}
                     >
-                      ✎ edit & retry
+                      ✎ Edit & retry
                     </button>
                   )}
                 </div>
@@ -447,7 +539,7 @@ export function CodexChatMessageList({
         } else {
           nodes.push(
             <div key={i} style={{ padding: '4px 0', textAlign: 'center' }}>
-              <span style={{ color: '#6b7280', fontFamily: MONO, fontSize: '0.846em' }}>
+              <span style={{ color: '#888', fontFamily: SANS, fontSize: '0.8em' }}>
                 — {statusMsg.message} —
               </span>
             </div>,
@@ -462,10 +554,7 @@ export function CodexChatMessageList({
             {msg.agentRunId ? (
               <AgentRunInfoCard agentRunId={msg.agentRunId} taskId={msg.taskId} agentType={msg.agentType} />
             ) : (
-              <span style={{
-                fontFamily: MONO, fontSize: '0.846em', color: '#6b7280',
-                padding: '2px 10px',
-              }}>
+              <span style={{ fontFamily: SANS, fontSize: '0.85em', color: '#888', padding: '2px 10px' }}>
                 Agent Run (no details available)
               </span>
             )}
@@ -476,9 +565,12 @@ export function CodexChatMessageList({
       // ── Compact boundary ──
       else if (msg.type === 'compact_boundary') {
         nodes.push(
-          <div key={i} style={{ padding: '6px 0', textAlign: 'center' }}>
-            <span style={{ color: '#f59e0b', fontFamily: MONO, fontSize: '0.846em', border: '1px solid rgba(245,158,11,0.3)', padding: '2px 12px', borderRadius: 4 }}>
-              ✂ context compacted · {msg.trigger} · {msg.preTokens.toLocaleString()} tokens before
+          <div key={i} style={{ padding: '8px 0', textAlign: 'center' }}>
+            <span style={{
+              color: ACCENT, fontFamily: SANS, fontSize: '0.8em',
+              border: `1px solid rgba(245,158,11,0.3)`, padding: '4px 14px', borderRadius: 8,
+            }}>
+              ✂ Context compacted · {msg.trigger} · {msg.preTokens.toLocaleString()} tokens before
             </span>
           </div>,
         );
@@ -497,8 +589,8 @@ export function CodexChatMessageList({
         if (!hasLater) {
           nodes.push(
             <div key={i} style={{ padding: '6px 0', textAlign: 'center' }}>
-              <span style={{ color: '#f59e0b', fontFamily: MONO, fontSize: '0.846em', fontStyle: 'italic' }}>
-                ⠿ compacting context…
+              <span style={{ color: ACCENT, fontFamily: SANS, fontSize: '0.8em', fontStyle: 'italic' }}>
+                ⠿ Compacting context…
               </span>
             </div>,
           );
@@ -514,49 +606,49 @@ export function CodexChatMessageList({
 
         nodes.push(
           <div key={i} style={{
-            margin: '6px 0', padding: '8px 12px',
-            border: '1px solid #f59e0b', borderRadius: 4,
+            margin: '6px 0', padding: '10px 14px',
+            border: `1px solid ${ACCENT}`, borderRadius: 8,
             backgroundColor: 'rgba(245,158,11,0.05)',
           }}>
-            <div style={{ color: '#f59e0b', fontSize: '0.923em', fontFamily: MONO, fontWeight: 600, marginBottom: 4 }}>
+            <div style={{ color: ACCENT, fontSize: '0.875em', fontFamily: SANS, fontWeight: 600, marginBottom: 4 }}>
               🛡 Permission Request: {permReq.toolName}
             </div>
             <pre style={{
-              color: '#9ca3af', fontSize: '0.846em', fontFamily: MONO, whiteSpace: 'pre-wrap',
-              maxHeight: 100, overflowY: 'auto', margin: 0, padding: '4px 8px',
-              backgroundColor: '#111827', borderRadius: 4,
+              color: '#9ca3af', fontSize: '0.8em', fontFamily: MONO, whiteSpace: 'pre-wrap',
+              maxHeight: 100, overflowY: 'auto', margin: 0, padding: '6px 10px',
+              backgroundColor: '#1a1a28', borderRadius: 6,
             }}>
               {typeof permReq.toolInput === 'string'
                 ? permReq.toolInput
                 : JSON.stringify(permReq.toolInput, null, 2).slice(0, 2000)}
             </pre>
             {responseMsg ? (
-              <div style={{ marginTop: 6, color: responseMsg.allowed ? '#10b981' : '#ef4444', fontSize: '0.846em', fontFamily: MONO }}>
-                {responseMsg.allowed ? '✓ allowed' : '✗ denied'}
+              <div style={{ marginTop: 6, color: responseMsg.allowed ? '#888' : '#ef4444', fontSize: '0.8em', fontFamily: SANS }}>
+                {responseMsg.allowed ? '✓ Allowed' : '✗ Denied'}
               </div>
             ) : (
-              <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                 <button
                   type="button"
                   onClick={() => onPermissionResponse?.(permReq.requestId, true)}
                   style={{
-                    background: 'transparent', border: '1px solid #10b981',
-                    color: '#10b981', cursor: 'pointer', fontFamily: MONO,
-                    fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
+                    background: 'transparent', border: `1px solid ${ACCENT}`,
+                    color: ACCENT, cursor: 'pointer', fontFamily: SANS,
+                    fontSize: '0.8em', padding: '4px 12px', borderRadius: 6,
                   }}
                 >
-                  ✓ allow
+                  ✓ Allow
                 </button>
                 <button
                   type="button"
                   onClick={() => onPermissionResponse?.(permReq.requestId, false)}
                   style={{
                     background: 'transparent', border: '1px solid #ef4444',
-                    color: '#ef4444', cursor: 'pointer', fontFamily: MONO,
-                    fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
+                    color: '#ef4444', cursor: 'pointer', fontFamily: SANS,
+                    fontSize: '0.8em', padding: '4px 12px', borderRadius: 6,
                   }}
                 >
-                  ✗ deny
+                  ✗ Deny
                 </button>
               </div>
             )}
@@ -581,7 +673,7 @@ export function CodexChatMessageList({
           );
         } else {
           nodes.push(
-            <div key={i} style={{ padding: '4px 0', color: '#60a5fa', fontFamily: MONO, fontSize: '0.923em' }}>
+            <div key={i} style={{ padding: '4px 0', color: '#60a5fa', fontFamily: SANS, fontSize: '0.875em' }}>
               <span style={{ marginRight: 6 }}>🔔</span>
               {notif.title && <span style={{ fontWeight: 600 }}>{notif.title}: </span>}
               <span>{notif.body}</span>
@@ -595,12 +687,12 @@ export function CodexChatMessageList({
         const act = msg as AgentChatMessageSubagentActivity;
         const started = act.status === 'started';
         nodes.push(
-          <div key={i} style={{ padding: '2px 0', fontFamily: MONO, fontSize: '0.923em' }}>
-            <span style={{ color: started ? '#8b5cf6' : '#10b981', marginRight: 6 }}>
+          <div key={i} style={{ padding: '2px 0', fontFamily: SANS, fontSize: '0.875em' }}>
+            <span style={{ color: started ? '#8b5cf6' : '#888', marginRight: 6 }}>
               {started ? '▶' : '✓'}
             </span>
-            <span style={{ color: started ? '#8b5cf6' : '#10b981', fontWeight: 600 }}>{act.agentName}</span>
-            <span style={{ color: '#6b7280' }}> {started ? 'started' : 'completed'}</span>
+            <span style={{ color: started ? '#8b5cf6' : '#888', fontWeight: 600 }}>{act.agentName}</span>
+            <span style={{ color: '#888' }}> {started ? 'started' : 'completed'}</span>
           </div>,
         );
       }
@@ -609,12 +701,12 @@ export function CodexChatMessageList({
       else if (msg.type === 'slash_command') {
         const cmd = msg as AgentChatMessageSlashCommand;
         nodes.push(
-          <div key={i} style={{ padding: '2px 0', fontFamily: MONO, fontSize: '0.923em' }}>
-            <span style={{ color: '#10b981', marginRight: 4 }}>$</span>
-            <span style={{ color: '#10b981', fontWeight: 600 }}>{cmd.command}</span>
+          <div key={i} style={{ padding: '2px 0', fontFamily: SANS, fontSize: '0.875em' }}>
+            <span style={{ color: '#60a5fa', marginRight: 4, fontFamily: MONO }}>$</span>
+            <span style={{ color: '#60a5fa', fontWeight: 600 }}>{cmd.command}</span>
             {cmd.args && <span style={{ color: '#9ca3af' }}> {cmd.args}</span>}
-            <span style={{ color: '#6b7280', marginLeft: 8, fontSize: '0.77em' }}>
-              {cmd.status === 'completed' ? '✓' : '\u2026'}
+            <span style={{ color: '#888', marginLeft: 8, fontSize: '0.85em' }}>
+              {cmd.status === 'completed' ? '✓' : '…'}
             </span>
           </div>,
         );
@@ -631,18 +723,18 @@ export function CodexChatMessageList({
         style={{ height: '100%', overflowY: 'auto' }}
         onScroll={handleScroll}
       >
-        <div style={{ padding: '16px 16px 8px', fontFamily: MONO, fontSize: '1em' }}>
+        <div style={{ padding: '16px 16px 8px', fontFamily: SANS, fontSize: '1em' }}>
           {rendered.length === 0 && isRunning && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 8 }}>
-              <span style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic' }}>⠿ working…</span>
+              <span style={{ color: '#888', fontSize: '0.9em', fontStyle: 'italic' }}>Working…</span>
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
           {rendered}
           {isRunning && rendered.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
-              <span style={{ color: '#10b981', fontSize: '0.923em' }}>✻</span>
-              <span style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic' }}>thinking…</span>
+              <span style={{ color: ACCENT, fontSize: '0.85em', animation: 'pulse 1.5s infinite' }}>●</span>
+              <span style={{ color: '#888', fontSize: '0.9em', fontStyle: 'italic' }}>Thinking…</span>
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
@@ -650,18 +742,30 @@ export function CodexChatMessageList({
         </div>
       </div>
 
+      {/* Scroll-to-bottom: centered ↓ in circle */}
       {!autoScroll && (
         <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
           <button
             type="button"
             onClick={scrollToLatest}
             style={{
-              background: '#1e293b', color: '#d1d5db', border: '1px solid #374151',
-              fontFamily: MONO, fontSize: '0.846em', padding: '4px 12px', borderRadius: 4,
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: '#2a2a3e',
+              color: '#d1d5db',
+              border: '1px solid #3a3a4e',
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.1em',
+              lineHeight: 1,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
             }}
+            title="Scroll to latest"
           >
-            ↓ scroll to latest
+            ↓
           </button>
         </div>
       )}

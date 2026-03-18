@@ -1,9 +1,9 @@
 /**
  * Codex preset — SessionTabs.
  *
- * Minimal terminal-styled tab bar matching the Codex CLI aesthetic.
- * Inherits the claude-code session tab pattern with Codex-specific
- * color accents (green/teal active indicator instead of indigo).
+ * Minimal tab bar matching the Codex CLI aesthetic.
+ * Uses proportional (sans-serif) fonts and amber active tab indicator
+ * with the dark navy Codex palette.
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import type { SessionTabsPresetProps } from '../types';
 import type { RunningAgent } from '../../../../../shared/types';
 
-const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
+const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
 export function CodexSessionTabs({
   sessions,
@@ -56,7 +56,7 @@ export function CodexSessionTabs({
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontFamily: MONO, fontSize: '0.923em' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontFamily: SANS, fontSize: '0.875em' }}>
       {sessions.map((s) => {
         const active = s.id === currentSessionId;
         const { running, completed } = getAgentStatus(s.id);
@@ -77,16 +77,16 @@ export function CodexSessionTabs({
               cursor: 'pointer',
               borderRadius: 4,
               backgroundColor: active ? 'rgba(255,255,255,0.08)' : 'transparent',
-              color: active ? '#e5e7eb' : '#6b7280',
-              borderBottom: active ? '2px solid #10b981' : '2px solid transparent',
+              color: active ? '#e5e7eb' : '#888',
+              borderBottom: active ? '2px solid #f59e0b' : '2px solid transparent',
               transition: 'background-color 0.15s, color 0.15s',
             }}
           >
             {running > 0 && (
-              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10b981', animation: 'pulse 1.5s infinite' }} />
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#f59e0b', animation: 'pulse 1.5s infinite' }} />
             )}
             {completed > 0 && running === 0 && (
-              <span style={{ color: '#10b981', fontSize: '0.77em' }}>✓</span>
+              <span style={{ color: '#f59e0b', fontSize: '0.77em' }}>✓</span>
             )}
             {renameId === s.id ? (
               <form
@@ -104,7 +104,7 @@ export function CodexSessionTabs({
                     border: '1px solid #4b5563',
                     color: '#e5e7eb',
                     fontSize: '1em',
-                    fontFamily: 'inherit',
+                    fontFamily: SANS,
                     width: 80,
                     padding: '1px 4px',
                     borderRadius: 2,
@@ -141,10 +141,11 @@ export function CodexSessionTabs({
         onClick={handleNew}
         style={{
           background: 'transparent',
-          border: '1px solid #374151',
-          color: '#6b7280',
+          border: '1px solid #3a3a4e',
+          color: '#888',
           cursor: 'pointer',
-          fontSize: '1.077em',
+          fontSize: '1em',
+          fontFamily: SANS,
           padding: '2px 8px',
           borderRadius: 4,
           lineHeight: 1,
@@ -161,14 +162,14 @@ export function CodexSessionTabs({
             position: 'fixed',
             top: menuPos.top,
             left: menuPos.left,
-            backgroundColor: '#1f2937',
-            border: '1px solid #374151',
+            backgroundColor: '#252535',
+            border: '1px solid #3a3a4e',
             borderRadius: 6,
             padding: 4,
             zIndex: 9999,
             minWidth: 120,
-            fontFamily: MONO,
-            fontSize: '0.923em',
+            fontFamily: SANS,
+            fontSize: '0.875em',
           }}
         >
           <button
@@ -180,7 +181,7 @@ export function CodexSessionTabs({
             style={{
               display: 'block', width: '100%', textAlign: 'left',
               padding: '4px 8px', background: 'transparent', border: 'none',
-              color: '#d1d5db', cursor: 'pointer',
+              color: '#d1d5db', cursor: 'pointer', fontFamily: SANS,
             }}
           >
             Rename
@@ -191,7 +192,7 @@ export function CodexSessionTabs({
               style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 padding: '4px 8px', background: 'transparent', border: 'none',
-                color: '#ef4444', cursor: 'pointer',
+                color: '#ef4444', cursor: 'pointer', fontFamily: SANS,
               }}
             >
               Delete
