@@ -1,8 +1,8 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Image, Square, Cpu, ArrowUp, Eye, Pencil, Shield, Zap, X } from 'lucide-react';
 import type { ChatImage, PermissionMode } from '../../../shared/types';
-import { ImageAnnotationPanel } from '../ui/ImageAnnotationPanel';
 import { MAX_MESSAGE_LENGTH } from '../../../shared/constants';
+import { ImagePreviewStrip } from './ImagePreviewStrip';
 import {
   Select,
   SelectTrigger,
@@ -97,9 +97,8 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   const { draft: value, setDraft: setValue, clearDraft } = useDraftPersistence(initialDraft, onDraftChange);
   const {
     images, setImages, fileInputRef, addImageFile,
-    handlePaste, handleDrop, handleDragOver, removeImage: hookRemoveImage,
+    handlePaste, handleDrop, handleDragOver, removeImage,
   } = useImageInput();
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -115,16 +114,6 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
       textareaRef.current?.focus();
     }
   }, [prefill?.seq]); // intentionally only tracks seq so a new prefill object with same seq doesn't re-fire
-
-  const removeImage = useCallback((index: number) => {
-    hookRemoveImage(index);
-    setPreviewIndex((prev) => {
-      if (prev === null) return null;
-      if (prev === index) return null;
-      if (prev > index) return prev - 1;
-      return prev;
-    });
-  }, [hookRemoveImage]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,11 +143,6 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
     }
   };
 
-  const handleAnnotationSave = useCallback((annotatedImage: ChatImage, idx: number) => {
-    setImages((prev) => prev.map((img, i) => i === idx ? annotatedImage : img));
-    setPreviewIndex(null);
-  }, []);
-
   const effectiveContextWindow = (tokenUsage?.contextWindow && tokenUsage.contextWindow > 0)
     ? tokenUsage.contextWindow
     : CONTEXT_WINDOW;
@@ -184,41 +168,11 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
         onDragOver={handleDragOver}
         className="rounded-[1.35rem] border border-border/75 bg-card/82 shadow-[0_16px_30px_hsl(var(--background)/0.42)] transition-[border-color,box-shadow] duration-[var(--motion-base)] ease-[var(--ease-standard)] focus-within:shadow-[0_18px_36px_hsl(var(--background)/0.52)] focus-within:border-ring/60 backdrop-blur-lg"
       >
-        {images.length > 0 && (
-          <div className="flex gap-2 px-4 pt-3 flex-wrap">
-            {images.map((img, i) => (
-              <div key={i} className="relative group">
-                <img
-                  src={`data:${img.mediaType};base64,${img.base64}`}
-                  alt={img.name || 'Attached image'}
-                  style={{ width: 56, height: 56 }}
-                  className="rounded-lg border border-border object-cover cursor-pointer"
-                  onClick={() => setPreviewIndex(i)}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeImage(i)}
-                  className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full text-xs leading-none opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  x
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {previewIndex !== null && images[previewIndex] && (
-          <ImageAnnotationPanel
-            images={images.map((img) => ({
-              src: `data:${img.mediaType};base64,${img.base64}`,
-              name: img.name,
-            }))}
-            initialIndex={previewIndex}
-            onClose={() => setPreviewIndex(null)}
-            onSave={handleAnnotationSave}
-          />
-        )}
+        <ImagePreviewStrip
+          images={images}
+          setImages={setImages}
+          removeImage={removeImage}
+        />
 
         <textarea
           ref={mergeRefs(textareaRef, forwardedRef)}
