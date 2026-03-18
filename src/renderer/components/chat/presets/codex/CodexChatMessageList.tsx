@@ -462,16 +462,12 @@ export function CodexChatMessageList({
             {msg.agentRunId ? (
               <AgentRunInfoCard agentRunId={msg.agentRunId} taskId={msg.taskId} agentType={msg.agentType} />
             ) : (
-              <button
-                onClick={() => navigate(`/agents/${msg.agentRunId}`)}
-                style={{
-                  background: 'transparent', border: '1px solid #374151',
-                  color: '#6b7280', cursor: 'pointer', fontFamily: MONO,
-                  fontSize: '0.846em', padding: '2px 10px', borderRadius: 4,
-                }}
-              >
-                Agent Run → View details
-              </button>
+              <span style={{
+                fontFamily: MONO, fontSize: '0.846em', color: '#6b7280',
+                padding: '2px 10px',
+              }}>
+                Agent Run (no details available)
+              </span>
             )}
           </div>,
         );

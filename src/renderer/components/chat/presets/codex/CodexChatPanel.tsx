@@ -34,6 +34,9 @@ const BG_HEADER = '#161b22';
 const BORDER = '#1e293b';
 const ACCENT = '#10b981';
 
+/** Reference counter for shared terminal style element — prevents premature removal during concurrent mounts. */
+let terminalStyleRefCount = 0;
+
 /** CSS injected once to style markdown and other inherited components in Codex terminal context. */
 const TERMINAL_STYLES = `
 .codex-terminal-root {
@@ -276,9 +279,11 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
 
   const showInlineTabs = scope.type === 'task';
 
-  // Inject terminal-scoped CSS once into document.head; clean up on unmount.
+  // Inject terminal-scoped CSS into document.head with ref counting;
+  // only remove the style element when the last instance unmounts.
   useEffect(() => {
     const id = 'codex-terminal-styles';
+    terminalStyleRefCount++;
     if (!document.getElementById(id)) {
       const style = document.createElement('style');
       style.id = id;
@@ -286,7 +291,11 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
       document.head.appendChild(style);
     }
     return () => {
-      document.getElementById(id)?.remove();
+      terminalStyleRefCount--;
+      if (terminalStyleRefCount <= 0) {
+        document.getElementById(id)?.remove();
+        terminalStyleRefCount = 0;
+      }
     };
   }, []);
 
@@ -599,6 +608,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
                 </div>
 
                 {/* Branch indicator */}
+                {/* TODO: fetch actual branch name when git API is available */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span style={{ fontSize: '0.923em' }}>⎇</span>
                   <span>main</span>

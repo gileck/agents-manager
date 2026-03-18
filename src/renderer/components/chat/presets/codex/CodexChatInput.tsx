@@ -67,11 +67,10 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
   ) {
     const { draft: value, setDraft: setValue, clearDraft } = useDraftPersistence(initialDraft, onDraftChange);
     const {
-      images, setImages,
-      handlePaste, handleDrop, handleDragOver, removeImage,
+      images, setImages, fileInputRef,
+      addImageFile, handlePaste, handleDrop, handleDragOver, removeImage,
     } = useImageInput();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Visual-only effort selector state
     const [effort, setEffort] = useState('high');
@@ -148,22 +147,8 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      // Trigger the same flow as paste — read as base64
       for (const file of Array.from(files)) {
-        if (!file.type.startsWith('image/')) continue;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = reader.result as string;
-          const b64 = dataUrl.split(',')[1];
-          if (b64) {
-            setImages((prev) => [...prev, {
-              base64: b64,
-              mediaType: file.type as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
-              name: file.name,
-            }]);
-          }
-        };
-        reader.readAsDataURL(file);
+        addImageFile(file);
       }
       // Reset so same file can be re-attached
       e.target.value = '';
