@@ -6,6 +6,7 @@ export { GitStatusCard } from './GitStatusCard';
 export { TimelineCard } from './TimelineCard';
 export { ContextCard } from './ContextCard';
 export { PlanMarkdown } from './PlanMarkdown';
+export { GenericReviewSection } from './GenericReviewSection';
 export { PlanReviewSection } from './PlanReviewSection';
 export { DesignReviewSection } from './DesignReviewSection';
 export { PhasedSubtasksSection } from './PhasedSubtasksSection';

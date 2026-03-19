@@ -164,6 +164,7 @@ function AppRoutes() {
         <Route path="tasks/:id" element={<TaskDetailPage />} />
         <Route path="tasks/:id/plan" element={<PlanReviewPage reviewType="plan" />} />
         <Route path="tasks/:id/design" element={<PlanReviewPage reviewType="design" />} />
+        <Route path="tasks/:id/investigation" element={<PlanReviewPage reviewType="investigation" />} />
         <Route path="tasks/:id/:tab" element={<TaskTabPage />} />
         <Route path="kanban" element={<KanbanBoardPage />} />
         <Route path="agent-runs" element={<AgentRunsListPage />} />

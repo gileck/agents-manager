@@ -34,10 +34,20 @@ const CONFIG = {
     label: 'Technical Design',
     tabKey: 'design',
   },
+  investigation: {
+    field: 'plan' as const,
+    entryType: 'investigation_feedback',
+    agentRole: 'investigator',
+    approveToStatus: 'implementing',
+    reviseToStatus: 'investigating',
+    reviewStatus: 'investigation_review',
+    label: 'Investigation',
+    tabKey: 'investigation',
+  },
 };
 
 interface PlanReviewPageProps {
-  reviewType: 'plan' | 'design';
+  reviewType: 'plan' | 'design' | 'investigation';
 }
 
 export function PlanReviewPage({ reviewType }: PlanReviewPageProps) {

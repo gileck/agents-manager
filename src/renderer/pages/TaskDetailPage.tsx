@@ -119,6 +119,7 @@ export function TaskDetailPage() {
 
   const initialTab = task?.status === 'plan_review' ? 'plan'
     : task?.status === 'design_review' ? 'design'
+    : task?.status === 'investigation_review' ? 'investigation'
     : (task?.status === 'pr_review' || task?.status === 'ready_to_merge') ? 'implementation'
     : 'details';
   const [tab, setTab] = useLocalStorage(`taskDetail.tab.${id}`, initialTab);
@@ -138,6 +139,8 @@ export function TaskDetailPage() {
       navigate(`/tasks/${id}/plan`);
     } else if (task?.status === 'design_review') {
       navigate(`/tasks/${id}/design`);
+    } else if (task?.status === 'investigation_review') {
+      navigate(`/tasks/${id}/investigation`);
     } else if (task?.status === 'pr_review' || task?.status === 'ready_to_merge') {
       setTab('implementation');
     }
@@ -462,6 +465,8 @@ export function TaskDetailPage() {
   // Tab content indicators
   const hasPlan = !!task.plan;
   const hasDesign = !!task.technicalDesign;
+  const hasInvestigation = (!!task.plan && (contextEntries?.some(e => e.entryType === 'investigation_feedback') ?? false))
+    || task.status === 'investigation_review';
   const hasImplementation = !!task.prLink || (artifacts?.some((a) => a.type === 'diff') ?? false);
   const hasReview = contextEntries?.some(e => e.entryType === 'workflow_review') ?? false;
 
@@ -654,6 +659,12 @@ export function TaskDetailPage() {
           background: 'var(--card)',
         }}>
           <TabsTrigger value="details">Task Details</TabsTrigger>
+          <TabsTrigger value="investigation" className={hasInvestigation ? '' : 'opacity-40'}>
+            <span className="flex items-center gap-1.5">
+              Investigation
+              {hasInvestigation && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
+            </span>
+          </TabsTrigger>
           <TabsTrigger value="plan" className={hasPlan ? '' : 'opacity-40'}>
             <span className="flex items-center gap-1.5">
               Plan
@@ -699,6 +710,22 @@ export function TaskDetailPage() {
             onPromptRespond={handleStructuredPromptRespond}
             onRefetch={refetch}
             onContextRefetch={refetchContext}
+          />
+        </TabsContent>
+
+        <TabsContent value="investigation" style={{ padding: '12px 24px', overflowY: 'auto' }}>
+          <PlanReviewCard
+            title="Investigation"
+            content={task.plan}
+            emptyContentMessage="No investigation yet. An investigation will appear here after the investigator agent completes."
+            entries={(contextEntries ?? []).filter(e => e.entryType === 'investigation_feedback')}
+            isReviewStatus={task.status === 'investigation_review'}
+            transitions={transitions ?? []}
+            transitioning={transitioning}
+            approveToStatus="implementing"
+            onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'investigation_feedback')}
+            renderContent={(content) => <PlanMarkdown content={content} />}
+            reviewPath={`/tasks/${id}/investigation`}
           />
         </TabsContent>
 
