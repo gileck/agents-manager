@@ -20,6 +20,11 @@ export interface DrawingCanvasHandle {
 /** Maximum dimension for loaded images to avoid canvas performance issues. */
 const MAX_IMAGE_DIM = 4096;
 
+/** Shape tools use drag-to-draw mode (start + end point) instead of freehand point accumulation. */
+function isShapeTool(tool: DrawingTool): boolean {
+  return tool === 'circle' || tool === 'arrow';
+}
+
 /**
  * Canvas-based drawing surface with a base image layer and freehand stroke overlay.
  * All drawing coordinates are in image-space; zoom is applied via CSS transform.
@@ -137,9 +142,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing.current) return;
     const { x, y } = toImageCoords(e);
-    currentPoints.current.push(x, y);
+    if (isShapeTool(activeTool)) {
+      // Shape tools: store only [startX, startY, currentX, currentY]
+      currentPoints.current = [currentPoints.current[0], currentPoints.current[1], x, y];
+    } else {
+      currentPoints.current.push(x, y);
+    }
     redraw();
-  }, [toImageCoords, redraw]);
+  }, [toImageCoords, redraw, activeTool]);
 
   const handlePointerUp = useCallback(() => {
     if (!isDrawing.current) return;
@@ -202,6 +212,44 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
   ctx.lineJoin = 'round';
   ctx.lineWidth = stroke.width;
   ctx.strokeStyle = stroke.color;
+
+  if (stroke.tool === 'circle') {
+    const [x1, y1, x2, y2] = stroke.points;
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
+    const rx = Math.abs(x2 - x1) / 2;
+    const ry = Math.abs(y2 - y1) / 2;
+    // Skip degenerate shapes (too small to be visible)
+    if (rx < 2 && ry < 2) { ctx.restore(); return; }
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (stroke.tool === 'arrow') {
+    const [x1, y1, x2, y2] = stroke.points;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    // Skip degenerate shapes
+    if (Math.abs(dx) < 2 && Math.abs(dy) < 2) { ctx.restore(); return; }
+    const angle = Math.atan2(dy, dx);
+    const headLen = Math.max(12, stroke.width * 4);
+    // Main line
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    // Arrowhead — two angled lines from the endpoint
+    ctx.beginPath();
+    ctx.moveTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(x2, y2);
+    ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
 
   if (stroke.tool === 'highlighter') {
     ctx.globalAlpha = 0.35;

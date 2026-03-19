@@ -1,5 +1,5 @@
 /** Drawing tool types for the annotation panel. */
-export type DrawingTool = 'pen' | 'highlighter';
+export type DrawingTool = 'pen' | 'highlighter' | 'circle' | 'arrow';
 
 /** A single stroke drawn on the canvas. */
 export interface Stroke {

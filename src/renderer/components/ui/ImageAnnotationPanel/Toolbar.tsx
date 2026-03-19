@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pen, Highlighter, Undo2, Redo2, Trash2, Save } from 'lucide-react';
+import { Pen, Highlighter, Circle, ArrowRight, Undo2, Redo2, Trash2, Save } from 'lucide-react';
 import type { DrawingTool } from './types';
 import type { BrushSizeLabel } from './useDrawingState';
 import { PRESET_COLORS, BRUSH_SIZES } from './useDrawingState';
@@ -23,6 +23,8 @@ interface ToolbarProps {
 const TOOL_BTNS: { tool: DrawingTool; Icon: React.ComponentType<{ className?: string }>; label: string }[] = [
   { tool: 'pen', Icon: Pen, label: 'Pen' },
   { tool: 'highlighter', Icon: Highlighter, label: 'Highlighter' },
+  { tool: 'circle', Icon: Circle, label: 'Circle' },
+  { tool: 'arrow', Icon: ArrowRight, label: 'Arrow' },
 ];
 
 const SIZE_LABELS = Object.keys(BRUSH_SIZES) as BrushSizeLabel[];
