@@ -81,8 +81,8 @@ export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionR
       fontSize: '1em',
       margin: '8px 0',
       borderRadius: 8,
-      border: '1px solid #3a3a4e',
-      backgroundColor: '#1e1e2e',
+      border: '1px solid #2a2a2a',
+      backgroundColor: '#161616',
       overflow: 'hidden',
     }}>
       {/* ── Header ── */}
@@ -143,10 +143,10 @@ export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionR
 
       {/* ── Expanded details ── */}
       {expanded && (
-        <div style={{ borderTop: '1px solid #2a2a3e' }}>
+        <div style={{ borderTop: '1px solid #2a2a2a' }}>
           {/* Prompt section */}
           {agentInput.prompt && (
-            <div style={{ borderBottom: (hasInternalMessages || hasResult) ? '1px solid #2a2a3e' : undefined }}>
+            <div style={{ borderBottom: (hasInternalMessages || hasResult) ? '1px solid #2a2a2a' : undefined }}>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPromptExpanded((v) => !v); }}
@@ -176,7 +176,7 @@ export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionR
                 <div style={{
                   margin: '0 14px 8px',
                   padding: '8px 12px',
-                  backgroundColor: '#1a1a28',
+                  backgroundColor: '#1a1a1a',
                   borderRadius: 6,
                   maxHeight: 200,
                   overflowY: 'auto',
@@ -199,7 +199,7 @@ export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionR
           {hasInternalMessages && (
             <div style={{
               padding: '8px 14px',
-              borderBottom: hasResult ? '1px solid #2a2a3e' : undefined,
+              borderBottom: hasResult ? '1px solid #2a2a2a' : undefined,
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {(() => {
@@ -277,7 +277,7 @@ export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionR
                 <div style={{
                   margin: '0 14px 8px',
                   padding: '8px 12px',
-                  backgroundColor: '#1a1a28',
+                  backgroundColor: '#1a1a1a',
                   borderRadius: 6,
                   maxHeight: 200,
                   overflowY: 'auto',

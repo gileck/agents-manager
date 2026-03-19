@@ -16,9 +16,9 @@ import { ImagePreviewStrip } from '../../ImagePreviewStrip';
 import { MAX_MESSAGE_LENGTH } from '../../../../../shared/constants';
 
 const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-const BORDER = '#3a3a4e';
+const BORDER = '#2a2a2a';
 const ACCENT = '#f59e0b';
-const BG_INPUT = '#252535';
+const BG_INPUT = '#1a1a1a';
 
 const EFFORT_OPTIONS = [
   { value: 'high', label: 'High' },
@@ -57,9 +57,9 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
       onEditLastMessage,
       initialDraft,
       onDraftChange,
-      agentLibs,
-      selectedAgentLib,
-      onAgentLibChange,
+      agentLibs: _agentLibs,
+      selectedAgentLib: _selectedAgentLib,
+      onAgentLibChange: _onAgentLibChange,
       models,
       selectedModel,
       onModelChange,
@@ -146,13 +146,13 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
 
     // Dropdown select style helper
     const selectStyle: React.CSSProperties = {
-      background: '#1a1a2e',
+      background: '#0d0d0d',
       color: '#d1d5db',
       border: `1px solid ${BORDER}`,
       borderRadius: 6,
       fontFamily: SANS,
-      fontSize: '0.8em',
-      padding: '4px 22px 4px 8px',
+      fontSize: '0.85em',
+      padding: '5px 24px 5px 10px',
       cursor: 'pointer',
       outline: 'none',
       appearance: 'none',
@@ -166,7 +166,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
     const permModeLabel = getPermModeLabel(permissionMode);
 
     return (
-      <div style={{ padding: '0 16px 0', backgroundColor: '#1a1a2e' }}>
+      <div style={{ padding: '0 16px 0', backgroundColor: '#0d0d0d' }}>
         {/* Image preview strip */}
         <ImagePreviewStrip
           images={images}
@@ -212,10 +212,10 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
                 lineHeight: '22px',
                 border: 'none',
                 outline: 'none',
-                minHeight: 52,
+                minHeight: 60,
                 maxHeight: 200,
                 overflowY: 'auto',
-                padding: '10px 12px',
+                padding: '14px 16px',
                 boxSizing: 'border-box',
               }}
             />
@@ -225,11 +225,12 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '4px 8px 6px',
+              padding: '8px 12px',
+              marginTop: 4,
               borderTop: '1px solid rgba(255,255,255,0.05)',
             }}>
               {/* Left controls */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {/* Attachment button */}
                 <button
                   type="button"
@@ -240,7 +241,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
                     color: '#888',
                     cursor: 'pointer',
                     borderRadius: 6,
-                    padding: '3px 8px',
+                    padding: '4px 10px',
                     fontSize: '1em',
                     fontFamily: SANS,
                     display: 'flex',
@@ -277,25 +278,11 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
                   ))}
                 </select>
 
-                {/* Engine selector (secondary) */}
-                {agentLibs && agentLibs.length > 0 && onAgentLibChange && (
-                  <select
-                    value={selectedAgentLib || ''}
-                    onChange={(e) => onAgentLibChange(e.target.value)}
-                    style={{ ...selectStyle, color: '#888' }}
-                    title="Engine"
-                  >
-                    {agentLibs.map((lib) => (
-                      <option key={lib.name} value={lib.name} disabled={!lib.available}>
-                        {lib.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                {/* Engine selector removed — real Codex does not have it in the input area */}
               </div>
 
               {/* Right controls */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {/* Queued indicator */}
                 {isQueued && (
                   <span style={{ fontFamily: SANS, fontSize: '0.8em', color: ACCENT }}>
@@ -352,7 +339,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
                     cursor: 'default',
                     fontSize: '1.1em',
                     opacity: 0.5,
-                    padding: '2px 4px',
+                    padding: '6px 8px',
                   }}
                   title="Voice input (coming soon)"
                 >🎤</button>
@@ -362,9 +349,9 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
                   type="submit"
                   disabled={!canSend}
                   style={{
-                    background: canSend ? ACCENT : '#2a2a3e',
+                    background: canSend ? ACCENT : '#2a2a2a',
                     border: 'none',
-                    color: canSend ? '#fff' : '#4b5563',
+                    color: canSend ? '#fff' : '#555',
                     cursor: canSend ? 'pointer' : 'default',
                     borderRadius: '50%',
                     width: 32,
@@ -389,13 +376,14 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '6px 4px 8px',
+          padding: '8px 12px 10px',
+          borderTop: '1px solid #1a1a1a',
           fontFamily: SANS,
           fontSize: '0.75em',
           color: '#888',
         }}>
           {/* Left: Local + Permission */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* Local indicator */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <span>💻</span>
