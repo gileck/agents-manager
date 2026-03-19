@@ -103,7 +103,7 @@ export class CodexCliLib extends BaseAgentLib {
   private sdkThreadIds = new Map<string, string>();
 
   supportedFeatures(): AgentLibFeatures {
-    return { images: true, hooks: false, thinking: true, nativeResume: false };
+    return { images: true, hooks: false, thinking: true, nativeResume: false, streamingInput: false };
   }
 
   getDefaultModel(): string { return 'gpt-5.4'; }
