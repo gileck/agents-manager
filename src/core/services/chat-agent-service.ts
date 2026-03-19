@@ -12,6 +12,7 @@ import type { AgentSubscriptionRegistry } from './agent-subscription-registry';
 import type { SessionScope } from './chat-prompt-parts';
 import { buildAgentChatSystemPrompt, buildDesktopSystemPrompt } from './chat-prompt-parts';
 import { createTaskMcpServer } from '../mcp/task-mcp-server';
+import { resizeImages } from '../libs/image-utils';
 
 import * as fs from 'fs';
 import * as os from 'os';
@@ -443,9 +444,9 @@ export class ChatAgentService {
     message: string,
     options: ChatSendOptions,
   ): Promise<ChatSendResult> {
-    const { systemPrompt, onEvent, images, pipelineSessionId, resumeSession, isAgentChat, permissionMode } = options;
+    const { systemPrompt, onEvent, images: rawImages, pipelineSessionId, resumeSession, isAgentChat, permissionMode } = options;
 
-    getAppLogger().info('ChatAgentService', `send() called for session ${sessionId}`, { messageLength: message.length, hasImages: !!(images?.length) });
+    getAppLogger().info('ChatAgentService', `send() called for session ${sessionId}`, { messageLength: message.length, hasImages: !!(rawImages?.length) });
 
     // Get session to find scope
     const session = await this.chatSessionStore.getSession(sessionId);
@@ -459,6 +460,11 @@ export class ChatAgentService {
       getAppLogger().warn('ChatAgentService', `Rejecting send: agent already running for session ${sessionId}`);
       throw new Error('An agent is already running for this session');
     }
+
+    // Downscale images that exceed the API dimension limit (2000px)
+    const images = (rawImages && rawImages.length > 0)
+      ? await resizeImages(rawImages)
+      : rawImages;
 
     // Save images to disk and build refs
     let imageRefs: ChatImageRef[] | undefined;
