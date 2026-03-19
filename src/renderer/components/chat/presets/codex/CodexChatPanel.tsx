@@ -30,7 +30,7 @@ import { CodexChatInput } from './CodexChatInput';
 
 const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
-const BG = '#0d0d0d';
+const BG = '#141414';
 const BG_HEADER = '#161616';
 const BORDER = '#2a2a2a';
 
