@@ -1,13 +1,10 @@
 /**
  * Codex preset — ChatInput.
  *
- * Styled input bar matching the Codex CLI design:
- * - Model selector dropdown (wired to existing models/onModelChange props)
- * - Effort/reasoning level selector (visual-only local state)
- * - "Ask for follow-up changes" placeholder text
- * - Attachment (+) button
- * - Microphone icon button (visual-only)
- * - Send button (arrow icon)
+ * Modern chat-app input area with 3-row vertical layout:
+ * Row 1: Large rounded textarea with dark background
+ * Row 2: Attachment, model/effort controls, mic icon, amber send button
+ * Row 3: Status bar (local indicator, permission mode, branch)
  */
 
 import React, { useRef, useCallback, useEffect, useState } from 'react';
@@ -18,9 +15,10 @@ import { useImageInput } from '../../hooks/useImageInput';
 import { ImagePreviewStrip } from '../../ImagePreviewStrip';
 import { MAX_MESSAGE_LENGTH } from '../../../../../shared/constants';
 
-const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
-const CONTEXT_WINDOW = 200_000;
-const ACCENT = '#10b981';
+const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+const BORDER = '#3a3a4e';
+const ACCENT = '#f59e0b';
+const BG_INPUT = '#252535';
 
 const EFFORT_OPTIONS = [
   { value: 'high', label: 'High' },
@@ -29,16 +27,21 @@ const EFFORT_OPTIONS = [
 ];
 
 const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string }[] = [
-  { value: 'read_only', label: 'read-only' },
-  { value: 'read_write', label: 'read-write' },
-  { value: 'full_access', label: 'full-access' },
+  { value: 'read_only', label: 'Read-only' },
+  { value: 'read_write', label: 'Read-write' },
+  { value: 'full_access', label: 'Full access' },
 ];
 
-function getContextColor(percent: number): string {
-  if (percent > 80) return '#ef4444';
-  if (percent > 50) return '#f59e0b';
-  return '#22c55e';
+function getPermModeLabel(mode: PermissionMode | null | undefined): string {
+  switch (mode) {
+    case 'read_only': return 'Read-only';
+    case 'read_write': return 'Read-write';
+    default: return 'Full access';
+  }
 }
+
+/** Shared dropdown style for Row 2 controls. */
+const DROPDOWN_CHEVRON = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'5\' viewBox=\'0 0 8 5\'%3E%3Cpath d=\'M0 0l4 5 4-5z\' fill=\'%23888\'/%3E%3C/svg%3E")';
 
 export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPresetProps>(
   function CodexChatInput(
@@ -47,7 +50,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
       onStop,
       isRunning,
       isQueued,
-      tokenUsage,
+      tokenUsage: _tokenUsage,
       onCancelQueue,
       prefill,
       lastUserMessage,
@@ -129,79 +132,46 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
       [forwardedRef],
     );
 
-    // Context usage
-    const effectiveContextWindow = (tokenUsage?.contextWindow && tokenUsage.contextWindow > 0)
-      ? tokenUsage.contextWindow
-      : CONTEXT_WINDOW;
-    const contextTokens = tokenUsage?.lastContextInputTokens ?? tokenUsage?.inputTokens ?? 0;
-    const contextPercent = tokenUsage
-      ? Math.min((contextTokens / effectiveContextWindow) * 100, 100)
-      : 0;
-
     const isOverLimit = value.length > MAX_MESSAGE_LENGTH;
+    const canSend = (value.trim() || images.length > 0) && !isOverLimit;
 
-    const handleAttachClick = () => {
-      fileInputRef.current?.click();
-    };
+    const handleAttachClick = () => { fileInputRef.current?.click(); };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      for (const file of Array.from(files)) {
-        addImageFile(file);
-      }
-      // Reset so same file can be re-attached
+      for (const file of Array.from(files)) { addImageFile(file); }
       e.target.value = '';
     };
 
-    // Selector dropdown style helper
+    // Dropdown select style helper
     const selectStyle: React.CSSProperties = {
-      background: '#1a1f2e',
+      background: '#1a1a2e',
       color: '#d1d5db',
-      border: '1px solid #2d3748',
-      borderRadius: 4,
-      fontFamily: MONO,
-      fontSize: '0.846em',
-      padding: '3px 6px',
+      border: `1px solid ${BORDER}`,
+      borderRadius: 6,
+      fontFamily: SANS,
+      fontSize: '0.8em',
+      padding: '4px 22px 4px 8px',
       cursor: 'pointer',
       outline: 'none',
       appearance: 'none',
       WebkitAppearance: 'none',
-      backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'5\' viewBox=\'0 0 8 5\'%3E%3Cpath d=\'M0 0l4 5 4-5z\' fill=\'%236b7280\'/%3E%3C/svg%3E")',
+      backgroundImage: DROPDOWN_CHEVRON,
       backgroundRepeat: 'no-repeat',
       backgroundPosition: 'right 6px center',
-      paddingRight: 18,
     };
 
-    // Icon button style helper
-    const iconBtnStyle: React.CSSProperties = {
-      background: 'transparent',
-      border: '1px solid #2d3748',
-      color: '#6b7280',
-      cursor: 'pointer',
-      borderRadius: 4,
-      padding: '4px 6px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '1em',
-      lineHeight: 1,
-    };
+    const isWarning = permissionMode === 'full_access' || !permissionMode;
+    const permModeLabel = getPermModeLabel(permissionMode);
 
     return (
-      <div
-        style={{
-          padding: '0 16px 0',
-          borderTop: '1px solid #1e293b',
-          backgroundColor: '#0d1117',
-        }}
-      >
+      <div style={{ padding: '0 16px 0', backgroundColor: '#1a1a2e' }}>
         {/* Image preview strip */}
         <ImagePreviewStrip
           images={images}
           setImages={setImages}
           removeImage={removeImage}
-          variant="terminal"
         />
 
         {/* Hidden file input for attachment */}
@@ -214,222 +184,267 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
           onChange={handleFileChange}
         />
 
-        {/* ── Selector row (model + effort) ── */}
+        <form onSubmit={handleSubmit} onDrop={handleDrop} onDragOver={handleDragOver}>
+          {/* ── Input container (Row 1 + Row 2) ── */}
+          <div style={{
+            borderRadius: 12,
+            border: `1px solid ${BORDER}`,
+            backgroundColor: BG_INPUT,
+            overflow: 'hidden',
+          }}>
+            {/* Row 1: Textarea */}
+            <textarea
+              ref={mergedRef}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              rows={2}
+              placeholder={isRunning ? 'Type a message (will be queued)…' : 'Ask for follow-up changes'}
+              style={{
+                display: 'block',
+                width: '100%',
+                resize: 'none',
+                backgroundColor: 'transparent',
+                color: '#e5e7eb',
+                fontFamily: SANS,
+                fontSize: '0.95em',
+                lineHeight: '22px',
+                border: 'none',
+                outline: 'none',
+                minHeight: 52,
+                maxHeight: 200,
+                overflowY: 'auto',
+                padding: '10px 12px',
+                boxSizing: 'border-box',
+              }}
+            />
+
+            {/* Row 2: Controls */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '4px 8px 6px',
+              borderTop: '1px solid rgba(255,255,255,0.05)',
+            }}>
+              {/* Left controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {/* Attachment button */}
+                <button
+                  type="button"
+                  onClick={handleAttachClick}
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${BORDER}`,
+                    color: '#888',
+                    cursor: 'pointer',
+                    borderRadius: 6,
+                    padding: '3px 8px',
+                    fontSize: '1em',
+                    fontFamily: SANS,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  title="Attach image"
+                >
+                  +
+                </button>
+
+                {/* Model selector */}
+                {models && models.length > 0 && onModelChange && (
+                  <select
+                    value={selectedModel || ''}
+                    onChange={(e) => onModelChange(e.target.value)}
+                    style={selectStyle}
+                    title="Model"
+                  >
+                    {models.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Effort selector (visual-only) */}
+                <select
+                  value={effort}
+                  onChange={(e) => setEffort(e.target.value)}
+                  style={selectStyle}
+                  title="Reasoning effort"
+                >
+                  {EFFORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+
+                {/* Engine selector (secondary) */}
+                {agentLibs && agentLibs.length > 0 && onAgentLibChange && (
+                  <select
+                    value={selectedAgentLib || ''}
+                    onChange={(e) => onAgentLibChange(e.target.value)}
+                    style={{ ...selectStyle, color: '#888' }}
+                    title="Engine"
+                  >
+                    {agentLibs.map((lib) => (
+                      <option key={lib.name} value={lib.name} disabled={!lib.available}>
+                        {lib.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Right controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {/* Queued indicator */}
+                {isQueued && (
+                  <span style={{ fontFamily: SANS, fontSize: '0.8em', color: ACCENT }}>
+                    queued
+                    {onCancelQueue && (
+                      <button
+                        type="button"
+                        onClick={onCancelQueue}
+                        style={{
+                          background: 'transparent', border: 'none', color: ACCENT,
+                          cursor: 'pointer', fontSize: '1em', marginLeft: 4,
+                        }}
+                        title="Cancel queue"
+                      >×</button>
+                    )}
+                  </span>
+                )}
+
+                {isOverLimit && (
+                  <span style={{ fontFamily: SANS, fontSize: '0.75em', color: '#ef4444' }}>
+                    {value.length.toLocaleString()}/{MAX_MESSAGE_LENGTH.toLocaleString()}
+                  </span>
+                )}
+
+                {/* Stop button */}
+                {isRunning && onStop && (
+                  <button
+                    type="button"
+                    onClick={onStop}
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${isQueued ? ACCENT : '#ef4444'}`,
+                      color: isQueued ? ACCENT : '#ef4444',
+                      cursor: 'pointer',
+                      borderRadius: 6,
+                      padding: '3px 8px',
+                      fontSize: '0.85em',
+                      fontFamily: SANS,
+                    }}
+                    title={isQueued ? 'Stop & send queued' : 'Stop'}
+                  >
+                    {isQueued ? '⚡' : '■'}
+                  </button>
+                )}
+
+                {/* Mic button (visual-only) */}
+                <button
+                  type="button"
+                  disabled
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#888',
+                    cursor: 'default',
+                    fontSize: '1.1em',
+                    opacity: 0.5,
+                    padding: '2px 4px',
+                  }}
+                  title="Voice input (coming soon)"
+                >🎤</button>
+
+                {/* Send button (amber circle) */}
+                <button
+                  type="submit"
+                  disabled={!canSend}
+                  style={{
+                    background: canSend ? ACCENT : '#2a2a3e',
+                    border: 'none',
+                    color: canSend ? '#fff' : '#4b5563',
+                    cursor: canSend ? 'pointer' : 'default',
+                    borderRadius: '50%',
+                    width: 32,
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.1em',
+                    lineHeight: 1,
+                    flexShrink: 0,
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                  title="Send message"
+                >↑</button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        {/* ── Row 3: Status bar ── */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '8px 0 4px',
-          fontFamily: MONO,
-          fontSize: '0.923em',
+          justifyContent: 'space-between',
+          padding: '6px 4px 8px',
+          fontFamily: SANS,
+          fontSize: '0.75em',
+          color: '#888',
         }}>
-          {/* Model selector */}
-          {models && models.length > 0 && onModelChange && (
-            <select
-              value={selectedModel || ''}
-              onChange={(e) => onModelChange(e.target.value)}
-              style={selectStyle}
-              title="Model"
-            >
-              {models.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          )}
+          {/* Left: Local + Permission */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Local indicator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>💻</span>
+              <span>Local</span>
+            </div>
 
-          {/* Effort selector (visual-only) */}
-          <select
-            value={effort}
-            onChange={(e) => setEffort(e.target.value)}
-            style={selectStyle}
-            title="Reasoning effort"
-          >
-            {EFFORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-
-          {/* Engine selector (small, secondary) */}
-          {agentLibs && agentLibs.length > 0 && onAgentLibChange && (
-            <select
-              value={selectedAgentLib || ''}
-              onChange={(e) => onAgentLibChange(e.target.value)}
-              style={{ ...selectStyle, color: '#6b7280' }}
-              title="Engine"
-            >
-              {agentLibs.map((lib) => (
-                <option key={lib.name} value={lib.name} disabled={!lib.available}>
-                  {lib.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Permission mode selector */}
-          {onPermissionModeChange && (
-            <select
-              value={permissionMode || 'full_access'}
-              onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
-              style={{ ...selectStyle, color: '#6b7280' }}
-              title="Permission mode"
-            >
-              {PERMISSION_MODE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Spacer */}
-          <div style={{ flex: 1 }} />
-
-          {/* Context usage indicator */}
-          {tokenUsage !== undefined && contextPercent > 0 && (
-            <span style={{
-              fontFamily: MONO,
-              fontSize: '0.846em',
-              color: getContextColor(contextPercent),
-            }}>
-              {Math.round(contextPercent)}% context
-            </span>
-          )}
-        </div>
-
-        {/* ── Input bar ── */}
-        <form
-          onSubmit={handleSubmit}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            gap: 8,
-            padding: '6px 0 10px',
-            borderTop: '1px solid #1a1f2e',
-          }}
-        >
-          {/* Attachment button */}
-          <button
-            type="button"
-            onClick={handleAttachClick}
-            style={iconBtnStyle}
-            title="Attach image"
-          >
-            +
-          </button>
-
-          {/* Textarea */}
-          <textarea
-            ref={mergedRef}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            rows={1}
-            placeholder={isRunning ? 'Type a message (will be queued)...' : 'Ask for follow-up changes'}
-            style={{
-              flex: 1,
-              resize: 'none',
-              backgroundColor: '#161b22',
-              color: '#e5e7eb',
-              fontFamily: MONO,
-              fontSize: '1em',
-              lineHeight: '22px',
-              border: '1px solid #2d3748',
-              borderRadius: 6,
-              outline: 'none',
-              minHeight: 36,
-              maxHeight: 200,
-              overflowY: 'auto',
-              padding: '7px 12px',
-            }}
-          />
-
-          {/* Right-side controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            {/* Queued indicator */}
-            {isQueued && (
-              <span style={{ fontFamily: MONO, fontSize: '0.846em', color: '#f59e0b' }}>
-                queued
-                {onCancelQueue && (
-                  <button
-                    type="button"
-                    onClick={onCancelQueue}
-                    style={{
-                      background: 'transparent', border: 'none', color: '#f59e0b',
-                      cursor: 'pointer', fontSize: '0.846em', marginLeft: 4,
-                    }}
-                    title="Cancel queue"
-                  >
-                    ×
-                  </button>
-                )}
-              </span>
+            {/* Permission mode */}
+            {onPermissionModeChange ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ color: isWarning ? ACCENT : '#888' }}>⚠️</span>
+                <select
+                  value={permissionMode || 'full_access'}
+                  onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: isWarning ? ACCENT : '#888',
+                    fontFamily: SANS,
+                    fontSize: '1em',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    paddingRight: 14,
+                    backgroundImage: DROPDOWN_CHEVRON,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0 center',
+                  }}
+                  title="Permission mode"
+                >
+                  {PERMISSION_MODE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ color: isWarning ? ACCENT : '#888' }}>⚠️</span>
+                <span style={{ color: isWarning ? ACCENT : '#888' }}>{permModeLabel}</span>
+              </div>
             )}
-
-            {isOverLimit && (
-              <span style={{ fontFamily: MONO, fontSize: '0.77em', color: '#ef4444' }}>
-                {value.length.toLocaleString()}/{MAX_MESSAGE_LENGTH.toLocaleString()}
-              </span>
-            )}
-
-            {/* Stop button */}
-            {isRunning && onStop && (
-              <button
-                type="button"
-                onClick={onStop}
-                style={{
-                  ...iconBtnStyle,
-                  color: isQueued ? '#f59e0b' : '#ef4444',
-                  border: `1px solid ${isQueued ? '#f59e0b' : '#ef4444'}`,
-                  fontSize: '0.846em',
-                  padding: '4px 8px',
-                }}
-                title={isQueued ? 'Stop & send queued' : 'Stop'}
-              >
-                {isQueued ? '⚡' : '■'}
-              </button>
-            )}
-
-            {/* Microphone button (visual-only) */}
-            <button
-              type="button"
-              style={{ ...iconBtnStyle, opacity: 0.4, cursor: 'default' }}
-              title="Voice input (coming soon)"
-              disabled
-            >
-              🎤
-            </button>
-
-            {/* Send button */}
-            <button
-              type="submit"
-              disabled={(!value.trim() && images.length === 0) || isOverLimit}
-              style={{
-                background: (value.trim() || images.length > 0) && !isOverLimit ? ACCENT : '#1a1f2e',
-                border: 'none',
-                color: (value.trim() || images.length > 0) && !isOverLimit ? '#fff' : '#4b5563',
-                cursor: (value.trim() || images.length > 0) && !isOverLimit ? 'pointer' : 'default',
-                borderRadius: 6,
-                padding: '6px 10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1em',
-                lineHeight: 1,
-                transition: 'background 0.15s, color 0.15s',
-              }}
-              title="Send message"
-            >
-              ↑
-            </button>
           </div>
-        </form>
+
+          {/* Right: Branch indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span>⎇</span>
+            <span>main</span>
+          </div>
+        </div>
       </div>
     );
   },

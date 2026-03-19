@@ -1,12 +1,13 @@
 /**
  * Codex preset — ChatPanel.
  *
- * Top-level orchestrator replicating the Codex CLI visual design:
- * - Codex top toolbar: task/project title, run button, agent avatar dropdown,
- *   hand-off button, commit button with diff indicator, action icons
- * - Bottom status bar: "Local" indicator, "Full access" permission mode,
- *   git branch indicator
- * - Dark terminal-style theme with codex-terminal-root CSS prefix
+ * Top-level orchestrator matching the Codex CLI visual design:
+ * - Clean top toolbar: session tabs/title, play button, agent avatar,
+ *   hand-off, push/commit, icon actions
+ * - Dark navy theme (#1a1a2e) with proportional fonts
+ * - No terminal elements (no chat/raw toggle, no streaming toggle,
+ *   no info/gear buttons, no context percentage)
+ * - Status bar is in the input area (Row 3), not a separate bottom bar
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
@@ -20,7 +21,6 @@ import { useActiveAgents } from '../../../../hooks/useActiveAgents';
 import { ContextSidebar } from '../../ContextSidebar';
 import { ActiveAgentsPanel } from '../../ActiveAgentsPanel';
 import { ChatActionsProvider } from '../../ChatActionsContext';
-import { RawChatView } from '../../RawChatView';
 import { TaskStatusBar } from '../../TaskStatusBar';
 import type { ChatPanelPresetProps } from '../types';
 
@@ -28,103 +28,106 @@ import { CodexSessionTabs } from './CodexSessionTabs';
 import { CodexChatMessageList } from './CodexChatMessageList';
 import { CodexChatInput } from './CodexChatInput';
 
+const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
-const BG = '#0d1117';
-const BG_HEADER = '#161b22';
-const BORDER = '#1e293b';
-const ACCENT = '#10b981';
+const BG = '#1a1a2e';
+const BG_HEADER = '#1e1e2e';
+const BORDER = '#3a3a4e';
 
-/** Reference counter for shared terminal style element — prevents premature removal during concurrent mounts. */
-let terminalStyleRefCount = 0;
+/** Reference counter for shared style element — prevents premature removal during concurrent mounts. */
+let chatStyleRefCount = 0;
 
-/** CSS injected once to style markdown and other inherited components in Codex terminal context. */
-const TERMINAL_STYLES = `
-.codex-terminal-root {
-  font-family: ${MONO};
+/** CSS injected once to style markdown and other inherited components in Codex context. */
+const CODEX_STYLES = `
+.codex-chat-root {
+  font-family: ${SANS};
   color: #d1d5db;
   background-color: ${BG};
 }
-.codex-terminal-root .codex-markdown-override p,
-.codex-terminal-root .codex-markdown-override li,
-.codex-terminal-root .codex-markdown-override span {
+.codex-chat-root .codex-markdown-override {
+  font-family: ${SANS};
+}
+.codex-chat-root .codex-markdown-override p,
+.codex-chat-root .codex-markdown-override li,
+.codex-chat-root .codex-markdown-override span {
   color: #d1d5db;
 }
-.codex-terminal-root .codex-markdown-override h1,
-.codex-terminal-root .codex-markdown-override h2,
-.codex-terminal-root .codex-markdown-override h3 {
+.codex-chat-root .codex-markdown-override h1,
+.codex-chat-root .codex-markdown-override h2,
+.codex-chat-root .codex-markdown-override h3 {
   color: #e5e7eb;
 }
-.codex-terminal-root .codex-markdown-override strong,
-.codex-terminal-root .codex-markdown-override b {
+.codex-chat-root .codex-markdown-override strong,
+.codex-chat-root .codex-markdown-override b {
   font-weight: 700;
   color: #f3f4f6;
 }
-.codex-terminal-root .codex-markdown-override em,
-.codex-terminal-root .codex-markdown-override i {
+.codex-chat-root .codex-markdown-override em,
+.codex-chat-root .codex-markdown-override i {
   font-style: italic;
   color: #d1d5db;
 }
-.codex-terminal-root .codex-markdown-override ul {
+.codex-chat-root .codex-markdown-override ul {
   list-style-type: disc;
   padding-left: 1.5rem;
 }
-.codex-terminal-root .codex-markdown-override ol {
+.codex-chat-root .codex-markdown-override ol {
   list-style-type: decimal;
   padding-left: 1.5rem;
 }
-.codex-terminal-root .codex-markdown-override li::marker {
-  color: #6b7280;
+.codex-chat-root .codex-markdown-override li::marker {
+  color: #888;
 }
-.codex-terminal-root .codex-markdown-override code {
-  background-color: #1e293b;
+.codex-chat-root .codex-markdown-override code {
+  background-color: #1a1a28;
   color: #e5e7eb;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 0.923em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
   font-family: ${MONO};
 }
-.codex-terminal-root .codex-markdown-override pre {
+.codex-chat-root .codex-markdown-override pre {
   background-color: #111827;
-  border: 1px solid #1e293b;
-  border-radius: 4px;
-  padding: 8px 12px;
+  border: 1px solid #2a2a3e;
+  border-radius: 6px;
+  padding: 10px 14px;
   overflow-x: auto;
 }
-.codex-terminal-root .codex-markdown-override pre code {
+.codex-chat-root .codex-markdown-override pre code {
   background-color: transparent;
   padding: 0;
   font-size: 12px;
 }
-.codex-terminal-root .codex-markdown-override a {
+.codex-chat-root .codex-markdown-override a {
   color: #60a5fa;
   text-decoration: underline;
 }
-.codex-terminal-root .codex-markdown-override blockquote {
-  border-left-color: #374151;
+.codex-chat-root .codex-markdown-override blockquote {
+  border-left-color: #3a3a4e;
   color: #9ca3af;
 }
-.codex-terminal-root .codex-markdown-override hr {
-  border-color: #374151;
+.codex-chat-root .codex-markdown-override hr {
+  border-color: #333;
   margin: 8px 0;
 }
-.codex-terminal-root .codex-markdown-override table {
-  border-color: #374151;
+.codex-chat-root .codex-markdown-override table {
+  border-color: #3a3a4e;
 }
-.codex-terminal-root .codex-markdown-override th,
-.codex-terminal-root .codex-markdown-override td {
-  border-color: #374151;
+.codex-chat-root .codex-markdown-override th,
+.codex-chat-root .codex-markdown-override td {
+  border-color: #3a3a4e;
   color: #d1d5db;
 }
-.codex-terminal-root .codex-markdown-override thead {
-  background-color: #1e293b;
+.codex-chat-root .codex-markdown-override thead {
+  background-color: #1e1e2e;
 }
-.codex-terminal-root .codex-markdown-override .group button {
-  background-color: #1e293b;
-  border-color: #374151;
+.codex-chat-root .codex-markdown-override .group button {
+  background-color: #1e1e2e;
+  border-color: #3a3a4e;
   color: #9ca3af;
 }
-.codex-terminal-root .codex-markdown-override .group button:hover {
-  background-color: #374151;
+.codex-chat-root .codex-markdown-override .group button:hover {
+  background-color: #2a2a3e;
   color: #d1d5db;
 }
 `;
@@ -164,19 +167,14 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
     tokenUsage,
     perTurnUsage,
     respondToPermission,
-    rawEvents,
   } = useChat(currentSessionId);
 
   const [showSidebar, setShowSidebar] = useState(false);
-  const [showRawView, setShowRawView] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
   const [threadTheme, setThreadTheme] = useState<ChatThreadTheme | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  // Reset raw view on session change
-  useEffect(() => { setShowRawView(false); }, [currentSessionId]);
 
   useChatKeyboardShortcuts({
     sessions,
@@ -237,14 +235,6 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
     catch (err) { reportError(err, 'CodexChatPanel: update permission mode'); }
   }, [currentSessionId, updateSession]);
 
-  const streamingEnabled = currentSession?.enableStreaming ?? true;
-
-  const handleStreamingToggle = useCallback(async () => {
-    if (!currentSessionId) return;
-    try { await updateSession(currentSessionId, { enableStreaming: !streamingEnabled }); }
-    catch (err) { reportError(err, 'CodexChatPanel: update streaming'); }
-  }, [currentSessionId, updateSession, streamingEnabled]);
-
   const handleDraftChange = useCallback(async (draft: string) => {
     if (!currentSessionId) return;
     try { await updateSession(currentSessionId, { draft: draft || null }); }
@@ -279,43 +269,34 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
 
   const showInlineTabs = scope.type === 'task';
 
-  // Inject terminal-scoped CSS into document.head with ref counting;
+  // Inject Codex-scoped CSS into document.head with ref counting;
   // only remove the style element when the last instance unmounts.
   useEffect(() => {
-    const id = 'codex-terminal-styles';
-    terminalStyleRefCount++;
+    const id = 'codex-chat-styles';
+    chatStyleRefCount++;
     if (!document.getElementById(id)) {
       const style = document.createElement('style');
       style.id = id;
-      style.textContent = TERMINAL_STYLES;
+      style.textContent = CODEX_STYLES;
       document.head.appendChild(style);
     }
     return () => {
-      terminalStyleRefCount--;
-      if (terminalStyleRefCount <= 0) {
+      chatStyleRefCount--;
+      if (chatStyleRefCount <= 0) {
         document.getElementById(id)?.remove();
-        terminalStyleRefCount = 0;
+        chatStyleRefCount = 0;
       }
     };
   }, []);
 
-  // Permission mode display label
-  const permModeLabel = useMemo(() => {
-    switch (selectedPermissionMode) {
-      case 'read_only': return 'Read-only';
-      case 'read_write': return 'Read-write';
-      default: return 'Full access';
-    }
-  }, [selectedPermissionMode]);
-
   // Toolbar button style helper
   const toolbarBtnStyle: React.CSSProperties = {
     background: 'transparent',
-    border: '1px solid #2d3748',
-    color: '#9ca3af',
+    border: '1px solid #3a3a4e',
+    color: '#888',
     cursor: 'pointer',
-    fontFamily: MONO,
-    fontSize: '0.77em',
+    fontFamily: SANS,
+    fontSize: '0.8em',
     padding: '3px 8px',
     borderRadius: 4,
     display: 'flex',
@@ -324,30 +305,17 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
     whiteSpace: 'nowrap',
   };
 
-  // Header toggle button style helper
-  const btnStyle = (active?: boolean): React.CSSProperties => ({
-    background: active ? '#1e293b' : 'transparent',
-    border: '1px solid #374151',
-    color: active ? '#e5e7eb' : '#6b7280',
-    cursor: 'pointer',
-    fontFamily: MONO,
-    fontSize: '0.846em',
-    padding: '3px 10px',
-    borderRadius: 4,
-    whiteSpace: 'nowrap',
-  });
-
   return (
     <ChatActionsProvider sendMessage={sendMessage} answerQuestion={answerQuestion} sessionId={currentSessionId} isStreaming={isStreaming}>
       <div
-        className="codex-terminal-root"
+        className="codex-chat-root"
         style={{
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
           backgroundColor: BG,
           color: '#d1d5db',
-          fontFamily: MONO,
+          fontFamily: SANS,
           ...(threadTheme?.fontSize ? { fontSize: `${threadTheme.fontSize}px` } : {}),
         }}
       >
@@ -362,7 +330,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
           minHeight: 40,
           gap: 8,
         }}>
-          {/* Left: session tabs or project title */}
+          {/* Left: session tabs or project/session title */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             {showInlineTabs && !sessionsLoading ? (
               <CodexSessionTabs
@@ -376,97 +344,114 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
               />
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-                <span style={{ color: ACCENT, fontSize: '0.923em' }}>●</span>
-                <span style={{ color: '#e5e7eb', fontSize: '0.923em', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{
+                  color: '#e5e7eb',
+                  fontSize: '0.9em',
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
                   {currentSession?.name || 'New thread'}
+                </span>
+                <span style={{ color: '#888', fontSize: '0.8em' }}>
+                  {scope.type === 'task' ? '' : scope.id ?? ''}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Center: Codex toolbar actions (visual-only) */}
+          {/* Center: Codex toolbar actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            {/* Run button */}
+            {/* Play button */}
             <button
               type="button"
               disabled
-              style={{ ...toolbarBtnStyle, color: ACCENT, borderColor: ACCENT, opacity: 0.6, cursor: 'default' }}
+              style={{ ...toolbarBtnStyle, opacity: 0.5, cursor: 'default' }}
               title="Run (visual-only)"
             >
-              ▶ Run
+              ▷
             </button>
 
-            {/* Agent avatar/dropdown */}
+            {/* Agent avatar */}
             <button
               type="button"
               disabled
-              style={{ ...toolbarBtnStyle, opacity: 0.6, cursor: 'default' }}
-              title="Agent (visual-only)"
+              style={{
+                ...toolbarBtnStyle,
+                opacity: 0.6,
+                cursor: 'default',
+                borderRadius: '50%',
+                width: 28,
+                height: 28,
+                padding: 0,
+                justifyContent: 'center',
+                border: 'none',
+                backgroundColor: '#2a6e4e',
+                color: '#fff',
+                fontSize: '0.85em',
+              }}
+              title="Agent"
             >
               🤖
             </button>
 
-            {/* Hand-off button */}
+            {/* Hand off button */}
             <button
               type="button"
               disabled
-              style={{ ...toolbarBtnStyle, opacity: 0.6, cursor: 'default' }}
+              style={{ ...toolbarBtnStyle, opacity: 0.5, cursor: 'default' }}
               title="Hand off (visual-only)"
             >
-              ↗ Hand off
+              ⇄ Hand off
             </button>
 
-            {/* Commit button with diff indicator */}
+            {/* Push / Commit button */}
             <button
               type="button"
               disabled
-              style={{ ...toolbarBtnStyle, opacity: 0.6, cursor: 'default' }}
-              title="Commit (visual-only)"
+              style={{ ...toolbarBtnStyle, opacity: 0.5, cursor: 'default' }}
+              title="Push (visual-only)"
             >
-              <span>Commit</span>
-              <span style={{ color: '#22c55e', fontSize: '0.923em' }}>+0</span>
-              <span style={{ color: '#ef4444', fontSize: '0.923em' }}>-0</span>
+              ↻ Push ∨
             </button>
           </div>
 
-          {/* Right: view actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {/* Chat / Raw toggle */}
-            <div style={{ display: 'flex', borderRadius: 4, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
-              <button onClick={() => setShowRawView(false)} style={btnStyle(!showRawView)} title="Chat view">
-                chat
-              </button>
-              <button onClick={() => setShowRawView(true)} style={btnStyle(showRawView)} title="Raw events">
-                raw
-              </button>
-            </div>
+          {/* Right: icon actions + overflow */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            {/* Separator */}
+            <div style={{ width: 1, height: 20, backgroundColor: '#3a3a4e', margin: '0 4px' }} />
 
-            {/* Streaming toggle */}
-            <button
-              onClick={handleStreamingToggle}
-              style={btnStyle(streamingEnabled)}
-              title={streamingEnabled ? 'Streaming on' : 'Streaming off'}
-            >
-              {streamingEnabled ? '⚡ on' : '⚡ off'}
+            {/* 4 icon buttons (visual-only) */}
+            <button type="button" disabled style={{ ...toolbarBtnStyle, opacity: 0.4, cursor: 'default', padding: '3px 6px' }} title="Screenshot">
+              📷
+            </button>
+            <button type="button" disabled style={{ ...toolbarBtnStyle, opacity: 0.4, cursor: 'default', padding: '3px 6px' }} title="Terminal">
+              ⬛
+            </button>
+            <button type="button" disabled style={{ ...toolbarBtnStyle, opacity: 0.4, cursor: 'default', padding: '3px 6px' }} title="Diff view">
+              ⧉
+            </button>
+            <button type="button" disabled style={{ ...toolbarBtnStyle, opacity: 0.4, cursor: 'default', padding: '3px 6px' }} title="Copy">
+              📋
             </button>
 
             {/* Sidebar toggle */}
             <button
               onClick={() => setShowSidebar(!showSidebar)}
-              style={btnStyle(showSidebar)}
+              style={{
+                ...toolbarBtnStyle,
+                color: showSidebar ? '#e5e7eb' : '#888',
+                backgroundColor: showSidebar ? 'rgba(255,255,255,0.08)' : 'transparent',
+              }}
               title="Toggle sidebar"
             >
-              {showSidebar ? '◧ hide' : '◧ info'}
-            </button>
-
-            {/* Settings */}
-            <button onClick={() => navigate('/settings/threads')} style={btnStyle()} title="Thread settings">
-              ⚙
+              ◧
             </button>
 
             {/* More actions */}
             <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowActions(!showActions)} style={btnStyle()} title="More">
+              <button onClick={() => setShowActions(!showActions)} style={toolbarBtnStyle} title="More">
                 ⋯
               </button>
               {showActions && (
@@ -474,31 +459,46 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
                   <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowActions(false)} />
                   <div style={{
                     position: 'absolute', right: 0, top: '100%', marginTop: 4,
-                    backgroundColor: '#1f2937', border: `1px solid ${BORDER}`,
+                    backgroundColor: '#252535', border: `1px solid ${BORDER}`,
                     borderRadius: 6, padding: 4, zIndex: 50, minWidth: 150,
-                    fontFamily: MONO, fontSize: '0.923em',
+                    fontFamily: SANS, fontSize: '0.875em',
                   }}>
                     <button
                       onClick={() => { summarizeChat(); setShowActions(false); }}
                       disabled={loading || isStreaming || messages.length === 0}
                       style={{
                         display: 'block', width: '100%', textAlign: 'left',
-                        padding: '4px 8px', background: 'transparent', border: 'none',
-                        color: '#d1d5db', cursor: 'pointer', opacity: (loading || isStreaming || messages.length === 0) ? 0.4 : 1,
+                        padding: '6px 10px', background: 'transparent', border: 'none',
+                        color: '#d1d5db', cursor: 'pointer', fontFamily: SANS,
+                        borderRadius: 4,
+                        opacity: (loading || isStreaming || messages.length === 0) ? 0.4 : 1,
                       }}
                     >
-                      summarize
+                      Summarize
                     </button>
                     <button
                       onClick={() => { clearChat(); setShowActions(false); }}
                       disabled={loading || isStreaming || messages.length === 0}
                       style={{
                         display: 'block', width: '100%', textAlign: 'left',
-                        padding: '4px 8px', background: 'transparent', border: 'none',
-                        color: '#ef4444', cursor: 'pointer', opacity: (loading || isStreaming || messages.length === 0) ? 0.4 : 1,
+                        padding: '6px 10px', background: 'transparent', border: 'none',
+                        color: '#ef4444', cursor: 'pointer', fontFamily: SANS,
+                        borderRadius: 4,
+                        opacity: (loading || isStreaming || messages.length === 0) ? 0.4 : 1,
                       }}
                     >
-                      clear
+                      Clear chat
+                    </button>
+                    <button
+                      onClick={() => { navigate('/settings/threads'); setShowActions(false); }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        padding: '6px 10px', background: 'transparent', border: 'none',
+                        color: '#d1d5db', cursor: 'pointer', fontFamily: SANS,
+                        borderRadius: 4,
+                      }}
+                    >
+                      Settings
                     </button>
                   </div>
                 </>
@@ -509,15 +509,15 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
 
         {/* ── Errors ── */}
         {sessionsError && (
-          <div style={{ padding: '6px 16px', color: '#ef4444', fontFamily: MONO, fontSize: '0.923em', borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ padding: '6px 16px', color: '#ef4444', fontFamily: SANS, fontSize: '0.875em', borderBottom: `1px solid ${BORDER}` }}>
             ⚠ Sessions: {sessionsError}
-            <button onClick={clearSessionsError} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', marginLeft: 8, fontFamily: MONO, fontSize: '0.846em' }}>dismiss</button>
+            <button onClick={clearSessionsError} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', marginLeft: 8, fontFamily: SANS, fontSize: '0.85em' }}>dismiss</button>
           </div>
         )}
         {error && (
-          <div style={{ padding: '6px 16px', color: '#ef4444', fontFamily: MONO, fontSize: '0.923em', borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ padding: '6px 16px', color: '#ef4444', fontFamily: SANS, fontSize: '0.875em', borderBottom: `1px solid ${BORDER}` }}>
             ⚠ Chat: {error}
-            <button onClick={clearError} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', marginLeft: 8, fontFamily: MONO, fontSize: '0.846em' }}>dismiss</button>
+            <button onClick={clearError} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', marginLeft: 8, fontFamily: SANS, fontSize: '0.85em' }}>dismiss</button>
           </div>
         )}
 
@@ -525,19 +525,17 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             {loading && messages.length === 0 ? (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
-                <span style={{ fontFamily: MONO, fontSize: '0.923em', fontStyle: 'italic' }}>⠿ loading messages…</span>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+                <span style={{ fontFamily: SANS, fontSize: '0.9em', fontStyle: 'italic' }}>Loading messages…</span>
               </div>
-            ) : showRawView ? (
-              <RawChatView rawEvents={rawEvents} />
             ) : messages.length === 0 && !isStreaming ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
-                <div style={{ textAlign: 'center', fontFamily: MONO }}>
-                  <div style={{ fontSize: '2.46em', marginBottom: 12, color: ACCENT }}>⬡</div>
-                  <div style={{ color: '#e5e7eb', fontSize: '1.23em', fontWeight: 600 }}>
+                <div style={{ textAlign: 'center', fontFamily: SANS }}>
+                  <div style={{ fontSize: '2.5em', marginBottom: 12, opacity: 0.6 }}>⬡</div>
+                  <div style={{ color: '#e5e7eb', fontSize: '1.2em', fontWeight: 600 }}>
                     {scope.type === 'task' ? 'Ready to work' : 'What can I help you build?'}
                   </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.923em', marginTop: 8 }}>
+                  <div style={{ color: '#888', fontSize: '0.9em', marginTop: 8 }}>
                     Ask about code, request changes, or explore your project.
                   </div>
                 </div>
@@ -552,77 +550,32 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
               />
             )}
 
-            {!showRawView && <TaskStatusBar sessionId={currentSessionId ?? null} />}
+            <TaskStatusBar sessionId={currentSessionId ?? null} />
 
             {/* ── Input ── */}
-            {!showRawView && (
-              <CodexChatInput
-                ref={inputRef}
-                key={currentSessionId ?? ''}
-                onSend={sendMessage}
-                onStop={stopChat}
-                isRunning={isStreaming}
-                isQueued={isQueued}
-                onCancelQueue={cancelQueuedMessage}
-                tokenUsage={tokenUsage}
-                agentLibs={agentLibs.length > 0 && currentSessionId ? agentLibs : undefined}
-                selectedAgentLib={selectedAgentLib}
-                onAgentLibChange={handleAgentLibChange}
-                models={currentModels.length > 0 ? currentModels : undefined}
-                selectedModel={selectedModel}
-                onModelChange={handleModelChange}
-                permissionMode={selectedPermissionMode}
-                onPermissionModeChange={handlePermissionModeChange}
-                prefill={prefill}
-                lastUserMessage={lastUserMessage}
-                onEditLastMessage={handleEditLastMessage}
-                initialDraft={currentSession?.draft ?? null}
-                onDraftChange={handleDraftChange}
-              />
-            )}
-
-            {/* ── Bottom Status Bar ── */}
-            {!showRawView && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 16,
-                padding: '4px 16px',
-                borderTop: `1px solid ${BORDER}`,
-                backgroundColor: BG_HEADER,
-                fontFamily: MONO,
-                fontSize: '0.77em',
-                color: '#6b7280',
-                minHeight: 28,
-              }}>
-                {/* Local execution indicator */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ color: ACCENT, fontSize: '0.923em' }}>⬤</span>
-                  <span>Local</span>
-                </div>
-
-                {/* Permission mode indicator */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ color: selectedPermissionMode === 'full_access' || !selectedPermissionMode ? '#f59e0b' : '#6b7280' }}>⚠</span>
-                  <span>{permModeLabel}</span>
-                </div>
-
-                {/* Branch indicator */}
-                {/* TODO: fetch actual branch name when git API is available */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: '0.923em' }}>⎇</span>
-                  <span>main</span>
-                </div>
-
-                {/* Spacer */}
-                <div style={{ flex: 1 }} />
-
-                {/* Engine + Model info */}
-                <span style={{ color: '#4b5563' }}>
-                  {selectedAgentLib}{selectedModel ? ` · ${currentModels.find((m) => m.value === selectedModel)?.label ?? selectedModel}` : ''}
-                </span>
-              </div>
-            )}
+            <CodexChatInput
+              ref={inputRef}
+              key={currentSessionId ?? ''}
+              onSend={sendMessage}
+              onStop={stopChat}
+              isRunning={isStreaming}
+              isQueued={isQueued}
+              onCancelQueue={cancelQueuedMessage}
+              tokenUsage={tokenUsage}
+              agentLibs={agentLibs.length > 0 && currentSessionId ? agentLibs : undefined}
+              selectedAgentLib={selectedAgentLib}
+              onAgentLibChange={handleAgentLibChange}
+              models={currentModels.length > 0 ? currentModels : undefined}
+              selectedModel={selectedModel}
+              onModelChange={handleModelChange}
+              permissionMode={selectedPermissionMode}
+              onPermissionModeChange={handlePermissionModeChange}
+              prefill={prefill}
+              lastUserMessage={lastUserMessage}
+              onEditLastMessage={handleEditLastMessage}
+              initialDraft={currentSession?.draft ?? null}
+              onDraftChange={handleDraftChange}
+            />
           </div>
 
           {/* ── Sidebar ── */}
