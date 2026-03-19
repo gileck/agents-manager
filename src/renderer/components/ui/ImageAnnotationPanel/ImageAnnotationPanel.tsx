@@ -70,6 +70,8 @@ export function ImageAnnotationPanel({
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.stopPropagation();
+        e.preventDefault();
         onClose();
         return;
       }
