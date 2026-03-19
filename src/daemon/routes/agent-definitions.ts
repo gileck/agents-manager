@@ -71,5 +71,12 @@ export function agentDefinitionRoutes(services: AppServices): Router {
     } catch (err) { next(err); }
   });
 
+  router.get('/api/agent-libs/features', (_req, res, next) => {
+    try {
+      const features = services.agentLibRegistry.getAllFeatures();
+      res.json(features);
+    } catch (err) { next(err); }
+  });
+
   return router;
 }

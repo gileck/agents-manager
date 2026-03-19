@@ -8,6 +8,7 @@ import {
   PanelRightOpen,
   MoreHorizontal,
   MessageSquare,
+  MessageSquarePlus,
   Zap,
   ZapOff,
   Settings,
@@ -65,7 +66,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     perTurnUsage,
     respondToPermission,
     rawEvents,
-  } = useChat(currentSessionId);
+  } = useChat(currentSessionId, { enableStreamingInput: (currentSession?.enableStreamingInput ?? false) });
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [showRawView, setShowRawView] = useState(false);
@@ -77,6 +78,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   }, [currentSessionId]);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
+  const [agentLibFeatures, setAgentLibFeatures] = useState<Record<string, { streamingInput: boolean }>>({});
   const [threadTheme, setThreadTheme] = useState<ChatThreadTheme | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -97,6 +99,9 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     });
     window.api.agentLibs.listModels().then(setAgentLibModels).catch((err) => {
       reportError(err, 'ChatPanel: load agent models');
+    });
+    window.api.agentLibs.listFeatures().then(setAgentLibFeatures).catch((err) => {
+      reportError(err, 'ChatPanel: load agent features');
     });
     window.api.settings.get().then((s) => {
       if (s.chatThreadTheme) {
@@ -162,6 +167,18 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
       reportError(err, 'ChatPanel: update streaming');
     }
   }, [currentSessionId, updateSession, streamingEnabled]);
+
+  const streamingInputEnabled = currentSession?.enableStreamingInput ?? false;
+  const libSupportsStreamingInput = agentLibFeatures[selectedAgentLib]?.streamingInput ?? false;
+
+  const handleStreamingInputToggle = useCallback(async () => {
+    if (!currentSessionId) return;
+    try {
+      await updateSession(currentSessionId, { enableStreamingInput: !streamingInputEnabled });
+    } catch (err) {
+      reportError(err, 'ChatPanel: update streaming input');
+    }
+  }, [currentSessionId, updateSession, streamingInputEnabled]);
 
   const handleDraftChange = useCallback(async (draft: string) => {
     if (!currentSessionId) return;
@@ -236,6 +253,16 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
           >
             {streamingEnabled ? <Zap className="h-4 w-4" /> : <ZapOff className="h-4 w-4" />}
           </button>
+
+          {libSupportsStreamingInput && (
+            <button
+              onClick={handleStreamingInputToggle}
+              className={`p-2 rounded-full border border-border/70 bg-card/65 transition-colors ${streamingInputEnabled ? 'text-foreground hover:bg-accent/65' : 'text-muted-foreground hover:text-foreground hover:bg-accent/65'}`}
+              title={streamingInputEnabled ? 'Live injection on — messages sent while agent is running are injected mid-execution' : 'Live injection off — messages are queued until agent completes'}
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+            </button>
+          )}
 
           <button
             onClick={() => setShowSidebar(!showSidebar)}
@@ -339,6 +366,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               onPermissionResponse={respondToPermission}
               rawEvents={rawEvents}
               showRawView={showRawView}
+              enableStreamingInput={streamingInputEnabled && libSupportsStreamingInput}
               emptyState={(
                 <div className="text-center text-muted-foreground/80 py-20">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border border-border/70 bg-card/65 mb-5">

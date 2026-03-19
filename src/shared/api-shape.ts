@@ -151,6 +151,7 @@ export interface ApiShape {
   agentLibs: {
     list(): Promise<{ name: string; available: boolean }[]>;
     listModels(): Promise<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>;
+    listFeatures(): Promise<Record<string, { images: boolean; hooks: boolean; thinking: boolean; nativeResume: boolean; streamingInput: boolean }>>;
   };
 
   // Pipeline operations
@@ -233,7 +234,7 @@ export interface ApiShape {
 
   // Chat operations
   chat: {
-    send(sessionId: string, message: string, images?: ChatImage[]): Promise<{ userMessage: ChatMessage; sessionId: string }>;
+    send(sessionId: string, message: string, images?: ChatImage[]): Promise<{ userMessage: ChatMessage; sessionId: string; injected?: boolean }>;
     stop(sessionId: string): Promise<void>;
     messages(sessionId: string): Promise<ChatMessage[]>;
     clear(sessionId: string): Promise<void>;
@@ -253,7 +254,7 @@ export interface ApiShape {
     list(scopeType: 'project' | 'task', scopeId: string): Promise<ChatSession[]>;
     listTaskSessions(projectId: string): Promise<TaskChatSessionWithTitle[]>;
     listAll(projectId: string): Promise<ChatSessionWithDetails[]>;
-    update(sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null }): Promise<ChatSession | null>;
+    update(sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreamingInput?: boolean }): Promise<ChatSession | null>;
     delete(sessionId: string): Promise<boolean>;
     hide(sessionId: string): Promise<boolean>;
     hideAll(projectId: string): Promise<boolean>;

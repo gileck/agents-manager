@@ -73,7 +73,8 @@ interface QueuedMessage {
   images?: ChatImage[];
 }
 
-export function useChat(sessionId: string | null) {
+export function useChat(sessionId: string | null, options?: { enableStreamingInput?: boolean }) {
+  const enableStreamingInput = options?.enableStreamingInput ?? false;
   const [dbMessages, setDbMessages] = useState<ChatMessage[]>([]);
   const [streamingMessages, setStreamingMessages] = useState<AgentChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -235,6 +236,25 @@ export function useChat(sessionId: string | null) {
     }
   }, [sessionId]);
 
+  // Inject a message into a running agent without resetting streaming state
+  const doInject = useCallback(async (message: string, images?: ChatImage[]) => {
+    if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
+
+    setError(null);
+    try {
+      const { userMessage } = await window.api.chat.send(sessionId, message, images);
+      // Optimistically add the injected user message to DB messages
+      setDbMessages((prev) => [...prev, userMessage]);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      // If injection fails (e.g. server doesn't support it), fall back to queuing
+      setQueuedMessage({ text: message, images });
+      if (!errMsg.includes('agent is already running')) {
+        setError(errMsg);
+      }
+    }
+  }, [sessionId]);
+
   // Keep doSendRef in sync
   doSendRef.current = doSend;
 
@@ -250,14 +270,19 @@ export function useChat(sessionId: string | null) {
   const sendMessage = useCallback(async (message: string, images?: ChatImage[]) => {
     if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
 
-    // Queue the message if an agent is already running
     if (isStreaming) {
-      setQueuedMessage({ text: message, images });
+      if (enableStreamingInput) {
+        // Injection mode: send directly to running agent without resetting streaming state
+        doInject(message, images);
+      } else {
+        // Queue the message for later
+        setQueuedMessage({ text: message, images });
+      }
       return;
     }
 
     doSend(message, images);
-  }, [sessionId, isStreaming, doSend]);
+  }, [sessionId, isStreaming, enableStreamingInput, doSend, doInject]);
 
   const stopChat = useCallback(() => {
     if (!sessionId) return;

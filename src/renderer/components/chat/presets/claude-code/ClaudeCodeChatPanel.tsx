@@ -162,13 +162,14 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
     perTurnUsage,
     respondToPermission,
     rawEvents,
-  } = useChat(currentSessionId);
+  } = useChat(currentSessionId, { enableStreamingInput: (currentSession?.enableStreamingInput ?? false) });
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [showRawView, setShowRawView] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [agentLibs, setAgentLibs] = useState<{ name: string; available: boolean }[]>([]);
   const [agentLibModels, setAgentLibModels] = useState<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>>({});
+  const [agentLibFeatures, setAgentLibFeatures] = useState<Record<string, { streamingInput: boolean }>>({});
   const [threadTheme, setThreadTheme] = useState<ChatThreadTheme | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -188,6 +189,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
   useEffect(() => {
     window.api.agentLibs.list().then(setAgentLibs).catch((err) => reportError(err, 'ClaudeCodeChatPanel: load agent libs'));
     window.api.agentLibs.listModels().then(setAgentLibModels).catch((err) => reportError(err, 'ClaudeCodeChatPanel: load agent models'));
+    window.api.agentLibs.listFeatures().then(setAgentLibFeatures).catch((err) => reportError(err, 'ClaudeCodeChatPanel: load agent features'));
     window.api.settings.get().then((s) => {
       if (s.chatThreadTheme) {
         try {
@@ -241,6 +243,15 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
     try { await updateSession(currentSessionId, { enableStreaming: !streamingEnabled }); }
     catch (err) { reportError(err, 'ClaudeCodeChatPanel: update streaming'); }
   }, [currentSessionId, updateSession, streamingEnabled]);
+
+  const streamingInputEnabled = currentSession?.enableStreamingInput ?? false;
+  const libSupportsStreamingInput = agentLibFeatures[selectedAgentLib]?.streamingInput ?? false;
+
+  const handleStreamingInputToggle = useCallback(async () => {
+    if (!currentSessionId) return;
+    try { await updateSession(currentSessionId, { enableStreamingInput: !streamingInputEnabled }); }
+    catch (err) { reportError(err, 'ClaudeCodeChatPanel: update streaming input'); }
+  }, [currentSessionId, updateSession, streamingInputEnabled]);
 
   const handleDraftChange = useCallback(async (draft: string) => {
     if (!currentSessionId) return;
@@ -367,6 +378,17 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
             >
               {streamingEnabled ? '⚡ on' : '⚡ off'}
             </button>
+
+            {/* Streaming input (live injection) toggle */}
+            {libSupportsStreamingInput && (
+              <button
+                onClick={handleStreamingInputToggle}
+                style={btnStyle(streamingInputEnabled)}
+                title={streamingInputEnabled ? 'Live injection on — messages injected mid-execution' : 'Live injection off — messages queued'}
+              >
+                {streamingInputEnabled ? '💬 inject' : '💬 queue'}
+              </button>
+            )}
 
             {/* Sidebar toggle */}
             <button
@@ -496,6 +518,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
                 onEditLastMessage={handleEditLastMessage}
                 initialDraft={currentSession?.draft ?? null}
                 onDraftChange={handleDraftChange}
+                enableStreamingInput={streamingInputEnabled && libSupportsStreamingInput}
               />
             )}
           </div>
