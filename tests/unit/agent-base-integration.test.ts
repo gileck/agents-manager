@@ -548,4 +548,152 @@ describe('Agent (integration with BaseAgentLib)', () => {
       expect(available).toBe(true);
     });
   });
+
+  // ============================================
+  // disallowedTools merging
+  // ============================================
+
+  describe('execute — disallowedTools merging', () => {
+    it('passes only builder disallowedTools when readOnly is false', async () => {
+      const builder = new MockPromptBuilder();
+      builder.buildExecutionConfig = (_ctx: AgentContext, config: AgentConfig) => ({
+        prompt: 'test',
+        maxTurns: 50,
+        timeoutMs: config.timeout || 60_000,
+        readOnly: false,
+        disallowedTools: ['Edit', 'MultiEdit', 'NotebookEdit'],
+      });
+      const { agent, lib } = buildAgent(undefined, builder);
+
+      await agent.execute(makeContext(), makeConfig());
+
+      const opts = lib.executeCalls[0].options;
+      expect(opts.disallowedTools).toEqual(expect.arrayContaining(['Edit', 'MultiEdit', 'NotebookEdit']));
+      expect(opts.disallowedTools).not.toContain('Write');
+    });
+
+    it('merges readOnly write tools with builder disallowedTools via Set dedup', async () => {
+      const builder = new MockPromptBuilder();
+      builder.buildExecutionConfig = (_ctx: AgentContext, config: AgentConfig) => ({
+        prompt: 'test',
+        maxTurns: 50,
+        timeoutMs: config.timeout || 60_000,
+        readOnly: true,
+        disallowedTools: ['Edit', 'CustomTool'],
+      });
+      const { agent, lib } = buildAgent(undefined, builder);
+
+      await agent.execute(makeContext(), makeConfig());
+
+      const opts = lib.executeCalls[0].options;
+      // Should contain all WRITE_TOOLS + CustomTool, with no duplicates
+      expect(opts.disallowedTools).toEqual(expect.arrayContaining(['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'CustomTool']));
+      // Edit should appear only once (deduped)
+      expect(opts.disallowedTools!.filter(t => t === 'Edit')).toHaveLength(1);
+    });
+
+    it('does not pass disallowedTools when readOnly is false and no builder tools', async () => {
+      const { agent, lib } = buildAgent();
+
+      await agent.execute(makeContext(), makeConfig());
+
+      const opts = lib.executeCalls[0].options;
+      expect(opts.disallowedTools).toBeUndefined();
+    });
+  });
+
+  // ============================================
+  // Write-restriction preToolUse hook
+  // ============================================
+
+  describe('execute — write-restriction hook', () => {
+    function buildAgentWithCleanupPaths(): ReturnType<typeof buildAgent> {
+      const builder = new MockPromptBuilder();
+      builder.buildExecutionConfig = (_ctx: AgentContext, config: AgentConfig) => ({
+        prompt: 'test',
+        maxTurns: 50,
+        timeoutMs: config.timeout || 60_000,
+        readOnly: false,
+        disallowedTools: ['Edit', 'MultiEdit', 'NotebookEdit'],
+        cleanupPaths: ['tmp'],
+      });
+      return buildAgent(undefined, builder);
+    }
+
+    it('blocks Write to src/foo.ts when cleanupPaths is set', async () => {
+      const { agent, lib } = buildAgentWithCleanupPaths();
+
+      await agent.execute(makeContext({ workdir: '/test/workdir' }), makeConfig());
+
+      const hooks = lib.executeCalls[0].options.hooks;
+      expect(hooks?.preToolUse).toBeDefined();
+
+      const result = hooks!.preToolUse!('Write', { file_path: 'src/foo.ts' });
+      expect(result).toBeDefined();
+      expect(result!.decision).toBe('block');
+      expect(result!.reason).toContain('WRITE RESTRICTION');
+    });
+
+    it('allows Write to tmp/verify.ts when cleanupPaths includes tmp', async () => {
+      const { agent, lib } = buildAgentWithCleanupPaths();
+
+      await agent.execute(makeContext({ workdir: '/test/workdir' }), makeConfig());
+
+      const hooks = lib.executeCalls[0].options.hooks;
+      const result = hooks!.preToolUse!('Write', { file_path: 'tmp/verify.ts' });
+      expect(result).toBeUndefined();
+    });
+
+    it('blocks Bash write patterns targeting src/ when cleanupPaths is set', async () => {
+      const { agent, lib } = buildAgentWithCleanupPaths();
+
+      await agent.execute(makeContext({ workdir: '/test/workdir' }), makeConfig());
+
+      const hooks = lib.executeCalls[0].options.hooks;
+      const result = hooks!.preToolUse!('Bash', { command: 'echo "x" > src/file.ts' });
+      expect(result).toBeDefined();
+      expect(result!.decision).toBe('block');
+      expect(result!.reason).toContain('WRITE RESTRICTION');
+    });
+
+    it('allows Bash write patterns targeting tmp/ when cleanupPaths includes tmp', async () => {
+      const { agent, lib } = buildAgentWithCleanupPaths();
+
+      await agent.execute(makeContext({ workdir: '/test/workdir' }), makeConfig());
+
+      const hooks = lib.executeCalls[0].options.hooks;
+      const result = hooks!.preToolUse!('Bash', { command: 'echo "x" > tmp/verify.ts' });
+      expect(result).toBeUndefined();
+    });
+
+    it('allows Read tool through write-restriction hook (only restricts writes)', async () => {
+      const { agent, lib } = buildAgentWithCleanupPaths();
+
+      await agent.execute(makeContext({ workdir: '/test/workdir' }), makeConfig());
+
+      const hooks = lib.executeCalls[0].options.hooks;
+      const result = hooks!.preToolUse!('Read', { file_path: 'src/foo.ts' });
+      expect(result).toBeUndefined();
+    });
+
+    it('does not install hooks when cleanupPaths is empty and no worktree', async () => {
+      const { agent, lib } = buildAgent();
+
+      await agent.execute(makeContext(), makeConfig());
+
+      const opts = lib.executeCalls[0].options;
+      expect(opts.hooks).toBeUndefined();
+    });
+
+    it('uses generic "Agent" wording in block messages, not "Planner"', async () => {
+      const { agent, lib } = buildAgentWithCleanupPaths();
+
+      await agent.execute(makeContext({ workdir: '/test/workdir' }), makeConfig());
+
+      const hooks = lib.executeCalls[0].options.hooks;
+      const result = hooks!.preToolUse!('Write', { file_path: 'src/foo.ts' });
+      expect(result!.reason).toContain('Agent can only write to');
+      expect(result!.reason).not.toContain('Planner');
+    });
+  });
 });

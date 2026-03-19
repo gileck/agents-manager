@@ -1,4 +1,5 @@
 import { resolve } from 'path';
+import { execSync } from 'child_process';
 import type { AgentContext, AgentConfig, AgentRunResult, AgentChatMessage } from '../../shared/types';
 import type { IAgent } from '../interfaces/agent';
 import type { IAgentLib, AgentLibTelemetry, AgentLibResult, AgentLibHooks } from '../interfaces/agent-lib';
@@ -78,10 +79,14 @@ export class Agent implements IAgent {
     const allowedPaths = [context.workdir];
     const readOnlyPaths = execConfig.readOnly && context.project?.path ? [context.project.path] : [];
 
-    // For read-only agents (investigator, planner, reviewer), disallow all write tools
-    // so they cannot modify files even within the worktree.
+    // Merge disallowed tools from two sources:
+    // 1. readOnly flag: all write tools are disallowed for read-only agents
+    // 2. execConfig.disallowedTools: per-builder tool restrictions (e.g., planner disallows Edit but allows Write)
     const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
-    const disallowedTools = execConfig.readOnly ? WRITE_TOOLS : undefined;
+    const readOnlyDisallowed = execConfig.readOnly ? WRITE_TOOLS : [];
+    const builderDisallowed = execConfig.disallowedTools ?? [];
+    const allDisallowed = [...new Set([...readOnlyDisallowed, ...builderDisallowed])];
+    const disallowedTools = allDisallowed.length > 0 ? allDisallowed : undefined;
 
     const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     log(`Starting agent run: mode=${context.mode}, workdir=${context.workdir}, readOnly=${execConfig.readOnly}, timeout=${execConfig.timeoutMs}ms, model=${config.model ?? 'default'}`);
@@ -94,35 +99,90 @@ export class Agent implements IAgent {
     const resolvedProjectPath = projectPath ? resolve(projectPath) : null;
     const isWorktree = resolvedProjectPath && resolvedWorkdir !== resolvedProjectPath;
 
-    const worktreeHooks: AgentLibHooks | undefined = isWorktree ? {
-      preToolUse: (toolName: string, toolInput: Record<string, unknown>) => {
-        // Guard file-writing tools
-        if (toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit' || toolName === 'NotebookEdit') {
-          const filePath = (toolInput.file_path ?? toolInput.notebook_path) as string | undefined;
-          if (!filePath) {
-            return { decision: 'block' as const, reason: `WORKTREE GUARD: ${toolName} with no file path — blocked for safety.` };
-          }
-          const resolvedFile = resolve(resolvedWorkdir, filePath);
-          if ((resolvedFile === resolvedProjectPath || resolvedFile.startsWith(resolvedProjectPath + '/')) && !resolvedFile.startsWith(resolvedWorkdir + '/') && resolvedFile !== resolvedWorkdir) {
-            return { decision: 'block' as const, reason: `WORKTREE GUARD: Write to main repository path "${filePath}" is BLOCKED. Use a relative path (e.g., src/...) which resolves within your worktree "${context.workdir}".` };
-          }
+    // Worktree guard: hard-block operations targeting the main repo
+    const worktreeGuard = isWorktree ? (toolName: string, toolInput: Record<string, unknown>) => {
+      // Guard file-writing tools
+      if (toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit' || toolName === 'NotebookEdit') {
+        const filePath = (toolInput.file_path ?? toolInput.notebook_path) as string | undefined;
+        if (!filePath) {
+          return { decision: 'block' as const, reason: `WORKTREE GUARD: ${toolName} with no file path — blocked for safety.` };
         }
-        // Guard bash commands that cd or operate on the main repo
-        if (toolName === 'Bash') {
-          const command = toolInput.command as string | undefined;
-          if (command) {
-            // Check ALL cd occurrences (not just the first) to prevent chained escapes
-            for (const cdMatch of command.matchAll(/\bcd\s+["']?([^\s"'|;&]+)/g)) {
-              const cdTarget = resolve(resolvedWorkdir, cdMatch[1]);
-              if ((cdTarget === resolvedProjectPath || cdTarget.startsWith(resolvedProjectPath + '/')) && !cdTarget.startsWith(resolvedWorkdir + '/') && cdTarget !== resolvedWorkdir) {
-                return { decision: 'block' as const, reason: `WORKTREE GUARD: "cd ${cdMatch[1]}" targets main repository. Stay in your worktree "${context.workdir}".` };
-              }
+        const resolvedFile = resolve(resolvedWorkdir, filePath);
+        if ((resolvedFile === resolvedProjectPath || resolvedFile.startsWith(resolvedProjectPath + '/')) && !resolvedFile.startsWith(resolvedWorkdir + '/') && resolvedFile !== resolvedWorkdir) {
+          return { decision: 'block' as const, reason: `WORKTREE GUARD: Write to main repository path "${filePath}" is BLOCKED. Use a relative path (e.g., src/...) which resolves within your worktree "${context.workdir}".` };
+        }
+      }
+      // Guard bash commands that cd or operate on the main repo
+      if (toolName === 'Bash') {
+        const command = toolInput.command as string | undefined;
+        if (command) {
+          // Check ALL cd occurrences (not just the first) to prevent chained escapes
+          for (const cdMatch of command.matchAll(/\bcd\s+["']?([^\s"'|;&]+)/g)) {
+            const cdTarget = resolve(resolvedWorkdir, cdMatch[1]);
+            if ((cdTarget === resolvedProjectPath || cdTarget.startsWith(resolvedProjectPath + '/')) && !cdTarget.startsWith(resolvedWorkdir + '/') && cdTarget !== resolvedWorkdir) {
+              return { decision: 'block' as const, reason: `WORKTREE GUARD: "cd ${cdMatch[1]}" targets main repository. Stay in your worktree "${context.workdir}".` };
             }
           }
         }
-        return undefined;
-      },
+      }
+      return undefined;
+    } : null;
+
+    // Write-restriction guard: when cleanupPaths is set, only allow writes to those paths
+    // (e.g., planner can only write to ${workdir}/tmp/)
+    const cleanupPaths = execConfig.cleanupPaths ?? [];
+    // Pre-compute allowed write paths once (not per tool invocation)
+    const resolvedAllowedWritePaths = cleanupPaths.map(p => resolve(resolvedWorkdir, p));
+    const isWithinAllowedWritePath = (absPath: string): boolean => {
+      return resolvedAllowedWritePaths.some(allowed => absPath === allowed || absPath.startsWith(allowed + '/'));
+    };
+    const writeRestriction = cleanupPaths.length > 0 ? (toolName: string, toolInput: Record<string, unknown>) => {
+      // Block Write tool calls to paths outside the allowed write paths
+      if (toolName === 'Write') {
+        const filePath = toolInput.file_path as string | undefined;
+        if (filePath) {
+          const resolvedFile = resolve(resolvedWorkdir, filePath);
+          // Only restrict paths within the workdir — paths outside are handled by SandboxGuard
+          if ((resolvedFile === resolvedWorkdir || resolvedFile.startsWith(resolvedWorkdir + '/')) && !isWithinAllowedWritePath(resolvedFile)) {
+            return { decision: 'block' as const, reason: `WRITE RESTRICTION: Write to "${filePath}" is blocked. Agent can only write to ${cleanupPaths.map(p => `${p}/`).join(', ')} for verification scripts.` };
+          }
+        }
+      }
+
+      // Best-effort: inspect Bash commands for write patterns targeting paths outside allowed write paths
+      if (toolName === 'Bash') {
+        const command = toolInput.command as string | undefined;
+        if (command) {
+          // Match common write patterns: >, >>, tee, cp, mv, mkdir, touch + their target paths
+          const BASH_WRITE_REGEX = /(?:^|\s)(?:>|>>|tee|cp|mv|mkdir|touch)\s+["']?([^\s"'|;&]+)/g;
+          for (const match of command.matchAll(BASH_WRITE_REGEX)) {
+            const targetPath = match[1];
+            const resolvedTarget = resolve(resolvedWorkdir, targetPath);
+            // Only restrict paths within the workdir but outside allowed write paths
+            if ((resolvedTarget === resolvedWorkdir || resolvedTarget.startsWith(resolvedWorkdir + '/')) && !isWithinAllowedWritePath(resolvedTarget)) {
+              return { decision: 'block' as const, reason: `WRITE RESTRICTION: Bash write to "${targetPath}" is blocked. Agent can only write to ${cleanupPaths.map(p => `${p}/`).join(', ')} for verification scripts.` };
+            }
+          }
+        }
+      }
+
+      return undefined;
+    } : null;
+
+    // Compose all preToolUse hooks into a single function
+    const composedPreToolUse = (worktreeGuard || writeRestriction) ? (toolName: string, toolInput: Record<string, unknown>) => {
+      if (worktreeGuard) {
+        const result = worktreeGuard(toolName, toolInput);
+        if (result) return result;
+      }
+      if (writeRestriction) {
+        const result = writeRestriction(toolName, toolInput);
+        if (result) return result;
+      }
+      return undefined;
     } : undefined;
+
+    const composedHooks: AgentLibHooks | undefined = composedPreToolUse ? { preToolUse: composedPreToolUse } : undefined;
 
     // For crash recovery resume with native-resume engines, use a short continuation
     // prompt instead of the full system prompt (the prior conversation is replayed by the SDK).
@@ -151,7 +211,7 @@ export class Agent implements IAgent {
         agentType: this.type,
         sdkPermissionMode: 'acceptEdits',
         ...(disallowedTools ? { disallowedTools } : {}),
-        ...(worktreeHooks ? { hooks: worktreeHooks } : {}),
+        ...(composedHooks ? { hooks: composedHooks } : {}),
       }, {
         onOutput,
         onLog,
@@ -185,7 +245,7 @@ export class Agent implements IAgent {
           agentType: this.type,
           sdkPermissionMode: 'acceptEdits',
           ...(disallowedTools ? { disallowedTools } : {}),
-          ...(worktreeHooks ? { hooks: worktreeHooks } : {}),
+          ...(composedHooks ? { hooks: composedHooks } : {}),
         }, {
           onOutput,
           onLog,
@@ -213,6 +273,17 @@ export class Agent implements IAgent {
 
       // Delayed telemetry cleanup — gives AgentService crash handler time to read token counts
       setTimeout(() => this.lastTelemetries.delete(runId), 5000);
+
+      // Best-effort cleanup of verification script directories (e.g., ${workdir}/tmp/)
+      for (const relPath of execConfig.cleanupPaths ?? []) {
+        try {
+          const absPath = resolve(context.workdir, relPath);
+          // Safety: only delete strict children of workdir — never the workdir root itself
+          if (absPath.startsWith(resolvedWorkdir + '/') && absPath !== resolvedWorkdir) {
+            execSync(`rm -rf "${absPath}"`, { timeout: 5000 });
+          }
+        } catch { /* best-effort cleanup — don't block agent completion */ }
+      }
     }
   }
 
