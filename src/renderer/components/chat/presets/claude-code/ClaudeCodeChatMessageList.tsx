@@ -282,6 +282,33 @@ function TerminalSearchGroup({
   );
 }
 
+function CopySummaryButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+      <button
+        type="button"
+        onClick={handleCopy}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '3px 8px', fontSize: 12, borderRadius: 4,
+          background: 'transparent', border: '1px solid #404040',
+          color: copied ? '#22c55e' : '#9ca3af', cursor: 'pointer',
+          fontFamily: MONO,
+        }}
+      >
+        {copied ? '✓ Copied' : '⧉ Copy Summary'}
+      </button>
+    </div>
+  );
+}
+
 export function ClaudeCodeChatMessageList({
   messages,
   isRunning,
@@ -544,6 +571,15 @@ export function ClaudeCodeChatMessageList({
                   )}
                 </div>
               )}
+            </div>,
+          );
+        } else if (statusMsg.message?.startsWith('[Conversation Summary]')) {
+          nodes.push(
+            <div key={i} style={{ padding: '4px 0', lineHeight: '22px' }}>
+              <CopySummaryButton text={statusMsg.message} />
+              <div style={{ color: '#d1d5db' }} className="cc-markdown-override">
+                <MarkdownContent content={statusMsg.message} />
+              </div>
             </div>,
           );
         } else {

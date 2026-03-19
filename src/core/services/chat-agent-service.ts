@@ -185,6 +185,8 @@ export class ChatAgentService {
   private imageStorageDir: string;
   private injectedQueue = new Map<string, InjectedMessage[]>();
   private injectedEventHandler?: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined;
+  /** Sessions that were compacted — next sendMessage() should skip SDK resume. */
+  private compactedSessions = new Set<string>();
   private pendingQuestions = new Map<string, {
     resolve: (answers: Record<string, string>) => void;
     reject: (err: Error) => void;
@@ -515,9 +517,12 @@ export class ChatAgentService {
     // Load conversation history to detect whether this is a follow-up message.
     // Instead of manually replaying history (the SDK rejects assistant-role messages
     // in the AsyncIterable prompt), we use native SDK session resume on follow-ups.
+    // After compaction, skip resume to start a fresh SDK session (old session may
+    // contain oversized images or stale context that would cause errors).
+    const wasCompacted = this.compactedSessions.delete(sessionId);
     const history = await this.chatMessageStore.getMessagesForSession(sessionId);
     const hasHistory = history.length > 1; // more than just the current user message
-    const shouldResume = resumeSession || hasHistory;
+    const shouldResume = wasCompacted ? false : (resumeSession || hasHistory);
 
     // Detect slash commands — the SDK handles them natively when sent as the prompt
     const isSlashCommand = message.trim().startsWith('/');
@@ -736,20 +741,22 @@ export class ChatAgentService {
     const totalCacheCreationInputTokens = historicalCacheCreationInputTokens + (summaryCacheCreationInputTokens ?? 0);
     const totalCostUsdValue = historicalTotalCostUsd + (summaryTotalCostUsd ?? 0);
 
-    const result = await this.chatMessageStore.replaceAllMessages(sessionId, [
-      {
-        sessionId,
-        role: 'system',
-        content: `[Conversation Summary]\n\n${summaryText}`,
-        costInputTokens: totalInputTokens || undefined,
-        costOutputTokens: totalOutputTokens || undefined,
-        cacheReadInputTokens: totalCacheReadInputTokens || undefined,
-        cacheCreationInputTokens: totalCacheCreationInputTokens || undefined,
-        totalCostUsd: totalCostUsdValue || undefined,
-      },
-    ]);
+    // Append the summary as a new message — keep all existing messages for history
+    const summaryMsg = await this.chatMessageStore.addMessage({
+      sessionId,
+      role: 'system',
+      content: `[Conversation Summary]\n\n${summaryText}`,
+      costInputTokens: totalInputTokens || undefined,
+      costOutputTokens: totalOutputTokens || undefined,
+      cacheReadInputTokens: totalCacheReadInputTokens || undefined,
+      cacheCreationInputTokens: totalCacheCreationInputTokens || undefined,
+      totalCostUsd: totalCostUsdValue || undefined,
+    });
 
-    return result;
+    // Mark session as compacted so next sendMessage() starts a fresh SDK session
+    this.compactedSessions.add(sessionId);
+
+    return [summaryMsg];
   }
 
   async getRunningAgents(): Promise<RunningAgent[]> {

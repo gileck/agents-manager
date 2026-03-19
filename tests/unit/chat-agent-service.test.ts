@@ -340,7 +340,7 @@ describe('ChatAgentService', () => {
 
       const summary = await service.summarizeMessages('session-1');
 
-      expect(mockMessageStore.replaceAllMessages).toHaveBeenCalled();
+      expect(mockMessageStore.addMessage).toHaveBeenCalled();
       expect(summary).toBeDefined();
     });
   });

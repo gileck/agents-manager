@@ -90,6 +90,28 @@ function ErrorDetails({ message, stack }: { message: string; stack?: string }) {
   );
 }
 
+/** Small copy-to-clipboard button. */
+function CopyButton({ text, label }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+      title={label || 'Copy'}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      <span>{copied ? 'Copied' : (label || 'Copy')}</span>
+    </button>
+  );
+}
+
 export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, onPermissionResponse }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -317,6 +339,15 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
               )}
             </div>
           );
+        } else if (msg.message?.startsWith('[Conversation Summary]')) {
+          nodes.push(
+            <div key={i} className="py-2.5 max-w-none prose-sm leading-7 text-foreground/95">
+              <div className="flex justify-end mb-1">
+                <CopyButton text={msg.message} label="Copy Summary" />
+              </div>
+              <MarkdownContent content={msg.message} />
+            </div>
+          );
         } else {
           nodes.push(
             <div key={i} className="text-center py-3">
@@ -346,11 +377,15 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
           </div>
         );
       } else if (msg.type === 'compact_boundary') {
+        // Find the conversation summary text that follows this compact boundary
+        const summaryMsg = messages.slice(i + 1).find(m => m.type === 'assistant_text' && m.text.startsWith('[Conversation Summary]'));
+        const summaryText = summaryMsg?.type === 'assistant_text' ? summaryMsg.text : undefined;
         nodes.push(
-          <div key={i} className="flex justify-center py-3">
+          <div key={i} className="flex justify-center items-center gap-2 py-3">
             <span className="text-xs font-medium px-3 py-1 rounded-full border" style={{ borderColor: '#f59e0b', color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.08)' }}>
               Context compacted &middot; {msg.trigger} &middot; {msg.preTokens.toLocaleString()} tokens before
             </span>
+            {summaryText && <CopyButton text={summaryText} label="Copy Summary" />}
           </div>
         );
       } else if (msg.type === 'ask_user_question') {

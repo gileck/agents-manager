@@ -220,6 +220,7 @@ Central orchestration, activity logging, and prompt handling
 - File: src/core/services/workflow-service.ts
 - Interface: src/core/interfaces/workflow-service.ts
 - All business logic goes here — never in IPC handlers, CLI commands, or daemon route handlers
+- Pipeline diagnostics, hook retry, phase advancement, and event dismissal live in PipelineInspectionService
 
 **Docs:** [workflow-service.md](docs/workflow-service.md)
 

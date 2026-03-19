@@ -266,6 +266,33 @@ function CodexCollapsibleGroup({
   );
 }
 
+function CopySummaryButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+      <button
+        type="button"
+        onClick={handleCopy}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '3px 8px', fontSize: 12, borderRadius: 4,
+          background: 'transparent', border: '1px solid #404040',
+          color: copied ? '#22c55e' : '#9ca3af', cursor: 'pointer',
+          fontFamily: SANS,
+        }}
+      >
+        {copied ? '✓ Copied' : '⧉ Copy Summary'}
+      </button>
+    </div>
+  );
+}
+
 export function CodexChatMessageList({
   messages,
   isRunning,
@@ -534,6 +561,15 @@ export function CodexChatMessageList({
                   )}
                 </div>
               )}
+            </div>,
+          );
+        } else if (statusMsg.message?.startsWith('[Conversation Summary]')) {
+          nodes.push(
+            <div key={i} style={{ padding: '6px 0', lineHeight: '24px', fontFamily: SANS }}>
+              <CopySummaryButton text={statusMsg.message} />
+              <div style={{ color: '#d1d5db' }} className="codex-markdown-override">
+                <MarkdownContent content={statusMsg.message} />
+              </div>
             </div>,
           );
         } else {

@@ -800,12 +800,15 @@ Conversation continuity is handled via native SDK session resume — not manual 
 
 ### Summarize Flow
 
-`summarizeMessages()` compresses an entire conversation into a single system summary message:
+`summarizeMessages()` compresses conversation context while preserving full history:
 1. Stops any running agent for the session
 2. Builds a summarization prompt from all messages
 3. Runs a single-turn Claude query to generate the summary
-4. Replaces all messages with one system message containing the summary
+4. **Appends** the summary as a new system message — all original messages are preserved in the DB for UI history
 5. Accumulates historical token costs onto the summary message
+6. Marks the session as compacted (`compactedSessions` set) so the next `sendMessage()` starts a fresh SDK session
+
+**Session resume after compaction:** After compaction, the `compactedSessions` flag forces `shouldResume = false` on the next message, preventing the SDK from replaying the old session state (which may contain oversized images or stale context). The flag is consumed (one-shot) on the first post-compaction message; subsequent messages resume normally. This applies to all agent libs that support session resume (claude-code, codex-cli, codex-app-server, base-agent).
 
 ### Running Agent Tracking
 
