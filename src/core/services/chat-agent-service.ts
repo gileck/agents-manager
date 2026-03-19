@@ -474,22 +474,28 @@ export class ChatAgentService {
 
         getAppLogger().info('ChatAgentService', `Injecting message into running session ${sessionId} (runId=${runId})`);
 
-        // Persist user message to DB
-        const userContent = (rawImages && rawImages.length > 0)
-          ? JSON.stringify({ text: message, images: await saveImagesToDisk(sessionId, await resizeImages(rawImages), this.imageStorageDir) })
+        // Resize images up-front (needed for both injection and DB persistence)
+        const resizedImages = (rawImages && rawImages.length > 0) ? await resizeImages(rawImages) : undefined;
+
+        // Build injection images (base64 + mediaType for the agent lib)
+        const injectionImages = resizedImages?.map(img => ({ base64: img.base64, mediaType: img.mediaType }));
+
+        // Attempt injection BEFORE persisting to DB to avoid orphaned messages
+        const injected = lib.injectMessage(runId, message, injectionImages);
+        if (!injected) {
+          getAppLogger().warn('ChatAgentService', `Injection failed (channel closed race) for session ${sessionId}`);
+          throw new Error('Message injection failed — the agent may have just finished. Please try again.');
+        }
+
+        // Persist user message to DB only after successful injection
+        const userContent = resizedImages
+          ? JSON.stringify({ text: message, images: await saveImagesToDisk(sessionId, resizedImages, this.imageStorageDir) })
           : message;
         const userMessage = await this.chatMessageStore.addMessage({
           sessionId,
           role: 'user',
           content: userContent,
         });
-
-        // Attempt injection
-        const injected = lib.injectMessage(runId, message);
-        if (!injected) {
-          getAppLogger().warn('ChatAgentService', `Injection failed (channel closed race) for session ${sessionId}`);
-          throw new Error('Message injection failed — the agent may have just finished. Please try again.');
-        }
 
         // Emit user message via WebSocket (the onEvent won't fire for injected messages naturally)
         onEvent?.({ type: 'message', message: { type: 'user', text: message, timestamp: Date.now() } });
