@@ -1254,6 +1254,8 @@ export interface ChatSession {
   systemPromptAppend: string | null;
   /** When true (default), stream deltas are forwarded to the UI in real-time. When false, the full response appears only when complete. */
   enableStreaming: boolean;
+  /** When true, messages sent while the agent is running are injected mid-execution via AsyncGenerator streaming input. When false, messages are queued for post-completion delivery. */
+  enableStreamingInput: boolean;
   /** Unsent draft text for this session's chat input. Null when there is no pending draft. */
   draft: string | null;
   createdAt: number;
@@ -1277,6 +1279,7 @@ export interface ChatSessionCreateInput {
   /** The project this session belongs to. For project-scoped sessions this equals scopeId; for task-scoped sessions it is the task's projectId. */
   projectId: string;
   enableStreaming?: boolean;
+  enableStreamingInput?: boolean;
 }
 
 // Chat agent event types (used by ChatAgentService consumers)
@@ -1300,6 +1303,8 @@ export interface ChatSendResult {
   userMessage: ChatMessage;
   sessionId: string;
   completion: Promise<void>;
+  /** When true, the message was injected mid-execution into a running agent session instead of starting a new execution. */
+  injected?: boolean;
 }
 
 export interface ChatSessionUpdateInput {
@@ -1310,6 +1315,7 @@ export interface ChatSessionUpdateInput {
   permissionMode?: PermissionMode | null;
   systemPromptAppend?: string | null;
   enableStreaming?: boolean;
+  enableStreamingInput?: boolean;
   draft?: string | null;
 }
 

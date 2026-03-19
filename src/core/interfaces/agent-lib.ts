@@ -266,6 +266,8 @@ export interface AgentLibRunOptions {
   permissionMode?: PermissionMode;
   /** SDK-level permission mode. Defaults to 'acceptEdits' if not specified. */
   sdkPermissionMode?: string;
+  /** When true, the engine should use a long-lived AsyncGenerator prompt to support mid-execution message injection. */
+  enableStreamingInput?: boolean;
 }
 
 export interface AgentLibCallbacks {
