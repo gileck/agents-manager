@@ -71,6 +71,7 @@ interface ChatInputProps {
   onEditLastMessage?: () => void;
   initialDraft?: string | null;
   onDraftChange?: (draft: string) => void;
+  enableStreamingInput?: boolean;
 }
 
 export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
@@ -93,6 +94,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   onEditLastMessage,
   initialDraft,
   onDraftChange,
+  enableStreamingInput = false,
 }: ChatInputProps, forwardedRef) {
   const { draft: value, setDraft: setValue, clearDraft } = useDraftPersistence(initialDraft, onDraftChange);
   const {
@@ -177,7 +179,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
         <textarea
           ref={mergeRefs(textareaRef, forwardedRef)}
           className="w-full resize-none bg-transparent px-4 pt-3 pb-2.5 text-sm min-h-[52px] max-h-[240px] overflow-y-auto focus:outline-none placeholder:text-muted-foreground/70"
-          placeholder={isRunning ? 'Type a message (will be queued)...' : 'Type a message...'}
+          placeholder={isRunning ? (enableStreamingInput ? 'Send message to running agent...' : 'Type a message (will be queued)...') : 'Type a message...'}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -359,7 +361,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
               type="submit"
               disabled={!canSubmit}
               className="p-2 rounded-full bg-primary text-primary-foreground disabled:opacity-45 disabled:cursor-not-allowed hover:bg-primary/92 transition-colors shadow-[0_8px_18px_hsl(var(--primary)/0.32)]"
-              title={isRunning ? 'Queue message' : 'Send message'}
+              title={isRunning ? (enableStreamingInput ? 'Inject message into running agent' : 'Queue message') : 'Send message'}
             >
               <ArrowUp className="h-4 w-4" />
             </button>

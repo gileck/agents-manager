@@ -44,6 +44,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
       onEditLastMessage,
       initialDraft,
       onDraftChange,
+      enableStreamingInput = false,
       agentLibs,
       selectedAgentLib,
       onAgentLibChange,
@@ -172,7 +173,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             rows={1}
-            placeholder={isRunning ? 'Type a message (will be queued)...' : 'Type a message...'}
+            placeholder={isRunning ? (enableStreamingInput ? 'Send message to running agent...' : 'Type a message (will be queued)...') : 'Type a message...'}
             style={{
               flex: 1,
               resize: 'none',

@@ -97,6 +97,8 @@ export interface ChatInputPresetProps {
   initialDraft?: string | null;
   /** Callback to persist draft text changes (debounced internally). */
   onDraftChange?: (draft: string) => void;
+  /** Whether mid-execution message injection is enabled for this session. */
+  enableStreamingInput?: boolean;
 }
 
 // ---------------------------------------------------------------------------
