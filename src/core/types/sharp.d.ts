@@ -1,6 +1,6 @@
 /**
  * Minimal type declarations for the `sharp` image processing library.
- * These will be superseded by @types/sharp when it is installed.
+ * These will be superseded by sharp's built-in type declarations when it is installed.
  */
 declare module 'sharp' {
   interface SharpInstance {

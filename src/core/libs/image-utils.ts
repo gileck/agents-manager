@@ -6,10 +6,14 @@ import { getAppLogger } from '../services/app-logger';
 
 const DEFAULT_MAX_DIMENSION = 2000;
 
-/** Lazy-load sharp to avoid import errors when the native module is not yet installed. */
+/** Lazy-load and cache sharp to avoid import errors when the native module is not yet installed. */
+let _sharp: typeof import('sharp')['default'] | null = null;
 async function loadSharp(): Promise<typeof import('sharp')['default']> {
-  const mod = await import('sharp');
-  return mod.default;
+  if (!_sharp) {
+    const mod = await import('sharp');
+    _sharp = mod.default;
+  }
+  return _sharp;
 }
 
 export function mediaTypeToExtension(mediaType: string): string {
