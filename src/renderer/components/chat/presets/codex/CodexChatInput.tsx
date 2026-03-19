@@ -16,9 +16,9 @@ import { ImagePreviewStrip } from '../../ImagePreviewStrip';
 import { MAX_MESSAGE_LENGTH } from '../../../../../shared/constants';
 
 const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-const BORDER = '#2a2a2a';
+const BORDER = '#333';
 const ACCENT = '#f59e0b';
-const BG_INPUT = '#1a1a1a';
+const BG_INPUT = '#1e1e1e';
 
 const EFFORT_OPTIONS = [
   { value: 'high', label: 'High' },
@@ -146,27 +146,27 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
 
     // Dropdown select style helper
     const selectStyle: React.CSSProperties = {
-      background: '#0d0d0d',
-      color: '#d1d5db',
-      border: `1px solid ${BORDER}`,
-      borderRadius: 6,
+      background: 'transparent',
+      color: '#9ca3af',
+      border: 'none',
+      borderRadius: 0,
       fontFamily: SANS,
       fontSize: '0.85em',
-      padding: '5px 24px 5px 10px',
+      padding: '2px 14px 2px 0',
       cursor: 'pointer',
       outline: 'none',
       appearance: 'none',
       WebkitAppearance: 'none',
       backgroundImage: DROPDOWN_CHEVRON,
       backgroundRepeat: 'no-repeat',
-      backgroundPosition: 'right 6px center',
+      backgroundPosition: 'right 0 center',
     };
 
     const isWarning = permissionMode === 'full_access' || !permissionMode;
     const permModeLabel = getPermModeLabel(permissionMode);
 
     return (
-      <div style={{ padding: '0 16px 0', backgroundColor: '#0d0d0d' }}>
+      <div style={{ padding: '0 16px 0', backgroundColor: '#141414' }}>
         {/* Image preview strip */}
         <ImagePreviewStrip
           images={images}
@@ -187,7 +187,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
         <form onSubmit={handleSubmit} onDrop={handleDrop} onDragOver={handleDragOver}>
           {/* ── Input container (Row 1 + Row 2) ── */}
           <div style={{
-            borderRadius: 12,
+            borderRadius: 22,
             border: `1px solid ${BORDER}`,
             backgroundColor: BG_INPUT,
             overflow: 'hidden',
@@ -215,7 +215,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
                 minHeight: 60,
                 maxHeight: 200,
                 overflowY: 'auto',
-                padding: '14px 16px',
+                padding: '16px 18px',
                 boxSizing: 'border-box',
               }}
             />
@@ -225,24 +225,24 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '8px 12px',
-              marginTop: 4,
+              padding: '6px 14px',
+              marginTop: 0,
               borderTop: '1px solid rgba(255,255,255,0.05)',
             }}>
               {/* Left controls */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {/* Attachment button */}
                 <button
                   type="button"
                   onClick={handleAttachClick}
                   style={{
                     background: 'transparent',
-                    border: `1px solid ${BORDER}`,
-                    color: '#888',
+                    border: 'none',
+                    color: '#666',
                     cursor: 'pointer',
-                    borderRadius: 6,
-                    padding: '4px 10px',
-                    fontSize: '1em',
+                    borderRadius: 0,
+                    padding: '4px 6px',
+                    fontSize: '1.1em',
                     fontFamily: SANS,
                     display: 'flex',
                     alignItems: 'center',
@@ -335,10 +335,10 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: '#888',
+                    color: '#555',
                     cursor: 'default',
-                    fontSize: '1.1em',
-                    opacity: 0.5,
+                    fontSize: '1em',
+                    opacity: 1,
                     padding: '6px 8px',
                   }}
                   title="Voice input (coming soon)"
@@ -349,8 +349,8 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
                   type="submit"
                   disabled={!canSend}
                   style={{
-                    background: canSend ? ACCENT : '#2a2a2a',
-                    border: 'none',
+                    background: canSend ? ACCENT : 'transparent',
+                    border: canSend ? 'none' : '1px solid #444',
                     color: canSend ? '#fff' : '#555',
                     cursor: canSend ? 'pointer' : 'default',
                     borderRadius: '50%',
@@ -376,7 +376,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '8px 12px 10px',
+          padding: '6px 14px 8px',
           borderTop: '1px solid #1a1a1a',
           fontFamily: SANS,
           fontSize: '0.75em',
@@ -386,8 +386,8 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* Local indicator */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span>💻</span>
-              <span>Local</span>
+              <span>▪</span>
+              <span>Local ∨</span>
             </div>
 
             {/* Permission mode */}
@@ -430,7 +430,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
           {/* Right: Branch indicator */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span>⎇</span>
-            <span>main</span>
+            <span>main ∨</span>
           </div>
         </div>
       </div>
