@@ -465,7 +465,7 @@ export function TaskDetailPage() {
   // Tab content indicators
   const hasPlan = !!task.plan;
   const hasDesign = !!task.technicalDesign;
-  const hasInvestigation = !!task.plan && (contextEntries?.some(e => e.entryType === 'investigation_feedback') ?? false)
+  const hasInvestigation = (!!task.plan && (contextEntries?.some(e => e.entryType === 'investigation_feedback') ?? false))
     || task.status === 'investigation_review';
   const hasImplementation = !!task.prLink || (artifacts?.some((a) => a.type === 'diff') ?? false);
   const hasReview = contextEntries?.some(e => e.entryType === 'workflow_review') ?? false;
