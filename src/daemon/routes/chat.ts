@@ -207,7 +207,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
       // Build prompt + resume options via service (keeps business logic out of routes)
       const sendCtx = await services.chatAgentService.buildSendContext(sessionId);
 
-      const { userMessage } = await services.chatAgentService.send(
+      const result = await services.chatAgentService.send(
         sessionId,
         message,
         {
@@ -221,7 +221,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         },
       );
 
-      res.json({ userMessage, sessionId });
+      res.json({ userMessage: result.userMessage, sessionId, ...(result.injected ? { injected: true } : {}) });
     } catch (err) { next(err); }
   });
 
@@ -270,7 +270,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   router.patch('/api/chat/sessions/:id', async (req, res, next) => {
     try {
       const sessionId = req.params.id;
-      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: string | null; systemPromptAppend?: string | null; draft?: string | null };
+      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: string | null; systemPromptAppend?: string | null; draft?: string | null; enableStreamingInput?: boolean };
       if (!input || typeof input !== 'object') {
         res.status(400).json({ error: 'Invalid input: expected object' });
         return;
@@ -295,7 +295,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(404).json({ error: 'Session not found' });
         return;
       }
-      const updateInput: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null } = {};
+      const updateInput: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null; enableStreamingInput?: boolean } = {};
       if (input.name !== undefined) updateInput.name = input.name.trim();
       if (input.agentLib !== undefined) {
         if (input.agentLib !== null) {
@@ -347,6 +347,13 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
           return;
         }
         updateInput.draft = input.draft;
+      }
+      if (input.enableStreamingInput !== undefined) {
+        if (typeof input.enableStreamingInput !== 'boolean') {
+          res.status(400).json({ error: 'enableStreamingInput must be a boolean' });
+          return;
+        }
+        updateInput.enableStreamingInput = input.enableStreamingInput;
       }
       const updated = await services.chatSessionStore.updateSession(sessionId, updateInput);
       res.json(updated);

@@ -33,6 +33,7 @@ interface AgentChatProps {
   onPermissionResponse?: (requestId: string, allowed: boolean) => void;
   rawEvents?: RawEvent[];
   showRawView?: boolean;
+  enableStreamingInput?: boolean;
 }
 
 export function AgentChat({
@@ -61,6 +62,7 @@ export function AgentChat({
   onPermissionResponse,
   rawEvents = [],
   showRawView = false,
+  enableStreamingInput = false,
 }: AgentChatProps) {
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
 
@@ -130,6 +132,7 @@ export function AgentChat({
           onEditLastMessage={handleEditLastMessage}
           initialDraft={initialDraft}
           onDraftChange={onDraftChange}
+          enableStreamingInput={enableStreamingInput}
         />
       </div>
       {showSidebar && (

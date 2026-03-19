@@ -46,7 +46,7 @@ vi.mock('../../src/core/services/chat-agent-service', async (importOriginal) => 
 function createMockAgentLib(): IAgentLib {
   return {
     name: 'claude-code',
-    supportedFeatures: () => ({ images: true, hooks: true, thinking: true, nativeResume: true }),
+    supportedFeatures: () => ({ images: true, hooks: true, thinking: true, nativeResume: true, streamingInput: true }),
     getDefaultModel: () => 'claude-opus-4-6',
     getSupportedModels: () => [{ value: 'claude-opus-4-6', label: 'Claude Opus 4.6' }],
     execute: vi.fn().mockImplementation((_runId, _options, callbacks) => {
@@ -67,6 +67,7 @@ function createMockAgentLib(): IAgentLib {
     stop: vi.fn().mockResolvedValue(undefined),
     isAvailable: vi.fn().mockResolvedValue(true),
     getTelemetry: vi.fn().mockReturnValue(null),
+    injectMessage: vi.fn().mockReturnValue(false),
   };
 }
 
@@ -86,6 +87,7 @@ describe('ChatAgentService', () => {
     scopeId: 'project-1',
     name: 'Test Session',
     agentLib: null,
+    enableStreamingInput: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -182,6 +184,7 @@ describe('ChatAgentService', () => {
         scopeId: 'project-1',
         name: 'Session 2',
         agentLib: null,
+        enableStreamingInput: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -213,13 +216,14 @@ describe('ChatAgentService', () => {
       mockAgentLibRegistry.listNames = vi.fn().mockReturnValue(['claude-code', 'codex-app-server']);
       mockAgentLibRegistry.getLib = vi.fn().mockReturnValue({
         name: 'codex-app-server',
-        supportedFeatures: () => ({ images: true, hooks: false, thinking: true, nativeResume: true }),
+        supportedFeatures: () => ({ images: true, hooks: false, thinking: true, nativeResume: true, streamingInput: false }),
         getDefaultModel: () => 'gpt-5.4',
         getSupportedModels: () => [{ value: 'gpt-5.4', label: 'GPT-5.4' }],
         execute,
         stop: vi.fn().mockResolvedValue(undefined),
         isAvailable: vi.fn().mockResolvedValue(true),
         getTelemetry: vi.fn().mockReturnValue(null),
+        injectMessage: vi.fn().mockReturnValue(false),
       } satisfies IAgentLib);
 
       await service.send('session-1', 'Test message', { systemPrompt: '', permissionMode: 'full_access' });

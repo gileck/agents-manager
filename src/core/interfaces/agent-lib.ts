@@ -49,6 +49,8 @@ export interface AgentLibFeatures {
   hooks: boolean;
   thinking: boolean;
   nativeResume: boolean;
+  /** Whether the engine supports mid-execution message injection via AsyncGenerator streaming input. */
+  streamingInput: boolean;
 }
 
 // ============================================
@@ -264,6 +266,8 @@ export interface AgentLibRunOptions {
   permissionMode?: PermissionMode;
   /** SDK-level permission mode. Defaults to 'acceptEdits' if not specified. */
   sdkPermissionMode?: string;
+  /** When true, the engine should use a long-lived AsyncGenerator prompt to support mid-execution message injection. */
+  enableStreamingInput?: boolean;
 }
 
 export interface AgentLibCallbacks {
@@ -363,4 +367,10 @@ export interface IAgentLib {
   getTelemetry(runId: string): AgentLibTelemetry | null;
   /** One-shot query for summarization or naming. Optional — engines that don't support it throw. */
   query?(prompt: string, options?: { model?: string; maxTokens?: number }): AsyncIterable<QueryEvent>;
+  /**
+   * Inject a user message into a running agent session.
+   * Only works when the engine supports streamingInput and the session was started with enableStreamingInput.
+   * Returns true if the message was successfully injected, false if not supported or no active session.
+   */
+  injectMessage(runId: string, message: string, images?: Array<{ base64: string; mediaType: string }>): boolean;
 }

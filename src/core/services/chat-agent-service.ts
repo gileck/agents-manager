@@ -188,6 +188,8 @@ export class ChatAgentService {
   private injectedEventHandler?: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined;
   /** Sessions that were compacted — next sendMessage() should skip SDK resume. */
   private compactedSessions = new Set<string>();
+  /** Maps sessionId → executeSessionId (runId) used by the agent lib for injection routing. */
+  private runningRunIds = new Map<string, string>();
   private pendingQuestions = new Map<string, {
     resolve: (answers: Record<string, string>) => void;
     reject: (err: Error) => void;
@@ -454,9 +456,58 @@ export class ChatAgentService {
       throw new Error('Session not found');
     }
 
-    // Don't abort previous running chat - allow parallel execution
-    // but do check if there's already one running for this session
+    // If an agent is already running, try mid-execution injection when supported
     if (this.runningControllers.has(sessionId)) {
+      // Check if injection is possible: lib supports streamingInput AND session toggle is on
+      const agentLibName = session.agentLib || this.getDefaultAgentLib() || DEFAULT_AGENT_LIB;
+      const lib = this.agentLibRegistry.listNames().includes(agentLibName)
+        ? this.agentLibRegistry.getLib(agentLibName)
+        : null;
+      const supportsInjection = lib?.supportedFeatures().streamingInput && session.enableStreamingInput;
+
+      if (supportsInjection && lib) {
+        const runId = this.runningRunIds.get(sessionId);
+        if (!runId) {
+          getAppLogger().warn('ChatAgentService', `Injection failed: no runId mapped for session ${sessionId}`);
+          throw new Error('An agent is already running for this session');
+        }
+
+        getAppLogger().info('ChatAgentService', `Injecting message into running session ${sessionId} (runId=${runId})`);
+
+        // Resize images up-front (needed for both injection and DB persistence)
+        const resizedImages = (rawImages && rawImages.length > 0) ? await resizeImages(rawImages) : undefined;
+
+        // Build injection images (base64 + mediaType for the agent lib)
+        const injectionImages = resizedImages?.map(img => ({ base64: img.base64, mediaType: img.mediaType }));
+
+        // Attempt injection BEFORE persisting to DB to avoid orphaned messages
+        const injected = lib.injectMessage(runId, message, injectionImages);
+        if (!injected) {
+          getAppLogger().warn('ChatAgentService', `Injection failed (channel closed race) for session ${sessionId}`);
+          throw new Error('Message injection failed — the agent may have just finished. Please try again.');
+        }
+
+        // Persist user message to DB only after successful injection
+        const userContent = resizedImages
+          ? JSON.stringify({ text: message, images: await saveImagesToDisk(sessionId, resizedImages, this.imageStorageDir) })
+          : message;
+        const userMessage = await this.chatMessageStore.addMessage({
+          sessionId,
+          role: 'user',
+          content: userContent,
+        });
+
+        // Emit user message via WebSocket (the onEvent won't fire for injected messages naturally)
+        onEvent?.({ type: 'message', message: { type: 'user', text: message, timestamp: Date.now() } });
+
+        return {
+          userMessage,
+          sessionId,
+          completion: Promise.resolve(),
+          injected: true,
+        };
+      }
+
       getAppLogger().warn('ChatAgentService', `Rejecting send: agent already running for session ${sessionId}`);
       throw new Error('An agent is already running for this session');
     }
@@ -589,7 +640,7 @@ export class ChatAgentService {
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
 
-    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, plugins: projectPlugins, enableStreaming: session.enableStreaming }).catch((err) => {
+    const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, plugins: projectPlugins, enableStreaming: session.enableStreaming, enableStreamingInput: session.enableStreamingInput }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
@@ -622,6 +673,7 @@ export class ChatAgentService {
   stop(sessionId: string): void {
     // Discard queued injected messages — session is being stopped
     this.injectedQueue.delete(sessionId);
+    this.runningRunIds.delete(sessionId);
 
     // Reject any pending questions for this session
     // Collect matching entries first to avoid delete-while-iterating
@@ -988,7 +1040,7 @@ export class ChatAgentService {
     emitEvent: (event: ChatAgentEvent) => void,
     images?: ChatImage[],
     model?: string,
-    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string; plugins?: Array<{ type: 'local'; path: string }>; enableStreaming?: boolean },
+    extra?: { pipelineSessionId?: string; resumeSession?: boolean; isAgentChat?: boolean; agentRunId?: string; permissionMode?: PermissionMode | null; agentType?: string; taskId?: string; plugins?: Array<{ type: 'local'; path: string }>; enableStreaming?: boolean; enableStreamingInput?: boolean },
   ): Promise<void> {
     getAppLogger().info('ChatAgentService', `runAgent() starting for session ${sessionId}`, { agentLibName, projectPath });
 
@@ -1152,6 +1204,9 @@ export class ChatAgentService {
 
       // When resuming a pipeline agent session, use its sessionId for the execute call
       const executeSessionId = extra?.pipelineSessionId ?? sessionId;
+
+      // Track sessionId → runId mapping for mid-execution injection routing
+      this.runningRunIds.set(sessionId, executeSessionId);
 
       // Build task MCP tool definitions for chat sessions (not pipeline agent runs).
       // Keyed by server name so claude-code-lib can create one SDK server per entry generically.
@@ -1371,6 +1426,10 @@ export class ChatAgentService {
         } : {}),
       };
 
+      // Determine whether streaming input (mid-execution message injection) should be enabled.
+      // Only enable when both the lib supports it AND the session toggle is on.
+      const enableStreamingInput = features.streamingInput && (extra?.enableStreamingInput === true);
+
       const executeOptions = {
         prompt,
         systemPrompt,
@@ -1397,6 +1456,7 @@ export class ChatAgentService {
         canUseTool,
         ...(agents ? { agents } : {}),
         ...(extra?.plugins?.length ? { plugins: extra.plugins } : {}),
+        ...(enableStreamingInput ? { enableStreamingInput: true } : {}),
       };
 
       let result = await lib.execute(executeSessionId, executeOptions, callbacks);
@@ -1477,6 +1537,7 @@ export class ChatAgentService {
       }
     } finally {
       this.runningControllers.delete(sessionId);
+      this.runningRunIds.delete(sessionId);
       this.liveTurnMessages.delete(sessionId);
 
       // Clean up any orphaned pending questions for this session (e.g. SDK timeout)

@@ -157,6 +157,7 @@ export interface ApiClient {
     delete(id: string): Promise<void>;
     listLibs(): Promise<unknown[]>;
     listModels(): Promise<unknown>;
+    listFeatures(): Promise<unknown>;
   };
 
   // Items (template scaffold)
@@ -458,6 +459,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       delete: (id) => req('DELETE', `/api/agent-definitions/${id}`),
       listLibs: () => req('GET', '/api/agent-libs'),
       listModels: () => req('GET', '/api/agent-libs/models'),
+      listFeatures: () => req('GET', '/api/agent-libs/features'),
     },
 
     // -- Items (template scaffold) -------------------------------------------

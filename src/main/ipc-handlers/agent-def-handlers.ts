@@ -35,4 +35,8 @@ export function registerAgentDefHandlers(api: ApiClient): void {
   registerIpcHandler(IPC_CHANNELS.AGENT_LIB_LIST, async () => {
     return api.agentDefinitions.listLibs();
   });
+
+  registerIpcHandler(IPC_CHANNELS.AGENT_LIB_LIST_FEATURES, async () => {
+    return api.agentDefinitions.listFeatures();
+  });
 }

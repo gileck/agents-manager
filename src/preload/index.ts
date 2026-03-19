@@ -172,6 +172,7 @@ const IPC_CHANNELS = {
   CHAT_SESSION_RENAMED: 'chat:session:renamed',
   CHAT_AGENT_NOTIFICATION: 'chat:agent-notification',
   AGENT_LIB_LIST: 'agent-lib:list',
+  AGENT_LIB_LIST_FEATURES: 'agent-lib:list-features',
   GIT_PROJECT_LOG: 'git:project-log',
   GIT_BRANCH: 'git:branch',
   GIT_COMMIT_DETAIL: 'git:commit-detail',
@@ -364,6 +365,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_LIB_LIST),
     listModels: (): Promise<Record<string, { models: { value: string; label: string }[]; defaultModel: string }>> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_LIB_LIST_MODELS),
+    listFeatures: (): Promise<Record<string, { images: boolean; hooks: boolean; thinking: boolean; nativeResume: boolean; streamingInput: boolean }>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_LIB_LIST_FEATURES),
   },
 
   // Pipeline operations
@@ -485,7 +488,7 @@ const api = {
 
   // Chat operations
   chat: {
-    send: (sessionId: string, message: string, images?: ChatImage[]): Promise<{ userMessage: ChatMessage; sessionId: string }> =>
+    send: (sessionId: string, message: string, images?: ChatImage[]): Promise<{ userMessage: ChatMessage; sessionId: string; injected?: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, sessionId, message, images),
     stop: (sessionId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, sessionId),
@@ -521,7 +524,7 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_TASK_SESSIONS, projectId),
     listAll: (projectId: string): Promise<ChatSessionWithDetails[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_ALL, projectId),
-    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null }): Promise<ChatSession | null> =>
+    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null; enableStreamingInput?: boolean }): Promise<ChatSession | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),

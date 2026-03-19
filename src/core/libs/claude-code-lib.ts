@@ -3,6 +3,7 @@ import type { AgentLibFeatures, AgentLibModelOption, AgentLibHooks, ModelTokenUs
 import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
 import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { BaseAgentLib, type BaseRunState, type EngineRunOptions, type EngineResult } from './base-agent-lib';
+import { createMessageChannel, type MessageChannel } from '../utils/message-channel';
 
 // Use Function constructor to preserve dynamic import() at runtime.
 // TypeScript compiles `await import(...)` to `require()` under CommonJS,
@@ -89,8 +90,11 @@ export class ClaudeCodeLib extends BaseAgentLib {
   /** Track seen message IDs per run to avoid duplicate token counting. */
   private seenMessageIds = new Map<string, Set<string>>();
 
+  /** Track active message channels for mid-execution injection, keyed by runId. */
+  private activeChannels = new Map<string, MessageChannel<SdkUserMessage>>();
+
   supportedFeatures(): AgentLibFeatures {
-    return { images: true, hooks: true, thinking: true, nativeResume: true };
+    return { images: true, hooks: true, thinking: true, nativeResume: true, streamingInput: true };
   }
 
   getDefaultModel(): string { return 'claude-opus-4-6'; }
@@ -140,22 +144,26 @@ export class ClaudeCodeLib extends BaseAgentLib {
     };
 
     // Build SDK prompt: use Single Message Input (string) by default.
-    // Only use an async generator when images are attached (need content blocks).
+    // When enableStreamingInput is on, always use a long-lived message channel (AsyncGenerator)
+    // so that mid-execution messages can be injected. When images are attached, also use
+    // an AsyncGenerator (need content blocks). When neither applies, use a plain string.
     let sdkPrompt: string | AsyncIterable<SdkUserMessage>;
-    if (options.images && options.images.length > 0) {
-      const contentBlocks = [
-        { type: 'text' as const, text: prompt },
-        ...options.images.map((img) => ({
-          type: 'image' as const,
-          source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
-        })),
-      ];
-      const imageMsg: SdkUserMessage = {
-        type: 'user',
-        message: { role: 'user', content: contentBlocks },
-        parent_tool_use_id: null,
-        session_id: runId,
-      };
+    let messageChannel: MessageChannel<SdkUserMessage> | undefined;
+
+    const useStreamingInput = engineOpts.enableStreamingInput;
+
+    if (useStreamingInput) {
+      // Long-lived message channel for injection support.
+      // The initial user message is pushed first; the channel stays open for injected messages.
+      messageChannel = createMessageChannel<SdkUserMessage>();
+      this.activeChannels.set(runId, messageChannel);
+
+      const initialMsg = this.buildSdkUserMessage(prompt, options.images, runId);
+      messageChannel.push(initialMsg);
+      sdkPrompt = messageChannel;
+    } else if (options.images && options.images.length > 0) {
+      // One-shot AsyncGenerator for images (no injection support)
+      const imageMsg = this.buildSdkUserMessage(prompt, options.images, runId);
       sdkPrompt = (async function* () { yield imageMsg; })();
     } else {
       sdkPrompt = prompt;
@@ -443,6 +451,11 @@ export class ClaudeCodeLib extends BaseAgentLib {
       });
     } finally {
       this.seenMessageIds.delete(runId);
+      // Close the message channel if one was created, and remove from active channels
+      if (messageChannel) {
+        messageChannel.close();
+        this.activeChannels.delete(runId);
+      }
     }
 
     return {
@@ -463,6 +476,50 @@ export class ClaudeCodeLib extends BaseAgentLib {
       durationApiMs,
       numTurns,
       modelUsage,
+    };
+  }
+
+  /**
+   * Inject a user message into a running agent session via the active message channel.
+   * Returns true if successfully pushed, false if no active channel or channel is closed.
+   */
+  override injectMessage(runId: string, message: string, images?: Array<{ base64: string; mediaType: string }>): boolean {
+    const channel = this.activeChannels.get(runId);
+    if (!channel || channel.isClosed) return false;
+
+    const userMsg = this.buildSdkUserMessage(message, images, runId);
+    return channel.push(userMsg);
+  }
+
+  /**
+   * Build an SdkUserMessage from text and optional images.
+   * Used for both the initial prompt message and injected messages.
+   */
+  private buildSdkUserMessage(
+    text: string,
+    images: Array<{ base64: string; mediaType: string }> | undefined,
+    sessionId: string,
+  ): SdkUserMessage {
+    if (images && images.length > 0) {
+      const contentBlocks = [
+        { type: 'text' as const, text },
+        ...images.map((img) => ({
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: img.mediaType, data: img.base64 },
+        })),
+      ];
+      return {
+        type: 'user',
+        message: { role: 'user', content: contentBlocks },
+        parent_tool_use_id: null,
+        session_id: sessionId,
+      };
+    }
+    return {
+      type: 'user',
+      message: { role: 'user', content: text },
+      parent_tool_use_id: null,
+      session_id: sessionId,
     };
   }
 

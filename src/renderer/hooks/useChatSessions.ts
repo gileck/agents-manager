@@ -134,7 +134,7 @@ export function useChatSessions(scope: ChatScope | null) {
     [sessions, currentSessionId]
   );
 
-  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreaming?: boolean; draft?: string | null }) => {
+  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreaming?: boolean; enableStreamingInput?: boolean; draft?: string | null }) => {
     try {
       const updatedSession = await window.api.chatSession.update(sessionId, input);
       if (updatedSession) {

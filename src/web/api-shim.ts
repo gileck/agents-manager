@@ -112,6 +112,7 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
     agentLibs: {
       list: () => api.agentDefinitions.listLibs() as Promise<never>,
       listModels: () => api.agentDefinitions.listModels() as Promise<never>,
+      listFeatures: () => api.agentDefinitions.listFeatures() as Promise<never>,
     },
 
     // ── Pipelines ─────────────────────────────────────────────────────

@@ -95,6 +95,8 @@ export interface EngineRunOptions {
   stream: (chunk: string) => void;
   /** Get the current accumulated result text length (for diagnostics). */
   getResultLength: () => number;
+  /** When true, the engine should use a long-lived AsyncGenerator prompt to support mid-execution message injection. */
+  enableStreamingInput?: boolean;
 }
 
 // ============================================
@@ -257,6 +259,7 @@ export abstract class BaseAgentLib implements IAgentLib {
         emit,
         stream,
         getResultLength: () => resultText.length,
+        enableStreamingInput: options.enableStreamingInput,
       });
 
       // Warn if sandbox guard was never invoked — canUseTool may be bypassed by the SDK
@@ -331,6 +334,16 @@ export abstract class BaseAgentLib implements IAgentLib {
       return;
     }
     this.doStop(runId, state);
+  }
+
+  /**
+   * Inject a user message into a running agent session.
+   * Default implementation returns false (not supported).
+   * Override in engines that support streaming input (e.g. ClaudeCodeLib).
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  injectMessage(_runId: string, _message: string, _images?: Array<{ base64: string; mediaType: string }>): boolean {
+    return false;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
