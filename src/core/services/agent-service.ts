@@ -38,6 +38,7 @@ import { SubtaskSyncInterceptor } from './subtask-sync-interceptor';
 import { AgentOutputFlusher } from './agent-output-flusher';
 import { PostRunExtractor } from './post-run-extractor';
 import { getAppLogger } from './app-logger';
+import { formatSystemNotification } from './pipeline-notification-context';
 
 export class AgentService implements IAgentService {
   private backgroundPromises = new Map<string, Promise<void>>();
@@ -998,11 +999,15 @@ export class AgentService implements IAgentService {
 
             // Tier 2: Injected agent turn (if requested)
             if (sub.autoNotify && this.enqueueInjectedMessage) {
-              const content =
-                `[System Notification] The ${agentType} agent for task "${updatedTask?.title ?? task.title}" ` +
-                `has completed with outcome "${result.outcome}". ` +
-                `Status: ${task.status} → ${updatedTask?.status ?? task.status}. ` +
-                (agentSummary ? `Summary: ${agentSummary}` : '');
+              const content = formatSystemNotification({
+                agentType,
+                taskTitle: updatedTask?.title ?? task.title,
+                outcome: result.outcome ?? 'unknown',
+                fromStatus: task.status,
+                toStatus: updatedTask?.status ?? task.status,
+                summary: agentSummary,
+                prLink: updatedTask?.prLink ?? undefined,
+              });
               try {
                 this.enqueueInjectedMessage(sub.sessionId, content, {
                   injected: true,
