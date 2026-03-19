@@ -32,7 +32,7 @@ class TestAgentLib extends BaseAgentLib {
   readonly name = 'test-engine';
 
   engineResult: EngineResult | ((opts: EngineRunOptions, state: BaseRunState) => EngineResult | Promise<EngineResult>) = { isError: false };
-  features: AgentLibFeatures = { images: false, hooks: false, thinking: false, nativeResume: false };
+  features: AgentLibFeatures = { images: false, hooks: false, thinking: false, nativeResume: false, streamingInput: false };
   defaultModel = 'test-model';
   available = true;
 
@@ -694,7 +694,7 @@ describe('BaseAgentLib', () => {
 
   describe('execute — hooks passthrough', () => {
     it('passes hooks to runEngine when features.hooks is true', async () => {
-      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false };
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
       const hooks: AgentLibHooks = { postToolUse: vi.fn() };
       lib.engineResult = { isError: false };
 
@@ -704,7 +704,7 @@ describe('BaseAgentLib', () => {
     });
 
     it('does NOT pass hooks to runEngine when features.hooks is false', async () => {
-      lib.features = { images: false, hooks: false, thinking: false, nativeResume: false };
+      lib.features = { images: false, hooks: false, thinking: false, nativeResume: false, streamingInput: false };
       const hooks: AgentLibHooks = { postToolUse: vi.fn() };
       lib.engineResult = { isError: false };
 

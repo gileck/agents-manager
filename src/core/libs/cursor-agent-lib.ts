@@ -17,7 +17,7 @@ export class CursorAgentLib extends BaseAgentLib {
   private killTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   supportedFeatures(): AgentLibFeatures {
-    return { images: false, hooks: false, thinking: true, nativeResume: false };
+    return { images: false, hooks: false, thinking: true, nativeResume: false, streamingInput: false };
   }
 
   getDefaultModel(): string { return 'opus-4.6-thinking'; }

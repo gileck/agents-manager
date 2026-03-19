@@ -66,6 +66,7 @@ export class CodexAppServerLib extends BaseAgentLib {
       hooks: false,
       thinking: true,
       nativeResume: true,
+      streamingInput: false,
     };
   }
 

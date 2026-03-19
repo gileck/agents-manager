@@ -39,7 +39,7 @@ class MockAgentLib implements IAgentLib {
   stopCalls: string[] = [];
   telemetryMap = new Map<string, AgentLibTelemetry>();
 
-  private featuresValue: AgentLibFeatures = { images: false, hooks: false, thinking: false, nativeResume: false };
+  private featuresValue: AgentLibFeatures = { images: false, hooks: false, thinking: false, nativeResume: false, streamingInput: false };
 
   constructor(name = 'test-engine', features?: Partial<AgentLibFeatures>) {
     this.name = name;
@@ -66,6 +66,11 @@ class MockAgentLib implements IAgentLib {
 
   getTelemetry(runId: string): AgentLibTelemetry | null {
     return this.telemetryMap.get(runId) ?? null;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  injectMessage(_runId: string, _message: string, _images?: Array<{ base64: string; mediaType: string }>): boolean {
+    return false;
   }
 }
 
