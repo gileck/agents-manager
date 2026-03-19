@@ -39,6 +39,30 @@ const MULTI_PHASE_INSTRUCTIONS = [
   'If needed, provide 2-4 phases in the "phases" array. When using phases, leave "subtasks" empty.',
 ].join('\n');
 
+const VERIFICATION_GUIDELINES = [
+  '',
+  '## Assumption Verification',
+  'You have restricted write access to `tmp/` (relative to your working directory) so you can verify HIGH-risk assumptions during planning.',
+  '',
+  '**When to verify:** Only for HIGH-risk assumptions that would fundamentally change the plan if wrong (e.g., SDK behavior, API contracts, runtime behavior).',
+  '**Do NOT verify:** Low/medium-risk assumptions, things you can confirm by reading source code, or well-documented behavior.',
+  '',
+  '**How to verify:**',
+  '1. Write a script to `tmp/verify-<name>.ts` (or `.js`) — keep it under 50 lines.',
+  '2. Execute with `npx tsx tmp/verify-<name>.ts` or `node tmp/verify-<name>.js`.',
+  '3. Read the output to confirm or refute the assumption.',
+  '4. Delete the script: `rm tmp/verify-<name>.ts`.',
+  '',
+  '**Rules:**',
+  '- ONLY write files to `tmp/` — writes anywhere else will be blocked.',
+  '- You cannot use Edit, MultiEdit, or NotebookEdit tools — only Write (to `tmp/`) and Bash.',
+  '- Keep verification scripts simple and fast (under 60 seconds).',
+  '- Never modify existing source files — you are still in planning mode.',
+  '- If a write fails or verification is impractical, skip it and document the assumption as UNVERIFIED.',
+  '- After verification, report results in the `assumptions` field of your output.',
+  '- Create `tmp/` directory first with `mkdir -p tmp/` if it does not exist.',
+].join('\n');
+
 const EFFICIENCY_RULES = [
   '',
   '## Efficiency Rules',
@@ -54,7 +78,15 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'planner';
 
   protected isReadOnly(): boolean {
-    return true;
+    return false;
+  }
+
+  protected getDisallowedTools(): string[] {
+    return ['Edit', 'MultiEdit', 'NotebookEdit'];
+  }
+
+  protected getCleanupPaths(): string[] {
+    return ['tmp'];
   }
 
   protected getExcludedFeedbackTypes(): string[] {
@@ -98,6 +130,22 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
               required: ['name', 'subtasks'],
             },
           },
+          assumptions: {
+            type: 'array',
+            description: 'Technical assumptions the plan depends on. High-risk assumptions should be verified via scripts when possible.',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Short identifier, e.g. "sdk-async-resume"' },
+                description: { type: 'string', description: 'What is being assumed' },
+                risk: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Impact if assumption is wrong' },
+                verified: { type: 'boolean', description: 'Whether a verification script was run' },
+                result: { type: 'string', enum: ['pass', 'fail'], description: 'Verification outcome (only if verified)' },
+                evidence: { type: 'string', description: 'Script output or reasoning supporting the assumption' },
+              },
+              required: ['id', 'description', 'risk', 'verified'],
+            },
+          },
           ...getTaskEstimationFields(),
           ...getInteractiveFields(),
         },
@@ -121,6 +169,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
     }
 
     prompt += PLAN_HEADER_FORMAT;
+    prompt += VERIFICATION_GUIDELINES;
     prompt += getTaskEstimationInstructions();
     prompt += getInteractiveInstructions(this.type);
 

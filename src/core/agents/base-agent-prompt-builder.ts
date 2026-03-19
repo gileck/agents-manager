@@ -37,6 +37,10 @@ export interface AgentExecutionConfig {
   timeoutMs: number;
   outputFormat?: object;
   readOnly: boolean;
+  /** Tool names to disallow regardless of readOnly flag (e.g., ['Edit', 'MultiEdit', 'NotebookEdit']). */
+  disallowedTools?: string[];
+  /** Paths relative to workdir that the agent may write to and that should be cleaned up after execution. */
+  cleanupPaths?: string[];
 }
 
 export abstract class BaseAgentPromptBuilder {
@@ -60,6 +64,12 @@ export abstract class BaseAgentPromptBuilder {
   protected getTimeout(context: AgentContext, config: AgentConfig): number {
     return config.timeout || 10 * 60 * 1000;
   }
+
+  /** Tool names to disallow regardless of readOnly flag. Override in subclasses. */
+  protected getDisallowedTools(): string[] | undefined { return undefined; }
+
+  /** Paths relative to workdir that the agent may write to; cleaned up after execution. */
+  protected getCleanupPaths(): string[] { return []; }
 
   /** Feedback types the subclass handles in its own prompt (excluded from base Unaddressed Feedback). */
   protected getExcludedFeedbackTypes(): string[] { return []; }
@@ -137,12 +147,17 @@ export abstract class BaseAgentPromptBuilder {
       prompt = worktreeGuard + '\n\n---\n\n' + prompt;
     }
 
+    const disallowedTools = this.getDisallowedTools();
+    const cleanupPaths = this.getCleanupPaths();
+
     return {
       prompt,
       maxTurns: this.getMaxTurns(context),
       timeoutMs: this.getTimeout(context, config),
       outputFormat: this.getOutputFormat(context),
       readOnly: this.isReadOnly(context),
+      ...(disallowedTools ? { disallowedTools } : {}),
+      ...(cleanupPaths.length > 0 ? { cleanupPaths } : {}),
     };
   }
 
