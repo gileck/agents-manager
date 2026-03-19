@@ -87,6 +87,7 @@ describe('ChatAgentService', () => {
     scopeId: 'project-1',
     name: 'Test Session',
     agentLib: null,
+    enableStreamingInput: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -183,6 +184,7 @@ describe('ChatAgentService', () => {
         scopeId: 'project-1',
         name: 'Session 2',
         agentLib: null,
+        enableStreamingInput: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };

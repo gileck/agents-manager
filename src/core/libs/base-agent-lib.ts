@@ -259,6 +259,7 @@ export abstract class BaseAgentLib implements IAgentLib {
         emit,
         stream,
         getResultLength: () => resultText.length,
+        enableStreamingInput: options.enableStreamingInput,
       });
 
       // Warn if sandbox guard was never invoked — canUseTool may be bypassed by the SDK
