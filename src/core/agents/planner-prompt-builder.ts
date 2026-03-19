@@ -48,7 +48,7 @@ const VERIFICATION_GUIDELINES = [
   '**Do NOT verify:** Low/medium-risk assumptions, things you can confirm by reading source code, or well-documented behavior.',
   '',
   '**How to verify:**',
-  '1. Write a script to `tmp/verify-<name>.ts` (or `.js`) — keep it under 50 lines.',
+  '1. Write a script to `tmp/verify-<name>.ts` (or `.js`).',
   '2. Execute with `npx tsx tmp/verify-<name>.ts` or `node tmp/verify-<name>.js`.',
   '3. Read the output to confirm or refute the assumption.',
   '4. Delete the script: `rm tmp/verify-<name>.ts`.',
