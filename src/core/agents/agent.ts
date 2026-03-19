@@ -131,13 +131,12 @@ export class Agent implements IAgent {
     // Write-restriction guard: when cleanupPaths is set, only allow writes to those paths
     // (e.g., planner can only write to ${workdir}/tmp/)
     const cleanupPaths = execConfig.cleanupPaths ?? [];
+    // Pre-compute allowed write paths once (not per tool invocation)
+    const resolvedAllowedWritePaths = cleanupPaths.map(p => resolve(resolvedWorkdir, p));
+    const isWithinAllowedWritePath = (absPath: string): boolean => {
+      return resolvedAllowedWritePaths.some(allowed => absPath === allowed || absPath.startsWith(allowed + '/'));
+    };
     const writeRestriction = cleanupPaths.length > 0 ? (toolName: string, toolInput: Record<string, unknown>) => {
-      const resolvedAllowedWritePaths = cleanupPaths.map(p => resolve(resolvedWorkdir, p));
-
-      const isWithinAllowedWritePath = (absPath: string): boolean => {
-        return resolvedAllowedWritePaths.some(allowed => absPath === allowed || absPath.startsWith(allowed + '/'));
-      };
-
       // Block Write tool calls to paths outside the allowed write paths
       if (toolName === 'Write') {
         const filePath = toolInput.file_path as string | undefined;
@@ -145,7 +144,7 @@ export class Agent implements IAgent {
           const resolvedFile = resolve(resolvedWorkdir, filePath);
           // Only restrict paths within the workdir — paths outside are handled by SandboxGuard
           if ((resolvedFile === resolvedWorkdir || resolvedFile.startsWith(resolvedWorkdir + '/')) && !isWithinAllowedWritePath(resolvedFile)) {
-            return { decision: 'block' as const, reason: `WRITE RESTRICTION: Write to "${filePath}" is blocked. Planner can only write to ${cleanupPaths.map(p => `${p}/`).join(', ')} for verification scripts.` };
+            return { decision: 'block' as const, reason: `WRITE RESTRICTION: Write to "${filePath}" is blocked. Agent can only write to ${cleanupPaths.map(p => `${p}/`).join(', ')} for verification scripts.` };
           }
         }
       }
@@ -161,7 +160,7 @@ export class Agent implements IAgent {
             const resolvedTarget = resolve(resolvedWorkdir, targetPath);
             // Only restrict paths within the workdir but outside allowed write paths
             if ((resolvedTarget === resolvedWorkdir || resolvedTarget.startsWith(resolvedWorkdir + '/')) && !isWithinAllowedWritePath(resolvedTarget)) {
-              return { decision: 'block' as const, reason: `WRITE RESTRICTION: Bash write to "${targetPath}" is blocked. Planner can only write to ${cleanupPaths.map(p => `${p}/`).join(', ')} for verification scripts.` };
+              return { decision: 'block' as const, reason: `WRITE RESTRICTION: Bash write to "${targetPath}" is blocked. Agent can only write to ${cleanupPaths.map(p => `${p}/`).join(', ')} for verification scripts.` };
             }
           }
         }
@@ -279,8 +278,8 @@ export class Agent implements IAgent {
       for (const relPath of execConfig.cleanupPaths ?? []) {
         try {
           const absPath = resolve(context.workdir, relPath);
-          // Safety: only delete paths within the workdir to prevent accidental damage
-          if (absPath.startsWith(resolvedWorkdir + '/') || absPath === resolvedWorkdir) {
+          // Safety: only delete strict children of workdir — never the workdir root itself
+          if (absPath.startsWith(resolvedWorkdir + '/') && absPath !== resolvedWorkdir) {
             execSync(`rm -rf "${absPath}"`, { timeout: 5000 });
           }
         } catch { /* best-effort cleanup — don't block agent completion */ }
