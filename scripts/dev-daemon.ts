@@ -23,7 +23,7 @@ const WITH_WEB = process.argv.includes('--web');
 const BACKEND_DIRS = ['core/', 'daemon/', 'shared/', 'cli/'];
 
 // esbuild command (same as package.json build:daemon)
-const ESBUILD_CMD = `node_modules/.bin/esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api`;
+const ESBUILD_CMD = `node_modules/.bin/esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api --external:sharp`;
 
 let daemon: ChildProcess | null = null;
 let webServer: ChildProcess | null = null;
