@@ -2,7 +2,7 @@
  * Codex preset — ChatMessageList.
  *
  * Chat-app style message timeline matching the Codex CLI aesthetic:
- * - User messages: right-aligned dark pill bubbles (#2a2a3e)
+ * - User messages: right-aligned dark pill bubbles (#2a2a2a)
  * - Assistant text: left-aligned, proportional font, no bullet prefix
  * - Collapsible "N previous messages" with centered HR-style dividers
  * - Scroll-to-bottom: centered ↓ arrow in circle
@@ -140,7 +140,7 @@ function CodexToolCall({
           {/* Input */}
           <div style={{
             padding: '6px 10px',
-            backgroundColor: '#1a1a28',
+            backgroundColor: '#1a1a1a',
             borderRadius: 6,
             maxHeight: 200,
             overflowY: 'auto',
@@ -161,7 +161,7 @@ function CodexToolCall({
           {toolResult && (
             <div style={{
               padding: '6px 10px',
-              backgroundColor: '#1a1a28',
+              backgroundColor: '#1a1a1a',
               borderRadius: 6,
               maxHeight: 200,
               overflowY: 'auto',
@@ -228,14 +228,14 @@ function CodexCollapsibleGroup({
           fontFamily: SANS,
         }}
       >
-        <div style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
+        <div style={{ flex: 1, height: 1, backgroundColor: '#2a2a2a' }} />
         <span style={{ color: '#888', fontSize: '0.8em', whiteSpace: 'nowrap' }}>
           {count} previous message{count !== 1 ? 's' : ''} {expanded ? '▾' : '▸'}
         </span>
-        <div style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
+        <div style={{ flex: 1, height: 1, backgroundColor: '#2a2a2a' }} />
       </button>
       {expanded && (
-        <div style={{ marginTop: 8, paddingLeft: 8, borderLeft: '2px solid #2a2a3e' }}>
+        <div style={{ marginTop: 8, paddingLeft: 8, borderLeft: '2px solid #2a2a2a' }}>
           {messages.map((msg, i) => {
             const globalIndex = startIndex + i;
             if (msg.type === 'tool_use') {
@@ -374,7 +374,7 @@ export function CodexChatMessageList({
               gap: 4,
             }}>
               <div style={{
-                backgroundColor: '#2a2a3e',
+                backgroundColor: '#2a2a2a',
                 borderRadius: '18px 18px 4px 18px',
                 padding: '10px 16px',
                 color: '#e5e7eb',
@@ -393,7 +393,7 @@ export function CodexChatMessageList({
                       key={j}
                       src={`/api/chat/images?path=${encodeURIComponent(img.path)}`}
                       alt={img.name || 'Image'}
-                      style={{ maxHeight: 120, maxWidth: 180, borderRadius: 8, border: '1px solid #3a3a4e', cursor: 'pointer' }}
+                      style={{ maxHeight: 120, maxWidth: 180, borderRadius: 8, border: '1px solid #2a2a2a', cursor: 'pointer' }}
                       onClick={() => {
                         const imgs = userMsg.images!.map((im: ChatImageRef) => ({ src: `/api/chat/images?path=${encodeURIComponent(im.path)}`, name: im.name }));
                         setViewerImages(imgs);
@@ -498,7 +498,7 @@ export function CodexChatMessageList({
                 fontFamily: SANS,
                 fontSize: '0.875em',
                 padding: '4px 14px',
-                border: `1px solid ${isError ? '#7f1d1d' : '#3a3a4e'}`,
+                border: `1px solid ${isError ? '#7f1d1d' : '#2a2a2a'}`,
                 borderRadius: 8,
                 display: 'inline-block',
               }}>
@@ -524,7 +524,7 @@ export function CodexChatMessageList({
                       type="button"
                       onClick={() => onEditMessage(lastUserText)}
                       style={{
-                        background: 'transparent', border: '1px solid #3a3a4e',
+                        background: 'transparent', border: '1px solid #2a2a2a',
                         color: '#d1d5db', cursor: 'pointer', fontFamily: SANS,
                         fontSize: '0.8em', padding: '4px 12px', borderRadius: 6,
                       }}
@@ -616,7 +616,7 @@ export function CodexChatMessageList({
             <pre style={{
               color: '#9ca3af', fontSize: '0.8em', fontFamily: MONO, whiteSpace: 'pre-wrap',
               maxHeight: 100, overflowY: 'auto', margin: 0, padding: '6px 10px',
-              backgroundColor: '#1a1a28', borderRadius: 6,
+              backgroundColor: '#1a1a1a', borderRadius: 6,
             }}>
               {typeof permReq.toolInput === 'string'
                 ? permReq.toolInput
@@ -752,9 +752,9 @@ export function CodexChatMessageList({
               width: 36,
               height: 36,
               borderRadius: '50%',
-              background: '#2a2a3e',
+              background: '#2a2a2a',
               color: '#d1d5db',
-              border: '1px solid #3a3a4e',
+              border: '1px solid #2a2a2a',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',

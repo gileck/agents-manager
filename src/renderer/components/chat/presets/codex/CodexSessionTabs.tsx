@@ -3,7 +3,7 @@
  *
  * Minimal tab bar matching the Codex CLI aesthetic.
  * Uses proportional (sans-serif) fonts and amber active tab indicator
- * with the dark navy Codex palette.
+ * with the neutral dark Codex palette.
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -76,7 +76,7 @@ export function CodexSessionTabs({
               padding: '4px 10px',
               cursor: 'pointer',
               borderRadius: 4,
-              backgroundColor: active ? 'rgba(255,255,255,0.08)' : 'transparent',
+              backgroundColor: active ? 'rgba(255,255,255,0.06)' : 'transparent',
               color: active ? '#e5e7eb' : '#888',
               borderBottom: active ? '2px solid #f59e0b' : '2px solid transparent',
               transition: 'background-color 0.15s, color 0.15s',
@@ -141,7 +141,7 @@ export function CodexSessionTabs({
         onClick={handleNew}
         style={{
           background: 'transparent',
-          border: '1px solid #3a3a4e',
+          border: '1px solid #2a2a2a',
           color: '#888',
           cursor: 'pointer',
           fontSize: '1em',
@@ -162,8 +162,8 @@ export function CodexSessionTabs({
             position: 'fixed',
             top: menuPos.top,
             left: menuPos.left,
-            backgroundColor: '#252535',
-            border: '1px solid #3a3a4e',
+            backgroundColor: '#1a1a1a',
+            border: '1px solid #2a2a2a',
             borderRadius: 6,
             padding: 4,
             zIndex: 9999,

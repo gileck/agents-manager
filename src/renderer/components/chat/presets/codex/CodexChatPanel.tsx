@@ -4,7 +4,7 @@
  * Top-level orchestrator matching the Codex CLI visual design:
  * - Clean top toolbar: session tabs/title, play button, agent avatar,
  *   hand-off, push/commit, icon actions
- * - Dark navy theme (#1a1a2e) with proportional fonts
+ * - Neutral dark theme (#0d0d0d) with proportional fonts
  * - No terminal elements (no chat/raw toggle, no streaming toggle,
  *   no info/gear buttons, no context percentage)
  * - Status bar is in the input area (Row 3), not a separate bottom bar
@@ -30,9 +30,9 @@ import { CodexChatInput } from './CodexChatInput';
 
 const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
-const BG = '#1a1a2e';
-const BG_HEADER = '#1e1e2e';
-const BORDER = '#3a3a4e';
+const BG = '#0d0d0d';
+const BG_HEADER = '#161616';
+const BORDER = '#2a2a2a';
 
 /** Reference counter for shared style element — prevents premature removal during concurrent mounts. */
 let chatStyleRefCount = 0;
@@ -79,7 +79,7 @@ const CODEX_STYLES = `
   color: #888;
 }
 .codex-chat-root .codex-markdown-override code {
-  background-color: #1a1a28;
+  background-color: #1a1a1a;
   color: #e5e7eb;
   padding: 1px 5px;
   border-radius: 4px;
@@ -87,8 +87,8 @@ const CODEX_STYLES = `
   font-family: ${MONO};
 }
 .codex-chat-root .codex-markdown-override pre {
-  background-color: #111827;
-  border: 1px solid #2a2a3e;
+  background-color: #111111;
+  border: 1px solid #2a2a2a;
   border-radius: 6px;
   padding: 10px 14px;
   overflow-x: auto;
@@ -103,31 +103,31 @@ const CODEX_STYLES = `
   text-decoration: underline;
 }
 .codex-chat-root .codex-markdown-override blockquote {
-  border-left-color: #3a3a4e;
+  border-left-color: #2a2a2a;
   color: #9ca3af;
 }
 .codex-chat-root .codex-markdown-override hr {
-  border-color: #333;
+  border-color: #2a2a2a;
   margin: 8px 0;
 }
 .codex-chat-root .codex-markdown-override table {
-  border-color: #3a3a4e;
+  border-color: #2a2a2a;
 }
 .codex-chat-root .codex-markdown-override th,
 .codex-chat-root .codex-markdown-override td {
-  border-color: #3a3a4e;
+  border-color: #2a2a2a;
   color: #d1d5db;
 }
 .codex-chat-root .codex-markdown-override thead {
-  background-color: #1e1e2e;
+  background-color: #161616;
 }
 .codex-chat-root .codex-markdown-override .group button {
-  background-color: #1e1e2e;
-  border-color: #3a3a4e;
+  background-color: #161616;
+  border-color: #2a2a2a;
   color: #9ca3af;
 }
 .codex-chat-root .codex-markdown-override .group button:hover {
-  background-color: #2a2a3e;
+  background-color: #2a2a2a;
   color: #d1d5db;
 }
 `;
@@ -292,7 +292,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
   // Toolbar button style helper
   const toolbarBtnStyle: React.CSSProperties = {
     background: 'transparent',
-    border: '1px solid #3a3a4e',
+    border: '1px solid #2a2a2a',
     color: '#888',
     cursor: 'pointer',
     fontFamily: SANS,
@@ -420,7 +420,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
           {/* Right: icon actions + overflow */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
             {/* Separator */}
-            <div style={{ width: 1, height: 20, backgroundColor: '#3a3a4e', margin: '0 4px' }} />
+            <div style={{ width: 1, height: 20, backgroundColor: '#2a2a2a', margin: '0 4px' }} />
 
             {/* 4 icon buttons (visual-only) */}
             <button type="button" disabled style={{ ...toolbarBtnStyle, opacity: 0.4, cursor: 'default', padding: '3px 6px' }} title="Screenshot">
@@ -442,7 +442,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
               style={{
                 ...toolbarBtnStyle,
                 color: showSidebar ? '#e5e7eb' : '#888',
-                backgroundColor: showSidebar ? 'rgba(255,255,255,0.08)' : 'transparent',
+                backgroundColor: showSidebar ? 'rgba(255,255,255,0.06)' : 'transparent',
               }}
               title="Toggle sidebar"
             >
@@ -459,7 +459,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
                   <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowActions(false)} />
                   <div style={{
                     position: 'absolute', right: 0, top: '100%', marginTop: 4,
-                    backgroundColor: '#252535', border: `1px solid ${BORDER}`,
+                    backgroundColor: '#1a1a1a', border: `1px solid ${BORDER}`,
                     borderRadius: 6, padding: 4, zIndex: 50, minWidth: 150,
                     fontFamily: SANS, fontSize: '0.875em',
                   }}>
