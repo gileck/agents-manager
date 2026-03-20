@@ -183,6 +183,10 @@ export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   private runningAgents = new Map<string, RunningAgent>();
   private liveTurnMessages = new Map<string, AgentChatMessage[]>();
+  /** Accumulates ALL turn messages for the run including pre-injection ones.
+   *  Unlike liveTurnMessages (cleared during injection), this is never cleared
+   *  so that AgentRun.messages captures the full conversation. */
+  private allRunTurnMessages = new Map<string, AgentChatMessage[]>();
   private imageStorageDir: string;
   private injectedQueue = new Map<string, InjectedMessage[]>();
   private injectedEventHandler?: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined;
@@ -487,9 +491,34 @@ export class ChatAgentService {
           throw new Error('Message injection failed — the agent may have just finished. Please try again.');
         }
 
+        // Persist any assistant messages accumulated before this injection so they
+        // aren't lost if the page reloads before the agent finishes (Bug 4 fix).
+        // Snapshot and clear are synchronous — no interleaving with emitMessage.
+        const currentTurnMessages = this.liveTurnMessages.get(sessionId);
+        if (currentTurnMessages && currentTurnMessages.length > 0) {
+          const snapshot = [...currentTurnMessages];
+          currentTurnMessages.length = 0;
+          try {
+            // Cost data is intentionally omitted — it represents the full run total
+            // and is persisted only once in the finally block.
+            await this.chatMessageStore.addMessage({
+              sessionId,
+              role: 'assistant',
+              content: JSON.stringify(snapshot),
+            });
+          } catch (persistErr) {
+            // Restore on failure to avoid data loss
+            currentTurnMessages.unshift(...snapshot);
+            getAppLogger().logError('ChatAgentService', 'Failed to persist pre-injection assistant messages', persistErr);
+          }
+        }
+
         // Persist user message to DB only after successful injection
-        const userContent = resizedImages
-          ? JSON.stringify({ text: message, images: await saveImagesToDisk(sessionId, resizedImages, this.imageStorageDir) })
+        const imageRefs = resizedImages
+          ? await saveImagesToDisk(sessionId, resizedImages, this.imageStorageDir)
+          : undefined;
+        const userContent = imageRefs
+          ? JSON.stringify({ text: message, images: imageRefs })
           : message;
         const userMessage = await this.chatMessageStore.addMessage({
           sessionId,
@@ -497,8 +526,11 @@ export class ChatAgentService {
           content: userContent,
         });
 
-        // Emit user message via WebSocket (the onEvent won't fire for injected messages naturally)
-        onEvent?.({ type: 'message', message: { type: 'user', text: message, timestamp: Date.now() } });
+        // Bug 1+2 fix: Do NOT emit user message via WebSocket here.
+        // The REST response already delivers the user message to the sender,
+        // and the normal send path also does not broadcast user messages via WS.
+        // Emitting here caused duplicates (streamingMessages + dbMessages) and
+        // the emitted message was missing image refs.
 
         return {
           userMessage,
@@ -1055,7 +1087,9 @@ export class ChatAgentService {
     let totalCostUsd: number | undefined;
     let lastContextInputTokens: number | undefined;
     const turnMessages: AgentChatMessage[] = [];
+    const allTurnMessages: AgentChatMessage[] = [];
     this.liveTurnMessages.set(sessionId, turnMessages);
+    this.allRunTurnMessages.set(sessionId, allTurnMessages);
 
     // Safe wrapper: emit both event types from a single AgentChatMessage
     const emitMessage = (msg: AgentChatMessage) => {
@@ -1068,6 +1102,7 @@ export class ChatAgentService {
       // Collect all messages except usage (stored in row-level cost fields)
       if (msg.type !== 'usage') {
         turnMessages.push(msg);
+        allTurnMessages.push(msg);
       }
     };
 
@@ -1539,6 +1574,7 @@ export class ChatAgentService {
       this.runningControllers.delete(sessionId);
       this.runningRunIds.delete(sessionId);
       this.liveTurnMessages.delete(sessionId);
+      this.allRunTurnMessages.delete(sessionId);
 
       // Clean up any orphaned pending questions for this session (e.g. SDK timeout)
       const orphaned = [...this.pendingQuestions.entries()].filter(([, p]) => p.sessionId === sessionId);
@@ -1595,7 +1631,7 @@ export class ChatAgentService {
               cacheReadInputTokens: (existingRun.cacheReadInputTokens ?? 0) + (cacheReadInputTokens ?? 0),
               cacheCreationInputTokens: (existingRun.cacheCreationInputTokens ?? 0) + (cacheCreationInputTokens ?? 0),
               totalCostUsd: (existingRun.totalCostUsd ?? 0) + (totalCostUsd ?? 0),
-              messages: [...(existingRun.messages ?? []), ...turnMessages],
+              messages: [...(existingRun.messages ?? []), ...allTurnMessages],
               prompt: existingRun.prompt ? existingRun.prompt : `${systemPrompt}\n\n${prompt}`,
             });
           } else {
