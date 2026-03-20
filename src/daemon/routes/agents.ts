@@ -104,9 +104,21 @@ export function agentRoutes(services: AppServices, wsHolder: WsHolder): Router {
       }
 
       // If linkedBugDescriptions not supplied, query linked bugs from DB
+      // Use dual-query to catch bugs with type:'bug' AND bugs with tag:'bug' (backwards compat)
       let linkedBugDescriptions = bodyLinkedBugDescriptions;
       if (!linkedBugDescriptions) {
-        const allBugs = await services.taskStore.listTasks({ type: 'bug' });
+        const [bugsByType, bugsByTag] = await Promise.all([
+          services.taskStore.listTasks({ type: 'bug' }),
+          services.taskStore.listTasks({ tag: 'bug' }),
+        ]);
+        const seenIds = new Set<string>();
+        const allBugs: typeof bugsByType = [];
+        for (const t of [...bugsByType, ...bugsByTag]) {
+          if (!seenIds.has(t.id)) {
+            seenIds.add(t.id);
+            allBugs.push(t);
+          }
+        }
         const linkedBugs = allBugs.filter(
           (t) => (t.metadata as Record<string, unknown> | undefined)?.sourceTaskId === taskId,
         );

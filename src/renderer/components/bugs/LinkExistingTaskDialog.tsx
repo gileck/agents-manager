@@ -10,19 +10,19 @@ import {
 } from '../ui/dialog';
 import type { Task } from '../../../shared/types';
 
-interface LinkExistingBugDialogProps {
+interface LinkExistingTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The source task to link the bug to */
+  /** The source task to link the selected task to */
   taskId: string;
-  /** Bug IDs already linked to this task — excluded from search results */
-  excludeBugIds: string[];
+  /** Task IDs already linked — excluded from search results */
+  excludeTaskIds: string[];
 }
 
-export function LinkExistingBugDialog({ open, onOpenChange, taskId, excludeBugIds }: LinkExistingBugDialogProps) {
+export function LinkExistingTaskDialog({ open, onOpenChange, taskId, excludeTaskIds }: LinkExistingTaskDialogProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Task[]>([]);
-  const [selectedBug, setSelectedBug] = useState<Task | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -34,7 +34,7 @@ export function LinkExistingBugDialog({ open, onOpenChange, taskId, excludeBugId
     if (open) {
       setSearchQuery('');
       setSearchResults([]);
-      setSelectedBug(null);
+      setSelectedTask(null);
       setShowDropdown(false);
       setSubmitting(false);
     }
@@ -60,7 +60,7 @@ export function LinkExistingBugDialog({ open, onOpenChange, taskId, excludeBugId
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
-    setSelectedBug(null);
+    setSelectedTask(null);
     setShowDropdown(true);
 
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -74,64 +74,66 @@ export function LinkExistingBugDialog({ open, onOpenChange, taskId, excludeBugId
     searchTimeoutRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const tasks = await window.api.tasks.list({ type: 'bug', search: value });
-        // Safety: ensure only bugs are shown, and exclude already-linked bugs
+        const tasks = await window.api.tasks.list({ search: value });
         const filtered = tasks
-          .filter((t) => t.type === 'bug')
-          .filter((t) => !excludeBugIds.includes(t.id));
+          .filter((t) => !excludeTaskIds.includes(t.id))
+          .filter((t) => t.id !== taskId);
         setSearchResults(filtered.slice(0, 20));
         setShowDropdown(true);
       } catch (err) {
-        reportError(err, 'Bug search');
+        reportError(err, 'Task search');
       } finally {
         setSearching(false);
       }
     }, 300);
-  }, [excludeBugIds]);
+  }, [excludeTaskIds, taskId]);
 
-  const handleSelectBug = useCallback((bug: Task) => {
-    setSelectedBug(bug);
-    setSearchQuery(bug.title);
+  const handleSelectTask = useCallback((task: Task) => {
+    setSelectedTask(task);
+    setSearchQuery(task.title);
     setShowDropdown(false);
     setSearchResults([]);
   }, []);
 
   const handleLink = async () => {
-    if (!selectedBug) return;
+    if (!selectedTask) return;
     setSubmitting(true);
 
     try {
-      // Fetch the bug to get its current metadata, then merge sourceTaskId
-      const freshBug = await window.api.tasks.get(selectedBug.id);
-      if (!freshBug) {
-        throw new Error('Bug task not found');
+      // Fetch the task to get its current metadata, then merge sourceTaskId
+      const freshTask = await window.api.tasks.get(selectedTask.id);
+      if (!freshTask) {
+        throw new Error('Task not found');
       }
 
-      const existingMetadata = (freshBug.metadata as Record<string, unknown>) ?? {};
-      await window.api.tasks.update(selectedBug.id, {
+      const existingMetadata = (freshTask.metadata as Record<string, unknown>) ?? {};
+      await window.api.tasks.update(selectedTask.id, {
         metadata: { ...existingMetadata, sourceTaskId: taskId },
       });
 
-      // Add 'defective' tag to the source task (de-duplicated)
-      try {
-        const sourceTask = await window.api.tasks.get(taskId);
-        const existingTags = sourceTask?.tags ?? [];
-        if (!existingTags.includes('defective')) {
-          await window.api.tasks.update(taskId, {
-            tags: [...existingTags, 'defective'],
-          });
+      // Add 'defective' tag to the source task only when the linked task is a bug
+      const isBug = selectedTask.type === 'bug' || selectedTask.tags?.includes('bug');
+      if (isBug) {
+        try {
+          const sourceTask = await window.api.tasks.get(taskId);
+          const existingTags = sourceTask?.tags ?? [];
+          if (!existingTags.includes('defective')) {
+            await window.api.tasks.update(taskId, {
+              tags: [...existingTags, 'defective'],
+            });
+          }
+        } catch (tagErr) {
+          // Non-fatal: the task was already linked
+          reportError(tagErr, 'Add defective tag');
         }
-      } catch (tagErr) {
-        // Non-fatal: the bug was already linked
-        reportError(tagErr, 'Add defective tag');
       }
 
-      toast.success('Bug linked', {
-        description: `"${selectedBug.title}" linked to this task`,
+      toast.success('Task linked', {
+        description: `"${selectedTask.title}" linked to this task`,
       });
       onOpenChange(false);
     } catch (err) {
-      reportError(err, 'Link existing bug');
+      reportError(err, 'Link existing task');
     } finally {
       setSubmitting(false);
     }
@@ -147,16 +149,16 @@ export function LinkExistingBugDialog({ open, onOpenChange, taskId, excludeBugId
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Link Existing Bug</DialogTitle>
+          <DialogTitle>Link Existing Task</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label>Search Bugs</Label>
+            <Label>Search Tasks</Label>
             <div className="relative" ref={dropdownRef}>
               <Input
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search for a bug task to link..."
+                placeholder="Search for a task to link..."
                 autoFocus
               />
               {searching && (
@@ -171,21 +173,24 @@ export function LinkExistingBugDialog({ open, onOpenChange, taskId, excludeBugId
                 >
                   {searchResults.length === 0 && !searching ? (
                     <div className="px-3 py-2 text-sm text-muted-foreground">
-                      No bugs found
+                      No tasks found
                     </div>
                   ) : (
-                    searchResults.map((bug) => (
+                    searchResults.map((task) => (
                       <div
-                        key={bug.id}
+                        key={task.id}
                         className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-accent text-sm"
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          handleSelectBug(bug);
+                          handleSelectTask(task);
                         }}
                       >
-                        <span className="truncate flex-1">{bug.title}</span>
-                        <Badge variant={statusColor(bug.status)} className="text-xs shrink-0">
-                          {bug.status}
+                        <span className="truncate flex-1">{task.title}</span>
+                        <Badge variant="outline" className="text-xs shrink-0 capitalize">
+                          {task.type}
+                        </Badge>
+                        <Badge variant={statusColor(task.status)} className="text-xs shrink-0">
+                          {task.status}
                         </Badge>
                       </div>
                     ))
@@ -193,9 +198,9 @@ export function LinkExistingBugDialog({ open, onOpenChange, taskId, excludeBugId
                 </div>
               )}
             </div>
-            {selectedBug && (
+            {selectedTask && (
               <p className="text-xs text-muted-foreground">
-                Selected: <span className="font-medium text-foreground">{selectedBug.title}</span>
+                Selected: <span className="font-medium text-foreground">{selectedTask.title}</span>
               </p>
             )}
           </div>
@@ -204,9 +209,9 @@ export function LinkExistingBugDialog({ open, onOpenChange, taskId, excludeBugId
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             onClick={handleLink}
-            disabled={submitting || !selectedBug}
+            disabled={submitting || !selectedTask}
           >
-            {submitting ? 'Linking...' : 'Link Bug'}
+            {submitting ? 'Linking...' : 'Link Task'}
           </Button>
         </DialogFooter>
       </DialogContent>

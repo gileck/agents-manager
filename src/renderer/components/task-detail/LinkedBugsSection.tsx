@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { BugReportDialog } from '../bugs/BugReportDialog';
-import { LinkExistingBugDialog } from '../bugs/LinkExistingBugDialog';
+import { LinkExistingTaskDialog } from '../bugs/LinkExistingTaskDialog';
 import { reportError } from '../../lib/error-handler';
+import { fetchAllBugs } from '../../lib/bug-queries';
 import type { Task } from '../../../shared/types';
 
 interface LinkedBugsSectionProps {
@@ -22,8 +23,8 @@ export function LinkedBugsSection({ taskId }: LinkedBugsSectionProps) {
 
   const fetchLinkedBugs = useCallback(async () => {
     try {
-      // Fetch all bug tasks and filter client-side for sourceTaskId === taskId
-      const allBugs = await window.api.tasks.list({ type: 'bug' });
+      // Fetch all bug tasks (by type + tag) and filter client-side for sourceTaskId === taskId
+      const allBugs = await fetchAllBugs();
       const linked = allBugs.filter(
         (t) => (t.metadata as Record<string, unknown> | undefined)?.sourceTaskId === taskId,
       );
@@ -131,11 +132,11 @@ export function LinkedBugsSection({ taskId }: LinkedBugsSectionProps) {
         initialSourceTaskId={taskId}
       />
 
-      <LinkExistingBugDialog
+      <LinkExistingTaskDialog
         open={linkDialogOpen}
         onOpenChange={handleLinkDialogClose}
         taskId={taskId}
-        excludeBugIds={linkedBugs.map((b) => b.id)}
+        excludeTaskIds={linkedBugs.map((b) => b.id)}
       />
     </>
   );
