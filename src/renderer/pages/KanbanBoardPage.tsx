@@ -23,7 +23,11 @@ import { reportError } from '../lib/error-handler';
 import { getColumnColor, rgba } from '../utils/kanban-colors';
 import type { Task, KanbanColumn as KanbanColumnType, KanbanBoardCreateInput, KanbanBoardUpdateInput, KanbanFilters as KanbanFiltersType, TransitionResult } from '../../shared/types';
 
-export function KanbanBoardPage() {
+interface KanbanBoardPageProps {
+  embedded?: boolean;
+}
+
+export function KanbanBoardPage({ embedded = false }: KanbanBoardPageProps) {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
   const navigate = useNavigate();
   const { board, loading: boardLoading, refetch: refetchBoard } = useKanbanBoard(currentProjectId);
@@ -322,30 +326,32 @@ export function KanbanBoardPage() {
       onDragCancel={handleDragCancel}
     >
       <div className="h-full flex flex-col">
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-4 py-3 border-b"
-          style={{ background: `linear-gradient(to right, ${rgba('#3b82f6', 0.02)}, ${rgba('#8b5cf6', 0.02)})` }}
-        >
-          <div>
-            <h1 className="text-xl font-bold">{board.name}</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {filteredAndSortedTasks.length} {filteredAndSortedTasks.length === 1 ? 'task' : 'tasks'}
-              {hasFilters && ` (${tasks.length} total)`}
-            </p>
+        {/* Header — hidden when embedded in tab container */}
+        {!embedded && (
+          <div
+            className="flex items-center justify-between px-4 py-3 border-b"
+            style={{ background: `linear-gradient(to right, ${rgba('#3b82f6', 0.02)}, ${rgba('#8b5cf6', 0.02)})` }}
+          >
+            <div>
+              <h1 className="text-xl font-bold">{board.name}</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {filteredAndSortedTasks.length} {filteredAndSortedTasks.length === 1 ? 'task' : 'tasks'}
+                {hasFilters && ` (${tasks.length} total)`}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <KanbanBoardConfigDialog board={board} onUpdate={handleBoardUpdate} />
+              <Button
+                size="sm"
+                onClick={handleCreateTask}
+                style={{ background: 'linear-gradient(to right, #2563eb, #7c3aed)', color: '#fff', border: 'none', boxShadow: '0 2px 4px -1px rgba(37, 99, 235, 0.2)' }}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                New Task
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <KanbanBoardConfigDialog board={board} onUpdate={handleBoardUpdate} />
-            <Button
-              size="sm"
-              onClick={handleCreateTask}
-              style={{ background: 'linear-gradient(to right, #2563eb, #7c3aed)', color: '#fff', border: 'none', boxShadow: '0 2px 4px -1px rgba(37, 99, 235, 0.2)' }}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              New Task
-            </Button>
-          </div>
-        </div>
+        )}
 
         {/* Filters — compact single-row bar */}
         <div className="px-3 py-2 border-b" style={{ backgroundColor: rgba('#6b7280', 0.03) }}>

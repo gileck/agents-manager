@@ -24,7 +24,7 @@ import { ThreadsHistoryPage } from './pages/ThreadsHistoryPage';
 import { TelegramPage } from './pages/TelegramPage';
 import { CostPage } from './pages/CostPage';
 import { SourceControlPage } from './pages/SourceControlPage';
-import { KanbanBoardPage } from './pages/KanbanBoardPage';
+
 import { DebugLogsPage } from './pages/DebugLogsPage';
 import { AgentRunsListPage } from './pages/AgentRunsListPage';
 import { KeyboardShortcutsPage } from './pages/KeyboardShortcutsPage';
@@ -166,7 +166,7 @@ function AppRoutes() {
         <Route path="tasks/:id/design" element={<PlanReviewPage reviewType="design" />} />
         <Route path="tasks/:id/investigation" element={<PlanReviewPage reviewType="investigation" />} />
         <Route path="tasks/:id/:tab" element={<TaskTabPage />} />
-        <Route path="kanban" element={<KanbanBoardPage />} />
+        <Route path="kanban" element={<Navigate to="/tasks" replace />} />
         <Route path="agent-runs" element={<AgentRunsListPage />} />
         <Route path="agents/:runId" element={<AgentRunPage />} />
         <Route path="features" element={<FeatureListPage />} />
