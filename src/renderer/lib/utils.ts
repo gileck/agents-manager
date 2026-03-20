@@ -37,6 +37,21 @@ export function formatRelativeTime(dateString: string): string {
   return formatDate(dateString);
 }
 
+export function truncateString(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength - 1) + '…';
+}
+
+export function fuzzyMatch(text: string, query: string): boolean {
+  const lower = text.toLowerCase();
+  const q = query.toLowerCase();
+  let qi = 0;
+  for (let i = 0; i < lower.length && qi < q.length; i++) {
+    if (lower[i] === q[qi]) qi++;
+  }
+  return qi === q.length;
+}
+
 export function truncatePath(path: string, maxLength = 40): string {
   if (path.length <= maxLength) return path;
 

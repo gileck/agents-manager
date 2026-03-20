@@ -56,6 +56,12 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   Bot, Bug, Clock, GitBranch, DollarSign, Terminal, BarChart3, Zap,
 };
 
+/** Extract the entity ID from a tab identity string (e.g., "task:abc123" → "abc123") */
+export function getEntityId(identity: string): string | null {
+  const idx = identity.indexOf(':');
+  return idx >= 0 ? identity.slice(idx + 1) : null;
+}
+
 export function computeTabInfo(pathname: string): TabInfo {
   if (pathname.startsWith('/settings')) {
     return { identity: 'page:/settings', label: 'Settings', iconName: 'Settings' };
@@ -357,7 +363,10 @@ export function getRecentPages(): RecentPage[] {
 }
 
 export function addRecentPage(path: string, label: string, iconName: string) {
-  const pages = getRecentPages().filter(p => p.path !== path);
+  const existing = getRecentPages();
+  // Skip if already at the head of the list
+  if (existing[0]?.path === path) return;
+  const pages = existing.filter(p => p.path !== path);
   pages.unshift({ path, label, iconName, visitedAt: Date.now() });
   if (pages.length > MAX_RECENT) pages.length = MAX_RECENT;
   try {
@@ -425,8 +434,11 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     }).catch((err) => reportError(err, 'TabsContext: load tab settings'));
   }, []);
 
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    saveTabsState(state);
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => saveTabsState(state), 150);
+    return () => clearTimeout(saveTimerRef.current);
   }, [state]);
 
   const openTab = useCallback((path: string) => {

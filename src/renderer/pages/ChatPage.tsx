@@ -10,16 +10,17 @@ export function ChatPage() {
   const { sessionId } = useParams<{ sessionId?: string }>();
   const { currentProjectId } = useCurrentProject();
   const sessions = useProjectChatSessions();
+  const { currentSessionId, sessions: sessionList, switchSession } = sessions;
 
   // Sync URL sessionId with the sessions context
   useEffect(() => {
-    if (sessionId && sessions.currentSessionId !== sessionId) {
-      const exists = sessions.sessions.some(s => s.id === sessionId);
+    if (sessionId && currentSessionId !== sessionId) {
+      const exists = sessionList.some(s => s.id === sessionId);
       if (exists) {
-        sessions.switchSession(sessionId);
+        switchSession(sessionId);
       }
     }
-  }, [sessionId, sessions]);
+  }, [sessionId, currentSessionId, sessionList, switchSession]);
 
   if (!currentProjectId) {
     return (

@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { X, Loader2, Pin } from 'lucide-react';
-import { cn } from '../../lib/utils';
-import { useTabsContext, ICON_MAP, type PageTab } from '../../contexts/TabsContext';
+import { cn, truncateString } from '../../lib/utils';
+import { useTabsContext, ICON_MAP, getEntityId, type PageTab } from '../../contexts/TabsContext';
 import { useActiveAgents } from '../../hooks/useActiveAgents';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { formatCombo } from '../../lib/keyboardShortcuts';
@@ -11,31 +12,15 @@ import { reportError } from '../../lib/error-handler';
 
 const MAX_LABEL_LENGTH = 24;
 
-function getEntityId(identity: string): string | null {
-  const idx = identity.indexOf(':');
-  return idx >= 0 ? identity.slice(idx + 1) : null;
-}
-
-function truncateLabel(label: string): string {
-  if (label.length <= MAX_LABEL_LENGTH) return label;
-  return label.slice(0, MAX_LABEL_LENGTH - 1) + '…';
-}
-
 function isDefaultLabel(tab: PageTab): boolean {
   if (tab.identity.startsWith('task:')) {
     const id = getEntityId(tab.identity);
     return tab.label === `Task ${id?.slice(0, 8)}`;
   }
-  if (tab.identity.startsWith('project:')) {
-    return tab.label === 'Project';
-  }
-  if (tab.identity.startsWith('chat:')) {
-    return tab.label === 'Thread';
-  }
+  if (tab.identity.startsWith('project:')) return tab.label === 'Project';
+  if (tab.identity.startsWith('chat:')) return tab.label === 'Thread';
   return false;
 }
-
-// --- Context menu ---
 
 interface ContextMenuState {
   tabId: string;
@@ -56,10 +41,7 @@ export function TabBar() {
   const activeTabRef = useRef<HTMLButtonElement>(null);
   const fetchingRef = useRef<Set<string>>(new Set());
 
-  // Context menu
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-
-  // Drag state
   const dragIdxRef = useRef<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
@@ -71,12 +53,11 @@ export function TabBar() {
     return () => window.removeEventListener('click', close);
   }, [contextMenu]);
 
-  // Scroll active tab into view
   useEffect(() => {
     activeTabRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   }, [state.activeTabId]);
 
-  // Fetch real titles
+  // Fetch real titles for entity tabs
   const fetchTitle = useCallback(async (tab: PageTab) => {
     const entityId = getEntityId(tab.identity);
     if (!entityId || fetchingRef.current.has(tab.identity)) return;
@@ -84,10 +65,10 @@ export function TabBar() {
     try {
       if (tab.identity.startsWith('task:')) {
         const task = await window.api.tasks.get(entityId);
-        if (task?.title) updateTabLabel(tab.id, truncateLabel(task.title));
+        if (task?.title) updateTabLabel(tab.id, truncateString(task.title, MAX_LABEL_LENGTH));
       } else if (tab.identity.startsWith('project:')) {
         const project = await window.api.projects.get(entityId);
-        if (project?.name) updateTabLabel(tab.id, truncateLabel(project.name));
+        if (project?.name) updateTabLabel(tab.id, truncateString(project.name, MAX_LABEL_LENGTH));
       }
     } catch (err) {
       reportError(err, 'TabBar: fetch entity title');
@@ -96,38 +77,40 @@ export function TabBar() {
     }
   }, [updateTabLabel]);
 
+  // Resolve tab labels — chat from context, task/project from API
   useEffect(() => {
+    const toFetch: PageTab[] = [];
     for (const tab of state.tabs) {
-      if (isDefaultLabel(tab)) {
-        // Chat session tabs — resolve name from sessions context
-        if (tab.identity.startsWith('chat:')) {
-          const sessionId = getEntityId(tab.identity);
-          const session = sessions.find(s => s.id === sessionId);
-          if (session?.name) {
-            updateTabLabel(tab.id, truncateLabel(session.name));
-          }
-        } else {
-          fetchTitle(tab);
+      if (!isDefaultLabel(tab)) continue;
+      if (tab.identity.startsWith('chat:')) {
+        const sessionId = getEntityId(tab.identity);
+        const session = sessions.find(s => s.id === sessionId);
+        if (session?.name) {
+          updateTabLabel(tab.id, truncateString(session.name, MAX_LABEL_LENGTH));
         }
+      } else {
+        toFetch.push(tab);
       }
+    }
+    if (toFetch.length > 0) {
+      void Promise.all(toFetch.map(fetchTitle));
     }
   }, [state.tabs, sessions, fetchTitle, updateTabLabel]);
 
-  if (!config.enabled || state.tabs.length === 0) {
-    return null;
-  }
-
-  // Running agent detection
-  const runningTaskIds = new Set<string>();
-  const runningSessionIds = new Set<string>();
-  for (const agent of agents) {
-    if (agent.status === 'running') {
-      if (agent.scopeType === 'task') runningTaskIds.add(agent.scopeId);
-      runningSessionIds.add(agent.sessionId);
+  // Memoize running agent Sets
+  const { runningTaskIds, runningSessionIds } = useMemo(() => {
+    const taskIds = new Set<string>();
+    const sessionIds = new Set<string>();
+    for (const a of agents) {
+      if (a.status === 'running') {
+        if (a.scopeType === 'task') taskIds.add(a.scopeId);
+        sessionIds.add(a.sessionId);
+      }
     }
-  }
+    return { runningTaskIds: taskIds, runningSessionIds: sessionIds };
+  }, [agents]);
 
-  const isTabRunning = (tab: PageTab): boolean => {
+  const isTabRunning = useCallback((tab: PageTab): boolean => {
     if (tab.identity.startsWith('task:')) {
       const taskId = getEntityId(tab.identity);
       return taskId ? runningTaskIds.has(taskId) : false;
@@ -137,10 +120,14 @@ export function TabBar() {
       return sessionId ? runningSessionIds.has(sessionId) : false;
     }
     if (tab.identity === 'page:/chat') {
-      return agents.some(a => a.status === 'running' && a.scopeType === 'project');
+      return runningSessionIds.size > 0;
     }
     return false;
-  };
+  }, [runningTaskIds, runningSessionIds]);
+
+  if (!config.enabled || state.tabs.length === 0) {
+    return null;
+  }
 
   const handleNavigateToTab = (tabId: string) => {
     const tab = state.tabs.find(t => t.id === tabId);
@@ -153,50 +140,37 @@ export function TabBar() {
     if (target) navigate(target);
   };
 
-  // Middle-click to close
   const handleMouseDown = (e: React.MouseEvent, tabId: string) => {
-    if (e.button === 1) {
-      e.preventDefault();
-      handleCloseTab(tabId);
-    }
+    if (e.button === 1) { e.preventDefault(); handleCloseTab(tabId); }
   };
 
-  // Context menu
   const handleContextMenu = (e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
     setContextMenu({ tabId, x: e.clientX, y: e.clientY });
   };
 
-  // Drag handlers
   const handleDragStart = (e: React.DragEvent, idx: number) => {
     dragIdxRef.current = idx;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(idx));
   };
-
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverIdx(idx);
   };
-
   const handleDrop = (e: React.DragEvent, toIdx: number) => {
     e.preventDefault();
     const fromIdx = dragIdxRef.current;
-    if (fromIdx !== null && fromIdx !== toIdx) {
-      reorderTabs(fromIdx, toIdx);
-    }
+    if (fromIdx !== null && fromIdx !== toIdx) reorderTabs(fromIdx, toIdx);
     dragIdxRef.current = null;
     setDragOverIdx(null);
   };
-
-  const handleDragEnd = () => {
-    dragIdxRef.current = null;
-    setDragOverIdx(null);
-  };
+  const handleDragEnd = () => { dragIdxRef.current = null; setDragOverIdx(null); };
 
   const contextTab = contextMenu ? state.tabs.find(t => t.id === contextMenu.tabId) : null;
   const contextTabIdx = contextMenu ? state.tabs.findIndex(t => t.id === contextMenu.tabId) : -1;
+  const portalTarget = document.getElementById('app-root') || document.body;
 
   return (
     <div className="flex items-center bg-muted/40 h-9 shrink-0 overflow-hidden relative">
@@ -232,20 +206,12 @@ export function TabBar() {
                 isDragOver && 'bg-accent/30'
               )}
             >
-
-              {/* Icon or running spinner */}
               {running ? (
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />
               ) : (
                 Icon && <Icon className="h-3.5 w-3.5 shrink-0" />
               )}
-
-              {/* Label — hidden for pinned tabs */}
-              {!tab.isPinned && (
-                <span className="truncate">{tab.label}</span>
-              )}
-
-              {/* Close button — not shown for pinned tabs */}
+              {!tab.isPinned && <span className="truncate">{tab.label}</span>}
               {!tab.isPinned && (
                 <span
                   role="button"
@@ -268,11 +234,11 @@ export function TabBar() {
         })}
       </div>
 
-      {/* Context menu */}
-      {contextMenu && contextTab && (
+      {/* Context menu — portaled per CLAUDE.md */}
+      {contextMenu && contextTab && createPortal(
         <div
-          className="fixed z-50 min-w-[160px] bg-popover border border-border rounded-md shadow-lg py-1 text-xs"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="absolute z-50 min-w-[160px] bg-popover border border-border rounded-md shadow-lg py-1 text-xs"
+          style={{ left: contextMenu.x, top: contextMenu.y, position: 'fixed' }}
           onClick={() => setContextMenu(null)}
         >
           {contextTab.isPinned ? (
@@ -310,7 +276,8 @@ export function TabBar() {
           >
             Close to the Right
           </button>
-        </div>
+        </div>,
+        portalTarget
       )}
     </div>
   );

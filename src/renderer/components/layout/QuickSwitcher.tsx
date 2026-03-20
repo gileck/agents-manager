@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, fuzzyMatch } from '../../lib/utils';
 import { useTabsContext, ICON_MAP, getRecentPages } from '../../contexts/TabsContext';
 
 interface SwitcherItem {
@@ -12,16 +12,6 @@ interface SwitcherItem {
   iconName: string;
   isOpenTab: boolean;
   tabId?: string;
-}
-
-function fuzzyMatch(text: string, query: string): boolean {
-  const lower = text.toLowerCase();
-  const q = query.toLowerCase();
-  let qi = 0;
-  for (let i = 0; i < lower.length && qi < q.length; i++) {
-    if (lower[i] === q[qi]) qi++;
-  }
-  return qi === q.length;
 }
 
 export function QuickSwitcher() {
