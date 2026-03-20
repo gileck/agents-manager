@@ -260,6 +260,19 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     }
   }
 
+  async unhideSession(id: string): Promise<boolean> {
+    try {
+      const stmt = this.db.prepare(`
+        UPDATE chat_sessions SET sidebar_hidden = 0 WHERE id = ?
+      `);
+      const result = stmt.run(id);
+      return result.changes > 0;
+    } catch (error) {
+      getAppLogger().logError('ChatSessionStore', 'unhideSession failed', error);
+      throw new Error(`Failed to unhide chat session: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  }
+
   async hideAllSessions(projectId: string): Promise<boolean> {
     try {
       const stmt = this.db.prepare(`

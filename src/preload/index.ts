@@ -166,6 +166,7 @@ const IPC_CHANNELS = {
   CHAT_SESSION_UPDATE: 'chat:session:update',
   CHAT_SESSION_DELETE: 'chat:session:delete',
   CHAT_SESSION_HIDE: 'chat:session:hide',
+  CHAT_SESSION_UNHIDE: 'chat:session:unhide',
   CHAT_SESSION_HIDE_ALL: 'chat:session:hide-all',
   CHAT_AGENT_SESSION: 'chat:agent-session',
   CHAT_AGENTS_LIST: 'chat:agents:list',
@@ -530,6 +531,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
     hide: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_HIDE, sessionId),
+    unhide: (sessionId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UNHIDE, sessionId),
     hideAll: (projectId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_HIDE_ALL, projectId),
     getAgentChatSession: (taskId: string, agentRole: string): Promise<ChatSession> =>

@@ -201,6 +201,7 @@ export interface ApiClient {
     getSession(id: string): Promise<unknown>;
     deleteSession(id: string): Promise<unknown>;
     hideSession(id: string): Promise<unknown>;
+    unhideSession(id: string): Promise<unknown>;
     hideAllSessions(projectId: string): Promise<unknown>;
     updateSession(id: string, input: { name?: string; agentLib?: string | null; systemPromptAppend?: string | null; draft?: string | null }): Promise<unknown>;
     getAgentChatSession(taskId: string, agentRole: string): Promise<unknown>;
@@ -529,6 +530,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       getSession: (id) => req('GET', `/api/chat/sessions/${id}`),
       deleteSession: (id) => req('DELETE', `/api/chat/sessions/${id}`),
       hideSession: (id) => req('PATCH', `/api/chat/sessions/${id}/hide`),
+      unhideSession: (id) => req('PATCH', `/api/chat/sessions/${id}/unhide`),
       hideAllSessions: (projectId) => req('POST', '/api/chat/sessions/hide-all', { projectId }),
       updateSession: (id, input) => req('PATCH', `/api/chat/sessions/${id}`, input),
       getAgentChatSession: (taskId, agentRole) =>
