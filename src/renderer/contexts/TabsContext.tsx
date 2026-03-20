@@ -143,7 +143,7 @@ function tabsReducer(state: TabsState, action: TabsAction): TabsState {
           ...state,
           tabs: state.tabs.map(t =>
             t.id === existing.id
-              ? { ...t, path: action.path, label: action.label, lastAccessedAt: now }
+              ? { ...t, path: action.path, lastAccessedAt: now }
               : t
           ),
           activeTabId: existing.id,
