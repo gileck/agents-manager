@@ -466,6 +466,148 @@ export class PostRunExtractor {
   }
 
   /**
+   * After a successful investigator run, link the bug task to the source tasks
+   * that introduced the defect. Sets `metadata.sourceTaskId` (backward compat)
+   * and `metadata.sourceTaskIds` on the bug task, and adds the `defective` tag
+   * to each source task so they appear in the Post-Mortem list.
+   */
+  async linkBugToSourceTasks(
+    taskId: string,
+    result: AgentRunResult,
+    agentType: string,
+    onLog: OnLog,
+    onPostLog?: OnPostLog,
+  ): Promise<void> {
+    if (agentType !== 'investigator' || result.exitCode !== 0) {
+      onPostLog?.('linkBugToSourceTasks skipped (not applicable)', { agentType, exitCode: result.exitCode });
+      return;
+    }
+    const _start = performance.now();
+
+    const so = result.structuredOutput as { sourceTaskIds?: string[] } | undefined;
+    const rawIds = so?.sourceTaskIds;
+    if (!rawIds || rawIds.length === 0) {
+      onPostLog?.('linkBugToSourceTasks skipped (no sourceTaskIds in output)');
+      return;
+    }
+
+    try {
+      const bugTask = await this.taskStore.getTask(taskId);
+      if (!bugTask) {
+        onPostLog?.('linkBugToSourceTasks skipped (bug task not found)');
+        return;
+      }
+
+      // Merge with any existing sourceTaskIds (from prior runs or manual linking)
+      const existingMetadata = (bugTask.metadata ?? {}) as Record<string, unknown>;
+      const existingSourceTaskIds = Array.isArray(existingMetadata.sourceTaskIds)
+        ? (existingMetadata.sourceTaskIds as string[])
+        : existingMetadata.sourceTaskId
+          ? [existingMetadata.sourceTaskId as string]
+          : [];
+
+      const validatedIds: string[] = [];
+
+      for (const id of rawIds) {
+        if (typeof id !== 'string' || !id.trim()) continue;
+        const trimmedId = id.trim();
+
+        // Skip if already linked
+        if (existingSourceTaskIds.includes(trimmedId)) {
+          onLog(`Source task ${trimmedId} already linked — skipping`);
+          validatedIds.push(trimmedId);
+          continue;
+        }
+
+        // Validate the task exists
+        const sourceTask = await this.taskStore.getTask(trimmedId);
+        if (!sourceTask) {
+          onLog(`Warning: source task ${trimmedId} not found — skipping`);
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'warning',
+            message: `linkBugToSourceTasks: source task ${trimmedId} not found — skipping`,
+            data: { sourceTaskId: trimmedId },
+          });
+          continue;
+        }
+
+        // Ensure source task is in the same project
+        if (sourceTask.projectId !== bugTask.projectId) {
+          onLog(`Warning: source task ${trimmedId} belongs to a different project — skipping`);
+          await this.taskEventLog.log({
+            taskId,
+            category: 'agent',
+            severity: 'warning',
+            message: `linkBugToSourceTasks: source task ${trimmedId} belongs to project ${sourceTask.projectId}, bug is in ${bugTask.projectId} — skipping`,
+            data: { sourceTaskId: trimmedId, sourceProjectId: sourceTask.projectId, bugProjectId: bugTask.projectId },
+          });
+          continue;
+        }
+
+        validatedIds.push(trimmedId);
+
+        // Add 'defective' tag to the source task (de-duplicated)
+        const existingTags = sourceTask.tags ?? [];
+        if (!existingTags.includes('defective')) {
+          await this.taskStore.updateTask(trimmedId, {
+            tags: [...existingTags, 'defective'],
+          });
+          onLog(`Added 'defective' tag to source task ${trimmedId}`);
+        }
+
+        // Log event on the source task for traceability
+        await this.taskEventLog.log({
+          taskId: trimmedId,
+          category: 'agent',
+          severity: 'info',
+          message: `Task marked as defective — linked from bug ${taskId}`,
+          data: { bugTaskId: taskId, bugTitle: bugTask.title },
+        });
+      }
+
+      if (validatedIds.length === 0) {
+        onPostLog?.('linkBugToSourceTasks: no valid source tasks found after validation');
+        return;
+      }
+
+      // De-duplicate the full list (existing + new)
+      const allSourceTaskIds = [...new Set([...existingSourceTaskIds, ...validatedIds])];
+
+      // Update the bug task's metadata
+      const updatedMetadata: Record<string, unknown> = {
+        ...existingMetadata,
+        sourceTaskId: existingMetadata.sourceTaskId ?? allSourceTaskIds[0], // backward compat: keep existing or use first
+        sourceTaskIds: allSourceTaskIds,
+      };
+      await this.taskStore.updateTask(taskId, { metadata: updatedMetadata });
+
+      onLog(`Linked bug to ${validatedIds.length} source task(s): ${validatedIds.join(', ')}`);
+      await this.taskEventLog.log({
+        taskId,
+        category: 'agent',
+        severity: 'info',
+        message: `Auto-linked bug to ${validatedIds.length} source task(s) from investigation`,
+        data: { sourceTaskIds: allSourceTaskIds, newlyLinked: validatedIds.filter(id => !existingSourceTaskIds.includes(id)) },
+      });
+    } catch (err) {
+      // Non-fatal — don't block pipeline on linking failure
+      const errMsg = err instanceof Error ? err.message : String(err);
+      onLog(`Warning: linkBugToSourceTasks failed: ${errMsg}`);
+      await this.taskEventLog.log({
+        taskId,
+        category: 'agent',
+        severity: 'warning',
+        message: `Failed to link bug to source tasks: ${errMsg}`,
+        data: { error: errMsg },
+      });
+    }
+    const _duration = Math.round(performance.now() - _start);
+    onPostLog?.('linkBugToSourceTasks complete', { sourceTaskIds: rawIds }, _duration);
+  }
+
+  /**
    * Analyze an agent run's message trace and return diagnostics.
    * Pure computation — caller is responsible for persisting the result.
    */
