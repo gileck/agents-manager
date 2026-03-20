@@ -28,7 +28,9 @@ const ESBUILD_CMD = `node_modules/.bin/esbuild src/daemon/index.ts --bundle --pl
 let daemon: ChildProcess | null = null;
 let webServer: ChildProcess | null = null;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
+let retryInterval: ReturnType<typeof setInterval> | null = null;
 let restarting = false;
+const RETRY_INTERVAL_MS = 60_000;
 
 function log(msg: string) {
   const ts = new Date().toLocaleTimeString();
@@ -205,6 +207,41 @@ function stopWebServer(): Promise<void> {
   });
 }
 
+function clearRetryInterval() {
+  if (retryInterval) {
+    clearInterval(retryInterval);
+    retryInterval = null;
+  }
+}
+
+let pendingRetryFilename: string | null = null;
+
+function startRetryInterval(filename: string | null) {
+  pendingRetryFilename = filename; // always update to latest filename
+  if (retryInterval) return; // already waiting
+  log(`Will retry restart every ${RETRY_INTERVAL_MS / 1000}s until agents finish...`);
+  retryInterval = setInterval(async () => {
+    if (restarting) return;
+    const activeCount = await checkActiveAgents();
+    if (activeCount > 0) {
+      warn(`Retry: still ${activeCount} agent(s) running. Will check again in ${RETRY_INTERVAL_MS / 1000}s.`);
+      return;
+    }
+    clearRetryInterval();
+    restarting = true;
+    try {
+      const fname = pendingRetryFilename;
+      log(`Agents finished — rebuilding & restarting daemon${fname ? ` (pending change: ${fname})` : ''}...`);
+      await stopDaemon();
+      startDaemon();
+    } catch (e) {
+      err(`Retry restart failed: ${(e as Error).message}`);
+    } finally {
+      restarting = false;
+    }
+  }, RETRY_INTERVAL_MS);
+}
+
 async function handleChange(filename: string | null) {
   if (restartTimer) clearTimeout(restartTimer);
 
@@ -214,10 +251,12 @@ async function handleChange(filename: string | null) {
 
     const activeCount = await checkActiveAgents();
     if (activeCount > 0) {
-      warn(`Skipping restart — ${activeCount} agent(s) running. Save again after agents finish.`);
+      warn(`Skipping restart — ${activeCount} agent(s) running.`);
+      startRetryInterval(filename);
       return;
     }
 
+    clearRetryInterval();
     restarting = true;
     log(`Change detected${filename ? ` (${filename})` : ''} — rebuilding & restarting daemon...`);
     await stopDaemon();
@@ -274,6 +313,7 @@ main();
 const shutdown = async () => {
   log('Shutting down...');
   if (restartTimer) clearTimeout(restartTimer);
+  clearRetryInterval();
   await Promise.all([stopWebServer(), stopDaemon()]);
   process.exit(0);
 };
