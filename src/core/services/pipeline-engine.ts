@@ -30,6 +30,8 @@ type OnPostLog = (category: PostProcessingLogCategory, message: string, details?
 export class PipelineEngine implements IPipelineEngine {
   private guards = new Map<string, GuardFn>();
   private hooks = new Map<string, HookFn>();
+  /** In-memory lock to prevent concurrent transitions on the same task while hooks are running. */
+  private transitionsInFlight = new Set<string>();
 
   constructor(
     private pipelineStore: IPipelineStore,
@@ -65,6 +67,11 @@ export class PipelineEngine implements IPipelineEngine {
   async executeTransition(task: Task, toStatus: string, context?: TransitionContext, onPostLog?: OnPostLog): Promise<TransitionResult> {
     const ctx: TransitionContext = context ?? { trigger: 'manual' };
 
+    // Reject if a transition is already in flight for this task
+    if (this.transitionsInFlight.has(task.id)) {
+      return { success: false, error: 'Transition already in progress for this task' };
+    }
+
     const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
     if (!pipeline) {
       return { success: false, error: `Pipeline not found: ${task.pipelineId}` };
@@ -98,15 +105,16 @@ export class PipelineEngine implements IPipelineEngine {
     let lastGuardFailures: Array<{ guard: string; reason: string }> = [];
 
     for (const transition of candidateTransitions) {
-    // Execute atomically within a sync transaction (better-sqlite3 requirement).
-    let updatedTask: Task | null = null;
+    // ── Phase 1: Guard evaluation (synchronous transaction) ──────────
+    // Only validates guards — does NOT persist the status change.
+    let freshTask: Task | null = null;
     const guardResults: Record<string, GuardResult> = {};
     const guardFailures: Array<{ guard: string; reason: string }> = [];
 
     try {
       this.txRunner.runTransaction(() => {
         // Re-fetch task inside transaction via sync store method (TOCTOU protection)
-        const freshTask = this.taskStore.getTaskSync(task.id);
+        freshTask = this.taskStore.getTaskSync(task.id);
         if (!freshTask) {
           throw new Error(`Task not found: ${task.id}`);
         }
@@ -148,7 +156,7 @@ export class PipelineEngine implements IPipelineEngine {
           return;
         }
 
-        updatedTask = this.applyStatusUpdate(freshTask, task.id, task.status, toStatus, ctx, guardResults);
+        // Guards passed — do NOT persist status here (crash-safe: status stays at original)
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -164,79 +172,143 @@ export class PipelineEngine implements IPipelineEngine {
       continue;
     }
 
-    if (!updatedTask) {
-      return { success: false, error: 'Transaction completed but task was not updated' };
+    if (!freshTask) {
+      return { success: false, error: 'Transaction completed but task was not found' };
     }
+
+    // Non-null assertion safe: freshTask was verified above and assigned inside the synchronous transaction
+    const validatedTask: Task = freshTask;
 
     onPostLog?.('pipeline', `Guards passed for ${task.status} → ${toStatus}, executing hooks`, {
       from: task.status, to: toStatus, hookCount: transition.hooks?.length ?? 0,
     });
 
-    // Run hooks after transaction
-    const hookFailures = await this.executeHooks(transition.hooks, updatedTask, transition, ctx, task.id, undefined, onPostLog);
+    // ── Phase 2: Required hook execution (async, no DB mutation) ─────
+    // Construct a projected task with the target status (not persisted).
+    // Run only required hooks. If any fail, return failure — no rollback needed
+    // because the status was never changed in the DB.
+    const projectedTimestamp = now();
+    const projectedTask: Task = { ...validatedTask, status: toStatus, updatedAt: projectedTimestamp };
 
-    // If any required hook failed, roll back the status change transactionally
-    const requiredFailures = hookFailures.filter(f => f.policy === 'required');
-    if (requiredFailures.length > 0) {
-      this.rollbackStatusChange(task.id, task.status, toStatus, ctx, requiredFailures);
-      await this.taskEventLog.log({
-        taskId: task.id,
-        category: 'system',
-        severity: 'error',
-        message: `Transition ${task.status} → ${toStatus} rolled back: required hook(s) failed`,
-        data: { failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
-      });
-      // After rollback, check if the failed hook requested a follow-up transition
-      const followUp = requiredFailures.find(f => f.followUpTransition)?.followUpTransition;
-      if (followUp) {
-        const freshTask = this.taskStore.getTaskSync(task.id);
-        if (!freshTask) {
-          getAppLogger().error('PipelineEngine', `Follow-up transition skipped: task ${task.id} not found after rollback`);
-        } else {
-          this.taskEventLog.log({
-            taskId: task.id,
-            category: 'system',
-            severity: 'info',
-            message: `Dispatching follow-up transition to "${followUp.to}" after rollback`,
-            data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger },
-          }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
+    // Partition hooks into required vs non-required
+    const requiredHooks = (transition.hooks ?? []).filter(h => h.policy === 'required');
+    const nonRequiredHooks = (transition.hooks ?? []).filter(h => h.policy !== 'required');
 
-          this.executeTransition(freshTask, followUp.to, { trigger: followUp.trigger, actor: ctx.actor })
-            .catch(err => {
-              const msg = err instanceof Error ? err.message : String(err);
-              this.taskEventLog.log({
-                taskId: task.id,
-                category: 'system',
-                severity: 'error',
-                message: `Follow-up transition to "${followUp.to}" failed: ${msg}`,
-                data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger, error: msg },
-              }).catch((logErr) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', logErr));
-            });
-        }
+    // Acquire in-flight lock before running required hooks
+    this.transitionsInFlight.add(task.id);
+
+    let requiredHookFailures: HookFailure[] = [];
+    try {
+      // Run required hooks with the projected (unpersisted) task
+      if (requiredHooks.length > 0) {
+        requiredHookFailures = await this.executeHooks(requiredHooks, projectedTask, transition, ctx, task.id, undefined, onPostLog);
       }
 
-      return {
-        success: false,
-        error: requiredFailures.map(f => `${f.hook}: ${f.error}`).join('; '),
-        hookFailures,
-      };
+      const requiredFailures = requiredHookFailures.filter(f => f.policy === 'required');
+      if (requiredFailures.length > 0) {
+        // Required hook failed — no rollback needed (status was never changed)
+        await this.taskEventLog.log({
+          taskId: task.id,
+          category: 'system',
+          severity: 'error',
+          message: `Transition ${task.status} → ${toStatus} aborted: required hook(s) failed`,
+          data: { failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
+        });
+        // Check if the failed hook requested a follow-up transition.
+        // Release the in-flight lock first so the follow-up transition is not blocked.
+        const followUp = requiredFailures.find(f => f.followUpTransition)?.followUpTransition;
+        if (followUp) {
+          this.transitionsInFlight.delete(task.id);
+          const latestTask = this.taskStore.getTaskSync(task.id);
+          if (!latestTask) {
+            getAppLogger().error('PipelineEngine', `Follow-up transition skipped: task ${task.id} not found after hook failure`);
+          } else {
+            this.taskEventLog.log({
+              taskId: task.id,
+              category: 'system',
+              severity: 'info',
+              message: `Dispatching follow-up transition to "${followUp.to}" after hook failure`,
+              data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger },
+            }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
+
+            this.executeTransition(latestTask, followUp.to, { trigger: followUp.trigger, actor: ctx.actor })
+              .catch(err => {
+                const msg = err instanceof Error ? err.message : String(err);
+                this.taskEventLog.log({
+                  taskId: task.id,
+                  category: 'system',
+                  severity: 'error',
+                  message: `Follow-up transition to "${followUp.to}" failed: ${msg}`,
+                  data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger, error: msg },
+                }).catch((logErr) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', logErr));
+              });
+          }
+        }
+
+        return {
+          success: false,
+          error: requiredFailures.map(f => `${f.hook}: ${f.error}`).join('; '),
+          hookFailures: requiredHookFailures,
+        };
+      }
+
+      // ── Phase 3: Status commit (synchronous transaction) ────────────
+      // All required hooks passed — now persist the status change.
+      // Re-verify task status hasn't changed (TOCTOU check).
+      let updatedTask: Task | null = null;
+      try {
+        this.txRunner.runTransaction(() => {
+          const currentTask = this.taskStore.getTaskSync(task.id);
+          if (!currentTask) {
+            throw new Error(`Task not found: ${task.id}`);
+          }
+          if (currentTask.status !== task.status) {
+            throw new Error(`Task status changed during hook execution: expected "${task.status}", got "${currentTask.status}"`);
+          }
+          updatedTask = this.applyStatusUpdate(currentTask, task.id, task.status, toStatus, ctx, guardResults);
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: message };
+      }
+
+      if (!updatedTask) {
+        return { success: false, error: 'Status commit transaction completed but task was not updated' };
+      }
+
+      // ── Phase 4: Post-commit operations ────────────────────────────
+      // Release the in-flight lock before running non-required hooks.
+      // Non-required hooks (e.g. advance_phase) may internally call executeTransition,
+      // which would be blocked by the lock if we kept it held. The status is already
+      // committed, so the lock is no longer needed for crash safety.
+      this.transitionsInFlight.delete(task.id);
+
+      // Log status_change event (only now, since status is actually persisted)
+      await this.taskEventLog.log({
+        taskId: task.id,
+        category: 'status_change',
+        severity: 'info',
+        message: `Status changed from "${task.status}" to "${toStatus}"`,
+        data: {
+          fromStatus: task.status,
+          toStatus,
+          trigger: ctx.trigger,
+          actor: ctx.actor,
+        },
+      });
+
+      // Run non-required hooks (best_effort and fire_and_forget) after status is committed
+      let nonRequiredHookFailures: HookFailure[] = [];
+      if (nonRequiredHooks.length > 0) {
+        nonRequiredHookFailures = await this.executeHooks(nonRequiredHooks, updatedTask, transition, ctx, task.id, undefined, onPostLog);
+      }
+
+      const allHookFailures = [...requiredHookFailures, ...nonRequiredHookFailures];
+      return { success: true, task: updatedTask, ...(allHookFailures.length > 0 ? { hookFailures: allHookFailures } : {}) };
+    } finally {
+      // Safety net: ensure lock is always released (no-op if already released above)
+      this.transitionsInFlight.delete(task.id);
     }
-
-    // Log status_change event
-    await this.taskEventLog.log({
-      taskId: task.id,
-      category: 'status_change',
-      severity: 'info',
-      message: `Status changed from "${task.status}" to "${toStatus}"`,
-      data: {
-        fromStatus: task.status,
-        toStatus,
-        trigger: ctx.trigger,
-        actor: ctx.actor,
-      },
-    });
-
-    return { success: true, task: updatedTask, ...(hookFailures.length > 0 ? { hookFailures } : {}) };
     } // end for (transition of candidateTransitions)
 
     // All candidate transitions were blocked by guards — log and return failure
