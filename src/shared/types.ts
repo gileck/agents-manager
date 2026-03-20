@@ -292,6 +292,7 @@ export interface Task {
   prLink: string | null;
   branchName: string | null;
   plan: string | null;
+  investigationReport: string | null;
   technicalDesign: string | null;
   debugInfo: string | null;
   subtasks: Subtask[];
@@ -344,6 +345,7 @@ export interface TaskUpdateInput {
   prLink?: string | null;
   branchName?: string | null;
   plan?: string | null;
+  investigationReport?: string | null;
   technicalDesign?: string | null;
   debugInfo?: string | null;
   subtasks?: Subtask[];

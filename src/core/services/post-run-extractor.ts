@@ -45,6 +45,7 @@ export class PostRunExtractor {
 
   /**
    * Extract plan/subtasks from a successful plan/investigate run and persist them.
+   * Planner output goes to `task.plan`; investigator output goes to `task.investigationReport`.
    */
   async extractPlan(
     taskId: string,
@@ -61,21 +62,28 @@ export class PostRunExtractor {
       return;
     }
     const _start = performance.now();
+    const isInvestigator = agentType === 'investigator';
 
     const so = result.structuredOutput as {
       plan?: string;
+      investigationReport?: string;
       planSummary?: string;
       investigationSummary?: string;
       subtasks?: string[];
       phases?: Array<{ name: string; subtasks: string[] }>;
     } | undefined;
 
-    if (so?.plan) {
-      onLog(`Extracting plan from structured output: hasPlan=${!!so.plan}, hasSubtasks=${!!so.subtasks}, subtaskCount=${so.subtasks?.length ?? 0}, hasPhases=${!!so.phases}, phaseCount=${so.phases?.length ?? 0}`);
-      const updates: TaskUpdateInput = { plan: so.plan };
+    // For investigator, prefer `investigationReport`; fall back to `plan` for backward compat
+    const reportContent = isInvestigator ? (so?.investigationReport ?? so?.plan) : so?.plan;
 
-      // Check for multi-phase output
-      if (so.phases && so.phases.length > 1) {
+    if (reportContent) {
+      onLog(`Extracting ${isInvestigator ? 'investigation report' : 'plan'} from structured output: hasContent=${!!reportContent}, hasSubtasks=${!!so?.subtasks}, subtaskCount=${so?.subtasks?.length ?? 0}, hasPhases=${!!so?.phases}, phaseCount=${so?.phases?.length ?? 0}`);
+      const updates: TaskUpdateInput = isInvestigator
+        ? { investigationReport: reportContent }
+        : { plan: reportContent };
+
+      // Check for multi-phase output (planner only)
+      if (!isInvestigator && so?.phases && so.phases.length > 1) {
         const phases: ImplementationPhase[] = so.phases.map((p, idx) => ({
           id: `phase-${idx + 1}`,
           name: p.name,
@@ -85,14 +93,19 @@ export class PostRunExtractor {
         updates.phases = phases;
         updates.subtasks = []; // subtasks live inside phases
         onLog(`Multi-phase plan created with ${phases.length} phases`);
-      } else if (so.subtasks && so.subtasks.length > 0) {
+      } else if (so?.subtasks && so.subtasks.length > 0) {
         updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
       }
       await this.taskStore.updateTask(taskId, updates);
     } else {
       // Fallback: parse raw output if structured output unavailable
       onLog('Structured output unavailable, falling back to raw output parsing');
-      await this.taskStore.updateTask(taskId, { plan: this.parseRawPlan(result.output) });
+      const fallbackContent = this.parseRawPlan(result.output);
+      if (isInvestigator) {
+        await this.taskStore.updateTask(taskId, { investigationReport: fallbackContent });
+      } else {
+        await this.taskStore.updateTask(taskId, { plan: fallbackContent });
+      }
       try {
         const subtasks = this.parseSubtasks(result.output);
         if (subtasks.length > 0) {
@@ -111,8 +124,16 @@ export class PostRunExtractor {
         onLog(`Warning: failed to mark plan_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    // After any successful investigator run, mark investigation feedback as addressed
+    if (agentRunId && isInvestigator) {
+      try {
+        await this.markFeedbackAsAddressed(taskId, ['investigation_feedback'], agentRunId, onLog);
+      } catch (err) {
+        onLog(`Warning: failed to mark investigation_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     const _duration = Math.round(performance.now() - _start);
-    onPostLog?.('extractPlan complete', { hasPlan: !!so?.plan, subtaskCount: so?.subtasks?.length ?? 0, phaseCount: so?.phases?.length ?? 0 }, _duration);
+    onPostLog?.('extractPlan complete', { isInvestigator, hasContent: !!reportContent, subtaskCount: so?.subtasks?.length ?? 0, phaseCount: so?.phases?.length ?? 0 }, _duration);
   }
 
   /**

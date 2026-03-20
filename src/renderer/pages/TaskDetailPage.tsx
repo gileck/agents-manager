@@ -486,8 +486,7 @@ export function TaskDetailPage() {
   // Tab content indicators
   const hasPlan = !!task.plan;
   const hasDesign = !!task.technicalDesign;
-  const hasInvestigation = (!!task.plan && (contextEntries?.some(e => e.entryType === 'investigation_feedback') ?? false))
-    || task.status === 'investigation_review';
+  const hasInvestigation = !!task.investigationReport || task.status === 'investigation_review';
   const hasImplementation = !!task.prLink || (artifacts?.some((a) => a.type === 'diff') ?? false);
   const hasReview = contextEntries?.some(e => e.entryType === 'workflow_review') ?? false;
 
@@ -682,7 +681,7 @@ export function TaskDetailPage() {
           <TabsTrigger value="details">Task Details</TabsTrigger>
           <TabsTrigger value="investigation" className={hasInvestigation ? '' : 'opacity-40'}>
             <span className="flex items-center gap-1.5">
-              Investigation
+              Report
               {hasInvestigation && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
             </span>
           </TabsTrigger>
@@ -736,9 +735,9 @@ export function TaskDetailPage() {
 
         <TabsContent value="investigation" style={{ padding: '12px 24px', overflowY: 'auto' }}>
           <PlanReviewCard
-            title="Investigation"
-            content={task.plan}
-            emptyContentMessage="No investigation yet. An investigation will appear here after the investigator agent completes."
+            title="Investigation Report"
+            content={task.investigationReport}
+            emptyContentMessage="No investigation report yet. A report will appear here after the investigator agent completes."
             entries={(contextEntries ?? []).filter(e => e.entryType === 'investigation_feedback')}
             isReviewStatus={task.status === 'investigation_review'}
             transitions={transitions ?? []}

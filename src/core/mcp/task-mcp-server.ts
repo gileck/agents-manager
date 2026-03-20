@@ -177,6 +177,7 @@ export async function createTaskMcpServer(
         featureId: z.string().nullable().optional().describe('Feature ID (null to clear)'),
         parentTaskId: z.string().nullable().optional().describe('Parent task ID (null to clear)'),
         plan: z.string().nullable().optional().describe('Plan content (null to clear)'),
+        investigationReport: z.string().nullable().optional().describe('Investigation report content (null to clear)'),
         technicalDesign: z.string().nullable().optional().describe('Technical design content (null to clear)'),
         debugInfo: z.string().nullable().optional().describe('Debug info (null to clear)'),
         prLink: z.string().nullable().optional().describe('PR link (null to clear)'),
@@ -204,6 +205,7 @@ export async function createTaskMcpServer(
         featureId?: string | null;
         parentTaskId?: string | null;
         plan?: string | null;
+        investigationReport?: string | null;
         technicalDesign?: string | null;
         debugInfo?: string | null;
         prLink?: string | null;

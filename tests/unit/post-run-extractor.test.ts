@@ -22,6 +22,7 @@ function createMockTask(overrides: Partial<Task> = {}): Task {
     prLink: null,
     branchName: null,
     plan: null,
+    investigationReport: null,
     technicalDesign: null,
     debugInfo: null,
     subtasks: [],
@@ -537,5 +538,184 @@ describe('PostRunExtractor.saveContextEntry', () => {
     // updateTask should NOT be called for tag update since 'post-mortem-done' already exists
     // (addEntry was called, but updateTask for tags was skipped)
     expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+  });
+});
+
+describe('PostRunExtractor.extractPlan', () => {
+  let extractor: PostRunExtractor;
+  let stores: ReturnType<typeof createMockStores>;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    stores = createMockStores();
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter);
+    onLog.mockClear();
+  });
+
+  it('should save investigationReport when investigator provides investigationReport in structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Investigation\n\nFindings here.',
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog);
+
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+      investigationReport: '# Investigation\n\nFindings here.',
+    });
+  });
+
+  it('should save investigationReport when investigator provides plan in structured output (backward compat)', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Investigation via plan field\n\nBackward compat.',
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog);
+
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+      investigationReport: '# Investigation via plan field\n\nBackward compat.',
+    });
+  });
+
+  it('should save plan (not investigationReport) when planner provides plan in structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan\n\nImplementation steps.',
+        subtasks: ['Step 1', 'Step 2'],
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'planner', onLog);
+
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', expect.objectContaining({
+      plan: '# Plan\n\nImplementation steps.',
+    }));
+    // Should NOT have set investigationReport
+    const updateCall = (stores.taskStore.updateTask as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(updateCall).not.toHaveProperty('investigationReport');
+  });
+
+  it('should use investigationReport fallback path for investigator when no structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Raw investigation output here.',
+      outcome: 'done',
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog);
+
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+      investigationReport: 'Raw investigation output here.',
+    });
+  });
+
+  it('should use plan fallback path for planner when no structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Raw plan output here.',
+      outcome: 'done',
+    };
+
+    await extractor.extractPlan('task-1', result, 'planner', onLog);
+
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+      plan: 'Raw plan output here.',
+    });
+  });
+
+  it('should mark investigation_feedback as addressed after investigator run', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Report',
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog, undefined, 'run-1');
+
+    expect(stores.taskContextStore.markEntriesAsAddressed).toHaveBeenCalledWith(
+      'task-1',
+      ['investigation_feedback'],
+      'run-1',
+    );
+  });
+
+  it('should mark plan_feedback as addressed after planner run', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan',
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'planner', onLog, undefined, 'run-1');
+
+    expect(stores.taskContextStore.markEntriesAsAddressed).toHaveBeenCalledWith(
+      'task-1',
+      ['plan_feedback'],
+      'run-1',
+    );
+  });
+
+  it('should skip extraction for non-zero exit code', async () => {
+    const result: AgentRunResult = {
+      exitCode: 1,
+      output: 'error',
+      outcome: 'failed',
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog);
+
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('should skip extraction for non-planner/investigator agent types', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: { plan: '# Plan' },
+    };
+
+    await extractor.extractPlan('task-1', result, 'implementor', onLog);
+
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('should not create multi-phase output for investigator even when phases are provided', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Report',
+        phases: [
+          { name: 'Phase 1', subtasks: ['A'] },
+          { name: 'Phase 2', subtasks: ['B'] },
+        ],
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog);
+
+    const updateCall = (stores.taskStore.updateTask as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(updateCall).toEqual({ investigationReport: '# Report' });
+    expect(updateCall).not.toHaveProperty('phases');
   });
 });

@@ -23,6 +23,7 @@ interface TaskRow {
   branch_name: string | null;
   feature_id: string | null;
   plan: string | null;
+  investigation_report: string | null;
   technical_design: string | null;
   debug_info: string | null;
   subtasks: string;
@@ -54,6 +55,7 @@ function rowToTask(row: TaskRow): Task {
     prLink: row.pr_link,
     branchName: row.branch_name,
     plan: row.plan,
+    investigationReport: row.investigation_report,
     technicalDesign: row.technical_design,
     debugInfo: row.debug_info,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
@@ -176,8 +178,8 @@ export class SqliteTaskStore implements ITaskStore {
       }
 
       this.db.prepare(`
-        INSERT INTO tasks (id, project_id, pipeline_id, title, description, type, size, complexity, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, technical_design, debug_info, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, project_id, pipeline_id, title, description, type, size, complexity, status, priority, tags, parent_task_id, feature_id, assignee, pr_link, branch_name, plan, investigation_report, technical_design, debug_info, subtasks, phases, plan_comments, technical_design_comments, metadata, created_at, updated_at, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         input.projectId,
@@ -195,6 +197,7 @@ export class SqliteTaskStore implements ITaskStore {
         input.assignee ?? null,
         input.prLink ?? null,
         input.branchName ?? null,
+        null,
         null,
         null,
         input.debugInfo ?? null,
@@ -278,6 +281,10 @@ export class SqliteTaskStore implements ITaskStore {
       if (input.plan !== undefined) {
         updates.push('plan = ?');
         values.push(input.plan);
+      }
+      if (input.investigationReport !== undefined) {
+        updates.push('investigation_report = ?');
+        values.push(input.investigationReport);
       }
       if (input.technicalDesign !== undefined) {
         updates.push('technical_design = ?');
@@ -378,7 +385,7 @@ export class SqliteTaskStore implements ITaskStore {
         // Reset task record fields (including pipeline_id if changed)
         this.db.prepare(`
           UPDATE tasks
-          SET status = ?, pipeline_id = ?, plan = NULL, technical_design = NULL, subtasks = '[]', phases = NULL, plan_comments = '[]', technical_design_comments = '[]',
+          SET status = ?, pipeline_id = ?, plan = NULL, investigation_report = NULL, technical_design = NULL, subtasks = '[]', phases = NULL, plan_comments = '[]', technical_design_comments = '[]',
               pr_link = NULL, branch_name = NULL, updated_at = ?
           WHERE id = ?
         `).run(firstStatus, effectivePipelineId, now(), id);

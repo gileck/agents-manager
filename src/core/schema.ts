@@ -109,6 +109,7 @@ export const BASELINE_MIGRATION_NAMES: string[] = [
   '109_add_system_prompt_append_to_chat_sessions',
   '110_reseed_pipelines_already_on_main',
   '111_add_diagnostics_to_agent_runs',
+  '118_add_investigation_report_to_tasks',
 ];
 
 function escSql(s: string): string {
@@ -232,6 +233,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at INTEGER NOT NULL,
   subtasks TEXT NOT NULL DEFAULT '[]',
   plan TEXT,
+  investigation_report TEXT,
   feature_id TEXT REFERENCES features(id),
   plan_comments TEXT NOT NULL DEFAULT '[]',
   technical_design TEXT,

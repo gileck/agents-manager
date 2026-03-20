@@ -156,5 +156,9 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '117_add_enable_streaming_input_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN enable_streaming_input INTEGER NOT NULL DEFAULT 0`,
     },
+    {
+      name: '118_add_investigation_report_to_tasks',
+      sql: `ALTER TABLE tasks ADD COLUMN investigation_report TEXT`,
+    },
   ];
 }
