@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Bug, ChevronDown, ChevronRight, Loader2, Play } from 'lucide-react';
+import { Bug, ChevronDown, ChevronRight, FileText, Loader2, Play } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -466,6 +466,21 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
           >
             <Play className="h-3.5 w-3.5 mr-1" />
             Run Post-Mortem
+          </Button>
+        )}
+
+        {!pendingReview && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/tasks/${task.id}/post-mortem`);
+            }}
+          >
+            <FileText className="h-3.5 w-3.5 mr-1" />
+            View Report
           </Button>
         )}
 
