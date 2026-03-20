@@ -28,6 +28,7 @@ import { SourceControlPage } from './pages/SourceControlPage';
 import { DebugLogsPage } from './pages/DebugLogsPage';
 import { AgentRunsListPage } from './pages/AgentRunsListPage';
 import { KeyboardShortcutsPage } from './pages/KeyboardShortcutsPage';
+import { SettingsTabsPage } from './pages/SettingsTabsPage';
 import { ThreadsSettingsPage } from './pages/ThreadsSettingsPage';
 import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
 import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
@@ -35,7 +36,8 @@ import { AutomatedAgentDetailPage } from './pages/AutomatedAgentDetailPage';
 import { PostMortemPage } from './pages/PostMortemPage';
 import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
-import { useRouteRestore } from './hooks/useRouteRestore';
+import { useTabNavigation } from './hooks/useTabNavigation';
+import { TabsProvider } from './contexts/TabsContext';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
 import { ProjectChatSessionsProvider } from './contexts/ProjectChatSessionsContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -48,8 +50,8 @@ function AppRoutes() {
   useTheme();
   // Initialize custom theme overrides (CSS variable customizations)
   useThemeConfig();
-  // Restore last visited route on app start and save on navigation
-  useRouteRestore();
+  // Manage page tabs (replaces useRouteRestore)
+  useTabNavigation();
 
   useEffect(() => {
     // Listen for navigation events from main process
@@ -187,6 +189,7 @@ function AppRoutes() {
           <Route path="pipelines" element={<PipelinesPage />} />
           <Route path="agents" element={<AgentDefinitionsPage />} />
           <Route path="keyboard" element={<KeyboardShortcutsPage />} />
+          <Route path="tabs" element={<SettingsTabsPage />} />
           <Route path="project" element={<ProjectConfigPage />} />
           <Route path="threads" element={<ThreadsSettingsPage />} />
         </Route>
@@ -199,10 +202,12 @@ export default function App() {
   return (
     <CurrentProjectProvider>
       <ProjectChatSessionsProvider>
-        <ErrorBoundary>
-          <AppRoutes />
-        </ErrorBoundary>
-        <Toaster />
+        <TabsProvider>
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
+          <Toaster />
+        </TabsProvider>
       </ProjectChatSessionsProvider>
     </CurrentProjectProvider>
   );

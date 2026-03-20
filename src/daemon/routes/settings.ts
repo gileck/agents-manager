@@ -16,6 +16,8 @@ export function readCurrentSettings(services: AppServices): AppSettings {
     chatDefaultPermissionMode: (settingsStore.get('chat_default_permission_mode', '') || null) as AppSettings['chatDefaultPermissionMode'],
     chatThreadTheme: settingsStore.get('chat_thread_theme', '') || null,
     chatPreset: settingsStore.get('chat_preset', '') || null,
+    tabsEnabled: settingsStore.get('tabs_enabled', 'true') === 'true',
+    tabsMaxOpen: parseInt(settingsStore.get('tabs_max_open', '5'), 10) || 5,
   };
 }
 
@@ -63,6 +65,14 @@ export function settingsRoutes(services: AppServices): Router {
       }
       if (updates.chatPreset !== undefined) {
         settingsStore.set('chat_preset', updates.chatPreset ?? '');
+      }
+
+      if (updates.tabsEnabled !== undefined) {
+        settingsStore.set('tabs_enabled', updates.tabsEnabled.toString());
+      }
+      if (updates.tabsMaxOpen !== undefined) {
+        const maxTabs = Math.max(2, Math.min(20, Number(updates.tabsMaxOpen) || 5));
+        settingsStore.set('tabs_max_open', maxTabs.toString());
       }
 
       const settings = readCurrentSettings(services);

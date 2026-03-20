@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Settings, Palette, Workflow, Bot, SlidersHorizontal, Keyboard, MessageSquare } from 'lucide-react';
+import { Settings, Palette, Workflow, Bot, SlidersHorizontal, Keyboard, MessageSquare, PanelTop } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 
@@ -9,6 +9,7 @@ const tabs = [
   { to: '/settings/theme', icon: Palette, label: 'Theme' },
   { to: '/settings/threads', icon: MessageSquare, label: 'Threads' },
   { to: '/settings/keyboard', icon: Keyboard, label: 'Shortcuts' },
+  { to: '/settings/tabs', icon: PanelTop, label: 'Tabs' },
   { to: '/settings/pipelines', icon: Workflow, label: 'Pipelines' },
   { to: '/settings/agents', icon: Bot, label: 'Agents' },
 ];

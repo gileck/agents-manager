@@ -177,11 +177,6 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
   useEffect(() => { setShowRawView(false); }, [currentSessionId]);
 
   useChatKeyboardShortcuts({
-    sessions,
-    currentSessionId,
-    switchSession,
-    createSession,
-    deleteSession,
     clearChat,
     focusInput: () => inputRef.current?.focus(),
   });

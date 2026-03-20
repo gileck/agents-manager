@@ -65,6 +65,8 @@ export interface AppSettings {
   chatDefaultPermissionMode: PermissionMode | null;
   chatThreadTheme: string | null; // JSON-serialized ChatThreadTheme
   chatPreset: string | null; // Active chat UI preset name (null = "default")
+  tabsEnabled: boolean;
+  tabsMaxOpen: number;
 }
 
 // Log types (kept for template infrastructure)

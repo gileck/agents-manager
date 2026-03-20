@@ -177,11 +177,6 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useChatKeyboardShortcuts({
-    sessions,
-    currentSessionId,
-    switchSession,
-    createSession,
-    deleteSession,
     clearChat,
     focusInput: () => inputRef.current?.focus(),
   });

@@ -1,4 +1,4 @@
-export type ShortcutContext = 'chat' | 'kanban';
+export type ShortcutContext = 'tabs' | 'kanban';
 
 export interface ShortcutDefinition {
   id: string;
@@ -9,14 +9,12 @@ export interface ShortcutDefinition {
 }
 
 export const SHORTCUT_REGISTRY: ShortcutDefinition[] = [
-  // Chat shortcuts
-  { id: 'chat.newSession',      context: 'chat',   description: 'New chat session',            defaultCombo: 'CmdOrCtrl+n' },
-  { id: 'chat.closeSession',    context: 'chat',   description: 'Close current session',        defaultCombo: 'CmdOrCtrl+w' },
-  { id: 'chat.prevSession',     context: 'chat',   description: 'Previous session',             defaultCombo: 'CmdOrCtrl+[' },
-  { id: 'chat.nextSession',     context: 'chat',   description: 'Next session',                 defaultCombo: 'CmdOrCtrl+]' },
-  { id: 'chat.focusInput',      context: 'chat',   description: 'Focus chat input',             defaultCombo: 'CmdOrCtrl+l' },
-  { id: 'chat.clearChat',       context: 'chat',   description: 'Clear conversation',           defaultCombo: 'CmdOrCtrl+k' },
-  { id: 'chat.jumpToSession',   context: 'chat',   description: 'Jump to session by index (1–9)', defaultCombo: 'CmdOrCtrl+1–9', notCustomizable: true },
+  // Tab shortcuts
+  { id: 'tabs.closeTab',      context: 'tabs',   description: 'Close current tab',             defaultCombo: 'CmdOrCtrl+w' },
+  { id: 'tabs.prevTab',       context: 'tabs',   description: 'Previous tab',                  defaultCombo: 'CmdOrCtrl+Shift+[' },
+  { id: 'tabs.nextTab',       context: 'tabs',   description: 'Next tab',                      defaultCombo: 'CmdOrCtrl+Shift+]' },
+  { id: 'tabs.quickSwitcher', context: 'tabs',   description: 'Quick switcher',                defaultCombo: 'CmdOrCtrl+e' },
+  { id: 'tabs.jumpToTab',     context: 'tabs',   description: 'Jump to tab by index (1–9)',    defaultCombo: 'CmdOrCtrl+1–9', notCustomizable: true },
   // Kanban shortcuts
   { id: 'kanban.navLeft',       context: 'kanban', description: 'Navigate to previous column',  defaultCombo: 'ArrowLeft' },
   { id: 'kanban.navRight',      context: 'kanban', description: 'Navigate to next column',      defaultCombo: 'ArrowRight' },
@@ -30,7 +28,7 @@ export const SHORTCUT_REGISTRY: ShortcutDefinition[] = [
 /**
  * Normalize a combo string so storage is always consistent.
  * The key portion is lowercased; modifiers are kept as-is.
- * e.g. "CmdOrCtrl+N" -> "CmdOrCtrl+n"
+ * e.g. "CmdOrCtrl+Shift+N" -> "CmdOrCtrl+Shift+n"
  */
 export function normalizeCombo(combo: string): string {
   const parts = combo.split('+');
@@ -41,18 +39,20 @@ export function normalizeCombo(combo: string): string {
 
 /**
  * Check whether a KeyboardEvent matches a given combo string.
- * Combo format: optional "CmdOrCtrl+" prefix, then the key (lowercase).
+ * Combo format: optional "CmdOrCtrl+" and/or "Shift+" prefix, then the key (lowercase).
  */
 export function matchesKeyEvent(combo: string, event: KeyboardEvent): boolean {
   const normalized = normalizeCombo(combo);
   const parts = normalized.split('+');
   const key = parts[parts.length - 1];
   const needsCmdOrCtrl = parts.includes('CmdOrCtrl');
+  const needsShift = parts.includes('Shift');
 
   const eventKey = event.key.toLowerCase();
   const hasCmdOrCtrl = event.metaKey || event.ctrlKey;
 
   if (needsCmdOrCtrl !== hasCmdOrCtrl) return false;
+  if (needsShift !== event.shiftKey) return false;
   return eventKey === key;
 }
 
@@ -67,6 +67,7 @@ export function comboFromKeyEvent(event: KeyboardEvent): string | null {
 
   const parts: string[] = [];
   if (event.metaKey || event.ctrlKey) parts.push('CmdOrCtrl');
+  if (event.shiftKey) parts.push('Shift');
   parts.push(key);
   return parts.join('+');
 }
@@ -75,7 +76,7 @@ const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith(
 
 /**
  * Return a human-readable label for a combo string.
- * e.g. "CmdOrCtrl+n" -> "⌘N" on Mac, "Ctrl+N" on Windows
+ * e.g. "CmdOrCtrl+Shift+[" -> "⌘⇧[" on Mac, "Ctrl+Shift+[" on Windows
  */
 export function formatCombo(combo: string): string {
   if (combo === 'CmdOrCtrl+1–9') return isMac ? '⌘1–9' : 'Ctrl+1–9';
@@ -83,11 +84,17 @@ export function formatCombo(combo: string): string {
   const parts = normalized.split('+');
   const key = parts[parts.length - 1];
   const hasCmdOrCtrl = parts.includes('CmdOrCtrl');
+  const hasShift = parts.includes('Shift');
 
   const keyLabel = key.length === 1 ? key.toUpperCase() : key;
 
-  if (hasCmdOrCtrl) {
-    return isMac ? `⌘${keyLabel}` : `Ctrl+${keyLabel}`;
+  if (isMac) {
+    const mods = (hasCmdOrCtrl ? '⌘' : '') + (hasShift ? '⇧' : '');
+    return `${mods}${keyLabel}`;
   }
-  return keyLabel;
+  const mods: string[] = [];
+  if (hasCmdOrCtrl) mods.push('Ctrl');
+  if (hasShift) mods.push('Shift');
+  mods.push(keyLabel);
+  return mods.join('+');
 }

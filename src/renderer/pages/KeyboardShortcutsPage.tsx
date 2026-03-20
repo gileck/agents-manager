@@ -7,11 +7,11 @@ import { useKeyboardShortcutsConfig } from '../hooks/useKeyboardShortcutsConfig'
 import { KeyRecorder } from '../components/KeyRecorder';
 
 const CONTEXT_LABELS: Record<ShortcutContext, string> = {
-  chat: 'Chat',
+  tabs: 'Tabs',
   kanban: 'Kanban',
 };
 
-const CONTEXTS: ShortcutContext[] = ['chat', 'kanban'];
+const CONTEXTS: ShortcutContext[] = ['tabs', 'kanban'];
 
 export function KeyboardShortcutsPage() {
   const { getCombo, setCombo, resetCombo, resetAll, hasConflict } = useKeyboardShortcutsConfig();

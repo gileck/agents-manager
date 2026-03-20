@@ -81,11 +81,6 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useChatKeyboardShortcuts({
-    sessions,
-    currentSessionId,
-    switchSession,
-    createSession,
-    deleteSession,
     clearChat,
     focusInput: () => inputRef.current?.focus(),
   });
