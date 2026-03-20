@@ -215,6 +215,9 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     let diffContent = '';
     try {
       diffContent = await gitOps.diff(rebaseRef, branch);
+      // Remove stale diff artifacts before creating the fresh one so the UI
+      // always reflects the current state of the branch.
+      await deps.taskArtifactStore.deleteArtifactsByType(task.id, 'diff');
       await deps.taskArtifactStore.createArtifact({
         taskId: task.id,
         type: 'diff',
