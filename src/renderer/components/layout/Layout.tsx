@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { TopMenu } from './TopMenu';
 import { TabBar } from './TabBar';
 import { QuickSwitcher } from './QuickSwitcher';
+import { GlobalSearchDialog } from './GlobalSearchDialog';
 import { BugReportDialog } from '../bugs/BugReportDialog';
 
 export function Layout() {
@@ -17,6 +18,7 @@ export function Layout() {
       />
       <BugReportDialog open={bugDialogOpen} onOpenChange={setBugDialogOpen} />
       <QuickSwitcher />
+      <GlobalSearchDialog />
     </>
   );
 }

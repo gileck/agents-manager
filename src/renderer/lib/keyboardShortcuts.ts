@@ -1,4 +1,4 @@
-export type ShortcutContext = 'tabs' | 'kanban';
+export type ShortcutContext = 'tabs' | 'kanban' | 'global';
 
 export interface ShortcutDefinition {
   id: string;
@@ -16,6 +16,8 @@ export const SHORTCUT_REGISTRY: ShortcutDefinition[] = [
   { id: 'tabs.quickSwitcher', context: 'tabs',   description: 'Quick switcher',                defaultCombo: 'CmdOrCtrl+e' },
   { id: 'tabs.reopenTab',     context: 'tabs',   description: 'Reopen last closed tab',        defaultCombo: 'CmdOrCtrl+Shift+t' },
   { id: 'tabs.jumpToTab',     context: 'tabs',   description: 'Jump to tab by index (1–9)',    defaultCombo: 'CmdOrCtrl+1–9', notCustomizable: true },
+  // Global shortcuts
+  { id: 'global.search',   context: 'global', description: 'Search tasks & threads', defaultCombo: 'CmdOrCtrl+o' },
   // Kanban shortcuts
   { id: 'kanban.navLeft',       context: 'kanban', description: 'Navigate to previous column',  defaultCombo: 'ArrowLeft' },
   { id: 'kanban.navRight',      context: 'kanban', description: 'Navigate to next column',      defaultCombo: 'ArrowRight' },
