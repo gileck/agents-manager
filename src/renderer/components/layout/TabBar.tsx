@@ -57,13 +57,13 @@ export function TabBar() {
               className={cn(
                 'group flex items-center gap-1.5 px-3 h-full text-xs font-medium border-r border-border whitespace-nowrap transition-colors min-w-0 max-w-[180px] relative',
                 isActive
-                  ? 'bg-background text-foreground'
-                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                  ? 'bg-background text-foreground border-b border-b-background -mb-px'
+                  : 'text-muted-foreground/70 hover:bg-muted/50 hover:text-foreground'
               )}
             >
-              {/* Active indicator */}
+              {/* Active indicator — top bar */}
               {isActive && (
-                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary" />
               )}
 
               {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
