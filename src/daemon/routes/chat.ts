@@ -139,6 +139,14 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // PATCH /api/chat/sessions/:id/unhide — unhide session (restore to sidebar)
+  router.patch('/api/chat/sessions/:id/unhide', async (req, res, next) => {
+    try {
+      const ok = await services.chatSessionStore.unhideSession(req.params.id);
+      res.json({ ok });
+    } catch (err) { next(err); }
+  });
+
   // GET /api/chat/sessions/:id — get session
   router.get('/api/chat/sessions/:id', async (req, res, next) => {
     try {

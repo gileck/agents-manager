@@ -66,6 +66,10 @@ export function registerChatSessionHandlers(api: ApiClient): void {
     return api.chat.hideSession(sessionId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_UNHIDE, async (_, sessionId: string) => {
+    return api.chat.unhideSession(sessionId);
+  });
+
   registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_HIDE_ALL, async (_, projectId: string) => {
     return api.chat.hideAllSessions(projectId);
   });
