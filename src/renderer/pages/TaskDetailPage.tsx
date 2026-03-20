@@ -37,13 +37,15 @@ import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
 
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
+import { ImagePasteArea } from '../components/ui/ImagePasteArea';
 import type { QuestionResponse } from '../components/prompts/QuestionForm';
 import { AnswerQuestionsDialog } from '../components/prompts/AnswerQuestionsDialog';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useTaskPolling } from '../hooks/useTaskPolling';
 import { BugReportDialog } from '../components/bugs/BugReportDialog';
 import type { BugReportInitialValues } from '../components/bugs/BugReportDialog';
-import type { HookFailureRecord } from '../../shared/types';
+import type { HookFailureRecord, ChatImage } from '../../shared/types';
+import { reportError } from '../lib/error-handler';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -148,6 +150,7 @@ export function TaskDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<TaskUpdateInput>({});
+  const [editImages, setEditImages] = useState<ChatImage[]>([]);
   const [saving, setSaving] = useState(false);
   const [transitioning, setTransitioning] = useState<string | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
@@ -201,6 +204,7 @@ export function TaskDetailPage() {
         assignee: task.assignee ?? '',
         featureId: task.featureId,
       });
+      setEditImages([]);
       setEditOpen(true);
     }
   };
@@ -209,8 +213,25 @@ export function TaskDetailPage() {
     if (!id) return;
     setSaving(true);
     try {
-      await window.api.tasks.update(id, editForm);
+      let description = editForm.description ?? '';
+
+      // Save screenshots if any
+      if (editImages.length > 0) {
+        try {
+          const { paths } = await window.api.screenshots.save(editImages);
+          if (paths.length > 0) {
+            const screenshotSection = '\n\n## Screenshots\n' +
+              paths.map((p, i) => `![screenshot-${i + 1}](${p})`).join('\n');
+            description = description + screenshotSection;
+          }
+        } catch (err) {
+          reportError(err, 'Save screenshots');
+        }
+      }
+
+      await window.api.tasks.update(id, { ...editForm, description });
       setEditOpen(false);
+      setEditImages([]);
       await refetch();
     } catch (err) {
       setTransitionError(err instanceof Error ? err.message : 'Failed to save task. Please try again.');
@@ -813,7 +834,7 @@ export function TaskDetailPage() {
       )}
 
       {/* Edit Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setEditImages([]); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Task</DialogTitle>
@@ -833,6 +854,7 @@ export function TaskDetailPage() {
                 value={editForm.description ?? ''}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
               />
+              <ImagePasteArea images={editImages} onImagesChange={setEditImages} />
             </div>
             <div className="space-y-2">
               <Label>Priority</Label>
