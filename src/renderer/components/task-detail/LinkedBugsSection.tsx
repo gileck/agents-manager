@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { BugReportDialog } from '../bugs/BugReportDialog';
+import { LinkExistingBugDialog } from '../bugs/LinkExistingBugDialog';
 import { reportError } from '../../lib/error-handler';
 import type { Task } from '../../../shared/types';
 
@@ -17,6 +18,7 @@ export function LinkedBugsSection({ taskId }: LinkedBugsSectionProps) {
   const [linkedBugs, setLinkedBugs] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
 
   const fetchLinkedBugs = useCallback(async () => {
     try {
@@ -48,6 +50,17 @@ export function LinkedBugsSection({ taskId }: LinkedBugsSectionProps) {
     [fetchLinkedBugs],
   );
 
+  const handleLinkDialogClose = useCallback(
+    (open: boolean) => {
+      setLinkDialogOpen(open);
+      if (!open) {
+        // Refetch after dialog closes to show newly linked bug
+        void fetchLinkedBugs();
+      }
+    },
+    [fetchLinkedBugs],
+  );
+
   const statusColor = (status: string) => {
     if (status === 'closed' || status === 'done' || status === 'merged') return 'default';
     if (status === 'in_progress' || status === 'implementing') return 'secondary';
@@ -68,14 +81,24 @@ export function LinkedBugsSection({ taskId }: LinkedBugsSectionProps) {
                 </span>
               )}
             </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setReportDialogOpen(true)}
-              className="h-6 text-xs"
-            >
-              Report Bug
-            </Button>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLinkDialogOpen(true)}
+                className="h-6 text-xs"
+              >
+                Link Existing
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReportDialogOpen(true)}
+                className="h-6 text-xs"
+              >
+                Report Bug
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pb-3">
@@ -106,6 +129,13 @@ export function LinkedBugsSection({ taskId }: LinkedBugsSectionProps) {
         open={reportDialogOpen}
         onOpenChange={handleReportDialogClose}
         initialSourceTaskId={taskId}
+      />
+
+      <LinkExistingBugDialog
+        open={linkDialogOpen}
+        onOpenChange={handleLinkDialogClose}
+        taskId={taskId}
+        excludeBugIds={linkedBugs.map((b) => b.id)}
       />
     </>
   );
