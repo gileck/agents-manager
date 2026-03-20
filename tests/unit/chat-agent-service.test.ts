@@ -726,5 +726,46 @@ describe('ChatAgentService', () => {
         expect(secondContent).not.toContainEqual(expect.objectContaining({ type: 'assistant_text', text: 'Initial response' }));
       }
     });
+
+    it('restores turnMessages on intermediate persistence failure so finally block still persists them', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
+      const { lib, resolve } = createHoldingMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      let callCount = 0;
+      const addMessageCalls: Array<{ role: string; content: string }> = [];
+      (mockMessageStore.addMessage as ReturnType<typeof vi.fn>).mockImplementation(async (input: { role: string; content: string }) => {
+        callCount++;
+        // Fail on the 2nd call — the intermediate assistant persistence.
+        // Call 1 is the initial user message from send().
+        if (callCount === 2) {
+          throw new Error('Simulated DB failure');
+        }
+        addMessageCalls.push({ role: input.role, content: input.content });
+        return { id: `msg-${addMessageCalls.length}`, sessionId: 'session-1', role: input.role, content: input.content, createdAt: Date.now() };
+      });
+
+      // Start the agent — call 1: persists the initial user message
+      const sendResult = await service.send('session-1', 'First message', { systemPrompt: '' });
+
+      // Inject a message — call 2: intermediate assistant persist FAILS, call 3: injected user message
+      await service.send('session-1', 'Injected message', { systemPrompt: '' });
+
+      // Resolve the agent (completes runAgent → finally block runs)
+      resolve();
+      await sendResult.completion;
+
+      // The finally block should have persisted assistant messages that include
+      // the restored pre-injection messages (since intermediate persistence failed)
+      const assistantMessages = addMessageCalls.filter((c) => c.role === 'assistant');
+      expect(assistantMessages.length).toBeGreaterThanOrEqual(1);
+      // The finally-block assistant message should contain the 'Initial response'
+      // because the error recovery restored it to turnMessages
+      const lastAssistant = assistantMessages[assistantMessages.length - 1];
+      const content = JSON.parse(lastAssistant.content);
+      expect(content).toContainEqual(
+        expect.objectContaining({ type: 'assistant_text', text: 'Initial response' }),
+      );
+    });
   });
 });

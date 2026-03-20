@@ -183,6 +183,10 @@ export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   private runningAgents = new Map<string, RunningAgent>();
   private liveTurnMessages = new Map<string, AgentChatMessage[]>();
+  /** Accumulates ALL turn messages for the run including pre-injection ones.
+   *  Unlike liveTurnMessages (cleared during injection), this is never cleared
+   *  so that AgentRun.messages captures the full conversation. */
+  private allRunTurnMessages = new Map<string, AgentChatMessage[]>();
   private imageStorageDir: string;
   private injectedQueue = new Map<string, InjectedMessage[]>();
   private injectedEventHandler?: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined;
@@ -495,6 +499,8 @@ export class ChatAgentService {
           const snapshot = [...currentTurnMessages];
           currentTurnMessages.length = 0;
           try {
+            // Cost data is intentionally omitted — it represents the full run total
+            // and is persisted only once in the finally block.
             await this.chatMessageStore.addMessage({
               sessionId,
               role: 'assistant',
@@ -1081,7 +1087,9 @@ export class ChatAgentService {
     let totalCostUsd: number | undefined;
     let lastContextInputTokens: number | undefined;
     const turnMessages: AgentChatMessage[] = [];
+    const allTurnMessages: AgentChatMessage[] = [];
     this.liveTurnMessages.set(sessionId, turnMessages);
+    this.allRunTurnMessages.set(sessionId, allTurnMessages);
 
     // Safe wrapper: emit both event types from a single AgentChatMessage
     const emitMessage = (msg: AgentChatMessage) => {
@@ -1094,6 +1102,7 @@ export class ChatAgentService {
       // Collect all messages except usage (stored in row-level cost fields)
       if (msg.type !== 'usage') {
         turnMessages.push(msg);
+        allTurnMessages.push(msg);
       }
     };
 
@@ -1565,6 +1574,7 @@ export class ChatAgentService {
       this.runningControllers.delete(sessionId);
       this.runningRunIds.delete(sessionId);
       this.liveTurnMessages.delete(sessionId);
+      this.allRunTurnMessages.delete(sessionId);
 
       // Clean up any orphaned pending questions for this session (e.g. SDK timeout)
       const orphaned = [...this.pendingQuestions.entries()].filter(([, p]) => p.sessionId === sessionId);
@@ -1621,7 +1631,7 @@ export class ChatAgentService {
               cacheReadInputTokens: (existingRun.cacheReadInputTokens ?? 0) + (cacheReadInputTokens ?? 0),
               cacheCreationInputTokens: (existingRun.cacheCreationInputTokens ?? 0) + (cacheCreationInputTokens ?? 0),
               totalCostUsd: (existingRun.totalCostUsd ?? 0) + (totalCostUsd ?? 0),
-              messages: [...(existingRun.messages ?? []), ...turnMessages],
+              messages: [...(existingRun.messages ?? []), ...allTurnMessages],
               prompt: existingRun.prompt ? existingRun.prompt : `${systemPrompt}\n\n${prompt}`,
             });
           } else {
