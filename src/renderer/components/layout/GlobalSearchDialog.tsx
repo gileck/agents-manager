@@ -9,6 +9,8 @@ import { useKeyboardShortcutsConfig } from '../../hooks/useKeyboardShortcutsConf
 import { formatCombo } from '../../lib/keyboardShortcuts';
 import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import { reportError } from '../../lib/error-handler';
+import { APP_PAGES } from '../../lib/pages';
+import type { PageDefinition } from '../../lib/pages';
 import type { Task, ChatSessionWithDetails } from '../../../shared/types';
 
 /* ── Status dot icons (reused from SidebarRecentTasks) ── */
@@ -45,11 +47,13 @@ const DEBOUNCE_MS = 250;
 
 interface SearchResult {
   id: string;
-  type: 'task' | 'thread';
+  type: 'task' | 'thread' | 'page';
   title: string;
   status?: string;
   messageCount?: number;
   updatedAt: number;
+  path?: string;
+  page?: PageDefinition;
 }
 
 export function GlobalSearchDialog() {
@@ -89,7 +93,12 @@ export function GlobalSearchDialog() {
 
   /* ── Fetch data (debounced) ── */
   const fetchResults = useCallback(async (searchQuery: string) => {
-    if (!currentProjectId) return;
+    if (!currentProjectId) {
+      // Without a project, clear tasks/threads (pages are filtered client-side)
+      setTasks([]);
+      setThreads([]);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -136,9 +145,29 @@ export function GlobalSearchDialog() {
     };
   }, [open, query, fetchResults]);
 
+  /* ── Filter pages by query ── */
+  const filteredPages = useMemo((): PageDefinition[] => {
+    if (!query.trim()) return [];
+    const lowerQuery = query.toLowerCase();
+    return APP_PAGES.filter(page => {
+      if (page.label.toLowerCase().includes(lowerQuery)) return true;
+      return page.keywords.some(kw => kw.toLowerCase().includes(lowerQuery));
+    });
+  }, [query]);
+
   /* ── Build flat result list ── */
   const results = useMemo((): SearchResult[] => {
     const items: SearchResult[] = [];
+    for (const page of filteredPages) {
+      items.push({
+        id: page.id,
+        type: 'page',
+        title: page.label,
+        updatedAt: 0,
+        path: page.path,
+        page,
+      });
+    }
     for (const task of tasks) {
       items.push({
         id: task.id,
@@ -158,7 +187,7 @@ export function GlobalSearchDialog() {
       });
     }
     return items;
-  }, [tasks, threads]);
+  }, [filteredPages, tasks, threads]);
 
   /* ── Scroll selected into view ── */
   useEffect(() => {
@@ -171,7 +200,9 @@ export function GlobalSearchDialog() {
   /* ── Select action ── */
   const selectResult = useCallback((result: SearchResult) => {
     setOpen(false);
-    if (result.type === 'task') {
+    if (result.type === 'page') {
+      navigate(result.path!);
+    } else if (result.type === 'task') {
       navigate(`/tasks/${result.id}`);
     } else {
       switchSession(result.id);
@@ -210,6 +241,7 @@ export function GlobalSearchDialog() {
   const portalTarget = document.getElementById('app-root') || document.body;
 
   /* ── Compute category indices for headers ── */
+  const pageCount = filteredPages.length;
   const taskCount = tasks.length;
   const threadCount = threads.length;
 
@@ -236,7 +268,7 @@ export function GlobalSearchDialog() {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search tasks and threads..."
+            placeholder="Search pages, tasks, and threads..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -251,21 +283,56 @@ export function GlobalSearchDialog() {
         </div>
 
         {/* Results area */}
-        {!currentProjectId ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground/60">
-            Select a project to search
-          </div>
-        ) : error ? (
+        {error ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground/60">
             {error}
+          </div>
+        ) : !currentProjectId && pageCount === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground/60">
+            Select a project to search tasks and threads
           </div>
         ) : results.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <Search className="h-8 w-8 text-muted-foreground/30" />
-            <span className="text-sm text-muted-foreground/60">No matching tasks or threads</span>
+            <span className="text-sm text-muted-foreground/60">No results found</span>
           </div>
         ) : (
           <div ref={listRef} className="max-h-80 overflow-y-auto">
+            {/* Pages section */}
+            {pageCount > 0 && (
+              <>
+                <div className="sticky top-0 z-10 bg-popover/95 backdrop-blur-xl px-4 py-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+                    Pages
+                  </span>
+                </div>
+                {filteredPages.map((page, idx) => {
+                  const Icon = page.icon;
+                  return (
+                    <button
+                      key={page.id}
+                      data-index={idx}
+                      onClick={() => selectResult({ id: page.id, type: 'page', title: page.label, updatedAt: 0, path: page.path, page })}
+                      className={cn(
+                        'flex items-center gap-3 w-full px-4 py-2 text-left transition-colors duration-75',
+                        idx === selectedIndex
+                          ? 'bg-accent/80 text-accent-foreground rounded-lg'
+                          : 'text-foreground hover:bg-muted/40'
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                      <span className="text-sm font-medium truncate flex-1">{page.label}</span>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Divider between pages and tasks */}
+            {pageCount > 0 && taskCount > 0 && (
+              <div className="border-t border-border/30 my-0.5" />
+            )}
+
             {/* Tasks section */}
             {taskCount > 0 && (
               <>
@@ -275,15 +342,16 @@ export function GlobalSearchDialog() {
                   </span>
                 </div>
                 {tasks.map((task, idx) => {
+                  const globalIdx = pageCount + idx;
                   const icon = STATUS_ICONS[task.status] || STATUS_ICONS._default;
                   return (
                     <button
                       key={task.id}
-                      data-index={idx}
+                      data-index={globalIdx}
                       onClick={() => selectResult({ id: task.id, type: 'task', title: task.title, status: task.status, updatedAt: task.updatedAt })}
                       className={cn(
                         'flex items-center gap-3 w-full px-4 py-2 text-left transition-colors duration-75',
-                        idx === selectedIndex
+                        globalIdx === selectedIndex
                           ? 'bg-accent/80 text-accent-foreground rounded-lg'
                           : 'text-foreground hover:bg-muted/40'
                       )}
@@ -302,8 +370,8 @@ export function GlobalSearchDialog() {
               </>
             )}
 
-            {/* Divider between sections */}
-            {taskCount > 0 && threadCount > 0 && (
+            {/* Divider between tasks and threads */}
+            {(pageCount > 0 || taskCount > 0) && threadCount > 0 && (
               <div className="border-t border-border/30 my-0.5" />
             )}
 
@@ -316,7 +384,7 @@ export function GlobalSearchDialog() {
                   </span>
                 </div>
                 {threads.map((thread, idx) => {
-                  const globalIdx = taskCount + idx;
+                  const globalIdx = pageCount + taskCount + idx;
                   return (
                     <button
                       key={thread.id}
