@@ -35,13 +35,13 @@ const CONFIG = {
     tabKey: 'design',
   },
   investigation: {
-    field: 'plan' as const,
+    field: 'investigationReport' as const,
     entryType: 'investigation_feedback',
     agentRole: 'investigator',
     approveToStatus: 'implementing',
     reviseToStatus: 'investigating',
     reviewStatus: 'investigation_review',
-    label: 'Investigation',
+    label: 'Investigation Report',
     tabKey: 'investigation',
   },
 };
