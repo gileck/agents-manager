@@ -1,9 +1,23 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toScreenshotApiUrl } from '../../utils/screenshot-url';
 
+/**
+ * Metadata keys that should NOT be rendered as h1 headers.
+ * Old investigation reports used `# Key: value` for all metadata lines;
+ * this normalizer converts them to `**Key:** value` so only the title
+ * remains as a heading.
+ */
+const METADATA_HEADER_RE = /^# (Summary|Root Cause Confidence|Root Cause|Suggested Fix Complexity(?:\s*\([^)]*\))?)\s*:/gm;
+
+function normalizeReportHeaders(raw: string): string {
+  return raw.replace(METADATA_HEADER_RE, (_match, key: string) => `**${key}:**`);
+}
+
 export function PlanMarkdown({ content }: { content: string }) {
+  const normalizedContent = useMemo(() => normalizeReportHeaders(content), [content]);
+
   return (
     <div className="plan-markdown text-sm leading-relaxed overflow-hidden">
       <ReactMarkdown
@@ -82,7 +96,7 @@ export function PlanMarkdown({ content }: { content: string }) {
           hr: () => <hr className="my-4 border-border" />,
         }}
       >
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   );
