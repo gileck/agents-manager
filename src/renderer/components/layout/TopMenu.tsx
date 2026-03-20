@@ -27,29 +27,13 @@ import {
   Search,
 } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
+import { getPageTitle } from '../../lib/pages';
 import { TaskCreateDialog } from '../tasks/TaskCreateDialog';
 import { NotificationBell } from './NotificationBell';
 import { useKeyboardShortcutsConfig } from '../../hooks/useKeyboardShortcutsConfig';
 import { formatCombo } from '../../lib/keyboardShortcuts';
 
 type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
-
-function getPageTitle(pathname: string): string {
-  if (pathname === '/') return 'Dashboard';
-  if (pathname.startsWith('/projects')) return 'Projects';
-  if (pathname.startsWith('/tasks')) return 'Tasks';
-  if (pathname.startsWith('/kanban')) return 'Kanban';
-  if (pathname.startsWith('/chat')) return 'New thread';
-  if (pathname.startsWith('/automated-agents')) return 'Automations';
-  if (pathname.startsWith('/agent-runs') || pathname.startsWith('/agents/')) return 'Agent runs';
-  if (pathname.startsWith('/features')) return 'Features';
-  if (pathname.startsWith('/cost')) return 'Cost';
-  if (pathname.startsWith('/source-control')) return 'Source control';
-  if (pathname.startsWith('/debug-logs')) return 'Debug logs';
-  if (pathname.startsWith('/post-mortem')) return 'Post-Mortem';
-  if (pathname.startsWith('/settings')) return 'Settings';
-  return 'Agents Manager';
-}
 
 const utilityButtonClass =
   'h-9 rounded-full border border-border/70 bg-card/65 hover:bg-accent/70 text-muted-foreground hover:text-foreground';

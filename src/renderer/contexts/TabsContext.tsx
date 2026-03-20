@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
-import { CheckSquare, MessageSquare, FolderOpen, Settings, LayoutDashboard, Bot, Bug, Clock, GitBranch, DollarSign, Terminal, BarChart3, Zap } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { reportError } from '../lib/error-handler';
+import { STATIC_PAGES_MAP } from '../lib/pages';
 
 // --- Types ---
 
@@ -36,25 +35,8 @@ interface TabInfo {
   iconName: string;
 }
 
-const STATIC_PAGES: Record<string, { label: string; iconName: string }> = {
-  '/': { label: 'Dashboard', iconName: 'LayoutDashboard' },
-  '/tasks': { label: 'Tasks', iconName: 'CheckSquare' },
-  '/chat': { label: 'Chat', iconName: 'MessageSquare' },
-  '/projects': { label: 'Projects', iconName: 'FolderOpen' },
-  '/threads': { label: 'Thread History', iconName: 'Clock' },
-  '/automated-agents': { label: 'Automations', iconName: 'Bot' },
-  '/post-mortem': { label: 'Post-Mortem', iconName: 'Bug' },
-  '/agent-runs': { label: 'Agent Runs', iconName: 'Zap' },
-  '/features': { label: 'Features', iconName: 'BarChart3' },
-  '/source-control': { label: 'Source Control', iconName: 'GitBranch' },
-  '/cost': { label: 'Cost', iconName: 'DollarSign' },
-  '/debug-logs': { label: 'Debug Logs', iconName: 'Terminal' },
-};
-
-export const ICON_MAP: Record<string, LucideIcon> = {
-  CheckSquare, MessageSquare, FolderOpen, Settings, LayoutDashboard,
-  Bot, Bug, Clock, GitBranch, DollarSign, Terminal, BarChart3, Zap,
-};
+// Re-export ICON_MAP so existing consumers (TabBar, QuickSwitcher) don't break
+export { ICON_MAP } from '../lib/pages';
 
 /** Extract the entity ID from a tab identity string (e.g., "task:abc123" → "abc123") */
 export function getEntityId(identity: string): string | null {
@@ -92,7 +74,7 @@ export function computeTabInfo(pathname: string): TabInfo {
   if (autoAgentMatch) {
     return { identity: `auto-agent:${autoAgentMatch[1]}`, label: 'Automation', iconName: 'Bot' };
   }
-  const staticPage = STATIC_PAGES[pathname];
+  const staticPage = STATIC_PAGES_MAP[pathname];
   if (staticPage) {
     return { identity: `page:${pathname}`, label: staticPage.label, iconName: staticPage.iconName };
   }

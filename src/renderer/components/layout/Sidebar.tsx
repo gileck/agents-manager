@@ -2,13 +2,9 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import {
-  Bot,
   Bug,
-  CheckSquare,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  FolderOpen,
   RefreshCw,
   SquarePen,
   Settings,
@@ -23,19 +19,12 @@ import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { reportError } from '../../lib/error-handler';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { SIDEBAR_NAV_PAGES } from '../../lib/pages';
 
 const COLLAPSED_WIDTH = 52;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 520;
 const DEFAULT_WIDTH = 288;
-
-const navItems = [
-  { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
-  { to: '/threads', icon: Clock, label: 'Thread History' },
-  { to: '/projects', icon: FolderOpen, label: 'Projects' },
-  { to: '/automated-agents', icon: Bot, label: 'Automations' },
-  { to: '/post-mortem', icon: Bug, label: 'Post-Mortem' },
-];
 
 interface SidebarProps {
   onReportBug: () => void;
@@ -167,10 +156,10 @@ export function Sidebar({ onReportBug }: SidebarProps) {
             <SquarePen className="h-4 w-4 shrink-0" />
             {!isCollapsed && 'New thread'}
           </button>
-          {navItems.map((item) => (
+          {SIDEBAR_NAV_PAGES.map((item) => (
             <NavLink
-              key={item.to}
-              to={item.to}
+              key={item.path}
+              to={item.path}
               title={isCollapsed ? item.label : undefined}
               className={({ isActive }) =>
                 cn(
