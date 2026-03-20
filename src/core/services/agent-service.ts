@@ -40,6 +40,19 @@ import { PostRunExtractor } from './post-run-extractor';
 import { getAppLogger } from './app-logger';
 import { formatSystemNotification } from './pipeline-notification-context';
 
+/**
+ * Agent types that are read-only (analysis only, never commit code changes).
+ * These agents skip branch creation/switching and worktree clean/rebase since
+ * they don't need a dedicated branch — they reuse whatever branch the worktree
+ * is currently on.
+ */
+const READONLY_AGENT_TYPES = new Set([
+  'post-mortem-reviewer',
+  'task-workflow-reviewer',
+  'reviewer',
+  'investigator',
+]);
+
 export class AgentService implements IAgentService {
   private backgroundPromises = new Map<string, Promise<void>>();
   private messageQueues = new Map<string, string[]>();
@@ -255,6 +268,7 @@ export class AgentService implements IAgentService {
     }
 
     // Determine base branch and phase branch name
+    const isReadOnlyAgent = READONLY_AGENT_TYPES.has(agentType);
     const baseBranch = multiPhase && taskBranch ? `origin/${taskBranch}` : undefined;
     let branch = `task/${taskId}`;
     if (multiPhase) {
@@ -274,6 +288,17 @@ export class AgentService implements IAgentService {
         message: `Worktree created on branch ${branch}`,
         data: { branch, baseBranch: baseBranch ?? 'origin/main', path: worktree.path, taskId },
       });
+    } else if (isReadOnlyAgent) {
+      // Read-only agents (post-mortem-reviewer, task-workflow-reviewer, investigator, reviewer)
+      // don't commit code changes — skip branch creation/switching entirely.
+      // Reuse whatever branch the worktree is currently on.
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'info',
+        message: `Worktree reused at ${worktree.path} (read-only agent "${agentType}", skipping branch switch)`,
+        data: { path: worktree.path, currentBranch: worktree.branch, agentType },
+      });
     } else {
       // Worktree exists from a prior agent phase (e.g. planner).
       // Checkout the expected branch so diff verification and artifact
@@ -284,8 +309,8 @@ export class AgentService implements IAgentService {
           await gitOps.createBranch(branch, baseBranch ?? 'origin/main');
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          if (/already exists/.test(msg)) {
-            // Branch already exists from a prior attempt — just checkout
+          if (/already exists|exists;.*cannot create/.test(msg)) {
+            // Branch already exists from a prior attempt or git ref hierarchy conflict — just checkout
             await gitOps.checkout(branch);
           } else {
             throw new Error(`Failed to switch worktree to branch "${branch}": ${msg}`, { cause: err });
@@ -332,7 +357,16 @@ export class AgentService implements IAgentService {
 
     // 5. Clean worktree and rebase onto main so the branch only contains agent changes
     // Skip clean + rebase when resuming an interrupted run — preserve the agent's in-progress work.
-    if (pendingResumeRun) {
+    // Also skip for read-only agents — they don't modify the worktree and don't need a fresh baseline.
+    if (isReadOnlyAgent) {
+      await this.taskEventLog.log({
+        taskId,
+        category: 'worktree',
+        severity: 'info',
+        message: `Skipping worktree clean/rebase — read-only agent "${agentType}" does not modify the worktree`,
+        data: { taskId, agentType },
+      });
+    } else if (pendingResumeRun) {
       // Abort any in-progress rebase left over from the crash
       try {
         const gitOps = this.createGitOps(worktree.path);
