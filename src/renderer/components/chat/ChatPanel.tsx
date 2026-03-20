@@ -8,9 +8,6 @@ import {
   PanelRightOpen,
   MoreHorizontal,
   MessageSquare,
-  MessageSquarePlus,
-  Zap,
-  ZapOff,
   Settings,
 } from 'lucide-react';
 import { InlineError } from '../InlineError';
@@ -195,7 +192,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   return (
     <ChatActionsProvider sendMessage={sendMessage} answerQuestion={answerQuestion} sessionId={currentSessionId} isStreaming={isStreaming}>
     <div className="flex flex-col h-full bg-transparent">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-card/40 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-card/40 backdrop-blur-sm relative z-50 overflow-visible">
         <div className="flex items-center gap-2 min-w-0">
           {showInlineTabs && !sessionsLoading ? (
             <SessionTabs
@@ -245,24 +242,6 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               Raw
             </button>
           </div>
-
-          <button
-            onClick={handleStreamingToggle}
-            className={`p-2 rounded-full border border-border/70 bg-card/65 transition-colors ${streamingEnabled ? 'text-foreground hover:bg-accent/65' : 'text-muted-foreground hover:text-foreground hover:bg-accent/65'}`}
-            title={streamingEnabled ? 'Streaming on — click to disable' : 'Streaming off — click to enable'}
-          >
-            {streamingEnabled ? <Zap className="h-4 w-4" /> : <ZapOff className="h-4 w-4" />}
-          </button>
-
-          {libSupportsStreamingInput && (
-            <button
-              onClick={handleStreamingInputToggle}
-              className={`p-2 rounded-full border border-border/70 bg-card/65 transition-colors ${streamingInputEnabled ? 'text-foreground hover:bg-accent/65' : 'text-muted-foreground hover:text-foreground hover:bg-accent/65'}`}
-              title={streamingInputEnabled ? 'Live injection on — messages sent while agent is running are injected mid-execution' : 'Live injection off — messages are queued until agent completes'}
-            >
-              <MessageSquarePlus className="h-4 w-4" />
-            </button>
-          )}
 
           <button
             onClick={() => setShowSidebar(!showSidebar)}
@@ -404,6 +383,10 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
                     reportError(err, 'ChatPanel: update custom instructions');
                   }
                 } : undefined}
+                streamingEnabled={streamingEnabled}
+                onStreamingToggle={handleStreamingToggle}
+                streamingInputEnabled={streamingInputEnabled}
+                onStreamingInputToggle={libSupportsStreamingInput ? handleStreamingInputToggle : undefined}
               />
             )}
             {scopeAgents.length > 0 && (

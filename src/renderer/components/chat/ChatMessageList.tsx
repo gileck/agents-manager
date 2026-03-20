@@ -112,6 +112,36 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
+/** Collapsed system notification with one-line summary and expand toggle. */
+function CollapsedSystemNotification({ title, text }: { title?: string; text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const summary = text.length > 100 ? text.slice(0, 100).trimEnd() + '…' : text;
+
+  return (
+    <div className="my-2 rounded-lg border text-sm" style={{ borderColor: 'hsl(var(--primary) / 0.3)', backgroundColor: 'hsl(var(--primary) / 0.04)' }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-2 w-full px-3 py-2 text-left"
+      >
+        <Bell className="h-4 w-4 text-primary flex-shrink-0" />
+        <span className="font-medium text-foreground flex-shrink-0">{title || 'System Notification'}</span>
+        {!expanded && (
+          <span className="text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">
+            {summary}
+          </span>
+        )}
+        <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 ml-auto transition-transform ${expanded ? 'rotate-90' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="px-3 pb-2 pl-9 text-muted-foreground whitespace-pre-wrap break-words">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, onPermissionResponse }: ChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -460,15 +490,24 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
         // Standalone permission_response (rendered inline with the request above — skip duplicate)
       } else if (msg.type === 'notification') {
         const notif = msg as AgentChatMessageNotification;
-        nodes.push(
-          <div key={i} className="flex items-start gap-2 my-2 px-3 py-2 text-sm rounded-lg border" style={{ borderColor: 'hsl(var(--primary) / 0.3)', backgroundColor: 'hsl(var(--primary) / 0.04)' }}>
-            <Bell className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-            <div>
-              {notif.title && <p className="font-medium text-foreground">{notif.title}</p>}
-              <p className="text-muted-foreground">{notif.body}</p>
+        const isSystemNotification = notif.body?.startsWith('[System Notification]');
+
+        if (isSystemNotification) {
+          const displayText = notif.body.replace(/^\[System Notification\]\s*/, '');
+          nodes.push(
+            <CollapsedSystemNotification key={i} title={notif.title} text={displayText} />,
+          );
+        } else {
+          nodes.push(
+            <div key={i} className="flex items-start gap-2 my-2 px-3 py-2 text-sm rounded-lg border" style={{ borderColor: 'hsl(var(--primary) / 0.3)', backgroundColor: 'hsl(var(--primary) / 0.04)' }}>
+              <Bell className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+              <div>
+                {notif.title && <p className="font-medium text-foreground">{notif.title}</p>}
+                <p className="text-muted-foreground">{notif.body}</p>
+              </div>
             </div>
-          </div>
-        );
+          );
+        }
       } else if (msg.type === 'subagent_activity') {
         const activity = msg as AgentChatMessageSubagentActivity;
         const isStarted = activity.status === 'started';

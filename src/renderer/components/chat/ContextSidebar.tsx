@@ -29,11 +29,15 @@ interface ContextSidebarProps {
   modelLabel?: string;
   systemPromptAppend?: string | null;
   onSystemPromptAppendChange?: (value: string | null) => void;
+  streamingEnabled?: boolean;
+  onStreamingToggle?: () => void;
+  streamingInputEnabled?: boolean;
+  onStreamingInputToggle?: () => void;
 }
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 
-export function ContextSidebar({ messages, run, tokenUsage, perTurnUsage, agentLib, model, modelLabel, systemPromptAppend, onSystemPromptAppendChange }: ContextSidebarProps) {
+export function ContextSidebar({ messages, run, tokenUsage, perTurnUsage, agentLib, model, modelLabel, systemPromptAppend, onSystemPromptAppendChange, streamingEnabled, onStreamingToggle, streamingInputEnabled, onStreamingInputToggle }: ContextSidebarProps) {
   const [costExpanded, setCostExpanded] = useState(false);
 
   // Use the latest usage message (SDK reports cumulative totals)
@@ -120,6 +124,28 @@ export function ContextSidebar({ messages, run, tokenUsage, perTurnUsage, agentL
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Model</span>
               <span className="font-mono text-xs">{modelLabel || model}</span>
+            </div>
+          )}
+          <hr className="border-border" />
+        </div>
+      )}
+
+      {/* Streaming toggles */}
+      {onStreamingToggle && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">Options</h3>
+          <div className="flex items-center justify-between text-sm cursor-pointer" onClick={onStreamingToggle}>
+            <span className="text-muted-foreground">Streaming</span>
+            <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${streamingEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}>
+              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${streamingEnabled ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+            </div>
+          </div>
+          {onStreamingInputToggle && (
+            <div className="flex items-center justify-between text-sm cursor-pointer" onClick={onStreamingInputToggle}>
+              <span className="text-muted-foreground">Live injection</span>
+              <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${streamingInputEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}>
+                <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${streamingInputEnabled ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+              </div>
             </div>
           )}
           <hr className="border-border" />
