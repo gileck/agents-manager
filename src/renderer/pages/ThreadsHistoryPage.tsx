@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
+import { useProjectChatSessions } from '../contexts/ProjectChatSessionsContext';
 import { reportError } from '../lib/error-handler';
 import { formatRelativeTimestamp } from '../components/tasks/task-helpers';
 import type { ChatSessionWithDetails } from '../../shared/types';
@@ -28,6 +29,7 @@ function formatDate(ts: number): string {
 
 export function ThreadsHistoryPage() {
   const { currentProjectId } = useCurrentProject();
+  const { switchSession, unhideSession } = useProjectChatSessions();
   const navigate = useNavigate();
 
   const [sessions, setSessions] = useState<ChatSessionWithDetails[]>([]);
@@ -167,7 +169,13 @@ export function ThreadsHistoryPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <button
-                      onClick={() => navigate('/chat')}
+                      onClick={() => {
+                        switchSession(session.id);
+                        if (session.sidebarHidden) {
+                          unhideSession(session.id).catch((err) => reportError(err, 'Unhide thread'));
+                        }
+                        navigate('/chat');
+                      }}
                       className="text-sm font-medium truncate hover:underline text-left"
                     >
                       {session.name}

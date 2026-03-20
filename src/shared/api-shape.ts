@@ -257,6 +257,7 @@ export interface ApiShape {
     update(sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreamingInput?: boolean }): Promise<ChatSession | null>;
     delete(sessionId: string): Promise<boolean>;
     hide(sessionId: string): Promise<boolean>;
+    unhide(sessionId: string): Promise<boolean>;
     hideAll(projectId: string): Promise<boolean>;
     getAgentChatSession(taskId: string, agentRole: string): Promise<ChatSession>;
     listAgents(): Promise<RunningAgent[]>;

@@ -155,6 +155,31 @@ export function useChatSessions(scope: ChatScope | null) {
     if (currentScope) localStorage.setItem(storageKey(currentScope), sessionId);
   }, []);
 
+  const unhideSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        const success = await window.api.chatSession.unhide(sessionId);
+        if (success) {
+          // Re-add the session to the local list if not already present
+          const existing = sessions.find((s) => s.id === sessionId);
+          if (!existing) {
+            // Fetch the full session from the server so we have accurate data
+            const fetched = await window.api.chatSession.list(
+              scopeRef.current?.type ?? 'project',
+              scopeRef.current?.id ?? '',
+            );
+            setSessions(fetched);
+          }
+        }
+        return success;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+    },
+    [sessions]
+  );
+
   const hideSession = useCallback(
     async (sessionId: string) => {
       if (sessions.length <= 1) {
@@ -250,6 +275,7 @@ export function useChatSessions(scope: ChatScope | null) {
     updateSession,
     deleteSession,
     hideSession,
+    unhideSession,
     hideAllSessions,
     clearAllSessions,
     switchSession,
