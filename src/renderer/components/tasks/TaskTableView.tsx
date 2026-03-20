@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUp, ArrowDown, ChevronsUpDown, Search, WrapText, AlignLeft } from 'lucide-react';
+import { ArrowUp, ArrowDown, ChevronsUpDown, Search } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { InlineError } from '../InlineError';
 import { formatRelativeTimestamp, buildPipelineMap } from './task-helpers';
@@ -13,6 +13,27 @@ import { getEffectiveCost, formatCost } from '../../../shared/cost-utils';
 import type { Pipeline, TaskFilter, AgentRun } from '../../../shared/types';
 
 type TableSortField = 'title' | 'status' | 'type' | 'subtasks' | 'createdBy' | 'runs' | 'failed' | 'cost' | 'created' | 'updated';
+
+const COLUMNS: { field: TableSortField; label: string; defaultWidth: number; minWidth: number }[] = [
+  { field: 'title',     label: 'Title',      defaultWidth: 250, minWidth: 100 },
+  { field: 'created',   label: 'Created',    defaultWidth: 100, minWidth: 70 },
+  { field: 'updated',   label: 'Updated',    defaultWidth: 100, minWidth: 70 },
+  { field: 'status',    label: 'Status',     defaultWidth: 120, minWidth: 80 },
+  { field: 'type',      label: 'Type',       defaultWidth: 90,  minWidth: 60 },
+  { field: 'subtasks',  label: 'Subtasks',   defaultWidth: 80,  minWidth: 60 },
+  { field: 'createdBy', label: 'Created By', defaultWidth: 110, minWidth: 70 },
+  { field: 'runs',      label: 'Runs',       defaultWidth: 70,  minWidth: 50 },
+  { field: 'failed',    label: 'Failed',     defaultWidth: 70,  minWidth: 50 },
+  { field: 'cost',      label: 'Cost',       defaultWidth: 80,  minWidth: 50 },
+];
+
+const DEFAULT_WIDTHS: Record<string, number> = Object.fromEntries(
+  COLUMNS.map((c) => [c.field, c.defaultWidth]),
+);
+
+const MIN_WIDTHS: Record<string, number> = Object.fromEntries(
+  COLUMNS.map((c) => [c.field, c.minWidth]),
+);
 
 const NAMED_COLOR_CSS: Record<string, string> = {
   blue: '#3b82f6',
@@ -59,30 +80,65 @@ function buildRunStatsMap(allRuns: AgentRun[]): Map<string, TaskRunStats> {
   return map;
 }
 
-interface SortableHeaderProps {
+interface ResizableHeaderProps {
   field: TableSortField;
   label: string;
-  current: TableSortField;
-  direction: 'asc' | 'desc';
+  width: number;
+  sortField: TableSortField;
+  sortDir: 'asc' | 'desc';
   onSort: (field: TableSortField) => void;
-  className?: string;
+  onResize: (field: string, width: number) => void;
 }
 
-function SortableHeader({ field, label, current, direction, onSort, className = '' }: SortableHeaderProps) {
-  const isActive = current === field;
+function ResizableHeader({ field, label, width, sortField, sortDir, onSort, onResize }: ResizableHeaderProps) {
+  const isActive = sortField === field;
+  const dragRef = useRef({ startX: 0, startWidth: 0, dragging: false });
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = { startX: e.clientX, startWidth: width, dragging: true };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!dragRef.current.dragging) return;
+      const delta = moveEvent.clientX - dragRef.current.startX;
+      const newWidth = Math.max(MIN_WIDTHS[field] ?? 50, dragRef.current.startWidth + delta);
+      onResize(field, newWidth);
+    };
+
+    const handleMouseUp = () => {
+      dragRef.current.dragging = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [field, width, onResize]);
+
   return (
     <th
-      className={`px-3 py-2 text-left font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors ${className}`}
+      className="relative px-3 py-2 text-left font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors"
+      style={{ width, minWidth: MIN_WIDTHS[field] ?? 50 }}
       onClick={() => onSort(field)}
     >
       <span className="inline-flex items-center gap-1">
         {label}
         {isActive ? (
-          direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+          sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
         ) : (
           <ChevronsUpDown className="w-3 h-3 opacity-30" />
         )}
       </span>
+      <div
+        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10"
+        onMouseDown={handleResizeStart}
+        onClick={(e) => e.stopPropagation()}
+      />
     </th>
   );
 }
@@ -106,9 +162,17 @@ export function TaskTableView() {
   const runStatsMap = useMemo(() => buildRunStatsMap(allRuns ?? []), [allRuns]);
 
   const [search, setSearch] = useState('');
-  const [expandTitle, setExpandTitle] = useState(false);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
   const [sortField, setSortField] = useLocalStorage<TableSortField>('taskTable.sortField', 'updated');
   const [sortDir, setSortDir] = useLocalStorage<'asc' | 'desc'>('taskTable.sortDir', 'desc');
+
+  const handleColumnResize = useCallback((field: string, width: number) => {
+    setColumnWidths((prev) => ({ ...prev, [field]: width }));
+  }, []);
+
+  const tableWidth = useMemo(() => {
+    return COLUMNS.reduce((sum, col) => sum + (columnWidths[col.field] ?? col.defaultWidth), 0);
+  }, [columnWidths]);
 
   const filteredTasks = useMemo(() => {
     if (!search.trim()) return tasks;
@@ -187,14 +251,6 @@ export function TaskTableView() {
               className="h-8 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setExpandTitle((v) => !v)}
-            className={`h-8 px-2 rounded-md border text-xs transition-colors ${expandTitle ? 'bg-accent text-foreground border-border' : 'bg-background text-muted-foreground border-input hover:bg-accent/50'}`}
-            title={expandTitle ? 'Compact titles' : 'Expand titles'}
-          >
-            {expandTitle ? <AlignLeft className="w-3.5 h-3.5" /> : <WrapText className="w-3.5 h-3.5" />}
-          </button>
           <p className="text-xs text-muted-foreground">
             {sortedTasks.length} {sortedTasks.length === 1 ? 'task' : 'tasks'}
             {search && sortedTasks.length !== tasks.length && ` of ${tasks.length}`}
@@ -206,19 +262,21 @@ export function TaskTableView() {
           <p className="text-center text-muted-foreground py-12">No tasks found.</p>
         ) : (
           <div className="border rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
+            <table className="text-sm" style={{ width: tableWidth, tableLayout: 'fixed' }}>
               <thead>
                 <tr className="border-b bg-muted/30">
-                  <SortableHeader field="title" label="Title" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="created" label="Created" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="updated" label="Updated" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="status" label="Status" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="type" label="Type" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="subtasks" label="Subtasks" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="createdBy" label="Created By" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="runs" label="Runs" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="failed" label="Failed" current={sortField} direction={sortDir} onSort={handleSort} />
-                  <SortableHeader field="cost" label="Cost" current={sortField} direction={sortDir} onSort={handleSort} />
+                  {COLUMNS.map((col) => (
+                    <ResizableHeader
+                      key={col.field}
+                      field={col.field}
+                      label={col.label}
+                      width={columnWidths[col.field] ?? col.defaultWidth}
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      onResize={handleColumnResize}
+                    />
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -234,16 +292,16 @@ export function TaskTableView() {
                       className="border-b border-border/40 last:border-b-0 hover:bg-accent/40 cursor-pointer transition-colors"
                       onClick={() => navigate(`/tasks/${task.id}`)}
                     >
-                      <td className={`px-3 py-2 font-medium ${expandTitle ? '' : 'max-w-[300px]'}`}>
-                        <span className={expandTitle ? 'whitespace-normal' : 'truncate block'}>{task.title}</span>
+                      <td className="px-3 py-2 font-medium overflow-hidden">
+                        <span className="block truncate">{task.title}</span>
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                         {formatRelativeTimestamp(task.createdAt)}
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                         {formatRelativeTimestamp(task.updatedAt)}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
+                      <td className="px-3 py-2 whitespace-nowrap overflow-hidden">
                         <span className="inline-flex items-center gap-1.5">
                           <span
                             className="h-2 w-2 rounded-full shrink-0 bg-muted-foreground/40"
@@ -252,28 +310,28 @@ export function TaskTableView() {
                           <span className="text-muted-foreground">{task.status}</span>
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap capitalize">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden capitalize">
                         {task.type ?? '-'}
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                         {task.subtasks.length > 0
                           ? <span>{doneSubtasks}/{task.subtasks.length}</span>
                           : <span className="text-muted-foreground/50">-</span>
                         }
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                         {task.createdBy ?? '-'}
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                         {runsLoading ? <span className="text-muted-foreground/40">...</span> : (stats.runs || '-')}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
+                      <td className="px-3 py-2 whitespace-nowrap overflow-hidden">
                         {runsLoading ? <span className="text-muted-foreground/40">...</span> : stats.failed > 0
                           ? <span className="text-red-500">{stats.failed}</span>
                           : <span className="text-muted-foreground/50">-</span>
                         }
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                         {runsLoading ? <span className="text-muted-foreground/40">...</span> : stats.cost > 0 ? formatCost(stats.cost) : '-'}
                       </td>
                     </tr>
