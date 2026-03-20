@@ -76,4 +76,14 @@ export class SqliteTaskArtifactStore implements ITaskArtifactStore {
       throw err;
     }
   }
+
+  async deleteArtifactsByType(taskId: string, type: ArtifactType): Promise<number> {
+    try {
+      const result = this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ? AND type = ?').run(taskId, type);
+      return result.changes;
+    } catch (err) {
+      getAppLogger().logError('TaskArtifactStore', 'deleteArtifactsByType failed', err);
+      throw err;
+    }
+  }
 }
