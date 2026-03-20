@@ -34,6 +34,7 @@ import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
 import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
 import { AutomatedAgentDetailPage } from './pages/AutomatedAgentDetailPage';
 import { PostMortemPage } from './pages/PostMortemPage';
+import { PostMortemReviewPage } from './pages/PostMortemReviewPage';
 import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useTabNavigation } from './hooks/useTabNavigation';
@@ -167,6 +168,7 @@ function AppRoutes() {
         <Route path="tasks/:id/plan" element={<PlanReviewPage reviewType="plan" />} />
         <Route path="tasks/:id/design" element={<PlanReviewPage reviewType="design" />} />
         <Route path="tasks/:id/investigation" element={<PlanReviewPage reviewType="investigation" />} />
+        <Route path="tasks/:id/post-mortem" element={<PostMortemReviewPage />} />
         <Route path="tasks/:id/:tab" element={<TaskTabPage />} />
         <Route path="kanban" element={<Navigate to="/tasks" replace />} />
         <Route path="agent-runs" element={<AgentRunsListPage />} />

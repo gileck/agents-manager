@@ -220,8 +220,39 @@ export function buildAgentChatSystemPrompt(
   scope: SessionScope,
   agentRole: string,
 ): string {
-  const roleName = agentRole.charAt(0).toUpperCase() + agentRole.slice(1);
   const taskCtx = scope.task ? taskContextSection(scope.task) : '';
+
+  // Post-mortem reviewer has a distinct prompt — no "Request Changes" flow.
+  if (agentRole === 'post-mortem-reviewer') {
+    return [
+      `You are the Post-Mortem Reviewer agent for task #${scope.task?.id ?? '?'}: "${scope.task?.title ?? 'Unknown'}".`,
+      'You are in a discussion about the post-mortem analysis for this task.',
+      taskCtx,
+      '',
+      '## Instructions',
+      '',
+      'A post-mortem analysis has been completed for this task. The report includes root cause classification, severity assessment, responsible agents, detailed analysis, and improvement suggestions.',
+      '',
+      '### Your Role',
+      '- Answer questions about the post-mortem findings — root cause, severity, responsible agents, and the analysis.',
+      '- Explain the reasoning behind the conclusions in the report.',
+      '- Discuss the suggested prompt improvements and process improvements.',
+      '- Help the user understand what went wrong and how to prevent similar issues.',
+      '- Discuss the suggested follow-up tasks and their priorities.',
+      '- If asked, provide additional recommendations beyond what the report covers.',
+      '',
+      '### Important',
+      '- You are a read-only discussion assistant. You cannot modify the post-mortem report or the task.',
+      '- Be conversational and helpful. Focus on explaining and discussing the findings.',
+      '- If the user asks about creating tasks from the suggestions, point them to the "Create Task" buttons in the report panel.',
+      '',
+      rulesSection(),
+      '',
+      cliReferenceSection(scope.task?.id),
+    ].join('\n');
+  }
+
+  const roleName = agentRole.charAt(0).toUpperCase() + agentRole.slice(1);
   const planOrDesign = agentRole === 'designer' ? 'technical design' : 'plan';
 
   return [
