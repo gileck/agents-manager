@@ -68,8 +68,11 @@ interface SdkUserMessage {
 interface SdkSystemMessage {
   type: 'system';
   subtype: string;
+  /** @deprecated — SDK now nests these under compact_metadata */
   trigger?: string;
+  /** @deprecated — SDK now nests these under compact_metadata */
   pre_tokens?: number;
+  compact_metadata?: { trigger: 'manual' | 'auto'; pre_tokens: number };
   status?: string | null;
 }
 interface SdkOtherMessage {
@@ -282,9 +285,13 @@ export class ClaudeCodeLib extends BaseAgentLib {
               state.accumulatedCacheReadInputTokens += assistantMsg.message.usage.cache_read_input_tokens ?? 0;
               state.accumulatedCacheCreationInputTokens += assistantMsg.message.usage.cache_creation_input_tokens ?? 0;
             }
-            lastInputTokens = assistantMsg.message.usage.input_tokens
-              + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
-              + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
+            // Only update lastInputTokens for parent-level messages (not sub-agents)
+            // so the context bar reflects the parent conversation's actual context usage.
+            if (!parentToolUseId) {
+              lastInputTokens = assistantMsg.message.usage.input_tokens
+                + (assistantMsg.message.usage.cache_read_input_tokens ?? 0)
+                + (assistantMsg.message.usage.cache_creation_input_tokens ?? 0);
+            }
             onMessage?.({ type: 'usage', inputTokens: state.accumulatedInputTokens, outputTokens: state.accumulatedOutputTokens, lastContextInputTokens: lastInputTokens, timestamp: Date.now() });
           }
           for (const block of assistantMsg.message.content) {
@@ -352,9 +359,12 @@ export class ClaudeCodeLib extends BaseAgentLib {
         } else if (message.type === 'system') {
           const sysMsg = message as SdkSystemMessage;
           if (sysMsg.subtype === 'compact_boundary') {
-            log(`Context compaction boundary: trigger=${sysMsg.trigger}, preTokens=${sysMsg.pre_tokens}`);
-            stream(`\n[Context compacted: ${sysMsg.trigger}, ${sysMsg.pre_tokens} tokens before compaction]\n`);
-            onMessage?.({ type: 'compact_boundary', trigger: sysMsg.trigger ?? 'unknown', preTokens: sysMsg.pre_tokens ?? 0, timestamp: Date.now() });
+            // SDK nests trigger/pre_tokens under compact_metadata; fall back to top-level for compat
+            const trigger = sysMsg.compact_metadata?.trigger ?? sysMsg.trigger ?? 'unknown';
+            const preTokens = sysMsg.compact_metadata?.pre_tokens ?? sysMsg.pre_tokens ?? 0;
+            log(`Context compaction boundary: trigger=${trigger}, preTokens=${preTokens}`);
+            stream(`\n[Context compacted: ${trigger}, ${preTokens} tokens before compaction]\n`);
+            onMessage?.({ type: 'compact_boundary', trigger, preTokens, timestamp: Date.now() });
           } else if (sysMsg.subtype === 'status') {
             if (sysMsg.status === 'compacting') {
               onMessage?.({ type: 'compacting', active: true, timestamp: Date.now() });
