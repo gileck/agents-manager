@@ -12,17 +12,21 @@ export interface PageTab {
   label: string;
   iconName: string;       // lucide icon identifier
   lastAccessedAt: number;
+  isPinned: boolean;
 }
 
 export interface TabsState {
   tabs: PageTab[];
   activeTabId: string | null;
+  recentlyClosed: PageTab[];  // stack of recently closed tabs (max 3)
 }
 
 interface TabsConfig {
   enabled: boolean;
   maxOpenTabs: number;
 }
+
+const MAX_RECENTLY_CLOSED = 3;
 
 // --- Tab identity computation ---
 
@@ -53,48 +57,33 @@ export const ICON_MAP: Record<string, LucideIcon> = {
 };
 
 export function computeTabInfo(pathname: string): TabInfo {
-  // Settings — all sub-pages grouped under one tab
   if (pathname.startsWith('/settings')) {
     return { identity: 'page:/settings', label: 'Settings', iconName: 'Settings' };
   }
-
-  // Task detail: /tasks/:id or /tasks/:id/plan, /tasks/:id/:tab, etc.
   const taskMatch = pathname.match(/^\/tasks\/([^/]+)/);
   if (taskMatch) {
     return { identity: `task:${taskMatch[1]}`, label: `Task ${taskMatch[1].slice(0, 8)}`, iconName: 'CheckSquare' };
   }
-
-  // Project detail: /projects/:id or /projects/:id/telegram
   const projectMatch = pathname.match(/^\/projects\/([^/]+)/);
   if (projectMatch) {
     return { identity: `project:${projectMatch[1]}`, label: `Project`, iconName: 'FolderOpen' };
   }
-
-  // Agent run: /agents/:runId
   const agentRunMatch = pathname.match(/^\/agents\/([^/]+)/);
   if (agentRunMatch) {
     return { identity: `agent-run:${agentRunMatch[1]}`, label: 'Agent Run', iconName: 'Zap' };
   }
-
-  // Feature detail: /features/:id
   const featureMatch = pathname.match(/^\/features\/([^/]+)/);
   if (featureMatch) {
     return { identity: `feature:${featureMatch[1]}`, label: 'Feature', iconName: 'BarChart3' };
   }
-
-  // Automated agent detail/runs
   const autoAgentMatch = pathname.match(/^\/automated-agents\/(?:runs\/)?([^/]+)/);
   if (autoAgentMatch) {
     return { identity: `auto-agent:${autoAgentMatch[1]}`, label: 'Automation', iconName: 'Bot' };
   }
-
-  // Static pages
   const staticPage = STATIC_PAGES[pathname];
   if (staticPage) {
     return { identity: `page:${pathname}`, label: staticPage.label, iconName: staticPage.iconName };
   }
-
-  // Fallback
   return { identity: `page:${pathname}`, label: pathname.split('/').pop() || 'Page', iconName: 'LayoutDashboard' };
 }
 
@@ -103,8 +92,14 @@ export function computeTabInfo(pathname: string): TabInfo {
 type TabsAction =
   | { type: 'OPEN_TAB'; path: string; identity: string; label: string; iconName: string; maxTabs: number }
   | { type: 'CLOSE_TAB'; tabId: string }
+  | { type: 'CLOSE_OTHERS'; tabId: string }
+  | { type: 'CLOSE_TO_RIGHT'; tabId: string }
   | { type: 'SWITCH_TAB'; tabId: string }
   | { type: 'UPDATE_TAB'; tabId: string; path?: string; label?: string }
+  | { type: 'PIN_TAB'; tabId: string }
+  | { type: 'UNPIN_TAB'; tabId: string }
+  | { type: 'REORDER_TABS'; fromIndex: number; toIndex: number }
+  | { type: 'REOPEN_TAB' }
   | { type: 'RESTORE'; state: TabsState };
 
 let tabIdCounter = 0;
@@ -112,14 +107,28 @@ function nextTabId(): string {
   return `tab-${Date.now()}-${++tabIdCounter}`;
 }
 
+/** Push a tab onto the recently closed stack */
+function pushClosed(recentlyClosed: PageTab[], tab: PageTab): PageTab[] {
+  const stack = [tab, ...recentlyClosed];
+  if (stack.length > MAX_RECENTLY_CLOSED) stack.length = MAX_RECENTLY_CLOSED;
+  return stack;
+}
+
+/** Push multiple tabs onto the recently closed stack */
+function pushClosedMany(recentlyClosed: PageTab[], tabs: PageTab[]): PageTab[] {
+  const stack = [...tabs, ...recentlyClosed];
+  if (stack.length > MAX_RECENTLY_CLOSED) stack.length = MAX_RECENTLY_CLOSED;
+  return stack;
+}
+
 function tabsReducer(state: TabsState, action: TabsAction): TabsState {
   switch (action.type) {
     case 'OPEN_TAB': {
       const now = Date.now();
-      // Check if tab with this identity already exists
       const existing = state.tabs.find(t => t.identity === action.identity);
       if (existing) {
         return {
+          ...state,
           tabs: state.tabs.map(t =>
             t.id === existing.id
               ? { ...t, path: action.path, label: action.label, lastAccessedAt: now }
@@ -129,7 +138,6 @@ function tabsReducer(state: TabsState, action: TabsAction): TabsState {
         };
       }
 
-      // Create new tab
       const newTab: PageTab = {
         id: nextTabId(),
         identity: action.identity,
@@ -137,45 +145,81 @@ function tabsReducer(state: TabsState, action: TabsAction): TabsState {
         label: action.label,
         iconName: action.iconName,
         lastAccessedAt: now,
+        isPinned: false,
       };
 
       let tabs = [...state.tabs, newTab];
+      let { recentlyClosed } = state;
 
-      // Evict LRU tabs if over max (safety floor of 1 to prevent infinite loop)
+      // Evict LRU unpinned tabs if over max
       const maxTabs = Math.max(action.maxTabs, 1);
       while (tabs.length > maxTabs) {
-        const lru = tabs.reduce((min, t) =>
-          t.id !== newTab.id && t.lastAccessedAt < min.lastAccessedAt ? t : min
-        , tabs[0]);
+        const unpinned = tabs.filter(t => !t.isPinned && t.id !== newTab.id);
+        if (unpinned.length === 0) break; // all pinned + new tab, can't evict
+        const lru = unpinned.reduce((min, t) =>
+          t.lastAccessedAt < min.lastAccessedAt ? t : min
+        , unpinned[0]);
+        recentlyClosed = pushClosed(recentlyClosed, lru);
         tabs = tabs.filter(t => t.id !== lru.id);
       }
 
-      return { tabs, activeTabId: newTab.id };
+      return { tabs, activeTabId: newTab.id, recentlyClosed };
     }
 
     case 'CLOSE_TAB': {
       const idx = state.tabs.findIndex(t => t.id === action.tabId);
       if (idx === -1) return state;
 
+      const closedTab = state.tabs[idx];
       const tabs = state.tabs.filter(t => t.id !== action.tabId);
+      const recentlyClosed = pushClosed(state.recentlyClosed, closedTab);
+
       if (tabs.length === 0) {
-        return { tabs: [], activeTabId: null };
+        return { tabs: [], activeTabId: null, recentlyClosed };
       }
 
       let activeTabId = state.activeTabId;
       if (state.activeTabId === action.tabId) {
-        // Activate adjacent: prefer right, then left
         const nextIdx = Math.min(idx, tabs.length - 1);
         activeTabId = tabs[nextIdx].id;
       }
 
-      return { tabs, activeTabId };
+      return { tabs, activeTabId, recentlyClosed };
+    }
+
+    case 'CLOSE_OTHERS': {
+      const keep = state.tabs.find(t => t.id === action.tabId);
+      if (!keep) return state;
+      const closed = state.tabs.filter(t => t.id !== action.tabId && !t.isPinned);
+      const tabs = state.tabs.filter(t => t.id === action.tabId || t.isPinned);
+      return {
+        tabs,
+        activeTabId: keep.id,
+        recentlyClosed: pushClosedMany(state.recentlyClosed, closed),
+      };
+    }
+
+    case 'CLOSE_TO_RIGHT': {
+      const idx = state.tabs.findIndex(t => t.id === action.tabId);
+      if (idx === -1) return state;
+      const closed = state.tabs.slice(idx + 1).filter(t => !t.isPinned);
+      const tabs = state.tabs.filter((t, i) => i <= idx || t.isPinned);
+      let activeTabId = state.activeTabId;
+      if (activeTabId && !tabs.some(t => t.id === activeTabId)) {
+        activeTabId = action.tabId;
+      }
+      return {
+        tabs,
+        activeTabId,
+        recentlyClosed: pushClosedMany(state.recentlyClosed, closed),
+      };
     }
 
     case 'SWITCH_TAB': {
       const tab = state.tabs.find(t => t.id === action.tabId);
       if (!tab) return state;
       return {
+        ...state,
         tabs: state.tabs.map(t =>
           t.id === action.tabId ? { ...t, lastAccessedAt: Date.now() } : t
         ),
@@ -191,6 +235,52 @@ function tabsReducer(state: TabsState, action: TabsAction): TabsState {
             ? { ...t, ...(action.path !== undefined && { path: action.path }), ...(action.label !== undefined && { label: action.label }) }
             : t
         ),
+      };
+    }
+
+    case 'PIN_TAB': {
+      const tab = state.tabs.find(t => t.id === action.tabId);
+      if (!tab || tab.isPinned) return state;
+      // Move pinned tab to the end of the pinned group (left side)
+      const pinned = state.tabs.filter(t => t.isPinned);
+      const unpinned = state.tabs.filter(t => !t.isPinned && t.id !== action.tabId);
+      const pinnedTab = { ...tab, isPinned: true };
+      return { ...state, tabs: [...pinned, pinnedTab, ...unpinned] };
+    }
+
+    case 'UNPIN_TAB': {
+      const tab = state.tabs.find(t => t.id === action.tabId);
+      if (!tab || !tab.isPinned) return state;
+      // Move unpinned tab to the start of unpinned group (after all pinned)
+      const pinned = state.tabs.filter(t => t.isPinned && t.id !== action.tabId);
+      const unpinned = state.tabs.filter(t => !t.isPinned);
+      const unpinnedTab = { ...tab, isPinned: false };
+      return { ...state, tabs: [...pinned, unpinnedTab, ...unpinned] };
+    }
+
+    case 'REORDER_TABS': {
+      const { fromIndex, toIndex } = action;
+      if (fromIndex === toIndex) return state;
+      if (fromIndex < 0 || fromIndex >= state.tabs.length) return state;
+      if (toIndex < 0 || toIndex >= state.tabs.length) return state;
+      const tabs = [...state.tabs];
+      const [moved] = tabs.splice(fromIndex, 1);
+      tabs.splice(toIndex, 0, moved);
+      return { ...state, tabs };
+    }
+
+    case 'REOPEN_TAB': {
+      if (state.recentlyClosed.length === 0) return state;
+      const [tab, ...rest] = state.recentlyClosed;
+      // Don't reopen if identity already exists
+      if (state.tabs.some(t => t.identity === tab.identity)) {
+        return { ...state, recentlyClosed: rest };
+      }
+      const reopened = { ...tab, id: nextTabId(), lastAccessedAt: Date.now() };
+      return {
+        tabs: [...state.tabs, reopened],
+        activeTabId: reopened.id,
+        recentlyClosed: rest,
       };
     }
 
@@ -223,9 +313,15 @@ function loadTabsState(): TabsState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.tabs)) return null;
-    // Ensure activeTabId references an existing tab
     if (parsed.activeTabId && !parsed.tabs.some((t: PageTab) => t.id === parsed.activeTabId)) {
       parsed.activeTabId = parsed.tabs[0]?.id ?? null;
+    }
+    // Ensure isPinned exists on all tabs (migration from v1 without pin support)
+    for (const tab of parsed.tabs) {
+      if (tab.isPinned === undefined) tab.isPinned = false;
+    }
+    if (!Array.isArray(parsed.recentlyClosed)) {
+      parsed.recentlyClosed = [];
     }
     return parsed as TabsState;
   } catch (err) {
@@ -272,13 +368,18 @@ interface TabsContextValue {
   config: TabsConfig;
   openTab: (path: string) => void;
   closeTab: (tabId: string) => void;
+  closeOthers: (tabId: string) => void;
+  closeToRight: (tabId: string) => void;
   switchTab: (tabId: string) => void;
   updateTabLabel: (tabId: string, label: string) => void;
+  pinTab: (tabId: string) => void;
+  unpinTab: (tabId: string) => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
+  reopenTab: () => void;
   getActiveTab: () => PageTab | undefined;
   setConfig: (config: Partial<TabsConfig>) => void;
   quickSwitcherOpen: boolean;
   setQuickSwitcherOpen: (open: boolean) => void;
-  /** Returns the path to navigate to after closing a tab, or null if no navigation needed */
   getCloseTabTarget: (tabId: string) => string | null;
 }
 
@@ -290,7 +391,7 @@ export function useTabsContext() {
   return ctx;
 }
 
-const DEFAULT_STATE: TabsState = { tabs: [], activeTabId: null };
+const DEFAULT_STATE: TabsState = { tabs: [], activeTabId: null, recentlyClosed: [] };
 
 export function TabsProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(tabsReducer, DEFAULT_STATE, () => {
@@ -307,7 +408,6 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
   const configRef = useRef(config);
   configRef.current = config;
 
-  // Load config from settings on mount
   useEffect(() => {
     const settingsApi = window.api?.settings;
     if (!settingsApi?.get) return;
@@ -319,7 +419,6 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     }).catch((err) => reportError(err, 'TabsContext: load tab settings'));
   }, []);
 
-  // Persist tabs state on every change
   useEffect(() => {
     saveTabsState(state);
   }, [state]);
@@ -327,15 +426,10 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
   const openTab = useCallback((path: string) => {
     const info = computeTabInfo(path);
     addRecentPage(path, info.label, info.iconName);
-
     if (!configRef.current.enabled) return;
-
     dispatch({
-      type: 'OPEN_TAB',
-      path,
-      identity: info.identity,
-      label: info.label,
-      iconName: info.iconName,
+      type: 'OPEN_TAB', path,
+      identity: info.identity, label: info.label, iconName: info.iconName,
       maxTabs: configRef.current.maxOpenTabs,
     });
   }, []);
@@ -344,12 +438,36 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'CLOSE_TAB', tabId });
   }, []);
 
+  const closeOthers = useCallback((tabId: string) => {
+    dispatch({ type: 'CLOSE_OTHERS', tabId });
+  }, []);
+
+  const closeToRight = useCallback((tabId: string) => {
+    dispatch({ type: 'CLOSE_TO_RIGHT', tabId });
+  }, []);
+
   const switchTab = useCallback((tabId: string) => {
     dispatch({ type: 'SWITCH_TAB', tabId });
   }, []);
 
   const updateTabLabel = useCallback((tabId: string, label: string) => {
     dispatch({ type: 'UPDATE_TAB', tabId, label });
+  }, []);
+
+  const pinTab = useCallback((tabId: string) => {
+    dispatch({ type: 'PIN_TAB', tabId });
+  }, []);
+
+  const unpinTab = useCallback((tabId: string) => {
+    dispatch({ type: 'UNPIN_TAB', tabId });
+  }, []);
+
+  const reorderTabs = useCallback((fromIndex: number, toIndex: number) => {
+    dispatch({ type: 'REORDER_TABS', fromIndex, toIndex });
+  }, []);
+
+  const reopenTab = useCallback(() => {
+    dispatch({ type: 'REOPEN_TAB' });
   }, []);
 
   const getActiveTab = useCallback(() => {
@@ -370,8 +488,14 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     return remaining[nextIdx]?.path ?? '/';
   }, [state]);
 
+  const value: TabsContextValue = {
+    state, config, openTab, closeTab, closeOthers, closeToRight,
+    switchTab, updateTabLabel, pinTab, unpinTab, reorderTabs, reopenTab,
+    getActiveTab, setConfig, quickSwitcherOpen, setQuickSwitcherOpen, getCloseTabTarget,
+  };
+
   return (
-    <TabsContext.Provider value={{ state, config, openTab, closeTab, switchTab, updateTabLabel, getActiveTab, setConfig, quickSwitcherOpen, setQuickSwitcherOpen, getCloseTabTarget }}>
+    <TabsContext.Provider value={value}>
       {children}
     </TabsContext.Provider>
   );

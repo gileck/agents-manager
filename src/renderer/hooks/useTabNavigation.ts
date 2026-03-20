@@ -12,7 +12,7 @@ import { matchesKeyEvent } from '../lib/keyboardShortcuts';
 export function useTabNavigation() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { state, config, openTab, closeTab, switchTab, setQuickSwitcherOpen, getCloseTabTarget } = useTabsContext();
+  const { state, config, openTab, closeTab, switchTab, setQuickSwitcherOpen, getCloseTabTarget, reopenTab } = useTabsContext();
   const { getCombo } = useKeyboardShortcutsConfig();
   const hasRestored = useRef(false);
 
@@ -108,6 +108,17 @@ export function useTabNavigation() {
         return;
       }
 
+      // Reopen last closed tab
+      if (matchesKeyEvent(getCombo('tabs.reopenTab'), event)) {
+        event.preventDefault();
+        const closedTab = state.recentlyClosed?.[0];
+        if (closedTab) {
+          reopenTab();
+          navigate(closedTab.path);
+        }
+        return;
+      }
+
       // Jump to tab by index (Cmd+1 through Cmd+9)
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey) {
         const digit = parseInt(event.key, 10);
@@ -123,7 +134,7 @@ export function useTabNavigation() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [config.enabled, state.tabs, state.activeTabId, getCombo, navigateToTab, handleCloseTab, setQuickSwitcherOpen]);
+  }, [config.enabled, state.tabs, state.activeTabId, state.recentlyClosed, getCombo, navigateToTab, handleCloseTab, setQuickSwitcherOpen, reopenTab, navigate]);
 
   return { navigateToTab, handleCloseTab };
 }
