@@ -191,6 +191,14 @@ export class ClaudeCodeLib extends BaseAgentLib {
     const cleanEnv = { ...process.env };
     delete cleanEnv.CLAUDECODE;
 
+    // Set a generous max output token limit to prevent the SDK from aborting with
+    // "Claude's response exceeded the N output token maximum" and then retrying
+    // indefinitely (which hangs the agent). Default SDK limit (32001) is too low
+    // for agents doing large code generation.
+    if (!cleanEnv.CLAUDE_CODE_MAX_OUTPUT_TOKENS) {
+      cleanEnv.CLAUDE_CODE_MAX_OUTPUT_TOKENS = '128000';
+    }
+
     // Build SDK hooks from our AgentLibHooks (engine-specific format transformation)
     const sdkHooks = this.buildSdkHooks(hooks, log);
 
