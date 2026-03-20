@@ -487,9 +487,32 @@ export class ChatAgentService {
           throw new Error('Message injection failed — the agent may have just finished. Please try again.');
         }
 
+        // Persist any assistant messages accumulated before this injection so they
+        // aren't lost if the page reloads before the agent finishes (Bug 4 fix).
+        // Snapshot and clear are synchronous — no interleaving with emitMessage.
+        const currentTurnMessages = this.liveTurnMessages.get(sessionId);
+        if (currentTurnMessages && currentTurnMessages.length > 0) {
+          const snapshot = [...currentTurnMessages];
+          currentTurnMessages.length = 0;
+          try {
+            await this.chatMessageStore.addMessage({
+              sessionId,
+              role: 'assistant',
+              content: JSON.stringify(snapshot),
+            });
+          } catch (persistErr) {
+            // Restore on failure to avoid data loss
+            currentTurnMessages.unshift(...snapshot);
+            getAppLogger().logError('ChatAgentService', 'Failed to persist pre-injection assistant messages', persistErr);
+          }
+        }
+
         // Persist user message to DB only after successful injection
-        const userContent = resizedImages
-          ? JSON.stringify({ text: message, images: await saveImagesToDisk(sessionId, resizedImages, this.imageStorageDir) })
+        const imageRefs = resizedImages
+          ? await saveImagesToDisk(sessionId, resizedImages, this.imageStorageDir)
+          : undefined;
+        const userContent = imageRefs
+          ? JSON.stringify({ text: message, images: imageRefs })
           : message;
         const userMessage = await this.chatMessageStore.addMessage({
           sessionId,
@@ -497,8 +520,11 @@ export class ChatAgentService {
           content: userContent,
         });
 
-        // Emit user message via WebSocket (the onEvent won't fire for injected messages naturally)
-        onEvent?.({ type: 'message', message: { type: 'user', text: message, timestamp: Date.now() } });
+        // Bug 1+2 fix: Do NOT emit user message via WebSocket here.
+        // The REST response already delivers the user message to the sender,
+        // and the normal send path also does not broadcast user messages via WS.
+        // Emitting here caused duplicates (streamingMessages + dbMessages) and
+        // the emitted message was missing image refs.
 
         return {
           userMessage,

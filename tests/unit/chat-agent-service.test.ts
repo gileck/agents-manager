@@ -576,4 +576,155 @@ describe('ChatAgentService', () => {
       expect((statusMsg as { message?: string }).message).toContain('maximum turn limit');
     });
   });
+
+  describe('mid-execution message injection', () => {
+    const injectionSession: ChatSession = {
+      ...mockSession,
+      enableStreamingInput: true,
+    };
+
+    /**
+     * Creates a mock lib whose execute() holds open until resolve() is called,
+     * simulating a long-running agent that can receive injected messages.
+     */
+    function createHoldingMockLib() {
+      let resolveExecute: ((result: { exitCode: number; output: string; model: string }) => void) | null = null;
+      const lib: IAgentLib = {
+        name: 'claude-code',
+        supportedFeatures: () => ({ images: true, hooks: true, thinking: true, nativeResume: true, streamingInput: true }),
+        getDefaultModel: () => 'claude-opus-4-6',
+        getSupportedModels: () => [{ value: 'claude-opus-4-6', label: 'Claude Opus 4.6' }],
+        execute: vi.fn().mockImplementation((_runId: string, _options: unknown, callbacks: { onOutput?: (s: string) => void; onMessage?: (m: AgentChatMessage) => void }) => {
+          callbacks.onOutput?.('Initial response\n');
+          callbacks.onMessage?.({ type: 'assistant_text', text: 'Initial response', timestamp: Date.now() });
+          return new Promise((resolve) => {
+            resolveExecute = resolve;
+          });
+        }),
+        stop: vi.fn().mockResolvedValue(undefined),
+        isAvailable: vi.fn().mockResolvedValue(true),
+        getTelemetry: vi.fn().mockReturnValue(null),
+        injectMessage: vi.fn().mockReturnValue(true),
+      };
+      return {
+        lib,
+        resolve: () => resolveExecute?.({ exitCode: 0, output: 'Done', model: 'claude-opus-4-6' }),
+      };
+    }
+
+    it('does NOT emit user message via WebSocket during injection (Bug 1 fix)', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
+      const { lib } = createHoldingMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      const events: Array<{ type: string; message?: AgentChatMessage }> = [];
+      // Start the agent
+      await service.send('session-1', 'First message', {
+        systemPrompt: '',
+        onEvent: (event) => events.push(event as { type: string; message?: AgentChatMessage }),
+      });
+
+      // Clear events from the initial send
+      events.length = 0;
+
+      // Inject a message
+      const injectResult = await service.send('session-1', 'Injected message', {
+        systemPrompt: '',
+        onEvent: (event) => events.push(event as { type: string; message?: AgentChatMessage }),
+      });
+
+      expect(injectResult.injected).toBe(true);
+      // There should be NO 'message' event with type: 'user' emitted via WS
+      const userMessages = events.filter(
+        (e) => e.type === 'message' && e.message?.type === 'user',
+      );
+      expect(userMessages).toHaveLength(0);
+    });
+
+    it('persists pre-injection assistant messages to DB before the injected user message (Bug 4 fix)', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
+      const { lib } = createHoldingMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      const addMessageCalls: Array<{ role: string; content: string }> = [];
+      (mockMessageStore.addMessage as ReturnType<typeof vi.fn>).mockImplementation(async (input: { role: string; content: string }) => {
+        addMessageCalls.push({ role: input.role, content: input.content });
+        return { id: `msg-${addMessageCalls.length}`, sessionId: 'session-1', role: input.role, content: input.content, createdAt: Date.now() };
+      });
+
+      // Start the agent — this persists the initial user message
+      await service.send('session-1', 'First message', { systemPrompt: '' });
+
+      // Clear the tracked calls from the initial send
+      addMessageCalls.length = 0;
+
+      // Inject a message — should persist assistant messages first, then user message
+      await service.send('session-1', 'Injected message', { systemPrompt: '' });
+
+      // Expect: first an assistant message (pre-injection snapshot), then the injected user message
+      expect(addMessageCalls.length).toBeGreaterThanOrEqual(2);
+      expect(addMessageCalls[0].role).toBe('assistant');
+      // The assistant content should be a JSON array containing the initial response
+      const assistantContent = JSON.parse(addMessageCalls[0].content);
+      expect(Array.isArray(assistantContent)).toBe(true);
+      expect(assistantContent).toContainEqual(
+        expect.objectContaining({ type: 'assistant_text', text: 'Initial response' }),
+      );
+      // The second call should be the injected user message
+      expect(addMessageCalls[1].role).toBe('user');
+      expect(addMessageCalls[1].content).toBe('Injected message');
+    });
+
+    it('returns the injected user message via REST response', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
+      const { lib } = createHoldingMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      // Start the agent
+      await service.send('session-1', 'First message', { systemPrompt: '' });
+
+      // Inject a message
+      const result = await service.send('session-1', 'Injected message', { systemPrompt: '' });
+
+      expect(result.injected).toBe(true);
+      expect(result.userMessage).toBeDefined();
+      expect(result.sessionId).toBe('session-1');
+    });
+
+    it('clears turnMessages after intermediate persistence so finally block only persists post-injection messages', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
+      const { lib, resolve } = createHoldingMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      const addMessageCalls: Array<{ role: string; content: string }> = [];
+      (mockMessageStore.addMessage as ReturnType<typeof vi.fn>).mockImplementation(async (input: { role: string; content: string }) => {
+        addMessageCalls.push({ role: input.role, content: input.content });
+        return { id: `msg-${addMessageCalls.length}`, sessionId: 'session-1', role: input.role, content: input.content, createdAt: Date.now() };
+      });
+
+      // Start the agent
+      const sendResult = await service.send('session-1', 'First message', { systemPrompt: '' });
+
+      // Inject a message
+      await service.send('session-1', 'Injected message', { systemPrompt: '' });
+
+      // Resolve the agent (completes runAgent)
+      resolve();
+      await sendResult.completion;
+
+      // Check that the finally block persisted an assistant message
+      // (which should be empty since pre-injection messages were already saved)
+      const assistantMessages = addMessageCalls.filter((c) => c.role === 'assistant');
+      // First assistant message: pre-injection snapshot (contains 'Initial response')
+      expect(assistantMessages[0]).toBeDefined();
+      const firstContent = JSON.parse(assistantMessages[0].content);
+      expect(firstContent).toContainEqual(expect.objectContaining({ type: 'assistant_text', text: 'Initial response' }));
+
+      // If there's a second assistant message from finally block, it should NOT contain 'Initial response' again
+      if (assistantMessages.length > 1) {
+        const secondContent = JSON.parse(assistantMessages[1].content);
+        expect(secondContent).not.toContainEqual(expect.objectContaining({ type: 'assistant_text', text: 'Initial response' }));
+      }
+    });
+  });
 });
