@@ -57,7 +57,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(400).json({ error: 'taskId and agentRole query params are required' });
         return;
       }
-      const VALID_AGENT_ROLES = ['planner', 'designer', 'implementor', 'investigator', 'reviewer'];
+      const VALID_AGENT_ROLES = ['planner', 'designer', 'implementor', 'investigator', 'reviewer', 'post-mortem-reviewer'];
       if (!VALID_AGENT_ROLES.includes(agentRole)) {
         res.status(400).json({ error: `Invalid agentRole: ${agentRole}. Must be one of: ${VALID_AGENT_ROLES.join(', ')}` });
         return;
