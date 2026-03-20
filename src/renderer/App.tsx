@@ -176,6 +176,7 @@ function AppRoutes() {
         <Route path="features" element={<FeatureListPage />} />
         <Route path="features/:id" element={<FeatureDetailPage />} />
         <Route path="chat" element={<ChatPage />} />
+        <Route path="chat/:sessionId" element={<ChatPage />} />
         <Route path="threads" element={<ThreadsHistoryPage />} />
         <Route path="automated-agents" element={<AutomatedAgentsPage />} />
         <Route path="automated-agents/:id" element={<AutomatedAgentDetailPage />} />

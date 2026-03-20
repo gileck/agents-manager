@@ -29,6 +29,9 @@ function isDefaultLabel(tab: PageTab): boolean {
   if (tab.identity.startsWith('project:')) {
     return tab.label === 'Project';
   }
+  if (tab.identity.startsWith('chat:')) {
+    return tab.label === 'Thread';
+  }
   return false;
 }
 
@@ -46,7 +49,7 @@ export function TabBar() {
     getCloseTabTarget, updateTabLabel, pinTab, unpinTab, reorderTabs,
   } = useTabsContext();
   const { agents } = useActiveAgents();
-  const { sessions, currentSessionId } = useProjectChatSessions();
+  const { sessions } = useProjectChatSessions();
   const navigate = useNavigate();
   const { getCombo } = useKeyboardShortcutsConfig();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -95,20 +98,20 @@ export function TabBar() {
 
   useEffect(() => {
     for (const tab of state.tabs) {
-      if (isDefaultLabel(tab)) fetchTitle(tab);
+      if (isDefaultLabel(tab)) {
+        // Chat session tabs — resolve name from sessions context
+        if (tab.identity.startsWith('chat:')) {
+          const sessionId = getEntityId(tab.identity);
+          const session = sessions.find(s => s.id === sessionId);
+          if (session?.name) {
+            updateTabLabel(tab.id, truncateLabel(session.name));
+          }
+        } else {
+          fetchTitle(tab);
+        }
+      }
     }
-  }, [state.tabs, fetchTitle]);
-
-  // Update chat tab label with current session name
-  useEffect(() => {
-    if (!currentSessionId || !sessions.length) return;
-    const chatTab = state.tabs.find(t => t.identity === 'page:/chat');
-    if (!chatTab) return;
-    const session = sessions.find(s => s.id === currentSessionId);
-    if (session?.name && chatTab.label !== truncateLabel(session.name)) {
-      updateTabLabel(chatTab.id, truncateLabel(session.name));
-    }
-  }, [currentSessionId, sessions, state.tabs, updateTabLabel]);
+  }, [state.tabs, sessions, fetchTitle, updateTabLabel]);
 
   if (!config.enabled || state.tabs.length === 0) {
     return null;
@@ -116,9 +119,11 @@ export function TabBar() {
 
   // Running agent detection
   const runningTaskIds = new Set<string>();
+  const runningSessionIds = new Set<string>();
   for (const agent of agents) {
-    if (agent.status === 'running' && agent.scopeType === 'task') {
-      runningTaskIds.add(agent.scopeId);
+    if (agent.status === 'running') {
+      if (agent.scopeType === 'task') runningTaskIds.add(agent.scopeId);
+      runningSessionIds.add(agent.sessionId);
     }
   }
 
@@ -126,6 +131,10 @@ export function TabBar() {
     if (tab.identity.startsWith('task:')) {
       const taskId = getEntityId(tab.identity);
       return taskId ? runningTaskIds.has(taskId) : false;
+    }
+    if (tab.identity.startsWith('chat:')) {
+      const sessionId = getEntityId(tab.identity);
+      return sessionId ? runningSessionIds.has(sessionId) : false;
     }
     if (tab.identity === 'page:/chat') {
       return agents.some(a => a.status === 'running' && a.scopeType === 'project');

@@ -60,6 +60,12 @@ export function computeTabInfo(pathname: string): TabInfo {
   if (pathname.startsWith('/settings')) {
     return { identity: 'page:/settings', label: 'Settings', iconName: 'Settings' };
   }
+  // Chat session: /chat/:sessionId
+  const chatMatch = pathname.match(/^\/chat\/([^/]+)/);
+  if (chatMatch) {
+    return { identity: `chat:${chatMatch[1]}`, label: 'Thread', iconName: 'MessageSquare' };
+  }
+
   const taskMatch = pathname.match(/^\/tasks\/([^/]+)/);
   if (taskMatch) {
     return { identity: `task:${taskMatch[1]}`, label: `Task ${taskMatch[1].slice(0, 8)}`, iconName: 'CheckSquare' };

@@ -174,7 +174,7 @@ export function ThreadsHistoryPage() {
                         if (session.sidebarHidden) {
                           unhideSession(session.id).catch((err) => reportError(err, 'Unhide thread'));
                         }
-                        navigate('/chat');
+                        navigate(`/chat/${session.id}`);
                       }}
                       className="text-sm font-medium truncate hover:underline text-left"
                     >

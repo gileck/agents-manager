@@ -24,7 +24,7 @@ export function SidebarSessions() {
   } = useProjectChatSessions();
   const navigate = useNavigate();
   const location = useLocation();
-  const onChatPage = location.pathname === '/chat';
+  const onChatPage = location.pathname === '/chat' || location.pathname.startsWith('/chat/');
 
   const [taskSessions, setTaskSessions] = useState<TaskChatSessionWithTitle[]>([]);
   const [renameId, setRenameId] = useState<string | null>(null);
@@ -82,13 +82,16 @@ export function SidebarSessions() {
     }, 0);
     const name = `Session ${maxNum + 1}`;
     createSession(name)
-      .then(() => navigate('/chat'))
+      .then((newSession) => {
+        if (newSession?.id) navigate(`/chat/${newSession.id}`);
+        else navigate('/chat');
+      })
       .catch((err) => reportError(err, 'Create session'));
   };
 
   const handleClick = (sessionId: string) => {
     switchSession(sessionId);
-    navigate('/chat');
+    navigate(`/chat/${sessionId}`);
   };
 
   const handleStartRename = (sessionId: string, currentName: string) => {

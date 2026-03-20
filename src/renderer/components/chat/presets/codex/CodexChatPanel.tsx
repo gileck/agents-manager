@@ -149,6 +149,11 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
     clearError: clearSessionsError,
   } = sessionsOverride ?? localSessions;
 
+  const handleSwitchSession = useCallback((sessionId: string) => {
+    switchSession(sessionId);
+    navigate(`/chat/${sessionId}`);
+  }, [switchSession, navigate]);
+
   const { agents, stopAgent } = useActiveAgents();
 
   const {
@@ -332,7 +337,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
                 sessions={sessions}
                 currentSessionId={currentSessionId}
                 activeAgents={scopeAgents}
-                onSessionChange={switchSession}
+                onSessionChange={handleSwitchSession}
                 onSessionCreate={createSession}
                 onSessionRename={renameSession}
                 onSessionDelete={deleteSession}
@@ -601,7 +606,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
               {scopeAgents.length > 0 && (
                 <ActiveAgentsPanel
                   agents={scopeAgents}
-                  onNavigateToSession={switchSession}
+                  onNavigateToSession={handleSwitchSession}
                   onStopAgent={stopAgent}
                 />
               )}

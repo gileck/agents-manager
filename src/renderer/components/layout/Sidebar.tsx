@@ -95,17 +95,18 @@ export function Sidebar({ onReportBug }: SidebarProps) {
   }, []);
 
   const handleNewThread = async () => {
-    navigate('/chat');
-    if (!currentProjectId) return;
+    if (!currentProjectId) { navigate('/chat'); return; }
 
     try {
       const maxNum = sessions.reduce((max, s) => {
         const match = s.name.match(/^Session (\d+)$/);
         return match ? Math.max(max, Number(match[1])) : max;
       }, 0);
-      await createSession(`Session ${maxNum + 1}`);
+      const newSession = await createSession(`Session ${maxNum + 1}`);
+      navigate(newSession?.id ? `/chat/${newSession.id}` : '/chat');
     } catch (err) {
       reportError(err, 'Create session');
+      navigate('/chat');
     }
   };
 

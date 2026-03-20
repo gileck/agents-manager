@@ -143,6 +143,11 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
     clearError: clearSessionsError,
   } = sessionsOverride ?? localSessions;
 
+  const handleSwitchSession = useCallback((sessionId: string) => {
+    switchSession(sessionId);
+    navigate(`/chat/${sessionId}`);
+  }, [switchSession, navigate]);
+
   const { agents, stopAgent } = useActiveAgents();
 
   const {
@@ -341,7 +346,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
                 sessions={sessions}
                 currentSessionId={currentSessionId}
                 activeAgents={scopeAgents}
-                onSessionChange={switchSession}
+                onSessionChange={handleSwitchSession}
                 onSessionCreate={createSession}
                 onSessionRename={renameSession}
                 onSessionDelete={deleteSession}
@@ -546,7 +551,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
               {scopeAgents.length > 0 && (
                 <ActiveAgentsPanel
                   agents={scopeAgents}
-                  onNavigateToSession={switchSession}
+                  onNavigateToSession={handleSwitchSession}
                   onStopAgent={stopAgent}
                 />
               )}

@@ -44,6 +44,12 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     clearError: clearSessionsError,
   } = sessionsOverride ?? localSessions;
 
+  // Wrap switchSession to also update the URL for per-session tabs
+  const handleSwitchSession = useCallback((sessionId: string) => {
+    switchSession(sessionId);
+    navigate(`/chat/${sessionId}`);
+  }, [switchSession, navigate]);
+
   const { agents, stopAgent } = useActiveAgents();
 
   const {
@@ -194,7 +200,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               sessions={sessions}
               currentSessionId={currentSessionId}
               activeAgents={scopeAgents}
-              onSessionChange={switchSession}
+              onSessionChange={handleSwitchSession}
               onSessionCreate={createSession}
               onSessionRename={renameSession}
               onSessionDelete={deleteSession}
@@ -387,7 +393,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
             {scopeAgents.length > 0 && (
               <ActiveAgentsPanel
                 agents={scopeAgents}
-                onNavigateToSession={switchSession}
+                onNavigateToSession={handleSwitchSession}
                 onStopAgent={stopAgent}
               />
             )}

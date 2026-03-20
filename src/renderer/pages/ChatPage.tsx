@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { MessageSquare } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useProjectChatSessions } from '../contexts/ProjectChatSessionsContext';
@@ -6,8 +7,19 @@ import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext
 import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
 
 export function ChatPage() {
+  const { sessionId } = useParams<{ sessionId?: string }>();
   const { currentProjectId } = useCurrentProject();
   const sessions = useProjectChatSessions();
+
+  // Sync URL sessionId with the sessions context
+  useEffect(() => {
+    if (sessionId && sessions.currentSessionId !== sessionId) {
+      const exists = sessions.sessions.some(s => s.id === sessionId);
+      if (exists) {
+        sessions.switchSession(sessionId);
+      }
+    }
+  }, [sessionId, sessions]);
 
   if (!currentProjectId) {
     return (
