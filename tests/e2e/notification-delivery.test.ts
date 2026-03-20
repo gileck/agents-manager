@@ -55,11 +55,14 @@ describe('Notification Delivery', () => {
 
   it('should send notification on needs_info agent transition', async () => {
     const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'planning');
+    // create_prompt hook (required) needs an agentRunId in context data
+    const agentRun = await ctx.agentRunStore.createRun({ taskId: task.id, agentType: 'planner', mode: 'new' });
     ctx.notificationRouter.clear();
 
     await ctx.pipelineEngine.executeTransition(task, 'needs_info', {
       trigger: 'agent',
       agentOutcome: 'needs_info',
+      data: { agentRunId: agentRun.id },
     });
 
     expect(ctx.notificationRouter.sent.length).toBeGreaterThanOrEqual(1);

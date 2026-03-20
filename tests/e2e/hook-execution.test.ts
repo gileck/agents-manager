@@ -243,6 +243,227 @@ describe('Hook Execution Policies', () => {
     expect(hookEvent).toBeTruthy();
   });
 
+  it('required policy: status is never persisted during hook execution (crash-safe)', async () => {
+    let statusDuringHook: string | undefined;
+
+    const pipeline = await ctx.pipelineStore.createPipeline({
+      name: 'Crash-Safe Pipeline',
+      taskType: 'crash-safe-test',
+      statuses: [
+        { name: 'open', label: 'Open' },
+        { name: 'in_progress', label: 'In Progress' },
+        { name: 'done', label: 'Done', isFinal: true },
+      ],
+      transitions: [
+        {
+          from: 'open',
+          to: 'in_progress',
+          trigger: 'manual',
+          hooks: [{ name: 'observe_status', policy: 'required' }],
+        },
+      ],
+    });
+
+    ctx.pipelineEngine.registerHook('observe_status', async (task) => {
+      // Read the task status from DB during hook execution
+      const dbTask = await ctx.taskStore.getTask(task.id);
+      statusDuringHook = dbTask!.status;
+      return { success: true };
+    });
+
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipeline.id));
+    const result = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
+
+    expect(result.success).toBe(true);
+    expect(result.task!.status).toBe('in_progress');
+
+    // Key assertion: during required hook execution, the DB status was still 'open'
+    // This ensures crash safety — if the process dies during hook execution,
+    // the task remains in its original status
+    expect(statusDuringHook).toBe('open');
+
+    // After successful transition, DB should now show the new status
+    const finalTask = await ctx.taskStore.getTask(task.id);
+    expect(finalTask!.status).toBe('in_progress');
+  });
+
+  it('required policy: failed hook leaves task in original status (no rollback needed)', async () => {
+    const pipeline = await ctx.pipelineStore.createPipeline({
+      name: 'No-Rollback Pipeline',
+      taskType: 'no-rollback-test',
+      statuses: [
+        { name: 'open', label: 'Open' },
+        { name: 'in_progress', label: 'In Progress' },
+        { name: 'done', label: 'Done', isFinal: true },
+      ],
+      transitions: [
+        {
+          from: 'open',
+          to: 'in_progress',
+          trigger: 'manual',
+          hooks: [{ name: 'failing_required', policy: 'required' }],
+        },
+      ],
+    });
+
+    ctx.pipelineEngine.registerHook('failing_required', async () => {
+      return { success: false, error: 'Hook rejected transition' };
+    });
+
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipeline.id));
+    const result = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Hook rejected transition');
+
+    // Task should still be in original status — never changed, no rollback needed
+    const dbTask = await ctx.taskStore.getTask(task.id);
+    expect(dbTask!.status).toBe('open');
+  });
+
+  it('concurrent transitions on same task are rejected', async () => {
+    let hookResolve: () => void;
+    const hookBlocked = new Promise<void>(r => { hookResolve = r; });
+    let hookStartResolve: () => void;
+    const hookStarted = new Promise<void>(r => { hookStartResolve = r; });
+
+    const pipeline = await ctx.pipelineStore.createPipeline({
+      name: 'Concurrent Lock Pipeline',
+      taskType: 'concurrent-test',
+      statuses: [
+        { name: 'open', label: 'Open' },
+        { name: 'in_progress', label: 'In Progress' },
+        { name: 'done', label: 'Done', isFinal: true },
+      ],
+      transitions: [
+        {
+          from: 'open',
+          to: 'in_progress',
+          trigger: 'manual',
+          hooks: [{ name: 'slow_hook', policy: 'required' }],
+        },
+      ],
+    });
+
+    ctx.pipelineEngine.registerHook('slow_hook', async () => {
+      hookStartResolve();
+      await hookBlocked; // Block until test releases
+      return { success: true };
+    });
+
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipeline.id));
+
+    // Start first transition (will block on slow_hook)
+    const firstTransition = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+
+    // Wait for the hook to start
+    await hookStarted;
+
+    // Attempt a second transition on the same task — should be rejected
+    const secondResult = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
+    expect(secondResult.success).toBe(false);
+    expect(secondResult.error).toContain('Transition already in progress');
+
+    // Release the first transition
+    hookResolve();
+    const firstResult = await firstTransition;
+    expect(firstResult.success).toBe(true);
+    expect(firstResult.task!.status).toBe('in_progress');
+  });
+
+  it('force transition is not blocked by in-flight lock', async () => {
+    let hookResolve: () => void;
+    const hookBlocked = new Promise<void>(r => { hookResolve = r; });
+    let hookStartResolve: () => void;
+    const hookStarted = new Promise<void>(r => { hookStartResolve = r; });
+
+    const pipeline = await ctx.pipelineStore.createPipeline({
+      name: 'Force Lock Pipeline',
+      taskType: 'force-lock-test',
+      statuses: [
+        { name: 'open', label: 'Open' },
+        { name: 'in_progress', label: 'In Progress' },
+        { name: 'done', label: 'Done', isFinal: true },
+      ],
+      transitions: [
+        {
+          from: 'open',
+          to: 'in_progress',
+          trigger: 'manual',
+          hooks: [{ name: 'slow_hook_2', policy: 'required' }],
+        },
+      ],
+    });
+
+    ctx.pipelineEngine.registerHook('slow_hook_2', async () => {
+      hookStartResolve();
+      await hookBlocked;
+      return { success: true };
+    });
+
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipeline.id));
+
+    // Start first transition (will block on slow_hook_2)
+    const firstTransition = ctx.pipelineEngine.executeTransition(task, 'in_progress');
+
+    // Wait for the hook to start
+    await hookStarted;
+
+    // Force transition should NOT be blocked by in-flight lock
+    const forceResult = await ctx.pipelineEngine.executeForceTransition(task, 'done');
+    expect(forceResult.success).toBe(true);
+    expect(forceResult.task!.status).toBe('done');
+
+    // Release the first transition — it will fail because status changed during hooks
+    hookResolve();
+    const firstResult = await firstTransition;
+    // The first transition should fail because TOCTOU check detects status changed
+    expect(firstResult.success).toBe(false);
+    expect(firstResult.error).toContain('status changed during hook execution');
+  });
+
+  it('non-required hooks run after status is committed', async () => {
+    let statusDuringBestEffort: string | undefined;
+
+    const pipeline = await ctx.pipelineStore.createPipeline({
+      name: 'Post-Commit Hook Pipeline',
+      taskType: 'postcommit-test',
+      statuses: [
+        { name: 'open', label: 'Open' },
+        { name: 'in_progress', label: 'In Progress' },
+        { name: 'done', label: 'Done', isFinal: true },
+      ],
+      transitions: [
+        {
+          from: 'open',
+          to: 'in_progress',
+          trigger: 'manual',
+          hooks: [
+            { name: 'required_first', policy: 'required' },
+            { name: 'besteffort_second', policy: 'best_effort' },
+          ],
+        },
+      ],
+    });
+
+    ctx.pipelineEngine.registerHook('required_first', async () => {
+      return { success: true };
+    });
+
+    ctx.pipelineEngine.registerHook('besteffort_second', async (task) => {
+      const dbTask = await ctx.taskStore.getTask(task.id);
+      statusDuringBestEffort = dbTask!.status;
+    });
+
+    const task = await ctx.taskStore.createTask(createTaskInput(projectId, pipeline.id));
+    const result = await ctx.pipelineEngine.executeTransition(task, 'in_progress');
+
+    expect(result.success).toBe(true);
+
+    // best_effort hooks run AFTER status is committed
+    expect(statusDuringBestEffort).toBe('in_progress');
+  });
+
   it('best_effort policy: hook fails and hookFailures populated with warning severity', async () => {
     const pipeline = await ctx.pipelineStore.createPipeline({
       name: 'Best Effort Pipeline',
