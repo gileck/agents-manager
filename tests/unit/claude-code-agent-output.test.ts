@@ -493,4 +493,107 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     // After abort, the generator should complete (possibly with error)
     expect(result).toBeDefined();
   });
+
+  it('should complete without deadlocking when enableStreamingInput is true', async () => {
+    // This test verifies the fix for the async generator deadlock when
+    // enableStreamingInput=true. Without the fix, the SDK would wait for
+    // the next input from the message channel while the for-await loop
+    // waits for more SDK output, causing an infinite hang.
+    const messages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: 'Hello from streaming input mode' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        usage: { input_tokens: 100, output_tokens: 50 },
+      },
+    ];
+
+    // The mock query receives the prompt (which will be a MessageChannel/AsyncIterable
+    // when enableStreamingInput=true) and returns messages. It consumes the prompt
+    // iterable and then yields result messages — mirroring the real SDK behavior.
+    mockQuery.mockImplementation(({ prompt }: { prompt: string | AsyncIterable<unknown> }) => {
+      return (async function* () {
+        // Consume the initial message from the async iterable prompt (like the real SDK does)
+        if (typeof prompt !== 'string' && Symbol.asyncIterator in prompt) {
+          const iter = prompt[Symbol.asyncIterator]();
+          await iter.next(); // consume initial message
+        }
+        // Yield the assistant + result messages
+        for (const msg of messages) {
+          yield msg;
+        }
+        // After yielding result, if the channel was properly closed by our fix,
+        // the iter.next() below will resolve (channel returns done:true).
+        // Without the fix, this would deadlock because the channel never closes.
+        if (typeof prompt !== 'string' && Symbol.asyncIterator in prompt) {
+          const iter = prompt[Symbol.asyncIterator]();
+          // The channel should be closed now, so this should return { done: true }
+          const next = await iter.next();
+          if (!next.done) {
+            throw new Error('MessageChannel should be closed after result — deadlock bug not fixed');
+          }
+        }
+      })();
+    });
+
+    // Use lib.execute directly with enableStreamingInput to exercise the MessageChannel path
+    const result = await lib.execute('streaming-test-run', {
+      prompt: 'Test message',
+      cwd: '/tmp/test',
+      allowedPaths: ['/tmp/test'],
+      readOnlyPaths: [],
+      enableStreamingInput: true,
+    }, {
+      onOutput: () => {},
+    });
+
+    // If we get here, the deadlock is fixed — execution completed
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('Hello from streaming input mode');
+  }, 10000); // 10s timeout — if this times out, the deadlock bug is back
+
+  it('should return false from injectMessage after result closes the channel', async () => {
+    // Verifies that post-result injection attempts fail gracefully
+    const messages = [
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'Done',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+    ];
+
+    mockQuery.mockImplementation(({ prompt }: { prompt: string | AsyncIterable<unknown> }) => {
+      return (async function* () {
+        if (typeof prompt !== 'string' && Symbol.asyncIterator in prompt) {
+          const iter = prompt[Symbol.asyncIterator]();
+          await iter.next(); // consume initial
+        }
+        for (const msg of messages) {
+          yield msg;
+        }
+      })();
+    });
+
+    await lib.execute('inject-test-run', {
+      prompt: 'Test',
+      cwd: '/tmp/test',
+      allowedPaths: ['/tmp/test'],
+      readOnlyPaths: [],
+      enableStreamingInput: true,
+    }, {
+      onOutput: () => {},
+    });
+
+    // After execution, the channel is closed — injection should return false
+    const injected = lib.injectMessage('inject-test-run', 'late message');
+    expect(injected).toBe(false);
+  });
 });
