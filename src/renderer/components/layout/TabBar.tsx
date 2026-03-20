@@ -38,7 +38,7 @@ export function TabBar() {
   const navigate = useNavigate();
   const { getCombo } = useKeyboardShortcutsConfig();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const activeTabRef = useRef<HTMLButtonElement>(null);
+  const activeTabRef = useRef<HTMLDivElement>(null);
   const fetchingRef = useRef<Set<string>>(new Set());
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -173,10 +173,10 @@ export function TabBar() {
   const portalTarget = document.getElementById('app-root') || document.body;
 
   return (
-    <div className="flex items-center bg-muted/40 h-9 shrink-0 overflow-hidden relative">
+    <div className="flex items-end bg-muted/80 border-b border-border shrink-0 overflow-hidden relative" style={{ minHeight: 35 }}>
       <div
         ref={scrollRef}
-        className="flex items-stretch flex-1 overflow-x-auto scrollbar-none"
+        className="flex items-end flex-1 overflow-x-auto scrollbar-none"
       >
         {state.tabs.map((tab, idx) => {
           const isActive = tab.id === state.activeTabId;
@@ -185,12 +185,16 @@ export function TabBar() {
           const isDragOver = dragOverIdx === idx;
 
           return (
-            <button
+            <div
               key={tab.id}
               ref={isActive ? activeTabRef : undefined}
+              role="tab"
+              tabIndex={0}
+              aria-selected={isActive}
               onClick={() => handleNavigateToTab(tab.id)}
               onMouseDown={(e) => handleMouseDown(e, tab.id)}
               onContextMenu={(e) => handleContextMenu(e, tab.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleNavigateToTab(tab.id); }}
               draggable
               onDragStart={(e) => handleDragStart(e, idx)}
               onDragOver={(e) => handleDragOver(e, idx)}
@@ -198,20 +202,28 @@ export function TabBar() {
               onDragEnd={handleDragEnd}
               title={`${tab.label}${idx < 9 ? ` (${formatCombo(`CmdOrCtrl+${idx + 1}`)})` : ''}`}
               className={cn(
-                'group flex items-center gap-1.5 h-full text-xs font-medium whitespace-nowrap transition-colors relative box-border border-t-2',
-                tab.isPinned ? 'px-2 w-9 justify-center' : 'px-3 min-w-0 max-w-[200px]',
+                'group relative flex items-center gap-1.5 text-xs font-medium whitespace-nowrap cursor-pointer select-none',
+                // Fixed height — active tabs are taller, reaching up to fill the bar
+                isActive ? 'h-[31px]' : 'h-[28px]',
+                // Pinned tabs: icon only. Regular tabs: icon + label + close area
+                tab.isPinned ? 'px-2.5' : 'pl-3 pr-7',
+                // Colors
                 isActive
-                  ? 'bg-background text-foreground border-t-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border-t-transparent',
-                isDragOver && 'bg-accent/30'
+                  ? 'bg-background text-foreground border border-border border-b-transparent rounded-t-md -mb-px z-10'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
+                // Inactive tab separators (thin right border, hidden on active and next-to-active)
+                !isActive && 'border-r border-r-border/40',
+                isDragOver && 'bg-accent/40'
               )}
             >
               {running ? (
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />
               ) : (
-                Icon && <Icon className="h-3.5 w-3.5 shrink-0" />
+                Icon && <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
               )}
-              {!tab.isPinned && <span className="truncate">{tab.label}</span>}
+              {!tab.isPinned && <span className="truncate max-w-[150px]">{tab.label}</span>}
+
+              {/* Close button — absolutely positioned so it never shifts layout */}
               {!tab.isPinned && (
                 <span
                   role="button"
@@ -220,16 +232,15 @@ export function TabBar() {
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleCloseTab(tab.id); } }}
                   title={`Close (${formatCombo(getCombo('tabs.closeTab'))})`}
                   className={cn(
-                    'ml-1 rounded-sm p-0.5 shrink-0 transition-colors',
-                    'opacity-0 group-hover:opacity-100',
-                    isActive && 'opacity-60',
-                    'hover:bg-muted-foreground/20'
+                    'absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 transition-opacity',
+                    'opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:bg-foreground/10',
+                    isActive && 'opacity-50'
                   )}
                 >
                   <X className="h-3 w-3" />
                 </span>
               )}
-            </button>
+            </div>
           );
         })}
       </div>
