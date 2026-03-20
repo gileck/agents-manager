@@ -47,6 +47,7 @@ export async function createBugReport(title: string, message: string, fullDetail
       title: `[Bug] ${title}`,
       description,
       debugInfo,
+      type: 'bug',
       tags: ['bug'],
     });
 

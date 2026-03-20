@@ -11,6 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
 import { reportError } from '../lib/error-handler';
+import { fetchAllBugs } from '../lib/bug-queries';
 import type { Task, TaskContextEntry } from '../../shared/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -77,7 +78,7 @@ function TriggerPostMortemDialog({
     const rawInput = task.metadata?.postMortemInput;
     setPostMortemInput(typeof rawInput === 'string' ? rawInput : '');
     setLoadingBugs(true);
-    window.api.tasks.list({ type: 'bug' }).then((bugs) => {
+    fetchAllBugs().then((bugs) => {
       const linked = bugs.filter(
         (b) => (b.metadata as Record<string, unknown> | undefined)?.sourceTaskId === task.id,
       );
@@ -362,7 +363,7 @@ function DefectiveTaskRow({ task, pendingReview, onRefresh }: DefectiveTaskRowPr
       try {
         const [entries, bugs] = await Promise.all([
           window.api.tasks.contextEntries(task.id),
-          window.api.tasks.list({ type: 'bug' }).then((all) =>
+          fetchAllBugs().then((all) =>
             all.filter(
               (b) => (b.metadata as Record<string, unknown> | undefined)?.sourceTaskId === task.id,
             ),
