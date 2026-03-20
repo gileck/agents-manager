@@ -356,6 +356,14 @@ export class ClaudeCodeLib extends BaseAgentLib {
             const usageMsg: AgentChatMessage = { type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, contextWindow, lastContextInputTokens: lastInputTokens, timestamp: Date.now() };
             onMessage?.(usageMsg);
           }
+          // Close the message channel after processing the SDK result.
+          // The result is the terminal event for a turn — the SDK is done processing.
+          // Without this, the SDK waits for the next input from the channel while the
+          // for-await loop waits for more SDK output, causing a deadlock.
+          if (messageChannel && !messageChannel.isClosed) {
+            log('Closing message channel after SDK result');
+            messageChannel.close();
+          }
         } else if (message.type === 'system') {
           const sysMsg = message as SdkSystemMessage;
           if (sysMsg.subtype === 'compact_boundary') {
