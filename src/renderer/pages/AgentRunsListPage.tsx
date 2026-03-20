@@ -2,7 +2,7 @@ import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from 'rea
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown } from 'lucide-react';
+import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown, ChevronLeft } from 'lucide-react';
 import { reportError } from '../lib/error-handler';
 import { getEffectiveCost, formatCost, formatTokens } from '../../shared/cost-utils';
 import type { AgentRun, AgentRunStatus, Task } from '../../shared/types';
@@ -70,6 +70,7 @@ const STATUS_ORDER: Record<AgentRunStatus, number> = {
 };
 
 const COLUMN_COUNT = 13; // expand toggle + 12 data columns
+const PAGE_SIZE = 50;
 
 const PLACEHOLDER = <span className="text-muted-foreground">-</span>;
 
@@ -194,6 +195,7 @@ export function AgentRunsListPage() {
   const [sortField, setSortField] = useState<SortField>('startedAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const toggleExpanded = useCallback((id: string) => {
@@ -242,8 +244,9 @@ export function AgentRunsListPage() {
     };
   }, [autoRefresh, fetchRuns]);
 
-  // Sort toggle handler
+  // Sort toggle handler — reset to first page on sort change
   const handleSort = useCallback((field: SortField) => {
+    setPage(0);
     setSortField((prev) => {
       if (prev === field) {
         setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -257,15 +260,15 @@ export function AgentRunsListPage() {
   // Derive unique agent types for filter dropdown
   const agentTypes = useMemo(() => [...new Set(runs.map((r) => r.agentType))].sort(), [runs]);
 
-  // Filter
-  const filtered = useMemo(
-    () => runs.filter((r) => {
+  // Filter — reset to first page when filters change
+  const filtered = useMemo(() => {
+    setPage(0);
+    return runs.filter((r) => {
       if (statusFilter && r.status !== statusFilter) return false;
       if (agentTypeFilter && r.agentType !== agentTypeFilter) return false;
       return true;
-    }),
-    [runs, statusFilter, agentTypeFilter],
-  );
+    });
+  }, [runs, statusFilter, agentTypeFilter]);
 
   // Sort
   const sorted = useMemo(() => {
@@ -319,6 +322,14 @@ export function AgentRunsListPage() {
     });
     return arr;
   }, [filtered, sortField, sortDir, tasks]);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const paged = useMemo(
+    () => sorted.slice(clampedPage * PAGE_SIZE, (clampedPage + 1) * PAGE_SIZE),
+    [sorted, clampedPage],
+  );
 
   // Stats (single pass)
   const stats = useMemo(() => {
@@ -392,7 +403,8 @@ export function AgentRunsListPage() {
           ))}
         </select>
         <span className="text-sm text-muted-foreground">
-          Showing {filtered.length} of {stats.total} runs
+          Showing {clampedPage * PAGE_SIZE + 1}–{Math.min((clampedPage + 1) * PAGE_SIZE, sorted.length)} of {sorted.length} runs
+          {sorted.length !== stats.total && ` (${stats.total} total)`}
         </span>
       </div>
 
@@ -421,14 +433,14 @@ export function AgentRunsListPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.length === 0 && (
+                {paged.length === 0 && (
                   <tr>
                     <td colSpan={COLUMN_COUNT} className="px-4 py-8 text-center text-muted-foreground">
                       {loading ? 'Loading...' : 'No agent runs found'}
                     </td>
                   </tr>
                 )}
-                {sorted.map((run) => {
+                {paged.map((run) => {
                   const task = tasks.get(run.taskId);
                   const isError = run.status === 'failed' || run.status === 'timed_out';
                   const isRunning = run.status === 'running';
@@ -501,6 +513,49 @@ export function AgentRunsListPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            Page {clampedPage + 1} of {totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(0)}
+              disabled={clampedPage === 0}
+            >
+              First
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={clampedPage === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={clampedPage >= totalPages - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(totalPages - 1)}
+              disabled={clampedPage >= totalPages - 1}
+            >
+              Last
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
