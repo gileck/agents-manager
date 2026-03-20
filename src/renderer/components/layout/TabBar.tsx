@@ -173,10 +173,10 @@ export function TabBar() {
   const portalTarget = document.getElementById('app-root') || document.body;
 
   return (
-    <div className="flex items-end bg-muted/80 border-b border-border shrink-0 overflow-hidden relative" style={{ minHeight: 35 }}>
+    <div className="flex items-stretch bg-muted shrink-0 overflow-hidden relative" style={{ height: 35 }}>
       <div
         ref={scrollRef}
-        className="flex items-end flex-1 overflow-x-auto scrollbar-none"
+        className="flex items-stretch flex-1 overflow-x-auto scrollbar-none"
       >
         {state.tabs.map((tab, idx) => {
           const isActive = tab.id === state.activeTabId;
@@ -202,17 +202,11 @@ export function TabBar() {
               onDragEnd={handleDragEnd}
               title={`${tab.label}${idx < 9 ? ` (${formatCombo(`CmdOrCtrl+${idx + 1}`)})` : ''}`}
               className={cn(
-                'group relative flex items-center gap-1.5 text-xs font-medium whitespace-nowrap cursor-pointer select-none',
-                // Fixed height — active tabs are taller, reaching up to fill the bar
-                isActive ? 'h-[31px]' : 'h-[28px]',
-                // Pinned tabs: icon only. Regular tabs: icon + label + close area
+                'group relative flex items-center gap-1.5 h-full text-xs font-medium whitespace-nowrap cursor-pointer select-none border-r border-r-border/30',
                 tab.isPinned ? 'px-2.5' : 'pl-3 pr-7',
-                // Colors
                 isActive
-                  ? 'bg-background text-foreground border border-border border-b-transparent rounded-t-md -mb-px z-10'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
-                // Inactive tab separators (thin right border, hidden on active and next-to-active)
-                !isActive && 'border-r border-r-border/40',
+                  ? 'bg-background text-foreground border-t-2 border-t-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 border-t-2 border-t-transparent',
                 isDragOver && 'bg-accent/40'
               )}
             >
