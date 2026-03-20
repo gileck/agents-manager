@@ -563,12 +563,11 @@ export function ImplementationTab({
 
   const fileDiffs = useMemo(() => {
     const diffArtifacts = artifacts?.filter((a) => a.type === 'diff') ?? [];
-    const allDiffs: FileDiff[] = [];
-    for (const artifact of diffArtifacts) {
-      const raw = (artifact.data as { diff?: string } | undefined)?.diff ?? '';
-      allDiffs.push(...parseDiff(raw));
-    }
-    return mergeDiffsByFile(allDiffs);
+    if (diffArtifacts.length === 0) return [];
+    // Use only the latest diff artifact — older ones are stale from previous iterations.
+    const latestDiff = diffArtifacts[diffArtifacts.length - 1];
+    const raw = (latestDiff.data as { diff?: string } | undefined)?.diff ?? '';
+    return mergeDiffsByFile(parseDiff(raw));
   }, [artifacts]);
 
   // Expanded state per file — default all collapsed

@@ -129,6 +129,7 @@ describe('registerScmHandler', () => {
       getArtifactsForTask: vi.fn().mockResolvedValue([]),
       createArtifact: vi.fn().mockResolvedValue(makeArtifact()),
       deleteArtifactsForTask: vi.fn(),
+      deleteArtifactsByType: vi.fn().mockResolvedValue(0),
     };
 
     mockTaskEventLog = {
@@ -292,6 +293,24 @@ describe('registerScmHandler', () => {
           title: '[Phase 1/2] Test Task',
         }),
       );
+    });
+
+    it('deletes old diff artifacts before creating a new one', async () => {
+      const result = await hooks['push_and_create_pr'](
+        makeTask(),
+        makeTransition({ from: 'implementing', to: 'pr_ready' }),
+        makeContext({ data: { branch } }),
+      );
+
+      expect(result.success).toBe(true);
+      // deleteArtifactsByType should be called before createArtifact for 'diff'
+      expect(mockTaskArtifactStore.deleteArtifactsByType).toHaveBeenCalledWith('task-1', 'diff');
+
+      // Verify ordering: deleteArtifactsByType was called before createArtifact(diff)
+      const deleteCall = (mockTaskArtifactStore.deleteArtifactsByType as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0];
+      const createCalls = (mockTaskArtifactStore.createArtifact as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
+      const diffCreateCall = createCalls[0]; // First createArtifact call is for diff
+      expect(deleteCall).toBeLessThan(diffCreateCall);
     });
 
     it('returns error when no branch in transition context', async () => {
