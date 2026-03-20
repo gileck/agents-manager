@@ -13,6 +13,10 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
     return config.timeout || 5 * 60 * 1000;
   }
 
+  protected isReadOnly(): boolean {
+    return true;
+  }
+
   protected getOutputFormat(_context: AgentContext): object | undefined {
     return {
       type: 'json_schema',

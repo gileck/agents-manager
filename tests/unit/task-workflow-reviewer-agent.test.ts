@@ -48,6 +48,20 @@ describe('TaskWorkflowReviewerPromptBuilder', () => {
     });
   });
 
+  describe('isReadOnly', () => {
+    it('returns true', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (promptBuilder as any).isReadOnly();
+      expect(result).toBe(true);
+    });
+
+    it('produces readOnly=true in execution config', () => {
+      const config: AgentConfig = {};
+      const execConfig = promptBuilder.buildExecutionConfig(createContext(), config);
+      expect(execConfig.readOnly).toBe(true);
+    });
+  });
+
   describe('getMaxTurns', () => {
     it('returns 50', () => {
       // Access protected method via cast
