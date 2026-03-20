@@ -4,6 +4,7 @@ import { X, Loader2, Pin } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useTabsContext, ICON_MAP, type PageTab } from '../../contexts/TabsContext';
 import { useActiveAgents } from '../../hooks/useActiveAgents';
+import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { formatCombo } from '../../lib/keyboardShortcuts';
 import { useKeyboardShortcutsConfig } from '../../hooks/useKeyboardShortcutsConfig';
 import { reportError } from '../../lib/error-handler';
@@ -45,6 +46,7 @@ export function TabBar() {
     getCloseTabTarget, updateTabLabel, pinTab, unpinTab, reorderTabs,
   } = useTabsContext();
   const { agents } = useActiveAgents();
+  const { sessions, currentSessionId } = useProjectChatSessions();
   const navigate = useNavigate();
   const { getCombo } = useKeyboardShortcutsConfig();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -96,6 +98,17 @@ export function TabBar() {
       if (isDefaultLabel(tab)) fetchTitle(tab);
     }
   }, [state.tabs, fetchTitle]);
+
+  // Update chat tab label with current session name
+  useEffect(() => {
+    if (!currentSessionId || !sessions.length) return;
+    const chatTab = state.tabs.find(t => t.identity === 'page:/chat');
+    if (!chatTab) return;
+    const session = sessions.find(s => s.id === currentSessionId);
+    if (session?.name && chatTab.label !== truncateLabel(session.name)) {
+      updateTabLabel(chatTab.id, truncateLabel(session.name));
+    }
+  }, [currentSessionId, sessions, state.tabs, updateTabLabel]);
 
   if (!config.enabled || state.tabs.length === 0) {
     return null;
@@ -177,7 +190,7 @@ export function TabBar() {
   const contextTabIdx = contextMenu ? state.tabs.findIndex(t => t.id === contextMenu.tabId) : -1;
 
   return (
-    <div className="flex items-center border-b border-border bg-muted/30 h-9 shrink-0 overflow-hidden relative">
+    <div className="flex items-center bg-muted/40 h-9 shrink-0 overflow-hidden relative">
       <div
         ref={scrollRef}
         className="flex items-stretch flex-1 overflow-x-auto scrollbar-none"
@@ -202,18 +215,14 @@ export function TabBar() {
               onDragEnd={handleDragEnd}
               title={`${tab.label}${idx < 9 ? ` (${formatCombo(`CmdOrCtrl+${idx + 1}`)})` : ''}`}
               className={cn(
-                'group flex items-center gap-1.5 h-full text-xs font-medium border-r border-border whitespace-nowrap transition-colors relative',
+                'group flex items-center gap-1.5 h-full text-xs font-medium whitespace-nowrap transition-colors relative box-border border-t-2',
                 tab.isPinned ? 'px-2 w-9 justify-center' : 'px-3 min-w-0 max-w-[200px]',
                 isActive
-                  ? 'bg-background text-foreground border-b border-b-background -mb-px'
-                  : 'text-muted-foreground/70 hover:bg-muted/50 hover:text-foreground',
-                isDragOver && 'ring-1 ring-inset ring-primary/50'
+                  ? 'bg-background text-foreground border-t-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border-t-transparent',
+                isDragOver && 'bg-accent/30'
               )}
             >
-              {/* Active indicator — top bar */}
-              {isActive && (
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary" />
-              )}
 
               {/* Icon or running spinner */}
               {running ? (
