@@ -16,13 +16,15 @@ import { DependenciesSection } from './DependenciesSection';
 import { LinkedBugsSection } from './LinkedBugsSection';
 import { PlanMarkdown } from './PlanMarkdown';
 import { TaskCommentsCard } from './TaskCommentsCard';
+import { ImagePasteArea } from '../ui/ImagePasteArea';
 import type {
   Task, AgentRun, TaskArtifact, PendingPrompt, DebugTimelineEntry,
-  TaskContextEntry, Transition,
+  TaskContextEntry, Transition, ChatImage,
 } from '../../../shared/types';
 import type { QuestionResponse } from '../prompts/QuestionForm';
 import { useNavigate } from 'react-router-dom';
 import { useFeatures } from '../../hooks/useFeatures';
+import { reportError } from '../../lib/error-handler';
 
 interface TaskDetailDashboardProps {
   task: Task;
@@ -62,29 +64,49 @@ export function TaskDetailDashboard({
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [savingDescription, setSavingDescription] = useState(false);
+  const [descriptionImages, setDescriptionImages] = useState<ChatImage[]>([]);
 
   const handleStartEditDescription = useCallback(() => {
     setDescriptionDraft(task.description ?? '');
+    setDescriptionImages([]);
     setEditingDescription(true);
   }, [task.description]);
 
   const handleCancelEditDescription = useCallback(() => {
     setEditingDescription(false);
     setDescriptionDraft('');
+    setDescriptionImages([]);
   }, []);
 
   const handleSaveDescription = useCallback(async () => {
     setSavingDescription(true);
     try {
-      await window.api.tasks.update(taskId, { description: descriptionDraft });
+      let description = descriptionDraft;
+
+      // Save screenshots if any
+      if (descriptionImages.length > 0) {
+        try {
+          const { paths } = await window.api.screenshots.save(descriptionImages);
+          if (paths.length > 0) {
+            const screenshotSection = '\n\n## Screenshots\n' +
+              paths.map((p, i) => `![screenshot-${i + 1}](${p})`).join('\n');
+            description = description + screenshotSection;
+          }
+        } catch (err) {
+          reportError(err, 'Save screenshots');
+        }
+      }
+
+      await window.api.tasks.update(taskId, { description });
       setEditingDescription(false);
+      setDescriptionImages([]);
       await onRefetch();
     } catch (err) {
-      console.error('Failed to save description:', err);
+      reportError(err, 'Save description');
     } finally {
       setSavingDescription(false);
     }
-  }, [taskId, descriptionDraft, onRefetch]);
+  }, [taskId, descriptionDraft, descriptionImages, onRefetch]);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
@@ -133,6 +155,7 @@ export function TaskDetailDashboard({
                     backgroundColor: 'var(--background)', color: 'var(--foreground)',
                   }}
                 />
+                <ImagePasteArea images={descriptionImages} onImagesChange={setDescriptionImages} />
                 <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                   <Button variant="outline" size="sm" onClick={handleCancelEditDescription} disabled={savingDescription}>
                     Cancel
