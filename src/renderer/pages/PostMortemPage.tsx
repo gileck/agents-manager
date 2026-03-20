@@ -110,11 +110,11 @@ function TriggerPostMortemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Run Post-Mortem Analysis</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-4">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-2">
           <div className="rounded-md bg-muted px-3 py-2 text-sm">
             <span className="font-medium">Task:</span>{' '}
             <span>{task.title}</span>
@@ -125,7 +125,7 @@ function TriggerPostMortemDialog({
           ) : linkedBugs.length > 0 ? (
             <div className="space-y-1">
               <Label className="text-xs">Linked Bugs ({linkedBugs.length})</Label>
-              <div className="rounded-md border divide-y text-xs">
+              <div className="rounded-md border divide-y text-xs max-h-32 overflow-y-auto">
                 {linkedBugs.map((bug) => (
                   <div key={bug.id} className="px-3 py-1.5 flex items-center gap-2">
                     <Bug className="h-3 w-3 text-destructive shrink-0" />
