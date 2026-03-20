@@ -16,15 +16,15 @@ type TableSortField = 'title' | 'status' | 'type' | 'subtasks' | 'createdBy' | '
 
 const COLUMNS: { field: TableSortField; label: string; defaultWidth: number; minWidth: number }[] = [
   { field: 'title',     label: 'Title',      defaultWidth: 250, minWidth: 100 },
-  { field: 'created',   label: 'Created',    defaultWidth: 100, minWidth: 70 },
-  { field: 'updated',   label: 'Updated',    defaultWidth: 100, minWidth: 70 },
-  { field: 'status',    label: 'Status',     defaultWidth: 120, minWidth: 80 },
-  { field: 'type',      label: 'Type',       defaultWidth: 90,  minWidth: 60 },
-  { field: 'subtasks',  label: 'Subtasks',   defaultWidth: 80,  minWidth: 60 },
-  { field: 'createdBy', label: 'Created By', defaultWidth: 110, minWidth: 70 },
-  { field: 'runs',      label: 'Runs',       defaultWidth: 70,  minWidth: 50 },
-  { field: 'failed',    label: 'Failed',     defaultWidth: 70,  minWidth: 50 },
-  { field: 'cost',      label: 'Cost',       defaultWidth: 80,  minWidth: 50 },
+  { field: 'created',   label: 'Created',    defaultWidth: 110, minWidth: 95 },
+  { field: 'updated',   label: 'Updated',    defaultWidth: 110, minWidth: 95 },
+  { field: 'status',    label: 'Status',     defaultWidth: 120, minWidth: 90 },
+  { field: 'type',      label: 'Type',       defaultWidth: 90,  minWidth: 75 },
+  { field: 'subtasks',  label: 'Subtasks',   defaultWidth: 100, minWidth: 95 },
+  { field: 'createdBy', label: 'Created By', defaultWidth: 120, minWidth: 110 },
+  { field: 'runs',      label: 'Runs',       defaultWidth: 75,  minWidth: 70 },
+  { field: 'failed',    label: 'Failed',     defaultWidth: 80,  minWidth: 75 },
+  { field: 'cost',      label: 'Cost',       defaultWidth: 80,  minWidth: 70 },
 ];
 
 const DEFAULT_WIDTHS: Record<string, number> = Object.fromEntries(
@@ -122,7 +122,7 @@ function ResizableHeader({ field, label, width, sortField, sortDir, onSort, onRe
 
   return (
     <th
-      className="relative px-3 py-2 text-left font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors"
+      className="relative px-3 py-2 text-left font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors whitespace-nowrap"
       style={{ width, minWidth: MIN_WIDTHS[field] ?? 50 }}
       onClick={() => onSort(field)}
     >
