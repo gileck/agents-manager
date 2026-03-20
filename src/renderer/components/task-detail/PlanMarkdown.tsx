@@ -5,7 +5,7 @@ import { toScreenshotApiUrl } from '../../utils/screenshot-url';
 
 export function PlanMarkdown({ content }: { content: string }) {
   return (
-    <div className="plan-markdown text-sm leading-relaxed">
+    <div className="plan-markdown text-sm leading-relaxed overflow-hidden">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
