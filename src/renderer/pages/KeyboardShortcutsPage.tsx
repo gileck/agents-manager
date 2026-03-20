@@ -9,9 +9,10 @@ import { KeyRecorder } from '../components/KeyRecorder';
 const CONTEXT_LABELS: Record<ShortcutContext, string> = {
   tabs: 'Tabs',
   kanban: 'Kanban',
+  global: 'Global',
 };
 
-const CONTEXTS: ShortcutContext[] = ['tabs', 'kanban'];
+const CONTEXTS: ShortcutContext[] = ['global', 'tabs', 'kanban'];
 
 export function KeyboardShortcutsPage() {
   const { getCombo, setCombo, resetCombo, resetAll, hasConflict } = useKeyboardShortcutsConfig();

@@ -67,6 +67,18 @@ export function useTabNavigation() {
     }
   }, [getCloseTabTarget, closeTab, navigate]);
 
+  // Global search shortcut — works regardless of tab config
+  useEffect(() => {
+    const handleGlobalSearch = (event: KeyboardEvent) => {
+      if (matchesKeyEvent(getCombo('global.search'), event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('open-global-search'));
+      }
+    };
+    window.addEventListener('keydown', handleGlobalSearch);
+    return () => window.removeEventListener('keydown', handleGlobalSearch);
+  }, [getCombo]);
+
   // Global keyboard shortcuts for tabs
   useEffect(() => {
     if (!config.enabled) return;

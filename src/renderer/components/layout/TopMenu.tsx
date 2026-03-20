@@ -24,10 +24,13 @@ import {
   ScrollText,
   Play,
   Plus,
+  Search,
 } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import { TaskCreateDialog } from '../tasks/TaskCreateDialog';
 import { NotificationBell } from './NotificationBell';
+import { useKeyboardShortcutsConfig } from '../../hooks/useKeyboardShortcutsConfig';
+import { formatCombo } from '../../lib/keyboardShortcuts';
 
 type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
 
@@ -58,6 +61,7 @@ export function TopMenu() {
   const { pipelines } = usePipelines();
   const navigate = useNavigate();
   const location = useLocation();
+  const { getCombo } = useKeyboardShortcutsConfig();
   const [telegramStatus, setTelegramStatus] = useState<TelegramBotStatus>('unknown');
   const [recentLogs, setRecentLogs] = useState<TelegramBotLogEntry[]>([]);
 
@@ -231,6 +235,16 @@ export function TopMenu() {
             New task
           </Button>
         )}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}
+          title={`Search tasks & threads (${formatCombo(getCombo('global.search'))})`}
+          className={utilityButtonClass}
+        >
+          <Search className="h-4 w-4" />
+        </Button>
 
         <Button
           variant={location.pathname === '/source-control' ? 'secondary' : 'ghost'}
