@@ -88,15 +88,10 @@ export function PostMortemReport({ data, taskId, onTaskCreated }: PostMortemRepo
     markdownParts.push('');
   }
 
-  if (Array.isArray(data.promptImprovements) && data.promptImprovements.length > 0) {
-    markdownParts.push('## Prompt Improvements\n');
-    data.promptImprovements.forEach((item) => markdownParts.push(`- ${item}`));
-    markdownParts.push('');
-  }
-
-  if (Array.isArray(data.processImprovements) && data.processImprovements.length > 0) {
-    markdownParts.push('## Process Improvements\n');
-    data.processImprovements.forEach((item) => markdownParts.push(`- ${item}`));
+  const codebaseImprovements = data.codebaseImprovements ?? data.processImprovements;
+  if (Array.isArray(codebaseImprovements) && codebaseImprovements.length > 0) {
+    markdownParts.push('## Codebase Improvements\n');
+    codebaseImprovements.forEach((item) => markdownParts.push(`- ${item}`));
     markdownParts.push('');
   }
 

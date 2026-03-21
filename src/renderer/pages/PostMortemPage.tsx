@@ -243,39 +243,25 @@ function PostMortemResults({
         </div>
       )}
 
-      {/* Prompt improvements */}
-      {Array.isArray(data.promptImprovements) && data.promptImprovements.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-            Prompt Improvements
-          </p>
-          <ul className="space-y-1">
-            {data.promptImprovements.map((item, i) => (
-              <li key={i} className="flex gap-2 text-sm">
-                <span className="text-muted-foreground shrink-0">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Process improvements */}
-      {Array.isArray(data.processImprovements) && data.processImprovements.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-            Process Improvements
-          </p>
-          <ul className="space-y-1">
-            {data.processImprovements.map((item, i) => (
-              <li key={i} className="flex gap-2 text-sm">
-                <span className="text-muted-foreground shrink-0">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Codebase improvements (with backward compat for old processImprovements data) */}
+      {(() => {
+        const improvements = data.codebaseImprovements ?? data.processImprovements;
+        return Array.isArray(improvements) && improvements.length > 0 ? (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              Codebase Improvements
+            </p>
+            <ul className="space-y-1">
+              {improvements.map((item, i) => (
+                <li key={i} className="flex gap-2 text-sm">
+                  <span className="text-muted-foreground shrink-0">•</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null;
+      })()}
 
       {/* Suggested tasks */}
       {Array.isArray(data.suggestedTasks) && data.suggestedTasks.length > 0 && (

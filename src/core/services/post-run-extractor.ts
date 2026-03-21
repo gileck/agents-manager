@@ -289,8 +289,7 @@ export class PostRunExtractor {
           severity?: string;
           responsibleAgents?: string[];
           analysis?: string;
-          promptImprovements?: string[];
-          processImprovements?: string[];
+          codebaseImprovements?: string[];
           suggestedTasks?: Array<{ title: string; description: string }>;
         }
         const pmso = result.structuredOutput as PostMortemReviewerOutput | undefined;
@@ -298,8 +297,7 @@ export class PostRunExtractor {
         entryData.severity = pmso?.severity;
         entryData.responsibleAgents = pmso?.responsibleAgents;
         entryData.analysis = pmso?.analysis;
-        entryData.promptImprovements = pmso?.promptImprovements;
-        entryData.processImprovements = pmso?.processImprovements;
+        entryData.codebaseImprovements = pmso?.codebaseImprovements;
         entryData.suggestedTasks = pmso?.suggestedTasks;
       }
       const entrySource = agentType === 'reviewer' ? 'reviewer'
@@ -320,8 +318,7 @@ export class PostRunExtractor {
           if (entryData.severity) pmData.severity = entryData.severity as string;
           if (entryData.responsibleAgents) pmData.responsibleAgents = entryData.responsibleAgents as string[];
           if (entryData.analysis) pmData.analysis = entryData.analysis as string;
-          if (entryData.promptImprovements) pmData.promptImprovements = entryData.promptImprovements as string[];
-          if (entryData.processImprovements) pmData.processImprovements = entryData.processImprovements as string[];
+          if (entryData.codebaseImprovements) pmData.codebaseImprovements = entryData.codebaseImprovements as string[];
           if (entryData.suggestedTasks) pmData.suggestedTasks = entryData.suggestedTasks as PostMortemData['suggestedTasks'];
           await this.taskStore.updateTask(taskId, { postMortem: pmData });
           onLog('Saved post-mortem data to task field');
@@ -383,7 +380,7 @@ export class PostRunExtractor {
     onLog: OnLog,
     onPostLog?: OnPostLog,
   ): Promise<void> {
-    if ((agentType !== 'task-workflow-reviewer' && agentType !== 'post-mortem-reviewer') || result.exitCode !== 0) {
+    if (agentType !== 'task-workflow-reviewer' || result.exitCode !== 0) {
       onPostLog?.('createSuggestedTasks skipped (not applicable)', { agentType, exitCode: result.exitCode });
       return;
     }
@@ -418,7 +415,6 @@ export class PostRunExtractor {
           ? suggested.size as TaskSize : undefined;
         const taskComplexity = suggested.complexity && (VALID_TASK_COMPLEXITIES as readonly string[]).includes(suggested.complexity)
           ? suggested.complexity as TaskComplexity : undefined;
-        const isPostMortem = agentType === 'post-mortem-reviewer';
         const createdTask = await this.taskStore.createTask({
           projectId: reviewedTask.projectId,
           pipelineId: AGENT_PIPELINE_ID,
@@ -429,8 +425,8 @@ export class PostRunExtractor {
           complexity: taskComplexity,
           debugInfo: suggested.debugInfo || undefined,
           priority,
-          tags: isPostMortem ? ['post-mortem'] : ['workflow-review'],
-          createdBy: isPostMortem ? 'post-mortem-reviewer' : 'workflow-reviewer',
+          tags: ['workflow-review'],
+          createdBy: 'workflow-reviewer',
         });
         created++;
 
@@ -441,8 +437,8 @@ export class PostRunExtractor {
           const phaseLabel = PHASE_LABELS[phase];
           const truncatedDesc = suggested.description.length > 200
             ? suggested.description.slice(0, 200) + '...' : suggested.description;
-          const notifTitle = isPostMortem ? 'Post-Mortem: New Task' : 'Workflow Review: New Task';
-          const notifChannel = isPostMortem ? `post-mortem-${createdTask.id}` : `workflow-review-${createdTask.id}`;
+          const notifTitle = 'Workflow Review: New Task';
+          const notifChannel = `workflow-review-${createdTask.id}`;
           await this.notificationRouter.send({
             taskId: createdTask.id,
             title: notifTitle,
@@ -461,13 +457,12 @@ export class PostRunExtractor {
       }
 
       if (created > 0) {
-        const reviewerLabel = agentType === 'post-mortem-reviewer' ? 'post-mortem review' : 'workflow review';
-        onLog(`Created ${created} suggested task(s) from ${reviewerLabel}`);
+        onLog(`Created ${created} suggested task(s) from workflow review`);
         await this.taskEventLog.log({
           taskId,
           category: 'agent',
           severity: 'info',
-          message: `${agentType === 'post-mortem-reviewer' ? 'Post-mortem' : 'Workflow'} reviewer suggested ${created} task(s) — auto-created in agent pipeline`,
+          message: `Workflow reviewer suggested ${created} task(s) — auto-created in agent pipeline`,
           data: { createdCount: created, titles: tasks.map(t => t.title) },
         });
       }
