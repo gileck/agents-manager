@@ -39,6 +39,20 @@ const MULTI_PHASE_INSTRUCTIONS = [
   'If needed, provide 2-4 phases in the "phases" array. When using phases, leave "subtasks" empty.',
 ].join('\n');
 
+const UI_COMPONENT_SPEC_INSTRUCTIONS = [
+  '',
+  '## UI Component Layout Specifications',
+  'When the plan includes subtasks that create or significantly modify UI components (dialogs, modals, pages, panels, drawers, popovers, sidebars), each such subtask MUST specify these layout decisions so the implementor does not have to guess:',
+  '',
+  '1. **Sizing constraints** — min/max width and height (e.g., "max-w-2xl, min-h-[200px], max-h-[80vh]").',
+  '2. **Overflow/scroll behavior** — how the component handles content that exceeds its bounds (e.g., "body scrolls vertically, header and footer stay fixed").',
+  '3. **Responsive behavior** — what happens at small viewport sizes (e.g., "goes full-width below sm breakpoint, converts to bottom sheet on mobile").',
+  '4. **Variable-length content** — identify any content that can vary in length (lists, text fields, error messages, loaded data) and specify how each is handled: truncation with tooltip, scrollable region, expandable section, or pagination.',
+  '',
+  'This does NOT require wireframes — just explicit decisions about layout behavior embedded in the subtask description.',
+  'Example: "Create TriggerPostMortemDialog — max-w-2xl, max-h-[80vh] with scrollable body. Bug list scrolls if >5 items. Free-text field grows to max 200px then scrolls internally. Full-width below sm breakpoint."',
+].join('\n');
+
 const VERIFICATION_GUIDELINES = [
   '',
   '## Assumption Verification',
@@ -250,6 +264,7 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       `5. **Assumptions** — mark each VERIFIED (cite file:line) or UNVERIFIED (implementor will verify).`,
       `6. **Subtasks** — 3-8 concrete, independently testable steps ordered by dependency.`,
       MULTI_PHASE_INSTRUCTIONS,
+      UI_COMPONENT_SPEC_INSTRUCTIONS,
     ];
     lines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Admin Feedback'));
     return lines.join('\n');
