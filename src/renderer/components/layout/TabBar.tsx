@@ -81,16 +81,21 @@ export function TabBar() {
   useEffect(() => {
     const toFetch: PageTab[] = [];
     for (const tab of state.tabs) {
-      if (!isDefaultLabel(tab)) continue;
+      // Chat tabs: always sync with session name (handles renames & auto-naming)
       if (tab.identity.startsWith('chat:')) {
         const sessionId = getEntityId(tab.identity);
         const session = sessions.find(s => s.id === sessionId);
         if (session?.name) {
-          updateTabLabel(tab.id, truncateString(session.name, MAX_LABEL_LENGTH));
+          const desired = truncateString(session.name, MAX_LABEL_LENGTH);
+          if (tab.label !== desired) {
+            updateTabLabel(tab.id, desired);
+          }
         }
-      } else {
-        toFetch.push(tab);
+        continue;
       }
+      // Task/project tabs: only fetch when still showing the default label
+      if (!isDefaultLabel(tab)) continue;
+      toFetch.push(tab);
     }
     if (toFetch.length > 0) {
       void Promise.all(toFetch.map(fetchTitle));
