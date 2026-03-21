@@ -119,13 +119,6 @@ export class CursorAgentLib extends BaseAgentLib {
           if (!line) continue;
           state.messageCount++;
 
-          if (state.messageCount % 25 === 0) {
-            log(`Message loop heartbeat: ${state.messageCount} messages processed`, {
-              inputTokens: state.accumulatedInputTokens,
-              outputTokens: state.accumulatedOutputTokens,
-            });
-          }
-
           let msg: Record<string, unknown> | null = null;
           try { msg = JSON.parse(line); } catch { /* not JSON */ }
 
