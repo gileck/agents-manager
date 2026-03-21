@@ -53,6 +53,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
       onModelChange,
       permissionMode,
       onPermissionModeChange,
+      isWaitingForInput = false,
     },
     forwardedRef,
   ) {
@@ -173,7 +174,7 @@ export const ClaudeCodeChatInput = React.forwardRef<HTMLTextAreaElement, ChatInp
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             rows={1}
-            placeholder={isRunning ? (enableStreamingInput ? 'Send message to running agent...' : 'Type a message (will be queued)...') : 'Type a message...'}
+            placeholder={isWaitingForInput ? 'Answer the question above...' : isRunning ? (enableStreamingInput ? 'Send message to running agent...' : 'Type a message (will be queued)...') : 'Type a message...'}
             style={{
               flex: 1,
               resize: 'none',

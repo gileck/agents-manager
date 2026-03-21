@@ -207,6 +207,11 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
     [agents, scope.type, scope.id],
   );
 
+  const isWaitingForInput = useMemo(
+    () => agents.some((a) => a.sessionId === currentSessionId && a.status === 'waiting_for_input'),
+    [agents, currentSessionId],
+  );
+
   const selectedAgentLib = currentSession?.agentLib || 'claude-code';
   const currentModels = agentLibModels[selectedAgentLib]?.models ?? [];
   const defaultModel = agentLibModels[selectedAgentLib]?.defaultModel ?? '';
@@ -575,6 +580,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
               onEditLastMessage={handleEditLastMessage}
               initialDraft={currentSession?.draft ?? null}
               onDraftChange={handleDraftChange}
+              isWaitingForInput={isWaitingForInput}
             />
           </div>
 

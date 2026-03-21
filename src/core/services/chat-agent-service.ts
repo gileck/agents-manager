@@ -106,7 +106,7 @@ export interface RunningAgent {
   scopeId: string;
   projectId: string;
   projectName: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'waiting_for_input' | 'completed' | 'failed';
   startedAt: number;
   lastActivity: number;
   messagePreview?: string;
@@ -678,7 +678,7 @@ export class ChatAgentService {
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
       try { emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL }); } catch { /* best effort */ }
       const agent = this.runningAgents.get(sessionId);
-      if (agent && agent.status === 'running') {
+      if (agent && (agent.status === 'running' || agent.status === 'waiting_for_input')) {
         agent.status = 'failed';
         agent.lastActivity = Date.now();
       }
@@ -720,7 +720,7 @@ export class ChatAgentService {
       getAppLogger().info('ChatAgentService', `Stopping chat agent for session ${sessionId}`);
       // Immediately reflect stop in agent status so UI doesn't show stale "running"
       const agent = this.runningAgents.get(sessionId);
-      if (agent && agent.status === 'running') {
+      if (agent && (agent.status === 'running' || agent.status === 'waiting_for_input')) {
         agent.status = 'failed';
         agent.lastActivity = Date.now();
       }
@@ -756,6 +756,12 @@ export class ChatAgentService {
 
     this.pendingQuestions.delete(questionId);
     pending.resolve(answers);
+
+    // Restore agent status from 'waiting_for_input' back to 'running'
+    const agent = this.runningAgents.get(pending.sessionId);
+    if (agent && agent.status === 'waiting_for_input') {
+      agent.status = 'running';
+    }
   }
 
   async getMessages(sessionId: string): Promise<ChatMessage[]> {
@@ -853,7 +859,7 @@ export class ChatAgentService {
     // Clean up stale agents (older than 1 hour)
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
     for (const [sessionId, agent] of this.runningAgents) {
-      if (agent.status !== 'running' && agent.lastActivity < oneHourAgo) {
+      if (agent.status !== 'running' && agent.status !== 'waiting_for_input' && agent.lastActivity < oneHourAgo) {
         this.runningAgents.delete(sessionId);
       }
     }
@@ -1206,6 +1212,12 @@ export class ChatAgentService {
           answered: false,
           timestamp: Date.now(),
         });
+
+        // Mark agent as waiting for user input so the UI can show a distinct indicator
+        const waitingAgent = this.runningAgents.get(sessionId);
+        if (waitingAgent && waitingAgent.status === 'running') {
+          waitingAgent.status = 'waiting_for_input';
+        }
 
         let onAbort: (() => void) | undefined;
         try {

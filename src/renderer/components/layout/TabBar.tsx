@@ -102,12 +102,12 @@ export function TabBar() {
     }
   }, [state.tabs, sessions, fetchTitle, updateTabLabel]);
 
-  // Memoize running agent Sets
+  // Memoize running agent Sets (includes waiting_for_input as active)
   const { runningTaskIds, runningSessionIds } = useMemo(() => {
     const taskIds = new Set<string>();
     const sessionIds = new Set<string>();
     for (const a of agents) {
-      if (a.status === 'running') {
+      if (a.status === 'running' || a.status === 'waiting_for_input') {
         if (a.scopeType === 'task') taskIds.add(a.scopeId);
         sessionIds.add(a.sessionId);
       }

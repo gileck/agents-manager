@@ -34,6 +34,7 @@ interface AgentChatProps {
   rawEvents?: RawEvent[];
   showRawView?: boolean;
   enableStreamingInput?: boolean;
+  isWaitingForInput?: boolean;
 }
 
 export function AgentChat({
@@ -63,6 +64,7 @@ export function AgentChat({
   rawEvents = [],
   showRawView = false,
   enableStreamingInput = false,
+  isWaitingForInput = false,
 }: AgentChatProps) {
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
 
@@ -133,6 +135,7 @@ export function AgentChat({
           initialDraft={initialDraft}
           onDraftChange={onDraftChange}
           enableStreamingInput={enableStreamingInput}
+          isWaitingForInput={isWaitingForInput}
         />
       </div>
       {showSidebar && (

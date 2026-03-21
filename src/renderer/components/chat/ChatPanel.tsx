@@ -119,6 +119,11 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     [agents, scope.type, scope.id],
   );
 
+  const isWaitingForInput = useMemo(
+    () => agents.some((a) => a.sessionId === currentSessionId && a.status === 'waiting_for_input'),
+    [agents, currentSessionId],
+  );
+
   const selectedAgentLib = currentSession?.agentLib || 'claude-code';
   const currentModels = agentLibModels[selectedAgentLib]?.models ?? [];
   const defaultModel = agentLibModels[selectedAgentLib]?.defaultModel ?? '';
@@ -347,6 +352,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
               rawEvents={rawEvents}
               showRawView={showRawView}
               enableStreamingInput={streamingInputEnabled && libSupportsStreamingInput}
+              isWaitingForInput={isWaitingForInput}
               emptyState={(
                 <div className="text-center text-muted-foreground/80 py-20">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border border-border/70 bg-card/65 mb-5">

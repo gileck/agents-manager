@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, MoreVertical, Loader2, Check } from 'lucide-react';
+import { Plus, X, MoreVertical, Loader2, Check, MessageCircleQuestion } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ChatSession, RunningAgent } from '../../../shared/types';
 import { Input } from '../ui/input';
@@ -68,15 +68,16 @@ export function SessionTabs({
   const getSessionAgentStatus = (sessionId: string) => {
     const sessionAgents = activeAgents.filter(agent => agent.sessionId === sessionId);
     const runningCount = sessionAgents.filter(agent => agent.status === 'running').length;
+    const waitingCount = sessionAgents.filter(agent => agent.status === 'waiting_for_input').length;
     const completedCount = sessionAgents.filter(agent => agent.status === 'completed').length;
 
-    return { runningCount, completedCount, hasAgents: sessionAgents.length > 0 };
+    return { runningCount, waitingCount, completedCount, hasAgents: sessionAgents.length > 0 };
   };
 
   return (
     <div className="flex items-center gap-1 overflow-x-auto scrollbar-thin">
       {sessions.map((session) => {
-        const { runningCount, completedCount } = getSessionAgentStatus(session.id);
+        const { runningCount, waitingCount, completedCount } = getSessionAgentStatus(session.id);
         const isActive = session.id === currentSessionId;
 
         return (
@@ -94,7 +95,11 @@ export function SessionTabs({
               <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
             )}
 
-            {completedCount > 0 && runningCount === 0 && (
+            {waitingCount > 0 && runningCount === 0 && (
+              <MessageCircleQuestion className="h-3 w-3 text-amber-500 shrink-0" />
+            )}
+
+            {completedCount > 0 && runningCount === 0 && waitingCount === 0 && (
               <div className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-500/80 text-white shrink-0">
                 <Check className="h-2 w-2" />
               </div>
@@ -129,9 +134,9 @@ export function SessionTabs({
               </span>
             )}
 
-            {(runningCount > 0 || completedCount > 0) && (
+            {(runningCount > 0 || waitingCount > 0 || completedCount > 0) && (
               <span className="text-[10px] text-muted-foreground/70">
-                {runningCount > 0 ? runningCount : completedCount}
+                {runningCount > 0 ? runningCount : waitingCount > 0 ? waitingCount : completedCount}
               </span>
             )}
 

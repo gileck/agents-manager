@@ -209,10 +209,38 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
     }
   }, [isStreaming, queuedMessage]);
 
+  const answerQuestion = useCallback(async (questionId: string, answers: Record<string, string>) => {
+    if (!sessionId) return;
+    try {
+      await window.api.chat.answerQuestion(sessionId, questionId, answers);
+      // Optimistically update the streaming message to answered
+      setStreamingMessages((prev) =>
+        prev.map((msg) =>
+          msg.type === 'ask_user_question' && msg.questionId === questionId
+            ? { ...msg, answered: true, answers }
+            : msg,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [sessionId]);
+
   const sendMessage = useCallback(async (message: string, images?: ChatImage[]) => {
     if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
 
     if (isStreaming) {
+      // Check if the agent is waiting for a question answer — route the message as the answer
+      // Only for single-question scenarios; multi-question should use the pill buttons
+      const pendingQuestion = [...streamingMessages].reverse().find(
+        (msg) => msg.type === 'ask_user_question' && !msg.answered
+      );
+      if (pendingQuestion && pendingQuestion.type === 'ask_user_question' && pendingQuestion.questions.length === 1) {
+        // Route the user's message as the answer (ignore images — answers are text-only)
+        answerQuestion(pendingQuestion.questionId, { [pendingQuestion.questions[0].question]: message });
+        return;
+      }
+
       if (enableStreamingInput) {
         // Injection mode: send directly to running agent without resetting streaming state
         doInject(message, images);
@@ -224,7 +252,7 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
     }
 
     doSend(message, images);
-  }, [sessionId, isStreaming, enableStreamingInput, doSend, doInject]);
+  }, [sessionId, isStreaming, enableStreamingInput, doSend, doInject, streamingMessages, answerQuestion]);
 
   const stopChat = useCallback(() => {
     if (!sessionId) return;
@@ -387,23 +415,6 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
   const cancelQueuedMessage = useCallback(() => setQueuedMessage(null), []);
 
   const clearError = useCallback(() => setError(null), []);
-
-  const answerQuestion = useCallback(async (questionId: string, answers: Record<string, string>) => {
-    if (!sessionId) return;
-    try {
-      await window.api.chat.answerQuestion(sessionId, questionId, answers);
-      // Optimistically update the streaming message to answered
-      setStreamingMessages((prev) =>
-        prev.map((msg) =>
-          msg.type === 'ask_user_question' && msg.questionId === questionId
-            ? { ...msg, answered: true, answers }
-            : msg,
-        ),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, [sessionId]);
 
   return {
     messages,

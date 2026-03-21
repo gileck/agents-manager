@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, CheckSquare, Loader2, Check, EyeOff, X, Clock } from 'lucide-react';
+import { Plus, CheckSquare, Loader2, Check, EyeOff, X, Clock, MessageCircleQuestion } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
@@ -40,7 +40,7 @@ export function SidebarSessions() {
     agents.forEach((agent) => {
       if (agent.status === 'completed') {
         const wasRunning = prev.some(
-          (a) => a.sessionId === agent.sessionId && a.status === 'running'
+          (a) => a.sessionId === agent.sessionId && (a.status === 'running' || a.status === 'waiting_for_input')
         );
         if (wasRunning) {
           setCompletedFlash((s) => new Set(s).add(agent.sessionId));
@@ -179,10 +179,14 @@ export function SidebarSessions() {
         <div className="px-1">
           {[...sessions].sort((a, b) => b.updatedAt - a.updatedAt).map((session) => {
             const isActive = onChatPage && session.id === currentSessionId;
-            const isRunning = agents.some(
+            const isAgentRunning = agents.some(
               (a) => a.sessionId === session.id && a.status === 'running'
             );
-            const isDone = !isRunning && completedFlash.has(session.id);
+            const isWaiting = agents.some(
+              (a) => a.sessionId === session.id && a.status === 'waiting_for_input'
+            );
+            const isActiveAgent = isAgentRunning || isWaiting;
+            const isDone = !isActiveAgent && completedFlash.has(session.id);
 
             return (
               <div
@@ -224,7 +228,9 @@ export function SidebarSessions() {
                     <span className="flex-1 min-w-0 truncate text-xs font-medium">
                       {session.name}
                     </span>
-                    {isRunning ? (
+                    {isWaiting ? (
+                      <MessageCircleQuestion className="h-3 w-3 text-amber-500 shrink-0" />
+                    ) : isAgentRunning ? (
                       <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
                     ) : isDone ? (
                       <div className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-500/80 text-white shrink-0">
@@ -269,10 +275,14 @@ export function SidebarSessions() {
           <div className="px-1">
             {taskSessions.map((ts) => {
               const isActive = location.pathname === `/tasks/${ts.scopeId}`;
-              const isRunning = agents.some(
+              const isTaskRunning = agents.some(
                 (a) => a.sessionId === ts.id && a.status === 'running'
               );
-              const isDone = !isRunning && completedFlash.has(ts.id);
+              const isTaskWaiting = agents.some(
+                (a) => a.sessionId === ts.id && a.status === 'waiting_for_input'
+              );
+              const isTaskActive = isTaskRunning || isTaskWaiting;
+              const isDone = !isTaskActive && completedFlash.has(ts.id);
               return (
                 <div
                   key={ts.id}
@@ -288,7 +298,9 @@ export function SidebarSessions() {
                   <span className="flex-1 min-w-0 truncate text-xs font-medium">
                     {ts.taskTitle}
                   </span>
-                  {isRunning ? (
+                  {isTaskWaiting ? (
+                    <MessageCircleQuestion className="h-3 w-3 text-amber-500 shrink-0" />
+                  ) : isTaskRunning ? (
                     <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
                   ) : isDone ? (
                     <div className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-500/80 text-white shrink-0">
