@@ -24,6 +24,7 @@ interface AgentPhase {
 }
 
 const PHASES: AgentPhase[] = [
+  { status: 'triaging',      agentType: 'triager',      reviewStatus: 'triage_review',         completionOutcome: 'triage_complete',        label: 'Triage' },
   { status: 'investigating', agentType: 'investigator', reviewStatus: 'investigation_review', completionOutcome: 'investigation_complete', label: 'Investigation' },
   { status: 'designing',     agentType: 'designer',     reviewStatus: 'design_review',        completionOutcome: 'design_ready',           label: 'Tech Design' },
   { status: 'planning',      agentType: 'planner',      reviewStatus: 'plan_review',          completionOutcome: 'plan_complete',           label: 'Planning' },
@@ -150,6 +151,8 @@ export const AGENT_PIPELINE: SeededPipeline = {
   statuses: [
     { name: 'open', label: 'Open', color: '#3b82f6', category: 'ready', position: 0 },
     { name: 'backlog', label: 'Backlog', color: '#94a3b8', category: 'ready' },
+    { name: 'triaging', label: 'Triaging', color: '#06b6d4', category: 'agent_running', position: 0.5 },
+    { name: 'triage_review', label: 'Triage Review', color: '#0891b2', category: 'human_review', position: 0.7 },
     { name: 'investigating', label: 'Investigating', color: '#f59e0b', category: 'agent_running', position: 1 },
     { name: 'investigation_review', label: 'Investigation Review', color: '#8b5cf6', category: 'human_review', position: 2 },
     { name: 'designing', label: 'Designing', color: '#ec4899', category: 'agent_running', position: 3 },
@@ -180,6 +183,26 @@ export const AGENT_PIPELINE: SeededPipeline = {
     // At each review gate the human chooses the next phase.
     // This is where the flow becomes dynamic — simple tasks skip ahead,
     // complex tasks go through more phases.
+
+    // Triage review → downstream phases (user picks next step after reviewing triage)
+    { from: 'triage_review', to: 'investigating', trigger: 'manual', label: 'Start Investigation',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('investigator', 'new')] },
+    { from: 'triage_review', to: 'designing', trigger: 'manual', label: 'Start Design',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('designer', 'new')] },
+    { from: 'triage_review', to: 'planning', trigger: 'manual', label: 'Start Planning',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('planner', 'new')] },
+    { from: 'triage_review', to: 'implementing', trigger: 'manual', label: 'Start Implementation',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('implementor', 'new')] },
+    { from: 'triage_review', to: 'open', trigger: 'manual', label: 'Back to Open' },
+    { from: 'triage_review', to: 'triaging', trigger: 'manual', label: 'Request Triage Changes',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('triager', 'revision', 'changes_requested')] },
+    { from: 'triage_review', to: 'backlog', trigger: 'manual', label: 'Move to Backlog' },
+    { from: 'triage_review', to: 'closed', trigger: 'manual', label: 'Close Task' },
 
     // Investigation review → implement (simple) / design (complex) / re-investigate
     { from: 'investigation_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',

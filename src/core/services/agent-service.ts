@@ -51,6 +51,7 @@ const READONLY_AGENT_TYPES = new Set([
   'task-workflow-reviewer',
   'reviewer',
   'investigator',
+  'triager',
 ]);
 
 export class AgentService implements IAgentService {
