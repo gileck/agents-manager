@@ -165,7 +165,7 @@ export function ReportPage({ config }: ReportPageProps) {
       title="Toggle chat panel"
     >
       <MessageSquare size={16} />
-      {chatOpen ? 'Chat' : 'Chat'}
+      {chatOpen ? 'Chat' : config.reviseToStatus ? 'Chat & Review' : 'Chat'}
     </Button>
   );
 
@@ -181,7 +181,7 @@ export function ReportPage({ config }: ReportPageProps) {
   // ─── Layout ───────────────────────────────────────────────────────────────
 
   return (
-    <TaskSubPageLayout taskId={id!} tabLabel={`${config.label} Review`} tabKey={config.tabKey} actions={actionButtons}>
+    <TaskSubPageLayout taskId={id!} tabLabel={config.tabLabel} tabKey={config.tabKey} actions={actionButtons}>
       {transitionsError && <InlineError message={transitionsError} context="Loading review transitions" />}
       {entriesError && <InlineError message={entriesError} context="Loading review comments" />}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>

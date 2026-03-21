@@ -5,6 +5,8 @@ export type ReportRenderer = 'markdown' | 'post-mortem' | 'workflow-review';
 export interface ReportPageConfig {
   /** Display label (e.g. "Plan", "Post-Mortem Report") */
   label: string;
+  /** Label shown in the TaskSubPageLayout header breadcrumb */
+  tabLabel: string;
   /** localStorage tab restore key */
   tabKey: string;
 
@@ -42,6 +44,7 @@ export interface ReportPageConfig {
 export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {
   plan: {
     label: 'Plan',
+    tabLabel: 'Plan Review',
     tabKey: 'plan',
     contentSource: { type: 'taskField', field: 'plan' },
     renderer: 'markdown',
@@ -56,6 +59,7 @@ export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {
   },
   design: {
     label: 'Technical Design',
+    tabLabel: 'Technical Design Review',
     tabKey: 'design',
     contentSource: { type: 'taskField', field: 'technicalDesign' },
     renderer: 'markdown',
@@ -70,6 +74,7 @@ export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {
   },
   investigation: {
     label: 'Investigation Report',
+    tabLabel: 'Investigation Report Review',
     tabKey: 'investigation',
     contentSource: { type: 'taskField', field: 'investigationReport' },
     renderer: 'markdown',
@@ -84,6 +89,7 @@ export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {
   },
   'post-mortem': {
     label: 'Post-Mortem Report',
+    tabLabel: 'Post-Mortem Report',
     tabKey: 'post-mortem',
     contentSource: { type: 'contextEntry', entryType: 'post_mortem' },
     renderer: 'post-mortem',
@@ -95,6 +101,7 @@ export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {
   },
   'workflow-review': {
     label: 'Workflow Review',
+    tabLabel: 'Workflow Review',
     tabKey: 'workflow-review',
     contentSource: { type: 'contextEntry', entryType: 'workflow_review' },
     renderer: 'workflow-review',
