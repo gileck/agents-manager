@@ -3,6 +3,7 @@ import { createTestContext, type TestContext } from '../helpers/test-context';
 import { createProjectInput, createTaskInput, resetCounters } from '../helpers/factories';
 import { AGENT_PIPELINE } from '../../src/core/data/seeded-pipelines';
 import { FEEDBACK_ENTRY_TYPES } from '../../src/shared/types';
+import { REPORT_CONFIGS } from '../../src/renderer/pages/reportConfigs';
 
 describe('WorkflowService.addTaskFeedback – entry type validation', () => {
   let ctx: TestContext;
@@ -48,5 +49,15 @@ describe('WorkflowService.addTaskFeedback – entry type validation', () => {
     await expect(
       ctx.workflowService.addTaskFeedback(taskId, 'invalid_feedback', 'Should fail'),
     ).rejects.toThrow('Invalid feedback entry type: invalid_feedback');
+  });
+
+  it('should include every REPORT_CONFIGS entryType in FEEDBACK_ENTRY_TYPES', () => {
+    const reportEntryTypes = Object.values(REPORT_CONFIGS).map((c) => c.entryType);
+    for (const entryType of reportEntryTypes) {
+      expect(
+        (FEEDBACK_ENTRY_TYPES as readonly string[]).includes(entryType),
+        `REPORT_CONFIGS entryType '${entryType}' is missing from FEEDBACK_ENTRY_TYPES`,
+      ).toBe(true);
+    }
   });
 });

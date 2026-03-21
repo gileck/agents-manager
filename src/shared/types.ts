@@ -684,7 +684,7 @@ export interface TaskContextEntryCreateInput {
 }
 
 export const FEEDBACK_ENTRY_TYPES = [
-  'plan_feedback', 'design_feedback', 'implementation_feedback', 'review_feedback', 'investigation_feedback', 'post_mortem_feedback',
+  'plan_feedback', 'design_feedback', 'implementation_feedback', 'review_feedback', 'investigation_feedback', 'post_mortem_feedback', 'workflow_review_feedback',
 ] as const;
 
 export const TRIAGE_ENTRY_TYPE = 'triage_summary' as const;
