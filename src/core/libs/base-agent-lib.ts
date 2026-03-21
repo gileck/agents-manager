@@ -196,16 +196,17 @@ export abstract class BaseAgentLib implements IAgentLib {
 
     // Build sandbox guard
     const sandboxGuard = new SandboxGuard(options.allowedPaths, options.readOnlyPaths);
-    let sandboxGuardCallCount = 0;
+    let sandboxGuardCanUseToolCallCount = 0;
+    let sandboxGuardHookCallCount = 0;
 
     // Build unified permission chain: sandbox guard → callerCanUseTool → onPermissionRequest
     const callerCanUseTool = options.canUseTool;
     const canUseTool: CanUseToolCallback = async (toolName, input, sdkOptions) => {
-      sandboxGuardCallCount++;
+      sandboxGuardCanUseToolCallCount++;
       // 1. Sandbox guard (synchronous path check)
       const guardResult = sandboxGuard.evaluateToolCall(toolName, input);
       if (!guardResult.allow) {
-        log(`Sandbox guard BLOCKED ${toolName}: ${guardResult.reason}`, { callCount: sandboxGuardCallCount });
+        log(`Sandbox guard BLOCKED ${toolName}: ${guardResult.reason}`, { callCount: sandboxGuardCanUseToolCallCount });
         return { behavior: 'deny', message: guardResult.reason ?? 'Blocked by sandbox guard' };
       }
       // 2. Caller's canUseTool interceptor (e.g. AskUserQuestion handler)
@@ -246,6 +247,39 @@ export abstract class BaseAgentLib implements IAgentLib {
       return { behavior: 'allow', updatedInput: updatedInput ?? input };
     };
 
+    // Build sandbox guard preToolUse hook — fires for ALL tool calls regardless of SDK
+    // permissionMode. This closes the defense-in-depth gap where `canUseTool` is only
+    // invoked for write operations when `permissionMode: 'acceptEdits'`, leaving
+    // SandboxGuard checks (sensitive path protection, path boundary enforcement) unenforced
+    // for read-only tool calls (Read, Glob, Grep, read-only Bash).
+    const sandboxGuardPreToolUseHook = (toolName: string, toolInput: Record<string, unknown>): { decision: 'block'; reason: string } | undefined => {
+      sandboxGuardHookCallCount++;
+      const guardResult = sandboxGuard.evaluateToolCall(toolName, toolInput);
+      if (!guardResult.allow) {
+        log(`Sandbox guard preToolUse BLOCKED ${toolName}: ${guardResult.reason}`, { hookCallCount: sandboxGuardHookCallCount });
+        return { decision: 'block', reason: guardResult.reason ?? 'Blocked by sandbox guard' };
+      }
+      return undefined;
+    };
+
+    // Compose sandbox guard hook with any caller-provided preToolUse hooks.
+    // The sandbox guard runs FIRST, before caller hooks (worktreeGuard, readOnlyGuard, etc.).
+    const callerPreToolUse = options.hooks?.preToolUse;
+    const composedPreToolUse = callerPreToolUse
+      ? (toolName: string, toolInput: Record<string, unknown>) => {
+          const guardResult = sandboxGuardPreToolUseHook(toolName, toolInput);
+          if (guardResult) return guardResult;
+          return callerPreToolUse(toolName, toolInput);
+        }
+      : sandboxGuardPreToolUseHook;
+
+    // Build composed hooks: always include sandbox guard preToolUse for hook-supporting engines,
+    // merged with any caller-provided hooks (postToolUse, notification, stop, etc.)
+    const composedHooks: AgentLibHooks = {
+      ...(features.hooks ? options.hooks : {}),
+      preToolUse: composedPreToolUse,
+    };
+
     log(`Starting agent run: cwd=${options.cwd}, allowedPaths=${JSON.stringify(options.allowedPaths)}, timeout=${options.timeoutMs ? `${options.timeoutMs}ms` : 'none'}, model=${options.model ?? 'default'}, engine=${this.name}`);
 
     try {
@@ -254,7 +288,7 @@ export abstract class BaseAgentLib implements IAgentLib {
         options,
         callbacks,
         canUseTool,
-        hooks: features.hooks ? options.hooks : undefined,
+        hooks: features.hooks ? composedHooks : undefined,
         log,
         emit,
         stream,
@@ -262,11 +296,12 @@ export abstract class BaseAgentLib implements IAgentLib {
         enableStreamingInput: options.enableStreamingInput,
       });
 
-      // Warn if sandbox guard was never invoked — canUseTool may be bypassed by the SDK
-      if (sandboxGuardCallCount === 0 && state.messageCount > 0) {
-        log(`WARNING: Sandbox guard was NEVER called during ${state.messageCount} messages — canUseTool may be bypassed by SDK permissionMode`);
+      // Log sandbox guard invocation summary across both paths
+      const totalGuardCalls = sandboxGuardCanUseToolCallCount + sandboxGuardHookCallCount;
+      if (totalGuardCalls === 0 && state.messageCount > 0) {
+        log(`WARNING: Sandbox guard was NEVER called during ${state.messageCount} messages — both canUseTool and preToolUse hooks may be bypassed`);
       } else {
-        log(`Sandbox guard was invoked ${sandboxGuardCallCount} times during execution`);
+        log(`Sandbox guard invoked ${totalGuardCalls} times (canUseTool: ${sandboxGuardCanUseToolCallCount}, preToolUse hook: ${sandboxGuardHookCallCount})`);
       }
 
       // Merge engine result with accumulated state

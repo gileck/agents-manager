@@ -204,14 +204,14 @@ The generic `Agent` class bridges prompt builder + lib registry → `IAgent`:
 Pipeline agents run in isolated git worktrees. Multiple layers prevent agents from escaping their worktree or writing when they shouldn't:
 
 **Read-only enforcement (`isReadOnly() = true`):**
-Read-only agents (investigator, planner, reviewer) receive `disallowedTools: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']`, which completely removes these tools from the SDK — the model cannot call them.
+Read-only agents (investigator, reviewer) receive `disallowedTools: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']`, which completely removes these tools from the SDK — the model cannot call them.
 
 **Read-only guard (PreToolUse hook — defense-in-depth):**
 When `execConfig.readOnly` is true, `Agent.execute()` builds a `readOnlyGuard` via `buildReadOnlyGuard()` and registers it as a `preToolUse` hook. This guard hard-blocks:
 - Write/Edit/MultiEdit/NotebookEdit tool calls (backstop for `disallowedTools`)
 - Destructive Bash commands: `rm`, `git commit`, `git push`, `git merge`, `git rebase`, `git reset`, `git clean`, `git add`, `git cherry-pick`, `git revert`, `git tag`, `git branch -d/-D`, `mkdir`, `touch`, `chmod`, `chown`, `mv`, `cp`, `tee`, `>`, `>>`
 
-This fires via SDK hooks (separate from `canUseTool`/permissions) so it cannot be bypassed by `permissionMode`. The `SandboxGuard` in `canUseTool` is never invoked for read-only agents because `permissionMode: 'acceptEdits'` auto-approves read-only tool calls without calling the callback — the `readOnlyGuard` closes this defense-in-depth gap.
+This fires via SDK hooks (separate from `canUseTool`/permissions) so it cannot be bypassed by `permissionMode`.
 
 **Worktree path guard (PreToolUse hook):**
 When an agent runs in a worktree (`workdir !== project.path`), `Agent.execute()` builds a `preToolUse` hook that hard-blocks:
@@ -223,16 +223,18 @@ This fires via SDK hooks (separate from `canUseTool`/permissions) so it cannot b
 **Prompt-level worktree instructions:**
 `BaseAgentPromptBuilder.buildExecutionConfig()` prepends a `CRITICAL: WORKTREE SAFETY` section to the prompt when the agent is in a worktree. This tells the agent its working directory, the forbidden main repo path, and mandatory rules (use relative paths, never cd to main repo).
 
-**SandboxGuard (canUseTool callback):**
-The `SandboxGuard` in `base-agent-lib.ts` validates tool call paths against `allowedPaths` and `readOnlyPaths`. It checks Write, Edit, Read, Glob, Grep, and Bash tools. Bash commands are parsed for path arguments (`cd`, `find`, `git`, `yarn`, etc.). Note: with `permissionMode: 'acceptEdits'`, `canUseTool` fires only for write operations. Read-only tool calls are auto-approved by the SDK without invoking the callback. For read-only agents, the `readOnlyGuard` (preToolUse hook) provides the equivalent enforcement.
+**SandboxGuard (dual enforcement — canUseTool + preToolUse hook):**
+The `SandboxGuard` in `base-agent-lib.ts` validates tool call paths against `allowedPaths` and `readOnlyPaths`. It checks Write, Edit, Read, Glob, Grep, and Bash tools. Bash commands are parsed for path arguments (`cd`, `find`, `git`, `yarn`, etc.). The sandbox guard enforces via **two independent paths**:
+1. **`canUseTool` callback** — runs the sandbox guard as the first stage of the permission chain. With `permissionMode: 'acceptEdits'`, this only fires for write operations.
+2. **`preToolUse` hook** — `BaseAgentLib` always composes a sandbox guard `preToolUse` hook that fires for **all** tool calls regardless of `permissionMode`. This ensures sensitive path protection (`.ssh`, `.aws`, `.gnupg`, `.config`, `/etc`, `.env`) and path boundary enforcement for read-only operations (Read, Glob, Grep, read-only Bash) that bypass `canUseTool`.
 
 **SDK permission mode:**
-All pipeline agents use `sdkPermissionMode: 'acceptEdits'` — never `bypassPermissions`. With this mode, `canUseTool` fires only for write operations (not read-only tool calls like git status, Read, Glob). The `readOnlyGuard` preToolUse hook compensates for this by enforcing write protection for read-only agents at the hook level, which fires for all tool calls.
+All pipeline agents use `sdkPermissionMode: 'acceptEdits'` — never `bypassPermissions`. With this mode, `canUseTool` fires only for write operations (not read-only tool calls like git status, Read, Glob). The sandbox guard `preToolUse` hook in `BaseAgentLib` compensates for this by enforcing path boundaries for all tool calls. Additionally, the `readOnlyGuard` preToolUse hook (from `agent.ts`) blocks destructive operations for read-only agents.
 
 | Agent | isReadOnly | disallowedTools | readOnlyGuard | Can Write in Worktree |
 |-------|:----------:|:---------------:|:-------------:|:---------------------:|
 | Investigator | true | Write, Edit, MultiEdit, NotebookEdit | yes (blocks write tools + destructive Bash) | no |
-| Planner | true | Write, Edit, MultiEdit, NotebookEdit | yes (blocks write tools + destructive Bash) | no |
+| Planner | false | Edit, MultiEdit, NotebookEdit | no | yes (restricted to `tmp/` for verification scripts) |
 | Reviewer | true | Write, Edit, MultiEdit, NotebookEdit | yes (blocks write tools + destructive Bash) | no |
 | Designer | false | — | no | yes |
 | Implementor | false | — | no | yes |
@@ -241,7 +243,7 @@ All pipeline agents use `sdkPermissionMode: 'acceptEdits'` — never `bypassPerm
 
 `type: 'planner'`
 
-- `isReadOnly() = true`
+- `isReadOnly() = false` (allows `Write` to `tmp/` for verification scripts; `Edit`/`MultiEdit`/`NotebookEdit` are disallowed)
 - Max turns: 150, Timeout: 10 min
 - Handles plan creation (`mode: 'new'`) and plan revision/resume (`mode: 'revision'`)
 - `inferOutcome()` → `'plan_complete'`
@@ -738,15 +740,18 @@ Ghost runs (DB says running but no in-memory tracking) are prevented at the sour
 
 **File:** `src/core/services/sandbox-guard.ts`
 
-`SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by `ClaudeCodeLib` for both task agents and chat agents.
+`SandboxGuard` enforces file-system boundaries for agent tool calls. It is used by `BaseAgentLib` for both task agents and chat agents, enforced via two independent paths:
 
-`ClaudeCodeLib` builds a unified `sdkCanUseTool` callback that chains three checks:
-
+**1. `canUseTool` callback (write operations):**
+`BaseAgentLib` builds a unified `canUseTool` callback that chains three checks:
 1. **SandboxGuard** — synchronous file-system boundary check (always runs first)
 2. **Caller's `canUseTool`** — async interceptor for special tools (e.g. AskUserQuestion handler)
 3. **`onPermissionRequest`** — interactive UI approval (only when provided, i.e. non-full_access modes)
 
-When `onPermissionRequest` is not provided (pipeline agents, full_access mode), the SandboxGuard also runs as a `preToolUse` hook via `buildSdkHooks()` for defense-in-depth. When `onPermissionRequest` is provided, the PreToolUse hook skips the sandbox guard (already handled in `sdkCanUseTool`) to avoid double-checking.
+With `permissionMode: 'acceptEdits'`, the SDK only calls `canUseTool` for write operations — read-only tool calls are auto-approved.
+
+**2. `preToolUse` hook (all operations — defense-in-depth):**
+`BaseAgentLib` always composes a sandbox guard `preToolUse` hook that fires for **all** tool calls regardless of `permissionMode`. This ensures sensitive path protection and path boundary enforcement for read-only operations (Read, Glob, Grep, read-only Bash) that bypass `canUseTool`. The sandbox guard hook runs FIRST, before any caller-provided `preToolUse` hooks (worktreeGuard, readOnlyGuard, etc.).
 
 ### Configuration
 
@@ -935,7 +940,7 @@ Default hooks wired by `ChatAgentService`:
 - **Stop** — Logs the stop event
 - **SubagentStart / SubagentStop** — Emit `subagent_activity` messages to the UI for real-time subagent lifecycle tracking
 
-When `onPermissionRequest` is not provided (pipeline agents, full_access mode), the SandboxGuard also runs as a `preToolUse` hook for defense-in-depth. When `onPermissionRequest` is provided (interactive chat), the SandboxGuard runs only inside `sdkCanUseTool`, and PreToolUse hooks skip the sandbox guard to avoid double-checking.
+The SandboxGuard always runs as a `preToolUse` hook via `BaseAgentLib` for defense-in-depth — this fires for **all** tool calls regardless of `permissionMode`, ensuring sensitive path protection and path boundary enforcement even when `canUseTool` is skipped for read-only operations. For write operations, the sandbox guard runs in both paths (preToolUse hook AND canUseTool callback) as intentional defense-in-depth.
 
 ### Subagent Definitions
 

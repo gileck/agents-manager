@@ -693,14 +693,19 @@ describe('BaseAgentLib', () => {
   // ============================================
 
   describe('execute — hooks passthrough', () => {
-    it('passes hooks to runEngine when features.hooks is true', async () => {
+    it('passes composed hooks to runEngine when features.hooks is true (includes sandbox guard preToolUse + caller hooks)', async () => {
       lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
-      const hooks: AgentLibHooks = { postToolUse: vi.fn() };
+      const postToolUseFn = vi.fn();
+      const hooks: AgentLibHooks = { postToolUse: postToolUseFn };
       lib.engineResult = { isError: false };
 
       await lib.execute('run1', makeOptions({ hooks }), makeCallbacks());
 
-      expect(lib.runEngineCalls[0].opts.hooks).toBe(hooks);
+      const passedHooks = lib.runEngineCalls[0].opts.hooks;
+      // Composed hooks should include the caller's postToolUse
+      expect(passedHooks?.postToolUse).toBe(postToolUseFn);
+      // Composed hooks should always include a preToolUse (sandbox guard)
+      expect(passedHooks?.preToolUse).toBeDefined();
     });
 
     it('does NOT pass hooks to runEngine when features.hooks is false', async () => {
@@ -711,6 +716,183 @@ describe('BaseAgentLib', () => {
       await lib.execute('run1', makeOptions({ hooks }), makeCallbacks());
 
       expect(lib.runEngineCalls[0].opts.hooks).toBeUndefined();
+    });
+
+    it('always includes sandbox guard preToolUse hook even when no caller hooks are provided', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions(), makeCallbacks());
+
+      const passedHooks = lib.runEngineCalls[0].opts.hooks;
+      expect(passedHooks?.preToolUse).toBeDefined();
+    });
+  });
+
+  // ============================================
+  // Sandbox guard preToolUse hook (defense-in-depth)
+  // ============================================
+
+  describe('execute — sandbox guard preToolUse hook', () => {
+    it('sandbox guard preToolUse blocks Read tool accessing sensitive paths (e.g. ~/.ssh/id_rsa)', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      let preToolUseResult: unknown;
+      lib.onRunEngine = (_runId, _state, opts) => {
+        // Simulate the SDK calling the preToolUse hook (as it does for ALL tool calls)
+        preToolUseResult = opts.hooks?.preToolUse?.('Read', { file_path: '/home/user/.ssh/id_rsa' });
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions(), makeCallbacks());
+
+      expect(preToolUseResult).toEqual({
+        decision: 'block',
+        reason: expect.stringContaining('sensitive path'),
+      });
+    });
+
+    it('sandbox guard preToolUse blocks Glob tool accessing paths outside boundaries', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      let preToolUseResult: unknown;
+      lib.onRunEngine = (_runId, _state, opts) => {
+        preToolUseResult = opts.hooks?.preToolUse?.('Glob', { path: '/var/log' });
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions(), makeCallbacks());
+
+      expect(preToolUseResult).toEqual({
+        decision: 'block',
+        reason: expect.stringContaining('Read outside allowed paths'),
+      });
+    });
+
+    it('sandbox guard preToolUse blocks Grep tool accessing sensitive paths', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      let preToolUseResult: unknown;
+      lib.onRunEngine = (_runId, _state, opts) => {
+        preToolUseResult = opts.hooks?.preToolUse?.('Grep', { path: '/etc/passwd' });
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions(), makeCallbacks());
+
+      expect(preToolUseResult).toEqual({
+        decision: 'block',
+        reason: expect.stringContaining('sensitive path'),
+      });
+    });
+
+    it('sandbox guard preToolUse allows Read/Glob/Grep within allowed paths', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      const results: unknown[] = [];
+      lib.onRunEngine = (_runId, _state, opts) => {
+        results.push(opts.hooks?.preToolUse?.('Read', { file_path: '/tmp/project/src/index.ts' }));
+        results.push(opts.hooks?.preToolUse?.('Glob', { path: '/tmp/project/src' }));
+        results.push(opts.hooks?.preToolUse?.('Grep', { path: '/tmp/project' }));
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions(), makeCallbacks());
+
+      // All should return undefined (not blocked)
+      expect(results).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('sandbox guard preToolUse blocks Bash commands accessing sensitive paths (cat ~/.ssh/id_rsa)', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      let preToolUseResult: unknown;
+      lib.onRunEngine = (_runId, _state, opts) => {
+        preToolUseResult = opts.hooks?.preToolUse?.('Bash', { command: 'cat /home/user/.ssh/id_rsa' });
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions(), makeCallbacks());
+
+      expect(preToolUseResult).toEqual({
+        decision: 'block',
+        reason: expect.stringContaining('sensitive path'),
+      });
+    });
+
+    it('sandbox guard preToolUse blocks Bash commands accessing ~/.aws/credentials', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      let preToolUseResult: unknown;
+      lib.onRunEngine = (_runId, _state, opts) => {
+        preToolUseResult = opts.hooks?.preToolUse?.('Bash', { command: 'cat /home/user/.aws/credentials' });
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions(), makeCallbacks());
+
+      expect(preToolUseResult).toEqual({
+        decision: 'block',
+        reason: expect.stringContaining('sensitive path'),
+      });
+    });
+
+    it('sandbox guard preToolUse runs BEFORE caller preToolUse hooks', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      const callerPreToolUse = vi.fn().mockReturnValue(undefined);
+      let preToolUseResult: unknown;
+      lib.onRunEngine = (_runId, _state, opts) => {
+        // Attempt to Read a sensitive path — sandbox guard should block before caller is called
+        preToolUseResult = opts.hooks?.preToolUse?.('Read', { file_path: '/home/user/.ssh/id_rsa' });
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions({ hooks: { preToolUse: callerPreToolUse } }), makeCallbacks());
+
+      // Sandbox guard should have blocked
+      expect(preToolUseResult).toEqual({
+        decision: 'block',
+        reason: expect.stringContaining('sensitive path'),
+      });
+      // Caller preToolUse should NOT have been called (sandbox guard blocked first)
+      expect(callerPreToolUse).not.toHaveBeenCalled();
+    });
+
+    it('caller preToolUse runs when sandbox guard allows', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      const callerPreToolUse = vi.fn().mockReturnValue({ decision: 'block', reason: 'blocked by caller' });
+      let preToolUseResult: unknown;
+      lib.onRunEngine = (_runId, _state, opts) => {
+        // Read within allowed path — sandbox guard allows, caller blocks
+        preToolUseResult = opts.hooks?.preToolUse?.('Read', { file_path: '/tmp/project/file.ts' });
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions({ hooks: { preToolUse: callerPreToolUse } }), makeCallbacks());
+
+      // Caller preToolUse should have been called
+      expect(callerPreToolUse).toHaveBeenCalledWith('Read', { file_path: '/tmp/project/file.ts' });
+      // And its block decision should be returned
+      expect(preToolUseResult).toEqual({ decision: 'block', reason: 'blocked by caller' });
+    });
+
+    it('tracks hook call count separately from canUseTool call count', async () => {
+      lib.features = { images: false, hooks: true, thinking: false, nativeResume: false, streamingInput: false };
+      const logFn = vi.fn();
+      lib.onRunEngine = (_runId, state, opts) => {
+        state.messageCount = 5;
+        // Simulate SDK calling preToolUse hook 3 times (for read-only operations)
+        opts.hooks?.preToolUse?.('Read', { file_path: '/tmp/project/file.ts' });
+        opts.hooks?.preToolUse?.('Glob', { path: '/tmp/project' });
+        opts.hooks?.preToolUse?.('Grep', { path: '/tmp/project' });
+        // Simulate SDK calling canUseTool 1 time (for a write operation)
+        opts.canUseTool('Write', { file_path: '/tmp/project/out.ts' }, { signal: state.abortController.signal, toolUseID: 'tu1' });
+      };
+      lib.engineResult = { isError: false };
+
+      await lib.execute('run1', makeOptions(), makeCallbacks({ onLog: logFn }));
+
+      // Find the log call that reports sandbox guard invocation counts
+      const guardLog = logFn.mock.calls.find(
+        (call: [string, Record<string, unknown>?]) => typeof call[0] === 'string' && call[0].includes('Sandbox guard invoked'),
+      );
+      expect(guardLog).toBeDefined();
+      expect(guardLog![0]).toContain('canUseTool: 1');
+      expect(guardLog![0]).toContain('preToolUse hook: 3');
     });
   });
 

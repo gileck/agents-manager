@@ -104,7 +104,11 @@ The SDK `permissionMode` controls how tool calls are approved at the engine leve
 | Pipeline agents | `'acceptEdits'` | Auto-accept file edits; read-only agents get `disallowedTools` for Write/Edit/MultiEdit/NotebookEdit + `readOnlyGuard` via preToolUse hooks |
 | Thread chat agents | `'acceptEdits'` (default) | App-level enforcement via `disallowedTools` + `onPermissionRequest` based on user's chosen PermissionMode |
 
-**Note:** `bypassPermissions` is never used. All agents use `'acceptEdits'`. With this mode, `canUseTool` fires only for write operations — read-only tool calls are auto-approved without invoking the callback. This means the SandboxGuard (which runs in `canUseTool`) never fires for read-only agents. To close this gap, read-only agents have a `readOnlyGuard` registered as a `preToolUse` hook, which fires for **all** tool calls regardless of `permissionMode`. This guard blocks Write/Edit/MultiEdit/NotebookEdit tools and destructive Bash commands as a defense-in-depth backstop.
+**Note:** `bypassPermissions` is never used. All agents use `'acceptEdits'`. With this mode, `canUseTool` fires only for write operations — read-only tool calls are auto-approved without invoking the callback. To close this gap, the `SandboxGuard` is enforced via **two independent paths**:
+1. **`canUseTool` callback** — runs the sandbox guard as the first stage of the permission chain for write operations
+2. **`preToolUse` hook** — `BaseAgentLib` always composes a sandbox guard `preToolUse` hook (for hook-supporting engines) that fires for **all** tool calls regardless of `permissionMode`, ensuring sensitive path protection and path boundary enforcement for read-only operations (Read, Glob, Grep, read-only Bash)
+
+Additionally, read-only agents have a `readOnlyGuard` registered as a `preToolUse` hook in `agent.ts`, which blocks Write/Edit/MultiEdit/NotebookEdit tools and destructive Bash commands as a defense-in-depth backstop.
 
 ### canUseTool Return Value
 
@@ -118,7 +122,7 @@ return { behavior: 'allow', updatedInput: updatedInput ?? input };
 return { behavior: 'allow' };
 ```
 
-**Note:** With `permissionMode: 'acceptEdits'`, read-only operations (git status, git diff, Read, Glob) are auto-approved by the SDK without calling `canUseTool`. Only write operations (git add, git commit, Write, Edit, Bash with write commands) go through the callback.
+**Note:** With `permissionMode: 'acceptEdits'`, read-only operations (git status, git diff, Read, Glob) are auto-approved by the SDK without calling `canUseTool`. Only write operations (git add, git commit, Write, Edit, Bash with write commands) go through the callback. The sandbox guard `preToolUse` hook in `BaseAgentLib` provides defense-in-depth enforcement for read-only operations that bypass `canUseTool`.
 
 ### Implemented By
 
