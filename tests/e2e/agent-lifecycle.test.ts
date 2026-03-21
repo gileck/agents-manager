@@ -96,4 +96,39 @@ describe('Agent Lifecycle', () => {
     const entries = await ctx.activityLog.getEntries({ action: 'agent_start' });
     expect(entries.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('should store structured output in payload column of agent run DB record', async () => {
+    const structuredData = { summary: 'Investigation complete', findings: ['Issue found'] };
+    ctx.scriptedAgent.setScript(async () => ({
+      exitCode: 0,
+      output: 'Done investigating',
+      outcome: 'investigation_complete',
+      structuredOutput: structuredData,
+    }));
+
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
+
+    const storedRun = await ctx.agentRunStore.getRun(run.id);
+    expect(storedRun).not.toBeNull();
+    expect(storedRun!.payload).toEqual(structuredData);
+  });
+
+  it('should prefer explicit payload over structuredOutput when both exist', async () => {
+    const explicitPayload = { questions: ['What is the API key?'] };
+    ctx.scriptedAgent.setScript(async () => ({
+      exitCode: 0,
+      output: 'Need more info',
+      outcome: 'needs_info',
+      payload: explicitPayload,
+      structuredOutput: { outcome: 'needs_info', questions: ['What is the API key?'], summary: 'extra data' },
+    }));
+
+    const run = await ctx.workflowService.startAgent(taskId, 'new', 'scripted');
+    await ctx.agentService.waitForCompletion(run.id);
+
+    const storedRun = await ctx.agentRunStore.getRun(run.id);
+    expect(storedRun).not.toBeNull();
+    expect(storedRun!.payload).toEqual(explicitPayload);
+  });
 });

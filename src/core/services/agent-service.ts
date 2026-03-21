@@ -921,7 +921,7 @@ export class AgentService implements IAgentService {
         status: runStatus,
         output: result.output,
         outcome: result.outcome,
-        payload: result.payload,
+        payload: result.payload ?? result.structuredOutput,
         exitCode: result.exitCode,
         completedAt,
         costInputTokens: result.costInputTokens,

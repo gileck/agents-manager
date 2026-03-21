@@ -191,7 +191,7 @@ export abstract class BaseAgentPromptBuilder {
       killReason: libResult.killReason,
       rawExitCode: libResult.rawExitCode,
     };
-    if (payload) result.payload = payload;
+    result.payload = payload ?? libResult.structuredOutput;
     return result;
   }
 }
