@@ -40,7 +40,17 @@ export class TaskReviewReportBuilder {
     const totalInputTokens = agentRuns.reduce((s, r) => s + (r.costInputTokens ?? 0), 0);
     const totalOutputTokens = agentRuns.reduce((s, r) => s + (r.costOutputTokens ?? 0), 0);
     const retries = agentRuns.filter(r => r.outcome === 'failed' && r.status === 'completed').length;
-    const failures = agentRuns.filter(r => r.status === 'failed').length;
+    const failures = agentRuns.filter(r => r.status === 'failed' && r.outcome !== 'interrupted').length;
+    const interruptedRuns = agentRuns.filter(r => r.outcome === 'interrupted');
+    const interruptions = interruptedRuns.length;
+    const recoveredSessionIds = new Set(
+      agentRuns
+        .filter(r => r.outcome !== 'interrupted' && r.sessionId != null)
+        .map(r => r.sessionId),
+    );
+    const recovered = interruptedRuns.filter(
+      r => r.sessionId != null && recoveredSessionIds.has(r.sessionId),
+    ).length;
 
     const transitions = timeline.filter(e => e.source === 'transition').sort((a, b) => a.timestamp - b.timestamp);
     const firstTs = task.createdAt;
@@ -58,6 +68,7 @@ export class TaskReviewReportBuilder {
     lines.push(`Total Token Cost: ${totalInputTokens} input / ${totalOutputTokens} output`);
     lines.push(`Retries: ${retries}`);
     lines.push(`Failures: ${failures}`);
+    lines.push(`Interruptions: ${interruptions} (${recovered} recovered)`);
 
     // Warn about runs whose token counts look suspiciously low relative to message count
     const suspectRuns = agentRuns.filter(r =>
