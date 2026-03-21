@@ -121,13 +121,13 @@ const APPROACH_SUGGESTION_INSTRUCTIONS = [
 
 const EFFICIENCY_RULES = [
   '',
-  '## Efficiency Rules',
+  '## Exploration Guidelines',
   '- FIRST classify the task, THEN scope your exploration proportionally.',
-  '- **Do NOT use the Agent/Task tool to spawn sub-agents.** Read files directly with Read, Grep, and Glob so their contents stay in your context. Sub-agents read files in isolation and force you to re-read everything.',
+  '- **Do NOT use the Agent/Task tool to spawn sub-agents.** Read files directly with Read, Grep, and Glob so their contents stay in your context.',
   '- Read each file AT MOST once. Do not re-read files you have already seen.',
-  '- Do not explore files that are unlikely to appear in your change list or inform a key decision (e.g., skip store implementations, daemon routes, and config files for a pure UI task).',
   '- Avoid redundant exploration: if the task description already describes a file\'s role, do not re-read it to confirm what was stated.',
-  '- **Turn budget:** Reserve your last 5-10 turns for producing the plan output. The plan is the deliverable — if you have explored enough to form a reasonable plan, stop exploring and write it. An imperfect plan produced on time is better than no plan at all.',
+  '',
+  '**Depth over speed.** A shallow plan that misses integration points or makes unverified behavioral assumptions causes bugs, rework, and post-mortems. Take the turns you need to trace code paths and verify behavior — do not stop exploring just to finish faster.',
 ].join('\n');
 
 export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
@@ -261,8 +261,8 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
       `2. **Approach** — high-level strategy, key decisions, and alternatives considered.`,
       `3. **Files to modify** — each file with a short description of the change.`,
       `4. **Edge cases & risks** — detailed edge cases and minor risks, and whether each requires a code change (if so, include the file above). Major risks that could derail the approach should already be listed in the plan header.`,
-      `5. **Assumptions** — mark each VERIFIED (cite file:line) or UNVERIFIED (implementor will verify).`,
-      `6. **Subtasks** — 3-8 concrete, independently testable steps ordered by dependency.`,
+      `5. **Assumptions** — mark each VERIFIED (cite file:line) or UNVERIFIED (implementor will verify). For behavioral assumptions ("when X happens, Y occurs"), trace the actual execution path — do not just verify a function or type exists.`,
+      `6. **Subtasks** — 3-8 concrete, independently testable steps ordered by dependency. Every requirement from the task description must map to at least one subtask.`,
       MULTI_PHASE_INSTRUCTIONS,
       UI_COMPONENT_SPEC_INSTRUCTIONS,
     ];
