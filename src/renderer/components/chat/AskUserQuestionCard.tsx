@@ -12,7 +12,7 @@ function isRecommended(label: string): boolean {
   return /\(Recommended\)\s*$/i.test(label);
 }
 
-/** Strip the "(Recommended)" suffix for display in compact mode. */
+/** Strip the "(Recommended)" suffix for display (badge is rendered separately). */
 function stripRecommended(label: string): string {
   return label.replace(/\s*\(Recommended\)\s*$/i, '').trim();
 }
@@ -330,7 +330,7 @@ export function AskUserQuestionCard({ message, onAnswer }: AskUserQuestionCardPr
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="text-sm flex items-center gap-1.5">
-                      {opt.label}
+                      {recommended ? stripRecommended(opt.label) : opt.label}
                       {recommended && (
                         <span className="inline-flex items-center gap-0.5 text-xs font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                           <Star className="h-3 w-3 fill-primary" />
