@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, AgentNotificationPayload } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage, ChatImage, AgentNotificationPayload } from '../../shared/types';
+import { convertDbMessages } from '../../shared/convert-db-messages';
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
@@ -7,65 +8,6 @@ export interface RawEvent {
   timestamp: string;
   channel: string;
   payload: unknown;
-}
-
-function convertDbMessages(dbMessages: ChatMessage[]): AgentChatMessage[] {
-  const result: AgentChatMessage[] = [];
-  for (const msg of dbMessages) {
-    if (msg.role === 'user') {
-      // Parse JSON envelope for messages with images
-      let text = msg.content;
-      let images: ChatImageRef[] | undefined;
-      if (msg.content.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(msg.content);
-          if (parsed && typeof parsed === 'object' && typeof parsed.text === 'string') {
-            text = parsed.text;
-            if (Array.isArray(parsed.images) && parsed.images.length > 0) {
-              images = parsed.images as ChatImageRef[];
-            }
-          }
-        } catch (err) {
-          console.warn('[useChat] User message starts with { but failed JSON parse:', err);
-        }
-      }
-      // Detect injected notification user messages (plain text from triggerNotificationTurn)
-      if (text.startsWith('[System Notification]')) {
-        result.push({ type: 'notification' as const, title: 'System Notification', body: text, timestamp: msg.createdAt });
-      } else {
-        result.push({ type: 'user' as const, text, images, timestamp: msg.createdAt });
-      }
-    } else if (msg.role === 'system') {
-      // Detect injected system notification JSON (from deliverInjectedMessage)
-      if (msg.content.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(msg.content);
-          if (parsed?.metadata?.injected === true && typeof parsed.text === 'string') {
-            const taskTitle = typeof parsed.metadata.taskTitle === 'string' ? parsed.metadata.taskTitle : undefined;
-            result.push({
-              type: 'notification' as const,
-              title: taskTitle ? `Task "${taskTitle}" completed` : 'System Notification',
-              body: parsed.text,
-              timestamp: msg.createdAt,
-            });
-            continue;
-          }
-        } catch { /* not injected notification JSON — fall through */ }
-      }
-      result.push({ type: 'status' as const, status: 'completed' as const, message: msg.content, timestamp: msg.createdAt });
-    } else if (msg.role === 'assistant') {
-      // Try to parse JSON array of structured messages; fall back to legacy plain text
-      try {
-        const parsed = JSON.parse(msg.content);
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.type) {
-          result.push(...(parsed as AgentChatMessage[]));
-          continue;
-        }
-      } catch { /* legacy plain text */ }
-      result.push({ type: 'assistant_text' as const, text: msg.content, timestamp: msg.createdAt });
-    }
-  }
-  return result;
 }
 
 interface QueuedMessage {
