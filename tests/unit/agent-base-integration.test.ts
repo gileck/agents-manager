@@ -134,7 +134,7 @@ class MockPromptBuilder {
       killReason: libResult.killReason,
       rawExitCode: libResult.rawExitCode,
     };
-    if (payload) result.payload = payload;
+    result.payload = payload ?? libResult.structuredOutput;
     return result;
   }
 }
@@ -301,6 +301,37 @@ describe('Agent (integration with BaseAgentLib)', () => {
       const result = await agent.execute(makeContext(), makeConfig());
 
       expect(result.outcome).toBe('success');
+    });
+
+    it('maps structuredOutput to payload for non-needs_info outcomes', async () => {
+      const { agent, lib } = buildAgent();
+      const structuredData = { summary: 'Investigation complete', findings: ['Found issue in module X'] };
+      lib.executeResult = {
+        exitCode: 0,
+        output: 'Investigation done',
+        model: 'test-model',
+        structuredOutput: structuredData,
+      };
+
+      const result = await agent.execute(makeContext(), makeConfig());
+
+      expect(result.outcome).toBe('success');
+      expect(result.payload).toEqual(structuredData);
+      expect(result.structuredOutput).toEqual(structuredData);
+    });
+
+    it('does not set payload when no structuredOutput is present', async () => {
+      const { agent, lib } = buildAgent();
+      lib.executeResult = {
+        exitCode: 0,
+        output: 'Done',
+        model: 'test-model',
+      };
+
+      const result = await agent.execute(makeContext(), makeConfig());
+
+      expect(result.outcome).toBe('success');
+      expect(result.payload).toBeUndefined();
     });
   });
 
