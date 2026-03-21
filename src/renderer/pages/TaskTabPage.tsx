@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { TaskSubPageLayout } from '../components/task-detail/TaskSubPageLayout';
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
 import { TimelinePanel } from '../components/task-detail/TimelinePanel';
@@ -8,6 +8,7 @@ import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
 import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext';
 import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
 import { InlineError } from '../components/InlineError';
+import { AgentRunsTable } from '../components/agent-run/AgentRunsTable';
 import { useTask } from '../hooks/useTasks';
 import { usePipeline } from '../hooks/usePipelines';
 import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
@@ -24,6 +25,7 @@ const TAB_CONFIG: Record<string, { label: string }> = {
   impl: { label: 'Implementation' },
   chat: { label: 'Chat' },
   timeline: { label: 'Timeline' },
+  'agent-runs': { label: 'Agent Runs' },
   review: { label: 'Workflow Review' },
 };
 
@@ -48,6 +50,7 @@ function TabContent({ id, tab }: { id: string; tab: string }) {
     case 'impl': return <ImplementationContent id={id} />;
     case 'chat': return <ChatContent id={id} />;
     case 'timeline': return <TimelineContent id={id} />;
+    case 'agent-runs': return <AgentRunsContent id={id} />;
     case 'review': return <ReviewContent id={id} />;
     default: return null;
   }
@@ -272,6 +275,59 @@ function TimelineContent({ id }: { id: string }) {
         isLive={shouldPoll}
         showFullPageButton={false}
         taskId={id}
+      />
+    </div>
+  );
+}
+
+// --- Agent Runs tab ---
+function AgentRunsContent({ id }: { id: string }) {
+  const navigate = useNavigate();
+  const { task } = useTask(id);
+  const { pipeline } = usePipeline(task?.pipelineId);
+  const statusMeta = usePipelineStatusMeta(task, pipeline);
+
+  const { data: agentRuns, refetch: refetchRuns } = useIpc<AgentRun[]>(
+    () => window.api.agents.runs(id), [id],
+  );
+
+  // Determine if we should poll for live updates
+  const hasRunningAgent = agentRuns?.some(r => r.status === 'running') ?? false;
+  const isAgentPhase = statusMeta.isAgentRunning;
+  const lastRun = agentRuns?.[0] ?? null;
+  const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
+    && lastRun?.status === 'completed' && lastRun.completedAt != null
+    && (Date.now() - lastRun.completedAt) < 30000;
+  const shouldPoll = hasRunningAgent || statusMeta.isWaitingForInput || isFinalizing;
+
+  // Poll agent runs when active
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!shouldPoll) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+    intervalRef.current = setInterval(() => {
+      refetchRuns();
+    }, 5000);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [shouldPoll, refetchRuns]);
+
+  return (
+    <div style={{ padding: '20px 24px', flex: 1, overflow: 'auto' }}>
+      <AgentRunsTable
+        runs={agentRuns ?? []}
+        showTaskColumn={false}
+        loading={!agentRuns}
+        onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
       />
     </div>
   );

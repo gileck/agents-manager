@@ -47,6 +47,7 @@ import { BugReportDialog } from '../components/bugs/BugReportDialog';
 import type { BugReportInitialValues } from '../components/bugs/BugReportDialog';
 import type { HookFailureRecord, ChatImage } from '../../shared/types';
 import { reportError } from '../lib/error-handler';
+import { AgentRunsTable } from '../components/agent-run/AgentRunsTable';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -711,6 +712,12 @@ export function TaskDetailPage() {
               {(debugTimeline?.length ?? 0) > 0 && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
             </span>
           </TabsTrigger>
+          <TabsTrigger value="agent-runs" className={(agentRuns?.length ?? 0) > 0 ? '' : 'opacity-40'}>
+            <span className="flex items-center gap-1.5">
+              Agent Runs
+              {(agentRuns?.length ?? 0) > 0 && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
+            </span>
+          </TabsTrigger>
           <TabsTrigger value="review" className={hasReview ? '' : 'opacity-40'}>Review</TabsTrigger>
         </TabsList>
         <div style={{
@@ -819,6 +826,20 @@ export function TaskDetailPage() {
             isLive={shouldPoll}
             showFullPageButton={true}
             taskId={id}
+          />
+        </TabsContent>
+
+        <TabsContent value="agent-runs" style={{ padding: '12px 24px', flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <Button variant="outline" size="sm" onClick={() => navigate(`/tasks/${id}/agent-runs`)}>
+              Open in new page
+            </Button>
+          </div>
+          <AgentRunsTable
+            runs={agentRuns ?? []}
+            showTaskColumn={false}
+            loading={!agentRuns}
+            onNavigateToRun={(runId) => navigate(`/agents/${runId}`)}
           />
         </TabsContent>
 
