@@ -344,6 +344,12 @@ export function ClaudeCodeChatMessageList({
 
   const segments = useMemo(() => groupMessages(messages), [messages]);
 
+  // Derive waiting-for-input state from messages: true when an unanswered AskUserQuestion exists
+  const isWaitingForInput = useMemo(
+    () => messages.some((m) => m.type === 'ask_user_question' && !m.answered),
+    [messages],
+  );
+
   const rendered = useMemo(() => {
     const resultMap = new Map<string, AgentChatMessageToolResult>();
     for (const msg of messages) {
@@ -363,6 +369,7 @@ export function ClaudeCodeChatMessageList({
             expandedTools={expandedTools}
             onToggleTool={toggleTool}
             sessionRunning={isRunning}
+            isWaitingForInput={isWaitingForInput}
           />,
         );
         continue;
@@ -757,14 +764,14 @@ export function ClaudeCodeChatMessageList({
         onScroll={handleScroll}
       >
         <div style={{ padding: '16px 16px 8px', fontFamily: MONO, fontSize: '1em' }}>
-          {rendered.length === 0 && isRunning && (
+          {rendered.length === 0 && isRunning && !isWaitingForInput && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 8 }}>
               <span style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic' }}>⠿ working…</span>
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
           {rendered}
-          {isRunning && rendered.length > 0 && (
+          {isRunning && rendered.length > 0 && !isWaitingForInput && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
               <span style={{ color: '#8b5cf6', fontSize: '0.923em' }}>✻</span>
               <span style={{ color: '#6b7280', fontSize: '0.923em', fontStyle: 'italic' }}>thinking…</span>

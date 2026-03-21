@@ -117,6 +117,8 @@ export interface AgentBlockPresetProps {
   onToggleTool: (index: number) => void;
   /** Whether the parent chat session is still running. */
   sessionRunning?: boolean;
+  /** Whether the agent is waiting for user input (AskUserQuestion). */
+  isWaitingForInput?: boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -174,6 +174,12 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
 
   const segments = useMemo(() => groupMessages(messages), [messages]);
 
+  // Derive waiting-for-input state from messages: true when an unanswered AskUserQuestion exists
+  const isWaitingForInput = useMemo(
+    () => messages.some((m) => m.type === 'ask_user_question' && !m.answered),
+    [messages],
+  );
+
   const rendered = useMemo(() => {
     // Pre-build toolId → toolResult map for top-level (ungrouped) tool calls
     const resultMap = new Map<string, AgentChatMessageToolResult>();
@@ -195,6 +201,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
             expandedTools={expandedTools}
             onToggleTool={toggleTool}
             sessionRunning={isRunning}
+            isWaitingForInput={isWaitingForInput}
           />
         );
         continue;
@@ -532,7 +539,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
         onScroll={handleScroll}
       >
         <div className="mx-auto w-full max-w-[980px] px-4 py-6">
-          {rendered.length === 0 && isRunning && (
+          {rendered.length === 0 && isRunning && !isWaitingForInput && (
             <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
@@ -541,7 +548,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
             </div>
           )}
           {rendered}
-          {isRunning && rendered.length > 0 && (
+          {isRunning && rendered.length > 0 && !isWaitingForInput && (
             <div className="flex items-center gap-2 py-3 text-muted-foreground text-sm">
               <div className="flex gap-1">
                 <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" />

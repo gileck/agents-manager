@@ -33,7 +33,7 @@ const STATUS_LABELS: Record<string, string> = {
   error: 'error',
 };
 
-export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionRunning }: AgentBlockPresetProps) {
+export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionRunning, isWaitingForInput }: AgentBlockPresetProps) {
   const agentInput = useMemo(() => parseAgentInput(segment.taskToolUse.input), [segment.taskToolUse.input]);
   const status = getAgentStatus(segment, sessionRunning);
   const isRunning = status === 'running' || status === 'initializing';
@@ -291,7 +291,7 @@ export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionR
       )}
 
       {/* ── Running indicators ── */}
-      {isRunning && !hasInternalMessages && !hasResult && (
+      {isRunning && !hasInternalMessages && !hasResult && !isWaitingForInput && (
         <div style={{
           padding: '4px 14px 10px',
           paddingLeft: 36,
@@ -307,7 +307,7 @@ export function CodexAgentBlock({ segment, expandedTools, onToggleTool, sessionR
         </div>
       )}
 
-      {isRunning && hasInternalMessages && !hasResult && (
+      {isRunning && hasInternalMessages && !hasResult && !isWaitingForInput && (
         <div style={{
           padding: '4px 14px 10px',
           paddingLeft: 36,

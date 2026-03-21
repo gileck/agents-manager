@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { X, Loader2, Pin } from 'lucide-react';
+import { X, Loader2, Pin, MessageCircleQuestion } from 'lucide-react';
 import { cn, truncateString } from '../../lib/utils';
 import { useTabsContext, ICON_MAP, getEntityId, type PageTab } from '../../contexts/TabsContext';
 import { useActiveAgents } from '../../hooks/useActiveAgents';
@@ -102,33 +102,54 @@ export function TabBar() {
     }
   }, [state.tabs, sessions, fetchTitle, updateTabLabel]);
 
-  // Memoize running agent Sets (includes waiting_for_input as active)
-  const { runningTaskIds, runningSessionIds } = useMemo(() => {
-    const taskIds = new Set<string>();
-    const sessionIds = new Set<string>();
+  // Memoize running and waiting agent Sets
+  const { runningTaskIds, runningSessionIds, waitingTaskIds, waitingSessionIds } = useMemo(() => {
+    const rTaskIds = new Set<string>();
+    const rSessionIds = new Set<string>();
+    const wTaskIds = new Set<string>();
+    const wSessionIds = new Set<string>();
     for (const a of agents) {
-      if (a.status === 'running' || a.status === 'waiting_for_input') {
-        if (a.scopeType === 'task') taskIds.add(a.scopeId);
-        sessionIds.add(a.sessionId);
+      if (a.status === 'running') {
+        if (a.scopeType === 'task') rTaskIds.add(a.scopeId);
+        rSessionIds.add(a.sessionId);
+      } else if (a.status === 'waiting_for_input') {
+        if (a.scopeType === 'task') wTaskIds.add(a.scopeId);
+        wSessionIds.add(a.sessionId);
       }
     }
-    return { runningTaskIds: taskIds, runningSessionIds: sessionIds };
+    return { runningTaskIds: rTaskIds, runningSessionIds: rSessionIds, waitingTaskIds: wTaskIds, waitingSessionIds: wSessionIds };
   }, [agents]);
 
   const isTabRunning = useCallback((tab: PageTab): boolean => {
     if (tab.identity.startsWith('task:')) {
       const taskId = getEntityId(tab.identity);
-      return taskId ? runningTaskIds.has(taskId) : false;
+      return taskId ? (runningTaskIds.has(taskId) || waitingTaskIds.has(taskId)) : false;
     }
     if (tab.identity.startsWith('chat:')) {
       const sessionId = getEntityId(tab.identity);
-      return sessionId ? runningSessionIds.has(sessionId) : false;
+      return sessionId ? (runningSessionIds.has(sessionId) || waitingSessionIds.has(sessionId)) : false;
     }
     if (tab.identity === 'page:/chat') {
-      return runningSessionIds.size > 0;
+      return runningSessionIds.size > 0 || waitingSessionIds.size > 0;
     }
     return false;
-  }, [runningTaskIds, runningSessionIds]);
+  }, [runningTaskIds, runningSessionIds, waitingTaskIds, waitingSessionIds]);
+
+  const isTabWaiting = useCallback((tab: PageTab): boolean => {
+    if (tab.identity.startsWith('task:')) {
+      const taskId = getEntityId(tab.identity);
+      // Waiting only if ALL agents for this tab are waiting (none are actively running)
+      return taskId ? (waitingTaskIds.has(taskId) && !runningTaskIds.has(taskId)) : false;
+    }
+    if (tab.identity.startsWith('chat:')) {
+      const sessionId = getEntityId(tab.identity);
+      return sessionId ? (waitingSessionIds.has(sessionId) && !runningSessionIds.has(sessionId)) : false;
+    }
+    if (tab.identity === 'page:/chat') {
+      return waitingSessionIds.size > 0 && runningSessionIds.size === 0;
+    }
+    return false;
+  }, [runningTaskIds, runningSessionIds, waitingTaskIds, waitingSessionIds]);
 
   if (!config.enabled || state.tabs.length === 0) {
     return null;
@@ -187,6 +208,7 @@ export function TabBar() {
           const isActive = tab.id === state.activeTabId;
           const Icon = ICON_MAP[tab.iconName];
           const running = isTabRunning(tab);
+          const waiting = isTabWaiting(tab);
           const isDragOver = dragOverIdx === idx;
 
           return (
@@ -215,7 +237,9 @@ export function TabBar() {
                 isDragOver && 'bg-accent/40'
               )}
             >
-              {running ? (
+              {running && waiting ? (
+                <MessageCircleQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+              ) : running ? (
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />
               ) : (
                 Icon && <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
