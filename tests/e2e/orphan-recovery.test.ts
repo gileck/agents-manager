@@ -102,6 +102,28 @@ describe('Orphan Recovery (recoverOrphanedRuns)', () => {
     expect(events.some((e) => e.message.includes('interrupted by app shutdown'))).toBe(true);
   });
 
+  it('should skip unlock when worktree has already been removed', async () => {
+    const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
+
+    await ctx.agentRunStore.createRun({
+      taskId: task.id,
+      agentType: 'scripted',
+      mode: 'new',
+    });
+
+    // Do NOT create a worktree — simulate the merge_pr hook having already removed it.
+    // Recovery should succeed without errors (no "fatal: not a working tree" warning).
+    const recovered = await ctx.agentService.recoverOrphanedRuns();
+
+    expect(recovered.length).toBe(1);
+    expect(recovered[0].status).toBe('failed');
+    expect(recovered[0].outcome).toBe('interrupted');
+
+    // Verify no warning-level worktree event was logged (unlock was skipped cleanly)
+    const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'worktree' });
+    expect(events.filter((e) => e.severity === 'warning')).toHaveLength(0);
+  });
+
   it('should return empty array when no orphaned runs exist', async () => {
     const recovered = await ctx.agentService.recoverOrphanedRuns();
     expect(recovered).toEqual([]);

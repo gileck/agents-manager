@@ -131,14 +131,19 @@ export class AgentService implements IAgentService {
           await this.taskPhaseStore.updatePhase(phase.id, { status: 'failed', completedAt });
         }
 
-        // Unlock worktree
+        // Unlock worktree (only if it still exists on disk)
         try {
           const task = await this.taskStore.getTask(run.taskId);
           if (task) {
             const project = await this.projectStore.getProject(task.projectId);
             if (project?.path) {
               const wm = this.createWorktreeManager(project.path);
-              await wm.unlock(run.taskId);
+              const wt = await wm.get(run.taskId);
+              if (wt) {
+                await wm.unlock(run.taskId);
+              } else {
+                getAppLogger().debug('AgentService', `recoverOrphanedRuns: worktree already removed for task ${run.taskId}, skipping unlock`);
+              }
             }
           }
         } catch (err) {
