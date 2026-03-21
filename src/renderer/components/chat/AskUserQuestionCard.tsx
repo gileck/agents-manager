@@ -94,10 +94,10 @@ function CompactPillMode({ question, questionId, onAnswer }: CompactPillModeProp
               type="button"
               disabled={submitting}
               onClick={() => submitAnswer(opt.label)}
-              className={`inline-flex items-center gap-1 px-3 py-1 text-sm rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`inline-flex items-center gap-1 px-3 py-1 text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 recommended
-                  ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-                  : 'bg-background text-foreground border-border hover:border-primary/50 hover:bg-accent/50'
+                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                  : 'bg-blue-600/20 text-blue-400 border-none hover:bg-blue-600/30'
               }`}
             >
               {recommended && <Star className="h-3 w-3 fill-current" />}
@@ -111,7 +111,7 @@ function CompactPillMode({ question, questionId, onAnswer }: CompactPillModeProp
             type="button"
             disabled={submitting}
             onClick={() => setShowOtherInput(true)}
-            className="inline-flex items-center px-3 py-1 text-sm rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-3 py-1 text-sm rounded-lg bg-blue-600/10 text-blue-400/70 border-none hover:bg-blue-600/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Other...
           </button>
@@ -126,13 +126,13 @@ function CompactPillMode({ question, questionId, onAnswer }: CompactPillModeProp
               onChange={(e) => setOtherText(e.target.value)}
               onKeyDown={handleOtherKeyDown}
               disabled={submitting}
-              className="text-sm px-2 py-1 rounded-full border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-40"
+              className="text-sm px-2 py-1 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-40"
             />
             <button
               type="button"
               disabled={submitting || !otherText.trim()}
               onClick={handleOtherSubmit}
-              className="inline-flex items-center px-2 py-1 text-sm rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-2 py-1 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="h-3 w-3" />
             </button>
