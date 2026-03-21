@@ -1623,6 +1623,14 @@ export class ChatAgentService {
           if (existingRun) {
             const agent = this.runningAgents.get(sessionId);
             const agentStatus = agent?.status ?? 'failed';
+            const systemPromptText = typeof systemPrompt === 'string' ? systemPrompt : (systemPrompt.append ?? '');
+            const resolvedPrompt = existingRun.prompt ? existingRun.prompt : `${systemPromptText}\n\n${prompt}`;
+
+            // Defensive guard: detect accidental object-to-string coercion in stored prompts
+            if (resolvedPrompt.includes('[object Object]')) {
+              getAppLogger().logError('ChatAgentService', `AgentRun ${agentRunId} prompt contains "[object Object]" — an object was coerced to string instead of being serialized properly`, new Error('Prompt serialization bug'));
+            }
+
             await this.agentRunStore.updateRun(agentRunId, {
               status: agentStatus === 'completed' ? 'completed' : 'failed',
               completedAt: Date.now(),
@@ -1632,7 +1640,7 @@ export class ChatAgentService {
               cacheCreationInputTokens: (existingRun.cacheCreationInputTokens ?? 0) + (cacheCreationInputTokens ?? 0),
               totalCostUsd: (existingRun.totalCostUsd ?? 0) + (totalCostUsd ?? 0),
               messages: [...(existingRun.messages ?? []), ...allTurnMessages],
-              prompt: existingRun.prompt ? existingRun.prompt : `${systemPrompt}\n\n${prompt}`,
+              prompt: resolvedPrompt,
             });
           } else {
             getAppLogger().warn('ChatAgentService', `AgentRun ${agentRunId} not found in DB; skipping update`);

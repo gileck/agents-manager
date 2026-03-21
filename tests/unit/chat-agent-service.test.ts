@@ -8,7 +8,8 @@ import type { IPipelineStore } from '../../src/core/interfaces/pipeline-store';
 import type { AgentLibRegistry } from '../../src/core/services/agent-lib-registry';
 import type { IAgentLib } from '../../src/core/interfaces/agent-lib';
 import type { ChatSession } from '../../src/core/interfaces/chat-session-store';
-import type { AgentChatMessage, Project } from '../../src/shared/types';
+import type { AgentChatMessage, AgentRun, Project } from '../../src/shared/types';
+import type { IAgentRunStore } from '../../src/core/interfaces/agent-run-store';
 
 vi.mock('../../src/core/mcp/task-mcp-server', () => ({
   createTaskMcpServer: vi.fn().mockResolvedValue([]),
@@ -766,6 +767,135 @@ describe('ChatAgentService', () => {
       expect(content).toContainEqual(
         expect.objectContaining({ type: 'assistant_text', text: 'Initial response' }),
       );
+    });
+  });
+
+  describe('AgentRun prompt serialization', () => {
+    it('stores the system prompt text (not [object Object]) when systemPrompt is a preset object', async () => {
+      const agentChatSession: ChatSession = {
+        id: 'session-1',
+        projectId: 'project-1',
+        scopeType: 'task',
+        scopeId: 'task-1',
+        name: 'Agent Chat Session',
+        agentLib: null,
+        source: 'agent-chat',
+        agentRole: 'investigator',
+        agentRunId: null,
+        permissionMode: null,
+        sidebarHidden: false,
+        systemPromptAppend: null,
+        model: null,
+        enableStreaming: true,
+        enableStreamingInput: false,
+        draft: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const mockAgentRun: AgentRun = {
+        id: 'run-1',
+        taskId: 'task-1',
+        agentType: 'investigator',
+        mode: 'revision',
+        status: 'running',
+        output: null,
+        outcome: null,
+        payload: {},
+        exitCode: null,
+        startedAt: Date.now(),
+        completedAt: null,
+        costInputTokens: 0,
+        costOutputTokens: 0,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        totalCostUsd: 0,
+        prompt: null,
+        error: null,
+        timeoutMs: null,
+        maxTurns: null,
+        messageCount: null,
+        messages: null,
+        automatedAgentId: null,
+        model: null,
+        engine: null,
+        sessionId: null,
+        diagnostics: null,
+      };
+
+      let capturedPrompt: string | null = null;
+      const mockAgentRunStore: IAgentRunStore = {
+        createRun: vi.fn().mockResolvedValue(mockAgentRun),
+        updateRun: vi.fn().mockImplementation((_id: string, input: { prompt?: string }) => {
+          capturedPrompt = input.prompt ?? null;
+          return Promise.resolve({ ...mockAgentRun, ...input });
+        }),
+        getRun: vi.fn().mockResolvedValue(mockAgentRun),
+        getRunsForTask: vi.fn().mockResolvedValue([]),
+        getActiveRuns: vi.fn().mockResolvedValue([]),
+        getAllRuns: vi.fn().mockResolvedValue([]),
+        getRunsForAutomatedAgent: vi.fn().mockResolvedValue([]),
+        getActiveRunForAutomatedAgent: vi.fn().mockResolvedValue(null),
+        countFailedRunsSync: vi.fn().mockReturnValue(0),
+        countRunningRunsSync: vi.fn().mockReturnValue(0),
+      };
+
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(agentChatSession);
+      mockSessionStore.updateSession = vi.fn().mockResolvedValue(agentChatSession);
+
+      mockTaskStore.getTask = vi.fn().mockResolvedValue({
+        id: 'task-1',
+        projectId: 'project-1',
+        pipelineId: 'pipeline-1',
+        title: 'Test Task',
+        description: null,
+        type: 'task',
+        size: null,
+        complexity: null,
+        status: 'investigation_review',
+        priority: 0,
+        tags: [],
+        parentTaskId: null,
+        featureId: null,
+        assignee: null,
+        prLink: null,
+        branchName: null,
+        plan: null,
+        investigationReport: null,
+        technicalDesign: null,
+        debugInfo: null,
+        subtasks: [],
+        phases: null,
+        planComments: [],
+        technicalDesignComments: [],
+        metadata: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        createdBy: null,
+      });
+
+      const serviceWithRunStore = new ChatAgentService(
+        mockMessageStore, mockSessionStore, mockProjectStore,
+        mockTaskStore, mockPipelineStore, mockAgentLibRegistry,
+        mockAgentRunStore,
+      );
+
+      const presetSystemPrompt = { type: 'preset' as const, preset: 'claude_code' as const, append: 'You are an investigator agent.\n\nWorktree safety rules...' };
+
+      const result = await serviceWithRunStore.send('session-1', 'Test message', {
+        systemPrompt: presetSystemPrompt,
+      });
+
+      // Let the agent run complete
+      await vi.advanceTimersByTimeAsync(200);
+      await result.completion;
+
+      // Verify updateRun was called and the prompt does NOT contain [object Object]
+      expect(mockAgentRunStore.updateRun).toHaveBeenCalled();
+      expect(capturedPrompt).toBeDefined();
+      expect(capturedPrompt).not.toContain('[object Object]');
+      // Verify the prompt contains the actual append text
+      expect(capturedPrompt).toContain('You are an investigator agent.');
     });
   });
 });
