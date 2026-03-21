@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { reportError } from '../../lib/error-handler';
 import type { DebugTimelineEntry } from '../../../shared/types';
 
 // --- Constants ---
@@ -143,7 +144,7 @@ export function TimelinePanel({ entries, isLive, showFullPageButton = true, task
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    }).catch(() => { /* clipboard not available */ });
+    }).catch((err) => reportError(err, 'Copy to clipboard'));
   }, [processedEntries]);
 
   const allSourcesSelected = sourceFilter.size === ALL_SOURCES.length;
@@ -301,13 +302,6 @@ export function TimelinePanel({ entries, isLive, showFullPageButton = true, task
         )}
       </div>
 
-      {/* Pulse animation keyframes */}
-      <style>{`
-        @keyframes timeline-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -458,7 +452,7 @@ function ExpandedDetail({ entry }: { entry: DebugTimelineEntry }) {
     navigator.clipboard.writeText(parts.join('\n')).then(() => {
       setDetailCopied(true);
       setTimeout(() => setDetailCopied(false), 2000);
-    }).catch(() => { /* clipboard not available */ });
+    }).catch((err) => reportError(err, 'Copy to clipboard'));
   }, [entry]);
 
   return (

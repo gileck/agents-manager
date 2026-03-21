@@ -17,7 +17,7 @@ import { PlanMarkdown } from './PlanMarkdown';
 import { TaskCommentsCard } from './TaskCommentsCard';
 import { ImagePasteArea } from '../ui/ImagePasteArea';
 import type {
-  Task, AgentRun, TaskArtifact, PendingPrompt, DebugTimelineEntry,
+  Task, AgentRun, TaskArtifact, PendingPrompt,
   TaskContextEntry, Transition, ChatImage,
 } from '../../../shared/types';
 import type { QuestionResponse } from '../prompts/QuestionForm';
@@ -31,7 +31,6 @@ interface TaskDetailDashboardProps {
   agentRuns: AgentRun[] | null;
   artifacts: TaskArtifact[] | null;
   pendingPrompts: PendingPrompt[] | null;
-  debugTimeline: DebugTimelineEntry[] | null;
   contextEntries: TaskContextEntry[] | null;
   secondaryTransitions: Transition[];
   transitioning: string | null;
@@ -48,7 +47,6 @@ export function TaskDetailDashboard({
   taskId,
   agentRuns,
   artifacts,
-  debugTimeline: _debugTimeline,
   contextEntries,
   secondaryTransitions,
   transitioning,

@@ -68,9 +68,6 @@ function DetailsContent({ id }: { id: string }) {
   const { data: pendingPrompts, refetch: refetchPrompts } = useIpc<PendingPrompt[]>(
     () => window.api.prompts.list(id), [id, task?.status],
   );
-  const { data: debugTimeline } = useIpc<DebugTimelineEntry[]>(
-    () => window.api.tasks.debugTimeline(id), [id],
-  );
   const { data: contextEntries, refetch: refetchContext } = useIpc<TaskContextEntry[]>(
     () => window.api.tasks.contextEntries(id), [id],
   );
@@ -146,7 +143,6 @@ function DetailsContent({ id }: { id: string }) {
         agentRuns={agentRuns}
         artifacts={artifacts}
         pendingPrompts={pendingPrompts}
-        debugTimeline={debugTimeline}
         contextEntries={contextEntries}
         secondaryTransitions={secondaryTransitions}
         transitioning={transitioning}

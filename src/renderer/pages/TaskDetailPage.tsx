@@ -727,7 +727,6 @@ export function TaskDetailPage() {
             agentRuns={agentRuns}
             artifacts={artifacts}
             pendingPrompts={pendingPrompts}
-            debugTimeline={debugTimeline}
             contextEntries={contextEntries}
             secondaryTransitions={secondaryTransitions}
             transitioning={transitioning}
