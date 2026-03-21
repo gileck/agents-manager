@@ -65,6 +65,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
       onModelChange,
       permissionMode,
       onPermissionModeChange,
+      isWaitingForInput = false,
     },
     forwardedRef,
   ) {
@@ -200,7 +201,7 @@ export const CodexChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputPre
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               rows={2}
-              placeholder={isRunning ? 'Type a message (will be queued)…' : 'Ask for follow-up changes'}
+              placeholder={isWaitingForInput ? 'Answer the question above…' : isRunning ? 'Type a message (will be queued)…' : 'Ask for follow-up changes'}
               style={{
                 display: 'block',
                 width: '100%',

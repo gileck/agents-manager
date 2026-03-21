@@ -99,6 +99,8 @@ export interface ChatInputPresetProps {
   onDraftChange?: (draft: string) => void;
   /** Whether mid-execution message injection is enabled for this session. */
   enableStreamingInput?: boolean;
+  /** Whether the agent is waiting for user input (AskUserQuestion). */
+  isWaitingForInput?: boolean;
 }
 
 // ---------------------------------------------------------------------------

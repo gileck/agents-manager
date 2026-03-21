@@ -72,6 +72,7 @@ interface ChatInputProps {
   initialDraft?: string | null;
   onDraftChange?: (draft: string) => void;
   enableStreamingInput?: boolean;
+  isWaitingForInput?: boolean;
 }
 
 export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatInput({
@@ -95,6 +96,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
   initialDraft,
   onDraftChange,
   enableStreamingInput = false,
+  isWaitingForInput = false,
 }: ChatInputProps, forwardedRef) {
   const { draft: value, setDraft: setValue, clearDraft } = useDraftPersistence(initialDraft, onDraftChange);
   const {
@@ -179,7 +181,7 @@ export const ChatInput = React.forwardRef<HTMLTextAreaElement, ChatInputProps>(f
         <textarea
           ref={mergeRefs(textareaRef, forwardedRef)}
           className="w-full resize-none bg-transparent px-4 pt-3 pb-2.5 text-sm min-h-[52px] max-h-[240px] overflow-y-auto focus:outline-none placeholder:text-muted-foreground/70"
-          placeholder={isRunning ? (enableStreamingInput ? 'Send message to running agent...' : 'Type a message (will be queued)...') : 'Type a message...'}
+          placeholder={isWaitingForInput ? 'Answer the question above...' : isRunning ? (enableStreamingInput ? 'Send message to running agent...' : 'Type a message (will be queued)...') : 'Type a message...'}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}

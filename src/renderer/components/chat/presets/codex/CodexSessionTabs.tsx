@@ -51,6 +51,7 @@ export function CodexSessionTabs({
     const sa = activeAgents.filter((a: RunningAgent) => a.sessionId === sessionId);
     return {
       running: sa.filter((a: RunningAgent) => a.status === 'running').length,
+      waiting: sa.filter((a: RunningAgent) => a.status === 'waiting_for_input').length,
       completed: sa.filter((a: RunningAgent) => a.status === 'completed').length,
     };
   };
@@ -59,7 +60,7 @@ export function CodexSessionTabs({
     <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontFamily: SANS, fontSize: '0.875em' }}>
       {sessions.map((s) => {
         const active = s.id === currentSessionId;
-        const { running, completed } = getAgentStatus(s.id);
+        const { running, waiting, completed } = getAgentStatus(s.id);
         return (
           <div
             key={s.id}
@@ -85,7 +86,10 @@ export function CodexSessionTabs({
             {running > 0 && (
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#f59e0b', animation: 'pulse 1.5s infinite' }} />
             )}
-            {completed > 0 && running === 0 && (
+            {waiting > 0 && running === 0 && (
+              <span style={{ color: '#f59e0b', fontSize: '0.85em', fontWeight: 700 }}>?</span>
+            )}
+            {completed > 0 && running === 0 && waiting === 0 && (
               <span style={{ color: '#f59e0b', fontSize: '0.77em' }}>✓</span>
             )}
             {renameId === s.id ? (

@@ -35,7 +35,7 @@ export function useActiveAgents() {
       if (chunk === '__CHAT_COMPLETE__') {
         setAgents((prev) =>
           prev.map((agent) =>
-            agent.sessionId === sessionId && agent.status === 'running'
+            agent.sessionId === sessionId && (agent.status === 'running' || agent.status === 'waiting_for_input')
               ? { ...agent, status: 'completed', lastActivity: Date.now() }
               : agent
           )

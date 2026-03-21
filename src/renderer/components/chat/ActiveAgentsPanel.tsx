@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, CheckCircle2, X, Clock } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, X, Clock, MessageCircleQuestion } from 'lucide-react';
 import { RunningAgent } from '../../../shared/types';
 import { Button } from '../ui/button';
 
@@ -53,6 +53,8 @@ export function ActiveAgentsPanel({
     switch (status) {
       case 'running':
         return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+      case 'waiting_for_input':
+        return <MessageCircleQuestion className="h-4 w-4 text-amber-500" />;
       case 'completed':
         return <CheckCircle2 className="h-4 w-4 text-green-500" />;
       case 'failed':
@@ -115,7 +117,7 @@ export function ActiveAgentsPanel({
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {agent.status === 'running'
+                        {(agent.status === 'running' || agent.status === 'waiting_for_input')
                           ? <ElapsedTime startedAt={agent.startedAt} />
                           : getRelativeTime(agent.lastActivity)
                         }
@@ -123,7 +125,7 @@ export function ActiveAgentsPanel({
                     </div>
                   </div>
 
-                  {agent.status === 'running' && (
+                  {(agent.status === 'running' || agent.status === 'waiting_for_input') && (
                     <Button
                       variant="ghost"
                       size="sm"

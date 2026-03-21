@@ -1359,7 +1359,7 @@ export interface RunningAgent {
   scopeId: string;
   projectId: string;
   projectName: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'waiting_for_input' | 'completed' | 'failed';
   startedAt: number;
   lastActivity: number;
   messagePreview?: string;
