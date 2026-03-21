@@ -10,6 +10,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useAutoScroll } from '../../hooks/useAutoScroll';
 import { useNavigate } from 'react-router-dom';
 import type {
   AgentChatMessage,
@@ -300,12 +301,10 @@ export function CodexChatMessageList({
   onResume,
   onPermissionResponse,
 }: ChatMessageListPresetProps) {
-  const endRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const { containerRef, endRef, autoScroll, handleScroll, scrollToLatest } = useAutoScroll({ messagesLength: messages.length });
   const navigate = useNavigate();
   const { answerQuestion } = useChatActions();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
-  const [autoScroll, setAutoScroll] = useState(true);
   const [viewerImages, setViewerImages] = useState<AnnotationImage[] | null>(null);
   const [viewerIndex, setViewerIndex] = useState(0);
 
@@ -325,22 +324,6 @@ export function CodexChatMessageList({
       else next.add(index);
       return next;
     });
-  }, []);
-
-  const handleScroll = useCallback(() => {
-    const c = containerRef.current;
-    if (!c) return;
-    setAutoScroll(c.scrollHeight - c.scrollTop - c.clientHeight < 80);
-  }, []);
-
-  useEffect(() => {
-    if (!autoScroll) return;
-    endRef.current?.scrollIntoView({ behavior: 'instant' });
-  }, [messages.length, autoScroll]);
-
-  const scrollToLatest = useCallback(() => {
-    setAutoScroll(true);
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
   const segments = useMemo(() => groupMessages(messages), [messages]);
@@ -756,7 +739,7 @@ export function CodexChatMessageList({
     <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
       <div
         ref={containerRef}
-        style={{ height: '100%', overflowY: 'auto' }}
+        style={{ height: '100%', overflowY: 'auto', overflowAnchor: 'auto' }}
         onScroll={handleScroll}
       >
         <div style={{ padding: '16px 16px 8px', fontFamily: SANS, fontSize: '1em' }}>
@@ -774,7 +757,7 @@ export function CodexChatMessageList({
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
-          <div ref={endRef} />
+          <div ref={endRef} style={{ overflowAnchor: 'none' }} />
         </div>
       </div>
 
