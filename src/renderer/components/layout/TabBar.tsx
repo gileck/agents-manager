@@ -181,7 +181,7 @@ export function TabBar() {
     <div className="flex items-stretch bg-muted shrink-0 overflow-hidden relative" style={{ height: 35 }}>
       <div
         ref={scrollRef}
-        className="flex items-stretch flex-1 overflow-x-auto scrollbar-none"
+        className="flex items-stretch flex-1 overflow-x-auto tabbar-scroll"
       >
         {state.tabs.map((tab, idx) => {
           const isActive = tab.id === state.activeTabId;
