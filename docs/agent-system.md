@@ -206,6 +206,13 @@ Pipeline agents run in isolated git worktrees. Multiple layers prevent agents fr
 **Read-only enforcement (`isReadOnly() = true`):**
 Read-only agents (investigator, planner, reviewer) receive `disallowedTools: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']`, which completely removes these tools from the SDK — the model cannot call them.
 
+**Read-only guard (PreToolUse hook — defense-in-depth):**
+When `execConfig.readOnly` is true, `Agent.execute()` builds a `readOnlyGuard` via `buildReadOnlyGuard()` and registers it as a `preToolUse` hook. This guard hard-blocks:
+- Write/Edit/MultiEdit/NotebookEdit tool calls (backstop for `disallowedTools`)
+- Destructive Bash commands: `rm`, `git commit`, `git push`, `git merge`, `git rebase`, `git reset`, `git clean`, `git add`, `git cherry-pick`, `git revert`, `git tag`, `git branch -d/-D`, `mkdir`, `touch`, `chmod`, `chown`, `mv`, `cp`, `tee`, `>`, `>>`
+
+This fires via SDK hooks (separate from `canUseTool`/permissions) so it cannot be bypassed by `permissionMode`. The `SandboxGuard` in `canUseTool` is never invoked for read-only agents because `permissionMode: 'acceptEdits'` auto-approves read-only tool calls without calling the callback — the `readOnlyGuard` closes this defense-in-depth gap.
+
 **Worktree path guard (PreToolUse hook):**
 When an agent runs in a worktree (`workdir !== project.path`), `Agent.execute()` builds a `preToolUse` hook that hard-blocks:
 - Write/Edit/Bash operations targeting the main repository path
@@ -217,18 +224,18 @@ This fires via SDK hooks (separate from `canUseTool`/permissions) so it cannot b
 `BaseAgentPromptBuilder.buildExecutionConfig()` prepends a `CRITICAL: WORKTREE SAFETY` section to the prompt when the agent is in a worktree. This tells the agent its working directory, the forbidden main repo path, and mandatory rules (use relative paths, never cd to main repo).
 
 **SandboxGuard (canUseTool callback):**
-The `SandboxGuard` in `base-agent-lib.ts` validates tool call paths against `allowedPaths` and `readOnlyPaths`. It checks Write, Edit, Read, Glob, Grep, and Bash tools. Bash commands are parsed for path arguments (`cd`, `find`, `git`, `yarn`, etc.).
+The `SandboxGuard` in `base-agent-lib.ts` validates tool call paths against `allowedPaths` and `readOnlyPaths`. It checks Write, Edit, Read, Glob, Grep, and Bash tools. Bash commands are parsed for path arguments (`cd`, `find`, `git`, `yarn`, etc.). Note: with `permissionMode: 'acceptEdits'`, `canUseTool` fires only for write operations. Read-only tool calls are auto-approved by the SDK without invoking the callback. For read-only agents, the `readOnlyGuard` (preToolUse hook) provides the equivalent enforcement.
 
 **SDK permission mode:**
-All pipeline agents use `sdkPermissionMode: 'acceptEdits'` — never `bypassPermissions`. This ensures the SDK's `canUseTool` callback fires for every tool call, allowing the SandboxGuard to enforce path restrictions.
+All pipeline agents use `sdkPermissionMode: 'acceptEdits'` — never `bypassPermissions`. With this mode, `canUseTool` fires only for write operations (not read-only tool calls like git status, Read, Glob). The `readOnlyGuard` preToolUse hook compensates for this by enforcing write protection for read-only agents at the hook level, which fires for all tool calls.
 
-| Agent | isReadOnly | disallowedTools | Can Write in Worktree |
-|-------|:----------:|:---------------:|:---------------------:|
-| Investigator | true | Write, Edit, MultiEdit, NotebookEdit | no |
-| Planner | true | Write, Edit, MultiEdit, NotebookEdit | no |
-| Reviewer | true | Write, Edit, MultiEdit, NotebookEdit | no |
-| Designer | false | — | yes |
-| Implementor | false | — | yes |
+| Agent | isReadOnly | disallowedTools | readOnlyGuard | Can Write in Worktree |
+|-------|:----------:|:---------------:|:-------------:|:---------------------:|
+| Investigator | true | Write, Edit, MultiEdit, NotebookEdit | yes (blocks write tools + destructive Bash) | no |
+| Planner | true | Write, Edit, MultiEdit, NotebookEdit | yes (blocks write tools + destructive Bash) | no |
+| Reviewer | true | Write, Edit, MultiEdit, NotebookEdit | yes (blocks write tools + destructive Bash) | no |
+| Designer | false | — | no | yes |
+| Implementor | false | — | no | yes |
 
 ### PlannerPromptBuilder
 

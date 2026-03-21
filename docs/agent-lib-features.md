@@ -101,10 +101,10 @@ The SDK `permissionMode` controls how tool calls are approved at the engine leve
 
 | Context | SDK Permission Mode | Enforcement |
 |---------|-------------------|-------------|
-| Pipeline agents | `'acceptEdits'` | Auto-accept file edits; read-only agents get `disallowedTools` for Write/Edit/MultiEdit/NotebookEdit |
+| Pipeline agents | `'acceptEdits'` | Auto-accept file edits; read-only agents get `disallowedTools` for Write/Edit/MultiEdit/NotebookEdit + `readOnlyGuard` via preToolUse hooks |
 | Thread chat agents | `'acceptEdits'` (default) | App-level enforcement via `disallowedTools` + `onPermissionRequest` based on user's chosen PermissionMode |
 
-**Note:** `bypassPermissions` is never used. All agents use `'acceptEdits'` which ensures the SDK's `canUseTool` callback fires, enabling the SandboxGuard to enforce path restrictions.
+**Note:** `bypassPermissions` is never used. All agents use `'acceptEdits'`. With this mode, `canUseTool` fires only for write operations — read-only tool calls are auto-approved without invoking the callback. This means the SandboxGuard (which runs in `canUseTool`) never fires for read-only agents. To close this gap, read-only agents have a `readOnlyGuard` registered as a `preToolUse` hook, which fires for **all** tool calls regardless of `permissionMode`. This guard blocks Write/Edit/MultiEdit/NotebookEdit tools and destructive Bash commands as a defense-in-depth backstop.
 
 ### canUseTool Return Value
 

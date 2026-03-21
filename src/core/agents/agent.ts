@@ -7,6 +7,65 @@ import type { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import type { AgentLibRegistry } from '../services/agent-lib-registry';
 import { getAppLogger } from '../services/app-logger';
 
+/** Tools that perform file writes — used by both disallowedTools and readOnlyGuard. */
+export const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
+
+/**
+ * Bash command patterns that modify files or git state. Used by the read-only guard
+ * to block destructive operations for read-only agents (reviewer, investigator, planner).
+ */
+export const DESTRUCTIVE_BASH_PATTERNS: RegExp[] = [
+  /\brm\s/,                    // rm files/dirs
+  /\bgit\s+commit\b/,          // git commit
+  /\bgit\s+push\b/,            // git push
+  /\bgit\s+merge\b/,           // git merge
+  /\bgit\s+rebase\b/,          // git rebase
+  /\bgit\s+reset\b/,           // git reset
+  /\bgit\s+clean\b/,           // git clean
+  /\bgit\s+add\b/,             // git add (staging)
+  /\bgit\s+cherry-pick\b/,     // git cherry-pick
+  /\bgit\s+revert\b/,          // git revert
+  /\bgit\s+tag\b/,             // git tag
+  /\bgit\s+branch\s+-[dD]\b/,  // git branch -d/-D (delete branch)
+  /\bmkdir\b/,                 // create directories
+  /\btouch\b/,                 // create files
+  /\bchmod\b/,                 // change permissions
+  /\bchown\b/,                 // change ownership
+  /\bmv\b/,                    // move/rename files
+  /\bcp\b/,                    // copy files (creates new)
+  /\btee\b/,                   // tee writes to files
+  /(?:^|[|;&\s])>/,            // redirect to file (overwrite)
+  /(?:^|[|;&\s])>>/,           // redirect to file (append)
+];
+
+/**
+ * Build a read-only guard function for use in preToolUse hooks. Returns a function that
+ * blocks Write/Edit/MultiEdit/NotebookEdit tools and destructive Bash commands.
+ *
+ * This guard fires via preToolUse hooks (not canUseTool), so it cannot be bypassed by
+ * SDK permissionMode settings. It provides defense-in-depth for read-only agents.
+ */
+export function buildReadOnlyGuard(): (toolName: string, toolInput: Record<string, unknown>) => { decision: 'block'; reason: string } | undefined {
+  return (toolName: string, toolInput: Record<string, unknown>) => {
+    // Block all write tools (defense-in-depth — already in disallowedTools)
+    if (WRITE_TOOLS.includes(toolName)) {
+      return { decision: 'block' as const, reason: `READ-ONLY GUARD: ${toolName} is blocked for read-only agents.` };
+    }
+    // Block destructive Bash commands
+    if (toolName === 'Bash') {
+      const command = toolInput.command as string | undefined;
+      if (command) {
+        for (const pattern of DESTRUCTIVE_BASH_PATTERNS) {
+          if (pattern.test(command)) {
+            return { decision: 'block' as const, reason: `READ-ONLY GUARD: Bash command blocked for read-only agent — contains write/destructive operation. Command: "${command.slice(0, 120)}"` };
+          }
+        }
+      }
+    }
+    return undefined;
+  };
+}
+
 export class Agent implements IAgent {
   readonly type: string;
 
@@ -82,7 +141,6 @@ export class Agent implements IAgent {
     // Merge disallowed tools from two sources:
     // 1. readOnly flag: all write tools are disallowed for read-only agents
     // 2. execConfig.disallowedTools: per-builder tool restrictions (e.g., planner disallows Edit but allows Write)
-    const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
     const readOnlyDisallowed = execConfig.readOnly ? WRITE_TOOLS : [];
     const builderDisallowed = execConfig.disallowedTools ?? [];
     const allDisallowed = [...new Set([...readOnlyDisallowed, ...builderDisallowed])];
@@ -169,14 +227,27 @@ export class Agent implements IAgent {
       return undefined;
     } : null;
 
+    // Read-only guard: defense-in-depth enforcement for read-only agents. Blocks write
+    // tools and destructive Bash commands via preToolUse hooks, which fire regardless of
+    // SDK permissionMode. This closes the gap where `permissionMode: 'acceptEdits'`
+    // auto-approves read-only tool calls without invoking canUseTool, meaning the
+    // SandboxGuard never fires for read-only agents. The disallowedTools list already
+    // removes Write/Edit/MultiEdit/NotebookEdit from the model's context, but this
+    // guard acts as a backstop if the model somehow attempts them anyway.
+    const readOnlyGuard = execConfig.readOnly ? buildReadOnlyGuard() : null;
+
     // Compose all preToolUse hooks into a single function
-    const composedPreToolUse = (worktreeGuard || writeRestriction) ? (toolName: string, toolInput: Record<string, unknown>) => {
+    const composedPreToolUse = (worktreeGuard || writeRestriction || readOnlyGuard) ? (toolName: string, toolInput: Record<string, unknown>) => {
       if (worktreeGuard) {
         const result = worktreeGuard(toolName, toolInput);
         if (result) return result;
       }
       if (writeRestriction) {
         const result = writeRestriction(toolName, toolInput);
+        if (result) return result;
+      }
+      if (readOnlyGuard) {
+        const result = readOnlyGuard(toolName, toolInput);
         if (result) return result;
       }
       return undefined;
