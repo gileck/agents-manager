@@ -58,6 +58,7 @@ export const OUTCOME_SCHEMAS: Record<string, OutcomeDefinition> = {
   reproduced: { description: 'Bug reproduced', schema: null },
   cannot_reproduce: { description: 'Bug not reproducible', schema: null },
   review_complete: { description: 'Workflow review finished', schema: null },
+  triage_complete: { description: 'Triage finished', schema: null },
 };
 
 const JS_TYPE_CHECKS: Record<string, (v: unknown) => boolean> = {

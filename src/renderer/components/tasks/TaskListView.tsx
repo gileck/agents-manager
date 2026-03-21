@@ -111,27 +111,34 @@ export function TaskListView() {
     setDialogOpen(true);
   };
 
+  /** Internal helper: creates the task and returns it (shared by Create and Create+Triage) */
+  const doCreateTask = async (): Promise<import('../../../shared/types').Task | null> => {
+    if (!form.title.trim() || !currentProjectId || !form.pipelineId) return null;
+    let description = form.description ?? '';
+
+    // Save screenshots if any
+    if (dialogImages.length > 0) {
+      try {
+        const { paths } = await window.api.screenshots.save(dialogImages);
+        if (paths.length > 0) {
+          const screenshotSection = '\n\n## Screenshots\n' +
+            paths.map((p, i) => `![screenshot-${i + 1}](${p})`).join('\n');
+          description = description + screenshotSection;
+        }
+      } catch (err) {
+        reportError(err, 'Save screenshots');
+      }
+    }
+
+    return window.api.tasks.create({ ...form, description, projectId: currentProjectId });
+  };
+
   const handleCreate = async () => {
     if (!form.title.trim() || !currentProjectId || !form.pipelineId) return;
     setCreating(true);
     try {
-      let description = form.description ?? '';
-
-      // Save screenshots if any
-      if (dialogImages.length > 0) {
-        try {
-          const { paths } = await window.api.screenshots.save(dialogImages);
-          if (paths.length > 0) {
-            const screenshotSection = '\n\n## Screenshots\n' +
-              paths.map((p, i) => `![screenshot-${i + 1}](${p})`).join('\n');
-            description = description + screenshotSection;
-          }
-        } catch (err) {
-          reportError(err, 'Save screenshots');
-        }
-      }
-
-      const task = await window.api.tasks.create({ ...form, description, projectId: currentProjectId });
+      const task = await doCreateTask();
+      if (!task) return;
       setDialogOpen(false);
       setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
       setDialogImages([]);
@@ -139,6 +146,26 @@ export function TaskListView() {
       navigate(`/tasks/${task.id}`);
     } catch (err) {
       reportError(err, 'Create task');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCreateAndTriage = async () => {
+    if (!form.title.trim() || !currentProjectId || !form.pipelineId) return;
+    setCreating(true);
+    try {
+      const task = await doCreateTask();
+      if (!task) return;
+      // Transition to triaging (triggers the triager agent via pipeline hook)
+      await window.api.tasks.transition(task.id, 'triaging', 'admin');
+      setDialogOpen(false);
+      setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
+      setDialogImages([]);
+      await refetch();
+      navigate(`/tasks/${task.id}`);
+    } catch (err) {
+      reportError(err, 'Create + Triage');
     } finally {
       setCreating(false);
     }
@@ -496,6 +523,7 @@ export function TaskListView() {
           creating={creating}
           images={dialogImages}
           onImagesChange={setDialogImages}
+          onCreateAndTriage={handleCreateAndTriage}
         />
         <TaskDeleteDialog
           target={deleteTarget}

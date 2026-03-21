@@ -69,6 +69,7 @@ import { InvestigatorPromptBuilder } from '../agents/investigator-prompt-builder
 import { ReviewerPromptBuilder } from '../agents/reviewer-prompt-builder';
 import { TaskWorkflowReviewerPromptBuilder } from '../agents/task-workflow-reviewer-prompt-builder';
 import { PostMortemReviewerPromptBuilder } from '../agents/post-mortem-reviewer-prompt-builder';
+import { TriagerPromptBuilder } from '../agents/triager-prompt-builder';
 import { ClaudeCodeLib } from '../libs/claude-code-lib';
 import { CursorAgentLib } from '../libs/cursor-agent-lib';
 import { CodexAppServerLib } from '../libs/codex-app-server-lib';
@@ -98,7 +99,6 @@ import { registerPhaseHandler } from '../handlers/phase-handler';
 import { ChatAgentService } from '../services/chat-agent-service';
 import { ScheduledAgentService } from '../services/scheduled-agent-service';
 import { SchedulerSupervisor } from '../services/scheduler-supervisor';
-import { TriageAgentPromptBuilder } from '../services/triage-agent-prompt-builder';
 import { DevServerManager, type DevServerManagerCallbacks } from '../services/dev-server-manager';
 import type { IDevServerManager } from '../interfaces/dev-server-manager';
 import { AgentSubscriptionRegistry } from '../services/agent-subscription-registry';
@@ -309,6 +309,7 @@ function createAgentModule(
   agentFramework.registerAgent(new Agent('reviewer', new ReviewerPromptBuilder(), agentLibRegistry));
   agentFramework.registerAgent(new Agent('task-workflow-reviewer', new TaskWorkflowReviewerPromptBuilder(), agentLibRegistry));
   agentFramework.registerAgent(new Agent('post-mortem-reviewer', new PostMortemReviewerPromptBuilder(), agentLibRegistry));
+  agentFramework.registerAgent(new Agent('triager', new TriagerPromptBuilder(), agentLibRegistry));
 
   // Report builder for workflow reviewer agent
   const taskReviewReportBuilder = new TaskReviewReportBuilder(
@@ -324,11 +325,9 @@ function createAgentModule(
   );
 
   // Scheduled agent service (created before AgentService — it is passed in as a dependency)
-  const triageBuilder = new TriageAgentPromptBuilder(stores.taskStore, stores.taskContextStore);
-  const promptBuilders = new Map([[triageBuilder.templateId, triageBuilder]]);
   const scheduledAgentService = new ScheduledAgentService(
     stores.automatedAgentStore, stores.agentRunStore, stores.projectStore, stores.taskStore,
-    agentLibRegistry, notificationRouter, promptBuilders,
+    agentLibRegistry, notificationRouter, new Map(),
   );
 
   // Dev server manager and in-memory subscription registry

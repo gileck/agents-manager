@@ -23,6 +23,7 @@ type OnLog = (message: string) => void;
 type OnPostLog = (message: string, details?: Record<string, unknown>, durationMs?: number) => void;
 
 const PHASE_LABELS: Record<string, string> = {
+  triaging: '\u{1F3F7}\u{FE0F} Triage',
   investigating: '\u{1F50D} Investigate',
   designing: '\u{1F3A8} Design',
   planning: '\u{1F4CB} Plan',
@@ -189,7 +190,7 @@ export class PostRunExtractor {
     onLog: OnLog,
     onPostLog?: OnPostLog,
   ): Promise<void> {
-    const estimatingAgents = ['planner', 'designer', 'investigator'];
+    const estimatingAgents = ['planner', 'designer', 'investigator', 'triager'];
     if (result.exitCode !== 0 || !estimatingAgents.includes(agentType)) {
       onPostLog?.('extractTaskEstimates skipped (not applicable)', { agentType, exitCode: result.exitCode });
       return;
@@ -688,6 +689,8 @@ export function getContextEntryType(agentType: string, revisionReason?: Revision
   if (agentType === 'post-mortem-reviewer') return 'post_mortem';
   if (agentType === 'reviewer') return outcome === 'approved' ? 'review_approved' : 'review_feedback';
   switch (agentType) {
+    case 'triager':
+      return 'triage_summary';
     case 'planner':
       return revisionReason === 'changes_requested' ? 'plan_revision_summary' : 'plan_summary';
     case 'investigator':

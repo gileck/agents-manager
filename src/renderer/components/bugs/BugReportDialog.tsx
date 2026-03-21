@@ -241,87 +241,95 @@ export function BugReportDialog({ open, onOpenChange, initialValues, initialSour
     }
   };
 
+  /** Internal helper: creates the bug task and returns it */
+  const doCreateBug = async (): Promise<Task | null> => {
+    const settings = await window.api.settings.get();
+    const projectId = settings.currentProjectId;
+    if (!projectId) {
+      setError('Select a project first in Settings');
+      return null;
+    }
+
+    let pipelineId = settings.defaultPipelineId;
+    if (!pipelineId) {
+      const pipelines = await window.api.pipelines.list();
+      if (pipelines.length === 0) {
+        setError('No pipelines configured');
+        return null;
+      }
+      pipelineId = pipelines[0].id;
+    }
+
+    // Build rich description
+    const sections: string[] = [];
+
+    if (description.trim()) {
+      sections.push('## Description', description.trim());
+    }
+
+    // Save screenshots if any
+    if (images.length > 0) {
+      try {
+        const { paths } = await window.api.screenshots.save(images);
+        if (paths.length > 0) {
+          sections.push('', '## Screenshots');
+          paths.forEach((p, i) => sections.push(`![screenshot-${i + 1}](${p})`));
+        }
+      } catch (err) {
+        reportError(err, 'Save screenshots');
+      }
+    }
+
+    sections.push('', '## Context', `- **Route:** \`${currentRoute}\``);
+    if (currentTaskId) {
+      sections.push(`- **Related Task:** \`${currentTaskId}\``);
+    }
+    if (selectedTask) {
+      sections.push(`- **Source Task:** \`${selectedTask.id}\` — ${selectedTask.title}`);
+    }
+
+    const task = await window.api.tasks.create({
+      projectId,
+      pipelineId,
+      title: `[Bug] ${title.trim()}`,
+      description: sections.join('\n'),
+      debugInfo: debugLogs.trim() || undefined,
+      type: 'bug',
+      tags: ['bug'],
+      metadata: {
+        ...(currentTaskId ? { relatedTaskId: currentTaskId } : {}),
+        ...(selectedTask ? { sourceTaskId: selectedTask.id } : {}),
+        route: currentRoute,
+      },
+    });
+
+    // Add 'defective' tag to the source task if one was selected (de-duplicated)
+    if (selectedTask) {
+      try {
+        const freshTask = await window.api.tasks.get(selectedTask.id);
+        const existingTags = freshTask?.tags ?? [];
+        if (!existingTags.includes('defective')) {
+          await window.api.tasks.update(selectedTask.id, {
+            tags: [...existingTags, 'defective'],
+          });
+        }
+      } catch (tagErr) {
+        // Non-fatal: bug task was already created
+        reportError(tagErr, 'Add defective tag');
+      }
+    }
+
+    return task;
+  };
+
   const handleSubmit = async () => {
     if (!title.trim()) return;
     setSubmitting(true);
     setError(null);
 
     try {
-      const settings = await window.api.settings.get();
-      const projectId = settings.currentProjectId;
-      if (!projectId) {
-        setError('Select a project first in Settings');
-        return;
-      }
-
-      let pipelineId = settings.defaultPipelineId;
-      if (!pipelineId) {
-        const pipelines = await window.api.pipelines.list();
-        if (pipelines.length === 0) {
-          setError('No pipelines configured');
-          return;
-        }
-        pipelineId = pipelines[0].id;
-      }
-
-      // Build rich description
-      const sections: string[] = [];
-
-      if (description.trim()) {
-        sections.push('## Description', description.trim());
-      }
-
-      // Save screenshots if any
-      if (images.length > 0) {
-        try {
-          const { paths } = await window.api.screenshots.save(images);
-          if (paths.length > 0) {
-            sections.push('', '## Screenshots');
-            paths.forEach((p, i) => sections.push(`![screenshot-${i + 1}](${p})`));
-          }
-        } catch (err) {
-          reportError(err, 'Save screenshots');
-        }
-      }
-
-      sections.push('', '## Context', `- **Route:** \`${currentRoute}\``);
-      if (currentTaskId) {
-        sections.push(`- **Related Task:** \`${currentTaskId}\``);
-      }
-      if (selectedTask) {
-        sections.push(`- **Source Task:** \`${selectedTask.id}\` — ${selectedTask.title}`);
-      }
-
-      const task = await window.api.tasks.create({
-        projectId,
-        pipelineId,
-        title: `[Bug] ${title.trim()}`,
-        description: sections.join('\n'),
-        debugInfo: debugLogs.trim() || undefined,
-        type: 'bug',
-        tags: ['bug'],
-        metadata: {
-          ...(currentTaskId ? { relatedTaskId: currentTaskId } : {}),
-          ...(selectedTask ? { sourceTaskId: selectedTask.id } : {}),
-          route: currentRoute,
-        },
-      });
-
-      // Add 'defective' tag to the source task if one was selected (de-duplicated)
-      if (selectedTask) {
-        try {
-          const freshTask = await window.api.tasks.get(selectedTask.id);
-          const existingTags = freshTask?.tags ?? [];
-          if (!existingTags.includes('defective')) {
-            await window.api.tasks.update(selectedTask.id, {
-              tags: [...existingTags, 'defective'],
-            });
-          }
-        } catch (tagErr) {
-          // Non-fatal: bug task was already created
-          reportError(tagErr, 'Add defective tag');
-        }
-      }
+      const task = await doCreateBug();
+      if (!task) return;
 
       toast.success('Bug report created', {
         ...(selectedTask ? { description: `Linked to "${selectedTask.title}"` } : {}),
@@ -333,6 +341,33 @@ export function BugReportDialog({ open, onOpenChange, initialValues, initialSour
       onOpenChange(false);
     } catch (err) {
       reportError(err, 'Create bug report');
+      setError(err instanceof Error ? err.message : 'Failed to create bug report');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitAndTriage = async () => {
+    if (!title.trim()) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const task = await doCreateBug();
+      if (!task) return;
+
+      // Transition to triaging (triggers the triager agent via pipeline hook)
+      await window.api.tasks.transition(task.id, 'triaging', 'admin');
+
+      toast.success('Bug report created + triaging started', {
+        action: {
+          label: 'View Task',
+          onClick: () => navigate(`/tasks/${task.id}`),
+        },
+      });
+      onOpenChange(false);
+    } catch (err) {
+      reportError(err, 'Submit + Triage');
       setError(err instanceof Error ? err.message : 'Failed to create bug report');
     } finally {
       setSubmitting(false);
@@ -478,12 +513,22 @@ export function BugReportDialog({ open, onOpenChange, initialValues, initialSour
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting || !title.trim()}
-          >
-            {submitting ? 'Submitting...' : 'Submit Bug Report'}
-          </Button>
+          <div className="inline-flex gap-1">
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || !title.trim()}
+            >
+              {submitting ? 'Submitting...' : 'Submit Bug Report'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleSubmitAndTriage}
+              disabled={submitting || !title.trim()}
+              title="Submit the bug report and immediately start triaging"
+            >
+              Submit + Triage
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

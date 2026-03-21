@@ -23,6 +23,8 @@ interface TaskCreateDialogProps {
   creating: boolean;
   images?: ChatImage[];
   onImagesChange?: (images: ChatImage[]) => void;
+  /** Called when user clicks "Create + Triage" — creates the task then transitions to triaging */
+  onCreateAndTriage?: () => void;
 }
 
 export function TaskCreateDialog({
@@ -36,6 +38,7 @@ export function TaskCreateDialog({
   creating,
   images,
   onImagesChange,
+  onCreateAndTriage,
 }: TaskCreateDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,12 +118,24 @@ export function TaskCreateDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
-            onClick={onCreate}
-            disabled={creating || !form.title.trim() || !form.pipelineId}
-          >
-            {creating ? 'Creating...' : 'Create'}
-          </Button>
+          <div className="inline-flex gap-1">
+            <Button
+              onClick={onCreate}
+              disabled={creating || !form.title.trim() || !form.pipelineId}
+            >
+              {creating ? 'Creating...' : 'Create'}
+            </Button>
+            {onCreateAndTriage && (
+              <Button
+                variant="outline"
+                onClick={onCreateAndTriage}
+                disabled={creating || !form.title.trim() || !form.pipelineId}
+                title="Create the task and immediately start triaging"
+              >
+                Create + Triage
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
