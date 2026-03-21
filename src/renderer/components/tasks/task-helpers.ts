@@ -9,7 +9,7 @@ export const PRIORITY_LABELS: Record<number, string> = {
 
 export type SortField = 'created' | 'updated' | 'priority' | 'status' | 'title';
 export type SortDirection = 'asc' | 'desc';
-export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline' | 'feature' | 'createdBy';
+export type GroupBy = 'none' | 'status' | 'priority' | 'pipeline' | 'feature' | 'createdBy' | 'type' | 'createdDate';
 export type ViewMode = 'list' | 'card';
 
 export function sortTasks(tasks: Task[], field: SortField, direction: SortDirection): Task[] {
@@ -68,6 +68,18 @@ export function groupTasks(
         break;
       case 'createdBy':
         key = task.createdBy ?? 'unknown';
+        break;
+      case 'type':
+        key = task.type
+          ? task.type.charAt(0).toUpperCase() + task.type.slice(1)
+          : 'Unknown';
+        break;
+      case 'createdDate':
+        key = new Date(task.createdAt).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
         break;
       default:
         key = 'all';
@@ -258,7 +270,11 @@ export function sortGroupEntries<T>(
   } else if (groupBy === 'priority') {
     // Priority keys are like "P0 - Critical", "P1 - High", etc. — sort by label (alphabetical works)
     entries.sort(([a], [b]) => a.localeCompare(b));
+  } else if (groupBy === 'createdDate') {
+    // Sort reverse-chronologically by parsing the date keys
+    entries.sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime());
   } else if (groupBy !== 'none') {
+    // type, feature, pipeline, createdBy — alphabetical
     entries.sort(([a], [b]) => a.localeCompare(b));
   }
 
