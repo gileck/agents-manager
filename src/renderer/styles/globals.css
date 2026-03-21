@@ -119,6 +119,30 @@
   background-color: hsl(var(--muted-foreground) / 0.52);
 }
 
+/* Tab bar minimal scrollbar – VS Code style, visible on hover only */
+.tabbar-scroll::-webkit-scrollbar {
+  height: 3px;
+  width: 0;
+}
+
+.tabbar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabbar-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+  border: none;
+}
+
+.tabbar-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+}
+
+.tabbar-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
 /* Keyframe animations used by inline styles (Tailwind animate-ping not used in pipeline) */
 @keyframes ping {
   75%,
