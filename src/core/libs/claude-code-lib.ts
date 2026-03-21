@@ -268,9 +268,6 @@ export class ClaudeCodeLib extends BaseAgentLib {
         }
 
         state.messageCount++;
-        if (state.messageCount % 25 === 0) {
-          log(`SDK message loop heartbeat: ${state.messageCount} messages processed`);
-        }
 
         if (message.type === 'assistant') {
           const assistantMsg = message as SdkAssistantMessage;
