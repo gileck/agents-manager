@@ -8,7 +8,6 @@ import { ArtifactsCard } from './ArtifactsCard';
 import { GitStatusCard } from './GitStatusCard';
 import { DevServerCard } from './DevServerCard';
 import { PRChecksCard } from './PRChecksCard';
-import { TimelineCard } from './TimelineCard';
 import { ContextCard } from './ContextCard';
 import { PhasedSubtasksSection } from './PhasedSubtasksSection';
 import { SubtasksSection } from './SubtasksSection';
@@ -18,7 +17,7 @@ import { PlanMarkdown } from './PlanMarkdown';
 import { TaskCommentsCard } from './TaskCommentsCard';
 import { ImagePasteArea } from '../ui/ImagePasteArea';
 import type {
-  Task, AgentRun, TaskArtifact, PendingPrompt, DebugTimelineEntry,
+  Task, AgentRun, TaskArtifact, PendingPrompt,
   TaskContextEntry, Transition, ChatImage,
 } from '../../../shared/types';
 import type { QuestionResponse } from '../prompts/QuestionForm';
@@ -32,7 +31,6 @@ interface TaskDetailDashboardProps {
   agentRuns: AgentRun[] | null;
   artifacts: TaskArtifact[] | null;
   pendingPrompts: PendingPrompt[] | null;
-  debugTimeline: DebugTimelineEntry[] | null;
   contextEntries: TaskContextEntry[] | null;
   secondaryTransitions: Transition[];
   transitioning: string | null;
@@ -49,7 +47,6 @@ export function TaskDetailDashboard({
   taskId,
   agentRuns,
   artifacts,
-  debugTimeline,
   contextEntries,
   secondaryTransitions,
   transitioning,
@@ -256,9 +253,6 @@ export function TaskDetailDashboard({
 
         {/* Comments */}
         <TaskCommentsCard taskId={taskId} contextEntries={contextEntries ?? []} onCommentAdded={onContextRefetch} />
-
-        {/* Timeline (collapsible) */}
-        <TimelineCard entries={debugTimeline ?? []} />
 
         {/* Context (collapsible) */}
         <ContextCard entries={contextEntries ?? []} />
