@@ -24,6 +24,7 @@ function createMockTask(overrides: Partial<Task> = {}): Task {
     plan: null,
     investigationReport: null,
     technicalDesign: null,
+    postMortem: null,
     debugInfo: null,
     subtasks: [],
     phases: null,
@@ -285,7 +286,7 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
     expect(onLog).toHaveBeenCalledWith(expect.stringContaining('notification failed'));
   });
 
-  it('should create tasks with post-mortem tags and createdBy for post-mortem-reviewer', async () => {
+  it('should not auto-create tasks for post-mortem-reviewer (disabled)', async () => {
     const result: AgentRunResult = {
       exitCode: 0,
       output: 'post-mortem output',
@@ -295,11 +296,10 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
         severity: 'major',
         responsibleAgents: ['planner'],
         analysis: 'Missed edge case in sorting',
-        promptImprovements: [],
-        processImprovements: [],
+        codebaseImprovements: [],
         suggestedTasks: [
           {
-            title: 'Add edge case checklist to planner prompt',
+            title: 'Consolidate sorting validation into shared utility',
             description: '**Where**: planner-prompt-builder.ts\n**Problem**: No edge case guidance',
             priority: 1,
             startPhase: 'planning',
@@ -310,38 +310,25 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
 
     await extractor.createSuggestedTasks('task-1', 'post-mortem-reviewer', result, onLog);
 
-    expect(stores.taskStore.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Add edge case checklist to planner prompt',
-        tags: ['post-mortem'],
-        createdBy: 'post-mortem-reviewer',
-        priority: 1,
-      }),
-    );
-
-    // Notification should use post-mortem title and channel
-    expect(stores.notificationRouter.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Post-Mortem: New Task',
-        channel: expect.stringContaining('post-mortem-'),
-      }),
-    );
+    // Auto-creation is disabled for post-mortem-reviewer — tasks are presented for user review instead
+    expect(stores.taskStore.createTask).not.toHaveBeenCalled();
+    expect(stores.notificationRouter.send).not.toHaveBeenCalled();
   });
 
-  it('should allow post-mortem-reviewer to create suggested tasks (not skipped)', async () => {
+  it('should skip post-mortem-reviewer suggested tasks (auto-creation disabled)', async () => {
     const result: AgentRunResult = {
       exitCode: 0,
       output: 'output',
       outcome: 'review_complete',
       structuredOutput: {
         suggestedTasks: [
-          { title: 'Improve review prompt', description: 'Add checklist', priority: 2 },
+          { title: 'Add type safety for sorting enums', description: 'Add checklist', priority: 2 },
         ],
       },
     };
 
     await extractor.createSuggestedTasks('task-1', 'post-mortem-reviewer', result, onLog);
-    expect(stores.taskStore.createTask).toHaveBeenCalledTimes(1);
+    expect(stores.taskStore.createTask).not.toHaveBeenCalled();
   });
 });
 
@@ -460,9 +447,8 @@ describe('PostRunExtractor.saveContextEntry', () => {
         severity: 'major',
         responsibleAgents: ['planner', 'reviewer'],
         analysis: 'The planner missed an edge case in the sorting logic.',
-        promptImprovements: ['Add edge case checklist to planner prompt'],
-        processImprovements: ['Add a guard that checks for edge case coverage'],
-        suggestedTasks: [{ title: 'Improve planner prompt', description: 'Add edge case checklist' }],
+        codebaseImprovements: ['Consolidate sorting validation into a shared utility with exhaustive enum checks'],
+        suggestedTasks: [{ title: 'Add type-safe sorting enum', description: 'Introduce shared enum for sort fields' }],
       },
     };
 
@@ -480,9 +466,8 @@ describe('PostRunExtractor.saveContextEntry', () => {
           severity: 'major',
           responsibleAgents: ['planner', 'reviewer'],
           analysis: 'The planner missed an edge case in the sorting logic.',
-          promptImprovements: ['Add edge case checklist to planner prompt'],
-          processImprovements: ['Add a guard that checks for edge case coverage'],
-          suggestedTasks: [{ title: 'Improve planner prompt', description: 'Add edge case checklist' }],
+          codebaseImprovements: ['Consolidate sorting validation into a shared utility with exhaustive enum checks'],
+          suggestedTasks: [{ title: 'Add type-safe sorting enum', description: 'Introduce shared enum for sort fields' }],
         }),
       }),
     );
@@ -498,8 +483,7 @@ describe('PostRunExtractor.saveContextEntry', () => {
         severity: 'minor',
         responsibleAgents: ['implementor'],
         analysis: 'Minor edge case missed.',
-        promptImprovements: [],
-        processImprovements: [],
+        codebaseImprovements: [],
         suggestedTasks: [],
       },
     };
@@ -515,8 +499,7 @@ describe('PostRunExtractor.saveContextEntry', () => {
         severity: 'minor',
         responsibleAgents: ['implementor'],
         analysis: 'Minor edge case missed.',
-        promptImprovements: [],
-        processImprovements: [],
+        codebaseImprovements: [],
         suggestedTasks: [],
       },
     });
@@ -536,8 +519,7 @@ describe('PostRunExtractor.saveContextEntry', () => {
         severity: 'minor',
         responsibleAgents: [],
         analysis: 'Unknown cause.',
-        promptImprovements: [],
-        processImprovements: [],
+        codebaseImprovements: [],
         suggestedTasks: [],
       },
     };
@@ -557,8 +539,7 @@ describe('PostRunExtractor.saveContextEntry', () => {
         severity: 'minor',
         responsibleAgents: [],
         analysis: 'Unknown cause.',
-        promptImprovements: [],
-        processImprovements: [],
+        codebaseImprovements: [],
         suggestedTasks: [],
       },
     });

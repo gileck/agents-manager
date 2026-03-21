@@ -280,7 +280,8 @@ export interface PostMortemData {
   severity?: string;
   responsibleAgents?: string[];
   analysis?: string;
-  promptImprovements?: string[];
+  codebaseImprovements?: string[];
+  /** @deprecated Use codebaseImprovements. Kept for backward compatibility with old stored data. */
   processImprovements?: string[];
   suggestedTasks?: PostMortemSuggestedTask[];
 }
