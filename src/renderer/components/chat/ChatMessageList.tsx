@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useAutoScroll } from './hooks/useAutoScroll';
 import { useNavigate } from 'react-router-dom';
 import { Pencil, ChevronDown, ChevronRight, Play, AlertTriangle, ShieldCheck, ShieldX, Bell, Bot, CheckCircle2, Terminal, Copy, Check } from 'lucide-react';
 import type { AgentChatMessage, AgentChatMessageToolUse, AgentChatMessageToolResult, AgentChatMessageUser, AgentChatMessageStatus, AgentChatMessageAskUserQuestion, AgentChatMessagePermissionRequest, AgentChatMessagePermissionResponse, AgentChatMessageNotification, AgentChatMessageSubagentActivity, AgentChatMessageSlashCommand, ChatImageRef } from '../../../shared/types';
@@ -143,12 +144,10 @@ function CollapsedSystemNotification({ title, text }: { title?: string; text: st
 }
 
 export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, onPermissionResponse }: ChatMessageListProps) {
-  const endRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const { containerRef, endRef, autoScroll, handleScroll, scrollToLatest } = useAutoScroll({ messagesLength: messages.length });
   const navigate = useNavigate();
   const { answerQuestion } = useChatActions();
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
-  const [autoScroll, setAutoScroll] = useState(true);
   const [viewerImages, setViewerImages] = useState<AnnotationImage[] | null>(null);
   const [viewerIndex, setViewerIndex] = useState(0);
 
@@ -171,25 +170,6 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
       else next.add(index);
       return next;
     });
-  }, []);
-
-  // Detect user scroll to pause / resume auto-scroll
-  const handleScroll = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
-    setAutoScroll(nearBottom);
-  }, []);
-
-  // Auto-scroll to bottom when new messages arrive (only when enabled)
-  useEffect(() => {
-    if (!autoScroll) return;
-    endRef.current?.scrollIntoView({ behavior: 'instant' });
-  }, [messages.length, autoScroll]);
-
-  const scrollToLatest = useCallback(() => {
-    setAutoScroll(true);
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
   const segments = useMemo(() => groupMessages(messages), [messages]);
@@ -548,6 +528,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
       <div
         ref={containerRef}
         className="h-full overflow-y-auto"
+        style={{ overflowAnchor: 'auto' }}
         onScroll={handleScroll}
       >
         <div className="mx-auto w-full max-w-[980px] px-4 py-6">
@@ -571,7 +552,7 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
-          <div ref={endRef} />
+          <div ref={endRef} style={{ overflowAnchor: 'none' }} />
         </div>
       </div>
 
