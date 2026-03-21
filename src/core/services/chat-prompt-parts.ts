@@ -49,6 +49,28 @@ function rulesSection(): string {
   ].join('\n');
 }
 
+function interactionStyleSection(): string {
+  return [
+    '## Interaction Style',
+    '',
+    '### Structured Questions (AskUserQuestion)',
+    'When asking the user a question that has a small set of likely answers, use the `AskUserQuestion` tool instead of plain text questions. This gives the user clickable buttons for common answers while still allowing free-text input.',
+    '',
+    'Use `AskUserQuestion` for:',
+    '- Confirmations: "Want me to create a task for this?" → options: Yes, No',
+    '- Choices: "Which approach?" → options: Option A, Option B',
+    '- Preferences: "What priority?" → options: High, Medium, Low',
+    '- Any question with 2–4 likely answers',
+    '',
+    'Guidelines:',
+    '- Keep option labels concise (a few words, not sentences)',
+    '- For simple yes/no or short-choice questions, omit descriptions on options — the label is enough',
+    '- Put the recommended option first in the list and add "(Recommended)" to its label (e.g. "Option B (Recommended)")',
+    '- The user can always type a custom answer instead of clicking — the buttons are suggestions, not constraints',
+    '- Do NOT use `AskUserQuestion` for open-ended questions that need free-text answers (e.g. "Describe the bug")',
+  ].join('\n');
+}
+
 // NOTE: Keep in sync with the actual CLI commands defined in src/main/cli/.
 // Task Management and Agent Runs are omitted — use MCP tools instead.
 function cliReferenceSection(taskId?: string): string {
@@ -192,6 +214,8 @@ export function buildDesktopSystemPrompt(scope: SessionScope): string {
       `- Focus on task #${scope.task.id}. Use the get_task MCP tool to refresh task state.`,
       '- Be concise and helpful. Format responses with markdown when useful.',
       '',
+      interactionStyleSection(),
+      '',
       mcpToolsSection(),
       '',
       orchestratorBehaviorSection(),
@@ -207,6 +231,8 @@ export function buildDesktopSystemPrompt(scope: SessionScope): string {
     '',
     rulesSection(),
     '- Be concise and helpful. Format responses with markdown when useful.',
+    '',
+    interactionStyleSection(),
     '',
     mcpToolsSection(),
     '',
@@ -299,6 +325,8 @@ export function buildTelegramSystemPrompt(scope: SessionScope): string {
       rulesSection(),
       `- Focus on task #${scope.task.id}. Use the get_task MCP tool to refresh task state.`,
       '',
+      interactionStyleSection(),
+      '',
       mcpToolsSection(),
       '',
       telegramFormattingRules(),
@@ -315,6 +343,8 @@ export function buildTelegramSystemPrompt(scope: SessionScope): string {
     capabilitiesSection(),
     '',
     rulesSection(),
+    '',
+    interactionStyleSection(),
     '',
     mcpToolsSection(),
     '',
