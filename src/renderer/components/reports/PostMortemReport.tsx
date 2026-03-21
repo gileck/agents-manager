@@ -1,18 +1,10 @@
-import React, { useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MessageSquare, X } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { InlineError } from '../components/InlineError';
-import { TaskSubPageLayout } from '../components/task-detail/TaskSubPageLayout';
-import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
-import { ReviewConversation } from '../components/plan/ReviewConversation';
-import { useReviewConversation } from '../hooks/useReviewConversation';
-import { useIpc } from '@template/renderer/hooks/useIpc';
-import { useLocalStorage } from '../hooks/useLocalStorage';
-import { reportError } from '../lib/error-handler';
-import type { TaskContextEntry } from '../../shared/types';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { PlanMarkdown } from '../task-detail/PlanMarkdown';
+import { reportError } from '../../lib/error-handler';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +18,7 @@ interface SuggestedTask {
   startPhase?: string;
 }
 
-interface PostMortemData {
+export interface PostMortemData {
   rootCause?: string;
   severity?: string;
   responsibleAgents?: string[];
@@ -53,17 +45,15 @@ const SEVERITY_COLORS: Record<string, { bg: string; text: string }> = {
   major: { bg: '#dc2626', text: 'white' },
 };
 
-// ─── Report panel (left side) ─────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
-function PostMortemReport({
-  data,
-  taskId,
-  onTaskCreated,
-}: {
+interface PostMortemReportProps {
   data: PostMortemData;
   taskId: string;
   onTaskCreated: () => void;
-}) {
+}
+
+export function PostMortemReport({ data, taskId, onTaskCreated }: PostMortemReportProps) {
   const navigate = useNavigate();
   const [creating, setCreating] = useState<string | null>(null);
 
@@ -204,101 +194,5 @@ function PostMortemReport({
         </div>
       )}
     </div>
-  );
-}
-
-// ─── Main page ────────────────────────────────────────────────────────────────
-
-export function PostMortemReviewPage() {
-  const { id } = useParams<{ id: string }>();
-  const [chatOpen, setChatOpen] = useLocalStorage('postMortemReview.chatOpen', true);
-
-  const { data: contextEntries, refetch: refetchContext, error: entriesError } = useIpc<TaskContextEntry[]>(
-    () => id ? window.api.tasks.contextEntries(id) : Promise.resolve([]),
-    [id],
-  );
-
-  // Find the most recent post_mortem entry
-  const postMortemEntry = (contextEntries ?? [])
-    .filter(e => e.entryType === 'post_mortem')
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-  const postMortemData = postMortemEntry?.data as PostMortemData | undefined;
-
-  // Chat entries (post_mortem_feedback)
-  const chatEntries = (contextEntries ?? []).filter(e => e.entryType === 'post_mortem_feedback');
-
-  const { streamingMessages, isStreaming, sendMessage, stopChat } = useReviewConversation(
-    id, 'post-mortem-reviewer', 'post_mortem_feedback', refetchContext,
-  );
-
-  const handleTaskCreated = useCallback(() => {
-    refetchContext();
-  }, [refetchContext]);
-
-  const chatToggleButton = (
-    <Button
-      variant={chatOpen ? 'secondary' : 'outline'}
-      size="sm"
-      onClick={() => setChatOpen(!chatOpen)}
-      title="Toggle chat panel"
-    >
-      <MessageSquare size={16} />
-      {chatOpen ? 'Chat' : 'Chat'}
-    </Button>
-  );
-
-  return (
-    <TaskSubPageLayout taskId={id!} tabLabel="Post-Mortem Report" tabKey="post-mortem" actions={chatToggleButton}>
-      {entriesError && <InlineError message={entriesError} context="Loading post-mortem data" />}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        {/* Left panel — report */}
-        <div style={{
-          width: chatOpen ? '60%' : '100%',
-          borderRight: chatOpen ? '1px solid var(--border)' : 'none',
-          overflowY: 'auto',
-          padding: '24px',
-          transition: 'width var(--motion-slow) var(--ease-standard)',
-        }}>
-          {postMortemData ? (
-            <PostMortemReport
-              data={postMortemData}
-              taskId={id!}
-              onTaskCreated={handleTaskCreated}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No post-mortem analysis available yet. Run a post-mortem analysis from the{' '}
-              <a href="/post-mortem" className="underline">Post-Mortem page</a> first.
-            </p>
-          )}
-        </div>
-
-        {/* Right panel — chat conversation */}
-        <div style={{
-          width: chatOpen ? '40%' : '0',
-          height: '100%',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'width var(--motion-slow) var(--ease-standard)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 8px 0' }}>
-            <Button variant="ghost" size="sm" onClick={() => setChatOpen(false)} title="Close chat panel">
-              <X size={16} />
-            </Button>
-          </div>
-          <ReviewConversation
-            entries={chatEntries}
-            isReviewStatus={!!postMortemData}
-            streamingMessages={streamingMessages}
-            isStreaming={isStreaming}
-            onSend={sendMessage}
-            onStop={stopChat}
-            hasConversation={chatEntries.length > 0}
-            placeholder="Ask about the post-mortem findings..."
-          />
-        </div>
-      </div>
-    </TaskSubPageLayout>
   );
 }

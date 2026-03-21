@@ -9,7 +9,8 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectConfigPage } from './pages/ProjectConfigPage';
 import { TaskListPage } from './pages/TaskListPage';
 import { TaskDetailPage } from './pages/TaskDetailPage';
-import { PlanReviewPage } from './pages/PlanReviewPage';
+import { ReportPage } from './pages/ReportPage';
+import { REPORT_CONFIGS } from './pages/reportConfigs';
 import { TaskTabPage } from './pages/TaskTabPage';
 import { AgentRunPage } from './pages/AgentRunPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -34,7 +35,6 @@ import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
 import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
 import { AutomatedAgentDetailPage } from './pages/AutomatedAgentDetailPage';
 import { PostMortemPage } from './pages/PostMortemPage';
-import { PostMortemReviewPage } from './pages/PostMortemReviewPage';
 import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useTabNavigation } from './hooks/useTabNavigation';
@@ -165,10 +165,11 @@ function AppRoutes() {
         <Route path="projects/:id/telegram" element={<TelegramPage />} />
         <Route path="tasks" element={<TaskListPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
-        <Route path="tasks/:id/plan" element={<PlanReviewPage reviewType="plan" />} />
-        <Route path="tasks/:id/design" element={<PlanReviewPage reviewType="design" />} />
-        <Route path="tasks/:id/investigation" element={<PlanReviewPage reviewType="investigation" />} />
-        <Route path="tasks/:id/post-mortem" element={<PostMortemReviewPage />} />
+        <Route path="tasks/:id/plan" element={<ReportPage config={REPORT_CONFIGS.plan} />} />
+        <Route path="tasks/:id/design" element={<ReportPage config={REPORT_CONFIGS.design} />} />
+        <Route path="tasks/:id/investigation" element={<ReportPage config={REPORT_CONFIGS.investigation} />} />
+        <Route path="tasks/:id/post-mortem" element={<ReportPage config={REPORT_CONFIGS['post-mortem']} />} />
+        <Route path="tasks/:id/workflow-review" element={<ReportPage config={REPORT_CONFIGS['workflow-review']} />} />
         <Route path="tasks/:id/:tab" element={<TaskTabPage />} />
         <Route path="kanban" element={<Navigate to="/tasks" replace />} />
         <Route path="agent-runs" element={<AgentRunsListPage />} />
