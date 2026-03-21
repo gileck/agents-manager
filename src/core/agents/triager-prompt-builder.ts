@@ -1,4 +1,5 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
+import { VALID_TASK_TYPES } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import { getInteractiveFields, getInteractiveInstructions, getTaskEstimationFields, getTaskEstimationInstructions } from './prompt-utils';
 
@@ -26,7 +27,7 @@ export class TriagerPromptBuilder extends BaseAgentPromptBuilder {
           triageSummary: { type: 'string', description: '2-3 sentence summary of triage findings' },
           suggestedType: {
             type: 'string',
-            enum: ['bug', 'feature', 'improvement', 'chore', 'refactor', 'docs', 'test'],
+            enum: [...VALID_TASK_TYPES],
             description: 'Suggested task type classification',
           },
           suggestedTags: {
@@ -155,8 +156,8 @@ export class TriagerPromptBuilder extends BaseAgentPromptBuilder {
       `  - \`${amCli} tasks update ${taskId} --tags <tag1>,<tag2>\` — add tags`,
       `  - \`${amCli} tasks update ${taskId} --description "<enriched description>"\` — update description if you expanded it`,
       ``,
-      `Note: The structured output you provide (suggestedType, size, complexity, tags, enrichedDescription) will also be`,
-      `used to update the task automatically. Using the CLI is optional but provides immediate feedback.`,
+      `Note: The structured output fields \`size\` and \`complexity\` will be applied to the task automatically.`,
+      `For \`type\`, \`tags\`, and \`description\`, you must use the CLI commands above.`,
     ];
   }
 
