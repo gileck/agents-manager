@@ -8,7 +8,6 @@ import { ArtifactsCard } from './ArtifactsCard';
 import { GitStatusCard } from './GitStatusCard';
 import { DevServerCard } from './DevServerCard';
 import { PRChecksCard } from './PRChecksCard';
-import { TimelineCard } from './TimelineCard';
 import { ContextCard } from './ContextCard';
 import { PhasedSubtasksSection } from './PhasedSubtasksSection';
 import { SubtasksSection } from './SubtasksSection';
@@ -49,7 +48,7 @@ export function TaskDetailDashboard({
   taskId,
   agentRuns,
   artifacts,
-  debugTimeline,
+  debugTimeline: _debugTimeline,
   contextEntries,
   secondaryTransitions,
   transitioning,
@@ -256,9 +255,6 @@ export function TaskDetailDashboard({
 
         {/* Comments */}
         <TaskCommentsCard taskId={taskId} contextEntries={contextEntries ?? []} onCommentAdded={onContextRefetch} />
-
-        {/* Timeline (collapsible) */}
-        <TimelineCard entries={debugTimeline ?? []} />
 
         {/* Context (collapsible) */}
         <ContextCard entries={contextEntries ?? []} />

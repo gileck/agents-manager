@@ -36,6 +36,7 @@ import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext
 import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
 
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
+import { TimelinePanel } from '../components/task-detail/TimelinePanel';
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
 import { ImagePasteArea } from '../components/ui/ImagePasteArea';
 import type { QuestionResponse } from '../components/prompts/QuestionForm';
@@ -704,6 +705,12 @@ export function TaskDetailPage() {
             </span>
           </TabsTrigger>
           <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="timeline" className={(debugTimeline?.length ?? 0) > 0 ? '' : 'opacity-40'}>
+            <span className="flex items-center gap-1.5">
+              Timeline
+              {(debugTimeline?.length ?? 0) > 0 && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
+            </span>
+          </TabsTrigger>
           <TabsTrigger value="review" className={hasReview ? '' : 'opacity-40'}>Review</TabsTrigger>
         </TabsList>
         <div style={{
@@ -805,6 +812,15 @@ export function TaskDetailPage() {
           <ChatPresetProvider>
             <PresetChatPanel scope={{ type: 'task', id: id! }} />
           </ChatPresetProvider>
+        </TabsContent>
+
+        <TabsContent value="timeline" style={{ padding: '12px 24px', flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <TimelinePanel
+            entries={debugTimeline ?? []}
+            isLive={shouldPoll}
+            showFullPageButton={true}
+            taskId={id}
+          />
         </TabsContent>
 
         <TabsContent value="review" style={{ padding: '12px 24px', overflowY: 'auto' }}>

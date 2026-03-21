@@ -3,7 +3,7 @@ export { MetricsCard } from './MetricsCard';
 export { AgentRunsCard } from './AgentRunsCard';
 export { ArtifactsCard } from './ArtifactsCard';
 export { GitStatusCard } from './GitStatusCard';
-export { TimelineCard } from './TimelineCard';
+export { TimelinePanel } from './TimelinePanel';
 export { ContextCard } from './ContextCard';
 export { PlanMarkdown } from './PlanMarkdown';
 export { GenericReviewSection } from './GenericReviewSection';

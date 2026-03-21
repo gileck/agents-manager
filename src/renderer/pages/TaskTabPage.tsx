@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { TaskSubPageLayout } from '../components/task-detail/TaskSubPageLayout';
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
+import { TimelinePanel } from '../components/task-detail/TimelinePanel';
 import { ImplementationTab } from '../components/tasks/ImplementationTab';
 import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
 import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext';
@@ -22,6 +23,7 @@ const TAB_CONFIG: Record<string, { label: string }> = {
   details: { label: 'Task Details' },
   impl: { label: 'Implementation' },
   chat: { label: 'Chat' },
+  timeline: { label: 'Timeline' },
   review: { label: 'Workflow Review' },
 };
 
@@ -45,6 +47,7 @@ function TabContent({ id, tab }: { id: string; tab: string }) {
     case 'details': return <DetailsContent id={id} />;
     case 'impl': return <ImplementationContent id={id} />;
     case 'chat': return <ChatContent id={id} />;
+    case 'timeline': return <TimelineContent id={id} />;
     case 'review': return <ReviewContent id={id} />;
     default: return null;
   }
@@ -219,6 +222,61 @@ function ChatContent({ id }: { id: string }) {
       <ChatPresetProvider>
         <PresetChatPanel scope={{ type: 'task', id }} />
       </ChatPresetProvider>
+    </div>
+  );
+}
+
+// --- Timeline tab ---
+function TimelineContent({ id }: { id: string }) {
+  const { task } = useTask(id);
+  const { pipeline } = usePipeline(task?.pipelineId);
+  const statusMeta = usePipelineStatusMeta(task, pipeline);
+
+  const { data: debugTimeline, refetch: refetchDebug } = useIpc<DebugTimelineEntry[]>(
+    () => window.api.tasks.debugTimeline(id), [id],
+  );
+  const { data: agentRuns } = useIpc<AgentRun[]>(
+    () => window.api.agents.runs(id), [id],
+  );
+
+  // Determine if we should poll for live updates
+  const hasRunningAgent = agentRuns?.some(r => r.status === 'running') ?? false;
+  const isAgentPhase = statusMeta.isAgentRunning;
+  const lastRun = agentRuns?.[0] ?? null;
+  const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
+    && lastRun?.status === 'completed' && lastRun.completedAt != null
+    && (Date.now() - lastRun.completedAt) < 30000;
+  const shouldPoll = hasRunningAgent || statusMeta.isWaitingForInput || isFinalizing;
+
+  // Poll debug timeline when active
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!shouldPoll) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+    intervalRef.current = setInterval(() => {
+      refetchDebug();
+    }, 3000);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [shouldPoll, refetchDebug]);
+
+  return (
+    <div style={{ padding: '20px 24px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <TimelinePanel
+        entries={debugTimeline ?? []}
+        isLive={shouldPoll}
+        showFullPageButton={false}
+        taskId={id}
+      />
     </div>
   );
 }
