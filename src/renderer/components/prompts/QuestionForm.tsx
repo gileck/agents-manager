@@ -3,6 +3,7 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { InlineError } from '../InlineError';
 import { Badge } from '../ui/badge';
+import { MarkdownContent } from '../chat/MarkdownContent';
 import type { PendingPrompt } from '../../../shared/types';
 
 interface QuestionOption {
@@ -184,7 +185,9 @@ function ChoiceQuestion({
                 <Badge variant="secondary" className="text-xs">Recommended</Badge>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              <MarkdownContent content={opt.description} />
+            </div>
           </div>
         </label>
       ))}
