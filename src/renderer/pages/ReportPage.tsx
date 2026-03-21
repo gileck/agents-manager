@@ -49,7 +49,13 @@ export function ReportPage({ config }: ReportPageProps) {
   let contextEntryCreatedAt: number | undefined;
 
   if (config.contentSource.type === 'taskField') {
-    content = task ? (task[config.contentSource.field] as string | null) : null;
+    const fieldValue = task ? task[config.contentSource.field] : null;
+    // postMortem is an object (PostMortemData); other fields are strings
+    if (typeof fieldValue === 'object' && fieldValue !== null) {
+      data = fieldValue;
+    } else {
+      content = fieldValue as string | null;
+    }
   } else {
     // contextEntry source: find the most recent entry of the specified type
     const { entryType: sourceEntryType } = config.contentSource;
@@ -60,7 +66,7 @@ export function ReportPage({ config }: ReportPageProps) {
     contextEntryCreatedAt = entry?.createdAt;
   }
 
-  const hasContent = config.contentSource.type === 'taskField' ? !!content : !!data;
+  const hasContent = !!content || !!data;
 
   // ─── Review status ────────────────────────────────────────────────────────
 

@@ -110,6 +110,8 @@ export const BASELINE_MIGRATION_NAMES: string[] = [
   '110_reseed_pipelines_already_on_main',
   '111_add_diagnostics_to_agent_runs',
   '118_add_investigation_report_to_tasks',
+  '119_add_post_mortem_to_tasks',
+  '120_backfill_post_mortem_from_context_entries',
 ];
 
 function escSql(s: string): string {
@@ -238,6 +240,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   plan_comments TEXT NOT NULL DEFAULT '[]',
   technical_design TEXT,
   technical_design_comments TEXT NOT NULL DEFAULT '[]',
+  post_mortem TEXT,
   phases TEXT,
   debug_info TEXT,
   created_by TEXT,
