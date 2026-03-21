@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Bug, ChevronDown, ChevronRight, FileText, Loader2, Play } from 'lucide-react';
+import { Bug, ChevronDown, ChevronRight, FileText, Loader2, Play, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -12,6 +12,7 @@ import {
 } from '../components/ui/dialog';
 import { reportError } from '../lib/error-handler';
 import { fetchAllBugs } from '../lib/bug-queries';
+import { AgentRunInfoCard } from '../components/chat/AgentRunInfoCard';
 import type { Task, TaskContextEntry, AgentRunStatus } from '../../shared/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -60,7 +61,7 @@ interface TriggerPostMortemDialogProps {
   onOpenChange: (open: boolean) => void;
   task: Task;
   onTriggered: () => void;
-  onRunStarted?: (taskId: string) => void;
+  onRunStarted?: (taskId: string, runId: string) => void;
 }
 
 function TriggerPostMortemDialog({
@@ -96,9 +97,10 @@ function TriggerPostMortemDialog({
       const linkedBugDescriptions = linkedBugs.map(
         (b) => `Title: ${b.title}\n${b.description ?? ''}`.trim(),
       );
-      await window.api.tasks.postMortem(task.id, { postMortemInput, linkedBugDescriptions });
+      const result = await window.api.tasks.postMortem(task.id, { postMortemInput, linkedBugDescriptions });
       toast.success('Post-mortem analysis started');
-      onRunStarted?.(task.id);
+      const runId = result?.id;
+      if (runId) onRunStarted?.(task.id, runId);
       onOpenChange(false);
       onTriggered();
     } catch (err) {
@@ -347,18 +349,21 @@ interface DefectiveTaskRowProps {
   task: Task;
   pendingReview: boolean;
   isRunning: boolean;
+  runId?: string;
   contextVersion: number;
   onRefresh: () => void;
-  onRunStarted: (taskId: string) => void;
+  onRunStarted: (taskId: string, runId: string) => void;
 }
 
-function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRefresh, onRunStarted }: DefectiveTaskRowProps) {
+function DefectiveTaskRow({ task, pendingReview, isRunning, runId, contextVersion, onRefresh, onRunStarted }: DefectiveTaskRowProps) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const [contextEntries, setContextEntries] = useState<TaskContextEntry[] | null>(null);
-  const [linkedBugCount, setLinkedBugCount] = useState<number | null>(null);
+  const [linkedBugs, setLinkedBugs] = useState<Task[]>([]);
+  const [linkedBugsLoaded, setLinkedBugsLoaded] = useState(false);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [loadingContext, setLoadingContext] = useState(false);
+  const [unlinkingBugId, setUnlinkingBugId] = useState<string | null>(null);
 
   // Re-fetch context entries when contextVersion changes (agent completed)
   useEffect(() => {
@@ -373,13 +378,14 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
       ),
     ]).then(([entries, bugs]) => {
       setContextEntries(entries);
-      setLinkedBugCount(bugs.length);
+      setLinkedBugs(bugs);
+      setLinkedBugsLoaded(true);
     }).catch((err) => {
       reportError(err, 'Refresh post-mortem context');
     }).finally(() => setLoadingContext(false));
   }, [contextVersion, expanded, task.id]);
 
-  // Lazily load context + bug count when expanded
+  // Lazily load context + linked bugs when expanded
   const handleExpand = useCallback(async () => {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
@@ -395,7 +401,8 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
           ),
         ]);
         setContextEntries(entries);
-        setLinkedBugCount(bugs.length);
+        setLinkedBugs(bugs);
+        setLinkedBugsLoaded(true);
       } catch (err) {
         reportError(err, 'Load post-mortem context');
         setExpanded(false);
@@ -404,6 +411,48 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
       }
     }
   }, [expanded, contextEntries, task.id]);
+
+  // Unlink a bug from this task
+  const handleUnlinkBug = useCallback(async (bugId: string) => {
+    setUnlinkingBugId(bugId);
+    try {
+      // Fetch fresh bug to preserve all metadata fields
+      const freshBug = await window.api.tasks.get(bugId);
+      if (!freshBug) {
+        toast.error('Bug task not found');
+        return;
+      }
+      // Remove sourceTaskId from metadata
+      const newMetadata = { ...freshBug.metadata, sourceTaskId: null };
+      await window.api.tasks.update(bugId, { metadata: newMetadata });
+
+      // Re-fetch to check remaining linked bugs
+      const allBugs = await fetchAllBugs();
+      const remainingBugs = allBugs.filter(
+        (b) => (b.metadata as Record<string, unknown> | undefined)?.sourceTaskId === task.id,
+      );
+
+      // If no bugs remain linked, remove defective/post-mortem-done tags
+      if (remainingBugs.length === 0) {
+        const freshTask = await window.api.tasks.get(task.id);
+        if (freshTask) {
+          const filteredTags = freshTask.tags.filter(
+            (t) => t !== 'defective' && t !== 'post-mortem-done',
+          );
+          await window.api.tasks.update(task.id, { tags: filteredTags });
+        }
+      }
+
+      // Update local state
+      setLinkedBugs(remainingBugs);
+      onRefresh();
+      toast.success('Bug unlinked');
+    } catch (err) {
+      reportError(err, 'Unlink bug');
+    } finally {
+      setUnlinkingBugId(null);
+    }
+  }, [task.id, onRefresh]);
 
   const postMortemEntry = contextEntries?.find((e) => e.entryType === 'post_mortem');
   const postMortemData = postMortemEntry?.data as PostMortemData | undefined;
@@ -426,7 +475,12 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{task.title}</p>
-          <p className="text-xs text-muted-foreground">{task.status}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted-foreground">{task.status}</p>
+            <span className="text-xs text-muted-foreground/60">
+              {new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          </div>
         </div>
 
         {/* Severity badge if review complete */}
@@ -440,10 +494,10 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
         )}
 
         {/* Linked bug count */}
-        {linkedBugCount !== null && linkedBugCount > 0 && (
+        {linkedBugsLoaded && linkedBugs.length > 0 && (
           <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
             <Bug className="h-3 w-3 text-destructive" />
-            {linkedBugCount}
+            {linkedBugs.length}
           </span>
         )}
 
@@ -499,7 +553,7 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
 
       {/* Expanded details */}
       {expanded && (
-        <div className="px-10 pb-4">
+        <div className="px-10 pb-4 space-y-3">
           {loadingContext ? (
             <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -512,16 +566,60 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
               onTaskCreated={onRefresh}
             />
           ) : isRunning ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Post-mortem analysis is running. Results will appear here when complete.
-            </div>
+            runId ? (
+              <AgentRunInfoCard agentRunId={runId} taskId={task.id} agentType="post-mortem-reviewer" />
+            ) : (
+              <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Post-mortem analysis is running. Results will appear here when complete.
+              </div>
+            )
           ) : (
             <p className="text-xs text-muted-foreground py-2">
               {pendingReview
                 ? 'No post-mortem analysis yet. Click "Run Post-Mortem" to start.'
                 : 'Post-mortem analysis not available.'}
             </p>
+          )}
+
+          {/* Linked bugs section */}
+          {linkedBugsLoaded && linkedBugs.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                Linked Bugs ({linkedBugs.length})
+              </p>
+              <div className="rounded-md border divide-y max-h-48 overflow-y-auto">
+                {linkedBugs.map((bug) => (
+                  <div key={bug.id} className="px-3 py-2 flex items-center gap-2 text-xs">
+                    <Bug className="h-3 w-3 text-destructive shrink-0" />
+                    <button
+                      className="text-sm font-medium truncate text-left hover:underline"
+                      onClick={() => navigate(`/tasks/${bug.id}`)}
+                    >
+                      {bug.title}
+                    </button>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{bug.status}</Badge>
+                    <span className="text-muted-foreground/60 shrink-0">
+                      {new Date(bug.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 w-5 p-0 ml-auto shrink-0 text-muted-foreground hover:text-destructive"
+                      disabled={unlinkingBugId === bug.id}
+                      onClick={() => handleUnlinkBug(bug.id)}
+                      title="Unlink this bug"
+                    >
+                      {unlinkingBugId === bug.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <X className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -542,7 +640,8 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, contextVersion, onRe
 export function PostMortemPage() {
   const [defectiveTasks, setDefectiveTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [runningTaskIds, setRunningTaskIds] = useState<Set<string>>(new Set());
+  // Map of taskId → runId for running post-mortem agents
+  const [runningRuns, setRunningRuns] = useState<Map<string, string>>(new Map());
   const [contextVersion, setContextVersion] = useState(0);
   const defectiveTaskIdsRef = useRef<Set<string>>(new Set());
 
@@ -559,10 +658,10 @@ export function PostMortemPage() {
   }, []);
 
   // Callback when a post-mortem agent is triggered
-  const handleRunStarted = useCallback((taskId: string) => {
-    setRunningTaskIds((prev) => {
-      const next = new Set(prev);
-      next.add(taskId);
+  const handleRunStarted = useCallback((taskId: string, runId: string) => {
+    setRunningRuns((prev) => {
+      const next = new Map(prev);
+      next.set(taskId, runId);
       return next;
     });
   }, []);
@@ -570,13 +669,14 @@ export function PostMortemPage() {
   // Initialize running state on mount — detect already-running post-mortem agents
   useEffect(() => {
     window.api.agents.activeRuns().then((activeRuns) => {
-      const postMortemRunningIds = new Set(
-        activeRuns
-          .filter((r) => r.agentType === 'post-mortem-reviewer' && r.status === 'running')
-          .map((r) => r.taskId),
-      );
-      if (postMortemRunningIds.size > 0) {
-        setRunningTaskIds(postMortemRunningIds);
+      const postMortemRuns = new Map<string, string>();
+      for (const r of activeRuns) {
+        if (r.agentType === 'post-mortem-reviewer' && r.status === 'running') {
+          postMortemRuns.set(r.taskId, r.id);
+        }
+      }
+      if (postMortemRuns.size > 0) {
+        setRunningRuns(postMortemRuns);
       }
     }).catch((err) => reportError(err, 'Check active post-mortem agents'));
   }, []);
@@ -586,9 +686,9 @@ export function PostMortemPage() {
     const unsubscribe = window.api.on.agentStatus((taskId: string, status: AgentRunStatus) => {
       if (!defectiveTaskIdsRef.current.has(taskId)) return;
       if (status === 'completed' || status === 'failed' || status === 'timed_out' || status === 'cancelled') {
-        setRunningTaskIds((prev) => {
+        setRunningRuns((prev) => {
           if (!prev.has(taskId)) return prev;
-          const next = new Set(prev);
+          const next = new Map(prev);
           next.delete(taskId);
           return next;
         });
@@ -602,21 +702,22 @@ export function PostMortemPage() {
 
   // Poll active runs every 3 seconds while any post-mortem agent is running
   useEffect(() => {
-    if (runningTaskIds.size === 0) return;
+    if (runningRuns.size === 0) return;
     const interval = setInterval(() => {
       window.api.agents.activeRuns().then((activeRuns) => {
-        const stillRunning = new Set(
-          activeRuns
-            .filter((r) => r.agentType === 'post-mortem-reviewer' && r.status === 'running')
-            .map((r) => r.taskId),
-        );
-        setRunningTaskIds((prev) => {
-          // Only keep IDs that are still actually running
-          const next = new Set<string>();
+        const stillRunning = new Map<string, string>();
+        for (const r of activeRuns) {
+          if (r.agentType === 'post-mortem-reviewer' && r.status === 'running') {
+            stillRunning.set(r.taskId, r.id);
+          }
+        }
+        setRunningRuns((prev) => {
+          // Only keep entries that are still actually running
+          const next = new Map<string, string>();
           let changed = false;
-          for (const id of prev) {
-            if (stillRunning.has(id)) {
-              next.add(id);
+          for (const [tid, rid] of prev) {
+            if (stillRunning.has(tid)) {
+              next.set(tid, stillRunning.get(tid) ?? rid);
             } else {
               changed = true;
             }
@@ -630,7 +731,7 @@ export function PostMortemPage() {
       }).catch((err) => reportError(err, 'Poll active post-mortem agents'));
     }, 3000);
     return () => clearInterval(interval);
-  }, [runningTaskIds.size, fetchTasks]);
+  }, [runningRuns.size, fetchTasks]);
 
   useEffect(() => {
     void fetchTasks();
@@ -677,7 +778,8 @@ export function PostMortemPage() {
                     key={task.id}
                     task={task}
                     pendingReview
-                    isRunning={runningTaskIds.has(task.id)}
+                    isRunning={runningRuns.has(task.id)}
+                    runId={runningRuns.get(task.id)}
                     contextVersion={contextVersion}
                     onRefresh={fetchTasks}
                     onRunStarted={handleRunStarted}
@@ -702,7 +804,8 @@ export function PostMortemPage() {
                     key={task.id}
                     task={task}
                     pendingReview={false}
-                    isRunning={runningTaskIds.has(task.id)}
+                    isRunning={runningRuns.has(task.id)}
+                    runId={runningRuns.get(task.id)}
                     contextVersion={contextVersion}
                     onRefresh={fetchTasks}
                     onRunStarted={handleRunStarted}
