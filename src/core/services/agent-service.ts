@@ -969,6 +969,7 @@ export class AgentService implements IAgentService {
       await this.postRunExtractor.extractTaskEstimates(taskId, result, agentType, postRunLog, extractionPostLog);
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog, extractionPostLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog, extractionPostLog);
+      await this.postRunExtractor.linkBugToSourceTasks(taskId, result, agentType, postRunLog, extractionPostLog);
 
       // Compute and persist run diagnostics
       const diagnostics = this.postRunExtractor.computeRunDiagnostics(flusher.getBufferedMessages(), result);

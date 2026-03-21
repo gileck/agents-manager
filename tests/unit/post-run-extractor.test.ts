@@ -719,3 +719,329 @@ describe('PostRunExtractor.extractPlan', () => {
     expect(updateCall).not.toHaveProperty('phases');
   });
 });
+
+describe('PostRunExtractor.linkBugToSourceTasks', () => {
+  let extractor: PostRunExtractor;
+  let stores: ReturnType<typeof createMockStores>;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    stores = createMockStores();
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter);
+    onLog.mockClear();
+  });
+
+  it('should link valid source task IDs and add defective tag', async () => {
+    const bugTask = createMockTask({ id: 'bug-1', projectId: 'proj-1', type: 'bug' as Task['type'], metadata: {} });
+    const sourceTask = createMockTask({ id: 'source-1', projectId: 'proj-1', tags: ['feature'] });
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (id: string) => {
+        if (id === 'bug-1') return bugTask;
+        if (id === 'source-1') return sourceTask;
+        return null;
+      });
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'investigation output',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Found root cause',
+        subtasks: ['Fix it'],
+        sourceTaskIds: ['source-1'],
+      },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    // Should add defective tag to source task
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('source-1', {
+      tags: ['feature', 'defective'],
+    });
+
+    // Should update bug task metadata with sourceTaskId and sourceTaskIds
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('bug-1', {
+      metadata: {
+        sourceTaskId: 'source-1',
+        sourceTaskIds: ['source-1'],
+      },
+    });
+
+    // Should log events
+    expect(stores.taskEventLog.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'source-1',
+        category: 'agent',
+        severity: 'info',
+        message: expect.stringContaining('marked as defective'),
+      }),
+    );
+    expect(stores.taskEventLog.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'bug-1',
+        category: 'agent',
+        severity: 'info',
+        message: expect.stringContaining('Auto-linked bug'),
+      }),
+    );
+  });
+
+  it('should skip invalid task IDs that do not exist', async () => {
+    const bugTask = createMockTask({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (id: string) => {
+        if (id === 'bug-1') return bugTask;
+        return null; // source task not found
+      });
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Summary',
+        subtasks: [],
+        sourceTaskIds: ['nonexistent-task'],
+      },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    // Should log a warning about the invalid ID
+    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('not found'));
+
+    // Should NOT update bug task metadata (no valid IDs)
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalledWith('bug-1', expect.anything());
+  });
+
+  it('should merge with already-linked tasks without duplicating', async () => {
+    const bugTask = createMockTask({
+      id: 'bug-1',
+      projectId: 'proj-1',
+      metadata: { sourceTaskId: 'existing-1', sourceTaskIds: ['existing-1'] },
+    });
+    const existingSource = createMockTask({ id: 'existing-1', projectId: 'proj-1', tags: ['defective'] });
+    const newSource = createMockTask({ id: 'new-1', projectId: 'proj-1', tags: [] });
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (id: string) => {
+        if (id === 'bug-1') return bugTask;
+        if (id === 'existing-1') return existingSource;
+        if (id === 'new-1') return newSource;
+        return null;
+      });
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Summary',
+        subtasks: [],
+        sourceTaskIds: ['existing-1', 'new-1'],
+      },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    // Should add defective tag to new source only (existing already has it)
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('new-1', {
+      tags: ['defective'],
+    });
+
+    // Should NOT add defective tag to existing source (already tagged)
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalledWith('existing-1', expect.anything());
+
+    // Bug metadata should contain both, with original sourceTaskId preserved
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('bug-1', {
+      metadata: {
+        sourceTaskId: 'existing-1', // preserved from original
+        sourceTaskIds: ['existing-1', 'new-1'], // merged and de-duped
+      },
+    });
+  });
+
+  it('should no-op gracefully when sourceTaskIds is empty', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Summary',
+        subtasks: [],
+        sourceTaskIds: [],
+      },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    // Should not call getTask or updateTask
+    expect(stores.taskStore.getTask).not.toHaveBeenCalled();
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('should no-op when sourceTaskIds is absent from structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Summary',
+        subtasks: [],
+      },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    expect(stores.taskStore.getTask).not.toHaveBeenCalled();
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('should skip for non-investigator agent types', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: { sourceTaskIds: ['task-1'] },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'planner', onLog);
+
+    expect(stores.taskStore.getTask).not.toHaveBeenCalled();
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('should skip for non-zero exit code', async () => {
+    const result: AgentRunResult = {
+      exitCode: 1,
+      output: 'error',
+      outcome: 'failed',
+      structuredOutput: { sourceTaskIds: ['task-1'] },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    expect(stores.taskStore.getTask).not.toHaveBeenCalled();
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('should skip source tasks from a different project', async () => {
+    const bugTask = createMockTask({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
+    const crossProjectTask = createMockTask({ id: 'cross-1', projectId: 'proj-other', tags: [] });
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (id: string) => {
+        if (id === 'bug-1') return bugTask;
+        if (id === 'cross-1') return crossProjectTask;
+        return null;
+      });
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Summary',
+        subtasks: [],
+        sourceTaskIds: ['cross-1'],
+      },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    // Should log warning about cross-project
+    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('different project'));
+
+    // Should NOT update bug task metadata (no valid IDs after filtering)
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalledWith('bug-1', expect.anything());
+  });
+
+  it('should handle multiple valid source tasks', async () => {
+    const bugTask = createMockTask({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
+    const source1 = createMockTask({ id: 'src-1', projectId: 'proj-1', tags: [] });
+    const source2 = createMockTask({ id: 'src-2', projectId: 'proj-1', tags: ['existing-tag'] });
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (id: string) => {
+        if (id === 'bug-1') return bugTask;
+        if (id === 'src-1') return source1;
+        if (id === 'src-2') return source2;
+        return null;
+      });
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Summary',
+        subtasks: [],
+        sourceTaskIds: ['src-1', 'src-2'],
+      },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    // Both source tasks should get defective tag
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('src-1', { tags: ['defective'] });
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('src-2', { tags: ['existing-tag', 'defective'] });
+
+    // Bug task metadata should have first ID as sourceTaskId and full array
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('bug-1', {
+      metadata: {
+        sourceTaskId: 'src-1',
+        sourceTaskIds: ['src-1', 'src-2'],
+      },
+    });
+  });
+
+  it('should not overwrite manually-set sourceTaskId when auto-linking', async () => {
+    const bugTask = createMockTask({
+      id: 'bug-1',
+      projectId: 'proj-1',
+      metadata: { sourceTaskId: 'manual-1', route: '/some-page' },
+    });
+    const manualSource = createMockTask({ id: 'manual-1', projectId: 'proj-1', tags: ['defective'] });
+    const autoSource = createMockTask({ id: 'auto-1', projectId: 'proj-1', tags: [] });
+
+    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (id: string) => {
+        if (id === 'bug-1') return bugTask;
+        if (id === 'manual-1') return manualSource;
+        if (id === 'auto-1') return autoSource;
+        return null;
+      });
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Summary',
+        subtasks: [],
+        sourceTaskIds: ['auto-1'],
+      },
+    };
+
+    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+
+    // sourceTaskId should be preserved (manual-1), not overwritten
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('bug-1', {
+      metadata: {
+        sourceTaskId: 'manual-1', // preserved
+        sourceTaskIds: ['manual-1', 'auto-1'], // merged
+        route: '/some-page', // other metadata preserved
+      },
+    });
+  });
+});
