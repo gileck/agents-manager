@@ -13,29 +13,7 @@ import {
 import { reportError } from '../lib/error-handler';
 import { fetchAllBugs } from '../lib/bug-queries';
 import { AgentRunInfoCard } from '../components/chat/AgentRunInfoCard';
-import type { Task, TaskContextEntry, AgentRunStatus } from '../../shared/types';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface SuggestedTask {
-  title: string;
-  description?: string;
-  type?: string;
-  priority?: number;
-  size?: string;
-  complexity?: string;
-  startPhase?: string;
-}
-
-interface PostMortemData {
-  rootCause?: string;
-  severity?: string;
-  responsibleAgents?: string[];
-  analysis?: string;
-  promptImprovements?: string[];
-  processImprovements?: string[];
-  suggestedTasks?: SuggestedTask[];
-}
+import type { Task, AgentRunStatus, PostMortemData, PostMortemSuggestedTask } from '../../shared/types';
 
 // ─── Colour maps ─────────────────────────────────────────────────────────────
 
@@ -187,7 +165,7 @@ function PostMortemResults({
   const navigate = useNavigate();
   const [creating, setCreating] = useState<string | null>(null);
 
-  const handleCreateTask = async (suggested: SuggestedTask) => {
+  const handleCreateTask = async (suggested: PostMortemSuggestedTask) => {
     setCreating(suggested.title);
     try {
       const settings = await window.api.settings.get();
@@ -358,26 +336,23 @@ interface DefectiveTaskRowProps {
 function DefectiveTaskRow({ task, pendingReview, isRunning, runId, contextVersion, onRefresh, onRunStarted }: DefectiveTaskRowProps) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  const [contextEntries, setContextEntries] = useState<TaskContextEntry[] | null>(null);
   const [linkedBugs, setLinkedBugs] = useState<Task[]>([]);
   const [linkedBugsLoaded, setLinkedBugsLoaded] = useState(false);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [loadingContext, setLoadingContext] = useState(false);
   const [unlinkingBugId, setUnlinkingBugId] = useState<string | null>(null);
 
-  // Re-fetch context entries when contextVersion changes (agent completed)
+  // Read post-mortem data directly from the task field
+  const postMortemData = task.postMortem;
+
+  // Re-fetch linked bugs when contextVersion changes (agent completed)
   useEffect(() => {
     if (contextVersion === 0 || !expanded) return;
     setLoadingContext(true);
-    Promise.all([
-      window.api.tasks.contextEntries(task.id),
-      fetchAllBugs().then((all) =>
-        all.filter(
-          (b) => (b.metadata as Record<string, unknown> | undefined)?.sourceTaskId === task.id,
-        ),
-      ),
-    ]).then(([entries, bugs]) => {
-      setContextEntries(entries);
+    fetchAllBugs().then((all) => {
+      const bugs = all.filter(
+        (b) => (b.metadata as Record<string, unknown> | undefined)?.sourceTaskId === task.id,
+      );
       setLinkedBugs(bugs);
       setLinkedBugsLoaded(true);
     }).catch((err) => {
@@ -385,22 +360,17 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, runId, contextVersio
     }).finally(() => setLoadingContext(false));
   }, [contextVersion, expanded, task.id]);
 
-  // Lazily load context + linked bugs when expanded
+  // Lazily load linked bugs when expanded
   const handleExpand = useCallback(async () => {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    if (nextExpanded && contextEntries === null) {
+    if (nextExpanded && !linkedBugsLoaded) {
       setLoadingContext(true);
       try {
-        const [entries, bugs] = await Promise.all([
-          window.api.tasks.contextEntries(task.id),
-          fetchAllBugs().then((all) =>
-            all.filter(
-              (b) => (b.metadata as Record<string, unknown> | undefined)?.sourceTaskId === task.id,
-            ),
-          ),
-        ]);
-        setContextEntries(entries);
+        const allBugs = await fetchAllBugs();
+        const bugs = allBugs.filter(
+          (b) => (b.metadata as Record<string, unknown> | undefined)?.sourceTaskId === task.id,
+        );
         setLinkedBugs(bugs);
         setLinkedBugsLoaded(true);
       } catch (err) {
@@ -410,7 +380,7 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, runId, contextVersio
         setLoadingContext(false);
       }
     }
-  }, [expanded, contextEntries, task.id]);
+  }, [expanded, linkedBugsLoaded, task.id]);
 
   // Unlink a bug from this task
   const handleUnlinkBug = useCallback(async (bugId: string) => {
@@ -453,9 +423,6 @@ function DefectiveTaskRow({ task, pendingReview, isRunning, runId, contextVersio
       setUnlinkingBugId(null);
     }
   }, [task.id, onRefresh]);
-
-  const postMortemEntry = contextEntries?.find((e) => e.entryType === 'post_mortem');
-  const postMortemData = postMortemEntry?.data as PostMortemData | undefined;
 
   const severityStyle = postMortemData?.severity
     ? SEVERITY_COLORS[postMortemData.severity]

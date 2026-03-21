@@ -6,6 +6,7 @@ import type {
   AgentChatMessage,
   AgentRunResult,
   ImplementationPhase,
+  PostMortemData,
   RevisionReason,
   Subtask,
   TaskComplexity,
@@ -311,7 +312,24 @@ export class PostRunExtractor {
         entryType, summary, data: entryData,
       });
 
-      // When a post-mortem review completes, add the 'post-mortem-done' tag to the task
+      // When a post-mortem review completes, persist data to the task field and add tag
+      if (agentType === 'post-mortem-reviewer') {
+        try {
+          const pmData: PostMortemData = {};
+          if (entryData.rootCause) pmData.rootCause = entryData.rootCause as string;
+          if (entryData.severity) pmData.severity = entryData.severity as string;
+          if (entryData.responsibleAgents) pmData.responsibleAgents = entryData.responsibleAgents as string[];
+          if (entryData.analysis) pmData.analysis = entryData.analysis as string;
+          if (entryData.promptImprovements) pmData.promptImprovements = entryData.promptImprovements as string[];
+          if (entryData.processImprovements) pmData.processImprovements = entryData.processImprovements as string[];
+          if (entryData.suggestedTasks) pmData.suggestedTasks = entryData.suggestedTasks as PostMortemData['suggestedTasks'];
+          await this.taskStore.updateTask(taskId, { postMortem: pmData });
+          onLog('Saved post-mortem data to task field');
+        } catch (pmErr) {
+          // Non-fatal — context entry is already saved
+          onLog(`Warning: failed to save post-mortem to task field: ${pmErr instanceof Error ? pmErr.message : String(pmErr)}`);
+        }
+      }
       if (agentType === 'post-mortem-reviewer') {
         try {
           const reviewedTask = await this.taskStore.getTask(taskId);

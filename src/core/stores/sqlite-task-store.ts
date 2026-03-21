@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Task, TaskType, TaskSize, TaskComplexity, TaskCreatedBy, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, ImplementationPhase, PlanComment } from '../../shared/types';
+import type { Task, TaskType, TaskSize, TaskComplexity, TaskCreatedBy, TaskCreateInput, TaskUpdateInput, TaskFilter, Subtask, ImplementationPhase, PlanComment, PostMortemData } from '../../shared/types';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import { generateId, now, parseJson } from './utils';
@@ -25,6 +25,7 @@ interface TaskRow {
   plan: string | null;
   investigation_report: string | null;
   technical_design: string | null;
+  post_mortem: string | null;
   debug_info: string | null;
   subtasks: string;
   phases: string | null;
@@ -57,6 +58,7 @@ function rowToTask(row: TaskRow): Task {
     plan: row.plan,
     investigationReport: row.investigation_report,
     technicalDesign: row.technical_design,
+    postMortem: parseJson<PostMortemData | null>(row.post_mortem, null),
     debugInfo: row.debug_info,
     subtasks: parseJson<Subtask[]>(row.subtasks, []),
     phases: row.phases ? parseJson<ImplementationPhase[] | null>(row.phases, null) : null,
@@ -290,6 +292,10 @@ export class SqliteTaskStore implements ITaskStore {
         updates.push('technical_design = ?');
         values.push(input.technicalDesign);
       }
+      if (input.postMortem !== undefined) {
+        updates.push('post_mortem = ?');
+        values.push(input.postMortem ? JSON.stringify(input.postMortem) : null);
+      }
       if (input.debugInfo !== undefined) {
         updates.push('debug_info = ?');
         values.push(input.debugInfo);
@@ -385,7 +391,7 @@ export class SqliteTaskStore implements ITaskStore {
         // Reset task record fields (including pipeline_id if changed)
         this.db.prepare(`
           UPDATE tasks
-          SET status = ?, pipeline_id = ?, plan = NULL, investigation_report = NULL, technical_design = NULL, subtasks = '[]', phases = NULL, plan_comments = '[]', technical_design_comments = '[]',
+          SET status = ?, pipeline_id = ?, plan = NULL, investigation_report = NULL, technical_design = NULL, post_mortem = NULL, subtasks = '[]', phases = NULL, plan_comments = '[]', technical_design_comments = '[]',
               pr_link = NULL, branch_name = NULL, updated_at = ?
           WHERE id = ?
         `).run(firstStatus, effectivePipelineId, now(), id);

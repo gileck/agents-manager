@@ -5,28 +5,10 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { PlanMarkdown } from '../task-detail/PlanMarkdown';
 import { reportError } from '../../lib/error-handler';
+import type { PostMortemData, PostMortemSuggestedTask } from '../../../shared/types';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface SuggestedTask {
-  title: string;
-  description?: string;
-  type?: string;
-  priority?: number;
-  size?: string;
-  complexity?: string;
-  startPhase?: string;
-}
-
-export interface PostMortemData {
-  rootCause?: string;
-  severity?: string;
-  responsibleAgents?: string[];
-  analysis?: string;
-  promptImprovements?: string[];
-  processImprovements?: string[];
-  suggestedTasks?: SuggestedTask[];
-}
+// Re-export for consumers that import from this file
+export type { PostMortemData } from '../../../shared/types';
 
 // ─── Colour maps ─────────────────────────────────────────────────────────────
 
@@ -57,7 +39,7 @@ export function PostMortemReport({ data, taskId, onTaskCreated }: PostMortemRepo
   const navigate = useNavigate();
   const [creating, setCreating] = useState<string | null>(null);
 
-  const handleCreateTask = async (suggested: SuggestedTask) => {
+  const handleCreateTask = async (suggested: PostMortemSuggestedTask) => {
     setCreating(suggested.title);
     try {
       const settings = await window.api.settings.get();

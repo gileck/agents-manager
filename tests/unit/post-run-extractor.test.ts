@@ -508,6 +508,19 @@ describe('PostRunExtractor.saveContextEntry', () => {
 
     await extractor.saveContextEntry('task-1', 'run-1', 'post-mortem-reviewer', undefined, result, onLog);
 
+    // Should save post-mortem data to task field
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+      postMortem: {
+        rootCause: 'missed_edge_case',
+        severity: 'minor',
+        responsibleAgents: ['implementor'],
+        analysis: 'Minor edge case missed.',
+        promptImprovements: [],
+        processImprovements: [],
+        suggestedTasks: [],
+      },
+    });
+    // Should add post-mortem-done tag
     expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
       tags: ['defective', 'post-mortem-done'],
     });
@@ -535,9 +548,20 @@ describe('PostRunExtractor.saveContextEntry', () => {
 
     await extractor.saveContextEntry('task-1', 'run-1', 'post-mortem-reviewer', undefined, result, onLog);
 
-    // updateTask should NOT be called for tag update since 'post-mortem-done' already exists
-    // (addEntry was called, but updateTask for tags was skipped)
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    // updateTask should be called once for postMortem data, but NOT for tags
+    // since 'post-mortem-done' already exists
+    expect(stores.taskStore.updateTask).toHaveBeenCalledTimes(1);
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+      postMortem: {
+        rootCause: 'other',
+        severity: 'minor',
+        responsibleAgents: [],
+        analysis: 'Unknown cause.',
+        promptImprovements: [],
+        processImprovements: [],
+        suggestedTasks: [],
+      },
+    });
   });
 });
 

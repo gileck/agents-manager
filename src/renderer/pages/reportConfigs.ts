@@ -12,7 +12,7 @@ export interface ReportPageConfig {
 
   /** Where to read the report content from */
   contentSource:
-    | { type: 'taskField'; field: 'plan' | 'technicalDesign' | 'investigationReport' }
+    | { type: 'taskField'; field: 'plan' | 'technicalDesign' | 'investigationReport' | 'postMortem' }
     | { type: 'contextEntry'; entryType: string };
 
   /** Which renderer to use for the left-panel content */
@@ -91,7 +91,7 @@ export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {
     label: 'Post-Mortem Report',
     tabLabel: 'Post-Mortem Report',
     tabKey: 'post-mortem',
-    contentSource: { type: 'contextEntry', entryType: 'post_mortem' },
+    contentSource: { type: 'taskField', field: 'postMortem' },
     renderer: 'post-mortem',
     agentRole: 'post-mortem-reviewer',
     entryType: 'post_mortem_feedback',

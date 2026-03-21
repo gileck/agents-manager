@@ -264,6 +264,27 @@ export interface PlanComment {
   addressed?: boolean;
 }
 
+// Post-mortem data types
+export interface PostMortemSuggestedTask {
+  title: string;
+  description?: string;
+  type?: string;
+  priority?: number;
+  size?: string;
+  complexity?: string;
+  startPhase?: string;
+}
+
+export interface PostMortemData {
+  rootCause?: string;
+  severity?: string;
+  responsibleAgents?: string[];
+  analysis?: string;
+  promptImprovements?: string[];
+  processImprovements?: string[];
+  suggestedTasks?: PostMortemSuggestedTask[];
+}
+
 // Task types
 export const VALID_TASK_TYPES = ['bug', 'feature', 'improvement'] as const;
 export type TaskType = typeof VALID_TASK_TYPES[number];
@@ -296,6 +317,7 @@ export interface Task {
   plan: string | null;
   investigationReport: string | null;
   technicalDesign: string | null;
+  postMortem: PostMortemData | null;
   debugInfo: string | null;
   subtasks: Subtask[];
   phases: ImplementationPhase[] | null;
@@ -349,6 +371,7 @@ export interface TaskUpdateInput {
   plan?: string | null;
   investigationReport?: string | null;
   technicalDesign?: string | null;
+  postMortem?: PostMortemData | null;
   debugInfo?: string | null;
   subtasks?: Subtask[];
   phases?: ImplementationPhase[] | null;

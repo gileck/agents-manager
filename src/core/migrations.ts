@@ -160,5 +160,22 @@ ALTER TABLE chat_messages ADD COLUMN total_cost_usd REAL`,
       name: '118_add_investigation_report_to_tasks',
       sql: `ALTER TABLE tasks ADD COLUMN investigation_report TEXT`,
     },
+    {
+      name: '119_add_post_mortem_to_tasks',
+      sql: `ALTER TABLE tasks ADD COLUMN post_mortem TEXT`,
+    },
+    {
+      name: '120_backfill_post_mortem_from_context_entries',
+      sql: `
+UPDATE tasks SET post_mortem = (
+  SELECT tce.data FROM task_context_entries tce
+  WHERE tce.task_id = tasks.id AND tce.entry_type = 'post_mortem'
+  ORDER BY tce.created_at DESC LIMIT 1
+)
+WHERE EXISTS (
+  SELECT 1 FROM task_context_entries tce
+  WHERE tce.task_id = tasks.id AND tce.entry_type = 'post_mortem'
+)`,
+    },
   ];
 }
