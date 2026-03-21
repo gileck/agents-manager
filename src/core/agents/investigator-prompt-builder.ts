@@ -30,6 +30,11 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
             items: { type: 'string' },
             description: 'Concrete fix steps that break down the suggested fix',
           },
+          sourceTaskIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Task IDs (UUIDs) that introduced the bug, identified via git tracing. Empty if not determinable.',
+          },
           ...getTaskEstimationFields(),
           ...getInteractiveFields(),
         },
@@ -85,6 +90,7 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
         '6. Suggest a concrete fix plan, including any tests that should be added or updated.',
         '7. Break the fix into subtasks.',
       );
+      ivrLines.push('', ...this.getSourceTaskIdentificationInstructions(invAmCli));
       ivrLines.push('', ...this.getReportStructureInstructions());
       prompt = ivrLines.join('\n');
     } else {
@@ -127,6 +133,7 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
           invLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
         }
       }
+      invLines.push('', ...this.getSourceTaskIdentificationInstructions(invAmCli));
       invLines.push('', ...this.getReportStructureInstructions());
       prompt = invLines.join('\n');
     }
@@ -139,6 +146,35 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
     }
 
     return prompt;
+  }
+
+  private getSourceTaskIdentificationInstructions(invAmCli: string): string[] {
+    return [
+      `## Source Task Identification`,
+      `After identifying the root cause, trace the defective code back to the task(s) that introduced it.`,
+      `Report ALL found task IDs in the \`sourceTaskIds\` field of your output. This enables automatic bug-to-task linking.`,
+      ``,
+      `### Strategy (try in order, stop when task IDs are found):`,
+      ``,
+      `**1. Primary — PR-based chain (most reliable):**`,
+      `   - Run \`git blame <file>\` on the defective lines to get the commit hash`,
+      `   - Check the commit message for a PR number: \`git log -1 --format=%s <commit>\` — look for \`(#<number>)\``,
+      `   - If PR number found: \`gh pr view <PR#> --json headRefName --jq .headRefName\``,
+      `   - Extract the task ID from the branch name (format: \`task/<taskId>\`)`,
+      ``,
+      `**2. Fallback — merge commit search:**`,
+      `   - \`git log --merges --grep="task/" --ancestry-path <commit>..HEAD --oneline -5\``,
+      `   - Look for merge commits that reference a \`task/\` branch name`,
+      ``,
+      `**3. Fallback — CLI task search:**`,
+      `   - \`${invAmCli} tasks list --search <keyword> --json\` to find tasks by title/description`,
+      `   - Match by \`branchName\` field to confirm the task owns the defective code`,
+      ``,
+      `**4. Fallback — branch contains (works for undeleted branches):**`,
+      `   - \`git branch -r --contains <commit>\` — look for \`task/<taskId>\` branches`,
+      ``,
+      `If none of the strategies yield a task ID, leave \`sourceTaskIds\` as an empty array.`,
+    ];
   }
 
   private getReportStructureInstructions(): string[] {
