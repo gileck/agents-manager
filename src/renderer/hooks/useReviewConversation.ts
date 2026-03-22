@@ -89,47 +89,10 @@ export function useReviewConversation(
       if (chunk === CHAT_COMPLETE_SENTINEL) {
         streamingRef.current = false;
         setIsStreaming(false);
-
-        // Extract assistant text from completed response and save as TaskContextEntry
-        window.api.chat.messages(sessionId)
-          .then((dbMessages) => {
-            // Find last assistant message
-            const lastAssistant = [...dbMessages].reverse().find(m => m.role === 'assistant');
-            if (!lastAssistant || !taskId) return;
-
-            // Extract plain text from structured messages
-            let responseText = lastAssistant.content;
-            try {
-              const parsed = JSON.parse(lastAssistant.content);
-              if (Array.isArray(parsed)) {
-                responseText = parsed
-                  .filter((m: AgentChatMessage) => m.type === 'assistant_text')
-                  .map((m: AgentChatMessage) => (m as { text: string }).text)
-                  .join('\n');
-              }
-            } catch {
-              // Expected for plain text content — responseText remains as the raw string.
-            }
-
-            if (responseText.trim()) {
-              window.api.tasks.addFeedback(taskId, {
-                entryType,
-                content: responseText.trim(),
-                source: agentRole,
-                agentRunId: sessionRef.current?.agentRunId ?? undefined,
-              }).then(() => {
-                onEntriesChangedRef.current();
-              }).catch((err: unknown) => {
-                reportError(err instanceof Error ? err : new Error(String(err)), 'Save agent response as context');
-              });
-            }
-          })
-          .catch((err: unknown) => {
-            reportError(err instanceof Error ? err : new Error(String(err)), 'Reload chat messages');
-          })
-          .finally(() => {
-            setStreamingMessages([]);
-          });
+        // Backend now saves the agent response as a TaskContextEntry.
+        // Just refetch entries and clear streaming state.
+        onEntriesChangedRef.current();
+        setStreamingMessages([]);
         return;
       }
 
@@ -149,7 +112,7 @@ export function useReviewConversation(
       unsubOutput();
       unsubMsg();
     };
-  }, [session, taskId, agentRole, entryType]);
+  }, [session, taskId, agentRole]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || !taskId) return;
