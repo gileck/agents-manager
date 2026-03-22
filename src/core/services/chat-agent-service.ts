@@ -5,6 +5,7 @@ import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
+import type { ITaskDocStore } from '../interfaces/task-doc-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks, SubagentDefinition, IAgentLib } from '../interfaces/agent-lib';
@@ -225,6 +226,7 @@ export class ChatAgentService {
     imageStorageDir?: string,
     private subscriptionRegistry?: AgentSubscriptionRegistry,
     private taskContextStore?: ITaskContextStore,
+    private taskDocStore?: ITaskDocStore,
   ) {
     this.imageStorageDir = imageStorageDir
       ?? path.join(process.env.HOME || os.homedir(), '.agents-manager', 'chat-images');
@@ -362,6 +364,17 @@ export class ChatAgentService {
       const project = await this.projectStore.getProject(task.projectId);
       if (!project) throw new Error(`Project not found for task: ${session.scopeId}`);
       const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+
+      // Hydrate docs from task_docs table (optional — non-fatal if store unavailable)
+      let docs;
+      if (this.taskDocStore) {
+        try {
+          docs = await this.taskDocStore.getByTaskId(task.id);
+        } catch (err) {
+          getAppLogger().warn('ChatAgentService', `Failed to hydrate task docs for scope: ${err instanceof Error ? err.message : String(err)}`, { taskId: task.id });
+        }
+      }
+
       return {
         scopeType: 'task',
         projectId: task.projectId,
@@ -375,6 +388,7 @@ export class ChatAgentService {
           assignee: task.assignee,
           plan: task.plan,
           technicalDesign: task.technicalDesign,
+          docs,
           pipelineName: pipeline?.name ?? task.pipelineId,
         },
       };

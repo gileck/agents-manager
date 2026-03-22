@@ -609,6 +609,16 @@ export class AgentService implements IAgentService {
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
 
+    // Hydrate task docs (plan, investigation report, technical design) from the task_docs table
+    if (this.taskDocStore) {
+      try {
+        context.docs = await this.taskDocStore.getByTaskId(taskId);
+      } catch (err) {
+        const docErr = err instanceof Error ? err.message : String(err);
+        getAppLogger().warn(`Agent:${agentType}`, `Failed to hydrate task docs: ${docErr}`, { taskId });
+      }
+    }
+
     // Look up agent definition by convention-based ID and pass modeConfig to context
     const projectDefaultEngine = context.project.config?.defaultAgentLib as string | undefined;
     let agentDefEngine = projectDefaultEngine || 'claude-code';

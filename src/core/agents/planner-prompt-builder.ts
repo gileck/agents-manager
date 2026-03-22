@@ -1,6 +1,7 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import { formatFeedbackForPrompt, getInteractiveFields, getInteractiveInstructions, getTaskEstimationFields, getTaskEstimationInstructions } from './prompt-utils';
+import { findDoc } from './doc-injection';
 
 const PLAN_HEADER_FORMAT = [
   '',
@@ -217,7 +218,10 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
     let prompt: string;
 
     if (mode === 'revision' && revisionReason === 'changes_requested') {
-      prompt = this.buildRevisionPrompt(context, task.title, desc, task.plan);
+      // Prefer plan from task_docs table, fall back to old task column
+      const planDoc = findDoc(context.docs, 'plan');
+      const existingPlan = planDoc?.content ?? task.plan;
+      prompt = this.buildRevisionPrompt(context, task.title, desc, existingPlan);
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
       prompt = this.buildResumePrompt(context, task.title, desc);
     } else {

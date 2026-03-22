@@ -6,6 +6,8 @@
  * passes it into ChatAgentService.send().
  */
 
+import type { TaskDoc } from '../../shared/types';
+import { getPhaseByDocType } from '../../shared/doc-phases';
 
 export interface SessionScope {
   scopeType: 'project' | 'task';
@@ -20,6 +22,8 @@ export interface SessionScope {
     assignee?: string | null;
     plan?: string | null;
     technicalDesign?: string | null;
+    /** Task document artifacts from the task_docs table. */
+    docs?: TaskDoc[];
     pipelineName: string;
   };
 }
@@ -166,8 +170,26 @@ function taskContextSection(
   if (task.description) lines.push(`- Description: ${task.description}`);
   if (task.priority !== undefined) lines.push(`- Priority: P${task.priority}`);
   if (task.assignee) lines.push(`- Assignee: ${task.assignee}`);
-  if (task.plan) lines.push(`\n### Plan\n${task.plan}`);
-  if (task.technicalDesign) lines.push(`\n### Technical Design\n${task.technicalDesign}`);
+
+  // Prefer doc summaries from task_docs table; fall back to full content from old task columns.
+  // Chat prompts use summaries to stay token-efficient — agents can use read_task_artifact for full content.
+  if (task.docs && task.docs.length > 0) {
+    for (const doc of task.docs) {
+      const phase = getPhaseByDocType(doc.type);
+      const title = phase?.docTitle ?? doc.type;
+      if (doc.summary) {
+        lines.push(`\n### ${title} (Summary)\n${doc.summary}`);
+      } else if (doc.content) {
+        // No summary available — include truncated content for context
+        const truncated = doc.content.length > 500 ? doc.content.slice(0, 500) + '...' : doc.content;
+        lines.push(`\n### ${title}\n${truncated}`);
+      }
+    }
+  } else {
+    // Fallback to old task columns during transition
+    if (task.plan) lines.push(`\n### Plan\n${task.plan}`);
+    if (task.technicalDesign) lines.push(`\n### Technical Design\n${task.technicalDesign}`);
+  }
 
   return lines.join('\n');
 }
