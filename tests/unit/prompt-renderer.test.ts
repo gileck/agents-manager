@@ -110,15 +110,24 @@ describe('PromptRenderer', () => {
   // Plan section rendering
   // ============================================
   describe('Plan section rendering', () => {
-    it('should include plan section when task has a plan', () => {
-      const ctx = createContext({ task: createTask({ plan: 'Step 1: Set up DB\nStep 2: Add API' }) });
+    it('should include plan section when docs contain a plan', () => {
+      const ctx = createContext({
+        docs: [{ id: 'doc-1', taskId: 'task-1', type: 'plan', content: 'Step 1: Set up DB\nStep 2: Add API', summary: null, createdAt: 0, updatedAt: 0 }],
+      });
       const result = renderer.render('{planSection}', ctx);
       expect(result).toContain('## Plan');
       expect(result).toContain('Step 1: Set up DB');
     });
 
-    it('should omit plan section when task has no plan', () => {
+    it('should omit plan section when no docs exist', () => {
       const result = renderer.render('{planSection}', createContext());
+      expect(result).not.toContain('## Plan');
+    });
+
+    it('should omit plan section when task has plan but no docs (deprecated field)', () => {
+      const ctx = createContext({ task: createTask({ plan: 'Old plan content' }) });
+      const result = renderer.render('{planSection}', ctx);
+      // No longer falls back to task.plan
       expect(result).not.toContain('## Plan');
     });
   });
@@ -233,15 +242,23 @@ describe('PromptRenderer', () => {
   // Technical design section
   // ============================================
   describe('Technical design section', () => {
-    it('should include technical design when present', () => {
-      const ctx = createContext({ task: createTask({ technicalDesign: 'Use microservices architecture' }) });
+    it('should include technical design when docs contain a design', () => {
+      const ctx = createContext({
+        docs: [{ id: 'doc-1', taskId: 'task-1', type: 'technical_design', content: 'Use microservices architecture', summary: null, createdAt: 0, updatedAt: 0 }],
+      });
       const result = renderer.render('{technicalDesignSection}', ctx);
       expect(result).toContain('## Technical Design');
       expect(result).toContain('Use microservices architecture');
     });
 
-    it('should omit technical design when not present', () => {
+    it('should omit technical design when no docs exist', () => {
       const result = renderer.render('{technicalDesignSection}', createContext());
+      expect(result).not.toContain('## Technical Design');
+    });
+
+    it('should omit technical design when task has field but no docs (deprecated field)', () => {
+      const ctx = createContext({ task: createTask({ technicalDesign: 'Old design' }) });
+      const result = renderer.render('{technicalDesignSection}', ctx);
       expect(result).not.toContain('## Technical Design');
     });
   });

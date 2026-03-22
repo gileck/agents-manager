@@ -145,10 +145,7 @@ export function TaskDetailPage() {
 
     const statusReviewPhase = task ? getPhaseByReviewStatus(task.status) : undefined;
     if (statusReviewPhase) {
-      const routeKey = statusReviewPhase.docType === 'investigation_report' ? 'investigation'
-        : statusReviewPhase.docType === 'technical_design' ? 'design'
-        : 'plan';
-      navigate(`/tasks/${id}/${routeKey}`);
+      navigate(`/tasks/${id}/${statusReviewPhase.routeKey}`);
     } else if (task?.status === 'pr_review' || task?.status === 'ready_to_merge') {
       setTab('implementation');
     }
@@ -750,6 +747,7 @@ export function TaskDetailPage() {
             transitions={transitions ?? []}
             transitioning={transitioning}
             onAction={handleFeedbackAction}
+            pipelineStatuses={pipeline?.statuses}
           />
         </TabsContent>
 

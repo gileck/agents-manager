@@ -386,8 +386,6 @@ export class ChatAgentService {
           description: task.description,
           priority: task.priority,
           assignee: task.assignee,
-          plan: task.plan,
-          technicalDesign: task.technicalDesign,
           docs,
           pipelineName: pipeline?.name ?? task.pipelineId,
         },

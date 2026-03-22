@@ -78,11 +78,9 @@ export class PromptRenderer {
   }
 
   private buildPlanSection(context: AgentContext): string {
-    // Prefer plan from task_docs table, fall back to old task column
     const planDoc = findDoc(context.docs, 'plan');
-    const planContent = planDoc?.content ?? context.task.plan;
-    if (planContent) {
-      return `\n## Plan\n${planContent}`;
+    if (planDoc?.content) {
+      return `\n## Plan\n${planDoc.content}`;
     }
     return '';
   }
@@ -123,11 +121,9 @@ export class PromptRenderer {
   }
 
   private buildTechnicalDesignSection(context: AgentContext): string {
-    // Prefer technical design from task_docs table, fall back to old task column
     const designDoc = findDoc(context.docs, 'technical_design');
-    const designContent = designDoc?.content ?? context.task.technicalDesign;
-    if (designContent) {
-      return `\n## Technical Design\n${designContent}`;
+    if (designDoc?.content) {
+      return `\n## Technical Design\n${designDoc.content}`;
     }
     return '';
   }

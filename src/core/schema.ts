@@ -234,11 +234,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   subtasks TEXT NOT NULL DEFAULT '[]',
-  plan TEXT,
-  investigation_report TEXT,
+  plan TEXT, -- DEPRECATED: use task_docs table instead. No longer actively written.
+  investigation_report TEXT, -- DEPRECATED: use task_docs table instead. No longer actively written.
   feature_id TEXT REFERENCES features(id),
   plan_comments TEXT NOT NULL DEFAULT '[]',
-  technical_design TEXT,
+  technical_design TEXT, -- DEPRECATED: use task_docs table instead. No longer actively written.
   technical_design_comments TEXT NOT NULL DEFAULT '[]',
   post_mortem TEXT,
   phases TEXT,

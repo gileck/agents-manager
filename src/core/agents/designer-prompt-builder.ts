@@ -59,18 +59,13 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
           ``,
           `Task: ${task.title}.${desc}`,
         );
-        // Prefer docs from task_docs table, fall back to old task columns
         const planDoc = findDoc(context.docs, 'plan');
         const designDoc = findDoc(context.docs, 'technical_design');
         if (planDoc) {
           tdrLines.push('', '## Plan', planDoc.content);
-        } else if (task.plan) {
-          tdrLines.push('', '## Plan', task.plan);
         }
         if (designDoc) {
           tdrLines.push('', '## Current Technical Design', designDoc.content);
-        } else if (task.technicalDesign) {
-          tdrLines.push('', '## Current Technical Design', task.technicalDesign);
         }
       }
       tdrLines.push(...formatFeedbackForPrompt(context.taskContext, ['design_feedback'], 'Admin Feedback on Design'));
@@ -106,18 +101,13 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
           ``,
           `Task: ${task.title}.${desc}`,
         );
-        // Prefer docs from task_docs table, fall back to old task columns
         const irPlanDoc = findDoc(context.docs, 'plan');
         const irDesignDoc = findDoc(context.docs, 'technical_design');
         if (irPlanDoc) {
           tdrLines.push('', '## Plan', irPlanDoc.content);
-        } else if (task.plan) {
-          tdrLines.push('', '## Plan', task.plan);
         }
         if (irDesignDoc) {
           tdrLines.push('', '## Previous Technical Design', irDesignDoc.content);
-        } else if (task.technicalDesign) {
-          tdrLines.push('', '## Previous Technical Design', task.technicalDesign);
         }
       }
       tdrLines.push(
@@ -145,12 +135,9 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
         ``,
         `Task: ${task.title}.${desc}`,
       ];
-      // Prefer plan from task_docs table, fall back to old task column
       const newPlanDoc = findDoc(context.docs, 'plan');
       if (newPlanDoc) {
         tdLines.push('', '## Plan', newPlanDoc.content);
-      } else if (task.plan) {
-        tdLines.push('', '## Plan', task.plan);
       }
       tdLines.push(...formatFeedbackForPrompt(context.taskContext, ['plan_feedback'], 'Plan Comments'));
       tdLines.push(

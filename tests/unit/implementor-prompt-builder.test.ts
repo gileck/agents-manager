@@ -160,7 +160,9 @@ describe('ImplementorPromptBuilder', () => {
     it('should include plan in new mode prompt', () => {
       const ctx = createContext({
         mode: 'new',
-        task: createTask({ plan: 'Step 1: Create auth module\nStep 2: Add routes' }),
+        docs: [
+          { id: 'doc-1', taskId: 'task-1', type: 'plan', content: 'Step 1: Create auth module\nStep 2: Add routes', summary: null, version: 1, createdAt: 1700000000000, updatedAt: 1700000000000 },
+        ],
       });
       const prompt = builder.buildPrompt(ctx);
       expect(prompt).toContain('Step 1: Create auth module');
@@ -243,7 +245,9 @@ describe('ImplementorPromptBuilder', () => {
     it('should include technical design in new mode prompt', () => {
       const ctx = createContext({
         mode: 'new',
-        task: createTask({ technicalDesign: 'Architecture: microservices' }),
+        docs: [
+          { id: 'doc-2', taskId: 'task-1', type: 'technical_design', content: 'Architecture: microservices', summary: 'Architecture: microservices', version: 1, createdAt: 1700000000000, updatedAt: 1700000000000 },
+        ],
       });
       const prompt = builder.buildPrompt(ctx);
       expect(prompt).toContain('Architecture: microservices');
