@@ -83,11 +83,9 @@ export class PostRunExtractor {
 
     if (reportContent) {
       onLog(`Extracting ${isInvestigator ? 'investigation report' : 'plan'} from structured output: hasContent=${!!reportContent}, hasSubtasks=${!!so?.subtasks}, subtaskCount=${so?.subtasks?.length ?? 0}, hasPhases=${!!so?.phases}, phaseCount=${so?.phases?.length ?? 0}`);
-      const updates: TaskUpdateInput = isInvestigator
-        ? { investigationReport: reportContent }
-        : { plan: reportContent };
 
-      // Check for multi-phase output (planner only)
+      // Write subtasks/phases to task store (non-doc fields)
+      const updates: TaskUpdateInput = {};
       if (!isInvestigator && so?.phases && so.phases.length > 1) {
         const phases: ImplementationPhase[] = so.phases.map((p, idx) => ({
           id: `phase-${idx + 1}`,
@@ -101,9 +99,11 @@ export class PostRunExtractor {
       } else if (so?.subtasks && so.subtasks.length > 0) {
         updates.subtasks = so.subtasks.map(name => ({ name, status: 'open' as const }));
       }
-      await this.taskStore.updateTask(taskId, updates);
+      if (Object.keys(updates).length > 0) {
+        await this.taskStore.updateTask(taskId, updates);
+      }
 
-      // Dual-write to task_docs table
+      // Primary write to task_docs table
       await this.upsertTaskDoc(
         taskId,
         isInvestigator ? 'investigation_report' : 'plan',
@@ -115,13 +115,8 @@ export class PostRunExtractor {
       // Fallback: parse raw output if structured output unavailable
       onLog('Structured output unavailable, falling back to raw output parsing');
       const fallbackContent = this.parseRawPlan(result.output);
-      if (isInvestigator) {
-        await this.taskStore.updateTask(taskId, { investigationReport: fallbackContent });
-      } else {
-        await this.taskStore.updateTask(taskId, { plan: fallbackContent });
-      }
 
-      // Dual-write fallback content to task_docs table
+      // Write fallback content to task_docs table
       if (fallbackContent) {
         await this.upsertTaskDoc(
           taskId,
@@ -184,17 +179,14 @@ export class PostRunExtractor {
     const so = result.structuredOutput as { technicalDesign?: string; designSummary?: string } | undefined;
     if (so?.technicalDesign) {
       onLog(`Extracting technical design from structured output: hasDesign=${!!so.technicalDesign}`);
-      await this.taskStore.updateTask(taskId, { technicalDesign: so.technicalDesign });
 
-      // Dual-write to task_docs table
+      // Primary write to task_docs table
       await this.upsertTaskDoc(taskId, 'technical_design', so.technicalDesign, so?.designSummary ?? null, onLog);
     } else {
       // Fallback: store raw output as technical design (only if non-empty to avoid overwriting valid design on bad runs)
       const fallback = this.parseRawPlan(result.output);
       if (fallback) {
-        await this.taskStore.updateTask(taskId, { technicalDesign: fallback });
-
-        // Dual-write fallback content to task_docs table
+        // Write fallback content to task_docs table
         await this.upsertTaskDoc(taskId, 'technical_design', fallback, null, onLog);
       }
     }
@@ -681,7 +673,7 @@ export class PostRunExtractor {
     }
   }
 
-  // ------- Task doc dual-write helper -------
+  // ------- Task doc primary write helper -------
 
   private async upsertTaskDoc(
     taskId: string,
@@ -694,7 +686,7 @@ export class PostRunExtractor {
     try {
       await this.taskDocStore.upsert({ taskId, type, content, summary });
     } catch (err) {
-      // Non-fatal — old column write already succeeded; don't block pipeline on task_docs failure
+      // Non-fatal — don't block pipeline on task_docs failure
       onLog(`Warning: failed to upsert task doc (type=${type}): ${err instanceof Error ? err.message : String(err)}`);
     }
   }

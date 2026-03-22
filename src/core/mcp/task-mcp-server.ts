@@ -3,6 +3,7 @@ import { createApiClient } from '../../client/api-client';
 import type { TaskType, TaskUpdateInput, DocArtifactType } from '../../shared/types';
 import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
 import type { AgentSubscriptionRegistry } from '../services/agent-subscription-registry';
+import { DOC_PHASES } from '../../shared/doc-phases';
 
 type CallToolResult = {
   content: Array<{ type: 'text'; text: string }>;
@@ -216,15 +217,18 @@ export async function createTaskMcpServer(
       }): Promise<CallToolResult> => {
         try {
           const taskId = await resolveTaskId(api, args.taskId);
-          const { taskId: _taskId, autoNotify: _autoNotify, ...updateFields } = args;
-          const task = await api.tasks.update(taskId, updateFields as TaskUpdateInput);
 
-          // Dual-write doc fields to task_docs table for backward compatibility
+          // Intercept doc fields — route exclusively to task_docs table
           const DOC_FIELD_MAP: Array<{ field: 'plan' | 'investigationReport' | 'technicalDesign'; docType: DocArtifactType }> = [
             { field: 'plan', docType: 'plan' },
             { field: 'investigationReport', docType: 'investigation_report' },
             { field: 'technicalDesign', docType: 'technical_design' },
           ];
+
+          const { taskId: _taskId, autoNotify: _autoNotify, plan: _plan, investigationReport: _ir, technicalDesign: _td, ...updateFields } = args;
+          const task = await api.tasks.update(taskId, updateFields as TaskUpdateInput);
+
+          // Write doc fields to task_docs table only
           for (const { field, docType } of DOC_FIELD_MAP) {
             const value = args[field];
             if (value !== undefined) {
@@ -235,8 +239,9 @@ export async function createTaskMcpServer(
                 } else {
                   await api.taskDocs.upsert(taskId, docType, value);
                 }
-              } catch {
-                // Non-fatal — old column write already succeeded
+              } catch (err) {
+                // eslint-disable-next-line no-console
+                console.warn(`[update_task] write to task_docs failed (type=${docType}):`, err);
               }
             }
           }
@@ -513,7 +518,7 @@ export async function createTaskMcpServer(
         'when only a summary was provided in the agent prompt context.',
       inputSchema: {
         taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
-        type: z.enum(['investigation_report', 'plan', 'technical_design']).describe(
+        type: z.enum(DOC_PHASES.map(p => p.docType) as [string, ...string[]]).describe(
           'Document type to retrieve',
         ),
       },

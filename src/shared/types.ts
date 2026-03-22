@@ -315,8 +315,11 @@ export interface Task {
   assignee: string | null;
   prLink: string | null;
   branchName: string | null;
+  /** @deprecated Use task_docs table (TaskDoc) instead. No longer actively written. */
   plan: string | null;
+  /** @deprecated Use task_docs table (TaskDoc) instead. No longer actively written. */
   investigationReport: string | null;
+  /** @deprecated Use task_docs table (TaskDoc) instead. No longer actively written. */
   technicalDesign: string | null;
   postMortem: PostMortemData | null;
   debugInfo: string | null;
@@ -369,8 +372,11 @@ export interface TaskUpdateInput {
   assignee?: string | null;
   prLink?: string | null;
   branchName?: string | null;
+  /** @deprecated Use task_docs table (TaskDoc) instead. No longer actively written. */
   plan?: string | null;
+  /** @deprecated Use task_docs table (TaskDoc) instead. No longer actively written. */
   investigationReport?: string | null;
+  /** @deprecated Use task_docs table (TaskDoc) instead. No longer actively written. */
   technicalDesign?: string | null;
   postMortem?: PostMortemData | null;
   debugInfo?: string | null;

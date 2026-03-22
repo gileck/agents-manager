@@ -20,8 +20,6 @@ export interface SessionScope {
     description?: string | null;
     priority?: number;
     assignee?: string | null;
-    plan?: string | null;
-    technicalDesign?: string | null;
     /** Task document artifacts from the task_docs table. */
     docs?: TaskDoc[];
     pipelineName: string;
@@ -171,7 +169,7 @@ function taskContextSection(
   if (task.priority !== undefined) lines.push(`- Priority: P${task.priority}`);
   if (task.assignee) lines.push(`- Assignee: ${task.assignee}`);
 
-  // Prefer doc summaries from task_docs table; fall back to full content from old task columns.
+  // Include doc summaries from task_docs table.
   // Chat prompts use summaries to stay token-efficient — agents can use read_task_artifact for full content.
   if (task.docs && task.docs.length > 0) {
     for (const doc of task.docs) {
@@ -185,10 +183,6 @@ function taskContextSection(
         lines.push(`\n### ${title}\n${truncated}`);
       }
     }
-  } else {
-    // Fallback to old task columns during transition
-    if (task.plan) lines.push(`\n### Plan\n${task.plan}`);
-    if (task.technicalDesign) lines.push(`\n### Technical Design\n${task.technicalDesign}`);
   }
 
   return lines.join('\n');

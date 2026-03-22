@@ -218,10 +218,8 @@ export class PlannerPromptBuilder extends BaseAgentPromptBuilder {
     let prompt: string;
 
     if (mode === 'revision' && revisionReason === 'changes_requested') {
-      // Prefer plan from task_docs table, fall back to old task column
       const planDoc = findDoc(context.docs, 'plan');
-      const existingPlan = planDoc?.content ?? task.plan;
-      prompt = this.buildRevisionPrompt(context, task.title, desc, existingPlan);
+      prompt = this.buildRevisionPrompt(context, task.title, desc, planDoc?.content ?? null);
     } else if (mode === 'revision' && revisionReason === 'info_provided') {
       prompt = this.buildResumePrompt(context, task.title, desc);
     } else {

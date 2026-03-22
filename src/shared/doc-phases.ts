@@ -14,6 +14,8 @@ export interface DocPhaseEntry {
   activeStatus: string;
   reviewStatus: string;
   feedbackType: string;
+  /** Route key used in the UI URL path (e.g. /tasks/:id/:routeKey). */
+  routeKey: string;
 }
 
 export const DOC_PHASES: readonly DocPhaseEntry[] = [
@@ -24,6 +26,7 @@ export const DOC_PHASES: readonly DocPhaseEntry[] = [
     activeStatus: 'investigating',
     reviewStatus: 'investigation_review',
     feedbackType: 'investigation_feedback',
+    routeKey: 'investigation',
   },
   {
     agentType: 'planner',
@@ -32,6 +35,7 @@ export const DOC_PHASES: readonly DocPhaseEntry[] = [
     activeStatus: 'planning',
     reviewStatus: 'plan_review',
     feedbackType: 'plan_feedback',
+    routeKey: 'plan',
   },
   {
     agentType: 'designer',
@@ -40,6 +44,7 @@ export const DOC_PHASES: readonly DocPhaseEntry[] = [
     activeStatus: 'designing',
     reviewStatus: 'design_review',
     feedbackType: 'design_feedback',
+    routeKey: 'design',
   },
 ] as const;
 
@@ -71,4 +76,8 @@ export function getDocTypeForAgent(agentType: string): DocArtifactType | undefin
 
 export function getFeedbackTypeForAgent(agentType: string): string | undefined {
   return getPhaseByAgentType(agentType)?.feedbackType;
+}
+
+export function getRouteKeyForDocType(docType: DocArtifactType): string | undefined {
+  return getPhaseByDocType(docType)?.routeKey;
 }

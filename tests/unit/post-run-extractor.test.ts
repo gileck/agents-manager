@@ -585,8 +585,14 @@ describe('PostRunExtractor.extractPlan', () => {
 
     await extractor.extractPlan('task-1', result, 'investigator', onLog);
 
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
-      investigationReport: '# Investigation\n\nFindings here.',
+    // No subtasks/phases, so updateTask should NOT be called
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    // Doc should be written to taskDocStore
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'investigation_report',
+      content: '# Investigation\n\nFindings here.',
+      summary: null,
     });
   });
 
@@ -602,8 +608,14 @@ describe('PostRunExtractor.extractPlan', () => {
 
     await extractor.extractPlan('task-1', result, 'investigator', onLog);
 
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
-      investigationReport: '# Investigation via plan field\n\nBackward compat.',
+    // No subtasks/phases, so updateTask should NOT be called
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    // Doc should be written to taskDocStore
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'investigation_report',
+      content: '# Investigation via plan field\n\nBackward compat.',
+      summary: null,
     });
   });
 
@@ -620,12 +632,23 @@ describe('PostRunExtractor.extractPlan', () => {
 
     await extractor.extractPlan('task-1', result, 'planner', onLog);
 
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', expect.objectContaining({
-      plan: '# Plan\n\nImplementation steps.',
-    }));
-    // Should NOT have set investigationReport
+    // updateTask should be called with subtasks only (not plan)
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+      subtasks: [
+        { name: 'Step 1', status: 'open' },
+        { name: 'Step 2', status: 'open' },
+      ],
+    });
     const updateCall = (stores.taskStore.updateTask as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(updateCall).not.toHaveProperty('plan');
     expect(updateCall).not.toHaveProperty('investigationReport');
+    // Doc should be written to taskDocStore
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'plan',
+      content: '# Plan\n\nImplementation steps.',
+      summary: null,
+    });
   });
 
   it('should use investigationReport fallback path for investigator when no structured output', async () => {
@@ -637,8 +660,14 @@ describe('PostRunExtractor.extractPlan', () => {
 
     await extractor.extractPlan('task-1', result, 'investigator', onLog);
 
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
-      investigationReport: 'Raw investigation output here.',
+    // No subtasks/phases in fallback, so updateTask should NOT be called
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    // Doc should be written to taskDocStore
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'investigation_report',
+      content: 'Raw investigation output here.',
+      summary: null,
     });
   });
 
@@ -651,8 +680,14 @@ describe('PostRunExtractor.extractPlan', () => {
 
     await extractor.extractPlan('task-1', result, 'planner', onLog);
 
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
-      plan: 'Raw plan output here.',
+    // No subtasks parsed from raw output, so updateTask should NOT be called
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    // Doc should be written to taskDocStore
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'plan',
+      content: 'Raw plan output here.',
+      summary: null,
     });
   });
 
@@ -735,9 +770,15 @@ describe('PostRunExtractor.extractPlan', () => {
 
     await extractor.extractPlan('task-1', result, 'investigator', onLog);
 
-    const updateCall = (stores.taskStore.updateTask as ReturnType<typeof vi.fn>).mock.calls[0][1];
-    expect(updateCall).toEqual({ investigationReport: '# Report' });
-    expect(updateCall).not.toHaveProperty('phases');
+    // Investigator ignores phases — no subtasks/phases, so updateTask should NOT be called
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    // Doc should be written to taskDocStore
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'investigation_report',
+      content: '# Report',
+      summary: null,
+    });
   });
 });
 
@@ -866,11 +907,12 @@ describe('PostRunExtractor dual-write to task_docs', () => {
       },
     };
 
-    // Should not throw — dual-write failure is non-fatal
+    // Should not throw — task_docs failure is non-fatal
     await expect(extractor.extractPlan('task-1', result, 'planner', onLog)).resolves.toBeUndefined();
 
-    // Old column write should still succeed
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', expect.objectContaining({
+    // task_docs is the primary write — old column should NOT be written
+    // (no subtasks/phases, so updateTask should not be called at all)
+    expect(stores.taskStore.updateTask).not.toHaveBeenCalledWith('task-1', expect.objectContaining({
       plan: '# Plan',
     }));
 
@@ -894,8 +936,6 @@ describe('PostRunExtractor dual-write to task_docs', () => {
 
     await extractorWithoutDocs.extractPlan('task-1', result, 'planner', onLog);
 
-    // Old column write should work
-    expect(stores.taskStore.updateTask).toHaveBeenCalled();
     // taskDocStore should NOT be called since it wasn't provided
     expect(stores.taskDocStore.upsert).not.toHaveBeenCalled();
   });

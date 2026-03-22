@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { PlanMarkdown } from '../task-detail/PlanMarkdown';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { DOC_PHASES, getPhaseByDocType, getPhaseByReviewStatus } from '../../../shared/doc-phases';
-import type { Task, TaskDoc, TaskContextEntry, Transition, DocArtifactType } from '../../../shared/types';
+import type { Task, TaskDoc, TaskContextEntry, Transition, DocArtifactType, PipelineStatus } from '../../../shared/types';
 
 interface DocsPanelProps {
   task: Task;
@@ -13,6 +13,8 @@ interface DocsPanelProps {
   transitions: Transition[];
   transitioning: string | null;
   onAction: (toStatus: string, comment: string, feedbackType: string) => Promise<void>;
+  /** Pipeline statuses for computing the "Approved" badge. */
+  pipelineStatuses?: PipelineStatus[];
 }
 
 export function DocsPanel({
@@ -22,6 +24,7 @@ export function DocsPanel({
   transitions,
   transitioning,
   onAction,
+  pipelineStatuses,
 }: DocsPanelProps) {
   const navigate = useNavigate();
 
@@ -77,6 +80,16 @@ export function DocsPanel({
           const isInReview = task.status === phase.reviewStatus;
           const isSelected = selectedType === phase.docType;
 
+          // Determine if this doc has been approved: task status is past the review status in pipeline order
+          let isApproved = false;
+          if (hasContent && !isInReview && pipelineStatuses) {
+            const reviewIdx = pipelineStatuses.findIndex(s => s.name === phase.reviewStatus);
+            const currentIdx = pipelineStatuses.findIndex(s => s.name === task.status);
+            if (reviewIdx >= 0 && currentIdx > reviewIdx) {
+              isApproved = true;
+            }
+          }
+
           return (
             <button
               key={phase.docType}
@@ -120,6 +133,19 @@ export function DocsPanel({
                   Review
                 </span>
               )}
+              {isApproved && (
+                <span style={{
+                  fontSize: 10,
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(63,185,80,0.1)',
+                  color: 'rgb(63,185,80)',
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}>
+                  Approved
+                </span>
+              )}
             </button>
           );
         })}
@@ -135,7 +161,7 @@ export function DocsPanel({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(`/tasks/${task.id}/${selectedPhase.docType === 'investigation_report' ? 'investigation' : selectedPhase.docType === 'technical_design' ? 'design' : 'plan'}`)}
+                onClick={() => navigate(`/tasks/${task.id}/${selectedPhase.routeKey}`)}
               >
                 Open Review
               </Button>
