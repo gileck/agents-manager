@@ -254,6 +254,7 @@ export class AgentService implements IAgentService {
       taskBranch = `task/${taskId}/integration`;
       const gitOpsRoot = this.createGitOps(projectPath);
       await gitOpsRoot.fetch('origin');
+      await this.cleanConflictingParentRefs(gitOpsRoot, taskBranch, taskId);
       try {
         await gitOpsRoot.createBranchRef(taskBranch, 'origin/main');
       } catch (err) {
@@ -288,6 +289,11 @@ export class AgentService implements IAgentService {
 
     let worktree = await worktreeManager.get(taskId);
     if (!worktree) {
+      if (multiPhase) {
+        // Clean refs that would conflict with hierarchical branch creation (e.g. task/abc blocking task/abc/phase-1)
+        const gitOpsForClean = this.createGitOps(projectPath);
+        await this.cleanConflictingParentRefs(gitOpsForClean, branch, taskId);
+      }
       worktree = await worktreeManager.create(branch, taskId, baseBranch);
       await this.taskEventLog.log({
         taskId,
@@ -313,6 +319,11 @@ export class AgentService implements IAgentService {
       // recording use the correct branch — not the stale one left behind.
       if (worktree.branch !== branch) {
         const gitOps = this.createGitOps(worktree.path);
+        if (multiPhase) {
+          // Clean refs that would conflict with hierarchical branch creation (uses root gitOps since refs are repo-global)
+          const gitOpsForClean = this.createGitOps(projectPath);
+          await this.cleanConflictingParentRefs(gitOpsForClean, branch, taskId);
+        }
         try {
           await gitOps.createBranch(branch, baseBranch ?? 'origin/main');
         } catch (err) {
@@ -1323,6 +1334,50 @@ export class AgentService implements IAgentService {
       }
     } catch {
       // Worktree may not exist — safe to ignore
+    }
+  }
+
+  /**
+   * Delete any local branch refs that would conflict with creating a hierarchical branch.
+   * Git's ref storage treats refs as a filesystem tree — `refs/heads/task/abc` cannot exist
+   * as both a leaf ref (branch) and a directory (parent of `task/abc/integration`).
+   * This method checks all parent path segments of `branch` and removes any that exist
+   * as leaf refs, preventing "cannot lock ref" errors.
+   */
+  private async cleanConflictingParentRefs(
+    gitOps: import('../interfaces/git-ops').IGitOps,
+    branch: string,
+    taskId: string,
+  ): Promise<void> {
+    const segments = branch.split('/');
+    // Check all parent prefixes (e.g. for "task/abc/integration" → ["task", "task/abc"])
+    for (let i = 1; i < segments.length; i++) {
+      const parentRef = segments.slice(0, i).join('/');
+      try {
+        const exists = await gitOps.refExists(parentRef);
+        if (exists) {
+          await gitOps.deleteLocalBranch(parentRef);
+          await this.taskEventLog.log({
+            taskId,
+            category: 'git',
+            severity: 'warning',
+            message: `Deleted conflicting branch ref "${parentRef}" (stale artifact from previous run) to allow creation of "${branch}"`,
+            data: { deletedRef: parentRef, targetBranch: branch },
+          });
+        }
+      } catch (err) {
+        // Ignore race-condition "not found" errors (another process may have deleted it)
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/not found|does not exist/.test(msg)) continue;
+        // Log but don't throw — the subsequent createBranchRef will produce the real error
+        await this.taskEventLog.log({
+          taskId,
+          category: 'git',
+          severity: 'warning',
+          message: `Failed to clean conflicting ref "${parentRef}": ${msg}`,
+          data: { parentRef, targetBranch: branch, error: msg },
+        });
+      }
     }
   }
 

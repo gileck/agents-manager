@@ -138,6 +138,17 @@ export class StubGitOps implements IGitOps {
     return this.revParseOverride ?? 'stub-rev-parse';
   }
 
+  async refExists(branch: string): Promise<boolean> {
+    this.throwIfConfigured('refExists');
+    return this.branches.includes(branch);
+  }
+
+  async deleteLocalBranch(name: string): Promise<void> {
+    this.throwIfConfigured('deleteLocalBranch');
+    const idx = this.branches.indexOf(name);
+    if (idx >= 0) this.branches.splice(idx, 1);
+  }
+
   async getCommitDetail(hash: string): Promise<GitCommitDetail> {
     const commit = this.commits.find((c) => c.hash === hash);
     return {

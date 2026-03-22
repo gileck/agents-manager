@@ -268,4 +268,37 @@ describe('LocalGitOps', () => {
       ]);
     });
   });
+
+  describe('refExists()', () => {
+    it('returns true when show-ref succeeds', async () => {
+      const calls: string[][] = [];
+      execFileHandler = (_cmd, args) => { calls.push(args); return 'abc123 refs/heads/task/abc\n'; };
+
+      const result = await ops.refExists('task/abc');
+
+      expect(result).toBe(true);
+      expect(calls[0]).toEqual(['show-ref', '--verify', 'refs/heads/task/abc']);
+    });
+
+    it('returns false when show-ref fails (ref not found)', async () => {
+      execFileHandler = () => {
+        throw new Error('fatal: not a valid ref');
+      };
+
+      const result = await ops.refExists('task/nonexistent');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('deleteLocalBranch()', () => {
+    it('calls git branch -D with the branch name', async () => {
+      const calls: string[][] = [];
+      execFileHandler = (_cmd, args) => { calls.push(args); return ''; };
+
+      await ops.deleteLocalBranch('task/abc');
+
+      expect(calls[0]).toEqual(['branch', '-D', 'task/abc']);
+    });
+  });
 });

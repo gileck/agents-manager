@@ -83,6 +83,33 @@ describe('LocalWorktreeManager', () => {
       ]);
     });
 
+    it('deletes conflicting ref and retries when "cannot lock ref" error occurs', async () => {
+      const gitCalls: string[][] = [];
+      let firstAttempt = true;
+      execFileHandler = (_cmd, args) => {
+        gitCalls.push(args);
+        if (args[0] === 'worktree' && args[1] === 'add' && args[2] === '-b') {
+          if (firstAttempt) {
+            firstAttempt = false;
+            throw new Error(
+              "fatal: cannot lock ref 'refs/heads/task/abc/phase-1': " +
+              "'refs/heads/task/abc' exists; cannot create 'refs/heads/task/abc/phase-1'"
+            );
+          }
+        }
+        return '';
+      };
+      mockedFs.existsSync.mockReturnValue(false);
+
+      const result = await manager.create('task/abc/phase-1', 'abc');
+
+      expect(firstAttempt).toBe(false);
+      expect(result.branch).toBe('task/abc/phase-1');
+      // Verify it deleted the conflicting ref
+      const branchDeleteCall = gitCalls.find(c => c[0] === 'branch' && c[1] === '-D');
+      expect(branchDeleteCall).toEqual(['branch', '-D', 'task/abc']);
+    });
+
     it('retries without -b when branch already exists', async () => {
       let firstAttempt = true;
       execFileHandler = (_cmd, args) => {
