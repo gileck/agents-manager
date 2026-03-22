@@ -13,7 +13,7 @@ import { useTask } from '../hooks/useTasks';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { reportError } from '../lib/error-handler';
-import type { Transition, TaskContextEntry } from '../../shared/types';
+import type { Transition, TaskContextEntry, TaskDoc } from '../../shared/types';
 import type { PostMortemData } from '../components/reports/PostMortemReport';
 import type { ReviewData } from '../components/reports/WorkflowReviewReport';
 import type { ReportPageConfig } from './reportConfigs';
@@ -42,13 +42,31 @@ export function ReportPage({ config }: ReportPageProps) {
     [id],
   );
 
+  // Fetch task doc when contentSource is taskDoc
+  const isTaskDocSource = config.contentSource.type === 'taskDoc';
+  const taskDocType = isTaskDocSource ? (config.contentSource as { type: 'taskDoc'; docType: string }).docType : null;
+  const { data: taskDoc } = useIpc<TaskDoc | null>(
+    () => (id && taskDocType) ? window.api.taskDocs.get(id, taskDocType as import('../../shared/types').DocArtifactType) : Promise.resolve(null),
+    [id, taskDocType, task?.status],
+  );
+
   // ─── Resolve content based on config ──────────────────────────────────────
 
   let content: string | null = null;
   let data: unknown = null;
   let contextEntryCreatedAt: number | undefined;
 
-  if (config.contentSource.type === 'taskField') {
+  if (config.contentSource.type === 'taskDoc') {
+    // Read from task_docs table, with fallback to old task column
+    content = taskDoc?.content ?? null;
+    if (!content && task) {
+      // Fallback to old columns during transition
+      const docType = (config.contentSource as { type: 'taskDoc'; docType: string }).docType;
+      if (docType === 'plan') content = task.plan ?? null;
+      else if (docType === 'technical_design') content = task.technicalDesign ?? null;
+      else if (docType === 'investigation_report') content = task.investigationReport ?? null;
+    }
+  } else if (config.contentSource.type === 'taskField') {
     const fieldValue = task ? task[config.contentSource.field] : null;
     // postMortem is an object (PostMortemData); other fields are strings
     if (typeof fieldValue === 'object' && fieldValue !== null) {
