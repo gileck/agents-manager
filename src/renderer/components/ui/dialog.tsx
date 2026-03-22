@@ -69,17 +69,19 @@ function DialogContent({ children, className, style }: DialogContentProps) {
   React.useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        event.stopImmediatePropagation();
+        event.preventDefault();
         onOpenChange(false);
       }
     }
 
     if (open) {
-      document.addEventListener('keydown', handleEscape);
+      document.addEventListener('keydown', handleEscape, true);
       document.body.style.overflow = 'hidden';
     }
 
     return () => {
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('keydown', handleEscape, true);
       document.body.style.overflow = '';
     };
   }, [open, onOpenChange]);
