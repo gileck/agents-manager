@@ -728,6 +728,68 @@ describe('ChatAgentService', () => {
       }
     });
 
+    it('retries as new message when injection channel closes before agent cleanup (race condition fix)', async () => {
+      // This test needs real timers because the fix polls with setTimeout
+      vi.useRealTimers();
+
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
+
+      // Create a mock lib that simulates the race condition:
+      // - execute() holds open initially (agent appears running)
+      // - injectMessage() returns false (channel closed — SDK finished but finally not yet run)
+      // - After a brief delay the execute() resolves (simulating finally block cleanup)
+      let resolveExecute: ((result: { exitCode: number; output: string; model: string }) => void) | null = null;
+      let secondExecuteCall = false;
+      const lib: IAgentLib = {
+        name: 'claude-code',
+        supportedFeatures: () => ({ images: true, hooks: true, thinking: true, nativeResume: true, streamingInput: true }),
+        getDefaultModel: () => 'claude-opus-4-6',
+        getSupportedModels: () => [{ value: 'claude-opus-4-6', label: 'Claude Opus 4.6' }],
+        execute: vi.fn().mockImplementation((_runId: string, _options: unknown, callbacks: { onOutput?: (s: string) => void; onMessage?: (m: AgentChatMessage) => void }) => {
+          if (secondExecuteCall) {
+            // Second call (retry): resolve immediately
+            callbacks.onOutput?.('Retry response\n');
+            callbacks.onMessage?.({ type: 'assistant_text', text: 'Retry response', timestamp: Date.now() });
+            return Promise.resolve({ exitCode: 0, output: 'Retry response', model: 'claude-opus-4-6' });
+          }
+          callbacks.onOutput?.('Initial response\n');
+          callbacks.onMessage?.({ type: 'assistant_text', text: 'Initial response', timestamp: Date.now() });
+          return new Promise((resolve) => { resolveExecute = resolve; });
+        }),
+        stop: vi.fn().mockResolvedValue(undefined),
+        isAvailable: vi.fn().mockResolvedValue(true),
+        getTelemetry: vi.fn().mockReturnValue(null),
+        // Always return false to simulate channel-closed race condition
+        injectMessage: vi.fn().mockReturnValue(false),
+      };
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      // Start the agent (first execute call — holds open)
+      const firstResult = await service.send('session-1', 'First message', { systemPrompt: '' });
+
+      // Resolve the first execute after a brief delay to simulate the
+      // finally block completing during the send() polling wait.
+      setTimeout(() => {
+        secondExecuteCall = true;
+        resolveExecute?.({ exitCode: 0, output: 'Done', model: 'claude-opus-4-6' });
+      }, 200);
+
+      // This should NOT throw — it should wait for cleanup and retry as a fresh send
+      const retryResult = await service.send('session-1', 'Follow-up message', { systemPrompt: '' });
+
+      // The result should be a normal (non-injected) send result
+      expect(retryResult.injected).toBeUndefined();
+      expect(retryResult.userMessage).toBeDefined();
+      expect(retryResult.sessionId).toBe('session-1');
+
+      // Wait for completions
+      await firstResult.completion;
+      await retryResult.completion;
+
+      // Restore fake timers for the rest of the suite
+      vi.useFakeTimers();
+    });
+
     it('restores turnMessages on intermediate persistence failure so finally block still persists them', async () => {
       mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
       const { lib, resolve } = createHoldingMockLib();

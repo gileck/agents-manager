@@ -487,8 +487,26 @@ export class ChatAgentService {
         // Attempt injection BEFORE persisting to DB to avoid orphaned messages
         const injected = lib.injectMessage(runId, message, injectionImages);
         if (!injected) {
-          getAppLogger().warn('ChatAgentService', `Injection failed (channel closed race) for session ${sessionId}`);
-          throw new Error('Message injection failed — the agent may have just finished. Please try again.');
+          // The channel was closed (SDK finished processing its result) but the
+          // runAgent() finally block hasn't executed yet, so runningControllers
+          // still contains the session. Wait for cleanup to complete, then retry
+          // as a fresh message turn instead of showing a confusing error.
+          getAppLogger().info('ChatAgentService', `Injection channel closed for session ${sessionId}, waiting for agent cleanup then retrying as new message`);
+          const maxWaitMs = 5000;
+          const waitStart = Date.now();
+          while (this.runningControllers.has(sessionId) && Date.now() - waitStart < maxWaitMs) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+
+          if (this.runningControllers.has(sessionId)) {
+            // Agent is genuinely still running but channel was somehow closed — unexpected
+            getAppLogger().warn('ChatAgentService', `Agent still running after channel close wait for session ${sessionId}`);
+            throw new Error('Message injection failed — the agent may have just finished. Please try again.');
+          }
+
+          // Agent finished — retry as a fresh message (normal send path)
+          getAppLogger().info('ChatAgentService', `Agent finished, retrying send as new message for session ${sessionId}`);
+          return this.send(sessionId, message, options);
         }
 
         // Persist any assistant messages accumulated before this injection so they
