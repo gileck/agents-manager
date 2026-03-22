@@ -230,10 +230,10 @@ export function TabBar() {
               title={`${tab.label}${idx < 9 ? ` (${formatCombo(`CmdOrCtrl+${idx + 1}`)})` : ''}`}
               className={cn(
                 'group relative flex items-center gap-1.5 h-full text-xs font-medium whitespace-nowrap cursor-pointer select-none border-r border-r-border/30',
-                tab.isPinned ? 'px-2.5' : 'pl-3 pr-7',
+                tab.isPinned ? 'pl-3 pr-2.5' : 'pl-3 pr-7',
                 isActive
                   ? 'bg-background text-foreground border-t-2 border-t-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 border-t-2 border-t-transparent',
+                  : `text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 border-t-2 ${tab.isPinned ? 'border-t-primary' : 'border-t-transparent'}`,
                 isDragOver && 'bg-accent/40'
               )}
             >
@@ -244,7 +244,8 @@ export function TabBar() {
               ) : (
                 Icon && <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
               )}
-              {!tab.isPinned && <span className="truncate max-w-[150px]">{tab.label}</span>}
+              {tab.isPinned && <Pin className="h-3 w-3 shrink-0 opacity-50" />}
+              <span className="truncate max-w-[150px]">{tab.label}</span>
 
               {/* Close button — absolutely positioned so it never shifts layout */}
               {!tab.isPinned && (
