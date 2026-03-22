@@ -158,7 +158,10 @@ export function TaskListView() {
       const task = await doCreateTask();
       if (!task) return;
       // Transition to triaging (triggers the triager agent via pipeline hook)
-      await window.api.tasks.transition(task.id, 'triaging', 'admin');
+      const result = await window.api.tasks.transition(task.id, 'triaging', 'admin');
+      if (!result.success) {
+        toast.error(result.error ?? 'Failed to transition to triaging');
+      }
       setDialogOpen(false);
       setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
       setDialogImages([]);
