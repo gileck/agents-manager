@@ -112,6 +112,7 @@ const IPC_CHANNELS = {
   TASK_ADD_FEEDBACK: 'task:add-feedback',
   TASK_DOCS_LIST: 'task:docs:list',
   TASK_DOCS_GET: 'task:docs:get',
+  TASK_DOCS_UPSERT: 'task:docs:upsert',
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
   TASK_WORKTREE: 'task:worktree',
   FEATURE_LIST: 'feature:list',
@@ -430,6 +431,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DOCS_LIST, taskId),
     get: (taskId: string, type: DocArtifactType): Promise<TaskDoc | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DOCS_GET, taskId, type),
+    upsert: (taskId: string, type: DocArtifactType, content: string, summary?: string | null): Promise<TaskDoc> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_DOCS_UPSERT, taskId, type, content, summary),
   },
 
   // Artifact operations

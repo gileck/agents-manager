@@ -20,6 +20,7 @@ import type { IAgentService } from '../interfaces/agent-service';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import type { INotificationRouter } from '../interfaces/notification-router';
+import type { ITaskDocStore } from '../interfaces/task-doc-store';
 import type { TaskReviewReportBuilder } from './task-review-report-builder';
 import type { IAgent } from '../interfaces/agent';
 import { ValidationRunner } from './validation-runner';
@@ -95,8 +96,9 @@ export class AgentService implements IAgentService {
       payload: AgentNotificationPayload,
     ) => void,
     private onTaskUpdated?: (taskId: string, task: import('../../shared/types').Task) => void,
+    private taskDocStore?: ITaskDocStore,
   ) {
-    this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter);
+    this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter, this.taskDocStore);
   }
 
   setInjectedMessageHandler(

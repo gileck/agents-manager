@@ -90,6 +90,7 @@ export const IPC_CHANNELS = {
   // Task docs
   TASK_DOCS_LIST: 'task:docs:list',
   TASK_DOCS_GET: 'task:docs:get',
+  TASK_DOCS_UPSERT: 'task:docs:upsert',
 
   // Debug timeline
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
