@@ -357,7 +357,14 @@ export function BugReportDialog({ open, onOpenChange, initialValues, initialSour
       if (!task) return;
 
       // Transition to triaging (triggers the triager agent via pipeline hook)
-      await window.api.tasks.transition(task.id, 'triaging', 'admin');
+      const result = await window.api.tasks.transition(task.id, 'triaging', 'admin');
+      if (!result.success) {
+        toast.error(result.error ?? 'Failed to transition to triaging');
+        // Bug was created but transition failed — still navigate to the task
+        navigate(`/tasks/${task.id}`);
+        onOpenChange(false);
+        return;
+      }
 
       toast.success('Bug report created + triaging started', {
         action: {
