@@ -4,8 +4,10 @@ import type { ITaskEventLog } from '../interfaces/task-event-log';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskStore } from '../interfaces/task-store';
+import type { ITaskDocStore } from '../interfaces/task-doc-store';
 import type { TimelineService } from './timeline/timeline-service';
 import { messagesToRawText } from '../../shared/agent-message-utils';
+import { DOC_PHASES } from '../../shared/doc-phases';
 
 export class TaskReviewReportBuilder {
   constructor(
@@ -15,6 +17,7 @@ export class TaskReviewReportBuilder {
     private taskArtifactStore: ITaskArtifactStore,
     private taskStore: ITaskStore,
     private timelineService: TimelineService,
+    private taskDocStore?: ITaskDocStore,
   ) {}
 
   async buildReport(taskId: string, outputPath: string): Promise<void> {
@@ -89,7 +92,26 @@ export class TaskReviewReportBuilder {
       lines.push(`  ${ts} ${t.title}`);
     }
 
-    if (task.plan) {
+    // Include task docs (plan, investigation report, technical design)
+    let taskDocs: import('../../shared/types').TaskDoc[] = [];
+    if (this.taskDocStore) {
+      try {
+        taskDocs = await this.taskDocStore.getByTaskId(taskId);
+      } catch {
+        // Non-fatal: fall back to legacy columns
+      }
+    }
+
+    if (taskDocs.length > 0) {
+      for (const doc of taskDocs) {
+        const phase = DOC_PHASES.find(p => p.docType === doc.type);
+        const title = phase?.docTitle ?? doc.type;
+        lines.push(``);
+        lines.push(`${title}:`);
+        lines.push(doc.content);
+      }
+    } else if (task.plan) {
+      // Fallback to legacy column
       lines.push(``);
       lines.push(`Plan:`);
       lines.push(task.plan);

@@ -7,6 +7,7 @@ interface Refetchers {
   refetchPrompts: () => void;
   refetchDebug: () => void;
   refetchContext: () => void;
+  refetchDocs?: () => void;
 }
 
 /**
@@ -20,7 +21,7 @@ export function useTaskPolling(
   hasRunningAgent: boolean,
   refetchers: Refetchers,
 ): void {
-  const { refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext } = refetchers;
+  const { refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext, refetchDocs } = refetchers;
 
   // 3-second polling interval while shouldPoll is true
   useEffect(() => {
@@ -32,9 +33,10 @@ export function useTaskPolling(
       refetchPrompts();
       refetchDebug();
       refetchContext();
+      refetchDocs?.();
     }, 3000);
     return () => clearInterval(interval);
-  }, [taskId, shouldPoll, refetchAgentRuns, refetch, refetchTransitions, refetchPrompts, refetchDebug, refetchContext]);
+  }, [taskId, shouldPoll, refetchAgentRuns, refetch, refetchTransitions, refetchPrompts, refetchDebug, refetchContext, refetchDocs]);
 
   // Completion edge: full refresh when agent finishes
   const prevHasRunning = useRef(hasRunningAgent);
@@ -46,7 +48,8 @@ export function useTaskPolling(
       refetchPrompts();
       refetchDebug();
       refetchContext();
+      refetchDocs?.();
     }
     prevHasRunning.current = hasRunningAgent;
-  }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext]);
+  }, [hasRunningAgent, refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext, refetchDocs]);
 }

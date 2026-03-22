@@ -26,10 +26,11 @@ import { PipelineProgress } from '../components/pipeline/PipelineProgress';
 import { WorkflowReviewTab } from '../components/tasks/WorkflowReviewTab';
 import { ImplementationTab } from '../components/tasks/ImplementationTab';
 import { useIpc } from '@template/renderer/hooks/useIpc';
-import { PlanReviewCard } from '../components/plan/PlanReviewCard';
+import { DocsPanel } from '../components/docs/DocsPanel';
+import { getPhaseByReviewStatus } from '../../shared/doc-phases';
 import type {
   Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
-  DebugTimelineEntry, Worktree, TaskContextEntry, HookFailure,
+  DebugTimelineEntry, Worktree, TaskContextEntry, HookFailure, TaskDoc,
 } from '../../shared/types';
 import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
 import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext';
@@ -37,7 +38,6 @@ import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
 
 import { TaskDetailDashboard } from '../components/task-detail/TaskDetailDashboard';
 import { TimelinePanel } from '../components/task-detail/TimelinePanel';
-import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
 import { ImagePasteArea } from '../components/ui/ImagePasteArea';
 import type { QuestionResponse } from '../components/prompts/QuestionForm';
 import { AnswerQuestionsDialog } from '../components/prompts/AnswerQuestionsDialog';
@@ -93,6 +93,11 @@ export function TaskDetailPage() {
     [id]
   );
 
+  const { data: docs, refetch: refetchDocs } = useIpc<TaskDoc[]>(
+    () => id ? window.api.taskDocs.list(id) : Promise.resolve([]),
+    [id, task?.status]
+  );
+
   // Derived agent state
   const isAgentPipeline = pipeline?.statuses.some((s) => s.category === 'agent_running') ?? false;
   const hasRunningAgent = agentRuns?.some((r) => r.status === 'running') ?? false;
@@ -108,7 +113,7 @@ export function TaskDetailPage() {
   const shouldPoll = hasRunningAgent || statusMeta.isWaitingForInput || isFinalizing || isStuck || awaitingPr;
 
   useTaskPolling(id, shouldPoll, hasRunningAgent, {
-    refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext,
+    refetch, refetchTransitions, refetchAgentRuns, refetchPrompts, refetchDebug, refetchContext, refetchDocs,
   });
 
   // Navigate away if the current task is deleted from another session
@@ -121,9 +126,8 @@ export function TaskDetailPage() {
     return unsubscribe;
   }, [id, navigate]);
 
-  const initialTab = task?.status === 'plan_review' ? 'plan'
-    : task?.status === 'design_review' ? 'design'
-    : task?.status === 'investigation_review' ? 'investigation'
+  const reviewPhase = task ? getPhaseByReviewStatus(task.status) : undefined;
+  const initialTab = reviewPhase ? 'docs'
     : (task?.status === 'pr_review' || task?.status === 'ready_to_merge') ? 'implementation'
     : 'details';
   const [tab, setTab] = useLocalStorage(`taskDetail.tab.${id}`, initialTab);
@@ -139,12 +143,12 @@ export function TaskDetailPage() {
     // Skip initial load and no-change cases
     if (!prev || prev === task?.status) return;
 
-    if (task?.status === 'plan_review') {
-      navigate(`/tasks/${id}/plan`);
-    } else if (task?.status === 'design_review') {
-      navigate(`/tasks/${id}/design`);
-    } else if (task?.status === 'investigation_review') {
-      navigate(`/tasks/${id}/investigation`);
+    const statusReviewPhase = task ? getPhaseByReviewStatus(task.status) : undefined;
+    if (statusReviewPhase) {
+      const routeKey = statusReviewPhase.docType === 'investigation_report' ? 'investigation'
+        : statusReviewPhase.docType === 'technical_design' ? 'design'
+        : 'plan';
+      navigate(`/tasks/${id}/${routeKey}`);
     } else if (task?.status === 'pr_review' || task?.status === 'ready_to_merge') {
       setTab('implementation');
     }
@@ -336,6 +340,7 @@ export function TaskDetailPage() {
       await refetchPrompts();
       await refetchDebug();
       await refetchContext();
+      await refetchDocs();
     } catch (err) {
       setTransitionError(err instanceof Error ? err.message : 'Failed to reset task. Please try again.');
       setResetOpen(false);
@@ -486,9 +491,7 @@ export function TaskDetailPage() {
   const hasVisibleBanners = transitionError !== null || diagnosticsError !== null || hookFailureAlerts.length > 0 || visibleDiagnosticFailures.length > 0;
 
   // Tab content indicators
-  const hasPlan = !!task.plan;
-  const hasDesign = !!task.technicalDesign;
-  const hasInvestigation = !!task.investigationReport || task.status === 'investigation_review';
+  const hasDocs = (docs ?? []).length > 0 || !!getPhaseByReviewStatus(task.status);
   const hasImplementation = !!task.prLink || (artifacts?.some((a) => a.type === 'diff') ?? false);
   const hasReview = contextEntries?.some(e => e.entryType === 'workflow_review') ?? false;
 
@@ -681,22 +684,15 @@ export function TaskDetailPage() {
           background: 'var(--card)',
         }}>
           <TabsTrigger value="details">Task Details</TabsTrigger>
-          <TabsTrigger value="investigation" className={hasInvestigation ? '' : 'opacity-40'}>
+          <TabsTrigger value="docs" className={hasDocs ? '' : 'opacity-40'}>
             <span className="flex items-center gap-1.5">
-              Report
-              {hasInvestigation && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="plan" className={hasPlan ? '' : 'opacity-40'}>
-            <span className="flex items-center gap-1.5">
-              Plan
-              {hasPlan && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="design" className={hasDesign ? '' : 'opacity-40'}>
-            <span className="flex items-center gap-1.5">
-              Technical Design
-              {hasDesign && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />}
+              Docs
+              {hasDocs && (
+                <>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3fb950', display: 'inline-block' }} />
+                  <span style={{ fontSize: 10, color: 'var(--muted-foreground)' }}>({(docs ?? []).length})</span>
+                </>
+              )}
             </span>
           </TabsTrigger>
           <TabsTrigger value="implementation" className={hasImplementation ? '' : 'opacity-40'}>
@@ -746,51 +742,14 @@ export function TaskDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="investigation" style={{ padding: '12px 24px', overflowY: 'auto' }}>
-          <PlanReviewCard
-            title="Investigation Report"
-            content={task.investigationReport}
-            emptyContentMessage="No investigation report yet. A report will appear here after the investigator agent completes."
-            entries={(contextEntries ?? []).filter(e => e.entryType === 'investigation_feedback')}
-            isReviewStatus={task.status === 'investigation_review'}
+        <TabsContent value="docs" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <DocsPanel
+            task={task}
+            docs={docs ?? []}
+            contextEntries={contextEntries ?? []}
             transitions={transitions ?? []}
             transitioning={transitioning}
-            approveToStatus="implementing"
-            onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'investigation_feedback')}
-            renderContent={(content) => <PlanMarkdown content={content} />}
-            reviewPath={`/tasks/${id}/investigation`}
-          />
-        </TabsContent>
-
-        <TabsContent value="plan" style={{ padding: '12px 24px', overflowY: 'auto' }}>
-          <PlanReviewCard
-            title="Plan"
-            content={task.plan}
-            emptyContentMessage="No plan yet. A plan will appear here after the planning agent completes."
-            entries={(contextEntries ?? []).filter(e => e.entryType === 'plan_feedback')}
-            isReviewStatus={task.status === 'plan_review'}
-            transitions={transitions ?? []}
-            transitioning={transitioning}
-            approveToStatus="implementing"
-            onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'plan_feedback')}
-            renderContent={(content) => <PlanMarkdown content={content} />}
-            reviewPath={`/tasks/${id}/plan`}
-          />
-        </TabsContent>
-
-        <TabsContent value="design" style={{ padding: '12px 24px', overflowY: 'auto' }}>
-          <PlanReviewCard
-            title="Technical Design"
-            content={task.technicalDesign}
-            emptyContentMessage="No technical design yet. A design document will appear here after the design agent completes."
-            entries={(contextEntries ?? []).filter(e => e.entryType === 'design_feedback')}
-            isReviewStatus={task.status === 'design_review'}
-            transitions={transitions ?? []}
-            transitioning={transitioning}
-            approveToStatus="implementing"
-            onAction={(toStatus, comment) => handleFeedbackAction(toStatus, comment, 'design_feedback')}
-            renderContent={(content) => <PlanMarkdown content={content} />}
-            reviewPath={`/tasks/${id}/design`}
+            onAction={handleFeedbackAction}
           />
         </TabsContent>
 

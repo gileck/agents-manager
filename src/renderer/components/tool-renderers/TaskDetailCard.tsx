@@ -4,7 +4,8 @@ import { TaskBaseCard } from './TaskBaseCard';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { useChatActions } from '../chat/ChatActionsContext';
 import type { ToolRendererProps } from './types';
-import type { Task, Transition } from '../../../shared/types';
+import type { Task, Transition, TaskDoc } from '../../../shared/types';
+import { getPhaseByDocType } from '../../../shared/doc-phases';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 
 const AGENT_BUTTONS: { label: string; agentType: string; mode: 'new' | 'revision'; variant: 'default' | 'secondary' | 'outline' }[] = [
@@ -31,6 +32,26 @@ export function parseTask(result: string): ParseTaskResult {
   }
 }
 
+/** Resolve docs from either task.docs (new system) or legacy task fields */
+function getTaskDocs(task: Task): { label: string; content: string }[] {
+  // Prefer docs from the unified task_docs system
+  const taskDocs = (task as Task & { docs?: TaskDoc[] }).docs;
+  if (taskDocs && taskDocs.length > 0) {
+    return taskDocs
+      .filter(d => d.content)
+      .map(d => ({
+        label: getPhaseByDocType(d.type)?.docTitle ?? d.type,
+        content: d.content,
+      }));
+  }
+  // Fallback to legacy task columns
+  const items: { label: string; content: string }[] = [];
+  if (task.plan) items.push({ label: 'Plan', content: task.plan });
+  if (task.technicalDesign) items.push({ label: 'Technical Design', content: task.technicalDesign });
+  if (task.investigationReport) items.push({ label: 'Investigation Report', content: task.investigationReport });
+  return items;
+}
+
 interface PlanDesignPanelProps {
   task: Task;
   isStreaming: boolean;
@@ -41,11 +62,10 @@ function PlanDesignPanel({ task, isStreaming, sendMessage }: PlanDesignPanelProp
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [contentExpanded, setContentExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('plan');
 
-  const hasPlan = !!task.plan;
-  const hasDesign = !!task.technicalDesign;
-  const showTabs = hasPlan && hasDesign;
+  const docItems = getTaskDocs(task);
+  const [activeTab, setActiveTab] = useState<string>(docItems[0]?.label ?? '');
+  const showTabs = docItems.length > 1;
 
   const subtaskCount = task.subtasks?.length ?? 0;
   const phaseCount = task.phases?.length ?? 0;
@@ -66,7 +86,7 @@ function PlanDesignPanel({ task, isStreaming, sendMessage }: PlanDesignPanelProp
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-foreground">
-            {hasPlan && hasDesign ? 'Plan & Design' : hasPlan ? 'Plan' : 'Technical Design'}
+            {docItems.length === 1 ? docItems[0].label : `Docs (${docItems.length})`}
           </span>
           {(subtaskCount > 0 || phaseCount > 0) && (
             <span className="text-[10px] text-muted-foreground">
@@ -88,25 +108,23 @@ function PlanDesignPanel({ task, isStreaming, sendMessage }: PlanDesignPanelProp
         showTabs ? (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="h-7">
-              <TabsTrigger value="plan" className="text-xs h-6 px-2">Plan</TabsTrigger>
-              <TabsTrigger value="design" className="text-xs h-6 px-2">Technical Design</TabsTrigger>
+              {docItems.map(item => (
+                <TabsTrigger key={item.label} value={item.label} className="text-xs h-6 px-2">{item.label}</TabsTrigger>
+              ))}
             </TabsList>
-            <TabsContent value="plan">
-              <div className="text-xs prose-sm max-h-64 overflow-y-auto border border-border/40 rounded p-2 bg-muted/30">
-                <MarkdownContent content={task.plan!} />
-              </div>
-            </TabsContent>
-            <TabsContent value="design">
-              <div className="text-xs prose-sm max-h-64 overflow-y-auto border border-border/40 rounded p-2 bg-muted/30">
-                <MarkdownContent content={task.technicalDesign!} />
-              </div>
-            </TabsContent>
+            {docItems.map(item => (
+              <TabsContent key={item.label} value={item.label}>
+                <div className="text-xs prose-sm max-h-64 overflow-y-auto border border-border/40 rounded p-2 bg-muted/30">
+                  <MarkdownContent content={item.content} />
+                </div>
+              </TabsContent>
+            ))}
           </Tabs>
-        ) : (
+        ) : docItems.length === 1 ? (
           <div className="text-xs prose-sm max-h-64 overflow-y-auto border border-border/40 rounded p-2 bg-muted/30">
-            <MarkdownContent content={(task.plan ?? task.technicalDesign)!} />
+            <MarkdownContent content={docItems[0].content} />
           </div>
-        )
+        ) : null
       )}
 
       <div className="flex flex-wrap gap-1.5">
@@ -225,7 +243,7 @@ function TaskDetailBody({ task }: TaskDetailBodyProps) {
       {/* Agent action buttons — filtered by task state */}
       <div className="flex flex-wrap gap-1.5">
         {AGENT_BUTTONS.filter(({ agentType }) => {
-          if (agentType === 'implementor') return task.plan != null;
+          if (agentType === 'implementor') return task.plan != null || getTaskDocs(task).length > 0;
           return true;
         }).map(({ label, agentType, mode, variant }) => (
           <Button
@@ -245,8 +263,8 @@ function TaskDetailBody({ task }: TaskDetailBodyProps) {
         <p className="text-xs text-destructive">{actionError}</p>
       )}
 
-      {/* Inline plan/design panel when plan or technical design exists */}
-      {(task.plan || task.technicalDesign) && (
+      {/* Inline docs panel when any doc content exists */}
+      {getTaskDocs(task).length > 0 && (
         <PlanDesignPanel
           task={task}
           isStreaming={isStreaming}

@@ -1,5 +1,8 @@
 // ─── Config type ──────────────────────────────────────────────────────────────
 
+import { DOC_PHASES } from '../../shared/doc-phases';
+import type { DocArtifactType } from '../../shared/types';
+
 export type ReportRenderer = 'markdown' | 'post-mortem' | 'workflow-review';
 
 export interface ReportPageConfig {
@@ -13,6 +16,7 @@ export interface ReportPageConfig {
   /** Where to read the report content from */
   contentSource:
     | { type: 'taskField'; field: 'plan' | 'technicalDesign' | 'investigationReport' | 'postMortem' }
+    | { type: 'taskDoc'; docType: DocArtifactType }
     | { type: 'contextEntry'; entryType: string };
 
   /** Which renderer to use for the left-panel content */
@@ -41,74 +45,55 @@ export interface ReportPageConfig {
 
 // ─── Config map ───────────────────────────────────────────────────────────────
 
-export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {
-  plan: {
-    label: 'Plan',
-    tabLabel: 'Plan Review',
-    tabKey: 'plan',
-    contentSource: { type: 'taskField', field: 'plan' },
+export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {};
+
+// Generate configs from DOC_PHASES registry
+for (const phase of DOC_PHASES) {
+  // Map docType to route key used in the URL
+  const routeKey = phase.docType === 'investigation_report' ? 'investigation'
+    : phase.docType === 'technical_design' ? 'design'
+    : 'plan';
+
+  REPORT_CONFIGS[routeKey] = {
+    label: phase.docTitle,
+    tabLabel: `${phase.docTitle} Review`,
+    tabKey: routeKey,
+    contentSource: { type: 'taskDoc', docType: phase.docType },
     renderer: 'markdown',
-    agentRole: 'planner',
-    entryType: 'plan_feedback',
-    chatPlaceholder: 'Ask about the plan or request changes...',
-    chatStorageKey: 'planReview.chatOpen',
+    agentRole: phase.agentType,
+    entryType: phase.feedbackType,
+    chatPlaceholder: `Ask about the ${phase.docTitle.toLowerCase()} or request changes...`,
+    chatStorageKey: `${phase.docType}Review.chatOpen`,
     approveToStatus: 'implementing',
-    reviseToStatus: 'planning',
-    reviewStatus: 'plan_review',
-    emptyMessage: 'No plan content available yet.',
-  },
-  design: {
-    label: 'Technical Design',
-    tabLabel: 'Technical Design Review',
-    tabKey: 'design',
-    contentSource: { type: 'taskField', field: 'technicalDesign' },
-    renderer: 'markdown',
-    agentRole: 'designer',
-    entryType: 'design_feedback',
-    chatPlaceholder: 'Ask about the technical design or request changes...',
-    chatStorageKey: 'designReview.chatOpen',
-    approveToStatus: 'implementing',
-    reviseToStatus: 'designing',
-    reviewStatus: 'design_review',
-    emptyMessage: 'No technical design content available yet.',
-  },
-  investigation: {
-    label: 'Investigation Report',
-    tabLabel: 'Investigation Report Review',
-    tabKey: 'investigation',
-    contentSource: { type: 'taskField', field: 'investigationReport' },
-    renderer: 'markdown',
-    agentRole: 'investigator',
-    entryType: 'investigation_feedback',
-    chatPlaceholder: 'Ask about the investigation report or request changes...',
-    chatStorageKey: 'investigationReview.chatOpen',
-    approveToStatus: 'implementing',
-    reviseToStatus: 'investigating',
-    reviewStatus: 'investigation_review',
-    emptyMessage: 'No investigation report content available yet.',
-  },
-  'post-mortem': {
-    label: 'Post-Mortem Report',
-    tabLabel: 'Post-Mortem Report',
-    tabKey: 'post-mortem',
-    contentSource: { type: 'taskField', field: 'postMortem' },
-    renderer: 'post-mortem',
-    agentRole: 'post-mortem-reviewer',
-    entryType: 'post_mortem_feedback',
-    chatPlaceholder: 'Ask about the post-mortem findings...',
-    chatStorageKey: 'postMortemReview.chatOpen',
-    emptyMessage: 'No post-mortem analysis available yet.',
-  },
-  'workflow-review': {
-    label: 'Workflow Review',
-    tabLabel: 'Workflow Review',
-    tabKey: 'workflow-review',
-    contentSource: { type: 'contextEntry', entryType: 'workflow_review' },
-    renderer: 'workflow-review',
-    agentRole: 'workflow-reviewer',
-    entryType: 'workflow_review_feedback',
-    chatPlaceholder: 'Ask about the workflow review findings...',
-    chatStorageKey: 'workflowReview.chatOpen',
-    emptyMessage: 'No workflow review available yet.',
-  },
+    reviseToStatus: phase.activeStatus,
+    reviewStatus: phase.reviewStatus,
+    emptyMessage: `No ${phase.docTitle.toLowerCase()} content available yet.`,
+  };
+}
+
+// Non-doc report configs
+REPORT_CONFIGS['post-mortem'] = {
+  label: 'Post-Mortem Report',
+  tabLabel: 'Post-Mortem Report',
+  tabKey: 'post-mortem',
+  contentSource: { type: 'taskField', field: 'postMortem' },
+  renderer: 'post-mortem',
+  agentRole: 'post-mortem-reviewer',
+  entryType: 'post_mortem_feedback',
+  chatPlaceholder: 'Ask about the post-mortem findings...',
+  chatStorageKey: 'postMortemReview.chatOpen',
+  emptyMessage: 'No post-mortem analysis available yet.',
+};
+
+REPORT_CONFIGS['workflow-review'] = {
+  label: 'Workflow Review',
+  tabLabel: 'Workflow Review',
+  tabKey: 'workflow-review',
+  contentSource: { type: 'contextEntry', entryType: 'workflow_review' },
+  renderer: 'workflow-review',
+  agentRole: 'workflow-reviewer',
+  entryType: 'workflow_review_feedback',
+  chatPlaceholder: 'Ask about the workflow review findings...',
+  chatStorageKey: 'workflowReview.chatOpen',
+  emptyMessage: 'No workflow review available yet.',
 };

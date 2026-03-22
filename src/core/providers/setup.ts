@@ -320,6 +320,7 @@ function createAgentModule(
   const taskReviewReportBuilder = new TaskReviewReportBuilder(
     stores.agentRunStore, stores.taskEventLog, stores.taskContextStore,
     stores.taskArtifactStore, stores.taskStore, timelineService,
+    stores.taskDocStore,
   );
 
   // Validation runner + outcome resolver for agent post-processing
