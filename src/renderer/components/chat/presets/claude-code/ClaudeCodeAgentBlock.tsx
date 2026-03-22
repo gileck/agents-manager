@@ -32,7 +32,7 @@ const STATUS_LABELS: Record<string, string> = {
   error: 'error',
 };
 
-export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, sessionRunning }: AgentBlockPresetProps) {
+export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, sessionRunning, isWaitingForInput }: AgentBlockPresetProps) {
   const agentInput = useMemo(() => parseAgentInput(segment.taskToolUse.input), [segment.taskToolUse.input]);
   const status = getAgentStatus(segment, sessionRunning);
   const isRunning = status === 'running' || status === 'initializing';
@@ -211,7 +211,7 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
       )}
 
       {/* Running indicator — thinking phase (no internal messages yet) */}
-      {isRunning && !hasInternalMessages && !hasResult && (
+      {isRunning && !hasInternalMessages && !hasResult && !isWaitingForInput && (
         <div style={{ paddingLeft: 20, color: '#6b7280', fontSize: '0.846em', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
           <span style={{ color }}>└</span>
           <span style={{ color: '#8b5cf6' }}>✻</span>
@@ -221,7 +221,7 @@ export function ClaudeCodeAgentBlock({ segment, expandedTools, onToggleTool, ses
       )}
 
       {/* Running indicator — working phase (has internal messages) */}
-      {isRunning && hasInternalMessages && !hasResult && (
+      {isRunning && hasInternalMessages && !hasResult && !isWaitingForInput && (
         <div style={{ paddingLeft: 20, color: '#6b7280', fontSize: '0.846em', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
           <span style={{ color }}>└</span>
           <span style={{ animation: 'pulse 1.5s infinite' }}>⠿</span>

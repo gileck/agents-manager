@@ -328,6 +328,12 @@ export function CodexChatMessageList({
 
   const segments = useMemo(() => groupMessages(messages), [messages]);
 
+  // Derive waiting-for-input state from messages: true when an unanswered AskUserQuestion exists
+  const isWaitingForInput = useMemo(
+    () => messages.some((m) => m.type === 'ask_user_question' && !m.answered),
+    [messages],
+  );
+
   const rendered = useMemo(() => {
     const resultMap = new Map<string, AgentChatMessageToolResult>();
     for (const msg of messages) {
@@ -347,6 +353,7 @@ export function CodexChatMessageList({
             expandedTools={expandedTools}
             onToggleTool={toggleTool}
             sessionRunning={isRunning}
+            isWaitingForInput={isWaitingForInput}
           />,
         );
         continue;
@@ -743,14 +750,14 @@ export function CodexChatMessageList({
         onScroll={handleScroll}
       >
         <div style={{ padding: '16px 16px 8px', fontFamily: SANS, fontSize: '1em' }}>
-          {rendered.length === 0 && isRunning && (
+          {rendered.length === 0 && isRunning && !isWaitingForInput && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 8 }}>
               <span style={{ color: '#888', fontSize: '0.9em', fontStyle: 'italic' }}>Working…</span>
               {startedAt && <ElapsedTime startedAt={startedAt} />}
             </div>
           )}
           {rendered}
-          {isRunning && rendered.length > 0 && (
+          {isRunning && rendered.length > 0 && !isWaitingForInput && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
               <span style={{ color: ACCENT, fontSize: '0.85em', animation: 'pulse 1.5s infinite' }}>●</span>
               <span style={{ color: '#888', fontSize: '0.9em', fontStyle: 'italic' }}>Thinking…</span>

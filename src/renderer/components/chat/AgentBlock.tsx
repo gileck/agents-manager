@@ -13,6 +13,8 @@ interface AgentBlockProps {
   onToggleTool: (index: number) => void;
   /** Whether the parent chat session is still running. */
   sessionRunning?: boolean;
+  /** Whether the agent is waiting for user input (AskUserQuestion). */
+  isWaitingForInput?: boolean;
 }
 
 /** Capitalize first letter. */
@@ -20,7 +22,7 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function AgentBlock({ segment, expandedTools, onToggleTool, sessionRunning }: AgentBlockProps) {
+export function AgentBlock({ segment, expandedTools, onToggleTool, sessionRunning, isWaitingForInput }: AgentBlockProps) {
   const agentInput = useMemo(() => parseAgentInput(segment.taskToolUse.input), [segment.taskToolUse.input]);
   const status = getAgentStatus(segment, sessionRunning);
   const isRunning = status === 'running' || status === 'initializing';
@@ -269,7 +271,7 @@ export function AgentBlock({ segment, expandedTools, onToggleTool, sessionRunnin
       )}
 
       {/* ── Running indicator (when no result yet) ── */}
-      {isRunning && !hasResult && (
+      {isRunning && !hasResult && !isWaitingForInput && (
         <div className="border-t border-border/40 px-3 py-2 flex items-center gap-2 text-xs text-muted-foreground">
           <div className="flex gap-1">
             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: statusConfig.borderColor }} />
