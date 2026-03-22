@@ -71,10 +71,15 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
       if (chunk === CHAT_COMPLETE_SENTINEL) {
         streamingRef.current = false;
         setIsStreaming(false);
-        setStreamingMessages([]);
-        // Reload messages from DB
+        // Reload messages from DB, then clear streaming messages so there is
+        // no frame where the streaming content has been removed but the DB
+        // messages haven't arrived yet (which would collapse the scroll
+        // height and trick auto-scroll into jumping to the bottom).
         window.api.chat.messages(sessionId)
-          .then(setDbMessages)
+          .then((freshMessages) => {
+            setDbMessages(freshMessages);
+            setStreamingMessages([]);
+          })
           .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
         return;
       }
