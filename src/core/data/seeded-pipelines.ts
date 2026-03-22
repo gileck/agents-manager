@@ -243,6 +243,11 @@ export const AGENT_PIPELINE: SeededPipeline = {
       guards: [{ name: 'no_running_agent' }],
       hooks: [startAgent('reviewer', 'new')] },
 
+    // ── PR review merge-conflict recovery (system follow-up from merge_pr hook failure)
+    { from: 'pr_review', to: 'implementing', trigger: 'system',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [startAgent('implementor', 'revision', 'merge_failed')] },
+
     // ── PR review (agent outcomes) ──────────────────────────────────
     ...prApprove('agent'),
     { from: 'pr_review', to: 'implementing', trigger: 'agent', agentOutcome: 'changes_requested',
@@ -261,6 +266,10 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'implementing', to: 'open', trigger: 'agent', agentOutcome: 'no_changes' },
     { from: 'implementing', to: 'ready_to_merge', trigger: 'agent', agentOutcome: 'already_on_main' },
     { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'conflicts_detected',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [startAgent('implementor', 'revision', 'merge_failed')] },
+    // System-triggered conflict recovery (from push_and_create_pr hook failure)
+    { from: 'implementing', to: 'implementing', trigger: 'system',
       guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
       hooks: [startAgent('implementor', 'revision', 'merge_failed')] },
     { from: 'implementing', to: 'implementing', trigger: 'agent', agentOutcome: 'uncommitted_changes',

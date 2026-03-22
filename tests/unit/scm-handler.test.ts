@@ -218,6 +218,7 @@ describe('registerScmHandler', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Merge conflicts');
+      expect(result.followUpTransition).toEqual({ to: 'implementing', trigger: 'system' });
       expect(mockGitOps.rebaseAbort).toHaveBeenCalled();
       // Push should NOT be called after rebase failure
       expect(mockGitOps.push).not.toHaveBeenCalled();

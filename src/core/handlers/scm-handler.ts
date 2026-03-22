@@ -199,6 +199,13 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     // changes and doesn't include unpushed local commits from other tasks.
     try {
       await gitOps.fetch('origin');
+    } catch (fetchErr) {
+      const fetchMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      await gitLog(`Fetch failed before rebase: ${fetchMsg}`, 'error');
+      return { success: false, error: `Fetch failed: ${fetchMsg}` };
+    }
+
+    try {
       await gitOps.rebase(rebaseRef);
       await gitLog(`Rebased onto ${rebaseRef} before push`);
     } catch (err) {
@@ -207,7 +214,20 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
       const errorMsg = err instanceof Error ? err.message : String(err);
       await gitLog(`Rebase onto ${rebaseRef} failed (merge conflicts): ${errorMsg}`, 'error');
 
-      return { success: false, error: 'Merge conflicts detected — rebase failed' };
+      // Store merge failure context for the recovery agent
+      try {
+        await deps.taskContextStore.addEntry({
+          taskId: task.id,
+          source: 'system',
+          entryType: 'merge_failure',
+          summary: `Rebase failed during push_and_create_pr: ${errorMsg}`,
+          data: { errorMessage: errorMsg, rebaseRef, branch, timestamp: Date.now() },
+        });
+      } catch (ctxErr) {
+        await gitLog(`Failed to store merge failure context (non-fatal): ${ctxErr}`, 'warning');
+      }
+
+      return { success: false, error: 'Merge conflicts detected — rebase failed', followUpTransition: { to: 'implementing', trigger: 'system' as const } };
     }
 
     // Collect diff against the base ref (what GitHub will compare against)

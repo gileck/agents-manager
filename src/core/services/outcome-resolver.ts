@@ -86,8 +86,9 @@ export class OutcomeResolver {
         effectiveOutcome = 'no_changes';
       }
 
-      // Early conflict detection (skip for merge_failed revision)
-      if (effectiveOutcome === 'pr_ready' && context.revisionReason !== 'merge_failed') {
+      // Early conflict detection — always run so conflicts are caught before
+      // the push_and_create_pr hook attempts a rebase with no recovery path.
+      if (effectiveOutcome === 'pr_ready') {
         effectiveOutcome = await this.detectConflicts(taskId, worktree, baseRef, onPostLog);
       }
 
@@ -257,10 +258,23 @@ export class OutcomeResolver {
   private async detectConflicts(taskId: string, worktree: { branch: string; path: string }, baseRef: string, onPostLog?: OnPostLog): Promise<'pr_ready' | 'conflicts_detected'> {
     const gitOps = this.createGitOps(worktree.path);
     onPostLog?.('git', `Fetching origin for conflict detection (baseRef=${baseRef})`);
-    const fetchStart = performance.now();
-    await gitOps.fetch('origin');
-    const fetchDuration = Math.round(performance.now() - fetchStart);
-    onPostLog?.('git', 'git fetch origin complete', undefined, fetchDuration);
+    try {
+      const fetchStart = performance.now();
+      await gitOps.fetch('origin');
+      const fetchDuration = Math.round(performance.now() - fetchStart);
+      onPostLog?.('git', 'git fetch origin complete', undefined, fetchDuration);
+    } catch (fetchErr) {
+      const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      onPostLog?.('git', `git fetch origin failed during conflict detection: ${msg} — skipping conflict check`, { baseRef, error: msg });
+      await this.taskEventLog.log({
+        taskId,
+        category: 'git',
+        severity: 'warning',
+        message: `Conflict detection skipped: fetch failed: ${msg}`,
+        data: { baseRef, error: msg },
+      });
+      return 'pr_ready'; // Let push_and_create_pr hook handle conflicts
+    }
 
     // Fast-path: if branch is already rebased onto the base ref, skip the rebase attempt
     try {
@@ -281,8 +295,9 @@ export class OutcomeResolver {
         });
         return 'pr_ready';
       }
-    } catch {
-      onPostLog?.('git', 'merge-base check failed — falling through to rebase');
+    } catch (mbErr) {
+      const msg = mbErr instanceof Error ? mbErr.message : String(mbErr);
+      onPostLog?.('git', `merge-base check failed: ${msg} — falling through to rebase`, { error: msg });
       // merge-base check failed — fall through to rebase
     }
 
@@ -298,17 +313,18 @@ export class OutcomeResolver {
         severity: 'info',
         message: `Pre-transition rebase onto ${baseRef} succeeded`,
       });
-    } catch {
+    } catch (rebaseErr) {
       try {
         await gitOps.rebaseAbort();
       } catch { /* may not be in rebase state */ }
-      onPostLog?.('git', `Merge conflicts detected with ${baseRef} — switching to conflicts_detected outcome`, { branch: worktree.branch, baseRef });
+      const errMsg = rebaseErr instanceof Error ? rebaseErr.message : String(rebaseErr);
+      onPostLog?.('git', `Rebase onto ${baseRef} failed: ${errMsg} — switching to conflicts_detected outcome`, { branch: worktree.branch, baseRef, error: errMsg });
       await this.taskEventLog.log({
         taskId,
         category: 'git',
         severity: 'warning',
-        message: `Merge conflicts with ${baseRef} detected — switching to conflicts_detected outcome`,
-        data: { branch: worktree.branch, baseRef },
+        message: `Rebase onto ${baseRef} failed: ${errMsg} — switching to conflicts_detected outcome`,
+        data: { branch: worktree.branch, baseRef, error: errMsg },
       });
       return 'conflicts_detected';
     }
