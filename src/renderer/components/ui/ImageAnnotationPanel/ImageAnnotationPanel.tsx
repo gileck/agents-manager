@@ -70,7 +70,7 @@ export function ImageAnnotationPanel({
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        e.stopPropagation();
+        e.stopImmediatePropagation();
         e.preventDefault();
         onClose();
         return;
@@ -107,8 +107,8 @@ export function ImageAnnotationPanel({
         }
       }
     };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
+    document.addEventListener('keydown', handleKey, true);
+    return () => document.removeEventListener('keydown', handleKey, true);
   }, [onClose, goPrev, goNext, zoomIn, zoomOut, zoomFit, readOnly, drawingUndo, drawingRedo]);
 
   // ── Mouse wheel zoom ───────────────────────────────────────────────
