@@ -164,6 +164,8 @@ export function TopMenu() {
   return (
     <div className="relative z-50 h-14 border-b border-border/70 bg-card/55 backdrop-blur-md flex items-center justify-between px-4 shrink-0">
       <div className="flex items-center gap-3 min-w-0">
+        <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Hello World</span>
+        <span className="text-border/60">|</span>
         <h1 className="text-lg font-semibold tracking-tight text-foreground truncate">{pageTitle}</h1>
         {currentProject && (
           <span className="hidden md:inline-flex items-center rounded-full border border-border/65 bg-muted/45 px-2.5 py-1 text-xs text-muted-foreground">
