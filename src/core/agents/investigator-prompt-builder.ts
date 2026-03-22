@@ -1,6 +1,5 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
-import { getInteractiveFields, getInteractiveInstructions, getTaskEstimationFields, getTaskEstimationInstructions } from './prompt-utils';
 
 export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'investigator';
@@ -24,21 +23,8 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
         type: 'object',
         properties: {
           investigationReport: { type: 'string', description: 'The detailed investigation report as markdown (root cause analysis, findings, fix suggestion)' },
-          investigationSummary: { type: 'string', description: 'A short 2-3 sentence summary of the investigation findings for display in task context' },
-          subtasks: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Concrete fix steps that break down the suggested fix',
-          },
-          sourceTaskIds: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Task IDs (UUIDs) that introduced the bug, identified via git tracing. Empty if not determinable.',
-          },
-          ...getTaskEstimationFields(),
-          ...getInteractiveFields(),
         },
-        required: ['investigationReport', 'investigationSummary', 'subtasks'],
+        required: ['investigationReport'],
       },
     };
   }
@@ -70,12 +56,6 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
         `  - \`${invAmCli} tasks get ${task.id} --json\` — full task details`,
         `  - \`${invAmCli} events list --task ${task.id} --json\` — task event log`,
       );
-      if (task.subtasks && task.subtasks.length > 0) {
-        ivrLines.push('', '## Subtasks');
-        for (const st of task.subtasks) {
-          ivrLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
-        }
-      }
       if (task.debugInfo) {
         ivrLines.push('', '## Debug Info', '```', task.debugInfo, '```');
       }
@@ -87,16 +67,14 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
         '3. Use their decisions to guide your investigation.',
         '4. For targeted file lookups (when you know approximately what you are looking for — function names, file patterns, error strings), use Read, Grep, and Glob directly. Only spawn Task/Explore sub-agents when you need broad codebase discovery across unknown directories or when the search space is genuinely large. Do not run the same searches both directly and via a sub-agent.',
         '5. Write a detailed investigation report with your findings.',
-        '6. Suggest a concrete fix plan, including any tests that should be added or updated.',
-        '7. Break the fix into subtasks.',
+        '6. Suggest a concrete fix, including any tests that should be added or updated.',
       );
-      ivrLines.push('', ...this.getSourceTaskIdentificationInstructions(invAmCli));
       ivrLines.push('', ...this.getReportStructureInstructions());
       prompt = ivrLines.join('\n');
     } else {
       // New investigation
       const invLines = [
-        `You are a bug investigator. Analyze the following bug report, investigate the root cause, and suggest a fix with concrete steps.`,
+        `You are a bug investigator. Analyze the following bug report, investigate the root cause, and suggest a fix.`,
         ``,
         `Bug: ${task.title}.${desc}`,
         ``,
@@ -111,8 +89,7 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
         `2. Investigate the codebase to find the root cause. The project documentation (CLAUDE.md) at the repository root contains architecture context if needed.`,
         `3. Write a detailed investigation report with your findings.`,
         `4. Check existing test coverage for the affected code and note any gaps.`,
-        `5. Suggest a concrete fix plan, including any tests that should be added or updated.`,
-        `6. Break the fix into subtasks.`,
+        `5. Suggest a concrete fix, including any tests that should be added or updated.`,
       ];
       const relatedTaskId = task.metadata?.relatedTaskId as string | undefined;
       if (relatedTaskId) {
@@ -127,54 +104,15 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
       if (task.debugInfo) {
         invLines.push('', '## Debug Info', '```', task.debugInfo, '```');
       }
-      if (task.subtasks && task.subtasks.length > 0) {
-        invLines.push('', '## Subtasks');
-        for (const st of task.subtasks) {
-          invLines.push(`- [${st.status === 'done' ? 'x' : ' '}] ${st.name} (${st.status})`);
-        }
-      }
-      invLines.push('', ...this.getSourceTaskIdentificationInstructions(invAmCli));
       invLines.push('', ...this.getReportStructureInstructions());
       prompt = invLines.join('\n');
     }
-
-    prompt += getTaskEstimationInstructions();
-    prompt += getInteractiveInstructions(this.type);
 
     if (context.validationErrors) {
       prompt += `\n\nThe previous attempt produced validation errors. Fix these issues and resubmit your report:\n\n${context.validationErrors}`;
     }
 
     return prompt;
-  }
-
-  private getSourceTaskIdentificationInstructions(invAmCli: string): string[] {
-    return [
-      `## Source Task Identification`,
-      `After identifying the root cause, trace the defective code back to the task(s) that introduced it.`,
-      `Report ALL found task IDs in the \`sourceTaskIds\` field of your output. This enables automatic bug-to-task linking.`,
-      ``,
-      `### Strategy (try in order, stop when task IDs are found):`,
-      ``,
-      `**1. Primary — PR-based chain (most reliable):**`,
-      `   - Run \`git blame <file>\` on the defective lines to get the commit hash`,
-      `   - Check the commit message for a PR number: \`git log -1 --format=%s <commit>\` — look for \`(#<number>)\``,
-      `   - If PR number found: \`gh pr view <PR#> --json headRefName --jq .headRefName\``,
-      `   - Extract the task ID from the branch name (format: \`task/<taskId>\`)`,
-      ``,
-      `**2. Fallback — merge commit search:**`,
-      `   - \`git log --merges --grep="task/" --ancestry-path <commit>..HEAD --oneline -5\``,
-      `   - Look for merge commits that reference a \`task/\` branch name`,
-      ``,
-      `**3. Fallback — CLI task search:**`,
-      `   - \`${invAmCli} tasks list --search <keyword> --json\` to find tasks by title/description`,
-      `   - Match by \`branchName\` field to confirm the task owns the defective code`,
-      ``,
-      `**4. Fallback — branch contains (works for undeleted branches):**`,
-      `   - \`git branch -r --contains <commit>\` — look for \`task/<taskId>\` branches`,
-      ``,
-      `If none of the strategies yield a task ID, leave \`sourceTaskIds\` as an empty array.`,
-    ];
   }
 
   private getReportStructureInstructions(): string[] {
@@ -184,12 +122,10 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
       ``,
       '```markdown',
       `# Investigation Report: [bug title]`,
-      `**Summary:** [Short summary of the report and findings]`,
-      `**Root Cause:** [Short summary of the root cause | 'Root Cause Not Found']`,
-      `**Root Cause Confidence:** [Very High | High | Mid | Low | None] — explanation of confidence level`,
-      `**Suggested Fix Complexity (if applicable):** [High | Mid | Low] — how complicated the suggested fix is`,
-      ``,
-      `[REST OF REPORT]`,
+      `**Summary:** [2-3 sentence summary]`,
+      `**Root Cause:** [what's broken and why]`,
+      `**Root Cause Confidence:** [High | Mid | Low]`,
+      `**Suggested Fix:** [concrete fix description]`,
       '```',
     ];
   }
