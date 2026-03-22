@@ -5,6 +5,7 @@ import type {
   TaskFilter,
   TaskEventFilter,
   ActivityFilter,
+  DocArtifactType,
 } from '../../shared/types';
 
 export function registerTaskHandlers(api: ApiClient): void {
@@ -150,6 +151,18 @@ export function registerTaskHandlers(api: ApiClient): void {
 
   registerIpcHandler(IPC_CHANNELS.TASK_ADD_FEEDBACK, async (_, taskId: string, input: { entryType: string; content: string; source?: string; agentRunId?: string }) => {
     return api.tasks.addFeedback(taskId, input);
+  });
+
+  // ============================================
+  // Task Docs
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.TASK_DOCS_LIST, async (_, taskId: string) => {
+    return api.taskDocs.list(taskId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_DOCS_GET, async (_, taskId: string, type: DocArtifactType) => {
+    return api.taskDocs.get(taskId, type);
   });
 
   // ============================================

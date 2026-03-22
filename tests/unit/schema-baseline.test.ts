@@ -59,6 +59,7 @@ const EXPECTED_TABLES = [
   'task_artifacts',
   'task_context_entries',
   'task_dependencies',
+  'task_docs',
   'task_events',
   'task_phases',
   'tasks',

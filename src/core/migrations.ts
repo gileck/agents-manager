@@ -177,5 +177,33 @@ WHERE EXISTS (
   WHERE tce.task_id = tasks.id AND tce.entry_type = 'post_mortem'
 )`,
     },
+    {
+      name: '121_create_task_docs',
+      sql: `
+CREATE TABLE IF NOT EXISTS task_docs (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  summary TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(task_id, type)
+);
+CREATE INDEX IF NOT EXISTS idx_task_docs_task ON task_docs(task_id);
+
+-- Backfill from existing task columns
+INSERT OR IGNORE INTO task_docs (id, task_id, type, content, summary, created_at, updated_at)
+SELECT 'doc-' || id || '-plan', id, 'plan', plan, NULL, updated_at, updated_at
+FROM tasks WHERE plan IS NOT NULL AND plan != '';
+
+INSERT OR IGNORE INTO task_docs (id, task_id, type, content, summary, created_at, updated_at)
+SELECT 'doc-' || id || '-investigation', id, 'investigation_report', investigation_report, NULL, updated_at, updated_at
+FROM tasks WHERE investigation_report IS NOT NULL AND investigation_report != '';
+
+INSERT OR IGNORE INTO task_docs (id, task_id, type, content, summary, created_at, updated_at)
+SELECT 'doc-' || id || '-design', id, 'technical_design', technical_design, NULL, updated_at, updated_at
+FROM tasks WHERE technical_design IS NOT NULL AND technical_design != ''`,
+    },
   ];
 }
