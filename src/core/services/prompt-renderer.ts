@@ -1,5 +1,6 @@
 import type { AgentContext } from '../../shared/types';
 import { formatCommentsForPrompt, formatFeedbackForPrompt } from '../agents/prompt-utils';
+import { findDoc } from '../agents/doc-injection';
 
 export class PromptRenderer {
   render(template: string, context: AgentContext): string {
@@ -77,8 +78,11 @@ export class PromptRenderer {
   }
 
   private buildPlanSection(context: AgentContext): string {
-    if (context.task.plan) {
-      return `\n## Plan\n${context.task.plan}`;
+    // Prefer plan from task_docs table, fall back to old task column
+    const planDoc = findDoc(context.docs, 'plan');
+    const planContent = planDoc?.content ?? context.task.plan;
+    if (planContent) {
+      return `\n## Plan\n${planContent}`;
     }
     return '';
   }
@@ -119,8 +123,11 @@ export class PromptRenderer {
   }
 
   private buildTechnicalDesignSection(context: AgentContext): string {
-    if (context.task.technicalDesign) {
-      return `\n## Technical Design\n${context.task.technicalDesign}`;
+    // Prefer technical design from task_docs table, fall back to old task column
+    const designDoc = findDoc(context.docs, 'technical_design');
+    const designContent = designDoc?.content ?? context.task.technicalDesign;
+    if (designContent) {
+      return `\n## Technical Design\n${designContent}`;
     }
     return '';
   }

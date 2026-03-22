@@ -2,6 +2,7 @@ import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import { formatFeedbackForPrompt, formatFeedbackAsContext, getInteractiveFields, getInteractiveInstructions } from './prompt-utils';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
+import { buildDocsPromptSections } from './doc-injection';
 
 export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'implementor';
@@ -128,14 +129,20 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
 
       if (!context.sessionId) {
         // Only include full plan/design in verbose fallback mode
-        if (task.plan) {
-          rcLines.push('', '## Plan', task.plan);
+        // Prefer docs from task_docs table, fall back to old task columns
+        const docsSection = buildDocsPromptSections(context.docs ?? [], 'plan');
+        if (docsSection) {
+          rcLines.push(docsSection);
+        } else {
+          if (task.plan) {
+            rcLines.push('', '## Plan', task.plan);
+          }
+          if (task.technicalDesign) {
+            rcLines.push('', '## Technical Design', task.technicalDesign);
+          }
         }
         rcLines.push(...formatFeedbackAsContext(context.taskContext, ['plan_feedback'], 'Plan Review Comments'));
         rcLines.push(...formatFeedbackForPrompt(context.taskContext, ['implementation_feedback'], 'Implementation Feedback'));
-        if (task.technicalDesign) {
-          rcLines.push('', '## Technical Design', task.technicalDesign);
-        }
         rcLines.push(...formatFeedbackAsContext(context.taskContext, ['design_feedback'], 'Design Review Comments'));
       } else {
         // In session-resume mode, still include all unaddressed feedback
@@ -256,11 +263,17 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         irLines.push('');
       }
       if (!context.sessionId) {
-        if (task.plan) {
-          irLines.push('', '## Plan', task.plan);
-        }
-        if (task.technicalDesign) {
-          irLines.push('', '## Technical Design', task.technicalDesign);
+        // Prefer docs from task_docs table, fall back to old task columns
+        const irDocsSection = buildDocsPromptSections(context.docs ?? [], 'plan');
+        if (irDocsSection) {
+          irLines.push(irDocsSection);
+        } else {
+          if (task.plan) {
+            irLines.push('', '## Plan', task.plan);
+          }
+          if (task.technicalDesign) {
+            irLines.push('', '## Technical Design', task.technicalDesign);
+          }
         }
       }
       irLines.push(
@@ -333,13 +346,19 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
         }
         lines.push('');
       }
-      if (task.plan) {
-        lines.push('', '## Plan', task.plan);
+      // Prefer docs from task_docs table, fall back to old task columns
+      const newDocsSection = buildDocsPromptSections(context.docs ?? [], 'plan');
+      if (newDocsSection) {
+        lines.push(newDocsSection);
+      } else {
+        if (task.plan) {
+          lines.push('', '## Plan', task.plan);
+        }
+        if (task.technicalDesign) {
+          lines.push('', '## Technical Design', task.technicalDesign);
+        }
       }
       lines.push(...formatFeedbackAsContext(context.taskContext, ['plan_feedback'], 'Plan Review Comments'));
-      if (task.technicalDesign) {
-        lines.push('', '## Technical Design', task.technicalDesign);
-      }
       lines.push(...formatFeedbackAsContext(context.taskContext, ['design_feedback'], 'Design Review Comments'));
       prompt = lines.join('\n');
     }

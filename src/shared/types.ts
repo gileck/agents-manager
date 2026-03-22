@@ -720,6 +720,8 @@ export interface AgentContext {
   mode: AgentMode;
   revisionReason?: RevisionReason;
   taskContext?: TaskContextEntry[];
+  /** Task document artifacts (plan, investigation report, technical design) from the task_docs table. */
+  docs?: TaskDoc[];
   validationErrors?: string;
   resolvedPrompt?: string;
   modeConfig?: AgentModeConfig;

@@ -397,7 +397,7 @@ function createChatModule(
     stores.chatMessageStore, stores.chatSessionStore, stores.projectStore, stores.taskStore,
     stores.pipelineStore, agentLibRegistry, stores.agentRunStore, getDefaultAgentLib,
     getDefaultModel, getDefaultPermissionMode, config?.imageStorageDir, subscriptionRegistry,
-    stores.taskContextStore,
+    stores.taskContextStore, stores.taskDocStore,
   );
   return { chatAgentService };
 }
