@@ -347,6 +347,7 @@ export class SqliteTaskStore implements ITaskStore {
         this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);
+        this.db.prepare('DELETE FROM task_docs WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM agent_runs WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);
@@ -384,6 +385,7 @@ export class SqliteTaskStore implements ITaskStore {
         this.db.prepare('DELETE FROM pending_prompts WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM task_phases WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM task_artifacts WHERE task_id = ?').run(id);
+        this.db.prepare('DELETE FROM task_docs WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM agent_runs WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM task_events WHERE task_id = ?').run(id);
         this.db.prepare('DELETE FROM transition_history WHERE task_id = ?').run(id);

@@ -456,6 +456,19 @@ CREATE TABLE IF NOT EXISTS app_debug_log (
   created_at INTEGER NOT NULL
 );
 
+-- ====== Task docs (unified document artifacts) ======
+
+CREATE TABLE IF NOT EXISTS task_docs (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  summary TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(task_id, type)
+);
+
 -- ====== Automated agents ======
 
 CREATE TABLE IF NOT EXISTS automated_agents (
@@ -513,6 +526,7 @@ CREATE INDEX IF NOT EXISTS idx_app_debug_log_source ON app_debug_log(source);
 CREATE INDEX IF NOT EXISTS idx_app_debug_log_created_at ON app_debug_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_automated_agents_project ON automated_agents(project_id);
 CREATE INDEX IF NOT EXISTS idx_automated_agents_schedule ON automated_agents(enabled, next_run_at);
+CREATE INDEX IF NOT EXISTS idx_task_docs_task ON task_docs(task_id);
 
 -- ====== Seed data ======
 

@@ -47,6 +47,8 @@ import type {
   DevServerInfo,
   AgentNotificationPayload,
   StopAgentResult,
+  TaskDoc,
+  DocArtifactType,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -108,6 +110,8 @@ const IPC_CHANNELS = {
   TASK_CONTEXT_ENTRIES: 'task:context-entries',
   TASK_ADD_CONTEXT_ENTRY: 'task:add-context-entry',
   TASK_ADD_FEEDBACK: 'task:add-feedback',
+  TASK_DOCS_LIST: 'task:docs:list',
+  TASK_DOCS_GET: 'task:docs:get',
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
   TASK_WORKTREE: 'task:worktree',
   FEATURE_LIST: 'feature:list',
@@ -418,6 +422,14 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.PROMPT_LIST, taskId),
     respond: (promptId: string, response: Record<string, unknown>): Promise<PendingPrompt | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.PROMPT_RESPOND, promptId, response),
+  },
+
+  // Task doc operations
+  taskDocs: {
+    list: (taskId: string): Promise<TaskDoc[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_DOCS_LIST, taskId),
+    get: (taskId: string, type: DocArtifactType): Promise<TaskDoc | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_DOCS_GET, taskId, type),
   },
 
   // Artifact operations

@@ -24,6 +24,8 @@ import type {
   InAppNotification, InAppNotificationFilter,
   DevServerInfo,
   ChatImage,
+  TaskDoc,
+  DocArtifactType,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -158,6 +160,12 @@ export interface ApiClient {
     listLibs(): Promise<unknown[]>;
     listModels(): Promise<unknown>;
     listFeatures(): Promise<unknown>;
+  };
+
+  // Task docs
+  taskDocs: {
+    list(taskId: string): Promise<TaskDoc[]>;
+    get(taskId: string, type: DocArtifactType): Promise<TaskDoc | null>;
   };
 
   // Items (template scaffold)
@@ -461,6 +469,12 @@ export function createApiClient(baseUrl: string): ApiClient {
       listLibs: () => req('GET', '/api/agent-libs'),
       listModels: () => req('GET', '/api/agent-libs/models'),
       listFeatures: () => req('GET', '/api/agent-libs/features'),
+    },
+
+    // -- Task Docs -----------------------------------------------------------
+    taskDocs: {
+      list: (taskId: string) => req('GET', `/api/tasks/${taskId}/docs`),
+      get: (taskId: string, type: DocArtifactType) => req('GET', `/api/tasks/${taskId}/docs/${type}`),
     },
 
     // -- Items (template scaffold) -------------------------------------------

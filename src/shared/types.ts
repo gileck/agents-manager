@@ -1555,3 +1555,29 @@ export interface AgentNotificationPayload {
   summary?: string;
   autoNotify: boolean;
 }
+
+// ============================================
+// Task Doc Types (unified document artifacts)
+// ============================================
+
+/** Predefined document artifact types. Extensible by adding new enum values + DOC_PHASES entry. */
+export type DocArtifactType = 'investigation_report' | 'plan' | 'technical_design';
+
+/** A row in the task_docs table — one document artifact per task per type. */
+export interface TaskDoc {
+  id: string;
+  taskId: string;
+  type: DocArtifactType;
+  content: string;
+  summary: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Input for creating or upserting a task doc. */
+export interface TaskDocCreateInput {
+  taskId: string;
+  type: DocArtifactType;
+  content: string;
+  summary?: string | null;
+}
