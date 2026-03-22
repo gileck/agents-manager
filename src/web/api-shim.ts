@@ -80,6 +80,13 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       postMortem: (taskId, input?) => api.agents.postMortem(taskId, input) as Promise<never>,
     },
 
+    // ── Task Docs ─────────────────────────────────────────────────────
+    taskDocs: {
+      list: (taskId) => api.taskDocs.list(taskId),
+      get: (taskId, type) => api.taskDocs.get(taskId, type),
+      upsert: (taskId, type, content, summary) => api.taskDocs.upsert(taskId, type, content, summary),
+    },
+
     // ── Features ──────────────────────────────────────────────────────
     features: {
       list: (filter?) => api.features.list(filter),

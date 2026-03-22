@@ -57,6 +57,8 @@ import type {
   DevServerInfo,
   AgentNotificationPayload,
   StopAgentResult,
+  TaskDoc,
+  DocArtifactType,
 } from './types';
 
 export interface ApiShape {
@@ -117,6 +119,13 @@ export interface ApiShape {
     worktree(taskId: string): Promise<Worktree | null>;
     workflowReview(taskId: string): Promise<AgentRun>;
     postMortem(taskId: string, input?: { postMortemInput?: string; linkedBugDescriptions?: string[] }): Promise<AgentRun>;
+  };
+
+  // Task doc operations
+  taskDocs: {
+    list(taskId: string): Promise<TaskDoc[]>;
+    get(taskId: string, type: DocArtifactType): Promise<TaskDoc | null>;
+    upsert(taskId: string, type: DocArtifactType, content: string, summary?: string | null): Promise<TaskDoc>;
   };
 
   // Feature operations

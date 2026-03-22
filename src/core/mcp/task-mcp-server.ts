@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createApiClient } from '../../client/api-client';
-import type { TaskType, TaskUpdateInput } from '../../shared/types';
+import type { TaskType, TaskUpdateInput, DocArtifactType } from '../../shared/types';
 import type { GenericMcpToolDefinition } from '../interfaces/mcp-tool';
 import type { AgentSubscriptionRegistry } from '../services/agent-subscription-registry';
 
@@ -218,6 +218,29 @@ export async function createTaskMcpServer(
           const taskId = await resolveTaskId(api, args.taskId);
           const { taskId: _taskId, autoNotify: _autoNotify, ...updateFields } = args;
           const task = await api.tasks.update(taskId, updateFields as TaskUpdateInput);
+
+          // Dual-write doc fields to task_docs table for backward compatibility
+          const DOC_FIELD_MAP: Array<{ field: 'plan' | 'investigationReport' | 'technicalDesign'; docType: DocArtifactType }> = [
+            { field: 'plan', docType: 'plan' },
+            { field: 'investigationReport', docType: 'investigation_report' },
+            { field: 'technicalDesign', docType: 'technical_design' },
+          ];
+          for (const { field, docType } of DOC_FIELD_MAP) {
+            const value = args[field];
+            if (value !== undefined) {
+              try {
+                if (value === null) {
+                  // null means "clear" — we don't delete the doc row, just set empty content
+                  // (task_docs rows are cleared on task reset via deleteByTaskId)
+                } else {
+                  await api.taskDocs.upsert(taskId, docType, value);
+                }
+              } catch {
+                // Non-fatal — old column write already succeeded
+              }
+            }
+          }
+
           return ok(task);
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
@@ -473,6 +496,43 @@ export async function createTaskMcpServer(
           // Step 2: Transition task back to the revision stage
           const result = await api.tasks.transition(taskId, targetStatus);
           return ok(result);
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // read_task_artifact
+    // -------------------------------------------------------------------------
+    {
+      name: 'read_task_artifact',
+      description:
+        'Read the full content of a task document artifact by type. ' +
+        'Use this to retrieve the complete investigation report, plan, or technical design ' +
+        'when only a summary was provided in the agent prompt context.',
+      inputSchema: {
+        taskId: z.string().describe('Task ID (full UUID or 8-char short prefix, e.g. "326e8ec7")'),
+        type: z.enum(['investigation_report', 'plan', 'technical_design']).describe(
+          'Document type to retrieve',
+        ),
+      },
+      handler: async (args: {
+        taskId: string;
+        type: 'investigation_report' | 'plan' | 'technical_design';
+      }): Promise<CallToolResult> => {
+        try {
+          const taskId = await resolveTaskId(api, args.taskId);
+          const doc = await api.taskDocs.get(taskId, args.type as DocArtifactType);
+          if (!doc) {
+            return fail(`No ${args.type} document found for task ${taskId}`);
+          }
+          return ok({
+            type: doc.type,
+            content: doc.content,
+            summary: doc.summary,
+            updatedAt: doc.updatedAt,
+          });
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
         }

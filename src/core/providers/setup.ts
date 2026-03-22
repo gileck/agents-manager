@@ -25,6 +25,7 @@ import type { IAppDebugLog } from '../interfaces/app-debug-log';
 import type { IAutomatedAgentStore } from '../interfaces/automated-agent-store';
 import type { IInAppNotificationStore } from '../interfaces/in-app-notification-store';
 import type { IItemStore } from '../interfaces/item-store';
+import type { ITaskDocStore } from '../interfaces/task-doc-store';
 import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -48,6 +49,7 @@ import { SqliteAppDebugLog } from '../stores/sqlite-app-debug-log';
 import { SqliteAutomatedAgentStore } from '../stores/sqlite-automated-agent-store';
 import { SqliteInAppNotificationStore } from '../stores/sqlite-in-app-notification-store';
 import { SqliteItemStore } from '../stores/sqlite-item-store';
+import { SqliteTaskDocStore } from '../stores/sqlite-task-doc-store';
 import { AppLogger, initAppLogger, getAppLogger } from '../services/app-logger';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
@@ -160,6 +162,7 @@ export interface AppServices {
   devServerManager: IDevServerManager;
   subscriptionRegistry: AgentSubscriptionRegistry;
   itemStore: IItemStore;
+  taskDocStore: ITaskDocStore;
   telegramBotManager: TelegramBotManager;
 }
 
@@ -197,12 +200,14 @@ function createStores(db: Database.Database) {
   const automatedAgentStore = new SqliteAutomatedAgentStore(db);
   const inAppNotificationStore = new SqliteInAppNotificationStore(db);
   const itemStore = new SqliteItemStore(db);
+  const taskDocStore = new SqliteTaskDocStore(db);
   return {
     projectStore, pipelineStore, taskStore, taskEventLog, activityLog,
     agentRunStore, userStore, txRunner, appDebugLog,
     taskArtifactStore, taskPhaseStore, pendingPromptStore, taskContextStore,
     featureStore, agentDefinitionStore, chatMessageStore, chatSessionStore,
     kanbanBoardStore, settingsStore, automatedAgentStore, inAppNotificationStore, itemStore,
+    taskDocStore,
   };
 }
 
@@ -315,6 +320,7 @@ function createAgentModule(
   const taskReviewReportBuilder = new TaskReviewReportBuilder(
     stores.agentRunStore, stores.taskEventLog, stores.taskContextStore,
     stores.taskArtifactStore, stores.taskStore, timelineService,
+    stores.taskDocStore,
   );
 
   // Validation runner + outcome resolver for agent post-processing
@@ -345,6 +351,7 @@ function createAgentModule(
     scheduledAgentService, agentLibRegistry, devServerManager,
     subscriptionRegistry, config?.onAgentSubscriptionFired,
     config?.onTaskUpdated,
+    stores.taskDocStore,
   );
 
   return { agentService, agentFramework, agentLibRegistry, devServerManager, subscriptionRegistry, scheduledAgentService };
@@ -391,7 +398,7 @@ function createChatModule(
     stores.chatMessageStore, stores.chatSessionStore, stores.projectStore, stores.taskStore,
     stores.pipelineStore, agentLibRegistry, stores.agentRunStore, getDefaultAgentLib,
     getDefaultModel, getDefaultPermissionMode, config?.imageStorageDir, subscriptionRegistry,
-    stores.taskContextStore,
+    stores.taskContextStore, stores.taskDocStore,
   );
   return { chatAgentService };
 }
@@ -532,6 +539,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     devServerManager,
     subscriptionRegistry,
     itemStore: stores.itemStore,
+    taskDocStore: stores.taskDocStore,
     telegramBotManager,
   };
 }

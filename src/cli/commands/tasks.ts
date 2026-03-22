@@ -84,7 +84,7 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
 
         if (cmdOpts.field) {
           const validFields = [
-            'plan', 'technicalDesign', 'debugInfo', 'phases', 'subtasks',
+            'plan', 'technicalDesign', 'investigationReport', 'debugInfo', 'phases', 'subtasks',
             'metadata', 'prLink', 'branchName', 'description', 'type', 'size',
             'complexity', 'tags', 'assignee', 'featureId', 'parentTaskId',
           ];
@@ -93,6 +93,26 @@ export function registerTaskCommands(program: Command, api: ApiClient): void {
             process.exitCode = 1;
             return;
           }
+
+          // For doc fields, try task_docs API first, fall back to task column
+          const docFieldMap: Record<string, string> = {
+            plan: 'plan',
+            technicalDesign: 'technical_design',
+            investigationReport: 'investigation_report',
+          };
+          const docType = docFieldMap[cmdOpts.field];
+          if (docType) {
+            try {
+              const doc = await api.taskDocs.get(id, docType as import('../../shared/types').DocArtifactType);
+              if (doc?.content) {
+                console.log(doc.content);
+                return;
+              }
+            } catch {
+              // Fall through to legacy column
+            }
+          }
+
           const value = (task as unknown as Record<string, unknown>)[cmdOpts.field];
           if (value === null || value === undefined) {
             if (opts.json) {

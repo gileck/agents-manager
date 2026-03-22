@@ -4,7 +4,8 @@ import type { ITaskStore } from '../../src/core/interfaces/task-store';
 import type { ITaskContextStore } from '../../src/core/interfaces/task-context-store';
 import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
 import type { INotificationRouter } from '../../src/core/interfaces/notification-router';
-import type { Task, AgentRunResult, TaskCreateInput } from '../../src/shared/types';
+import type { ITaskDocStore } from '../../src/core/interfaces/task-doc-store';
+import type { Task, AgentRunResult, TaskCreateInput, TaskDoc } from '../../src/shared/types';
 
 function createMockTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -75,7 +76,22 @@ function createMockStores() {
     send: vi.fn().mockResolvedValue(undefined),
   };
 
-  return { taskStore, taskContextStore, taskEventLog, notificationRouter };
+  const taskDocStore: ITaskDocStore = {
+    upsert: vi.fn().mockImplementation(async (input) => ({
+      id: 'doc-1',
+      taskId: input.taskId,
+      type: input.type,
+      content: input.content,
+      summary: input.summary ?? null,
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
+    } as TaskDoc)),
+    getByTaskId: vi.fn().mockResolvedValue([]),
+    getByTaskIdAndType: vi.fn().mockResolvedValue(null),
+    deleteByTaskId: vi.fn().mockResolvedValue(undefined),
+  };
+
+  return { taskStore, taskContextStore, taskEventLog, notificationRouter, taskDocStore };
 }
 
 describe('PostRunExtractor.createSuggestedTasks', () => {
@@ -85,7 +101,7 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
 
   beforeEach(() => {
     stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter);
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
     onLog.mockClear();
   });
 
@@ -377,7 +393,7 @@ describe('PostRunExtractor.saveContextEntry', () => {
 
   beforeEach(() => {
     stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter);
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
     onLog.mockClear();
   });
 
@@ -553,7 +569,7 @@ describe('PostRunExtractor.extractPlan', () => {
 
   beforeEach(() => {
     stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter);
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
     onLog.mockClear();
   });
 
@@ -725,6 +741,166 @@ describe('PostRunExtractor.extractPlan', () => {
   });
 });
 
+describe('PostRunExtractor dual-write to task_docs', () => {
+  let extractor: PostRunExtractor;
+  let stores: ReturnType<typeof createMockStores>;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    stores = createMockStores();
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
+    onLog.mockClear();
+  });
+
+  it('should upsert plan doc when planner provides structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan\n\nImplementation steps.',
+        planSummary: 'A three-step plan to fix the issue.',
+        subtasks: ['Step 1'],
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'planner', onLog);
+
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'plan',
+      content: '# Plan\n\nImplementation steps.',
+      summary: 'A three-step plan to fix the issue.',
+    });
+  });
+
+  it('should upsert investigation_report doc when investigator provides structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Investigation\n\nRoot cause found.',
+        investigationSummary: 'Root cause is a race condition in cleanup.',
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog);
+
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'investigation_report',
+      content: '# Investigation\n\nRoot cause found.',
+      summary: 'Root cause is a race condition in cleanup.',
+    });
+  });
+
+  it('should upsert technical_design doc when designer provides structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        technicalDesign: '# Design\n\nArchitecture details.',
+        designSummary: 'Three-layer architecture with caching.',
+      },
+    };
+
+    await extractor.extractTechnicalDesign('task-1', result, 'designer', onLog);
+
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'technical_design',
+      content: '# Design\n\nArchitecture details.',
+      summary: 'Three-layer architecture with caching.',
+    });
+  });
+
+  it('should upsert with null summary when no summary is provided', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan\n\nContent only.',
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'planner', onLog);
+
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'plan',
+      content: '# Plan\n\nContent only.',
+      summary: null,
+    });
+  });
+
+  it('should upsert fallback content when no structured output is available', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Raw plan output.',
+      outcome: 'done',
+    };
+
+    await extractor.extractPlan('task-1', result, 'planner', onLog);
+
+    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      type: 'plan',
+      content: 'Raw plan output.',
+      summary: null,
+    });
+  });
+
+  it('should not fail if taskDocStore.upsert throws', async () => {
+    (stores.taskDocStore.upsert as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB error'));
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan',
+        planSummary: 'Summary.',
+      },
+    };
+
+    // Should not throw — dual-write failure is non-fatal
+    await expect(extractor.extractPlan('task-1', result, 'planner', onLog)).resolves.toBeUndefined();
+
+    // Old column write should still succeed
+    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', expect.objectContaining({
+      plan: '# Plan',
+    }));
+
+    // Warning should be logged
+    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('failed to upsert task doc'));
+  });
+
+  it('should not call taskDocStore when it is not provided', async () => {
+    const extractorWithoutDocs = new PostRunExtractor(
+      stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter,
+    );
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan',
+      },
+    };
+
+    await extractorWithoutDocs.extractPlan('task-1', result, 'planner', onLog);
+
+    // Old column write should work
+    expect(stores.taskStore.updateTask).toHaveBeenCalled();
+    // taskDocStore should NOT be called since it wasn't provided
+    expect(stores.taskDocStore.upsert).not.toHaveBeenCalled();
+  });
+});
+
 describe('PostRunExtractor.linkBugToSourceTasks', () => {
   let extractor: PostRunExtractor;
   let stores: ReturnType<typeof createMockStores>;
@@ -732,7 +908,7 @@ describe('PostRunExtractor.linkBugToSourceTasks', () => {
 
   beforeEach(() => {
     stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter);
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
     onLog.mockClear();
   });
 

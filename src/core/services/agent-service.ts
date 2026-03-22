@@ -20,6 +20,7 @@ import type { IAgentService } from '../interfaces/agent-service';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IAgentDefinitionStore } from '../interfaces/agent-definition-store';
 import type { INotificationRouter } from '../interfaces/notification-router';
+import type { ITaskDocStore } from '../interfaces/task-doc-store';
 import type { TaskReviewReportBuilder } from './task-review-report-builder';
 import type { IAgent } from '../interfaces/agent';
 import { ValidationRunner } from './validation-runner';
@@ -95,8 +96,9 @@ export class AgentService implements IAgentService {
       payload: AgentNotificationPayload,
     ) => void,
     private onTaskUpdated?: (taskId: string, task: import('../../shared/types').Task) => void,
+    private taskDocStore?: ITaskDocStore,
   ) {
-    this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter);
+    this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter, this.taskDocStore);
   }
 
   setInjectedMessageHandler(
@@ -606,6 +608,16 @@ export class AgentService implements IAgentService {
 
     // Load accumulated task context entries for the agent
     context.taskContext = await this.taskContextStore.getEntriesForTask(taskId);
+
+    // Hydrate task docs (plan, investigation report, technical design) from the task_docs table
+    if (this.taskDocStore) {
+      try {
+        context.docs = await this.taskDocStore.getByTaskId(taskId);
+      } catch (err) {
+        const docErr = err instanceof Error ? err.message : String(err);
+        getAppLogger().warn(`Agent:${agentType}`, `Failed to hydrate task docs: ${docErr}`, { taskId });
+      }
+    }
 
     // Look up agent definition by convention-based ID and pass modeConfig to context
     const projectDefaultEngine = context.project.config?.defaultAgentLib as string | undefined;
