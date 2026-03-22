@@ -111,4 +111,80 @@ describe('InvestigatorPromptBuilder', () => {
       expect(prompt).not.toContain('## Debug Info');
     });
   });
+
+  describe('report structure includes architectural analysis and fix options', () => {
+    it('should include Architectural Analysis section in new investigation', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('## Architectural Analysis');
+    });
+
+    it('should include Fix Options with three options in new investigation', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('## Fix Options');
+      expect(prompt).toContain('### Option 1: Direct Fix');
+      expect(prompt).toContain('### Option 2: Architectural Fix');
+      expect(prompt).toContain('### Option 3: Balanced Approach');
+    });
+
+    it('should not include old Suggested Fix field in new investigation', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).not.toContain('**Suggested Fix:**');
+    });
+
+    it('should include Architectural Analysis section in revision mode', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'info_provided' as RevisionReason,
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('## Architectural Analysis');
+    });
+
+    it('should include Fix Options with three options in revision mode', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'info_provided' as RevisionReason,
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('## Fix Options');
+      expect(prompt).toContain('### Option 1: Direct Fix');
+      expect(prompt).toContain('### Option 2: Architectural Fix');
+      expect(prompt).toContain('### Option 3: Balanced Approach');
+    });
+  });
+
+  describe('instructions include architectural analysis step', () => {
+    it('should instruct agent to analyze architectural context in new investigation', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Analyze the architectural context of the bug');
+    });
+
+    it('should instruct agent to present multiple fix options in new investigation', () => {
+      const ctx = createContext({ mode: 'new' });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Present multiple fix options at different depths');
+    });
+
+    it('should instruct agent to analyze architectural context in revision mode', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'info_provided' as RevisionReason,
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Analyze the architectural context of the bug');
+    });
+
+    it('should instruct agent to present multiple fix options in revision mode', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'info_provided' as RevisionReason,
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('Present multiple fix options at different depths');
+    });
+  });
 });
