@@ -125,6 +125,7 @@ export interface ApiShape {
   taskDocs: {
     list(taskId: string): Promise<TaskDoc[]>;
     get(taskId: string, type: DocArtifactType): Promise<TaskDoc | null>;
+    upsert(taskId: string, type: DocArtifactType, content: string, summary?: string | null): Promise<TaskDoc>;
   };
 
   // Feature operations

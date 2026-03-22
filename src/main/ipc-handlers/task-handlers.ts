@@ -165,6 +165,10 @@ export function registerTaskHandlers(api: ApiClient): void {
     return api.taskDocs.get(taskId, type);
   });
 
+  registerIpcHandler(IPC_CHANNELS.TASK_DOCS_UPSERT, async (_, taskId: string, type: DocArtifactType, content: string, summary?: string | null) => {
+    return api.taskDocs.upsert(taskId, type, content, summary);
+  });
+
   // ============================================
   // Debug Timeline
   // ============================================

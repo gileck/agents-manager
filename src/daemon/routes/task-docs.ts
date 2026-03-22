@@ -25,5 +25,19 @@ export function taskDocRoutes(services: AppServices): Router {
     } catch (err) { next(err); }
   });
 
+  // Upsert a doc (create or update by task + type)
+  router.put('/api/tasks/:taskId/docs/:type', async (req, res, next) => {
+    try {
+      const { content, summary } = req.body as { content: string; summary?: string | null };
+      const doc = await services.taskDocStore.upsert({
+        taskId: req.params.taskId,
+        type: req.params.type as DocArtifactType,
+        content: content ?? '',
+        summary: summary ?? null,
+      });
+      res.json(doc);
+    } catch (err) { next(err); }
+  });
+
   return router;
 }

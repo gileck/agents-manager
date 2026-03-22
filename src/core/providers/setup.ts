@@ -350,6 +350,7 @@ function createAgentModule(
     scheduledAgentService, agentLibRegistry, devServerManager,
     subscriptionRegistry, config?.onAgentSubscriptionFired,
     config?.onTaskUpdated,
+    stores.taskDocStore,
   );
 
   return { agentService, agentFramework, agentLibRegistry, devServerManager, subscriptionRegistry, scheduledAgentService };

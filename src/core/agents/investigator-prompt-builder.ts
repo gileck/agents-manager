@@ -23,8 +23,9 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
         type: 'object',
         properties: {
           investigationReport: { type: 'string', description: 'The detailed investigation report as markdown (root cause analysis, findings, fix suggestion)' },
+          investigationSummary: { type: 'string', description: 'A short 2-3 sentence summary of the investigation findings, root cause, and recommended fix approach' },
         },
-        required: ['investigationReport'],
+        required: ['investigationReport', 'investigationSummary'],
       },
     };
   }

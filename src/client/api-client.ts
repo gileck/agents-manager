@@ -166,6 +166,7 @@ export interface ApiClient {
   taskDocs: {
     list(taskId: string): Promise<TaskDoc[]>;
     get(taskId: string, type: DocArtifactType): Promise<TaskDoc | null>;
+    upsert(taskId: string, type: DocArtifactType, content: string, summary?: string | null): Promise<TaskDoc>;
   };
 
   // Items (template scaffold)
@@ -475,6 +476,8 @@ export function createApiClient(baseUrl: string): ApiClient {
     taskDocs: {
       list: (taskId: string) => req('GET', `/api/tasks/${taskId}/docs`),
       get: (taskId: string, type: DocArtifactType) => req('GET', `/api/tasks/${taskId}/docs/${type}`),
+      upsert: (taskId: string, type: DocArtifactType, content: string, summary?: string | null) =>
+        req('PUT', `/api/tasks/${taskId}/docs/${type}`, { content, summary }),
     },
 
     // -- Items (template scaffold) -------------------------------------------
