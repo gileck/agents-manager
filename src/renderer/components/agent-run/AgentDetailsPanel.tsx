@@ -14,7 +14,7 @@ export function AgentDetailsPanel({ run }: AgentDetailsPanelProps) {
     []
   );
 
-  const agentDefinition = agentDefinitions?.find(def => def.name === run.agentType);
+  const agentDefinition = agentDefinitions?.find(def => def.id === `agent-def-${run.agentType}`);
 
   const [systemPromptExpanded, setSystemPromptExpanded] = useState(false);
 

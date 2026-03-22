@@ -124,4 +124,38 @@ describe('Agent Definition CRUD', () => {
       ctx.agentDefinitionStore.deleteDefinition('agent-def-implementor'),
     ).rejects.toThrow('Cannot delete built-in');
   });
+
+  it('should update model override on a built-in definition', async () => {
+    // Verify the seeded definition starts with model: null
+    const before = await ctx.agentDefinitionStore.getDefinition('agent-def-investigator');
+    expect(before).not.toBeNull();
+    expect(before!.isBuiltIn).toBe(true);
+    expect(before!.model).toBeNull();
+
+    // Update the model override (mimics the Edit Agent UI save path)
+    const updated = await ctx.agentDefinitionStore.updateDefinition('agent-def-investigator', {
+      model: 'claude-sonnet-4-5-20250929',
+    });
+
+    expect(updated).not.toBeNull();
+    expect(updated!.model).toBe('claude-sonnet-4-5-20250929');
+    expect(updated!.id).toBe('agent-def-investigator');
+    expect(updated!.isBuiltIn).toBe(true);
+
+    // Verify the convention-based lookup returns the updated model
+    const byType = await ctx.agentDefinitionStore.getDefinitionByAgentType('investigator');
+    expect(byType).not.toBeNull();
+    expect(byType!.model).toBe('claude-sonnet-4-5-20250929');
+  });
+
+  it('should return updated model via getDefinition after built-in update', async () => {
+    await ctx.agentDefinitionStore.updateDefinition('agent-def-implementor', {
+      model: 'test-model-override',
+    });
+
+    // Direct ID lookup (same path as agent-service.ts:615)
+    const def = await ctx.agentDefinitionStore.getDefinition('agent-def-implementor');
+    expect(def).not.toBeNull();
+    expect(def!.model).toBe('test-model-override');
+  });
 });
