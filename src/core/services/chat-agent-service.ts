@@ -4,6 +4,7 @@ import type { IProjectStore } from '../interfaces/project-store';
 import type { ITaskStore } from '../interfaces/task-store';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
+import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { ChatMessage, AgentChatMessage, ChatImage, ChatImageRef, ChatSendOptions, ChatSendResult, ChatAgentEvent, ChatSession, PermissionMode } from '../../shared/types';
 import type { AgentLibRegistry } from './agent-lib-registry';
 import type { AgentLibCallbacks, SubagentDefinition, IAgentLib } from '../interfaces/agent-lib';
@@ -179,6 +180,17 @@ function tagNestedSubagentMessage(message: AgentChatMessage, parentToolUseId: st
   }
 }
 
+/** Maps agent-chat agentRole → TaskContextEntry entryType for auto-saving responses. */
+const AGENT_ROLE_TO_FEEDBACK_ENTRY_TYPE: Record<string, string> = {
+  planner: 'plan_feedback',
+  designer: 'design_feedback',
+  implementor: 'implementation_feedback',
+  investigator: 'investigation_feedback',
+  reviewer: 'review_feedback',
+  'post-mortem-reviewer': 'post_mortem_feedback',
+  'workflow-reviewer': 'workflow_review_feedback',
+};
+
 export class ChatAgentService {
   private runningControllers = new Map<string, AbortController>();
   private runningAgents = new Map<string, RunningAgent>();
@@ -212,6 +224,7 @@ export class ChatAgentService {
     private getDefaultPermissionMode: () => PermissionMode | null = () => null,
     imageStorageDir?: string,
     private subscriptionRegistry?: AgentSubscriptionRegistry,
+    private taskContextStore?: ITaskContextStore,
   ) {
     this.imageStorageDir = imageStorageDir
       ?? path.join(process.env.HOME || os.homedir(), '.agents-manager', 'chat-images');
@@ -1644,6 +1657,37 @@ export class ChatAgentService {
         // modify the plan/design directly. Plan/design changes are handled by
         // the "Request Changes" flow which transitions the task back to
         // planning/designing and re-runs the full pipeline.
+      }
+
+      // Auto-save agent-chat response as TaskContextEntry so it's visible
+      // in the review conversation even if the frontend missed the
+      // completion sentinel (e.g. user navigated away).
+      if (extra?.isAgentChat && extra?.taskId && this.taskContextStore && turnMessages.length > 0) {
+        const agentRole = extra.agentType;
+        const entryType = agentRole ? AGENT_ROLE_TO_FEEDBACK_ENTRY_TYPE[agentRole] : undefined;
+        if (entryType) {
+          try {
+            const responseText = turnMessages
+              .filter(m => m.type === 'assistant_text')
+              .map(m => (m as { type: 'assistant_text'; text: string }).text)
+              .join('\n');
+
+            if (responseText.trim()) {
+              await this.taskContextStore.addEntry({
+                taskId: extra.taskId,
+                source: agentRole ?? 'agent',
+                entryType,
+                summary: responseText.trim(),
+                agentRunId: agentRunId,
+              });
+              getAppLogger().info('ChatAgentService',
+                `Saved agent-chat response as TaskContextEntry (${entryType}) for task ${extra.taskId}`);
+            }
+          } catch (ctxErr) {
+            getAppLogger().logError('ChatAgentService',
+              'Failed to save agent-chat response as TaskContextEntry', ctxErr);
+          }
+        }
       }
 
       // Update AgentRun with accumulated costs and messages
