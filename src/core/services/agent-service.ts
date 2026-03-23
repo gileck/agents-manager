@@ -995,6 +995,7 @@ export class AgentService implements IAgentService {
       };
       await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
       await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
+      await this.postRunExtractor.extractUxDesign(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
       await this.postRunExtractor.extractTaskEstimates(taskId, result, agentType, postRunLog, extractionPostLog);
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog, extractionPostLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog, extractionPostLog);
