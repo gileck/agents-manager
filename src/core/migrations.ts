@@ -205,5 +205,9 @@ INSERT OR IGNORE INTO task_docs (id, task_id, type, content, summary, created_at
 SELECT 'doc-' || id || '-design', id, 'technical_design', technical_design, NULL, updated_at, updated_at
 FROM tasks WHERE technical_design IS NOT NULL AND technical_design != ''`,
     },
+    {
+      name: '122_reseed_pipelines_triaging',
+      sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}', transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
+    },
   ];
 }
