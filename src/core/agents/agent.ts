@@ -259,14 +259,32 @@ export class Agent implements IAgent {
 
     const composedHooks: AgentLibHooks | undefined = composedPreToolUse ? { preToolUse: composedPreToolUse } : undefined;
 
-    // For crash recovery resume with native-resume engines, use a short continuation
-    // prompt instead of the full system prompt (the prior conversation is replayed by the SDK).
+    // For session resumes with native-resume engines, use a short continuation prompt
+    // instead of the full system prompt (the prior conversation is replayed by the SDK).
+    // Two cases:
+    //   1. Crash recovery: context.resumedFromRunId is set — use generic "continue" prompt
+    //   2. Revision-mode: mode='revision' with session resume — inject feedback via buildContinuationPrompt()
     let effectivePrompt = execConfig.prompt;
     if (context.resumedFromRunId && context.resumeSession && lib.supportedFeatures().nativeResume) {
+      // Crash recovery resume
       effectivePrompt = context.customPrompt?.trim() || 'You were interrupted by an app shutdown. Continue where you left off and complete the task.';
       log(`Resuming interrupted session — using continuation prompt`, { resumedFromRunId: context.resumedFromRunId, promptLength: effectivePrompt.length });
       // Update stored prompt to reflect what was actually sent (not the full system prompt)
       onPromptBuilt?.(effectivePrompt);
+    } else if (context.resumeSession && !context.resumedFromRunId && lib.supportedFeatures().nativeResume) {
+      // Revision-mode resume: the SDK will replay the prior conversation, so the full
+      // system prompt is redundant. Build a short continuation prompt that injects
+      // the new feedback as a user message the agent must address.
+      const continuationPrompt = this.promptBuilder.buildContinuationPrompt(context);
+      if (continuationPrompt) {
+        effectivePrompt = continuationPrompt;
+        log(`Revision-mode session resume — using continuation prompt with feedback`, {
+          sessionId: context.sessionId,
+          revisionReason: context.revisionReason,
+          promptLength: effectivePrompt.length,
+        });
+        onPromptBuilt?.(effectivePrompt);
+      }
     }
 
     try {

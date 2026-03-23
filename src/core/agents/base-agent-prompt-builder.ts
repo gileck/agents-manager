@@ -74,6 +74,70 @@ export abstract class BaseAgentPromptBuilder {
   /** Feedback types the subclass handles in its own prompt (excluded from base Unaddressed Feedback). */
   protected getExcludedFeedbackTypes(): string[] { return []; }
 
+  /**
+   * Build a short continuation prompt for revision-mode session resumes.
+   *
+   * When a session is resumed for a revision (e.g., plan feedback), the SDK loads
+   * the prior conversation. Passing the full system prompt is ignored because the
+   * agent already has the context. Instead, we send a short message that tells the
+   * agent about the new feedback and what to do.
+   *
+   * Returns null if no continuation prompt is needed (falls back to full prompt).
+   * Subclasses can override for agent-type-specific revision instructions.
+   */
+  buildContinuationPrompt(context: AgentContext): string | null {
+    if (context.mode !== 'revision' || !context.revisionReason) return null;
+
+    // Extract unaddressed feedback entries from task context
+    const feedbackTypeSet = new Set<string>(FEEDBACK_ENTRY_TYPES);
+    const allFeedback = (context.taskContext ?? []).filter(
+      e => feedbackTypeSet.has(e.entryType) && !e.addressed,
+    );
+
+    // If there's no feedback and no custom prompt, nothing to inject
+    if (allFeedback.length === 0 && !context.customPrompt?.trim()) return null;
+
+    const lines: string[] = [];
+
+    // Opening instruction based on revision reason
+    switch (context.revisionReason) {
+      case 'changes_requested':
+        lines.push('The user has provided new feedback on your work. You must revise your output to address all of the feedback below.');
+        break;
+      case 'info_provided':
+        lines.push('The user has provided answers to your questions. Continue where you left off and use their decisions to complete the task.');
+        break;
+      case 'merge_failed':
+        lines.push('A merge/rebase conflict was detected. Resolve the conflicts and ensure the branch is clean.');
+        break;
+      case 'uncommitted_changes':
+        lines.push('There are uncommitted changes from a prior run. Stage and commit them to complete the task.');
+        break;
+      default:
+        lines.push(`You are being asked to revise your work (reason: ${context.revisionReason}).`);
+        break;
+    }
+
+    // Include feedback content
+    if (allFeedback.length > 0) {
+      lines.push('', '## Feedback to Address');
+      for (const entry of allFeedback) {
+        lines.push('', formatContextEntry(entry));
+      }
+    }
+
+    // Include custom prompt if provided (e.g., from message queue)
+    if (context.customPrompt?.trim()) {
+      lines.push('', '## Additional Instructions', context.customPrompt.trim());
+    }
+
+    if (context.revisionReason === 'changes_requested') {
+      lines.push('', 'Address every piece of feedback. Do not skip or partially address any comment.');
+    }
+
+    return lines.join('\n');
+  }
+
   buildExecutionConfig(context: AgentContext, config: AgentConfig): AgentExecutionConfig {
     let prompt: string;
     if (context.modeConfig?.promptTemplate) {
