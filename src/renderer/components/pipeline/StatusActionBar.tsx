@@ -3,7 +3,7 @@ import { Button } from '../ui/button';
 import { SplitButton } from '../ui/SplitButton';
 import { getRecommendedTransition, isEscapeTransition } from '../../utils/getRecommendedTransition';
 import { AgentRunErrorBanner } from '../agent-run/AgentRunErrorBanner';
-import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity, TaskContextEntry } from '../../../shared/types';
+import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity, TaskContextEntry, ProposedFixOption } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
 import { reportError } from '../../lib/error-handler';
 
@@ -70,13 +70,6 @@ function renderSmartTransitions(
       onTransition={onTransition}
     />
   );
-}
-
-interface ProposedFixOption {
-  id: string;
-  label: string;
-  description: string;
-  recommended?: boolean;
 }
 
 export function StatusActionBar({

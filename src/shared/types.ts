@@ -1582,6 +1582,14 @@ export interface TaskDoc {
   updatedAt: number;
 }
 
+/** A proposed fix option surfaced by the investigator agent. */
+export interface ProposedFixOption {
+  id: string;
+  label: string;
+  description: string;
+  recommended?: boolean;
+}
+
 /** Input for creating or upserting a task doc. */
 export interface TaskDocCreateInput {
   taskId: string;

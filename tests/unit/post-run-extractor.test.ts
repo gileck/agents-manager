@@ -782,6 +782,113 @@ describe('PostRunExtractor.extractPlan', () => {
   });
 });
 
+describe('PostRunExtractor.extractPlan proposedOptions extraction', () => {
+  let extractor: PostRunExtractor;
+  let stores: ReturnType<typeof createMockStores>;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    stores = createMockStores();
+    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
+    onLog.mockClear();
+  });
+
+  it('should create fix_options_proposed context entry when investigator output includes proposedOptions', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Report',
+        proposedOptions: [
+          { id: 'opt-1', label: 'Option A', description: 'First approach', recommended: true },
+          { id: 'opt-2', label: 'Option B', description: 'Second approach' },
+        ],
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog, undefined, 'run-1');
+
+    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        agentRunId: 'run-1',
+        source: 'agent',
+        entryType: 'fix_options_proposed',
+        summary: '2 fix option(s) proposed',
+        data: {
+          options: [
+            { id: 'opt-1', label: 'Option A', description: 'First approach', recommended: true },
+            { id: 'opt-2', label: 'Option B', description: 'Second approach' },
+          ],
+        },
+      }),
+    );
+  });
+
+  it('should not create fix_options_proposed context entry when proposedOptions is empty', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Report',
+        proposedOptions: [],
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog, undefined, 'run-1');
+
+    // addEntry may be called for other context entries but not for fix_options_proposed
+    const addEntryCalls = (stores.taskContextStore.addEntry as ReturnType<typeof vi.fn>).mock.calls;
+    const fixOptionsCalls = addEntryCalls.filter(
+      (call: unknown[]) => (call[0] as { entryType: string }).entryType === 'fix_options_proposed',
+    );
+    expect(fixOptionsCalls).toHaveLength(0);
+  });
+
+  it('should not create fix_options_proposed context entry when proposedOptions is missing', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Report',
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'investigator', onLog, undefined, 'run-1');
+
+    const addEntryCalls = (stores.taskContextStore.addEntry as ReturnType<typeof vi.fn>).mock.calls;
+    const fixOptionsCalls = addEntryCalls.filter(
+      (call: unknown[]) => (call[0] as { entryType: string }).entryType === 'fix_options_proposed',
+    );
+    expect(fixOptionsCalls).toHaveLength(0);
+  });
+
+  it('should not create fix_options_proposed context entry for non-investigator agents', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan',
+        proposedOptions: [
+          { id: 'opt-1', label: 'Option A', description: 'First approach' },
+        ],
+      },
+    };
+
+    await extractor.extractPlan('task-1', result, 'planner', onLog, undefined, 'run-1');
+
+    const addEntryCalls = (stores.taskContextStore.addEntry as ReturnType<typeof vi.fn>).mock.calls;
+    const fixOptionsCalls = addEntryCalls.filter(
+      (call: unknown[]) => (call[0] as { entryType: string }).entryType === 'fix_options_proposed',
+    );
+    expect(fixOptionsCalls).toHaveLength(0);
+  });
+});
+
 describe('PostRunExtractor dual-write to task_docs', () => {
   let extractor: PostRunExtractor;
   let stores: ReturnType<typeof createMockStores>;
