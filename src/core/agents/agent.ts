@@ -6,6 +6,7 @@ import type { IAgentLib, AgentLibTelemetry, AgentLibResult, AgentLibHooks } from
 import type { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import type { AgentLibRegistry } from '../services/agent-lib-registry';
 import { getAppLogger } from '../services/app-logger';
+import { getGlobalAgentReadOnlyPaths } from '../utils/user-paths';
 
 /** Tools that perform file writes — used by both disallowedTools and readOnlyGuard. */
 export const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
@@ -137,6 +138,9 @@ export class Agent implements IAgent {
 
     const allowedPaths = [context.workdir];
     const readOnlyPaths = execConfig.readOnly && context.project?.path ? [context.project.path] : [];
+    // Include global read-only paths (screenshots, chat images) so agents can
+    // read media referenced in task descriptions regardless of sandbox mode.
+    readOnlyPaths.push(...getGlobalAgentReadOnlyPaths());
 
     // Merge disallowed tools from two sources:
     // 1. readOnly flag: all write tools are disallowed for read-only agents
