@@ -59,6 +59,7 @@ export const OUTCOME_SCHEMAS: Record<string, OutcomeDefinition> = {
   cannot_reproduce: { description: 'Bug not reproducible', schema: null },
   review_complete: { description: 'Workflow review finished', schema: null },
   triage_complete: { description: 'Triage finished', schema: null },
+  options_ready: { description: 'UX design options ready for review', schema: null },
 };
 
 const JS_TYPE_CHECKS: Record<string, (v: unknown) => boolean> = {

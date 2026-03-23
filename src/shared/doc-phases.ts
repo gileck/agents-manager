@@ -46,6 +46,15 @@ export const DOC_PHASES: readonly DocPhaseEntry[] = [
     feedbackType: 'design_feedback',
     routeKey: 'design',
   },
+  {
+    agentType: 'ux-designer',
+    docType: 'ux_design',
+    docTitle: 'UX Design',
+    activeStatus: 'ux_designing',
+    reviewStatus: 'ux_design_review',
+    feedbackType: 'ux_design_feedback',
+    routeKey: 'ux-design',
+  },
 ] as const;
 
 // --- Lookup helpers ---

@@ -714,7 +714,7 @@ export interface TaskContextEntryCreateInput {
 }
 
 export const FEEDBACK_ENTRY_TYPES = [
-  'plan_feedback', 'design_feedback', 'implementation_feedback', 'review_feedback', 'investigation_feedback', 'post_mortem_feedback', 'workflow_review_feedback',
+  'plan_feedback', 'design_feedback', 'implementation_feedback', 'review_feedback', 'investigation_feedback', 'post_mortem_feedback', 'workflow_review_feedback', 'ux_design_feedback',
 ] as const;
 
 export const TRIAGE_ENTRY_TYPE = 'triage_summary' as const;
@@ -1569,7 +1569,7 @@ export interface AgentNotificationPayload {
 // ============================================
 
 /** Predefined document artifact types. Extensible by adding new enum values + DOC_PHASES entry. */
-export type DocArtifactType = 'investigation_report' | 'plan' | 'technical_design';
+export type DocArtifactType = 'investigation_report' | 'plan' | 'technical_design' | 'ux_design' | 'ux_design_spec';
 
 /** A row in the task_docs table — one document artifact per task per type. */
 export interface TaskDoc {
