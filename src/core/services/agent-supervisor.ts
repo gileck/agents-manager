@@ -17,10 +17,44 @@ const STALL_GRACE_MS = 60_000;
 /** Maximum number of supervisor-initiated recovery attempts per task. */
 const MAX_STALL_RECOVERY_ATTEMPTS = 2;
 
+/** Number of consecutive identical error hashes required to declare a deterministic failure. */
+const DETERMINISTIC_FAILURE_THRESHOLD = 2;
+
+/**
+ * Normalize an error message by stripping variable parts (hex IDs, UUIDs,
+ * long numeric sequences) so that structurally identical errors hash the same.
+ */
+export function normalizeError(msg: string): string {
+  return msg
+    // Strip UUIDs (8-4-4-4-12 hex)
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<UUID>')
+    // Strip hex strings ≥8 chars (commit SHAs, ref hashes, etc.)
+    .replace(/\b[0-9a-f]{8,}\b/gi, '<HEX>')
+    // Strip purely numeric sequences ≥6 digits (timestamps, IDs).
+    // Uses lookahead/lookbehind for digit boundaries because \b won't match between
+    // a digit and an adjacent letter (both are word characters).
+    .replace(/(?<!\d)\d{6,}(?!\d)/g, '<NUM>');
+}
+
+/**
+ * Simple djb2 string hash — returns a stable string representation.
+ * Not cryptographic; used only for deduplication of error classes.
+ */
+export function hashError(msg: string): string {
+  const normalized = normalizeError(msg);
+  let hash = 5381;
+  for (let i = 0; i < normalized.length; i++) {
+    hash = ((hash << 5) + hash + normalized.charCodeAt(i)) | 0; // hash * 33 + c, keep 32-bit
+  }
+  return String(hash >>> 0); // unsigned 32-bit
+}
+
 export class AgentSupervisor {
   private timer: ReturnType<typeof setInterval> | null = null;
   /** Tracks recovery attempts per task to enforce MAX_STALL_RECOVERY_ATTEMPTS. */
   private recoveryAttempts = new Map<string, number>();
+  /** Tracks recent error hashes per task for deterministic failure detection. */
+  private errorHashes = new Map<string, string[]>();
 
   constructor(
     private agentRunStore: IAgentRunStore,
@@ -116,7 +150,11 @@ export class AgentSupervisor {
           // Check if there's already a running agent for this task
           const runs = await this.agentRunStore.getRunsForTask(task.id);
           const hasRunning = runs.some(r => r.status === 'running');
-          if (hasRunning) continue;
+          if (hasRunning) {
+            // Task is healthy — clear any stale error history
+            this.errorHashes.delete(task.id);
+            continue;
+          }
 
           // Skip recovery if the most recent run was explicitly cancelled by the user (via Stop button).
           // runs are ordered by started_at DESC, so runs[0] is the latest.
@@ -167,6 +205,38 @@ export class AgentSupervisor {
           const agentType = expectedAgentType ?? latestRun?.agentType ?? 'implementor';
           const mode = latestRun?.mode ?? 'new';
 
+          // If the latest completed run has an error, seed it into our hash history.
+          // This captures agent-level failures (as opposed to startAgent() spawn failures
+          // which are recorded in the catch block below). We only append when the hash
+          // differs from the last entry to avoid double-counting the same run across polls.
+          if (latestCompleted?.error) {
+            const runErrorHash = hashError(latestCompleted.error);
+            const hashes = this.errorHashes.get(task.id) ?? [];
+            if (hashes.length === 0 || hashes[hashes.length - 1] !== runErrorHash) {
+              hashes.push(runErrorHash);
+              this.errorHashes.set(task.id, hashes);
+            }
+          }
+
+          // Check for deterministic failure: if the last N consecutive error hashes
+          // are identical, stop retrying and escalate.
+          const taskErrorHashes = this.errorHashes.get(task.id) ?? [];
+          if (taskErrorHashes.length >= DETERMINISTIC_FAILURE_THRESHOLD) {
+            const recent = taskErrorHashes.slice(-DETERMINISTIC_FAILURE_THRESHOLD);
+            const allSame = recent.every(h => h === recent[0]);
+            if (allSame) {
+              const repeatedError = latestCompleted?.error ?? 'unknown';
+              await this.taskEventLog.log({
+                taskId: task.id,
+                category: 'system',
+                severity: 'error',
+                message: `Stall recovery abandoned: deterministic failure detected for task ${task.id} — same error repeated ${DETERMINISTIC_FAILURE_THRESHOLD} times: ${repeatedError}`,
+                data: { status, agentType, errorHash: recent[0], repeatedError, consecutiveCount: DETERMINISTIC_FAILURE_THRESHOLD },
+              });
+              continue;
+            }
+          }
+
           // Check recovery cap
           const attempts = this.recoveryAttempts.get(task.id) ?? 0;
           if (attempts >= MAX_STALL_RECOVERY_ATTEMPTS) continue;
@@ -189,6 +259,8 @@ export class AgentSupervisor {
               this.agentService.setPendingResume(task.id, latestRun);
             }
             await this.workflowService.startAgent(task.id, mode, agentType);
+            // Recovery succeeded — clear error history for this task
+            this.errorHashes.delete(task.id);
             await this.taskEventLog.log({
               taskId: task.id,
               category: 'system',
@@ -201,13 +273,20 @@ export class AgentSupervisor {
               this.agentService.clearPendingResume(task.id);
             }
             const msg = err instanceof Error ? err.message : String(err);
+
+            // Track the error hash for deterministic failure detection
+            const errHash = hashError(msg);
+            const hashes = this.errorHashes.get(task.id) ?? [];
+            hashes.push(errHash);
+            this.errorHashes.set(task.id, hashes);
+
             try {
               await this.taskEventLog.log({
                 taskId: task.id,
                 category: 'system',
                 severity: 'error',
                 message: `Stall recovery threw for task ${task.id}: ${msg}`,
-                data: { error: msg, recoveryAttempt: attempts + 1 },
+                data: { error: msg, errorHash: errHash, recoveryAttempt: attempts + 1 },
               });
             } catch (logErr) {
               getAppLogger().logError('AgentSupervisor', `Stall recovery error (task ${task.id}): ${msg}`, logErr);
