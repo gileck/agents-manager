@@ -69,6 +69,18 @@ export class LocalWorktreeManager implements IWorktreeManager {
       if (/already exists/.test(msg)) {
         // Branch already exists from a prior run — retry without -b
         await this.git(['worktree', 'add', wtPath, branch]);
+      } else if (/cannot lock ref.*exists;/.test(msg)) {
+        // Git ref hierarchy conflict: a flat ref (e.g. "task/abc") blocks creation of
+        // a hierarchical ref (e.g. "task/abc/phase-1"). Delete the conflicting ref and retry.
+        const conflictMatch = msg.match(/'refs\/heads\/([^']+)' exists;/);
+        if (conflictMatch) {
+          const conflictingRef = conflictMatch[1];
+          getAppLogger().warn('WorktreeManager', `Deleting conflicting branch ref "${conflictingRef}" to unblock worktree creation for "${branch}"`, { conflictingRef, branch });
+          await this.git(['branch', '-D', conflictingRef]);
+          await this.git(['worktree', 'add', '-b', branch, wtPath, base]);
+        } else {
+          throw new Error(`Failed to create worktree for branch "${branch}" from base "${base}": ${msg}`, { cause: err });
+        }
       } else {
         throw new Error(`Failed to create worktree for branch "${branch}" from base "${base}": ${msg}`, { cause: err });
       }

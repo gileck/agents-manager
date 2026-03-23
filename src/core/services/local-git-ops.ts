@@ -130,6 +130,19 @@ export class LocalGitOps implements IGitOps {
     return this.git(['rev-parse', ref]);
   }
 
+  async refExists(branch: string): Promise<boolean> {
+    try {
+      await this.git(['show-ref', '--verify', `refs/heads/${branch}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async deleteLocalBranch(name: string): Promise<void> {
+    await this.git(['branch', '-D', name]);
+  }
+
   async getCommitDetail(hash: string): Promise<GitCommitDetail> {
     const body = await this.git(['log', '-1', '--format=%b', hash]);
     const filesOutput = await this.git(['diff', '--name-status', `${hash}^`, hash]);

@@ -31,4 +31,8 @@ export interface IGitOps {
   mergeBase(ref1: string, ref2: string): Promise<string>;
   /** Return the resolved commit hash: `git rev-parse <ref>`. */
   revParse(ref: string): Promise<string>;
+  /** Check if a local branch ref exists: `git show-ref --verify refs/heads/<branch>`. */
+  refExists(branch: string): Promise<boolean>;
+  /** Force-delete a local branch: `git branch -D <name>`. */
+  deleteLocalBranch(name: string): Promise<void>;
 }
