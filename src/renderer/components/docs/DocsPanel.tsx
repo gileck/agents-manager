@@ -4,15 +4,8 @@ import { Button } from '../ui/button';
 import { PlanMarkdown } from '../task-detail/PlanMarkdown';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { DOC_PHASES, getPhaseByDocType, getPhaseByReviewStatus } from '../../../shared/doc-phases';
-import type { Task, TaskDoc, TaskContextEntry, Transition, DocArtifactType, PipelineStatus } from '../../../shared/types';
+import type { Task, TaskDoc, TaskContextEntry, Transition, DocArtifactType, PipelineStatus, ProposedFixOption } from '../../../shared/types';
 import { reportError } from '../../lib/error-handler';
-
-interface ProposedFixOption {
-  id: string;
-  label: string;
-  description: string;
-  recommended?: boolean;
-}
 
 interface DocsPanelProps {
   task: Task;
