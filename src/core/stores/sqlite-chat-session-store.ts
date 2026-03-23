@@ -209,8 +209,6 @@ export class SqliteChatSessionStore implements IChatSessionStore {
         return this.getSession(id);
       }
 
-      setClauses.push('updated_at = ?');
-      params.push(now());
       params.push(id);
 
       const stmt = this.db.prepare(`
