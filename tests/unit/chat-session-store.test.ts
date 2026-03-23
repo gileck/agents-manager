@@ -172,7 +172,7 @@ describe('SqliteChatSessionStore', () => {
   });
 
   describe('updateSession', () => {
-    it('should update session name', async () => {
+    it('should update session name without changing updatedAt', async () => {
       const created = await store.createSession({
         scopeType: 'project',
         scopeId: testProjectId,
@@ -184,7 +184,9 @@ describe('SqliteChatSessionStore', () => {
 
       expect(updated).not.toBeNull();
       expect(updated!.name).toBe('Updated Name');
-      expect(updated!.updatedAt).toBeGreaterThanOrEqual(created.updatedAt);
+      // updateSession should NOT bump updatedAt — only addMessage should,
+      // so the sidebar sorts by last message time, not metadata edits.
+      expect(updated!.updatedAt).toBe(created.updatedAt);
     });
 
     it('should update session agentLib', async () => {
