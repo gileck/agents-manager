@@ -155,6 +155,9 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { name: 'triage_review', label: 'Triage Review', color: '#0891b2', category: 'human_review', position: 0.7 },
     { name: 'investigating', label: 'Investigating', color: '#f59e0b', category: 'agent_running', position: 1 },
     { name: 'investigation_review', label: 'Investigation Review', color: '#8b5cf6', category: 'human_review', position: 2 },
+    { name: 'ux_designing', label: 'UX Designing', color: '#34d399', category: 'agent_running', position: 2.3 },
+    { name: 'ux_design_review', label: 'UX Design Review', color: '#2dd4bf', category: 'human_review', position: 2.5 },
+    { name: 'ux_needs_info', label: 'UX Needs Info', color: '#fbbf24', category: 'waiting_for_input', position: 2.7 },
     { name: 'designing', label: 'Designing', color: '#ec4899', category: 'agent_running', position: 3 },
     { name: 'design_review', label: 'Design Review', color: '#a855f7', category: 'human_review', position: 4 },
     { name: 'planning', label: 'Planning', color: '#f97316', category: 'agent_running', position: 5 },
@@ -214,6 +217,51 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'investigation_review', to: 'investigating', trigger: 'manual', label: 'Request Investigation Changes',
       guards: [{ name: 'no_running_agent' }],
       hooks: [startAgent('investigator', 'new')] },
+
+    // ── UX Design (optional phase) ──────────────────────────────────
+    // Entry points: user manually triggers UX design from review gates
+    { from: 'open', to: 'ux_designing', trigger: 'manual', label: 'Start UX Design',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('ux-designer', 'new')] },
+    { from: 'triage_review', to: 'ux_designing', trigger: 'manual', label: 'Start UX Design',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('ux-designer', 'new')] },
+    { from: 'investigation_review', to: 'ux_designing', trigger: 'manual', label: 'Start UX Design',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('ux-designer', 'new')] },
+
+    // Agent completion
+    { from: 'ux_designing', to: 'ux_design_review', trigger: 'agent', agentOutcome: 'options_ready',
+      hooks: [notify('UX Design ready', 'UX Design ready: {taskTitle}\n\nSummary: {summary}')] },
+    { from: 'ux_designing', to: 'ux_needs_info', trigger: 'agent', agentOutcome: 'needs_info',
+      hooks: [
+        { name: 'create_prompt', params: { resumeOutcome: 'info_provided' }, policy: 'required' },
+        notify('Info needed', 'Info needed: {taskTitle}'),
+      ] },
+
+    // Auto-retry & cancel
+    { from: 'ux_designing', to: 'ux_designing', trigger: 'agent', agentOutcome: 'failed',
+      guards: [{ name: 'max_retries', params: { max: 3 } }, { name: 'no_running_agent' }],
+      hooks: [startAgent('ux-designer', 'new')] },
+    { from: 'ux_designing', to: 'open', trigger: 'manual', label: 'Cancel UX Design' },
+
+    // Review actions
+    { from: 'ux_design_review', to: 'ux_designing', trigger: 'manual', label: 'Request Changes',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('ux-designer', 'revision', 'changes_requested')] },
+    { from: 'ux_design_review', to: 'designing', trigger: 'manual', label: 'Approve & Design',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('designer', 'new')] },
+    { from: 'ux_design_review', to: 'planning', trigger: 'manual', label: 'Approve & Plan',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('planner', 'new')] },
+    { from: 'ux_design_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('implementor', 'new')] },
+
+    // Needs info → resume
+    { from: 'ux_needs_info', to: 'ux_designing', trigger: 'agent', agentOutcome: 'info_provided',
+      hooks: [startAgent('ux-designer', 'revision', 'info_provided')] },
 
     // Design review → plan / implement / re-design
     { from: 'design_review', to: 'planning', trigger: 'manual', label: 'Approve & Plan',

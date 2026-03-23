@@ -185,4 +185,7 @@ temp/
 # *.sqlite
 # *.sqlite3
 
+# UX mock files (ephemeral review artifacts)
+ux-mocks/
+
 .agent-worktrees/
