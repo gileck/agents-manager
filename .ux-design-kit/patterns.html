@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agents Manager — Component Patterns</title>
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    /* ── Pattern page layout ───────────────────────────────────── */
+    .pattern-page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--space-8) var(--space-6);
+    }
+    .pattern-page h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-bold);
+      margin-bottom: var(--space-2);
+    }
+    .pattern-page > p {
+      color: var(--color-muted-fg);
+      margin-bottom: var(--space-8);
+    }
+    .section {
+      margin-bottom: var(--space-10);
+    }
+    .section-title {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-semibold);
+      margin-bottom: var(--space-4);
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .variant-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      align-items: center;
+      margin-bottom: var(--space-4);
+    }
+    .variant-label {
+      font-size: var(--text-xs);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-muted-fg);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      width: 100%;
+      margin-bottom: var(--space-1);
+    }
+
+    /* ── Buttons ────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      border-radius: 0.75rem;
+      font-size: var(--text-sm);
+      font-weight: var(--font-weight-medium);
+      height: 2.25rem; /* h-9 */
+      padding: 0 var(--space-4);
+      border: none;
+      cursor: pointer;
+      transition: all var(--motion-fast) var(--ease-standard);
+      gap: var(--space-2);
+      font-family: var(--font-sans);
+      text-decoration: none;
+      line-height: 1;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: var(--color-primary-fg);
+      box-shadow: var(--shadow-button-primary);
+    }
+    .btn-primary:hover { filter: brightness(1.08); }
+
+    .btn-secondary {
+      background: var(--color-secondary);
+      color: var(--color-secondary-fg);
+    }
+    .btn-secondary:hover { background: var(--color-accent); }
+
+    .btn-destructive {
+      background: var(--color-destructive);
+      color: hsl(210, 40%, 98%);
+    }
+    .btn-destructive:hover { filter: brightness(1.1); }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--color-fg);
+      border: 1px solid var(--color-border);
+    }
+    .btn-outline:hover { background: var(--color-accent); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-fg);
+    }
+    .btn-ghost:hover { background: var(--color-accent); }
+
+    .btn-success {
+      background: var(--color-success);
+      color: hsl(210, 40%, 98%);
+    }
+
+    .btn-sm {
+      height: 2rem; /* h-8 */
+      padding: 0 var(--space-3);
+      font-size: var(--text-xs);
+    }
+
+    .btn-lg {
+      height: 2.5rem; /* h-10 */
+      padding: 0 var(--space-5);
+    }
+
+    .btn-icon {
+      height: 2.25rem;
+      width: 2.25rem;
+      padding: 0;
+      border-radius: var(--radius-full);
+    }
+
+    /* ── Cards ──────────────────────────────────────────────────── */
+    .card {
+      border-radius: var(--radius-2xl);
+      border: 1px solid hsl(var(--border) / 0.7);
+      background: hsl(var(--card) / 0.88);
+      color: var(--color-card-fg);
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(12px);
+    }
+    .card-header {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1-5);
+      padding: var(--space-5);
+    }
+    .card-title {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--leading-none);
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+    .card-description {
+      font-size: var(--text-sm);
+      color: var(--color-muted-fg);
+      margin: 0;
+    }
+    .card-content {
+      padding: 0 var(--space-5) var(--space-5);
+    }
+    .card-footer {
+      display: flex;
+      align-items: center;
+      padding: 0 var(--space-5) var(--space-5);
+      gap: var(--space-2);
+    }
+
+    /* ── Badges ─────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: var(--radius-full);
+      border: 1px solid transparent;
+      padding: 0.125rem var(--space-2-5);
+      font-size: var(--text-xs);
+      font-weight: var(--font-weight-semibold);
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+    .badge-default {
+      background: hsl(var(--primary) / 0.9);
+      color: var(--color-primary-fg);
+    }
+    .badge-secondary {
+      background: var(--color-secondary);
+      color: var(--color-secondary-fg);
+    }
+    .badge-destructive {
+      background: var(--color-destructive);
+      color: hsl(210, 40%, 98%);
+    }
+    .badge-success {
+      background: var(--color-success);
+      color: hsl(210, 40%, 98%);
+    }
+    .badge-warning {
+      background: var(--color-warning);
+      color: hsl(220, 13%, 12%);
+    }
+    .badge-outline {
+      background: transparent;
+      border-color: var(--color-border);
+      color: var(--color-fg);
+    }
+    .badge-review {
+      background: hsl(199, 89%, 48%);
+      color: white;
+    }
+
+    /* ── Status indicators ─────────────────────────────────────── */
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: var(--radius-full);
+    }
+    .status-dot-running { background: var(--status-running); }
+    .status-dot-completed { background: var(--status-completed); }
+    .status-dot-failed { background: var(--status-failed); }
+    .status-dot-warning { background: var(--status-warning); }
+    .status-dot-cancelled { background: var(--status-cancelled); }
+    .status-dot-initializing { background: var(--status-initializing); }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .status-dot-running {
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    /* ── Form inputs ───────────────────────────────────────────── */
+    .input {
+      display: block;
+      height: 2.5rem; /* h-10 */
+      width: 100%;
+      border-radius: 0.75rem;
+      border: 1px solid hsl(var(--input) / 0.8);
+      background: var(--color-bg);
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--text-sm);
+      font-family: var(--font-sans);
+      color: var(--color-fg);
+      box-shadow: 0 0 0 1px hsl(var(--border) / 0.22) inset;
+      transition: box-shadow var(--motion-fast) var(--ease-standard);
+      outline: none;
+    }
+    .input::placeholder {
+      color: hsl(var(--muted-foreground) / 0.85);
+    }
+    .input:focus {
+      box-shadow: 0 0 0 2px hsl(var(--ring) / 0.65);
+    }
+
+    .textarea {
+      display: block;
+      width: 100%;
+      min-height: 80px;
+      border-radius: 0.75rem;
+      border: 1px solid hsl(var(--input) / 0.8);
+      background: var(--color-bg);
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--text-sm);
+      font-family: var(--font-sans);
+      color: var(--color-fg);
+      box-shadow: 0 0 0 1px hsl(var(--border) / 0.22) inset;
+      resize: vertical;
+      outline: none;
+    }
+    .textarea:focus {
+      box-shadow: 0 0 0 2px hsl(var(--ring) / 0.65);
+    }
+
+    .label {
+      display: block;
+      font-size: var(--text-sm);
+      font-weight: var(--font-weight-medium);
+      margin-bottom: var(--space-1-5);
+      color: var(--color-fg);
+    }
+
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .checkbox {
+      width: 1rem;
+      height: 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--color-primary);
+      accent-color: var(--color-primary);
+      cursor: pointer;
+    }
+
+    .select-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 2.25rem; /* h-9 */
+      width: 100%;
+      border-radius: var(--radius-full);
+      border: 1px solid hsl(var(--input) / 0.8);
+      background: var(--color-bg);
+      padding: var(--space-1-5) var(--space-3);
+      font-size: var(--text-sm);
+      font-family: var(--font-sans);
+      color: var(--color-fg);
+      cursor: pointer;
+      outline: none;
+    }
+    .select-trigger:hover {
+      background: hsl(var(--muted) / 0.45);
+    }
+    .select-trigger svg {
+      width: 1rem;
+      height: 1rem;
+      opacity: 0.5;
+    }
+
+    /* ── Tabs ───────────────────────────────────────────────────── */
+    .tabs-list {
+      display: inline-flex;
+      align-items: center;
+      height: 2.5rem;
+      border-radius: 0.75rem;
+      border: 1px solid hsl(var(--border) / 0.7);
+      background: hsl(var(--muted) / 0.55);
+      padding: var(--space-1);
+      gap: var(--space-0-5);
+      backdrop-filter: blur(4px);
+    }
+    .tab-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      border-radius: var(--radius-sm);
+      padding: var(--space-1-5) var(--space-3);
+      font-size: var(--text-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-muted-fg);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      transition: all var(--motion-fast) var(--ease-standard);
+      font-family: var(--font-sans);
+    }
+    .tab-trigger:hover {
+      background: hsl(var(--background) / 0.45);
+      color: var(--color-fg);
+    }
+    .tab-trigger[aria-selected="true"],
+    .tab-trigger.active {
+      background: hsl(var(--background) / 0.95);
+      color: var(--color-fg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* ── Tables ─────────────────────────────────────────────────── */
+    .table-wrapper {
+      width: 100%;
+      overflow: auto;
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--text-sm);
+    }
+    .table th {
+      height: 2.5rem;
+      padding: 0 var(--space-3);
+      text-align: left;
+      font-weight: var(--font-weight-medium);
+      color: var(--color-muted-fg);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .table td {
+      padding: var(--space-2) var(--space-3);
+      border-bottom: 1px solid hsl(var(--border) / 0.5);
+      vertical-align: middle;
+    }
+    .table tr:hover td {
+      background: hsl(var(--muted) / 0.35);
+    }
+
+    /* ── Dialogs / Modals ──────────────────────────────────────── */
+    .dialog-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dialog-content {
+      position: relative;
+      width: 100%;
+      max-width: 32rem; /* max-w-lg */
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      background: var(--color-card);
+      padding: var(--space-6);
+      box-shadow: var(--shadow-lg);
+    }
+    .dialog-header {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1-5);
+      margin-bottom: var(--space-4);
+    }
+    .dialog-title {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-semibold);
+      margin: 0;
+    }
+    .dialog-description {
+      font-size: var(--text-sm);
+      color: var(--color-muted-fg);
+      margin: 0;
+    }
+    .dialog-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-2);
+      margin-top: var(--space-6);
+    }
+    .dialog-close {
+      position: absolute;
+      top: var(--space-4);
+      right: var(--space-4);
+      background: transparent;
+      border: none;
+      color: var(--color-muted-fg);
+      cursor: pointer;
+      padding: var(--space-1);
+      border-radius: var(--radius-sm);
+    }
+    .dialog-close:hover { background: var(--color-accent); }
+
+    /* ── Sidebar ────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-width);
+      height: 100%;
+      border-right: 1px solid hsl(var(--border) / 0.7);
+      background: hsl(var(--card) / 0.5);
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .sidebar-header {
+      padding: var(--space-4);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-weight: var(--font-weight-semibold);
+      font-size: var(--text-sm);
+    }
+    .sidebar-section-label {
+      font-size: 11px;
+      font-weight: var(--font-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-muted-fg);
+      padding: var(--space-2-5) var(--space-3);
+      border-top: 1px solid hsl(var(--border) / 0.55);
+    }
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-2-5);
+      margin: 0 var(--space-2);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      color: var(--color-fg);
+      cursor: pointer;
+      transition: background var(--motion-fast) var(--ease-standard);
+      text-decoration: none;
+      border: 1px solid transparent;
+    }
+    .sidebar-item:hover {
+      background: hsl(var(--accent) / 0.55);
+    }
+    .sidebar-item.active {
+      background: hsl(var(--accent) / 0.85);
+      border-color: hsl(var(--border) / 0.6);
+    }
+    .sidebar-item-icon {
+      width: 1rem;
+      height: 1rem;
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+
+    /* ── Top menu / Header ─────────────────────────────────────── */
+    .top-menu {
+      height: var(--top-menu-height);
+      border-bottom: 1px solid hsl(var(--border) / 0.7);
+      background: hsl(var(--card) / 0.55);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-4);
+    }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1-5);
+      font-size: var(--text-sm);
+      color: var(--color-muted-fg);
+    }
+    .breadcrumb-separator {
+      color: var(--color-muted-fg);
+      opacity: 0.5;
+    }
+    .breadcrumb-current {
+      color: var(--color-fg);
+      font-weight: var(--font-weight-medium);
+    }
+
+    /* ── Tab bar (VS Code-style) ───────────────────────────────── */
+    .tab-bar {
+      height: var(--tab-bar-height);
+      display: flex;
+      align-items: stretch;
+      background: var(--color-muted);
+      border-bottom: 1px solid var(--color-border);
+      overflow-x: auto;
+      gap: 1px;
+    }
+    .tab-bar-item {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1-5);
+      padding: 0 var(--space-3);
+      font-size: var(--text-xs);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-muted-fg);
+      background: transparent;
+      border: none;
+      border-top: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: var(--font-sans);
+    }
+    .tab-bar-item:hover {
+      color: var(--color-fg);
+      background: hsl(var(--muted-foreground) / 0.1);
+    }
+    .tab-bar-item.active {
+      color: var(--color-fg);
+      background: var(--color-bg);
+      border-top-color: var(--color-primary);
+    }
+
+    /* ── Agent block (running indicator) ───────────────────────── */
+    .agent-block {
+      border-left: 3px solid var(--agent-glow-a);
+      padding: var(--space-3) var(--space-4);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      background: hsl(var(--card) / 0.6);
+      position: relative;
+      overflow: hidden;
+    }
+    .agent-block.running {
+      animation: agent-border-glow 2.5s ease-in-out infinite;
+    }
+    @keyframes agent-border-glow {
+      0%, 100% {
+        border-left-color: var(--agent-glow-a);
+        box-shadow: inset 3px 0 12px -4px rgba(99, 102, 241, 0.3);
+      }
+      50% {
+        border-left-color: var(--agent-glow-b);
+        box-shadow: inset 3px 0 12px -4px rgba(59, 130, 246, 0.45);
+      }
+    }
+    .agent-block-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      font-weight: var(--font-weight-semibold);
+    }
+    .agent-block-body {
+      margin-top: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-muted-fg);
+    }
+
+    /* ── Utility: flex helpers ──────────────────────────────────── */
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .gap-1 { gap: var(--space-1); }
+    .gap-2 { gap: var(--space-2); }
+    .gap-3 { gap: var(--space-3); }
+    .gap-4 { gap: var(--space-4); }
+    .flex-1 { flex: 1 1 0%; }
+    .w-full { width: 100%; }
+    .max-w-xs { max-width: 20rem; }
+    .max-w-sm { max-width: 24rem; }
+    .mt-2 { margin-top: var(--space-2); }
+    .mt-4 { margin-top: var(--space-4); }
+    .mb-2 { margin-bottom: var(--space-2); }
+    .p-4 { padding: var(--space-4); }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Demo grid for the pattern page ─────────────────────────── */
+    .demo-inline { position: relative; } /* for dialog demo */
+    .demo-dialog-overlay {
+      position: relative;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-8) var(--space-4);
+    }
+    .demo-dialog-content {
+      position: relative;
+      width: 100%;
+      max-width: 32rem;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      background: var(--color-card);
+      padding: var(--space-6);
+      box-shadow: var(--shadow-lg);
+    }
+  </style>
+</head>
+<body>
+  <div class="pattern-page">
+    <h1>Component Pattern Reference</h1>
+    <p>Live-rendered components matching the Agents Manager design system. Each snippet uses tokens from <code>tokens.css</code>.</p>
+
+    <!-- ════════════════════════════════════════════════════════════
+         BUTTONS
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Buttons</h2>
+
+      <div class="variant-label">Variants</div>
+      <div class="variant-row">
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-outline">Outline</button>
+        <button class="btn btn-ghost">Ghost</button>
+        <button class="btn btn-destructive">Danger</button>
+        <button class="btn btn-success">Success</button>
+      </div>
+
+      <div class="variant-label">Sizes</div>
+      <div class="variant-row">
+        <button class="btn btn-primary btn-sm">Small</button>
+        <button class="btn btn-primary">Default</button>
+        <button class="btn btn-primary btn-lg">Large</button>
+        <button class="btn btn-secondary btn-icon" title="Icon button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+
+      <div class="variant-label">States</div>
+      <div class="variant-row">
+        <button class="btn btn-primary" disabled>Disabled</button>
+        <button class="btn btn-outline" disabled>Disabled Outline</button>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         CARDS
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Cards</h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-4);">
+        <!-- Basic card -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Task: Implement Auth Flow</h3>
+            <p class="card-description">Add OAuth2 authentication with JWT refresh tokens</p>
+          </div>
+          <div class="card-content">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-default">In Progress</span>
+              <span class="badge badge-outline">Feature</span>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-sm btn-secondary">View Details</button>
+            <button class="btn btn-sm btn-ghost">Dismiss</button>
+          </div>
+        </div>
+
+        <!-- Card with stats -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Pipeline Overview</h3>
+            <p class="card-description">Current sprint metrics</p>
+          </div>
+          <div class="card-content">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);">
+              <div>
+                <div style="font-size: var(--text-2xl); font-weight: var(--font-weight-bold);">12</div>
+                <div style="font-size: var(--text-xs); color: var(--color-muted-fg);">Tasks completed</div>
+              </div>
+              <div>
+                <div style="font-size: var(--text-2xl); font-weight: var(--font-weight-bold);">3</div>
+                <div style="font-size: var(--text-xs); color: var(--color-muted-fg);">In progress</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         BADGES & STATUS INDICATORS
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Badges &amp; Status Indicators</h2>
+
+      <div class="variant-label">Badge variants</div>
+      <div class="variant-row">
+        <span class="badge badge-default">Default</span>
+        <span class="badge badge-secondary">Secondary</span>
+        <span class="badge badge-success">Success</span>
+        <span class="badge badge-warning">Warning</span>
+        <span class="badge badge-destructive">Error</span>
+        <span class="badge badge-outline">Outline</span>
+        <span class="badge badge-review">Review</span>
+      </div>
+
+      <div class="variant-label">Status dot indicators</div>
+      <div class="variant-row">
+        <span class="flex items-center gap-2">
+          <span class="status-dot status-dot-running"></span> Running
+        </span>
+        <span class="flex items-center gap-2">
+          <span class="status-dot status-dot-completed"></span> Completed
+        </span>
+        <span class="flex items-center gap-2">
+          <span class="status-dot status-dot-failed"></span> Failed
+        </span>
+        <span class="flex items-center gap-2">
+          <span class="status-dot status-dot-warning"></span> Warning
+        </span>
+        <span class="flex items-center gap-2">
+          <span class="status-dot status-dot-cancelled"></span> Cancelled
+        </span>
+        <span class="flex items-center gap-2">
+          <span class="status-dot status-dot-initializing"></span> Initializing
+        </span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         TABLES
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Tables</h2>
+
+      <div class="card" style="overflow: hidden;">
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Tokens</th>
+                <th>Started</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight: var(--font-weight-medium);">Investigator</td>
+                <td><span class="badge badge-success">Completed</span></td>
+                <td>2m 34s</td>
+                <td>12,450</td>
+                <td style="color: var(--color-muted-fg);">2 hours ago</td>
+              </tr>
+              <tr>
+                <td style="font-weight: var(--font-weight-medium);">Designer</td>
+                <td><span class="badge badge-success">Completed</span></td>
+                <td>1m 12s</td>
+                <td>8,200</td>
+                <td style="color: var(--color-muted-fg);">1 hour ago</td>
+              </tr>
+              <tr>
+                <td style="font-weight: var(--font-weight-medium);">Implementor</td>
+                <td>
+                  <span class="flex items-center gap-2">
+                    <span class="status-dot status-dot-running"></span>
+                    <span style="color: var(--status-running);">Running</span>
+                  </span>
+                </td>
+                <td>5m 01s</td>
+                <td>24,100</td>
+                <td style="color: var(--color-muted-fg);">Just now</td>
+              </tr>
+              <tr>
+                <td style="font-weight: var(--font-weight-medium);">Reviewer</td>
+                <td><span class="badge badge-secondary">Pending</span></td>
+                <td>—</td>
+                <td>—</td>
+                <td style="color: var(--color-muted-fg);">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         FORM INPUTS
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Form Inputs</h2>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6); max-width: 700px;">
+        <!-- Text input -->
+        <div>
+          <label class="label">Task Title</label>
+          <input class="input" type="text" placeholder="Enter task title..." value="Implement user auth">
+        </div>
+
+        <!-- Select -->
+        <div>
+          <label class="label">Pipeline</label>
+          <div class="select-trigger">
+            <span>Agent Pipeline</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+
+        <!-- Textarea -->
+        <div style="grid-column: span 2;">
+          <label class="label">Description</label>
+          <textarea class="textarea" placeholder="Describe the task requirements...">Add OAuth2 authentication flow with JWT refresh tokens. Support Google and GitHub providers.</textarea>
+        </div>
+
+        <!-- Checkbox -->
+        <div>
+          <label class="label">Options</label>
+          <div class="flex flex-col gap-2">
+            <div class="checkbox-wrapper">
+              <input type="checkbox" class="checkbox" id="cb1" checked>
+              <label for="cb1" style="font-size: var(--text-sm);">Auto-run pipeline</label>
+            </div>
+            <div class="checkbox-wrapper">
+              <input type="checkbox" class="checkbox" id="cb2">
+              <label for="cb2" style="font-size: var(--text-sm);">Notify on completion</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         TABS
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Tabs</h2>
+
+      <div class="variant-label">Pill tabs (content area)</div>
+      <div class="variant-row">
+        <div class="tabs-list">
+          <button class="tab-trigger active" aria-selected="true">Overview</button>
+          <button class="tab-trigger">Agent Runs</button>
+          <button class="tab-trigger">Activity</button>
+          <button class="tab-trigger">Settings</button>
+        </div>
+      </div>
+
+      <div class="variant-label" style="margin-top: var(--space-4);">Tab bar (VS Code-style, top-level)</div>
+      <div style="border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--color-border);">
+        <div class="tab-bar">
+          <button class="tab-bar-item active">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg>
+            Task #42
+          </button>
+          <button class="tab-bar-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Chat
+          </button>
+          <button class="tab-bar-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+            Settings
+          </button>
+        </div>
+        <div style="background: var(--color-bg); padding: var(--space-4); font-size: var(--text-sm); color: var(--color-muted-fg);">
+          Tab content area...
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         DIALOG / MODAL
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Dialog / Modal</h2>
+
+      <div class="demo-dialog-overlay">
+        <div class="demo-dialog-content">
+          <button class="dialog-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+          </button>
+          <div class="dialog-header">
+            <h3 class="dialog-title">Create New Task</h3>
+            <p class="dialog-description">Add a new task to the current project pipeline.</p>
+          </div>
+          <div>
+            <label class="label">Title</label>
+            <input class="input" type="text" placeholder="Task title..." value="Add retry logic to webhook handler">
+            <div style="margin-top: var(--space-4);">
+              <label class="label">Description</label>
+              <textarea class="textarea" placeholder="Describe what needs to be done...">Implement exponential backoff retry for failed webhook deliveries.</textarea>
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary">Create Task</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         SIDEBAR LAYOUT PATTERN
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Sidebar Pattern</h2>
+
+      <div style="height: 420px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); display: flex;">
+        <div class="sidebar" style="width: 240px; flex-shrink: 0;">
+          <div class="sidebar-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Agents Manager</span>
+          </div>
+          <div class="sidebar-section-label">Workspace</div>
+          <a class="sidebar-item active" href="#">
+            <svg class="sidebar-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+            Dashboard
+          </a>
+          <a class="sidebar-item" href="#">
+            <svg class="sidebar-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/></svg>
+            Tasks
+          </a>
+          <a class="sidebar-item" href="#">
+            <svg class="sidebar-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Agent Runs
+          </a>
+          <div class="sidebar-section-label">Configuration</div>
+          <a class="sidebar-item" href="#">
+            <svg class="sidebar-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            Settings
+          </a>
+          <a class="sidebar-item" href="#">
+            <svg class="sidebar-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><rect width="6" height="6" x="3" y="12" rx="1"/><rect width="6" height="6" x="15" y="6" rx="1"/></svg>
+            Pipelines
+          </a>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+          <div class="top-menu">
+            <div class="breadcrumb">
+              <span>My Project</span>
+              <span class="breadcrumb-separator">/</span>
+              <span class="breadcrumb-current">Dashboard</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="btn btn-sm btn-ghost btn-icon" title="Search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
+              </button>
+              <button class="btn btn-sm btn-primary">New Task</button>
+            </div>
+          </div>
+          <div style="flex: 1; padding: var(--space-5); overflow: auto; background: var(--color-bg);">
+            <div style="font-size: var(--text-xs); color: var(--color-muted-fg); margin-bottom: var(--space-4);">Content area</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">Active Tasks</h3>
+                </div>
+                <div class="card-content" style="font-size: var(--text-2xl); font-weight: var(--font-weight-bold);">7</div>
+              </div>
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">Agent Runs Today</h3>
+                </div>
+                <div class="card-content" style="font-size: var(--text-2xl); font-weight: var(--font-weight-bold);">23</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         HEADER & BREADCRUMB PATTERN
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Header &amp; Breadcrumb</h2>
+
+      <div style="border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border);">
+        <div class="top-menu">
+          <div class="breadcrumb">
+            <span>agents-manager</span>
+            <span class="breadcrumb-separator">/</span>
+            <span>Tasks</span>
+            <span class="breadcrumb-separator">/</span>
+            <span class="breadcrumb-current">TASK-42: Implement Auth</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="badge badge-review">In Review</span>
+            <button class="btn btn-sm btn-outline">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit
+            </button>
+            <button class="btn btn-sm btn-primary">Approve &amp; Merge</button>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <button class="tab-bar-item active">Overview</button>
+          <button class="tab-bar-item">Agent Conversation</button>
+          <button class="tab-bar-item">Diff</button>
+          <button class="tab-bar-item">Activity Log</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         AGENT BLOCK (running indicator)
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Agent Block (Chat / Running Indicator)</h2>
+
+      <div style="max-width: 600px; display: flex; flex-direction: column; gap: var(--space-3);">
+        <!-- Completed agent block -->
+        <div class="agent-block" style="border-left-color: var(--status-completed);">
+          <div class="agent-block-header">
+            <span class="status-dot status-dot-completed"></span>
+            <span>Investigator</span>
+            <span style="margin-left: auto; font-size: var(--text-xs); color: var(--color-muted-fg); font-weight: normal;">2m 34s &middot; 12,450 tokens</span>
+          </div>
+          <div class="agent-block-body">
+            Analyzed the codebase and identified 3 files that need modification for the auth flow.
+          </div>
+        </div>
+
+        <!-- Running agent block with glow animation -->
+        <div class="agent-block running">
+          <div class="agent-block-header">
+            <span class="status-dot status-dot-running"></span>
+            <span>Implementor</span>
+            <span style="margin-left: auto; font-size: var(--text-xs); color: var(--color-muted-fg); font-weight: normal;">Running...</span>
+          </div>
+          <div class="agent-block-body">
+            Writing authentication middleware and updating route handlers...
+          </div>
+        </div>
+
+        <!-- Failed agent block -->
+        <div class="agent-block" style="border-left-color: var(--status-failed);">
+          <div class="agent-block-header">
+            <span class="status-dot status-dot-failed"></span>
+            <span>Reviewer</span>
+            <span style="margin-left: auto; font-size: var(--text-xs); color: var(--color-muted-fg); font-weight: normal;">Failed &middot; 45s</span>
+          </div>
+          <div class="agent-block-body" style="color: var(--color-destructive);">
+            Error: Agent timed out while waiting for tool approval.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         SURFACE PANELS
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Surface Panels &amp; Elevation</h2>
+
+      <div style="display: flex; gap: var(--space-4); flex-wrap: wrap;">
+        <div style="background: hsl(var(--surface-1) / 0.72); backdrop-filter: blur(14px); padding: var(--space-5); border-radius: var(--radius-lg); border: 1px solid hsl(var(--border) / 0.5); min-width: 200px;">
+          <div style="font-weight: var(--font-weight-semibold); margin-bottom: var(--space-1);">Surface Panel</div>
+          <div style="font-size: var(--text-xs); color: var(--color-muted-fg);">surface-1 / 0.72 + blur(14px)</div>
+        </div>
+        <div style="background: hsl(var(--surface-2) / 0.86); backdrop-filter: blur(18px); padding: var(--space-5); border-radius: var(--radius-lg); border: 1px solid hsl(var(--border) / 0.5); min-width: 200px;">
+          <div style="font-weight: var(--font-weight-semibold); margin-bottom: var(--space-1);">Surface Elevated</div>
+          <div style="font-size: var(--text-xs); color: var(--color-muted-fg);">surface-2 / 0.86 + blur(18px)</div>
+        </div>
+        <div class="card" style="min-width: 200px;">
+          <div class="card-header">
+            <h3 class="card-title">Card Surface</h3>
+            <p class="card-description">card / 0.88 + blur(12px)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         MONOSPACE / LOG VIEWER
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">Monospace / Log Viewer</h2>
+
+      <div style="background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; overflow-x: auto;">
+        <div style="color: hsl(var(--primary));">[INFO]  Agent started: implementor</div>
+        <div style="color: var(--color-fg);">[STDOUT] Analyzing src/auth/middleware.ts...</div>
+        <div style="color: var(--color-fg);">[STDOUT] Creating new file: src/auth/jwt-handler.ts</div>
+        <div style="color: hsl(var(--destructive));">[STDERR] Warning: Deprecated API usage in line 42</div>
+        <div style="color: var(--color-fg);">[STDOUT] Running tests...</div>
+        <div style="color: hsl(var(--success));">[INFO]  All 14 tests passed</div>
+        <div style="color: hsl(var(--primary));">[INFO]  Agent completed in 2m 34s</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Theme toggle for preview -->
+  <div style="position: fixed; bottom: var(--space-4); right: var(--space-4); z-index: 100;">
+    <button class="btn btn-secondary btn-sm" onclick="document.documentElement.classList.toggle('dark')" style="box-shadow: var(--shadow-lg);">
+      Toggle Dark/Light
+    </button>
+  </div>
+</body>
+</html>
