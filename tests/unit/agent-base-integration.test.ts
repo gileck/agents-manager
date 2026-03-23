@@ -82,10 +82,15 @@ class MockPromptBuilder {
   readonly type = 'test-builder';
   builtPrompt = 'Built test prompt';
   inferredOutcome = 'success';
+  /** Configurable return value for buildContinuationPrompt. Set to a string to simulate feedback injection. */
+  continuationPromptResult: string | null = null;
 
   buildPrompt(_context: AgentContext): string { return this.builtPrompt; }
   inferOutcome(_mode: string, exitCode: number, _output: string): string {
     return exitCode === 0 ? this.inferredOutcome : 'failed';
+  }
+  buildContinuationPrompt(_context: AgentContext): string | null {
+    return this.continuationPromptResult;
   }
   protected isReadOnly(): boolean { return false; }
   protected getMaxTurns(): number { return 50; }
@@ -390,6 +395,97 @@ describe('Agent (integration with BaseAgentLib)', () => {
 
       expect(lib.executeCalls[0].options.sessionId).toBe('session-abc');
       expect(lib.executeCalls[0].options.resumeSession).toBe(true);
+    });
+
+    it('uses continuation prompt for revision-mode resume with nativeResume', async () => {
+      const lib = new MockAgentLib('test-engine', { nativeResume: true });
+      const builder = new MockPromptBuilder();
+      builder.continuationPromptResult = 'The user has provided new feedback on your work.\n\n## Feedback to Address\n\nPlease fix the naming.';
+      const { agent } = buildAgent(lib, builder);
+
+      const onPromptBuilt = vi.fn();
+      await agent.execute(
+        makeContext({
+          mode: 'revision',
+          revisionReason: 'changes_requested',
+          resumeSession: true,
+          sessionId: 'session-rev-1',
+          // Note: no resumedFromRunId — this is NOT crash recovery
+        }),
+        makeConfig(),
+        undefined,
+        undefined,
+        onPromptBuilt,
+      );
+
+      // Should use the continuation prompt, not the full system prompt
+      expect(lib.executeCalls[0].options.prompt).toBe(builder.continuationPromptResult);
+      // onPromptBuilt should be called twice: once with the full prompt, then updated with continuation
+      expect(onPromptBuilt).toHaveBeenCalledWith(builder.continuationPromptResult);
+    });
+
+    it('falls back to full prompt when continuation prompt returns null (no feedback)', async () => {
+      const lib = new MockAgentLib('test-engine', { nativeResume: true });
+      const builder = new MockPromptBuilder();
+      builder.builtPrompt = 'Full system prompt for revision';
+      builder.continuationPromptResult = null; // no feedback to inject
+      const { agent } = buildAgent(lib, builder);
+
+      await agent.execute(
+        makeContext({
+          mode: 'revision',
+          revisionReason: 'changes_requested',
+          resumeSession: true,
+          sessionId: 'session-rev-2',
+        }),
+        makeConfig(),
+      );
+
+      // Should fall back to the full system prompt since continuation returned null
+      expect(lib.executeCalls[0].options.prompt).toBe('Full system prompt for revision');
+    });
+
+    it('does NOT use continuation prompt when engine lacks nativeResume (revision-mode)', async () => {
+      const lib = new MockAgentLib('test-engine', { nativeResume: false });
+      const builder = new MockPromptBuilder();
+      builder.builtPrompt = 'Full system prompt';
+      builder.continuationPromptResult = 'Should not be used';
+      const { agent } = buildAgent(lib, builder);
+
+      await agent.execute(
+        makeContext({
+          mode: 'revision',
+          revisionReason: 'changes_requested',
+          resumeSession: true,
+          sessionId: 'session-rev-3',
+        }),
+        makeConfig(),
+      );
+
+      // Without nativeResume, should use the full system prompt
+      expect(lib.executeCalls[0].options.prompt).toBe('Full system prompt');
+    });
+
+    it('prefers crash-recovery resume over revision-mode when resumedFromRunId is set', async () => {
+      const lib = new MockAgentLib('test-engine', { nativeResume: true });
+      const builder = new MockPromptBuilder();
+      builder.continuationPromptResult = 'Revision feedback prompt';
+      const { agent } = buildAgent(lib, builder);
+
+      await agent.execute(
+        makeContext({
+          mode: 'revision',
+          revisionReason: 'changes_requested',
+          resumeSession: true,
+          sessionId: 'session-rev-4',
+          resumedFromRunId: 'prev-run-crash', // crash recovery takes priority
+        }),
+        makeConfig(),
+      );
+
+      // Should use crash-recovery continuation prompt, not revision-mode
+      expect(lib.executeCalls[0].options.prompt).toContain('interrupted');
+      expect(lib.executeCalls[0].options.prompt).not.toBe('Revision feedback prompt');
     });
   });
 
