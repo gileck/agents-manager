@@ -719,6 +719,11 @@ export class ChatAgentService {
     // Run agent in background, return completion promise
     const abortController = new AbortController();
     this.runningControllers.set(sessionId, abortController);
+    // Set runningRunIds synchronously (before the async runAgent call) so that
+    // mid-execution injection can look up the runId immediately. Without this,
+    // there is a race window where runningControllers exists but runningRunIds
+    // does not, causing injection to fail with "no runId mapped for session".
+    this.runningRunIds.set(sessionId, pipelineSessionId ?? sessionId);
 
     const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, plugins: projectPlugins, enableStreaming: session.enableStreaming, enableStreamingInput: session.enableStreamingInput }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
@@ -731,6 +736,7 @@ export class ChatAgentService {
         agent.lastActivity = Date.now();
       }
       this.runningControllers.delete(sessionId);
+      this.runningRunIds.delete(sessionId);
     });
 
     return { userMessage, sessionId, completion };
@@ -1299,11 +1305,11 @@ export class ChatAgentService {
         ? images.map((img) => ({ base64: img.base64, mediaType: img.mediaType }))
         : undefined;
 
-      // When resuming a pipeline agent session, use its sessionId for the execute call
+      // When resuming a pipeline agent session, use its sessionId for the execute call.
+      // Note: runningRunIds is already set synchronously in send() before runAgent()
+      // is called — do NOT set it here to avoid a race condition where injection
+      // attempts between send() and this point would fail.
       const executeSessionId = extra?.pipelineSessionId ?? sessionId;
-
-      // Track sessionId → runId mapping for mid-execution injection routing
-      this.runningRunIds.set(sessionId, executeSessionId);
 
       // Build task MCP tool definitions for chat sessions (not pipeline agent runs).
       // Keyed by server name so claude-code-lib can create one SDK server per entry generically.

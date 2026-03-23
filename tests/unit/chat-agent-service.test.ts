@@ -790,6 +790,30 @@ describe('ChatAgentService', () => {
       vi.useFakeTimers();
     });
 
+    it('succeeds when injection is attempted immediately after agent start (runningRunIds race condition fix)', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
+      const { lib, resolve } = createHoldingMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      // Start the agent — runningControllers and runningRunIds should both be set
+      // synchronously before runAgent() starts executing asynchronously.
+      const firstResult = await service.send('session-1', 'First message', { systemPrompt: '' });
+
+      // Immediately inject a message (no awaits between start and inject).
+      // Before the fix, this would throw "no runId mapped for session" because
+      // runningRunIds was only set inside the async runAgent() body.
+      const injectResult = await service.send('session-1', 'Injected immediately', { systemPrompt: '' });
+
+      expect(injectResult.injected).toBe(true);
+      expect(injectResult.userMessage).toBeDefined();
+      expect(injectResult.sessionId).toBe('session-1');
+      expect(lib.injectMessage).toHaveBeenCalled();
+
+      // Clean up: resolve the holding execute so runAgent() completes
+      resolve();
+      await firstResult.completion;
+    });
+
     it('restores turnMessages on intermediate persistence failure so finally block still persists them', async () => {
       mockSessionStore.getSession = vi.fn().mockResolvedValue(injectionSession);
       const { lib, resolve } = createHoldingMockLib();
