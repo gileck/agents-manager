@@ -216,6 +216,8 @@ const IPC_CHANNELS = {
   CHAT_TRACK_TASK: 'chat:track-task',
   CHAT_UNTRACK_TASK: 'chat:untrack-task',
   CHAT_ANSWER_QUESTION: 'chat:answer-question',
+  WORKTREE_FILE_URL: 'worktree-file:url',
+  WORKTREE_FILE_READ: 'worktree-file:read',
   SCREENSHOT_SAVE: 'screenshot:save',
   CHAT_PERMISSION_REQUEST: 'chat:permission-request',
   CHAT_PERMISSION_RESPONSE: 'chat:permission-response',
@@ -598,6 +600,14 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.DEV_SERVER_STATUS, taskId),
     list: (): Promise<DevServerInfo[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.DEV_SERVER_LIST),
+  },
+
+  // Worktree file operations
+  worktreeFile: {
+    url: (taskId: string, filePath: string): Promise<string> =>
+      ipcRenderer.invoke(IPC_CHANNELS.WORKTREE_FILE_URL, taskId, filePath),
+    read: (taskId: string, filePath: string): Promise<string> =>
+      ipcRenderer.invoke(IPC_CHANNELS.WORKTREE_FILE_READ, taskId, filePath),
   },
 
   // Screenshot operations

@@ -27,6 +27,7 @@ import { shellRoutes } from './routes/shell';
 import { devServerRoutes } from './routes/dev-servers';
 import { screenshotRoutes } from './routes/screenshots';
 import { taskDocRoutes } from './routes/task-docs';
+import { worktreeFileRoutes } from './routes/worktree-file';
 import { errorHandler } from './middleware/error-handler';
 import type { AppServices } from '../core/providers/setup';
 import type { DaemonWsServer } from './ws/ws-server';
@@ -64,6 +65,7 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}): { 
   app.use(eventRoutes(services));
   app.use(notificationRoutes(services));
   app.use(taskDocRoutes(services));
+  app.use(worktreeFileRoutes(services));
 
   // Action routes (side-effects: agents, chat, git, etc.)
   app.use(agentRoutes(services, wsHolder));
