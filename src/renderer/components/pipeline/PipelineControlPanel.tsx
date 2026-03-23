@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { StatusActionBar } from './StatusActionBar';
 import { ForceTransitionDialog } from './ForceTransitionDialog';
-import type { AgentRun, Transition, PipelineStatus, HookFailure, PipelineDiagnostics, TaskType, TaskSize, TaskComplexity } from '../../../shared/types';
+import type { AgentRun, Transition, PipelineStatus, HookFailure, PipelineDiagnostics, TaskType, TaskSize, TaskComplexity, TaskContextEntry } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
 
 interface PipelineControlPanelProps {
@@ -21,6 +21,7 @@ interface PipelineControlPanelProps {
   onHookFailures: (failures: HookFailure[]) => void;
   diagnostics: PipelineDiagnostics | null;
   refetchDiagnostics: () => void;
+  contextEntries?: TaskContextEntry[];
 }
 
 export function PipelineControlPanel({
@@ -40,6 +41,7 @@ export function PipelineControlPanel({
   onHookFailures,
   diagnostics,
   refetchDiagnostics,
+  contextEntries,
 }: PipelineControlPanelProps) {
   const [forceDialogOpen, setForceDialogOpen] = useState(false);
   const [forcing, setForcing] = useState(false);
@@ -91,6 +93,8 @@ export function PipelineControlPanel({
         hasPendingPhases={hasPendingPhases}
         totalFailedRuns={diagnostics?.agentState.totalFailedRuns}
         onOpenForceDialog={() => setForceDialogOpen(true)}
+        contextEntries={contextEntries}
+        taskId={taskId}
       />
 
       {/* Force transition dialog */}
