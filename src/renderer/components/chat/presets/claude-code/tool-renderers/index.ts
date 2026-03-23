@@ -21,7 +21,10 @@ import {
   TerminalListTasksRenderer,
   TerminalGetTaskRenderer,
   TerminalTransitionTaskRenderer,
+  TerminalRequestChangesRenderer,
   TerminalListAgentRunsRenderer,
+  TerminalSubscribeForAgentRenderer,
+  TerminalReadTaskArtifactRenderer,
 } from './TerminalTaskManagerRenderers';
 
 const TERMINAL_TOOL_RENDERERS: Record<string, React.ComponentType<ToolRendererProps>> = {
@@ -59,15 +62,19 @@ const TERMINAL_TOOL_RENDERERS: Record<string, React.ComponentType<ToolRendererPr
   'mcp__taskManager__list_tasks': TerminalListTasksRenderer,
   'mcp__taskManager__get_task': TerminalGetTaskRenderer,
   'mcp__taskManager__transition_task': TerminalTransitionTaskRenderer,
-  'mcp__taskManager__request_changes': TerminalTransitionTaskRenderer,
+  'mcp__taskManager__request_changes': TerminalRequestChangesRenderer,
   'mcp__taskManager__list_agent_runs': TerminalListAgentRunsRenderer,
+  'mcp__taskManager__subscribe_for_agent': TerminalSubscribeForAgentRenderer,
+  'mcp__taskManager__read_task_artifact': TerminalReadTaskArtifactRenderer,
   'taskManager.create_task': TerminalCreateTaskRenderer,
   'taskManager.update_task': TerminalUpdateTaskRenderer,
   'taskManager.list_tasks': TerminalListTasksRenderer,
   'taskManager.get_task': TerminalGetTaskRenderer,
   'taskManager.transition_task': TerminalTransitionTaskRenderer,
-  'taskManager.request_changes': TerminalTransitionTaskRenderer,
+  'taskManager.request_changes': TerminalRequestChangesRenderer,
   'taskManager.list_agent_runs': TerminalListAgentRunsRenderer,
+  'taskManager.subscribe_for_agent': TerminalSubscribeForAgentRenderer,
+  'taskManager.read_task_artifact': TerminalReadTaskArtifactRenderer,
 };
 
 /** Get a terminal-specific tool renderer by tool name. Falls back to TerminalGenericRenderer. */
