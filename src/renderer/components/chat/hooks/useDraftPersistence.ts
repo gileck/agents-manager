@@ -25,6 +25,12 @@ export function useDraftPersistence(
 } {
   const [draft, setDraftState] = useState(initialDraft ?? '');
 
+  // Sync internal state when initialDraft prop changes (e.g. session switch
+  // without component remount — happens when the React key stays the same).
+  useEffect(() => {
+    setDraftState(initialDraft ?? '');
+  }, [initialDraft]);
+
   // Debounce-save draft whenever it changes
   useEffect(() => {
     if (!onPersist) return;

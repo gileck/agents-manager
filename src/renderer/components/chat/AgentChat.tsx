@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { AgentChatMessage, AgentRun, ChatImage, PermissionMode } from '../../../shared/types';
 import type { RawEvent } from '../../hooks/useChat';
 import { ChatMessageList } from './ChatMessageList';
@@ -66,6 +66,12 @@ export function AgentChat({
   enableStreamingInput = false,
   isWaitingForInput = false,
 }: AgentChatProps) {
+  // Generate a unique key for the ChatInput to force remount on session changes.
+  // When sessionId is null/undefined we use a monotonically-increasing counter
+  // so that successive null sessions still get distinct keys.
+  const nullKeyCounter = useRef(0);
+  const inputKey = sessionId ?? `__no-session-${++nullKeyCounter.current}`;
+
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
 
   const handleEditMessage = useCallback((text: string) => {
@@ -113,7 +119,7 @@ export function AgentChat({
         )}
         <TaskStatusBar sessionId={sessionId ?? null} />
         <ChatInput
-          key={sessionId ?? ''}
+          key={inputKey}
           ref={inputRef}
           onSend={onSend}
           onStop={onStop}

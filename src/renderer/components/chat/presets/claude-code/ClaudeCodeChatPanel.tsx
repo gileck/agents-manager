@@ -503,7 +503,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
             {!showRawView && (
               <ClaudeCodeChatInput
                 ref={inputRef}
-                key={currentSessionId ?? ''}
+                key={currentSessionId ?? `__no-session-${Date.now()}`}
                 onSend={sendMessage}
                 onStop={stopChat}
                 isRunning={isStreaming}

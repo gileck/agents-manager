@@ -560,7 +560,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
             {/* ── Input ── */}
             <CodexChatInput
               ref={inputRef}
-              key={currentSessionId ?? ''}
+              key={currentSessionId ?? `__no-session-${Date.now()}`}
               onSend={sendMessage}
               onStop={stopChat}
               isRunning={isStreaming}
