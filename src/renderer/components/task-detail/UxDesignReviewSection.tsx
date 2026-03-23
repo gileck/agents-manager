@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Monitor, Tablet, Smartphone, Maximize2 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
@@ -53,8 +53,15 @@ interface MockCardProps {
 function MockCard({ taskId, mock, onExpand }: MockCardProps) {
   const [viewport, setViewport] = useState<ViewportSize>('desktop');
   const [loadError, setLoadError] = useState(false);
+  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
 
-  const iframeSrc = `/api/worktree/${taskId}/file?path=${encodeURIComponent(mock.path)}`;
+  useEffect(() => {
+    setLoadError(false);
+    setIframeSrc(null);
+    window.api.worktreeFile.url(taskId, mock.path)
+      .then(setIframeSrc)
+      .catch(() => setLoadError(true));
+  }, [taskId, mock.path]);
 
   return (
     <div className="rounded-lg border bg-muted/30 overflow-hidden">
@@ -108,25 +115,16 @@ function MockCard({ taskId, mock, onExpand }: MockCardProps) {
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
             Mock not available
           </div>
+        ) : !iframeSrc ? (
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            Loading preview…
+          </div>
         ) : (
           <iframe
             src={iframeSrc}
             sandbox="allow-scripts"
             title={mock.label}
             onError={() => setLoadError(true)}
-            onLoad={(e) => {
-              // If the iframe loaded but the content is a 404/error page,
-              // we can't easily detect it due to sandbox restrictions.
-              // The onError only fires for network-level failures.
-              try {
-                const frame = e.currentTarget;
-                if (frame.contentDocument === null) {
-                  // Cross-origin or sandbox restriction — expected
-                }
-              } catch {
-                // Sandbox blocks access — expected behavior
-              }
-            }}
             style={{
               width: VIEWPORT_WIDTHS[viewport],
               height: '100%',
@@ -151,10 +149,21 @@ interface FullscreenMockModalProps {
 
 function FullscreenMockModal({ open, onOpenChange, taskId, mock }: FullscreenMockModalProps) {
   const [viewport, setViewport] = useState<ViewportSize>('desktop');
+  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
+
+  // Reset viewport to desktop when switching to a different mock
+  useEffect(() => { setViewport('desktop'); }, [mock?.path]);
+
+  // Resolve the full iframe URL via the API (includes daemon base URL for Electron)
+  useEffect(() => {
+    if (!mock) { setIframeSrc(null); return; }
+    setIframeSrc(null);
+    window.api.worktreeFile.url(taskId, mock.path)
+      .then(setIframeSrc)
+      .catch(() => setIframeSrc(null));
+  }, [taskId, mock?.path]);
 
   if (!mock) return null;
-
-  const iframeSrc = `/api/worktree/${taskId}/file?path=${encodeURIComponent(mock.path)}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -188,17 +197,23 @@ function FullscreenMockModal({ open, onOpenChange, taskId, mock }: FullscreenMoc
           </div>
         </DialogHeader>
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', justifyContent: 'center', background: 'var(--background)', borderRadius: 8 }}>
-          <iframe
-            src={iframeSrc}
-            sandbox="allow-scripts"
-            title={mock.label}
-            style={{
-              width: VIEWPORT_WIDTHS[viewport],
-              height: '100%',
-              border: 'none',
-              flexShrink: 0,
-            }}
-          />
+          {iframeSrc ? (
+            <iframe
+              src={iframeSrc}
+              sandbox="allow-scripts"
+              title={mock.label}
+              style={{
+                width: VIEWPORT_WIDTHS[viewport],
+                height: '100%',
+                border: 'none',
+                flexShrink: 0,
+              }}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+              Loading preview…
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
