@@ -993,9 +993,7 @@ export class AgentService implements IAgentService {
       const extractionPostLog = (message: string, details?: Record<string, unknown>, durationMs?: number) => {
         emitPostLog('extraction', message, details, durationMs);
       };
-      await this.postRunExtractor.extractPlan(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
-      await this.postRunExtractor.extractTechnicalDesign(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
-      await this.postRunExtractor.extractUxDesign(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
+      await this.postRunExtractor.extractDoc(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
       await this.postRunExtractor.extractTaskEstimates(taskId, result, agentType, postRunLog, extractionPostLog);
       await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog, extractionPostLog);
       await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog, extractionPostLog);

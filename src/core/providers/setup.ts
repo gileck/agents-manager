@@ -64,15 +64,7 @@ import { TelegramNotificationRouter } from '../services/telegram-notification-ro
 import { getResolvedConfig } from '../services/config-service';
 import { validateTelegramConfig } from '../services/telegram-config-validator';
 import { Agent } from '../agents/agent';
-import { PlannerPromptBuilder } from '../agents/planner-prompt-builder';
-import { DesignerPromptBuilder } from '../agents/designer-prompt-builder';
-import { ImplementorPromptBuilder } from '../agents/implementor-prompt-builder';
-import { InvestigatorPromptBuilder } from '../agents/investigator-prompt-builder';
-import { ReviewerPromptBuilder } from '../agents/reviewer-prompt-builder';
-import { TaskWorkflowReviewerPromptBuilder } from '../agents/task-workflow-reviewer-prompt-builder';
-import { PostMortemReviewerPromptBuilder } from '../agents/post-mortem-reviewer-prompt-builder';
-import { TriagerPromptBuilder } from '../agents/triager-prompt-builder';
-import { UxDesignerPromptBuilder } from '../agents/ux-designer-prompt-builder';
+import { AGENT_BUILDERS } from '../agents/agent-builders';
 import { ClaudeCodeLib } from '../libs/claude-code-lib';
 import { CursorAgentLib } from '../libs/cursor-agent-lib';
 import { CodexAppServerLib } from '../libs/codex-app-server-lib';
@@ -308,15 +300,9 @@ function createAgentModule(
 
   // Agent framework — each Agent combines a prompt builder with the lib registry
   const agentFramework = new AgentFrameworkImpl();
-  agentFramework.registerAgent(new Agent('planner', new PlannerPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('designer', new DesignerPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('implementor', new ImplementorPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('investigator', new InvestigatorPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('reviewer', new ReviewerPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('task-workflow-reviewer', new TaskWorkflowReviewerPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('post-mortem-reviewer', new PostMortemReviewerPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('triager', new TriagerPromptBuilder(), agentLibRegistry));
-  agentFramework.registerAgent(new Agent('ux-designer', new UxDesignerPromptBuilder(), agentLibRegistry));
+  for (const [type, BuilderClass] of Object.entries(AGENT_BUILDERS)) {
+    agentFramework.registerAgent(new Agent(type, new BuilderClass(), agentLibRegistry));
+  }
 
   // Report builder for workflow reviewer agent
   const taskReviewReportBuilder = new TaskReviewReportBuilder(

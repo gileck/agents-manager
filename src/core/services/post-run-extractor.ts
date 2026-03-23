@@ -40,13 +40,56 @@ const PHASE_LABELS: Record<string, string> = {
  * Extracted from AgentService.runAgentInBackground to reduce method size.
  */
 export class PostRunExtractor {
+  /**
+   * Registry mapping agent types to their doc extraction methods.
+   * Adding a new doc-producing agent = add one entry here.
+   */
+  private readonly docExtractors: Map<string, (
+    taskId: string,
+    result: AgentRunResult,
+    agentType: string,
+    onLog: OnLog,
+    revisionReason?: RevisionReason,
+    agentRunId?: string,
+    onPostLog?: OnPostLog,
+  ) => Promise<void>>;
+
   constructor(
     private taskStore: ITaskStore,
     private taskContextStore: ITaskContextStore,
     private taskEventLog: ITaskEventLog,
     private notificationRouter: INotificationRouter,
     private taskDocStore?: ITaskDocStore,
-  ) {}
+  ) {
+    this.docExtractors = new Map([
+      ['planner', this.extractPlan.bind(this)],
+      ['investigator', this.extractPlan.bind(this)],
+      ['designer', this.extractTechnicalDesign.bind(this)],
+      ['ux-designer', this.extractUxDesign.bind(this)],
+    ]);
+  }
+
+  /**
+   * Dispatch doc extraction for a given agent type.
+   * Looks up the registered extractor and calls it if found; otherwise skips silently.
+   * Replaces the need for callers to invoke each extractor individually.
+   */
+  async extractDoc(
+    taskId: string,
+    result: AgentRunResult,
+    agentType: string,
+    onLog: OnLog,
+    revisionReason?: RevisionReason,
+    agentRunId?: string,
+    onPostLog?: OnPostLog,
+  ): Promise<void> {
+    const extractor = this.docExtractors.get(agentType);
+    if (extractor) {
+      await extractor(taskId, result, agentType, onLog, revisionReason, agentRunId, onPostLog);
+    } else {
+      onPostLog?.('extractDoc skipped (no doc extractor registered)', { agentType });
+    }
+  }
 
   /**
    * Extract plan/subtasks from a successful plan/investigate run and persist them.
