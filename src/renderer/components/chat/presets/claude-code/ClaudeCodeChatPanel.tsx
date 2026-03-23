@@ -264,6 +264,13 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
     catch (err) { reportError(err, 'ClaudeCodeChatPanel: update draft'); }
   }, [currentSessionId, updateSession]);
 
+  // Stable key for the ChatInput — forces remount only when currentSessionId
+  // actually changes. Avoids the stale key='' collision for null sessions.
+  const inputKey = useMemo(
+    () => currentSessionId ?? `__no-session-${Date.now()}`,
+    [currentSessionId],
+  );
+
   // ── AgentChat-level state for prefill / edit ──
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
   const handleEditMessage = useCallback((text: string) => {
@@ -503,7 +510,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
             {!showRawView && (
               <ClaudeCodeChatInput
                 ref={inputRef}
-                key={currentSessionId ?? ''}
+                key={inputKey}
                 onSend={sendMessage}
                 onStop={stopChat}
                 isRunning={isStreaming}

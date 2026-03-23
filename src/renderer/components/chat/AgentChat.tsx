@@ -66,6 +66,14 @@ export function AgentChat({
   enableStreamingInput = false,
   isWaitingForInput = false,
 }: AgentChatProps) {
+  // Stable key for the ChatInput — forces remount only when sessionId actually
+  // changes. When sessionId is null/undefined, a one-time fallback is generated
+  // so consecutive null sessions don't share the same key ('').
+  const inputKey = useMemo(
+    () => sessionId ?? `__no-session-${Date.now()}`,
+    [sessionId],
+  );
+
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
 
   const handleEditMessage = useCallback((text: string) => {
@@ -113,7 +121,7 @@ export function AgentChat({
         )}
         <TaskStatusBar sessionId={sessionId ?? null} />
         <ChatInput
-          key={sessionId ?? ''}
+          key={inputKey}
           ref={inputRef}
           onSend={onSend}
           onStop={onStop}
