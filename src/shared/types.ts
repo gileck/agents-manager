@@ -1,3 +1,5 @@
+import { DOC_PHASES } from './doc-phases';
+
 // Item types
 export interface Item {
   id: string;
@@ -713,8 +715,14 @@ export interface TaskContextEntryCreateInput {
   addressed?: boolean;
 }
 
+/**
+ * Feedback entry types — derived from DOC_PHASES (doc-specific feedback) plus
+ * non-doc feedback types that don't come from DOC_PHASES.
+ * Adding a DOC_PHASES entry automatically registers its feedbackType here.
+ */
 export const FEEDBACK_ENTRY_TYPES = [
-  'plan_feedback', 'design_feedback', 'implementation_feedback', 'review_feedback', 'investigation_feedback', 'post_mortem_feedback', 'workflow_review_feedback', 'ux_design_feedback',
+  ...DOC_PHASES.map(p => p.feedbackType),
+  'implementation_feedback', 'review_feedback', 'post_mortem_feedback', 'workflow_review_feedback',
 ] as const;
 
 export const TRIAGE_ENTRY_TYPE = 'triage_summary' as const;
