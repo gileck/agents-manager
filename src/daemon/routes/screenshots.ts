@@ -4,6 +4,7 @@ import fs from 'fs';
 import { randomUUID } from 'crypto';
 import type { AppServices } from '../../core/providers/setup';
 import type { ChatImage } from '../../shared/types';
+import { getScreenshotStorageDir } from '../../core/utils/user-paths';
 
 const MEDIA_TYPE_TO_EXT: Record<string, string> = {
   'image/png': 'png',
@@ -12,12 +13,7 @@ const MEDIA_TYPE_TO_EXT: Record<string, string> = {
   'image/webp': 'webp',
 };
 
-function getScreenshotStorageDir(services: AppServices): string {
-  const imageDir = services.chatAgentService.getImageStorageDir();
-  return path.join(path.dirname(imageDir), 'screenshots');
-}
-
-export function screenshotRoutes(services: AppServices): Router {
+export function screenshotRoutes(_services: AppServices): Router {
   const router = Router();
 
   // Save screenshots to disk
@@ -45,7 +41,7 @@ export function screenshotRoutes(services: AppServices): Router {
         decoded.push({ buffer, ext });
       }
 
-      const storageDir = getScreenshotStorageDir(services);
+      const storageDir = getScreenshotStorageDir();
       await fs.promises.mkdir(storageDir, { recursive: true });
 
       const paths: string[] = [];
@@ -68,7 +64,7 @@ export function screenshotRoutes(services: AppServices): Router {
         res.status(400).json({ error: 'path query param is required' });
         return;
       }
-      const storageDir = getScreenshotStorageDir(services);
+      const storageDir = getScreenshotStorageDir();
       const resolved = path.resolve(rawPath);
       const storageRoot = path.resolve(storageDir);
       if (!resolved.startsWith(storageRoot + path.sep) && resolved !== storageRoot) {

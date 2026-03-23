@@ -363,5 +363,29 @@ describe('SandboxGuard', () => {
       expect(result.allow).toBe(false);
       expect(result.reason).toContain('sensitive path');
     });
+
+    it('should allow reading screenshots when screenshot dir is in readOnlyPaths', () => {
+      const screenshotGuard = new SandboxGuard(
+        ['/tmp/worktree'],
+        ['/tmp/project', '/Users/testuser/.agents-manager/screenshots', '/Users/testuser/.agents-manager/chat-images'],
+      );
+      // Read a screenshot file — should be allowed
+      const readResult = screenshotGuard.evaluateToolCall('Read', {
+        file_path: '/Users/testuser/.agents-manager/screenshots/abc123.png',
+      });
+      expect(readResult.allow).toBe(true);
+
+      // Read a chat image — should be allowed
+      const chatResult = screenshotGuard.evaluateToolCall('Read', {
+        file_path: '/Users/testuser/.agents-manager/chat-images/session1/img.png',
+      });
+      expect(chatResult.allow).toBe(true);
+
+      // Write to screenshot dir — should be blocked (readOnly, not writable)
+      const writeResult = screenshotGuard.evaluateToolCall('Write', {
+        file_path: '/Users/testuser/.agents-manager/screenshots/malicious.txt',
+      });
+      expect(writeResult.allow).toBe(false);
+    });
   });
 });

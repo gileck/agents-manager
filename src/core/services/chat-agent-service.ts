@@ -17,10 +17,10 @@ import { createTaskMcpServer } from '../mcp/task-mcp-server';
 import { resizeImages } from '../libs/image-utils';
 
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { getAppLogger } from './app-logger';
+import { getChatImagesStorageDir, getScreenshotStorageDir } from '../utils/user-paths';
 
 /** Parse a user message content field that may be a JSON envelope with images and/or metadata. */
 function parseUserContent(content: string): { text: string; images?: ChatImageRef[]; metadata?: Record<string, unknown> } {
@@ -228,8 +228,7 @@ export class ChatAgentService {
     private taskContextStore?: ITaskContextStore,
     private taskDocStore?: ITaskDocStore,
   ) {
-    this.imageStorageDir = imageStorageDir
-      ?? path.join(process.env.HOME || os.homedir(), '.agents-manager', 'chat-images');
+    this.imageStorageDir = imageStorageDir ?? getChatImagesStorageDir();
   }
 
   /**
@@ -1128,6 +1127,7 @@ export class ChatAgentService {
     const agentRunId = extra?.agentRunId;
 
     const imageDir = this.imageStorageDir;
+    const screenshotDir = getScreenshotStorageDir();
 
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
@@ -1403,8 +1403,8 @@ export class ChatAgentService {
             model,
             maxTurns: subagentDef?.maxTurns ?? 25,
             timeoutMs: 300000,
-            allowedPaths: readOnly ? [] : [projectPath, imageDir],
-            readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
+            allowedPaths: readOnly ? [] : [projectPath, imageDir, screenshotDir],
+            readOnlyPaths: readOnly ? [projectPath, imageDir, screenshotDir] : [],
             readOnly,
             permissionMode: effectiveMode,
             settingSources: ['project'] as Array<'user' | 'project' | 'local'>,
@@ -1527,8 +1527,8 @@ export class ChatAgentService {
         cwd: projectPath,
         model,
         maxTurns: 50,
-        allowedPaths: readOnly ? [] : [projectPath, imageDir],
-        readOnlyPaths: readOnly ? [projectPath, imageDir] : [],
+        allowedPaths: readOnly ? [] : [projectPath, imageDir, screenshotDir],
+        readOnlyPaths: readOnly ? [projectPath, imageDir, screenshotDir] : [],
         readOnly,
         permissionMode: effectiveMode,
         settingSources: ['project'] as Array<'user' | 'project' | 'local'>,
