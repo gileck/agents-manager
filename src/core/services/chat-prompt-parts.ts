@@ -6,13 +6,15 @@
  * passes it into ChatAgentService.send().
  */
 
-import type { TaskDoc } from '../../shared/types';
+import type { TaskDoc, PermissionMode } from '../../shared/types';
 import { getPhaseByDocType } from '../../shared/doc-phases';
 
 export interface SessionScope {
   scopeType: 'project' | 'task';
   projectId: string;
   projectName: string;
+  permissionMode?: PermissionMode;
+  projectPath: string;
   task?: {
     id: string;
     title: string;
@@ -30,24 +32,75 @@ export interface SessionScope {
 // Shared pieces
 // ---------------------------------------------------------------------------
 
-function capabilitiesSection(): string {
-  return [
-    '## Capabilities',
-    '- Read and explore project files (Read, Glob, Grep, LS tools)',
-    '- Use MCP tools for task management: create_task, get_task, list_tasks, transition_task, request_changes, list_agent_runs',
-    '- Run the `npx agents-manager` CLI via Bash for operations not covered by MCP (subtasks, deps, events, prompts, pipelines, projects)',
-    '- Answer questions about code, architecture, and project state',
-  ].join('\n');
+function capabilitiesSection(mode: PermissionMode = 'read_only'): string {
+  const lines = ['## Capabilities'];
+
+  if (mode === 'full_access') {
+    lines.push(
+      '- Full access to read, write, and execute in the project',
+      '- Use all available tools: Read, Write, Edit, MultiEdit, Glob, Grep, Bash, NotebookEdit, etc.',
+      '- Use MCP tools for task management: create_task, get_task, list_tasks, transition_task, request_changes, list_agent_runs',
+      '- Run the `npx agents-manager` CLI via Bash for operations not covered by MCP (subtasks, deps, events, prompts, pipelines, projects)',
+      '- Answer questions about code, architecture, and project state',
+    );
+  } else if (mode === 'read_write') {
+    lines.push(
+      '- Read, write, and edit project files (Read, Write, Edit, MultiEdit, Glob, Grep tools)',
+      '- Use Bash for non-destructive commands (builds, tests, linting, git operations)',
+      '- Use MCP tools for task management: create_task, get_task, list_tasks, transition_task, request_changes, list_agent_runs',
+      '- Run the `npx agents-manager` CLI via Bash for operations not covered by MCP (subtasks, deps, events, prompts, pipelines, projects)',
+      '- Answer questions about code, architecture, and project state',
+    );
+  } else {
+    // read_only (default)
+    lines.push(
+      '- Read and explore project files (Read, Glob, Grep, LS tools)',
+      '- Use MCP tools for task management: create_task, get_task, list_tasks, transition_task, request_changes, list_agent_runs',
+      '- Run the `npx agents-manager` CLI via Bash for operations not covered by MCP (subtasks, deps, events, prompts, pipelines, projects)',
+      '- Answer questions about code, architecture, and project state',
+    );
+  }
+
+  return lines.join('\n');
 }
 
-function rulesSection(): string {
+function rulesSection(mode: PermissionMode = 'read_only'): string {
+  const lines = ['## Rules'];
+
+  if (mode === 'full_access') {
+    lines.push(
+      '- You have full access to read, write, and execute. Use standard Claude Code behavior.',
+      '- For task management operations (create, get, list, transition, agent runs), use MCP tools — they return structured data natively.',
+      '- You CAN use Bash to run `npx agents-manager` CLI for non-MCP operations (subtasks, deps, events, prompts, pipelines, projects).',
+    );
+  } else if (mode === 'read_write') {
+    lines.push(
+      '- You can read, write, and edit project files.',
+      '- Be careful with destructive operations: do not force-push, do not delete branches, do not run `rm -rf` on project directories.',
+      '- For task management operations (create, get, list, transition, agent runs), use MCP tools — they return structured data natively.',
+      '- You CAN use Bash to run `npx agents-manager` CLI for non-MCP operations (subtasks, deps, events, prompts, pipelines, projects).',
+      '- You CAN use Bash for commands like builds, tests, linting, and git operations.',
+    );
+  } else {
+    // read_only (default)
+    lines.push(
+      '- You MUST NOT modify any files. Do not use Write, Edit, MultiEdit, or NotebookEdit tools.',
+      '- For task management operations (create, get, list, transition, agent runs), use MCP tools — they return structured data natively.',
+      '- You CAN use Bash to run `npx agents-manager` CLI for non-MCP operations (subtasks, deps, events, prompts, pipelines, projects).',
+      '- You CAN use Bash for read-only commands like `ls`, `cat`, `git log`, `git diff`, etc.',
+      '- When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.',
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function tmpFolderSection(projectPath: string): string {
   return [
-    '## Rules',
-    '- You MUST NOT modify any files. Do not use Write, Edit, MultiEdit, or NotebookEdit tools.',
-    '- For task management operations (create, get, list, transition, agent runs), use MCP tools — they return structured data natively.',
-    '- You CAN use Bash to run `npx agents-manager` CLI for non-MCP operations (subtasks, deps, events, prompts, pipelines, projects).',
-    '- You CAN use Bash for read-only commands like `ls`, `cat`, `git log`, `git diff`, etc.',
-    '- When the user asks you to do something that requires modifying files, explain that you can only read files but can help plan changes or create tasks.',
+    '## Writable tmp/ Folder',
+    `You can always write to \`${projectPath}/tmp\` — this folder is for testing, verifications, HTML files for visualizations, and scratch work.`,
+    'It is not tracked by git and never pushed. Use it freely regardless of permission mode.',
+    'If the folder does not exist yet, create it with `mkdir -p tmp/` before writing to it.',
   ].join('\n');
 }
 
@@ -153,6 +206,11 @@ function orchestratorBehaviorSection(): string {
     '### Multi-Task Awareness',
     '- In project-scoped sessions, proactively offer to show all active tasks when the user asks about project status.',
     '- Use `list_tasks` with a status filter to surface in-progress or blocked work.',
+    '',
+    '### Official MCP Transitions',
+    '- Always use the official MCP tools (`transition_task`, `request_changes`) for all state transitions. Never bypass the pipeline by running CLI commands that directly change task status.',
+    '- Use `ready_to_merge` when a task has passed review and is ready for merging. Never directly merge PRs — let the pipeline handle it via the `ready_to_merge` transition.',
+    '- The pipeline enforces guards and hooks on each transition. Bypassing them can leave tasks in an inconsistent state.',
   ].join('\n');
 }
 
@@ -218,17 +276,28 @@ function telegramResponseStyle(): string {
 // Consumer-specific composite builders
 // ---------------------------------------------------------------------------
 
+/** Returns a human-friendly description of codebase access for the intro line. */
+function accessDescription(mode: PermissionMode): string {
+  if (mode === 'full_access') return 'have full access to read, write, and execute in the codebase';
+  if (mode === 'read_write') return 'can read and write files in the codebase';
+  return 'have read-only access to the codebase';
+}
+
 export function buildDesktopSystemPrompt(scope: SessionScope): string {
+  const mode: PermissionMode = scope.permissionMode ?? 'read_only';
+
   if (scope.task) {
     return [
       `You are a task orchestrator for task #${scope.task.id}: "${scope.task.title}".`,
       taskContextSection(scope.task),
       '',
-      capabilitiesSection(),
+      capabilitiesSection(mode),
       '',
-      rulesSection(),
+      rulesSection(mode),
       `- Focus on task #${scope.task.id}. Use the get_task MCP tool to refresh task state.`,
       '- Be concise and helpful. Format responses with markdown when useful.',
+      '',
+      tmpFolderSection(scope.projectPath),
       '',
       interactionStyleSection(),
       '',
@@ -241,12 +310,14 @@ export function buildDesktopSystemPrompt(scope: SessionScope): string {
   }
 
   return [
-    `You are a project orchestrator for project "${scope.projectName}". You can create and manage tasks on behalf of the user, and have read-only access to the codebase.`,
+    `You are a project orchestrator for project "${scope.projectName}". You can create and manage tasks on behalf of the user, and ${accessDescription(mode)}.`,
     '',
-    capabilitiesSection(),
+    capabilitiesSection(mode),
     '',
-    rulesSection(),
+    rulesSection(mode),
     '- Be concise and helpful. Format responses with markdown when useful.',
+    '',
+    tmpFolderSection(scope.projectPath),
     '',
     interactionStyleSection(),
     '',
@@ -263,8 +334,10 @@ export function buildAgentChatSystemPrompt(
   agentRole: string,
 ): string {
   const taskCtx = scope.task ? taskContextSection(scope.task) : '';
+  const mode: PermissionMode = scope.permissionMode ?? 'read_only';
 
   // Post-mortem reviewer has a distinct prompt — no "Request Changes" flow.
+  // Always uses read_only rules regardless of session mode.
   if (agentRole === 'post-mortem-reviewer') {
     return [
       `You are the Post-Mortem Reviewer agent for task #${scope.task?.id ?? '?'}: "${scope.task?.title ?? 'Unknown'}".`,
@@ -288,7 +361,9 @@ export function buildAgentChatSystemPrompt(
       '- Be conversational and helpful. Focus on explaining and discussing the findings.',
       '- If the user asks about creating tasks from the suggestions, point them to the "Create Task" buttons in the report panel.',
       '',
-      rulesSection(),
+      rulesSection('read_only'),
+      '',
+      tmpFolderSection(scope.projectPath),
       '',
       cliReferenceSection(scope.task?.id),
     ].join('\n');
@@ -324,22 +399,28 @@ export function buildAgentChatSystemPrompt(
     '',
     `IMPORTANT: Do NOT attempt to rewrite or output a revised ${planOrDesign}. You are a review assistant — changes are applied by the ${roleName} pipeline after the user clicks Request Changes.`,
     '',
-    rulesSection(),
+    rulesSection(mode),
+    '',
+    tmpFolderSection(scope.projectPath),
     '',
     cliReferenceSection(scope.task?.id),
   ].join('\n');
 }
 
 export function buildTelegramSystemPrompt(scope: SessionScope): string {
+  const mode: PermissionMode = scope.permissionMode ?? 'read_only';
+
   if (scope.task) {
     return [
       `You are a Telegram bot assistant for task #${scope.task.id}: "${scope.task.title}".`,
       taskContextSection(scope.task),
       '',
-      capabilitiesSection(),
+      capabilitiesSection(mode),
       '',
-      rulesSection(),
+      rulesSection(mode),
       `- Focus on task #${scope.task.id}. Use the get_task MCP tool to refresh task state.`,
+      '',
+      tmpFolderSection(scope.projectPath),
       '',
       interactionStyleSection(),
       '',
@@ -354,11 +435,13 @@ export function buildTelegramSystemPrompt(scope: SessionScope): string {
   }
 
   return [
-    `You are a Telegram bot assistant for project "${scope.projectName}". You can create and manage tasks via MCP tools, and have read-only access to the codebase.`,
+    `You are a Telegram bot assistant for project "${scope.projectName}". You can create and manage tasks via MCP tools, and ${accessDescription(mode)}.`,
     '',
-    capabilitiesSection(),
+    capabilitiesSection(mode),
     '',
-    rulesSection(),
+    rulesSection(mode),
+    '',
+    tmpFolderSection(scope.projectPath),
     '',
     interactionStyleSection(),
     '',

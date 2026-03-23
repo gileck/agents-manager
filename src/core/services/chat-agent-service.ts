@@ -362,6 +362,7 @@ export class ChatAgentService {
       if (!task) throw new Error(`Task not found: ${session.scopeId}`);
       const project = await this.projectStore.getProject(task.projectId);
       if (!project) throw new Error(`Project not found for task: ${session.scopeId}`);
+      if (!project.path) throw new Error(`Project has no path for task: ${session.scopeId}`);
       const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
 
       // Hydrate docs from task_docs table (optional — non-fatal if store unavailable)
@@ -378,6 +379,8 @@ export class ChatAgentService {
         scopeType: 'task',
         projectId: task.projectId,
         projectName: project.name,
+        permissionMode: session.permissionMode ?? undefined,
+        projectPath: project.path,
         task: {
           id: task.id,
           title: task.title,
@@ -397,10 +400,13 @@ export class ChatAgentService {
 
     const project = await this.projectStore.getProject(session.scopeId);
     if (!project) throw new Error(`Project not found: ${session.scopeId}`);
+    if (!project.path) throw new Error(`Project has no path: ${session.scopeId}`);
     return {
       scopeType: 'project',
       projectId: session.scopeId,
       projectName: project.name,
+      permissionMode: session.permissionMode ?? undefined,
+      projectPath: project.path,
     };
   }
 
@@ -1128,6 +1134,7 @@ export class ChatAgentService {
 
     const imageDir = this.imageStorageDir;
     const screenshotDir = getScreenshotStorageDir();
+    const tmpPath = path.join(projectPath, 'tmp');
 
     let costInputTokens: number | undefined;
     let costOutputTokens: number | undefined;
@@ -1403,7 +1410,7 @@ export class ChatAgentService {
             model,
             maxTurns: subagentDef?.maxTurns ?? 25,
             timeoutMs: 300000,
-            allowedPaths: readOnly ? [] : [projectPath, imageDir, screenshotDir],
+            allowedPaths: readOnly ? [tmpPath] : [projectPath, imageDir, screenshotDir, tmpPath],
             readOnlyPaths: readOnly ? [projectPath, imageDir, screenshotDir] : [],
             readOnly,
             permissionMode: effectiveMode,
@@ -1527,7 +1534,7 @@ export class ChatAgentService {
         cwd: projectPath,
         model,
         maxTurns: 50,
-        allowedPaths: readOnly ? [] : [projectPath, imageDir, screenshotDir],
+        allowedPaths: readOnly ? [tmpPath] : [projectPath, imageDir, screenshotDir, tmpPath],
         readOnlyPaths: readOnly ? [projectPath, imageDir, screenshotDir] : [],
         readOnly,
         permissionMode: effectiveMode,
