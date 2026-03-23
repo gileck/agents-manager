@@ -300,6 +300,12 @@ export interface ApiClient {
     list(): Promise<DevServerInfo[]>;
   };
 
+  // Worktree file operations
+  worktreeFile: {
+    getUrl(taskId: string, path: string): string;
+    read(taskId: string, path: string): Promise<string>;
+  };
+
   // Screenshots
   screenshots: {
     save(images: ChatImage[]): Promise<{ paths: string[] }>;
@@ -684,6 +690,21 @@ export function createApiClient(baseUrl: string): ApiClient {
       stop: (taskId) => req('POST', `/api/tasks/${taskId}/dev-server/stop`),
       status: (taskId) => req('GET', `/api/tasks/${taskId}/dev-server/status`),
       list: () => req('GET', '/api/dev-servers'),
+    },
+
+    // -- Worktree file operations ---------------------------------------------
+    worktreeFile: {
+      getUrl: (taskId, filePath) =>
+        `${baseUrl}/api/worktree/${taskId}/file?path=${encodeURIComponent(filePath)}`,
+      read: async (taskId, filePath) => {
+        const url = `${baseUrl}/api/worktree/${taskId}/file?path=${encodeURIComponent(filePath)}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          throw new ApiError(res.status, (err as Record<string, string>).error || `HTTP ${res.status}`);
+        }
+        return res.text();
+      },
     },
 
     // -- Screenshots ---------------------------------------------------------

@@ -255,6 +255,10 @@ export const IPC_CHANNELS = {
   // Chat question answering
   CHAT_ANSWER_QUESTION: 'chat:answer-question',
 
+  // Worktree file operations
+  WORKTREE_FILE_URL: 'worktree-file:url',
+  WORKTREE_FILE_READ: 'worktree-file:read',
+
   // Screenshot operations
   SCREENSHOT_SAVE: 'screenshot:save',
 

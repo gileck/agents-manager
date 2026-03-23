@@ -305,6 +305,12 @@ export interface ApiShape {
     save(images: ChatImage[]): Promise<{ paths: string[] }>;
   };
 
+  // Worktree file operations
+  worktreeFile: {
+    url(taskId: string, path: string): Promise<string>;
+    read(taskId: string, path: string): Promise<string>;
+  };
+
   // Shell operations
   shell: {
     openInChrome(url: string): Promise<void>;

@@ -264,6 +264,12 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       list: () => api.devServers.list(),
     },
 
+    // ── Worktree File ──────────────────────────────────────────────────
+    worktreeFile: {
+      url: (taskId, filePath) => Promise.resolve(api.worktreeFile.getUrl(taskId, filePath)),
+      read: (taskId, filePath) => api.worktreeFile.read(taskId, filePath),
+    },
+
     // ── Screenshots ────────────────────────────────────────────────────
     screenshots: {
       save: (images) => api.screenshots.save(images),

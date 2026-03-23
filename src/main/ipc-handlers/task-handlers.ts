@@ -186,6 +186,18 @@ export function registerTaskHandlers(api: ApiClient): void {
   });
 
   // ============================================
+  // Worktree File Operations
+  // ============================================
+
+  registerIpcHandler(IPC_CHANNELS.WORKTREE_FILE_URL, async (_, taskId: string, filePath: string) => {
+    return api.worktreeFile.getUrl(taskId, filePath);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.WORKTREE_FILE_READ, async (_, taskId: string, filePath: string) => {
+    return api.worktreeFile.read(taskId, filePath);
+  });
+
+  // ============================================
   // Workflow Review
   // ============================================
 
