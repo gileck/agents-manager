@@ -76,6 +76,7 @@ export class PostRunExtractor {
       investigationSummary?: string;
       subtasks?: string[];
       phases?: Array<{ name: string; subtasks: string[] }>;
+      proposedOptions?: Array<{ id: string; label: string; description: string; recommended?: boolean }>;
     } | undefined;
 
     // For investigator, prefer `investigationReport`; fall back to `plan` for backward compat
@@ -153,6 +154,25 @@ export class PostRunExtractor {
         onLog(`Warning: failed to mark investigation_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+
+    // Extract proposed fix options from investigator output
+    if (isInvestigator && so?.proposedOptions && Array.isArray(so.proposedOptions) && so.proposedOptions.length > 0) {
+      try {
+        await this.taskContextStore.addEntry({
+          taskId,
+          agentRunId,
+          source: 'agent',
+          entryType: 'fix_options_proposed',
+          summary: `${so.proposedOptions.length} fix option(s) proposed`,
+          data: { options: so.proposedOptions },
+        });
+        onLog(`Saved ${so.proposedOptions.length} proposed fix options as context entry`);
+      } catch (err) {
+        // Non-fatal — don't block pipeline on fix options extraction failure
+        onLog(`Warning: failed to save proposed fix options: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     const _duration = Math.round(performance.now() - _start);
     onPostLog?.('extractPlan complete', { isInvestigator, hasContent: !!reportContent, subtaskCount: so?.subtasks?.length ?? 0, phaseCount: so?.phases?.length ?? 0 }, _duration);
   }

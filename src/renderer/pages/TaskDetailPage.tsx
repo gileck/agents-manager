@@ -572,6 +572,7 @@ export function TaskDetailPage() {
                   onHookFailures={(failures) => setHookFailureAlerts((prev) => [...prev, ...failures])}
                   diagnostics={diagnostics}
                   refetchDiagnostics={refetchDiagnostics}
+                  contextEntries={contextEntries ?? undefined}
                 />
               </div>
             )}

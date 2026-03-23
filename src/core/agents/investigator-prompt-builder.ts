@@ -22,8 +22,22 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
       schema: {
         type: 'object',
         properties: {
-          investigationReport: { type: 'string', description: 'The detailed investigation report as markdown (root cause analysis, findings, fix suggestion)' },
+          investigationReport: { type: 'string', description: 'The detailed investigation report as markdown (root cause analysis, findings, architectural analysis). Do NOT embed fix options in this report — use the proposedOptions field instead.' },
           investigationSummary: { type: 'string', description: 'A short 2-3 sentence summary of the investigation findings, root cause, and recommended fix approach' },
+          proposedOptions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'A kebab-case identifier, e.g. "direct-fix", "architectural-fix", "balanced-approach"' },
+                label: { type: 'string', description: 'Short label starting with a size tier: "S — Direct Fix: ...", "M — Balanced Approach: ...", "L — Architectural Fix: ..."' },
+                description: { type: 'string', description: 'Markdown description with effort estimate, approach summary, affected files, and tradeoffs' },
+                recommended: { type: 'boolean', description: 'Set to true for the single recommended option' },
+              },
+              required: ['id', 'label', 'description'],
+            },
+            description: 'Structured fix options when multiple viable approaches exist at different effort/risk levels. Omit or leave empty when there is a single clear approach.',
+          },
         },
         required: ['investigationReport', 'investigationSummary'],
       },
@@ -68,8 +82,8 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
         '3. Use their decisions to guide your investigation.',
         '4. For targeted file lookups (when you know approximately what you are looking for — function names, file patterns, error strings), use Read, Grep, and Glob directly. Only spawn Task/Explore sub-agents when you need broad codebase discovery across unknown directories or when the search space is genuinely large. Do not run the same searches both directly and via a sub-agent.',
         '5. Analyze the architectural context of the bug — look beyond the immediate trigger to understand what design decision, missing abstraction, or coupling pattern allowed this bug to exist.',
-        '6. Write a detailed investigation report with your findings.',
-        '7. Present multiple fix options at different depths (direct fix, architectural fix, and balanced approach where applicable), including any tests that should be added or updated.',
+        '6. Write a detailed investigation report with your findings (root cause, architectural analysis). Do NOT embed fix options in the report body.',
+        '7. If multiple viable fix approaches exist at different effort/risk levels, populate the `proposedOptions` structured output field with each option. If there is a single clear fix, you may omit `proposedOptions`. Include any tests that should be added or updated in the option descriptions.',
       );
       ivrLines.push('', ...this.getReportStructureInstructions());
       prompt = ivrLines.join('\n');
@@ -90,9 +104,9 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
         `1. Read the bug report carefully — it may contain debug logs, error traces, timeline entries, and context from the reporter.`,
         `2. Investigate the codebase to find the root cause. The project documentation (CLAUDE.md) at the repository root contains architecture context if needed.`,
         `3. Analyze the architectural context of the bug — look beyond the immediate trigger to understand what design decision, missing abstraction, or coupling pattern allowed this bug to exist. Consider whether this is a symptom of a deeper issue.`,
-        `4. Write a detailed investigation report with your findings.`,
+        `4. Write a detailed investigation report with your findings (root cause, architectural analysis). Do NOT embed fix options in the report body.`,
         `5. Check existing test coverage for the affected code and note any gaps.`,
-        `6. Present multiple fix options at different depths (direct fix, architectural fix, and balanced approach where applicable), including any tests that should be added or updated.`,
+        `6. If multiple viable fix approaches exist at different effort/risk levels, populate the \`proposedOptions\` structured output field with each option (S/M/L tiers). If there is a single clear fix, you may omit \`proposedOptions\`. Include test changes needed in the option descriptions.`,
       ];
       const relatedTaskId = task.metadata?.relatedTaskId as string | undefined;
       if (relatedTaskId) {
@@ -132,21 +146,23 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
       `## Architectural Analysis`,
       `[Why does this bug exist? What design decision or missing abstraction allowed it?`,
       `Is this a symptom of a deeper pattern in the codebase?]`,
-      ``,
-      `## Fix Options`,
-      ``,
-      `### Option 1: Direct Fix`,
-      `[Minimal change to fix the immediate bug. Describe the change, affected files,`,
-      `and what architectural debt remains.]`,
-      ``,
-      `### Option 2: Architectural Fix`,
-      `[Deeper refactor that addresses the underlying design issue. Describe the approach,`,
-      `scope, and how it improves the codebase long-term.]`,
-      ``,
-      `### Option 3: Balanced Approach`,
-      `[Middle ground — fixes the bug properly while making targeted improvements`,
-      `without a full refactor. May not exist for every bug.]`,
       '```',
+      ``,
+      `**IMPORTANT:** Do NOT embed fix options in the report body. Instead, use the structured \`proposedOptions\` field in the JSON output.`,
+      ``,
+      `## Fix Options (proposedOptions field)`,
+      `When you identify multiple viable fix approaches at different effort/risk levels, populate the \`proposedOptions\` array in your structured output. When there is a single obvious fix, you may omit \`proposedOptions\` entirely.`,
+      ``,
+      `Each option should have:`,
+      `- **id**: kebab-case identifier (e.g. "direct-fix", "architectural-fix", "balanced-approach")`,
+      `- **label**: Start with a size tier — "S — Direct Fix: [brief description]", "M — Balanced Approach: [brief description]", "L — Architectural Fix: [brief description]"`,
+      `- **description**: Markdown with effort estimate, approach summary, affected files, and tradeoffs`,
+      `- **recommended**: Set to \`true\` for the single recommended option`,
+      ``,
+      `Typical options:`,
+      `1. **S — Direct Fix**: Minimal change to fix the immediate bug. Note what architectural debt remains.`,
+      `2. **L — Architectural Fix**: Deeper refactor addressing the underlying design issue. Note scope and long-term benefit.`,
+      `3. **M — Balanced Approach** (when applicable): Middle ground — fixes the bug properly with targeted improvements without a full refactor.`,
     ];
   }
 

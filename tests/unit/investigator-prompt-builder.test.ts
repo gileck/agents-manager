@@ -119,13 +119,13 @@ describe('InvestigatorPromptBuilder', () => {
       expect(prompt).toContain('## Architectural Analysis');
     });
 
-    it('should include Fix Options with three options in new investigation', () => {
+    it('should include Fix Options instructions referencing proposedOptions in new investigation', () => {
       const ctx = createContext({ mode: 'new' });
       const prompt = builder.buildPrompt(ctx);
-      expect(prompt).toContain('## Fix Options');
-      expect(prompt).toContain('### Option 1: Direct Fix');
-      expect(prompt).toContain('### Option 2: Architectural Fix');
-      expect(prompt).toContain('### Option 3: Balanced Approach');
+      expect(prompt).toContain('## Fix Options (proposedOptions field)');
+      expect(prompt).toContain('S — Direct Fix');
+      expect(prompt).toContain('L — Architectural Fix');
+      expect(prompt).toContain('M — Balanced Approach');
     });
 
     it('should not include old Suggested Fix field in new investigation', () => {
@@ -143,16 +143,16 @@ describe('InvestigatorPromptBuilder', () => {
       expect(prompt).toContain('## Architectural Analysis');
     });
 
-    it('should include Fix Options with three options in revision mode', () => {
+    it('should include Fix Options instructions referencing proposedOptions in revision mode', () => {
       const ctx = createContext({
         mode: 'revision' as AgentMode,
         revisionReason: 'info_provided' as RevisionReason,
       });
       const prompt = builder.buildPrompt(ctx);
-      expect(prompt).toContain('## Fix Options');
-      expect(prompt).toContain('### Option 1: Direct Fix');
-      expect(prompt).toContain('### Option 2: Architectural Fix');
-      expect(prompt).toContain('### Option 3: Balanced Approach');
+      expect(prompt).toContain('## Fix Options (proposedOptions field)');
+      expect(prompt).toContain('S — Direct Fix');
+      expect(prompt).toContain('L — Architectural Fix');
+      expect(prompt).toContain('M — Balanced Approach');
     });
   });
 
@@ -163,10 +163,11 @@ describe('InvestigatorPromptBuilder', () => {
       expect(prompt).toContain('Analyze the architectural context of the bug');
     });
 
-    it('should instruct agent to present multiple fix options in new investigation', () => {
+    it('should instruct agent to populate proposedOptions for multiple fix approaches in new investigation', () => {
       const ctx = createContext({ mode: 'new' });
       const prompt = builder.buildPrompt(ctx);
-      expect(prompt).toContain('Present multiple fix options at different depths');
+      expect(prompt).toContain('proposedOptions');
+      expect(prompt).toContain('multiple viable fix approaches');
     });
 
     it('should instruct agent to analyze architectural context in revision mode', () => {
@@ -178,13 +179,14 @@ describe('InvestigatorPromptBuilder', () => {
       expect(prompt).toContain('Analyze the architectural context of the bug');
     });
 
-    it('should instruct agent to present multiple fix options in revision mode', () => {
+    it('should instruct agent to populate proposedOptions for multiple fix approaches in revision mode', () => {
       const ctx = createContext({
         mode: 'revision' as AgentMode,
         revisionReason: 'info_provided' as RevisionReason,
       });
       const prompt = builder.buildPrompt(ctx);
-      expect(prompt).toContain('Present multiple fix options at different depths');
+      expect(prompt).toContain('proposedOptions');
+      expect(prompt).toContain('multiple viable fix approaches');
     });
   });
 });
