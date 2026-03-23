@@ -35,6 +35,7 @@ import { AutomatedAgentsPage } from './pages/AutomatedAgentsPage';
 import { AutomatedAgentRunPage } from './pages/AutomatedAgentRunPage';
 import { AutomatedAgentDetailPage } from './pages/AutomatedAgentDetailPage';
 import { PostMortemPage } from './pages/PostMortemPage';
+import { UxDesignReviewPage } from './pages/UxDesignReviewPage';
 import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useTabNavigation } from './hooks/useTabNavigation';
@@ -168,6 +169,7 @@ function AppRoutes() {
         <Route path="tasks/:id/plan" element={<ReportPage config={REPORT_CONFIGS.plan} />} />
         <Route path="tasks/:id/design" element={<ReportPage config={REPORT_CONFIGS.design} />} />
         <Route path="tasks/:id/investigation" element={<ReportPage config={REPORT_CONFIGS.investigation} />} />
+        <Route path="tasks/:id/ux-design" element={<UxDesignReviewPage />} />
         <Route path="tasks/:id/post-mortem" element={<ReportPage config={REPORT_CONFIGS['post-mortem']} />} />
         <Route path="tasks/:id/workflow-review" element={<ReportPage config={REPORT_CONFIGS['workflow-review']} />} />
         <Route path="tasks/:id/:tab" element={<TaskTabPage />} />

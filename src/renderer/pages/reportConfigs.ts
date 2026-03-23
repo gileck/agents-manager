@@ -49,10 +49,10 @@ export const REPORT_CONFIGS: Record<string, ReportPageConfig> = {};
 
 // Generate configs from DOC_PHASES registry
 for (const phase of DOC_PHASES) {
-  // Map docType to route key used in the URL
-  const routeKey = phase.docType === 'investigation_report' ? 'investigation'
-    : phase.docType === 'technical_design' ? 'design'
-    : 'plan';
+  // Skip phases that use custom pages (not the generic ReportPage)
+  if (phase.docType === 'ux_design') continue;
+
+  const routeKey = phase.routeKey;
 
   REPORT_CONFIGS[routeKey] = {
     label: phase.docTitle,
