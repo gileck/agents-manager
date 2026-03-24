@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { initAgentFiles, showAgentConfig, deleteAgentFiles } from '../../src/core/agents/agent-file-config-writer';
+import { initAgentFiles, showAgentConfig, deleteAgentFiles, writeAgentPrompt } from '../../src/core/agents/agent-file-config-writer';
 import { AGENT_BUILDERS } from '../../src/core/agents/agent-builders';
 
 const TEST_DIR = path.join(__dirname, '..', '.tmp-agent-file-config-writer-test');
@@ -230,5 +230,57 @@ describe('deleteAgentFiles', () => {
     // Others should still exist
     expect(fs.existsSync(path.join(TEST_DIR, '.agents', 'reviewer'))).toBe(true);
     expect(fs.existsSync(path.join(TEST_DIR, '.agents', 'implementor'))).toBe(true);
+  });
+});
+
+describe('writeAgentPrompt', () => {
+  beforeEach(() => {
+    cleanup();
+    fs.mkdirSync(TEST_DIR, { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('writes prompt.md to the correct path', () => {
+    const result = writeAgentPrompt(TEST_DIR, 'planner', 'Custom prompt content');
+
+    expect(result.path).toBe(path.join(TEST_DIR, '.agents', 'planner', 'prompt.md'));
+    expect(fs.existsSync(result.path)).toBe(true);
+    expect(fs.readFileSync(result.path, 'utf-8')).toBe('Custom prompt content');
+  });
+
+  it('creates the .agents/{agentType}/ directory if needed', () => {
+    const agentDir = path.join(TEST_DIR, '.agents', 'planner');
+    expect(fs.existsSync(agentDir)).toBe(false);
+
+    writeAgentPrompt(TEST_DIR, 'planner', 'New prompt');
+
+    expect(fs.existsSync(agentDir)).toBe(true);
+  });
+
+  it('overwrites existing prompt.md', () => {
+    writeAgentPrompt(TEST_DIR, 'planner', 'First version');
+    writeAgentPrompt(TEST_DIR, 'planner', 'Second version');
+
+    const promptPath = path.join(TEST_DIR, '.agents', 'planner', 'prompt.md');
+    expect(fs.readFileSync(promptPath, 'utf-8')).toBe('Second version');
+  });
+
+  it('throws for unknown agent type', () => {
+    expect(() => writeAgentPrompt(TEST_DIR, 'nonexistent', 'content')).toThrow('Unknown agent type');
+  });
+
+  it('preserves existing config.json when writing prompt', () => {
+    // Init first to create config.json
+    initAgentFiles(TEST_DIR, 'planner');
+    const configPath = path.join(TEST_DIR, '.agents', 'planner', 'config.json');
+    const originalConfig = fs.readFileSync(configPath, 'utf-8');
+
+    // Write prompt (should not touch config.json)
+    writeAgentPrompt(TEST_DIR, 'planner', 'Updated prompt');
+
+    expect(fs.readFileSync(configPath, 'utf-8')).toBe(originalConfig);
   });
 });

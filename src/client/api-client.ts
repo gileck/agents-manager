@@ -167,6 +167,7 @@ export interface ApiClient {
     getEffective(agentType: string, projectId: string, mode?: AgentMode, revisionReason?: RevisionReason): Promise<EffectiveAgentConfig>;
     initFiles(agentType: string, projectId: string, force?: boolean): Promise<AgentFileInitResult>;
     deleteFiles(agentType: string, projectId: string): Promise<{ deleted: string[] }>;
+    updatePrompt(agentType: string, projectId: string, content: string): Promise<{ path: string }>;
   };
 
   // Task docs
@@ -491,6 +492,8 @@ export function createApiClient(baseUrl: string): ApiClient {
         req('POST', `/api/agent-definitions/${agentType}/init${qs({ projectId })}`, force ? { force: true } : {}),
       deleteFiles: (agentType, projectId) =>
         req('DELETE', `/api/agent-definitions/${agentType}/file-config${qs({ projectId })}`),
+      updatePrompt: (agentType, projectId, content) =>
+        req('PUT', `/api/agent-definitions/${agentType}/prompt${qs({ projectId })}`, { content }),
     },
 
     // -- Task Docs -----------------------------------------------------------

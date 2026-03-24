@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { initAgentFiles, showAgentConfig, deleteAgentFiles } from '../../src/core/agents/agent-file-config-writer';
+import { initAgentFiles, showAgentConfig, deleteAgentFiles, writeAgentPrompt } from '../../src/core/agents/agent-file-config-writer';
 import { AGENT_BUILDERS } from '../../src/core/agents/agent-builders';
 
 const TEST_DIR = path.join(__dirname, '..', '.tmp-agent-definitions-routes-test');
@@ -141,6 +141,38 @@ describe('agent-definitions file-config route handlers', () => {
     });
   });
 
+  // ---- PUT /api/agent-definitions/:agentType/prompt ----
+
+  describe('PUT update prompt', () => {
+    it('writes prompt content to the correct file', () => {
+      const result = writeAgentPrompt(TEST_DIR, 'planner', 'Updated planner prompt');
+
+      expect(result.path).toContain('.agents/planner/prompt.md');
+      expect(fs.readFileSync(result.path, 'utf-8')).toBe('Updated planner prompt');
+    });
+
+    it('creates directory and file when .agents/ does not exist', () => {
+      expect(fs.existsSync(path.join(TEST_DIR, '.agents'))).toBe(false);
+
+      writeAgentPrompt(TEST_DIR, 'reviewer', 'New reviewer prompt');
+
+      expect(fs.existsSync(path.join(TEST_DIR, '.agents', 'reviewer', 'prompt.md'))).toBe(true);
+    });
+
+    it('overwrites existing prompt and shows file source in effective config', () => {
+      initAgentFiles(TEST_DIR, 'planner');
+      writeAgentPrompt(TEST_DIR, 'planner', 'Custom override prompt');
+
+      const effective = showAgentConfig(TEST_DIR, 'planner');
+      expect(effective.promptSource).toBe('file');
+      expect(effective.prompt).toBe('Custom override prompt');
+    });
+
+    it('throws for unknown agent type', () => {
+      expect(() => writeAgentPrompt(TEST_DIR, 'nonexistent', 'content')).toThrow('Unknown agent type');
+    });
+  });
+
   // ---- Round-trip: init → effective → delete → effective ----
 
   describe('round-trip lifecycle', () => {
@@ -163,6 +195,28 @@ describe('agent-definitions file-config route handlers', () => {
 
       // 5. After delete — back to defaults
       result = showAgentConfig(TEST_DIR, 'planner');
+      expect(result.promptSource).toBe('default');
+      expect(result.hasFileConfig).toBe(false);
+    });
+
+    it('init → update prompt → effective shows custom → delete → defaults', () => {
+      // 1. Init
+      initAgentFiles(TEST_DIR, 'implementor');
+
+      // 2. Update prompt
+      writeAgentPrompt(TEST_DIR, 'implementor', 'Custom implementor instructions');
+
+      // 3. Verify effective config shows the custom prompt
+      let result = showAgentConfig(TEST_DIR, 'implementor');
+      expect(result.promptSource).toBe('file');
+      expect(result.prompt).toBe('Custom implementor instructions');
+      expect(result.hasFileConfig).toBe(true);
+
+      // 4. Delete
+      deleteAgentFiles(TEST_DIR, 'implementor');
+
+      // 5. Back to defaults
+      result = showAgentConfig(TEST_DIR, 'implementor');
       expect(result.promptSource).toBe('default');
       expect(result.hasFileConfig).toBe(false);
     });

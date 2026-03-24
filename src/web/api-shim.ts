@@ -113,6 +113,16 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       create: (input) => api.agentDefinitions.create(input) as Promise<never>,
       update: (id, input) => api.agentDefinitions.update(id, input) as Promise<never>,
       delete: (id) => api.agentDefinitions.delete(id).then(() => true),
+      // File-based agent config (.agents/)
+      listTypes: () => api.agentDefinitions.listTypes(),
+      getEffective: (agentType, projectId, mode?, revisionReason?) =>
+        api.agentDefinitions.getEffective(agentType, projectId, mode, revisionReason),
+      initFiles: (agentType, projectId, force?) =>
+        api.agentDefinitions.initFiles(agentType, projectId, force),
+      deleteFiles: (agentType, projectId) =>
+        api.agentDefinitions.deleteFiles(agentType, projectId),
+      updatePrompt: (agentType, projectId, content) =>
+        api.agentDefinitions.updatePrompt(agentType, projectId, content),
     },
 
     // ── Agent Libs ────────────────────────────────────────────────────
