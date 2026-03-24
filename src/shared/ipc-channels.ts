@@ -111,6 +111,11 @@ export const IPC_CHANNELS = {
   AGENT_DEF_CREATE: 'agent-def:create',
   AGENT_DEF_UPDATE: 'agent-def:update',
   AGENT_DEF_DELETE: 'agent-def:delete',
+  AGENT_DEF_LIST_TYPES: 'agent-def:list-types',
+  AGENT_DEF_EFFECTIVE: 'agent-def:effective',
+  AGENT_DEF_INIT_FILES: 'agent-def:init-files',
+  AGENT_DEF_DELETE_FILES: 'agent-def:delete-files',
+  AGENT_DEF_UPDATE_PROMPT: 'agent-def:update-prompt',
 
   // Git operations
   GIT_DIFF: 'git:diff',

@@ -596,6 +596,80 @@ export async function createTaskMcpServer(
         }
       },
     },
+
+    // -------------------------------------------------------------------------
+    // list_agent_types
+    // -------------------------------------------------------------------------
+    {
+      name: 'list_agent_types',
+      description:
+        'List all available agent types that can be configured via file-based ' +
+        'definitions (.agents/ directory). Returns an array of agent type names ' +
+        '(e.g. "planner", "implementor", "reviewer").',
+      inputSchema: {},
+      handler: async (): Promise<CallToolResult> => {
+        try {
+          const types = await api.agentDefinitions.listTypes();
+          return ok(types);
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // get_agent_config
+    // -------------------------------------------------------------------------
+    {
+      name: 'get_agent_config',
+      description:
+        'Get the effective configuration for an agent type, showing which fields ' +
+        'come from file-based config (.agents/) vs hardcoded defaults. Returns the ' +
+        'prompt, execution parameters (maxTurns, timeout, readOnly, disallowedTools), ' +
+        'and per-field source attribution. Use this to inspect how an agent is configured ' +
+        'before modifying its prompt or parameters.',
+      inputSchema: {
+        agentType: z.string().describe('Agent type (e.g. "planner", "implementor", "reviewer")'),
+        projectId: z.string().optional().describe('Project ID. Defaults to the current project.'),
+      },
+      handler: async (args: { agentType: string; projectId?: string }): Promise<CallToolResult> => {
+        try {
+          const projectId = args.projectId ?? context.projectId;
+          const config = await api.agentDefinitions.getEffective(args.agentType, projectId);
+          return ok(config);
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // update_agent_prompt
+    // -------------------------------------------------------------------------
+    {
+      name: 'update_agent_prompt',
+      description:
+        'Write or update the prompt.md file for an agent type in the project\'s ' +
+        '.agents/ directory. This creates or overwrites the file at ' +
+        '{projectPath}/.agents/{agentType}/prompt.md. The prompt supports ' +
+        'PromptRenderer variable substitution: {taskTitle}, {taskDescription}, ' +
+        '{planSection}, {technicalDesignSection}, {subtasksSection}, etc. ' +
+        'Changes take effect on the next agent run.',
+      inputSchema: {
+        agentType: z.string().describe('Agent type (e.g. "planner", "implementor", "reviewer")'),
+        content: z.string().describe('The prompt content to write to prompt.md'),
+        projectId: z.string().optional().describe('Project ID. Defaults to the current project.'),
+      },
+      handler: async (args: { agentType: string; content: string; projectId?: string }): Promise<CallToolResult> => {
+        try {
+          const projectId = args.projectId ?? context.projectId;
+          const result = await api.agentDefinitions.updatePrompt(args.agentType, projectId, args.content);
+          return ok(result);
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    },
   ];
 
   // Wrap all tool handlers with a post-handler that:

@@ -1,5 +1,5 @@
 import { resolve } from 'path';
-import type { AgentContext, AgentConfig, AgentRunResult, TaskContextEntry } from '../../shared/types';
+import type { AgentContext, AgentConfig, AgentRunResult, AgentFileConfig, TaskContextEntry } from '../../shared/types';
 import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
 import type { AgentLibResult } from '../interfaces/agent-lib';
 import { PromptRenderer } from '../services/prompt-renderer';
@@ -138,17 +138,39 @@ export abstract class BaseAgentPromptBuilder {
     return lines.join('\n');
   }
 
-  buildExecutionConfig(context: AgentContext, config: AgentConfig): AgentExecutionConfig {
+  buildExecutionConfig(
+    context: AgentContext,
+    config: AgentConfig,
+    fileConfig?: AgentFileConfig,
+    onLog?: (message: string, data?: Record<string, unknown>) => void,
+  ): AgentExecutionConfig {
+    const log = onLog ?? (() => {});
+
+    // --- Prompt resolution: file > code ---
     let prompt: string;
-    if (context.modeConfig?.promptTemplate) {
-      const renderer = new PromptRenderer();
-      prompt = renderer.render(context.modeConfig.promptTemplate, context);
+    let promptSource: 'file' | 'default' = 'default';
+    if (fileConfig?.prompt) {
+      // File-based prompt — render through PromptRenderer for variable substitution
+      try {
+        const renderer = new PromptRenderer();
+        prompt = renderer.render(fileConfig.prompt, context);
+        promptSource = 'file';
+        log(`Using file-based prompt from ${fileConfig.promptPath}`, { agentType: this.type, source: 'file' });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log(`Failed to render file-based prompt from ${fileConfig.promptPath}: ${message}, falling back to hardcoded default`, {
+          agentType: this.type, error: message, path: fileConfig.promptPath,
+        });
+        prompt = context.resolvedPrompt ?? this.buildPrompt(context);
+      }
     } else {
       prompt = context.resolvedPrompt ?? this.buildPrompt(context);
-      if (context.skills?.length) {
-        const skillsList = context.skills.map(s => `- /${s}`).join('\n');
-        prompt += `\n\n## Available Skills\nYou have access to the following skills. Use the Skill tool to invoke them:\n${skillsList}`;
-      }
+    }
+
+    // Append skills section (for both file-based and code-based prompts)
+    if (context.skills?.length) {
+      const skillsList = context.skills.map(s => `- /${s}`).join('\n');
+      prompt += `\n\n## Available Skills\nYou have access to the following skills. Use the Skill tool to invoke them:\n${skillsList}`;
     }
     if (context.taskContext?.length) {
       const feedbackTypeSet = new Set<string>(FEEDBACK_ENTRY_TYPES);
@@ -211,15 +233,34 @@ export abstract class BaseAgentPromptBuilder {
       prompt = worktreeGuard + '\n\n---\n\n' + prompt;
     }
 
-    const disallowedTools = this.getDisallowedTools();
     const cleanupPaths = this.getCleanupPaths();
+
+    // --- Config field resolution: file config (if present) > builder defaults ---
+    const fc = fileConfig?.config;
+    const maxTurns = fc?.maxTurns ?? this.getMaxTurns(context);
+    const timeoutMs = fc?.timeout ?? this.getTimeout(context, config);
+    const readOnly = fc?.readOnly ?? this.isReadOnly(context);
+    const outputFormat = fc?.outputFormat ?? this.getOutputFormat(context);
+    const disallowedTools = fc?.disallowedTools ?? this.getDisallowedTools();
+
+    // Log config merge with source attribution
+    if (fc) {
+      const fields = [
+        `maxTurns=${maxTurns} (${fc.maxTurns !== undefined ? 'file' : 'default'})`,
+        `timeout=${timeoutMs} (${fc.timeout !== undefined ? 'file' : 'default'})`,
+        `readOnly=${readOnly} (${fc.readOnly !== undefined ? 'file' : 'default'})`,
+      ];
+      if (disallowedTools) fields.push(`disallowedTools=[${disallowedTools.join(',')}] (${fc.disallowedTools !== undefined ? 'file' : 'default'})`);
+      if (outputFormat) fields.push(`outputFormat=present (${fc.outputFormat !== undefined ? 'file' : 'default'})`);
+      log(`${this.type} config: ${fields.join(', ')}`, { agentType: this.type, promptSource });
+    }
 
     return {
       prompt,
-      maxTurns: this.getMaxTurns(context),
-      timeoutMs: this.getTimeout(context, config),
-      outputFormat: this.getOutputFormat(context),
-      readOnly: this.isReadOnly(context),
+      maxTurns,
+      timeoutMs,
+      outputFormat,
+      readOnly,
       ...(disallowedTools ? { disallowedTools } : {}),
       ...(cleanupPaths.length > 0 ? { cleanupPaths } : {}),
     };
@@ -257,5 +298,25 @@ export abstract class BaseAgentPromptBuilder {
     };
     result.payload = payload ?? libResult.structuredOutput;
     return result;
+  }
+
+  /**
+   * Expose builder default config values for external tooling (e.g., `agents init` scaffolding).
+   * Returns the execution config defaults as determined by the builder's protected methods.
+   */
+  getDefaultConfigValues(context: AgentContext, config: AgentConfig): {
+    maxTurns: number;
+    timeout: number;
+    readOnly: boolean;
+    disallowedTools?: string[];
+    outputFormat?: object;
+  } {
+    return {
+      maxTurns: this.getMaxTurns(context),
+      timeout: this.getTimeout(context, config),
+      readOnly: this.isReadOnly(context),
+      disallowedTools: this.getDisallowedTools(),
+      outputFormat: this.getOutputFormat(context),
+    };
   }
 }

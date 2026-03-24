@@ -727,6 +727,50 @@ export const FEEDBACK_ENTRY_TYPES = [
 
 export const TRIAGE_ENTRY_TYPE = 'triage_summary' as const;
 
+// ============================================
+// File-based Agent Configuration Types
+// ============================================
+
+/** Config fields that can be specified in `.agents/{agentType}/config.json`. */
+export interface AgentFileConfigJson {
+  engine?: string;
+  model?: string;
+  maxTurns?: number;
+  timeout?: number;
+  readOnly?: boolean;
+  disallowedTools?: string[];
+  outputFormat?: object;
+}
+
+/** Result of loading file-based agent configuration from `.agents/{agentType}/`. */
+export interface AgentFileConfig {
+  /** Raw prompt template content from prompt.md (or mode-specific variant). */
+  prompt?: string;
+  /** Which prompt file was loaded (for logging). */
+  promptPath?: string;
+  /** Parsed config fields from config.json. */
+  config?: AgentFileConfigJson;
+  /** Which config file was loaded (for logging). */
+  configPath?: string;
+}
+
+/** Effective agent config with per-field source attribution. Returned by daemon API. */
+export interface EffectiveAgentConfig {
+  agentType: string;
+  prompt: string;
+  promptSource: 'file' | 'default';
+  config: AgentFileConfigJson;
+  configSources: Record<string, 'file' | 'default'>;
+  /** Whether `.agents/{agentType}/` directory exists on disk. */
+  hasFileConfig: boolean;
+}
+
+/** Result of file scaffolding (init) operation. */
+export interface AgentFileInitResult {
+  created: string[];
+  skipped: string[];
+}
+
 export interface AgentContext {
   task: Task;
   project: Project;

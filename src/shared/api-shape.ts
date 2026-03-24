@@ -59,6 +59,9 @@ import type {
   StopAgentResult,
   TaskDoc,
   DocArtifactType,
+  EffectiveAgentConfig,
+  AgentFileInitResult,
+  RevisionReason,
 } from './types';
 
 export interface ApiShape {
@@ -154,6 +157,12 @@ export interface ApiShape {
     create(input: AgentDefinitionCreateInput): Promise<AgentDefinition>;
     update(id: string, input: AgentDefinitionUpdateInput): Promise<AgentDefinition | null>;
     delete(id: string): Promise<boolean>;
+    // File-based agent config (.agents/)
+    listTypes(): Promise<string[]>;
+    getEffective(agentType: string, projectId: string, mode?: AgentMode, revisionReason?: RevisionReason): Promise<EffectiveAgentConfig>;
+    initFiles(agentType: string, projectId: string, force?: boolean): Promise<AgentFileInitResult>;
+    deleteFiles(agentType: string, projectId: string): Promise<{ deleted: string[] }>;
+    updatePrompt(agentType: string, projectId: string, content: string): Promise<{ path: string }>;
   };
 
   // Agent lib operations

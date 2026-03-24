@@ -26,6 +26,8 @@ import type {
   ChatImage,
   TaskDoc,
   DocArtifactType,
+  EffectiveAgentConfig,
+  AgentFileInitResult,
 } from '../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -160,6 +162,12 @@ export interface ApiClient {
     listLibs(): Promise<unknown[]>;
     listModels(): Promise<unknown>;
     listFeatures(): Promise<unknown>;
+    // File-based agent config (.agents/)
+    listTypes(): Promise<string[]>;
+    getEffective(agentType: string, projectId: string, mode?: AgentMode, revisionReason?: RevisionReason): Promise<EffectiveAgentConfig>;
+    initFiles(agentType: string, projectId: string, force?: boolean): Promise<AgentFileInitResult>;
+    deleteFiles(agentType: string, projectId: string): Promise<{ deleted: string[] }>;
+    updatePrompt(agentType: string, projectId: string, content: string): Promise<{ path: string }>;
   };
 
   // Task docs
@@ -476,6 +484,16 @@ export function createApiClient(baseUrl: string): ApiClient {
       listLibs: () => req('GET', '/api/agent-libs'),
       listModels: () => req('GET', '/api/agent-libs/models'),
       listFeatures: () => req('GET', '/api/agent-libs/features'),
+      // File-based agent config (.agents/)
+      listTypes: () => req('GET', '/api/agent-definitions/types/list'),
+      getEffective: (agentType, projectId, mode?, revisionReason?) =>
+        req('GET', `/api/agent-definitions/${agentType}/effective${qs({ projectId, mode, revisionReason })}`),
+      initFiles: (agentType, projectId, force?) =>
+        req('POST', `/api/agent-definitions/${agentType}/init${qs({ projectId })}`, force ? { force: true } : {}),
+      deleteFiles: (agentType, projectId) =>
+        req('DELETE', `/api/agent-definitions/${agentType}/file-config${qs({ projectId })}`),
+      updatePrompt: (agentType, projectId, content) =>
+        req('PUT', `/api/agent-definitions/${agentType}/prompt${qs({ projectId })}`, { content }),
     },
 
     // -- Task Docs -----------------------------------------------------------
