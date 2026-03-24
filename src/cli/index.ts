@@ -13,6 +13,7 @@ import { registerPipelinesCommands } from './commands/pipelines';
 import { registerStatusCommand } from './commands/status';
 import { registerTelegramCommands } from './commands/telegram';
 import { registerDaemonCommands } from './commands/daemon';
+import { registerAgentsConfigCommands } from './commands/agents-config';
 import { registerLogsCommands } from './commands/logs';
 import { registerGitCommands } from './commands/git';
 import { registerFeatureCommands } from './commands/features';
@@ -31,17 +32,19 @@ program
   .option('--no-color', 'Disable colored output');
 
 async function main(): Promise<void> {
-  // Daemon commands manage the daemon lifecycle directly — they don't need
-  // the API client.  Register them before we decide whether to auto-start.
+  // Daemon and agents-config commands manage their own concerns directly —
+  // they don't need the daemon API client. Register them before auto-start.
   registerDaemonCommands(program);
+  registerAgentsConfigCommands(program);
 
-  // Peek at argv to see if the user is running a daemon sub-command.
+  // Peek at argv to see if the user is running a daemon or agents sub-command.
   // If so, skip the ensureDaemon() step entirely.
   const isDaemonCommand = process.argv.length >= 3 && process.argv[2] === 'daemon';
+  const isAgentsConfigCommand = process.argv.length >= 3 && process.argv[2] === 'agents';
   const isHelpOrVersion = process.argv.includes('--help') || process.argv.includes('-h')
     || process.argv.includes('--version') || process.argv.includes('-V');
 
-  if (!isDaemonCommand && !isHelpOrVersion) {
+  if (!isDaemonCommand && !isAgentsConfigCommand && !isHelpOrVersion) {
     // Ensure the daemon is running and create the API client
     const daemonUrl = await ensureDaemon();
     const api = createApiClient(daemonUrl);

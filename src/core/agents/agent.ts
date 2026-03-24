@@ -7,6 +7,7 @@ import type { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import type { AgentLibRegistry } from '../services/agent-lib-registry';
 import { getAppLogger } from '../services/app-logger';
 import { getGlobalAgentReadOnlyPaths } from '../utils/user-paths';
+import { loadAgentFileConfig } from './agent-file-config-loader';
 
 /** Tools that perform file writes — used by both disallowedTools and readOnlyGuard. */
 export const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
@@ -119,7 +120,28 @@ export class Agent implements IAgent {
     onPromptBuilt?: (prompt: string) => void,
     onMessage?: (msg: AgentChatMessage) => void,
   ): Promise<AgentRunResult> {
-    const execConfig = this.promptBuilder.buildExecutionConfig(context, config);
+    const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
+
+    // Load file-based agent config from .agents/{agentType}/ if project path is available
+    let fileConfig = undefined;
+    const projectPath = context.project?.path;
+    if (projectPath) {
+      fileConfig = loadAgentFileConfig(projectPath, this.type, context.mode, context.revisionReason, log);
+
+      // Override engine/model from file config (applied before lib resolution below)
+      if (fileConfig.config?.engine) {
+        config = { ...config, engine: fileConfig.config.engine };
+        log(`File config overriding engine to "${fileConfig.config.engine}"`, { agentType: this.type });
+      }
+      if (fileConfig.config?.model) {
+        config = { ...config, model: fileConfig.config.model };
+        log(`File config overriding model to "${fileConfig.config.model}"`, { agentType: this.type });
+      }
+    } else {
+      log('No project path available, skipping file-based config loading', { agentType: this.type });
+    }
+
+    const execConfig = this.promptBuilder.buildExecutionConfig(context, config, fileConfig, log);
     onPromptBuilt?.(execConfig.prompt);
 
     const runId = context.task.id;
@@ -150,15 +172,14 @@ export class Agent implements IAgent {
     const allDisallowed = [...new Set([...readOnlyDisallowed, ...builderDisallowed])];
     const disallowedTools = allDisallowed.length > 0 ? allDisallowed : undefined;
 
-    const log = (msg: string, data?: Record<string, unknown>) => onLog?.(msg, data);
     log(`Starting agent run: mode=${context.mode}, workdir=${context.workdir}, readOnly=${execConfig.readOnly}, timeout=${execConfig.timeoutMs}ms, model=${config.model ?? 'default'}`);
 
     // Build worktree guard hook: hard-block Edit/Write/Bash operations targeting the main
     // repo when the agent is working in an isolated worktree. This fires via SDK hooks
     // (separate from canUseTool/permissions) so it cannot be bypassed by permissionMode.
-    const projectPath = context.project?.path;
+    const agentProjectPath = context.project?.path;
     const resolvedWorkdir = resolve(context.workdir);
-    const resolvedProjectPath = projectPath ? resolve(projectPath) : null;
+    const resolvedProjectPath = agentProjectPath ? resolve(agentProjectPath) : null;
     const isWorktree = resolvedProjectPath && resolvedWorkdir !== resolvedProjectPath;
 
     // Worktree guard: hard-block operations targeting the main repo
