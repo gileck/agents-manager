@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { AppServices } from '../../core/providers/setup';
 import type { AgentDefinitionCreateInput, AgentDefinitionUpdateInput, AgentMode, RevisionReason } from '../../shared/types';
-import { initAgentFiles, showAgentConfig, deleteAgentFiles } from '../../core/agents/agent-file-config-writer';
+import { initAgentFiles, showAgentConfig, deleteAgentFiles, writeAgentPrompt } from '../../core/agents/agent-file-config-writer';
 import { AGENT_BUILDERS } from '../../core/agents/agent-builders';
 
 export function agentDefinitionRoutes(services: AppServices): Router {
@@ -142,6 +142,47 @@ export function agentDefinitionRoutes(services: AppServices): Router {
 
       const typeArg = agentType === 'all' ? undefined : agentType;
       const result = deleteAgentFiles(project.path, typeArg);
+      res.json(result);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('Unknown agent type')) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      next(err);
+    }
+  });
+
+  /**
+   * PUT /api/agent-definitions/:agentType/prompt?projectId=X
+   * Write or update the prompt.md file for an agent type.
+   * Body: { content: string }
+   */
+  router.put('/api/agent-definitions/:agentType/prompt', async (req, res, next) => {
+    try {
+      const { agentType } = req.params;
+      const projectId = req.query.projectId as string | undefined;
+      const content = req.body?.content;
+
+      if (!projectId) {
+        res.status(400).json({ error: 'projectId query parameter is required' });
+        return;
+      }
+      if (typeof content !== 'string') {
+        res.status(400).json({ error: 'content (string) is required in request body' });
+        return;
+      }
+
+      const project = await services.projectStore.getProject(projectId);
+      if (!project) {
+        res.status(404).json({ error: `Project "${projectId}" not found` });
+        return;
+      }
+      if (!project.path) {
+        res.status(400).json({ error: `Project "${projectId}" has no path configured` });
+        return;
+      }
+
+      const result = writeAgentPrompt(project.path, agentType, content);
       res.json(result);
     } catch (err) {
       if (err instanceof Error && err.message.includes('Unknown agent type')) {

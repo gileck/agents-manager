@@ -233,6 +233,29 @@ export function showAgentConfig(
 }
 
 /**
+ * Write (or overwrite) the prompt file for an agent type.
+ * Creates the `.agents/{agentType}/` directory if needed.
+ * Returns the path that was written.
+ */
+export function writeAgentPrompt(
+  projectPath: string,
+  agentType: string,
+  content: string,
+): { path: string } {
+  if (!AGENT_BUILDERS[agentType]) {
+    const available = Object.keys(AGENT_BUILDERS).join(', ');
+    throw new Error(`Unknown agent type "${agentType}". Available types: ${available}`);
+  }
+
+  const typeDir = join(projectPath, '.agents', agentType);
+  mkdirSync(typeDir, { recursive: true });
+
+  const promptPath = join(typeDir, 'prompt.md');
+  writeFileSync(promptPath, content, 'utf-8');
+  return { path: promptPath };
+}
+
+/**
  * Delete `.agents/{agentType}/` directory (reset to defaults).
  * If `agentType` is omitted, deletes the entire `.agents/` directory.
  * Returns the list of deleted paths.
