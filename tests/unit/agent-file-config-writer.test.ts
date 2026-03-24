@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { initAgentFiles, showAgentConfig } from '../../src/core/agents/agent-file-config-writer';
+import { initAgentFiles, showAgentConfig, deleteAgentFiles } from '../../src/core/agents/agent-file-config-writer';
 import { AGENT_BUILDERS } from '../../src/core/agents/agent-builders';
 
 const TEST_DIR = path.join(__dirname, '..', '.tmp-agent-file-config-writer-test');
@@ -131,6 +131,7 @@ describe('showAgentConfig', () => {
     expect(result.configSources.maxTurns).toBe('default');
     expect(result.configSources.timeout).toBe('default');
     expect(result.config.maxTurns).toBeGreaterThan(0);
+    expect(result.hasFileConfig).toBe(false);
   });
 
   it('shows file config when .agents/ exists', () => {
@@ -146,9 +147,88 @@ describe('showAgentConfig', () => {
     expect(result.config.maxTurns).toBe(200);
     expect(result.configSources.maxTurns).toBe('file');
     expect(result.configSources.timeout).toBe('default');
+    expect(result.hasFileConfig).toBe(true);
   });
 
   it('throws for unknown agent type', () => {
     expect(() => showAgentConfig(TEST_DIR, 'nonexistent')).toThrow('Unknown agent type');
+  });
+
+  it('reports hasFileConfig=false when dir exists but is empty', () => {
+    // Create the .agents/planner dir but don't put files in it
+    const agentDir = path.join(TEST_DIR, '.agents', 'planner');
+    fs.mkdirSync(agentDir, { recursive: true });
+
+    const result = showAgentConfig(TEST_DIR, 'planner');
+
+    // hasFileConfig should be true because the directory exists
+    expect(result.hasFileConfig).toBe(true);
+    // But content should be from defaults since no files exist
+    expect(result.promptSource).toBe('default');
+  });
+});
+
+describe('deleteAgentFiles', () => {
+  beforeEach(() => {
+    cleanup();
+    fs.mkdirSync(TEST_DIR, { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('deletes a single agent type directory', () => {
+    initAgentFiles(TEST_DIR, 'planner');
+    const agentDir = path.join(TEST_DIR, '.agents', 'planner');
+    expect(fs.existsSync(agentDir)).toBe(true);
+
+    const result = deleteAgentFiles(TEST_DIR, 'planner');
+
+    expect(result.deleted.length).toBe(1);
+    expect(result.deleted[0]).toBe(agentDir);
+    expect(fs.existsSync(agentDir)).toBe(false);
+    // .agents/ dir should still exist (only planner was deleted)
+    expect(fs.existsSync(path.join(TEST_DIR, '.agents'))).toBe(true);
+  });
+
+  it('deletes entire .agents/ directory when no agentType specified', () => {
+    initAgentFiles(TEST_DIR);
+    const agentsDir = path.join(TEST_DIR, '.agents');
+    expect(fs.existsSync(agentsDir)).toBe(true);
+
+    const result = deleteAgentFiles(TEST_DIR);
+
+    expect(result.deleted.length).toBe(1);
+    expect(result.deleted[0]).toBe(agentsDir);
+    expect(fs.existsSync(agentsDir)).toBe(false);
+  });
+
+  it('returns empty deleted array when .agents/ does not exist', () => {
+    const result = deleteAgentFiles(TEST_DIR, 'planner');
+
+    expect(result.deleted.length).toBe(0);
+  });
+
+  it('returns empty deleted array when .agents/ dir does not exist (no type)', () => {
+    const result = deleteAgentFiles(TEST_DIR);
+
+    expect(result.deleted.length).toBe(0);
+  });
+
+  it('throws for unknown agent type', () => {
+    expect(() => deleteAgentFiles(TEST_DIR, 'nonexistent')).toThrow('Unknown agent type');
+  });
+
+  it('only deletes the specified agent type, leaving others intact', () => {
+    initAgentFiles(TEST_DIR); // Init all
+
+    deleteAgentFiles(TEST_DIR, 'planner');
+
+    // Planner should be gone
+    expect(fs.existsSync(path.join(TEST_DIR, '.agents', 'planner'))).toBe(false);
+    // Others should still exist
+    expect(fs.existsSync(path.join(TEST_DIR, '.agents', 'reviewer'))).toBe(true);
+    expect(fs.existsSync(path.join(TEST_DIR, '.agents', 'implementor'))).toBe(true);
   });
 });

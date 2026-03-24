@@ -754,6 +754,23 @@ export interface AgentFileConfig {
   configPath?: string;
 }
 
+/** Effective agent config with per-field source attribution. Returned by daemon API. */
+export interface EffectiveAgentConfig {
+  agentType: string;
+  prompt: string;
+  promptSource: 'file' | 'default';
+  config: AgentFileConfigJson;
+  configSources: Record<string, 'file' | 'default'>;
+  /** Whether `.agents/{agentType}/` directory exists on disk. */
+  hasFileConfig: boolean;
+}
+
+/** Result of file scaffolding (init) operation. */
+export interface AgentFileInitResult {
+  created: string[];
+  skipped: string[];
+}
+
 export interface AgentContext {
   task: Task;
   project: Project;

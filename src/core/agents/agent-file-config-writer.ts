@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import type { AgentContext, AgentConfig, AgentFileConfigJson, AgentMode, RevisionReason, Task, Project } from '../../shared/types';
 import { AGENT_BUILDERS } from './agent-builders';
@@ -179,7 +179,7 @@ export function showAgentConfig(
   projectPath: string,
   agentType: string,
   options: { mode?: AgentMode; revisionReason?: RevisionReason } = {},
-): { prompt: string; promptSource: 'file' | 'default'; config: AgentFileConfigJson; configSources: Record<string, 'file' | 'default'> } {
+): { prompt: string; promptSource: 'file' | 'default'; config: AgentFileConfigJson; configSources: Record<string, 'file' | 'default'>; hasFileConfig: boolean } {
   const BuilderClass = AGENT_BUILDERS[agentType];
   if (!BuilderClass) {
     const available = Object.keys(AGENT_BUILDERS).join(', ');
@@ -227,5 +227,41 @@ export function showAgentConfig(
     disallowedTools: fc.disallowedTools !== undefined ? 'file' : 'default',
   };
 
-  return { prompt, promptSource, config: effectiveConfig, configSources };
+  const hasFileConfig = existsSync(join(projectPath, '.agents', agentType));
+
+  return { prompt, promptSource, config: effectiveConfig, configSources, hasFileConfig };
+}
+
+/**
+ * Delete `.agents/{agentType}/` directory (reset to defaults).
+ * If `agentType` is omitted, deletes the entire `.agents/` directory.
+ * Returns the list of deleted paths.
+ */
+export function deleteAgentFiles(
+  projectPath: string,
+  agentType?: string,
+): { deleted: string[] } {
+  const deleted: string[] = [];
+
+  if (agentType) {
+    // Validate agent type
+    if (!AGENT_BUILDERS[agentType]) {
+      const available = Object.keys(AGENT_BUILDERS).join(', ');
+      throw new Error(`Unknown agent type "${agentType}". Available types: ${available}`);
+    }
+
+    const typeDir = join(projectPath, '.agents', agentType);
+    if (existsSync(typeDir)) {
+      rmSync(typeDir, { recursive: true, force: true });
+      deleted.push(typeDir);
+    }
+  } else {
+    const agentsDir = join(projectPath, '.agents');
+    if (existsSync(agentsDir)) {
+      rmSync(agentsDir, { recursive: true, force: true });
+      deleted.push(agentsDir);
+    }
+  }
+
+  return { deleted };
 }
