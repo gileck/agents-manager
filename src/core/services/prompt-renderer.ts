@@ -5,7 +5,6 @@ import { findDoc } from '../agents/doc-injection';
 export class PromptRenderer {
   render(template: string, context: AgentContext): string {
     // Strip HTML comments (<!-- ... -->) from file-based templates to save tokens.
-    // Uses the dotAll flag (s) so comments spanning multiple lines are removed.
     const cleaned = template.replace(/<!--[\s\S]*?-->/g, '');
 
     const variables: Record<string, string> = {

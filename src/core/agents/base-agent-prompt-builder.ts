@@ -206,6 +206,10 @@ export abstract class BaseAgentPromptBuilder {
     }
 
     // --- Generic docs injection: show all task docs as summaries ---
+    // NOTE: Some agents (implementor, designer, ux-designer) also embed specific docs
+    // in full via their own buildPrompt(). This generic section is intentionally additive —
+    // it ensures every agent (especially file-based prompt templates) gets at least a
+    // summary of all prior work products, even if some appear twice in different forms.
     const docsSection = buildGenericDocsSection(context.docs);
     if (docsSection) {
       prompt = `${docsSection}\n\n---\n\n${prompt}`;
