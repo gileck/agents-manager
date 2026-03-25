@@ -128,6 +128,7 @@ export class TriagerPromptBuilder extends BaseAgentPromptBuilder {
         `   - Complex features or architectural changes → designing`,
         `   - Tasks needing plan breakdown → planning`,
         `   - Simple/clear tasks (xs/sm, low complexity) → implementing`,
+        `   - Task is not relevant, already done, or a duplicate → closed`,
         `7. Update the task with your findings (see "Apply Changes" below).`,
         `8. If the task is too vague to triage properly (e.g., "fix the thing", "make it better"), use the \`needs_info\` outcome to ask clarifying questions. Do NOT guess or hallucinate requirements.`,
       ];
