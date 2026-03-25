@@ -236,19 +236,11 @@ export function StatusActionBar({
         );
       }
     }
-    // Generic human review (plan_review, investigation_review without options, etc.)
+    // Generic human review (triage_review, plan_review, design_review, investigation_review without options, etc.)
+    // Use SplitButton with recommended transition instead of flat button dump
     return (
       <div className="flex items-center gap-2 flex-wrap">
-        {primaryTransitions.map((t) => (
-          <Button
-            key={t.to}
-            size="sm"
-            onClick={() => onTransition(t.to)}
-            disabled={transitioning !== null}
-          >
-            {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
-          </Button>
-        ))}
+        {renderSmartTransitions(task, primaryTransitions, transitioning, onTransition)}
       </div>
     );
   }
