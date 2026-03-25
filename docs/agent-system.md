@@ -7,7 +7,7 @@ key_points:
   - "File: src/core/agents/ — Agent, PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder, ScriptedAgent"
   - "File: src/core/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib"
   - "Agent resolves AgentLib from registry via config.engine at execute() time"
-  - "Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes"
+  - "Prompt templates: file-based (.agents/) via PromptRenderer, or hardcoded in prompt builder classes"
 ---
 # Agent System
 
@@ -443,22 +443,23 @@ Updates the agent run record with: status, outcome, payload, exit code, output, 
 
 ## Prompt Building
 
-### Template Resolution vs Hardcoded Fallback
+### Prompt Resolution (2-Tier)
 
-Prompt resolution follows a three-step priority chain inside `BaseAgentPromptBuilder.buildExecutionConfig()`:
+Prompt resolution follows a two-tier priority chain inside `BaseAgentPromptBuilder.buildExecutionConfig()`:
 
-1. **DB-backed template** — If `context.modeConfig?.promptTemplate` is set (loaded from `agent_definitions`), render it through `PromptRenderer.render()`.
-2. **Resolved prompt** — If `context.resolvedPrompt` is populated (legacy path), use it directly.
-3. **Hardcoded fallback** — Call `this.buildPrompt(context)` on the prompt builder subclass.
+1. **File-based prompt** — If `.agents/{agentType}/prompt.md` exists (loaded by `loadAgentFileConfig()`), render it through `PromptRenderer.render()` for variable substitution.
+2. **Hardcoded fallback** — Call `this.buildPrompt(context)` on the prompt builder subclass.
 
 ```typescript
 // In base-agent-prompt-builder.ts — buildExecutionConfig()
-if (context.modeConfig?.promptTemplate) {
-  prompt = new PromptRenderer().render(context.modeConfig.promptTemplate, context);
+if (fileConfig?.prompt) {
+  prompt = new PromptRenderer().render(fileConfig.prompt, context);
 } else {
-  prompt = context.resolvedPrompt ?? this.buildPrompt(context);
+  prompt = this.buildPrompt(context);
 }
 ```
+
+The file-based prompt replaces **layer 1 only** (the instruction prompt). The system still auto-injects task context, feedback, worktree guards, skills, and validation errors around it. See [File-Based Agent Configuration](file-based-agent-config.md) for the full `.agents/` directory structure, config.json fields, mode-specific prompt files, and CLI commands.
 
 After resolution, the builder appends skills (if any) and prepends task context entries (if any).
 
@@ -466,7 +467,7 @@ After resolution, the builder appends skills (if any) and prepends task context 
 
 **File:** `src/core/services/prompt-renderer.ts`
 
-`PromptRenderer` handles all DB-backed template rendering. It performs simple string replacement of placeholder variables, then auto-appends a summary suffix and any validation errors.
+`PromptRenderer` handles template rendering for both file-based prompts (`.agents/{agentType}/prompt.md`) and any programmatic templates. It performs simple string replacement of placeholder variables, then auto-appends a summary suffix and any validation errors.
 
 **Template variables** (13 total):
 

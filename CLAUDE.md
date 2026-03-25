@@ -90,7 +90,7 @@ Agent types, execution lifecycle, prompts, validation, and context accumulation
 - File: src/core/agents/ — Agent, PlannerPromptBuilder, DesignerPromptBuilder, ImplementorPromptBuilder, InvestigatorPromptBuilder, ReviewerPromptBuilder, ScriptedAgent
 - File: src/core/libs/ — ClaudeCodeLib, CursorAgentLib, CodexCliLib
 - Agent resolves AgentLib from registry via config.engine at execute() time
-- Prompt templates: DB-backed via PromptRenderer, or hardcoded in prompt builder classes
+- Prompt templates: file-based (.agents/) via PromptRenderer, or hardcoded in prompt builder classes
 
 **Docs:** [agent-system.md](docs/agent-system.md)
 
@@ -127,6 +127,23 @@ How all UI clients (Electron, CLI, Web, Telegram bot) converge on the same daemo
 - Daemon singleton enforced by health check probe + OS TCP port bind on fixed port 3847
 
 **Docs:** [client-daemon-convergence.md](docs/client-daemon-convergence.md)
+
+---
+
+## File-Based Agent Configuration
+
+Customizing agent prompts and execution config via .agents/ directory
+
+**Summary:** The .agents/ directory provides git-tracked, per-project customization of agent prompts and execution parameters. Files override hardcoded defaults with a 2-tier resolution chain: File (.agents/) > Code (builder defaults).
+
+**Key Points:**
+- Directory: {projectPath}/.agents/{agentType}/ — prompt.md + config.json per agent
+- 2-tier resolution: File > Code — each field resolves independently
+- CLI: npx agents-manager agents init|show|list — daemon-independent (filesystem only)
+- Loader: src/core/agents/agent-file-config-loader.ts — never throws, logs all decisions
+- Mode-specific prompts: prompt.revision.md, prompt.merge.md, prompt.resume.md, prompt.uncommitted.md
+
+**Docs:** [file-based-agent-config.md](docs/file-based-agent-config.md)
 
 ---
 
@@ -253,6 +270,22 @@ The agents-manager command-line tool, commands, and project context
 - CLI is UI-only — no business logic; all commands delegate to daemon API client
 
 **Docs:** [cli-reference.md](docs/cli-reference.md)
+
+---
+
+## Creating a New Agent
+
+Step-by-step guide for adding a new agent type to the system
+
+**Summary:** After the registration boilerplate refactor, adding a new agent type requires only 3 files: a prompt builder, a DOC_PHASES entry, and extraction logic. Registries in setup.ts (AGENT_BUILDERS), types.ts (FEEDBACK_ENTRY_TYPES), and agent-service.ts (extractDoc) auto-derive from these sources.
+
+**Key Points:**
+- 3-file workflow: (1) create prompt builder, (2) add DOC_PHASES entry, (3) add extraction method + registry entry
+- AGENT_BUILDERS map in src/core/agents/agent-builders.ts replaces scattered imports and registration lines in setup.ts
+- FEEDBACK_ENTRY_TYPES in types.ts auto-derives from DOC_PHASES — no manual array editing needed
+- extractDoc() in post-run-extractor.ts dispatches to the right extractor via a registry map — no editing agent-service.ts
+
+**Docs:** [create-new-agent.md](docs/create-new-agent.md)
 
 ---
 

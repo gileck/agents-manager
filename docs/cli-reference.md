@@ -230,6 +230,16 @@ npx agents-manager telegram status                           # Show Telegram con
 
 The `start` command is long-running — it starts a Telegram bot that listens for commands and forwards notifications. Press Ctrl+C to stop. Requires `telegram.botToken` and `telegram.chatId` in the project config file (`<projectPath>/.agents-manager/config.json`).
 
+### `agents` — Agent Configuration
+
+**Daemon-independent** — these commands operate directly on the filesystem and do not require the daemon to be running. See [File-Based Agent Configuration](file-based-agent-config.md) for full details.
+
+```bash
+npx agents-manager agents init [agentType] [--path <path>] [--force]   # Scaffold .agents/ with defaults
+npx agents-manager agents show <agentType> [--path <path>] [--mode] [--revision-reason] [--prompt-only] [--config-only]  # Show effective config
+npx agents-manager agents list                                          # List available agent types
+```
+
 ### `daemon` — Daemon Lifecycle
 
 ```bash
@@ -306,6 +316,9 @@ npx agents-manager logs clear                                # Clear debug logs
 | `settings get` | `api.settings.get()` |
 | `settings update` | `api.settings.update(partial)` |
 | `events activities` | `api.events.listActivities(filter)` |
+| `agents init` | Filesystem only (no daemon) |
+| `agents show` | Filesystem only (no daemon) |
+| `agents list` | Filesystem only (no daemon) |
 
 ## Project Context Resolution
 
