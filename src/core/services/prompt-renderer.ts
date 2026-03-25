@@ -4,6 +4,9 @@ import { findDoc } from '../agents/doc-injection';
 
 export class PromptRenderer {
   render(template: string, context: AgentContext): string {
+    // Strip HTML comments (<!-- ... -->) from file-based templates to save tokens.
+    const cleaned = template.replace(/<!--[\s\S]*?-->/g, '');
+
     const variables: Record<string, string> = {
       '{taskTitle}': this.buildTaskTitle(context),
       '{taskDescription}': this.buildTaskDescription(context),
@@ -21,13 +24,13 @@ export class PromptRenderer {
     };
 
     // Use replacer functions to avoid $-pattern interpretation in replacement strings
-    let prompt = template;
+    let prompt = cleaned;
     for (const [key, value] of Object.entries(variables)) {
       prompt = prompt.replaceAll(key, value);
     }
 
     // Append standard suffix only when template does not opt out via {skipSummary}
-    if (!template.includes('{skipSummary}')) {
+    if (!cleaned.includes('{skipSummary}')) {
       prompt += '\n\nWhen you are done, end your response with a "## Summary" section that briefly describes what you did.';
     }
 

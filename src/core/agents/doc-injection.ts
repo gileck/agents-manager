@@ -42,6 +42,51 @@ export function buildDocsPromptSections(
 }
 
 /**
+ * Build a generic docs section that renders ALL docs as summaries with
+ * instructions for reading full content via the `read_task_artifact` MCP tool.
+ *
+ * This is injected automatically by `BaseAgentPromptBuilder.buildExecutionConfig`
+ * so every agent sees prior work products (investigation report, plan, design, etc.)
+ * without per-agent template variables.
+ *
+ * @param docs - All docs for the task
+ * @returns Formatted markdown string for prompt injection, or empty string if no docs
+ */
+export function buildGenericDocsSection(docs: TaskDoc[] | undefined): string {
+  if (!docs || docs.length === 0) return '';
+
+  const lines: string[] = [
+    '## Available Task Documents',
+    '',
+    'The following documents have been produced for this task. Summaries are shown below.',
+    'To read the full content of any document, use the `read_task_artifact` MCP tool with the specified type.',
+    '',
+  ];
+
+  for (const doc of docs) {
+    const phase = getPhaseByDocType(doc.type);
+    const title = phase?.docTitle ?? doc.type;
+    if (doc.summary) {
+      lines.push(`### ${title}`);
+      lines.push(`**Type:** \`${doc.type}\``);
+      lines.push('');
+      lines.push(doc.summary);
+      lines.push('');
+      lines.push(`_Use \`read_task_artifact\` with type=\`${doc.type}\` to read the full document._`);
+      lines.push('');
+    } else if (doc.content) {
+      lines.push(`### ${title}`);
+      lines.push(`**Type:** \`${doc.type}\``);
+      lines.push('');
+      lines.push(`Document available — use the \`read_task_artifact\` MCP tool with type=\`${doc.type}\` to view full content.`);
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * Find a specific doc by type from the docs array.
  * Convenience wrapper used by prompt builders that need direct access to a doc.
  */

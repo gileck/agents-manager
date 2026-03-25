@@ -3,6 +3,7 @@ import type { AgentContext, AgentConfig, AgentRunResult, AgentFileConfig, TaskCo
 import { FEEDBACK_ENTRY_TYPES } from '../../shared/types';
 import type { AgentLibResult } from '../interfaces/agent-lib';
 import { PromptRenderer } from '../services/prompt-renderer';
+import { buildGenericDocsSection } from './doc-injection';
 
 /** Format a single review comment — supports both structured objects and legacy strings. */
 function formatReviewComment(c: unknown): string {
@@ -202,6 +203,16 @@ export abstract class BaseAgentPromptBuilder {
       if (sections.length > 0) {
         prompt = `${sections.join('\n\n')}\n\n---\n\n${prompt}`;
       }
+    }
+
+    // --- Generic docs injection: show all task docs as summaries ---
+    // NOTE: Some agents (implementor, designer, ux-designer) also embed specific docs
+    // in full via their own buildPrompt(). This generic section is intentionally additive —
+    // it ensures every agent (especially file-based prompt templates) gets at least a
+    // summary of all prior work products, even if some appear twice in different forms.
+    const docsSection = buildGenericDocsSection(context.docs);
+    if (docsSection) {
+      prompt = `${docsSection}\n\n---\n\n${prompt}`;
     }
 
     if (!context.workdir) {

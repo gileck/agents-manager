@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildDocsPromptSections, findDoc } from '../../src/core/agents/doc-injection';
+import { buildDocsPromptSections, buildGenericDocsSection, findDoc } from '../../src/core/agents/doc-injection';
 import type { TaskDoc } from '../../src/shared/types';
 
 function makeDoc(type: TaskDoc['type'], content: string, summary?: string | null): TaskDoc {
@@ -111,6 +111,73 @@ describe('buildDocsPromptSections', () => {
     // Should still include the investigation_report as a summary (since it is "other")
     expect(result).toContain('Investigation Report (Summary)');
     expect(result).toContain('Report summary');
+  });
+});
+
+describe('buildGenericDocsSection', () => {
+  it('returns empty string when docs is undefined', () => {
+    expect(buildGenericDocsSection(undefined)).toBe('');
+  });
+
+  it('returns empty string when docs array is empty', () => {
+    expect(buildGenericDocsSection([])).toBe('');
+  });
+
+  it('renders all docs as summaries with read_task_artifact instruction', () => {
+    const docs = [
+      makeDoc('investigation_report', '# Full Report', 'Short report summary'),
+      makeDoc('plan', '# Full Plan', 'Short plan summary'),
+    ];
+    const result = buildGenericDocsSection(docs);
+
+    // Header
+    expect(result).toContain('## Available Task Documents');
+    expect(result).toContain('read_task_artifact');
+
+    // Investigation report section
+    expect(result).toContain('### Investigation Report');
+    expect(result).toContain('Short report summary');
+    expect(result).toContain('type=`investigation_report`');
+    expect(result).not.toContain('# Full Report');
+
+    // Plan section
+    expect(result).toContain('### Plan');
+    expect(result).toContain('Short plan summary');
+    expect(result).toContain('type=`plan`');
+    expect(result).not.toContain('# Full Plan');
+  });
+
+  it('shows fallback hint when doc has content but no summary', () => {
+    const docs = [makeDoc('technical_design', '# Design Content', null)];
+    const result = buildGenericDocsSection(docs);
+
+    expect(result).toContain('### Technical Design');
+    expect(result).toContain('type=`technical_design`');
+    expect(result).toContain('Document available');
+    expect(result).not.toContain('# Design Content');
+  });
+
+  it('skips docs with neither summary nor content', () => {
+    const docs = [{ ...makeDoc('plan', '', null), content: '' } as TaskDoc];
+    const result = buildGenericDocsSection(docs);
+    // Header is present but no doc entries
+    expect(result).not.toContain('### Plan');
+  });
+
+  it('includes type metadata for each doc', () => {
+    const docs = [makeDoc('plan', '# Plan', 'Summary')];
+    const result = buildGenericDocsSection(docs);
+    expect(result).toContain('**Type:** `plan`');
+  });
+
+  it('renders single doc correctly', () => {
+    const docs = [makeDoc('investigation_report', '# Full Report', 'Summary of investigation')];
+    const result = buildGenericDocsSection(docs);
+
+    expect(result).toContain('## Available Task Documents');
+    expect(result).toContain('### Investigation Report');
+    expect(result).toContain('Summary of investigation');
+    expect(result).toContain('type=`investigation_report`');
   });
 });
 
