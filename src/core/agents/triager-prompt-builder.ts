@@ -37,8 +37,8 @@ export class TriagerPromptBuilder extends BaseAgentPromptBuilder {
           },
           suggestedPhase: {
             type: 'string',
-            enum: ['investigating', 'designing', 'planning', 'implementing'],
-            description: 'Recommended next pipeline phase after triage',
+            enum: ['investigating', 'designing', 'planning', 'implementing', 'closed'],
+            description: 'Recommended next pipeline phase after triage, or closed if task is not relevant',
           },
           phaseSkipJustification: {
             type: 'string',
