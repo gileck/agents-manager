@@ -117,8 +117,16 @@ export class LocalWorktreeManager implements IWorktreeManager {
     try {
       await this.git(['worktree', 'unlock', this.worktreePath(taskId)]);
     } catch (err) {
-      // Ignore "not locked"
-      if (!(err instanceof Error && err.message.includes('not locked'))) throw err;
+      // Ignore "not locked" and missing-worktree errors for idempotency.
+      // The worktree may have already been removed by a prior phase merge.
+      if (err instanceof Error && (
+        err.message.includes('not locked') ||
+        err.message.includes('is not a working tree') ||
+        err.message.includes('does not exist')
+      )) {
+        return;
+      }
+      throw err;
     }
   }
 
