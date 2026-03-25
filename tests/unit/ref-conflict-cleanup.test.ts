@@ -96,6 +96,31 @@ describe('Git ref hierarchy conflict detection', () => {
       expect(await gitOps.refExists('task/other')).toBe(true);
     });
 
+    it('deletes old flat branch "task/abc" before creating "task/abc/work" (single-phase migration)', async () => {
+      const gitOps = new StubGitOps();
+
+      // Simulate: old flat branch "task/abc" exists from a previous single-phase run
+      await gitOps.createBranchRef('task/abc', 'origin/main');
+      expect(await gitOps.refExists('task/abc')).toBe(true);
+
+      // Simulate the cleanup logic: check parent refs of "task/abc/work"
+      const targetBranch = 'task/abc/work';
+      const segments = targetBranch.split('/');
+      for (let i = 1; i < segments.length; i++) {
+        const parentRef = segments.slice(0, i).join('/');
+        if (await gitOps.refExists(parentRef)) {
+          await gitOps.deleteLocalBranch(parentRef);
+        }
+      }
+
+      // Old flat branch should be gone
+      expect(await gitOps.refExists('task/abc')).toBe(false);
+
+      // Now creating the new hierarchical branch should succeed
+      await gitOps.createBranchRef('task/abc/work', 'origin/main');
+      expect(await gitOps.refExists('task/abc/work')).toBe(true);
+    });
+
     it('handles race-condition "not found" errors silently during cleanup', async () => {
       const gitOps = new StubGitOps();
 

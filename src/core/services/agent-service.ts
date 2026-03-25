@@ -279,7 +279,7 @@ export class AgentService implements IAgentService {
     // Determine base branch and phase branch name
     const isReadOnlyAgent = READONLY_AGENT_TYPES.has(agentType);
     const baseBranch = multiPhase && taskBranch ? `origin/${taskBranch}` : undefined;
-    let branch = `task/${taskId}`;
+    let branch = `task/${taskId}/work`;
     if (multiPhase) {
       const phaseIdx = getActivePhaseIndex(task.phases);
       if (phaseIdx >= 0) {
@@ -289,11 +289,11 @@ export class AgentService implements IAgentService {
 
     let worktree = await worktreeManager.get(taskId);
     if (!worktree) {
-      if (multiPhase) {
-        // Clean refs that would conflict with hierarchical branch creation (e.g. task/abc blocking task/abc/phase-1)
-        const gitOpsForClean = this.createGitOps(projectPath);
-        await this.cleanConflictingParentRefs(gitOpsForClean, branch, taskId);
-      }
+      // Clean refs that would conflict with hierarchical branch creation
+      // (e.g. task/abc blocking task/abc/work or task/abc/phase-1).
+      // Runs for ALL branch types since all task branches are now hierarchical.
+      const gitOpsForClean = this.createGitOps(projectPath);
+      await this.cleanConflictingParentRefs(gitOpsForClean, branch, taskId);
       worktree = await worktreeManager.create(branch, taskId, baseBranch);
       await this.taskEventLog.log({
         taskId,
@@ -319,11 +319,40 @@ export class AgentService implements IAgentService {
       // recording use the correct branch — not the stale one left behind.
       if (worktree.branch !== branch) {
         const gitOps = this.createGitOps(worktree.path);
-        if (multiPhase) {
-          // Clean refs that would conflict with hierarchical branch creation (uses root gitOps since refs are repo-global)
-          const gitOpsForClean = this.createGitOps(projectPath);
-          await this.cleanConflictingParentRefs(gitOpsForClean, branch, taskId);
+        // Clean refs that would conflict with hierarchical branch creation (uses root gitOps since refs are repo-global).
+        // Runs for ALL branch types since all task branches are now hierarchical.
+        const gitOpsForClean = this.createGitOps(projectPath);
+        await this.cleanConflictingParentRefs(gitOpsForClean, branch, taskId);
+
+        // Migration: if the worktree is on the old flat branch (task/{id}) which is a parent
+        // prefix of the new hierarchical branch (task/{id}/work), detach HEAD first to free
+        // the old branch ref so it can be deleted by cleanConflictingParentRefs or createBranch.
+        const oldBranch = worktree.branch;
+        if (branch.startsWith(oldBranch + '/')) {
+          try {
+            const headSha = await gitOps.revParse('HEAD');
+            await gitOps.checkout(headSha); // detach HEAD
+            const gitOpsRoot = this.createGitOps(projectPath);
+            await gitOpsRoot.deleteLocalBranch(oldBranch);
+            await this.taskEventLog.log({
+              taskId,
+              category: 'git',
+              severity: 'info',
+              message: `Migrated worktree from old flat branch "${oldBranch}" to detached HEAD (preparing for "${branch}")`,
+              data: { oldBranch, newBranch: branch, headSha },
+            });
+          } catch (migrationErr) {
+            const migMsg = migrationErr instanceof Error ? migrationErr.message : String(migrationErr);
+            await this.taskEventLog.log({
+              taskId,
+              category: 'git',
+              severity: 'warning',
+              message: `Migration from old flat branch "${oldBranch}" failed: ${migMsg} — continuing with branch creation`,
+              data: { oldBranch, newBranch: branch, error: migMsg },
+            });
+          }
         }
+
         try {
           await gitOps.createBranch(branch, baseBranch ?? 'origin/main');
         } catch (err) {
