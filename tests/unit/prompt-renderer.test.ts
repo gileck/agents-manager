@@ -384,6 +384,53 @@ describe('PromptRenderer', () => {
   });
 
   // ============================================
+  // HTML comment stripping
+  // ============================================
+  describe('HTML comment stripping', () => {
+    it('should strip single-line HTML comments', () => {
+      const result = renderer.render('Before <!-- comment --> After', createContext());
+      expect(result).toContain('Before  After');
+      expect(result).not.toContain('comment');
+    });
+
+    it('should strip multi-line HTML comments', () => {
+      const template = `Line 1
+<!--
+  This is a multi-line comment
+  with lots of content
+-->
+Line 2`;
+      const result = renderer.render(template, createContext());
+      expect(result).toContain('Line 1');
+      expect(result).toContain('Line 2');
+      expect(result).not.toContain('multi-line comment');
+    });
+
+    it('should strip multiple HTML comments', () => {
+      const template = '<!-- first --> middle <!-- second -->';
+      const result = renderer.render(template, createContext());
+      expect(result).toContain('middle');
+      expect(result).not.toContain('first');
+      expect(result).not.toContain('second');
+    });
+
+    it('should still process variables after stripping comments', () => {
+      const template = '<!-- comment -->{taskTitle}<!-- another -->';
+      const result = renderer.render(template, createContext());
+      expect(result).toContain('Implement login feature');
+      expect(result).not.toContain('comment');
+      expect(result).not.toContain('another');
+    });
+
+    it('should respect {skipSummary} even after stripping comments that preceded it', () => {
+      const template = '<!-- preamble -->Do work{skipSummary}';
+      const result = renderer.render(template, createContext());
+      expect(result).not.toContain('## Summary');
+      expect(result).not.toContain('preamble');
+    });
+  });
+
+  // ============================================
   // Edge cases
   // ============================================
   describe('Edge cases', () => {
