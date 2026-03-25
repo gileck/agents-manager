@@ -236,7 +236,34 @@ export function StatusActionBar({
         );
       }
     }
-    // Generic human review (triage_review, plan_review, design_review, investigation_review without options, etc.)
+    // Triage review: use triager's suggestedPhase as recommended CTA
+    if (status === 'triage_review' && contextEntries) {
+      const triageEntry = [...contextEntries]
+        .filter(e => e.entryType === 'triage_summary')
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+      const suggestedPhase = (triageEntry?.data as { suggestedPhase?: string } | undefined)?.suggestedPhase;
+
+      if (suggestedPhase) {
+        const matchingTransition = primaryTransitions.find(t => t.to === suggestedPhase);
+        if (matchingTransition) {
+          const otherForward = primaryTransitions.filter(t => !isEscapeTransition(t) && t.to !== suggestedPhase);
+          const escapes = primaryTransitions.filter(t => isEscapeTransition(t) && t.to !== suggestedPhase);
+
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              <SplitButton
+                primaryTransition={matchingTransition}
+                otherForwardTransitions={otherForward}
+                escapeTransitions={escapes}
+                transitioning={transitioning}
+                onTransition={onTransition}
+              />
+            </div>
+          );
+        }
+      }
+    }
+    // Generic human review (plan_review, design_review, investigation_review without options, etc.)
     // Use SplitButton with recommended transition instead of flat button dump
     return (
       <div className="flex items-center gap-2 flex-wrap">

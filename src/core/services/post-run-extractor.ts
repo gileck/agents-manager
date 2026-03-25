@@ -397,12 +397,13 @@ export class PostRunExtractor {
       // Use structured output summary when available, fall back to parsing
       const so = result.structuredOutput as {
         summary?: string;
+        triageSummary?: string;
         planSummary?: string;
         investigationSummary?: string;
         designSummary?: string;
         designOverview?: string;
       } | undefined;
-      const structuredSummary = so?.investigationSummary ?? so?.designSummary ?? so?.designOverview ?? so?.planSummary ?? so?.summary;
+      const structuredSummary = so?.triageSummary ?? so?.investigationSummary ?? so?.designSummary ?? so?.designOverview ?? so?.planSummary ?? so?.summary;
       const summary = structuredSummary || this.parseContextSummary(result.output);
       const entryType = getContextEntryType(agentType, revisionReason, result.outcome);
       onLog(`Saving context entry: type=${entryType}, source=${agentType === 'reviewer' ? 'reviewer' : 'agent'}, summaryLength=${summary.length}`);
@@ -449,6 +450,11 @@ export class PostRunExtractor {
         entryData.analysis = pmso?.analysis;
         entryData.codebaseImprovements = pmso?.codebaseImprovements;
         entryData.suggestedTasks = pmso?.suggestedTasks;
+      }
+      if (agentType === 'triager') {
+        const tso = result.structuredOutput as { suggestedPhase?: string; phaseSkipJustification?: string } | undefined;
+        if (tso?.suggestedPhase) entryData.suggestedPhase = tso.suggestedPhase;
+        if (tso?.phaseSkipJustification) entryData.phaseSkipJustification = tso.phaseSkipJustification;
       }
       const entrySource = agentType === 'reviewer' ? 'reviewer'
         : agentType === 'task-workflow-reviewer' ? 'workflow-reviewer'

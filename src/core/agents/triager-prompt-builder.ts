@@ -37,8 +37,8 @@ export class TriagerPromptBuilder extends BaseAgentPromptBuilder {
           },
           suggestedPhase: {
             type: 'string',
-            enum: ['investigating', 'designing', 'planning', 'implementing'],
-            description: 'Recommended next pipeline phase after triage',
+            enum: ['investigating', 'designing', 'planning', 'implementing', 'closed'],
+            description: 'Recommended next pipeline phase after triage, or closed if task is not relevant',
           },
           phaseSkipJustification: {
             type: 'string',
@@ -128,6 +128,7 @@ export class TriagerPromptBuilder extends BaseAgentPromptBuilder {
         `   - Complex features or architectural changes → designing`,
         `   - Tasks needing plan breakdown → planning`,
         `   - Simple/clear tasks (xs/sm, low complexity) → implementing`,
+        `   - Task is not relevant, already done, or a duplicate → closed`,
         `7. Update the task with your findings (see "Apply Changes" below).`,
         `8. If the task is too vague to triage properly (e.g., "fix the thing", "make it better"), use the \`needs_info\` outcome to ask clarifying questions. Do NOT guess or hallucinate requirements.`,
       ];

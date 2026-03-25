@@ -560,6 +560,78 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     });
   });
+
+  it('should extract triager structured output fields into context entry data', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Triage complete',
+      outcome: 'triage_complete',
+      structuredOutput: {
+        triageSummary: 'Small bug fix in renderer',
+        suggestedPhase: 'implementing',
+        phaseSkipJustification: 'XS bug — skip investigation and design',
+      },
+    };
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'triager', undefined, result, onLog);
+
+    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        source: 'agent',
+        entryType: 'triage_summary',
+        data: expect.objectContaining({
+          suggestedPhase: 'implementing',
+          phaseSkipJustification: 'XS bug — skip investigation and design',
+        }),
+      }),
+    );
+  });
+
+  it('should extract triager suggestedPhase closed into context entry data', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Triage complete — task is not relevant',
+      outcome: 'triage_complete',
+      structuredOutput: {
+        triageSummary: 'Task is a duplicate of an already-completed task',
+        suggestedPhase: 'closed',
+      },
+    };
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'triager', undefined, result, onLog);
+
+    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        source: 'agent',
+        entryType: 'triage_summary',
+        data: expect.objectContaining({
+          suggestedPhase: 'closed',
+        }),
+      }),
+    );
+  });
+
+  it('should use triageSummary as context entry summary for triager', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'raw output',
+      outcome: 'triage_complete',
+      structuredOutput: {
+        triageSummary: 'Small renderer fix — XS bug',
+        suggestedPhase: 'implementing',
+      },
+    };
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'triager', undefined, result, onLog);
+
+    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: 'Small renderer fix — XS bug',
+      }),
+    );
+  });
 });
 
 describe('PostRunExtractor.extractPlan', () => {
