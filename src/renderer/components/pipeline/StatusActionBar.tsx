@@ -6,6 +6,7 @@ import { AgentRunErrorBanner } from '../agent-run/AgentRunErrorBanner';
 import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity, TaskContextEntry, ProposedFixOption } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
 import { reportError } from '../../lib/error-handler';
+import { buildFixOptionSummary } from '../../utils/fix-option-summary';
 
 type TaskProps = {
   status: string;
@@ -346,7 +347,7 @@ function InvestigationReviewWithOptions({
       await window.api.tasks.addContextEntry(taskId, {
         source: 'user',
         entryType: 'fix_option_selected',
-        summary: selected.label,
+        summary: buildFixOptionSummary(selected),
         data: { option: selected },
       });
       onTransition(approveTransition.to);
