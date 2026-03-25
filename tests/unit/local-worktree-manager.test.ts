@@ -231,6 +231,22 @@ describe('LocalWorktreeManager', () => {
       await expect(manager.unlock('task1')).resolves.toBeUndefined();
     });
 
+    it('tolerates "is not a working tree" errors', async () => {
+      execFileHandler = () => {
+        throw new Error("fatal: '/path' is not a working tree");
+      };
+
+      await expect(manager.unlock('task1')).resolves.toBeUndefined();
+    });
+
+    it('tolerates "does not exist" errors', async () => {
+      execFileHandler = () => {
+        throw new Error("fatal: '/path' does not exist");
+      };
+
+      await expect(manager.unlock('task1')).resolves.toBeUndefined();
+    });
+
     it('rethrows non-idempotency errors', async () => {
       execFileHandler = () => {
         throw new Error('fatal: unexpected error');
