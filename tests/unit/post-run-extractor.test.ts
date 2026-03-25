@@ -613,6 +613,35 @@ describe('PostRunExtractor.saveContextEntry', () => {
     );
   });
 
+  it('should extract triager relevanceVerdict into context entry data', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Triage complete',
+      outcome: 'triage_complete',
+      structuredOutput: {
+        triageSummary: 'Feature already implemented in codebase',
+        suggestedPhase: 'closed',
+        phaseSkipJustification: 'Feature already exists — closing task',
+        relevanceVerdict: 'already_exists',
+      },
+    };
+
+    await extractor.saveContextEntry('task-1', 'run-1', 'triager', undefined, result, onLog);
+
+    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        source: 'agent',
+        entryType: 'triage_summary',
+        data: expect.objectContaining({
+          suggestedPhase: 'closed',
+          phaseSkipJustification: 'Feature already exists — closing task',
+          relevanceVerdict: 'already_exists',
+        }),
+      }),
+    );
+  });
+
   it('should use triageSummary as context entry summary for triager', async () => {
     const result: AgentRunResult = {
       exitCode: 0,

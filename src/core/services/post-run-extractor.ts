@@ -452,9 +452,10 @@ export class PostRunExtractor {
         entryData.suggestedTasks = pmso?.suggestedTasks;
       }
       if (agentType === 'triager') {
-        const tso = result.structuredOutput as { suggestedPhase?: string; phaseSkipJustification?: string } | undefined;
+        const tso = result.structuredOutput as { suggestedPhase?: string; phaseSkipJustification?: string; relevanceVerdict?: string } | undefined;
         if (tso?.suggestedPhase) entryData.suggestedPhase = tso.suggestedPhase;
         if (tso?.phaseSkipJustification) entryData.phaseSkipJustification = tso.phaseSkipJustification;
+        if (tso?.relevanceVerdict) entryData.relevanceVerdict = tso.relevanceVerdict;
       }
       const entrySource = agentType === 'reviewer' ? 'reviewer'
         : agentType === 'task-workflow-reviewer' ? 'workflow-reviewer'
