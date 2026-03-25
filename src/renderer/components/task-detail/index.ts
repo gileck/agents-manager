@@ -15,3 +15,4 @@ export { DependenciesSection } from './DependenciesSection';
 export { ArtifactCard } from './ArtifactCard';
 export { ContextEntryCard } from './ContextEntryCard';
 export { UxDesignReviewSection } from './UxDesignReviewSection';
+export { TriageSummaryCard } from './TriageSummaryCard';

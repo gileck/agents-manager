@@ -14,6 +14,7 @@ import { SubtasksSection } from './SubtasksSection';
 import { DependenciesSection } from './DependenciesSection';
 import { LinkedBugsSection } from './LinkedBugsSection';
 import { PlanMarkdown } from './PlanMarkdown';
+import { TriageSummaryCard } from './TriageSummaryCard';
 import { TaskCommentsCard } from './TaskCommentsCard';
 import { ImagePasteArea } from '../ui/ImagePasteArea';
 import type {
@@ -177,6 +178,9 @@ export function TaskDetailDashboard({
             )}
           </CardContent>
         </Card>
+
+        {/* Triage Summary */}
+        <TriageSummaryCard entries={contextEntries ?? []} />
 
         {/* Extra metadata */}
         {(task.featureId || task.prLink || task.branchName || task.tags.length > 0 || task.assignee || task.createdBy) && (
