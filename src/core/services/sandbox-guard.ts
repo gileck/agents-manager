@@ -13,6 +13,9 @@ const SENSITIVE_PATTERNS = [
 /** Regex to extract file paths from bash commands that accept path arguments. */
 const BASH_PATH_REGEX = /(?:^|\s)(?:cat|less|head|tail|rm|mv|cp|mkdir|touch|chmod|chown|find|ls|>|>>)\s+["']?([^\s"'|;&]+)/g;
 const BASH_CD_REGEX = /(?:^|\s)cd\s+["']?([^\s"'|;&]+)/g;
+/** Supplementary regex: captures any absolute paths (starting with /) anywhere in the command.
+ *  This ensures paths appearing after flags (e.g., `ls -la /var/secret`) are still checked. */
+const BASH_ABSOLUTE_PATH_REGEX = /(?:^|\s)(\/[^\s"'|;&]+)/g;
 
 export class SandboxGuard {
   private resolvedAllowed: string[];
@@ -85,24 +88,35 @@ export class SandboxGuard {
   }
 
   private checkBashCommand(command: string): { allow: boolean; reason?: string } {
-    const paths: string[] = [];
+    const pathSet = new Set<string>();
 
     // Extract paths from common file-manipulating commands
     let match: RegExpExecArray | null;
     const pathRegex = new RegExp(BASH_PATH_REGEX.source, 'g');
     while ((match = pathRegex.exec(command)) !== null) {
-      paths.push(match[1]);
+      pathSet.add(match[1]);
     }
 
     const cdRegex = new RegExp(BASH_CD_REGEX.source, 'g');
     while ((match = cdRegex.exec(command)) !== null) {
-      paths.push(match[1]);
+      pathSet.add(match[1]);
+    }
+
+    // Also extract absolute paths anywhere in the command (catches paths after flags)
+    const absPathRegex = new RegExp(BASH_ABSOLUTE_PATH_REGEX.source, 'g');
+    while ((match = absPathRegex.exec(command)) !== null) {
+      pathSet.add(match[1]);
     }
 
     // If no paths extracted, allow (conservative — most bash commands are safe)
-    if (paths.length === 0) return { allow: true };
+    if (pathSet.size === 0) return { allow: true };
 
-    for (const p of paths) {
+    for (const p of pathSet) {
+      // Skip command flags (arguments starting with -)
+      if (p.startsWith('-')) {
+        continue;
+      }
+
       if (this.isSensitivePath(p)) {
         return { allow: false, reason: `Bash command accesses sensitive path: ${p}` };
       }

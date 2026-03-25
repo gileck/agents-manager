@@ -236,6 +236,55 @@ describe('SandboxGuard', () => {
       const result = guard.evaluateToolCall('Bash', { command: 'cat /tmp/project/a.txt && rm /var/secret/b.txt' });
       expect(result.allow).toBe(false);
     });
+
+    // ---- Flag-skipping tests (false-positive prevention) ----
+
+    it('should not treat -la flag as a path in ls -la', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'ls -la /tmp/project/src' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should not treat numeric flags as paths (git log -30)', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'ls -30 /tmp/project' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should not treat -n flag as a path (head -n 20)', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'head -n /tmp/project/file.txt' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should not treat -80 flag as a path (tail -80)', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'tail -80 /tmp/project/log.txt' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should not treat -r flag as a path (ls -r)', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'ls -r /tmp/project' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should not treat -rf flag as a path (rm -rf)', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'rm -rf /tmp/project/dist' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should not treat long flags as paths (--recursive)', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'cp --recursive /tmp/project/src /tmp/project/backup' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should still block actual paths even when flags are present', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'ls -la /var/secret' });
+      expect(result.allow).toBe(false);
+      expect(result.reason).toContain('outside boundaries');
+    });
+
+    it('should still block sensitive paths even when flags are present', () => {
+      const result = guard.evaluateToolCall('Bash', { command: 'cat -n /home/user/.ssh/id_rsa' });
+      expect(result.allow).toBe(false);
+      expect(result.reason).toContain('sensitive path');
+    });
   });
 
   // ============================================
