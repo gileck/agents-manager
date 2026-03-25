@@ -6,6 +6,7 @@ import { MarkdownContent } from '../chat/MarkdownContent';
 import { DOC_PHASES, getPhaseByDocType, getPhaseByReviewStatus } from '../../../shared/doc-phases';
 import type { Task, TaskDoc, TaskContextEntry, Transition, DocArtifactType, PipelineStatus, ProposedFixOption } from '../../../shared/types';
 import { reportError } from '../../lib/error-handler';
+import { buildFixOptionSummary } from '../../utils/fix-option-summary';
 
 interface DocsPanelProps {
   task: Task;
@@ -271,7 +272,7 @@ function InvestigationFixOptionApprove({
       await window.api.tasks.addContextEntry(task.id, {
         source: 'user',
         entryType: 'fix_option_selected',
-        summary: selectedOption.label,
+        summary: buildFixOptionSummary(selectedOption),
         data: { option: selectedOption },
       });
       await onAction(approveTransition.to, '', feedbackType);
