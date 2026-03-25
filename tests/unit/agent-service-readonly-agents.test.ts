@@ -112,8 +112,8 @@ function makeMockedDeps() {
   const createGitOps = vi.fn().mockReturnValue(mockGitOps);
 
   const mockWorktreeManager: IWorktreeManager = {
-    get: vi.fn().mockResolvedValue({ branch: 'task/task-1', path: '/tmp/worktree' }),
-    create: vi.fn().mockResolvedValue({ branch: 'task/task-1', path: '/tmp/worktree' }),
+    get: vi.fn().mockResolvedValue({ branch: 'task/task-1/work', path: '/tmp/worktree' }),
+    create: vi.fn().mockResolvedValue({ branch: 'task/task-1/work', path: '/tmp/worktree' }),
     delete: vi.fn().mockResolvedValue(undefined),
     lock: vi.fn().mockResolvedValue(undefined),
     unlock: vi.fn().mockResolvedValue(undefined),
@@ -376,7 +376,7 @@ describe('AgentService — git ref hierarchy conflict regex', () => {
 
     // Simulate git ref hierarchy conflict
     (mockGitOps.createBranch as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("fatal: 'refs/heads/task/task-1/task-workflow-reviewer' exists; cannot create 'refs/heads/task/task-1'"),
+      new Error("fatal: 'refs/heads/task/task-1/task-workflow-reviewer' exists; cannot create 'refs/heads/task/task-1/work'"),
     );
 
     // Should not throw — should fall back to checkout
@@ -387,7 +387,7 @@ describe('AgentService — git ref hierarchy conflict regex', () => {
 
     // Should have tried createBranch, then fallen back to checkout
     expect(mockGitOps.createBranch).toHaveBeenCalled();
-    expect(mockGitOps.checkout).toHaveBeenCalledWith('task/task-1');
+    expect(mockGitOps.checkout).toHaveBeenCalledWith('task/task-1/work');
   });
 
   it('still handles standard "already exists" error', async () => {
@@ -399,7 +399,7 @@ describe('AgentService — git ref hierarchy conflict regex', () => {
     });
 
     (mockGitOps.createBranch as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("fatal: a branch named 'task/task-1' already exists"),
+      new Error("fatal: a branch named 'task/task-1/work' already exists"),
     );
 
     const run = await service.execute('task-1', 'new', 'implementor');
@@ -407,6 +407,6 @@ describe('AgentService — git ref hierarchy conflict regex', () => {
 
     await new Promise(r => setTimeout(r, 50));
 
-    expect(mockGitOps.checkout).toHaveBeenCalledWith('task/task-1');
+    expect(mockGitOps.checkout).toHaveBeenCalledWith('task/task-1/work');
   });
 });
