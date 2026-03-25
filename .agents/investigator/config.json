@@ -1,0 +1,5 @@
+{
+  "maxTurns": 150,
+  "timeout": 600000,
+  "readOnly": true
+}

@@ -1,0 +1,10 @@
+{
+  "maxTurns": 50,
+  "timeout": 600000,
+  "readOnly": false,
+  "disallowedTools": [
+    "Edit",
+    "MultiEdit",
+    "NotebookEdit"
+  ]
+}
