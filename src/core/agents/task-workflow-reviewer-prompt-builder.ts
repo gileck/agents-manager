@@ -1,6 +1,7 @@
-import { VALID_TASK_SIZES, VALID_TASK_COMPLEXITIES, VALID_START_PHASES } from '../../shared/types';
+import { VALID_TASK_SIZES, VALID_TASK_COMPLEXITIES } from '../../shared/types';
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
+import { getStartPhaseField } from './prompt-utils';
 
 export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
   readonly type = 'task-workflow-reviewer';
@@ -78,7 +79,7 @@ export class TaskWorkflowReviewerPromptBuilder extends BaseAgentPromptBuilder {
                 priority: { type: 'number', enum: [0, 1, 2, 3], description: 'Priority: 0=P0 Critical, 1=P1 High, 2=P2 Medium, 3=P3 Low' },
                 size: { type: 'string', enum: [...VALID_TASK_SIZES], description: 'Estimated task size: xs=trivial, sm=small, md=medium, lg=large, xl=extra-large' },
                 complexity: { type: 'string', enum: [...VALID_TASK_COMPLEXITIES], description: 'Estimated complexity: low=straightforward, medium=some nuance, high=many unknowns' },
-                startPhase: { type: 'string', enum: [...VALID_START_PHASES], description: 'Recommended starting phase for this task' },
+                ...getStartPhaseField(),
               },
               required: ['title', 'type', 'description', 'priority'],
             },

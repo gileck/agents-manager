@@ -1,7 +1,9 @@
 import {
   VALID_TASK_SIZES,
   VALID_TASK_COMPLEXITIES,
+  ALL_PIPELINE_PHASES,
 } from '../../shared/types';
+import type { PipelinePhase } from '../../shared/types';
 import type {
   AgentChatMessage,
   AgentRunResult,
@@ -25,7 +27,7 @@ import { analyzeRunMessages } from './run-diagnostics-analyzer';
 type OnLog = (message: string) => void;
 type OnPostLog = (message: string, details?: Record<string, unknown>, durationMs?: number) => void;
 
-const PHASE_LABELS: Record<string, string> = {
+const PHASE_LABELS: Record<PipelinePhase, string> = {
   triaging: '\u{1F3F7}\u{FE0F} Triage',
   investigating: '\u{1F50D} Investigate',
   designing: '\u{1F3A8} Design',
@@ -589,7 +591,9 @@ export class PostRunExtractor {
 
         // Send Telegram notification with action buttons
         try {
-          const phase = suggested.startPhase && PHASE_LABELS[suggested.startPhase]
+          const isPipelinePhase = (s: string): s is PipelinePhase =>
+            (ALL_PIPELINE_PHASES as readonly string[]).includes(s);
+          const phase: PipelinePhase = suggested.startPhase && isPipelinePhase(suggested.startPhase)
             ? suggested.startPhase : 'investigating';
           const phaseLabel = PHASE_LABELS[phase];
           const truncatedDesc = suggested.description.length > 200
