@@ -1,4 +1,4 @@
-import { VALID_TASK_SIZES, VALID_TASK_COMPLEXITIES } from '../../shared/types';
+import { VALID_TASK_SIZES, VALID_TASK_COMPLEXITIES, VALID_START_PHASES } from '../../shared/types';
 import type { AgentContext, AgentConfig } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 
@@ -59,7 +59,7 @@ export class PostMortemReviewerPromptBuilder extends BaseAgentPromptBuilder {
                 priority: { type: 'number', enum: [0, 1, 2, 3], description: 'Priority: 0=Critical, 1=High, 2=Medium, 3=Low' },
                 size: { type: 'string', enum: [...VALID_TASK_SIZES], description: 'Estimated task size' },
                 complexity: { type: 'string', enum: [...VALID_TASK_COMPLEXITIES], description: 'Estimated complexity' },
-                startPhase: { type: 'string', enum: ['investigating', 'designing', 'planning', 'implementing'], description: 'Recommended starting phase' },
+                startPhase: { type: 'string', enum: [...VALID_START_PHASES], description: 'Recommended starting phase' },
               },
               required: ['title', 'type', 'description', 'priority'],
             },

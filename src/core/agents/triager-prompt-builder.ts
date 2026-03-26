@@ -1,5 +1,5 @@
 import type { AgentContext, AgentConfig } from '../../shared/types';
-import { VALID_TASK_TYPES } from '../../shared/types';
+import { VALID_TASK_TYPES, VALID_START_PHASES } from '../../shared/types';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 import { getInteractiveFields, getInteractiveInstructions, getTaskEstimationFields, getTaskEstimationInstructions } from './prompt-utils';
 
@@ -37,7 +37,7 @@ export class TriagerPromptBuilder extends BaseAgentPromptBuilder {
           },
           suggestedPhase: {
             type: 'string',
-            enum: ['investigating', 'designing', 'planning', 'implementing', 'closed'],
+            enum: [...VALID_START_PHASES, 'closed'],
             description: 'Recommended next pipeline phase after triage, or closed if task is not relevant',
           },
           phaseSkipJustification: {

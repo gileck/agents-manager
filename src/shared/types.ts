@@ -298,6 +298,9 @@ export type TaskSize = typeof VALID_TASK_SIZES[number];
 export const VALID_TASK_COMPLEXITIES = ['low', 'medium', 'high'] as const;
 export type TaskComplexity = typeof VALID_TASK_COMPLEXITIES[number];
 
+export const VALID_START_PHASES = ['investigating', 'designing', 'planning', 'implementing'] as const;
+export type StartPhase = typeof VALID_START_PHASES[number];
+
 export type TaskCreatedBy = 'user' | 'workflow-reviewer' | 'post-mortem-reviewer' | 'session-agent';
 
 export interface Task {
