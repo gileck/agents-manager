@@ -13,6 +13,7 @@ import {
   SelectItem,
 } from '../ui/select';
 import { Button } from '../ui/button';
+import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import {
   FolderOpen,
   FolderPlus,
@@ -25,13 +26,19 @@ import {
   Play,
   Plus,
   Search,
+  ChevronDown,
+  Lightbulb,
+  Bug,
+  Sparkles,
 } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import { getPageTitle } from '../../lib/pages';
 import { TaskCreateDialog } from '../tasks/TaskCreateDialog';
+import { ThemedThreadDialog } from '../chat/ThemedThreadDialog';
 import { NotificationBell } from './NotificationBell';
 import { useKeyboardShortcutsConfig } from '../../hooks/useKeyboardShortcutsConfig';
 import { formatCombo } from '../../lib/keyboardShortcuts';
+import type { ThreadIntent } from '../../lib/thread-intent-prompts';
 
 type TelegramBotStatus = 'running' | 'stopped' | 'failed' | 'unknown';
 
@@ -53,11 +60,20 @@ export function TopMenu() {
   const [form, setForm] = useState<Omit<TaskCreateInput, 'projectId'>>({ pipelineId: '', title: '', description: '', type: 'feature' });
   const [creating, setCreating] = useState(false);
   const [dialogImages, setDialogImages] = useState<ChatImage[]>([]);
+  const [themedThreadOpen, setThemedThreadOpen] = useState(false);
+  const [themedThreadIntent, setThemedThreadIntent] = useState<ThreadIntent>('feature');
+  const [newTaskMenuOpen, setNewTaskMenuOpen] = useState(false);
 
   const openCreateDialog = () => {
     setForm({ pipelineId: '', title: '', description: '', type: 'feature' });
     setDialogImages([]);
     setCreateDialogOpen(true);
+  };
+
+  const openThemedThread = (intent: ThreadIntent) => {
+    setNewTaskMenuOpen(false);
+    setThemedThreadIntent(intent);
+    setThemedThreadOpen(true);
   };
 
   const handleCreate = async () => {
@@ -208,16 +224,65 @@ export function TopMenu() {
         </div>
 
         {currentProjectId && (
-          <Button
-            variant="default"
-            size="sm"
-            onClick={openCreateDialog}
-            className="rounded-full px-3"
-            title="Create new task"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            New task
-          </Button>
+          <div className="inline-flex items-center">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={openCreateDialog}
+              className="rounded-l-full rounded-r-none px-3 border-r border-primary-foreground/20"
+              title="Create new task"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              New task
+            </Button>
+            <Popover open={newTaskMenuOpen} onOpenChange={setNewTaskMenuOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="rounded-r-full rounded-l-none px-1.5 min-w-0"
+                  title="More creation options"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-52 p-1">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-accent text-left"
+                  onClick={() => { setNewTaskMenuOpen(false); openCreateDialog(); }}
+                >
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                  New Task
+                </button>
+                <div className="h-px bg-border/60 my-1" />
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-accent text-left"
+                  onClick={() => openThemedThread('feature')}
+                >
+                  <Lightbulb className="h-4 w-4 text-amber-500" />
+                  Feature Request
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-accent text-left"
+                  onClick={() => openThemedThread('bug')}
+                >
+                  <Bug className="h-4 w-4 text-red-500" />
+                  Bug Report
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-accent text-left"
+                  onClick={() => openThemedThread('improvement')}
+                >
+                  <Sparkles className="h-4 w-4 text-blue-500" />
+                  Improvement
+                </button>
+              </PopoverContent>
+            </Popover>
+          </div>
         )}
 
         <Button
@@ -312,6 +377,12 @@ export function TopMenu() {
         creating={creating}
         images={dialogImages}
         onImagesChange={setDialogImages}
+      />
+
+      <ThemedThreadDialog
+        open={themedThreadOpen}
+        onOpenChange={setThemedThreadOpen}
+        intent={themedThreadIntent}
       />
     </div>
   );
