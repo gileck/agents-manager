@@ -1,16 +1,23 @@
-import React, { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useRef } from 'react';
+import { useParams, useLocation } from 'react-router-dom';
 import { MessageSquare } from 'lucide-react';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useProjectChatSessions } from '../contexts/ProjectChatSessionsContext';
 import { ChatPresetProvider } from '../components/chat/presets/ChatPresetContext';
 import { PresetChatPanel } from '../components/chat/presets/PresetChatPanel';
+import { reportError } from '../lib/error-handler';
+import type { ThemedThreadNavState } from '../components/chat/ThemedThreadDialog';
 
 export function ChatPage() {
   const { sessionId } = useParams<{ sessionId?: string }>();
+  const location = useLocation();
   const { currentProjectId } = useCurrentProject();
   const sessions = useProjectChatSessions();
   const { currentSessionId, sessions: sessionList, switchSession } = sessions;
+
+  // Track whether the initial message for this navigation has already been sent
+  // to prevent duplicate sends on re-renders.
+  const initialMessageSentRef = useRef<string | null>(null);
 
   // Sync URL sessionId with the sessions context
   useEffect(() => {
@@ -21,6 +28,24 @@ export function ChatPage() {
       }
     }
   }, [sessionId, currentSessionId, sessionList, switchSession]);
+
+  // Auto-send initial message passed via navigation state from ThemedThreadDialog.
+  // Waits until the session is synced (currentSessionId matches URL param) before sending.
+  useEffect(() => {
+    const navState = location.state as ThemedThreadNavState | null;
+    if (!navState?.initialMessage || !sessionId) return;
+    // Only send once per navigation — guard against re-renders
+    if (initialMessageSentRef.current === sessionId) return;
+    // Wait until the sessions context has synced to the target session
+    if (currentSessionId !== sessionId) return;
+
+    initialMessageSentRef.current = sessionId;
+    window.api.chat.send(sessionId, navState.initialMessage).catch((err) => {
+      reportError(err, 'Send themed thread message');
+    });
+    // Clear navigation state so refreshing the page doesn't re-send
+    window.history.replaceState({}, '', location.pathname);
+  }, [sessionId, currentSessionId, location.state, location.pathname]);
 
   if (!currentProjectId) {
     return (

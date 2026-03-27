@@ -546,7 +546,7 @@ export interface TransitionHistoryEntry {
 
 export interface IGuardQueryContext {
   countUnresolvedDependencies(taskId: string): number;
-  countFailedRuns(taskId: string): number;
+  countFailedRuns(taskId: string, agentType?: string): number;
   countRunningRuns(taskId: string): number;
   getUserRole(username: string): 'admin' | 'user' | null;
 }
@@ -1243,6 +1243,16 @@ export interface HookFailureRecord {
   retryable: boolean;
 }
 
+export interface GuardBlockRecord {
+  id: string;
+  taskId: string;
+  fromStatus: string;
+  toStatus: string;
+  trigger: TransitionTrigger;
+  guardFailures: Array<{ guard: string; reason: string }>;
+  timestamp: number;
+}
+
 export interface PipelineDiagnostics {
   taskId: string;
   currentStatus: string;
@@ -1254,6 +1264,7 @@ export interface PipelineDiagnostics {
   };
   allTransitions: AllTransitionsResult;
   recentHookFailures: HookFailureRecord[];
+  recentGuardBlocks: GuardBlockRecord[];
   phases: ImplementationPhase[] | null;
   activePhaseIndex: number;
   agentState: {

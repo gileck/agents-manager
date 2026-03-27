@@ -144,7 +144,7 @@ export function createTestContext(): TestContext {
   const txRunner = new SqliteTransactionRunner(db);
   const guardContext: import('../../src/shared/types').IGuardQueryContext = {
     countUnresolvedDependencies: (id: string) => taskStore.countUnresolvedDependenciesSync(id),
-    countFailedRuns: (id: string) => agentRunStore.countFailedRunsSync(id),
+    countFailedRuns: (id: string, agentType?: string) => agentRunStore.countFailedRunsSync(id, agentType),
     countRunningRuns: (id: string) => agentRunStore.countRunningRunsSync(id),
     getUserRole: (username: string) => userStore.getUserRoleSync(username),
   };

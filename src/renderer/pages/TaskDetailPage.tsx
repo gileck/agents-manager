@@ -98,6 +98,10 @@ export function TaskDetailPage() {
     [id, task?.status]
   );
 
+  // Diagnostics hooks (must be before derived state that depends on diagnostics)
+  const { diagnostics, refetch: refetchDiagnostics, error: diagnosticsError } = usePipelineDiagnostics(id!, task?.status ?? '');
+  const { retry, retrying } = useHookRetry();
+
   // Derived agent state
   const isAgentPipeline = pipeline?.statuses.some((s) => s.category === 'agent_running') ?? false;
   const hasRunningAgent = agentRuns?.some((r) => r.status === 'running') ?? false;
@@ -106,7 +110,10 @@ export function TaskDetailPage() {
   const isFinalizing = isAgentPhase && !hasRunningAgent && agentRuns !== null
     && lastRun?.status === 'completed' && lastRun.completedAt != null
     && (Date.now() - lastRun.completedAt) < 30000;
-  const isStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null && !isFinalizing;
+  const isAgentStuck = isAgentPhase && !hasRunningAgent && agentRuns !== null && !isFinalizing;
+  // Also consider guard-blocked diagnostics (e.g., max_retries blocking a transition during human_review)
+  const isGuardBlocked = diagnostics?.isStuck ?? false;
+  const isStuck = isAgentStuck || isGuardBlocked;
 
   // Poll while agent is running, needs_info, finalizing, stuck, or waiting for PR
   const awaitingPr = statusMeta.isHumanReview && !task?.prLink;
@@ -177,10 +184,6 @@ export function TaskDetailPage() {
   // Bug report dialog state
   const [bugReportOpen, setBugReportOpen] = useState(false);
   const [bugReportInitialValues, setBugReportInitialValues] = useState<BugReportInitialValues | undefined>(undefined);
-
-  // Diagnostics hooks lifted from PipelineControlPanel
-  const { diagnostics, refetch: refetchDiagnostics, error: diagnosticsError } = usePipelineDiagnostics(id!, task?.status ?? '');
-  const { retry, retrying } = useHookRetry();
 
   // Auto-dismiss transition error after 15 seconds
   useEffect(() => {

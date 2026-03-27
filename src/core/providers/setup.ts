@@ -212,7 +212,7 @@ function createStores(db: Database.Database) {
 function createPipelineModule(stores: ReturnType<typeof createStores>) {
   const guardContext: import('../../shared/types').IGuardQueryContext = {
     countUnresolvedDependencies: (id: string) => stores.taskStore.countUnresolvedDependenciesSync(id),
-    countFailedRuns: (id: string) => stores.agentRunStore.countFailedRunsSync(id),
+    countFailedRuns: (id: string, agentType?: string) => stores.agentRunStore.countFailedRunsSync(id, agentType),
     countRunningRuns: (id: string) => stores.agentRunStore.countRunningRunsSync(id),
     getUserRole: (username: string) => stores.userStore.getUserRoleSync(username),
   };
