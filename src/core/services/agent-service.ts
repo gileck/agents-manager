@@ -553,6 +553,7 @@ export class AgentService implements IAgentService {
     if (queue && queue.length === 0) this.messageQueues.delete(taskId);
 
     const devServer = this.devServerManager?.getStatus(task.id);
+    const rebaseTarget = baseBranch ?? 'origin/main';
     const context: AgentContext = {
       task,
       project,
@@ -561,6 +562,7 @@ export class AgentService implements IAgentService {
       revisionReason,
       customPrompt,
       devServerUrl: devServer?.status === 'ready' ? devServer.url : undefined,
+      rebaseTarget,
       additionalContext,
     };
 
