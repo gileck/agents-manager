@@ -353,11 +353,13 @@ export class ClaudeCodeLib extends BaseAgentLib {
             const usageMsg: AgentChatMessage = { type: 'usage', inputTokens: costInputTokens ?? 0, outputTokens: costOutputTokens ?? 0, contextWindow, lastContextInputTokens: lastInputTokens, timestamp: Date.now() };
             onMessage?.(usageMsg);
           }
-          // Close the message channel after processing the SDK result.
-          // The result is the terminal event for a turn — the SDK is done processing.
-          // Without this, the SDK waits for the next input from the channel while the
-          // for-await loop waits for more SDK output, causing a deadlock.
-          if (messageChannel && !messageChannel.isClosed) {
+          // When streaming input is disabled, close the message channel so the
+          // SDK exits its input loop and the for-await terminates cleanly.
+          // When streaming input IS enabled, keep the channel open so injected
+          // user messages can flow through — the SDK reads the next message
+          // from the channel, and both async waits unblock naturally when a
+          // message is pushed via injectMessage().
+          if (messageChannel && !messageChannel.isClosed && !useStreamingInput) {
             log('Closing message channel after SDK result');
             messageChannel.close();
           }

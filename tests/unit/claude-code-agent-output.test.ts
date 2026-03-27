@@ -494,70 +494,61 @@ describe('Agent (ImplementorPromptBuilder + ClaudeCodeLib) onOutput streaming', 
     expect(result).toBeDefined();
   });
 
-  it('should complete without deadlocking when enableStreamingInput is true', async () => {
-    // This test verifies the fix for the async generator deadlock when
-    // enableStreamingInput=true. Without the fix, the SDK would wait for
-    // the next input from the message channel while the for-await loop
-    // waits for more SDK output, causing an infinite hang.
-    const messages = [
-      {
-        type: 'assistant',
-        message: {
-          content: [{ type: 'text', text: 'Hello from streaming input mode' }],
-          usage: { input_tokens: 100, output_tokens: 50 },
-        },
-      },
-      {
-        type: 'result',
-        subtype: 'success',
-        result: 'Done',
-        usage: { input_tokens: 100, output_tokens: 50 },
-      },
-    ];
+  it('should keep channel open for injection after result when enableStreamingInput is true', async () => {
+    // With enableStreamingInput, the channel stays open after a result so that
+    // follow-up messages can be injected. The mock SDK reads two messages from
+    // the channel: the initial prompt and an injected follow-up.
+    const allOutput: string[] = [];
 
-    // The mock query receives the prompt (which will be a MessageChannel/AsyncIterable
-    // when enableStreamingInput=true) and returns messages. It consumes the prompt
-    // iterable and then yields result messages — mirroring the real SDK behavior.
     mockQuery.mockImplementation(({ prompt }: { prompt: string | AsyncIterable<unknown> }) => {
       return (async function* () {
-        // Consume the initial message from the async iterable prompt (like the real SDK does)
-        if (typeof prompt !== 'string' && Symbol.asyncIterator in prompt) {
-          const iter = prompt[Symbol.asyncIterator]();
-          await iter.next(); // consume initial message
+        if (typeof prompt === 'string') {
+          yield { type: 'result', subtype: 'success', result: 'Done', usage: { input_tokens: 10, output_tokens: 5 } };
+          return;
         }
-        // Yield the assistant + result messages
-        for (const msg of messages) {
-          yield msg;
-        }
-        // After yielding result, if the channel was properly closed by our fix,
-        // the iter.next() below will resolve (channel returns done:true).
-        // Without the fix, this would deadlock because the channel never closes.
-        if (typeof prompt !== 'string' && Symbol.asyncIterator in prompt) {
-          const iter = prompt[Symbol.asyncIterator]();
-          // The channel should be closed now, so this should return { done: true }
-          const next = await iter.next();
-          if (!next.done) {
-            throw new Error('MessageChannel should be closed after result — deadlock bug not fixed');
-          }
-        }
+        const iter = prompt[Symbol.asyncIterator]();
+
+        // Turn 1: read initial message
+        await iter.next();
+        yield { type: 'assistant', message: { content: [{ type: 'text', text: 'Response to first' }], usage: { input_tokens: 100, output_tokens: 50 } } };
+        yield { type: 'result', subtype: 'success', result: 'Turn 1 done', usage: { input_tokens: 100, output_tokens: 50 } };
+
+        // Turn 2: read injected message — channel should still be open
+        const next = await iter.next();
+        if (next.done) throw new Error('Channel was closed after result — injection broken');
+
+        yield { type: 'assistant', message: { content: [{ type: 'text', text: 'Response to injected' }], usage: { input_tokens: 50, output_tokens: 25 } } };
+        yield { type: 'result', subtype: 'success', result: 'Turn 2 done', usage: { input_tokens: 50, output_tokens: 25 } };
+        // Mock SDK exits — generator completes, for-await ends, finally block cleans up
       })();
     });
 
-    // Use lib.execute directly with enableStreamingInput to exercise the MessageChannel path
-    const result = await lib.execute('streaming-test-run', {
-      prompt: 'Test message',
+    // Start execute without awaiting — it won't complete until the mock SDK exits
+    const executePromise = lib.execute('streaming-multi-turn', {
+      prompt: 'First message',
       cwd: '/tmp/test',
       allowedPaths: ['/tmp/test'],
       readOnlyPaths: [],
       enableStreamingInput: true,
     }, {
-      onOutput: () => {},
+      onOutput: (chunk: string) => { allOutput.push(chunk); },
     });
 
-    // If we get here, the deadlock is fixed — execution completed
+    // Yield to allow the first result to be processed and the mock SDK to wait for input
+    await new Promise(r => setTimeout(r, 50));
+
+    // Channel should still be open — inject a follow-up message
+    const injected = lib.injectMessage('streaming-multi-turn', 'Injected message');
+    expect(injected).toBe(true);
+
+    // Execute completes after the mock SDK processes both messages
+    const result = await executePromise;
+
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain('Hello from streaming input mode');
-  }, 10000); // 10s timeout — if this times out, the deadlock bug is back
+    const outputText = allOutput.join('');
+    expect(outputText).toContain('Response to first');
+    expect(outputText).toContain('Response to injected');
+  }, 10000);
 
   it('should return false from injectMessage after result closes the channel', async () => {
     // Verifies that post-result injection attempts fail gracefully
