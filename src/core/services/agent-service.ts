@@ -1411,13 +1411,14 @@ export class AgentService implements IAgentService {
 
   /**
    * Find the original session-creating run for a given agent type.
-   * Returns the first (oldest) completed mode='new' run, which is the session file owner.
-   * Runs are ordered newest-first, so we reverse-search.
+   * Returns the most recent completed mode='new' run, which is the session to resume.
+   * Runs are ordered newest-first from the store, so forward iteration finds the latest.
+   *
+   * This ensures that after a task reset, revision runs resume the fresh session
+   * from the current cycle — not a stale session from a previous cycle.
    */
   private findOriginalSessionRun(runs: AgentRun[], agentType: string): AgentRun | undefined {
-    // Reverse to find oldest first (runs are newest-first from store)
-    for (let i = runs.length - 1; i >= 0; i--) {
-      const r = runs[i];
+    for (const r of runs) {
       if (r.agentType === agentType && r.mode === 'new' && r.status === 'completed') {
         return r;
       }
