@@ -146,6 +146,7 @@ export function createTestContext(): TestContext {
     countUnresolvedDependencies: (id: string) => taskStore.countUnresolvedDependenciesSync(id),
     countFailedRuns: (id: string, agentType?: string) => agentRunStore.countFailedRunsSync(id, agentType),
     countRunningRuns: (id: string) => agentRunStore.countRunningRunsSync(id),
+    countSelfLoopTransitions: (id: string, fromStatus: string, toStatus: string) => pipelineStore.countSelfLoopTransitionsSync(id, fromStatus, toStatus),
     getUserRole: (username: string) => userStore.getUserRoleSync(username),
   };
   const pipelineEngine = new PipelineEngine(pipelineStore, taskStore, taskEventLog, txRunner, guardContext);

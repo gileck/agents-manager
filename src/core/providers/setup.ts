@@ -214,6 +214,7 @@ function createPipelineModule(stores: ReturnType<typeof createStores>) {
     countUnresolvedDependencies: (id: string) => stores.taskStore.countUnresolvedDependenciesSync(id),
     countFailedRuns: (id: string, agentType?: string) => stores.agentRunStore.countFailedRunsSync(id, agentType),
     countRunningRuns: (id: string) => stores.agentRunStore.countRunningRunsSync(id),
+    countSelfLoopTransitions: (id: string, fromStatus: string, toStatus: string) => stores.pipelineStore.countSelfLoopTransitionsSync(id, fromStatus, toStatus),
     getUserRole: (username: string) => stores.userStore.getUserRoleSync(username),
   };
   const pipelineEngine = new PipelineEngine(

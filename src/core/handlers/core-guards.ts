@@ -21,6 +21,18 @@ export function registerCoreGuards(engine: IPipelineEngine): void {
   engine.registerGuard('max_retries', (task: Task, transition: Transition, _context: TransitionContext, queryCtx: IGuardQueryContext, params?: Record<string, unknown>): GuardResult => {
     const max = (params?.max as number) ?? 3;
 
+    // Self-loop transitions (e.g. implementing → implementing for conflicts_detected)
+    // complete successfully so countFailedRuns never sees them. Instead, count
+    // prior self-loop transition_history entries for the same from → to status.
+    if (transition.from === transition.to) {
+      const count = queryCtx.countSelfLoopTransitions(task.id, transition.from, transition.to);
+      if (count > max) {
+        return { allowed: false, reason: `Max retries (${max}) reached — ${count} self-loop transitions for ${transition.from}` };
+      }
+      return { allowed: true };
+    }
+
+    // Non-self-loop: count failed agent runs as before.
     // Extract agent type from the transition's start_agent hook so we only
     // count failures for the agent that will be retried, not globally.
     const startAgentHook = transition.hooks?.find(h => h.name === 'start_agent');
