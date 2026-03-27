@@ -44,7 +44,7 @@ function createMockTask(overrides: Partial<Task> = {}): Task {
 
 let taskCounter = 0;
 
-function createMockTaskApi(taskOverrides: Partial<Task> = {}): ITaskAPI {
+function createMockTaskApi(taskOverrides: Partial<Task> = {}, otherTasks: Map<string, Task> = new Map()): ITaskAPI {
   taskCounter = 0;
   return {
     taskId: taskOverrides.id ?? 'task-1',
@@ -60,6 +60,9 @@ function createMockTaskApi(taskOverrides: Partial<Task> = {}): ITaskAPI {
       taskCounter++;
       return createMockTask({ ...input, id: `new-task-${taskCounter}`, debugInfo: input.debugInfo ?? null });
     }),
+    getTaskById: vi.fn().mockImplementation(async (taskId: string) => otherTasks.get(taskId) ?? null),
+    updateTaskById: vi.fn().mockResolvedValue(undefined),
+    logEventForTask: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -1009,8 +1012,10 @@ describe('investigatorPostRunHandler (linkBugToSourceTasks)', () => {
     onLog.mockClear();
   });
 
-  it('should link valid source task IDs to bug metadata', async () => {
-    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
+  it('should link valid source task IDs to bug metadata and tag source tasks as defective', async () => {
+    const sourceTask = createMockTask({ id: 'source-1', projectId: 'proj-1', tags: [] });
+    const otherTasks = new Map([['source-1', sourceTask]]);
+    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} }, otherTasks);
 
     const result: AgentRunResult = {
       exitCode: 0,
@@ -1032,14 +1037,118 @@ describe('investigatorPostRunHandler (linkBugToSourceTasks)', () => {
         sourceTaskIds: ['source-1'],
       },
     });
+
+    // Should add 'defective' tag to the source task
+    expect(taskApi.updateTaskById).toHaveBeenCalledWith('source-1', {
+      tags: ['defective'],
+    });
+
+    // Should log event on the source task for traceability
+    expect(taskApi.logEventForTask).toHaveBeenCalledWith('source-1', expect.objectContaining({
+      category: 'agent',
+      severity: 'info',
+      message: expect.stringContaining('marked as defective'),
+    }));
+  });
+
+  it('should skip source tasks that do not exist', async () => {
+    // No source tasks in the map — getTaskById returns null
+    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'investigation output',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Found root cause',
+        sourceTaskIds: ['nonexistent-1'],
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    // Should NOT update bug task metadata (no valid IDs)
+    const updateCalls = (taskApi.updateTask as ReturnType<typeof vi.fn>).mock.calls;
+    const metadataCalls = updateCalls.filter((call: unknown[]) => {
+      const arg = call[0] as Record<string, unknown>;
+      return arg.metadata;
+    });
+    expect(metadataCalls).toHaveLength(0);
+
+    // Should log warning about nonexistent task
+    expect(taskApi.logEventForTask).toHaveBeenCalledWith('bug-1', expect.objectContaining({
+      severity: 'warning',
+      message: expect.stringContaining('not found'),
+    }));
+  });
+
+  it('should skip source tasks from a different project', async () => {
+    const sourceTask = createMockTask({ id: 'source-1', projectId: 'other-proj', tags: [] });
+    const otherTasks = new Map([['source-1', sourceTask]]);
+    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} }, otherTasks);
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'investigation output',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Found root cause',
+        sourceTaskIds: ['source-1'],
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    // Should NOT update bug task metadata (cross-project source task rejected)
+    const updateCalls = (taskApi.updateTask as ReturnType<typeof vi.fn>).mock.calls;
+    const metadataCalls = updateCalls.filter((call: unknown[]) => {
+      const arg = call[0] as Record<string, unknown>;
+      return arg.metadata;
+    });
+    expect(metadataCalls).toHaveLength(0);
+
+    // Should NOT tag the source task
+    expect(taskApi.updateTaskById).not.toHaveBeenCalled();
+
+    // Should log warning about cross-project mismatch
+    expect(taskApi.logEventForTask).toHaveBeenCalledWith('bug-1', expect.objectContaining({
+      severity: 'warning',
+      message: expect.stringContaining('belongs to project'),
+    }));
+  });
+
+  it('should not duplicate defective tag on source tasks that already have it', async () => {
+    const sourceTask = createMockTask({ id: 'source-1', projectId: 'proj-1', tags: ['defective'] });
+    const otherTasks = new Map([['source-1', sourceTask]]);
+    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} }, otherTasks);
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'investigation output',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Found root cause',
+        sourceTaskIds: ['source-1'],
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    // Should NOT call updateTaskById to add tag (already present)
+    expect(taskApi.updateTaskById).not.toHaveBeenCalled();
   });
 
   it('should merge with already-linked tasks without duplicating', async () => {
+    const newSourceTask = createMockTask({ id: 'new-1', projectId: 'proj-1', tags: [] });
+    const otherTasks = new Map([['new-1', newSourceTask]]);
     taskApi = createMockTaskApi({
       id: 'bug-1',
       projectId: 'proj-1',
       metadata: { sourceTaskId: 'existing-1', sourceTaskIds: ['existing-1'] },
-    });
+    }, otherTasks);
 
     const result: AgentRunResult = {
       exitCode: 0,
@@ -1133,11 +1242,13 @@ describe('investigatorPostRunHandler (linkBugToSourceTasks)', () => {
   });
 
   it('should not overwrite manually-set sourceTaskId when auto-linking', async () => {
+    const autoTask = createMockTask({ id: 'auto-1', projectId: 'proj-1', tags: [] });
+    const otherTasks = new Map([['auto-1', autoTask]]);
     taskApi = createMockTaskApi({
       id: 'bug-1',
       projectId: 'proj-1',
       metadata: { sourceTaskId: 'manual-1', route: '/some-page' },
-    });
+    }, otherTasks);
 
     const result: AgentRunResult = {
       exitCode: 0,

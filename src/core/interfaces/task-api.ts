@@ -55,4 +55,15 @@ export interface ITaskAPI {
 
   /** Create a new task (e.g., suggested tasks from workflow reviewer). */
   createTask(input: TaskCreateInput): Promise<Task>;
+
+  // --- Cross-task operations (for handlers that need to read/update other tasks) ---
+
+  /** Get any task by its ID (not scoped to current task). Used for cross-task validation. */
+  getTaskById(taskId: string): Promise<Task | null>;
+
+  /** Update any task by its ID (not scoped to current task). Used for cross-task tagging. */
+  updateTaskById(taskId: string, updates: TaskUpdateInput): Promise<void>;
+
+  /** Log an event on any task (not scoped to current task). Used for cross-task traceability. */
+  logEventForTask(taskId: string, input: { category: TaskEventCategory; severity: TaskEventSeverity; message: string; data?: Record<string, unknown> }): Promise<void>;
 }

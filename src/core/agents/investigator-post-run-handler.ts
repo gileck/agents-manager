@@ -108,7 +108,10 @@ async function extractInvestigationReport(
  * After a successful investigator run, link the bug task to the source tasks
  * that introduced the defect. Sets metadata.sourceTaskId (backward compat)
  * and metadata.sourceTaskIds on the bug task, and adds the 'defective' tag
- * to each source task.
+ * to each validated source task.
+ *
+ * Validates each source task: must exist and belong to the same project.
+ * Invalid IDs are skipped with a warning event logged.
  */
 async function linkBugToSourceTasks(
   taskApi: ITaskAPI,
@@ -156,15 +159,49 @@ async function linkBugToSourceTasks(
         continue;
       }
 
-      // Validate the task exists — use createTask's underlying store via getTask pattern
-      // We need to use the taskApi.createTask store, but we only have taskApi scoped to the bug task.
-      // Instead, we check via logEvent if the task is valid by looking at the bug task's project.
-      // Note: linkBugToSourceTasks needs access to other tasks, which goes beyond the scoped taskApi.
-      // We preserve this by including the source task validation in the handler.
-      // The taskApi.getTask() returns the bug task; for other tasks we'd need the store.
-      // Since this is a complex cross-task operation, we log but can't fully validate without the store.
-      // The agent-service will provide a TaskAPI that wraps the full store.
+      // Validate the source task exists
+      const sourceTask = await taskApi.getTaskById(trimmedId);
+      if (!sourceTask) {
+        onLog(`Warning: source task ${trimmedId} not found — skipping`);
+        await taskApi.logEventForTask(taskApi.taskId, {
+          category: 'agent',
+          severity: 'warning',
+          message: `linkBugToSourceTasks: source task ${trimmedId} not found — skipping`,
+          data: { sourceTaskId: trimmedId },
+        });
+        continue;
+      }
+
+      // Ensure source task is in the same project
+      if (sourceTask.projectId !== bugTask.projectId) {
+        onLog(`Warning: source task ${trimmedId} belongs to a different project — skipping`);
+        await taskApi.logEventForTask(taskApi.taskId, {
+          category: 'agent',
+          severity: 'warning',
+          message: `linkBugToSourceTasks: source task ${trimmedId} belongs to project ${sourceTask.projectId}, bug is in ${bugTask.projectId} — skipping`,
+          data: { sourceTaskId: trimmedId, sourceProjectId: sourceTask.projectId, bugProjectId: bugTask.projectId },
+        });
+        continue;
+      }
+
       validatedIds.push(trimmedId);
+
+      // Add 'defective' tag to the source task (de-duplicated)
+      const existingTags = sourceTask.tags ?? [];
+      if (!existingTags.includes('defective')) {
+        await taskApi.updateTaskById(trimmedId, {
+          tags: [...existingTags, 'defective'],
+        });
+        onLog(`Added 'defective' tag to source task ${trimmedId}`);
+      }
+
+      // Log event on the source task for traceability
+      await taskApi.logEventForTask(trimmedId, {
+        category: 'agent',
+        severity: 'info',
+        message: `Task marked as defective — linked from bug ${taskApi.taskId}`,
+        data: { bugTaskId: taskApi.taskId, bugTitle: bugTask.title },
+      });
     }
 
     if (validatedIds.length === 0) {
