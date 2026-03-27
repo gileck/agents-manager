@@ -1,5 +1,5 @@
 import { realpathSync } from 'fs';
-import { resolve } from 'path';
+import { isAbsolute, resolve } from 'path';
 
 const SENSITIVE_PATTERNS = [
   '/.ssh',
@@ -20,8 +20,10 @@ const BASH_ABSOLUTE_PATH_REGEX = /(?:^|\s)(\/[^\s"'|;&]+)/g;
 export class SandboxGuard {
   private resolvedAllowed: string[];
   private resolvedReadOnly: string[];
+  private readonly cwd: string;
 
-  constructor(allowedPaths: string[], readOnlyPaths: string[] = []) {
+  constructor(allowedPaths: string[], readOnlyPaths: string[] = [], cwd?: string) {
+    this.cwd = cwd ?? process.cwd();
     this.resolvedAllowed = allowedPaths.map(p => this.safeRealpath(p));
     this.resolvedReadOnly = readOnlyPaths.map(p => this.safeRealpath(p));
   }
@@ -148,10 +150,11 @@ export class SandboxGuard {
 
   private safeRealpath(p: string): string {
     try {
-      return realpathSync(resolve(p));
+      const resolved = isAbsolute(p) ? p : resolve(this.cwd, p);
+      return realpathSync(resolved);
     } catch {
       // Path may not exist yet (e.g., Write to new file) — resolve without symlink resolution
-      return resolve(p);
+      return isAbsolute(p) ? resolve(p) : resolve(this.cwd, p);
     }
   }
 }
