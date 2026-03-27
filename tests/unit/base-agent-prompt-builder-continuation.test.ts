@@ -93,7 +93,7 @@ describe('BaseAgentPromptBuilder — buildContinuationPrompt', () => {
     expect(result).not.toContain('Address every piece of feedback');
   });
 
-  it('builds continuation prompt with merge_failed reason', () => {
+  it('builds continuation prompt with merge_failed reason and default rebase target', () => {
     const feedback = makeFeedbackEntry({
       entryType: 'implementation_feedback',
       summary: 'Merge conflict in src/index.ts',
@@ -106,6 +106,25 @@ describe('BaseAgentPromptBuilder — buildContinuationPrompt', () => {
 
     expect(result).not.toBeNull();
     expect(result).toContain('merge/rebase conflict');
+    expect(result).toContain('`origin/main`');
+  });
+
+  it('builds continuation prompt with merge_failed reason using custom rebaseTarget', () => {
+    const feedback = makeFeedbackEntry({
+      entryType: 'implementation_feedback',
+      summary: 'Merge conflict in src/index.ts',
+    });
+    const result = builder.buildContinuationPrompt(makeContext({
+      mode: 'revision',
+      revisionReason: 'merge_failed',
+      rebaseTarget: 'origin/task/abc123/integration',
+      taskContext: [feedback],
+    }));
+
+    expect(result).not.toBeNull();
+    expect(result).toContain('merge/rebase conflict');
+    expect(result).toContain('`origin/task/abc123/integration`');
+    expect(result).not.toContain('origin/main');
   });
 
   it('builds continuation prompt with uncommitted_changes reason', () => {

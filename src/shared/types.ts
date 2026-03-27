@@ -817,6 +817,9 @@ export interface AgentContext {
   resumedFromRunId?: string;
   /** URL of the dev server running in the task's worktree, if any. */
   devServerUrl?: string;
+  /** The branch ref the agent should rebase against (e.g. 'origin/main' or 'origin/task/<id>/integration').
+   *  Set by agent-service based on task type; used by prompt builders for merge_failed revisions. */
+  rebaseTarget?: string;
   /** Additional context data passed by the caller (e.g. linked bug descriptions for post-mortem review). */
   additionalContext?: Record<string, unknown>;
 }
