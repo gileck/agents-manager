@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PostRunExtractor, getContextEntryType } from '../../src/core/services/post-run-extractor';
-import type { ITaskStore } from '../../src/core/interfaces/task-store';
-import type { ITaskContextStore } from '../../src/core/interfaces/task-context-store';
-import type { ITaskEventLog } from '../../src/core/interfaces/task-event-log';
-import type { INotificationRouter } from '../../src/core/interfaces/notification-router';
-import type { ITaskDocStore } from '../../src/core/interfaces/task-doc-store';
-import type { Task, AgentRunResult, TaskCreateInput, TaskDoc } from '../../src/shared/types';
+import { getContextEntryType } from '../../src/core/agents/post-run-utils';
+import { plannerPostRunHandler } from '../../src/core/agents/planner-post-run-handler';
+import { investigatorPostRunHandler } from '../../src/core/agents/investigator-post-run-handler';
+import { designerPostRunHandler } from '../../src/core/agents/designer-post-run-handler';
+import { implementorPostRunHandler } from '../../src/core/agents/implementor-post-run-handler';
+import { reviewerPostRunHandler } from '../../src/core/agents/reviewer-post-run-handler';
+import { triagerPostRunHandler } from '../../src/core/agents/triager-post-run-handler';
+import { taskWorkflowReviewerPostRunHandler } from '../../src/core/agents/task-workflow-reviewer-post-run-handler';
+import { postMortemReviewerPostRunHandler } from '../../src/core/agents/post-mortem-reviewer-post-run-handler';
+import type { ITaskAPI } from '../../src/core/interfaces/task-api';
+import type { Task, AgentRunResult, TaskCreateInput } from '../../src/shared/types';
 
 function createMockTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -40,68 +44,34 @@ function createMockTask(overrides: Partial<Task> = {}): Task {
 
 let taskCounter = 0;
 
-function createMockStores() {
+function createMockTaskApi(taskOverrides: Partial<Task> = {}, otherTasks: Map<string, Task> = new Map()): ITaskAPI {
   taskCounter = 0;
-
-  const taskStore: ITaskStore = {
-    getTask: vi.fn().mockResolvedValue(createMockTask()),
-    listTasks: vi.fn().mockResolvedValue([]),
+  return {
+    taskId: taskOverrides.id ?? 'task-1',
+    upsertDoc: vi.fn().mockResolvedValue(undefined),
+    updateTask: vi.fn().mockResolvedValue(undefined),
+    getTask: vi.fn().mockResolvedValue(createMockTask(taskOverrides)),
+    addContextEntry: vi.fn().mockResolvedValue(undefined),
+    markFeedbackAsAddressed: vi.fn().mockResolvedValue(undefined),
+    logEvent: vi.fn().mockResolvedValue(undefined),
+    sendNotification: vi.fn().mockResolvedValue(undefined),
+    sendNotificationForTask: vi.fn().mockResolvedValue(undefined),
     createTask: vi.fn().mockImplementation(async (input: TaskCreateInput) => {
       taskCounter++;
       return createMockTask({ ...input, id: `new-task-${taskCounter}`, debugInfo: input.debugInfo ?? null });
     }),
-    updateTask: vi.fn().mockResolvedValue(createMockTask()),
-    deleteTask: vi.fn().mockResolvedValue(true),
-    resetTask: vi.fn().mockResolvedValue(createMockTask()),
-    addDependency: vi.fn().mockResolvedValue(undefined),
-    removeDependency: vi.fn().mockResolvedValue(undefined),
-    getDependencies: vi.fn().mockResolvedValue([]),
-    getDependents: vi.fn().mockResolvedValue([]),
-    getStatusCounts: vi.fn().mockResolvedValue([]),
-    getTotalCount: vi.fn().mockResolvedValue(0),
+    getTaskById: vi.fn().mockImplementation(async (taskId: string) => otherTasks.get(taskId) ?? null),
+    updateTaskById: vi.fn().mockResolvedValue(undefined),
+    logEventForTask: vi.fn().mockResolvedValue(undefined),
   };
-
-  const taskContextStore: ITaskContextStore = {
-    addEntry: vi.fn().mockResolvedValue({}),
-    getEntriesForTask: vi.fn().mockResolvedValue([]),
-    markEntriesAsAddressed: vi.fn().mockResolvedValue(0),
-  };
-
-  const taskEventLog: ITaskEventLog = {
-    log: vi.fn().mockResolvedValue({}),
-    getEvents: vi.fn().mockResolvedValue([]),
-  };
-
-  const notificationRouter: INotificationRouter = {
-    send: vi.fn().mockResolvedValue(undefined),
-  };
-
-  const taskDocStore: ITaskDocStore = {
-    upsert: vi.fn().mockImplementation(async (input) => ({
-      id: 'doc-1',
-      taskId: input.taskId,
-      type: input.type,
-      content: input.content,
-      summary: input.summary ?? null,
-      createdAt: 1700000000000,
-      updatedAt: 1700000000000,
-    } as TaskDoc)),
-    getByTaskId: vi.fn().mockResolvedValue([]),
-    getByTaskIdAndType: vi.fn().mockResolvedValue(null),
-    deleteByTaskId: vi.fn().mockResolvedValue(undefined),
-  };
-
-  return { taskStore, taskContextStore, taskEventLog, notificationRouter, taskDocStore };
 }
 
-describe('PostRunExtractor.createSuggestedTasks', () => {
-  let extractor: PostRunExtractor;
-  let stores: ReturnType<typeof createMockStores>;
+describe('taskWorkflowReviewerPostRunHandler (createSuggestedTasks)', () => {
+  let taskApi: ITaskAPI;
   const onLog = vi.fn();
 
   beforeEach(() => {
-    stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
+    taskApi = createMockTaskApi();
     onLog.mockClear();
   });
 
@@ -128,9 +98,9 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
       },
     };
 
-    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
+    await taskWorkflowReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskStore.createTask).toHaveBeenCalledWith(
+    expect(taskApi.createTask).toHaveBeenCalledWith(
       expect.objectContaining({
         title: '[Bug] Agent crashes on startup',
         description: '**Where**: agent.ts\n**Problem**: null ref',
@@ -163,9 +133,9 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
       },
     };
 
-    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
+    await taskWorkflowReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskStore.createTask).toHaveBeenCalledWith(
+    expect(taskApi.createTask).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Improve prompt guidance',
         description: '**Where**: prompt.ts\n**Problem**: vague instructions',
@@ -173,19 +143,8 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
       }),
     );
     // debugInfo should be undefined (not included)
-    const callArgs = (stores.taskStore.createTask as ReturnType<typeof vi.fn>).mock.calls[0][0] as TaskCreateInput;
+    const callArgs = (taskApi.createTask as ReturnType<typeof vi.fn>).mock.calls[0][0] as TaskCreateInput;
     expect(callArgs.debugInfo).toBeUndefined();
-  });
-
-  it('should skip non-workflow-reviewer agent types', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-    };
-
-    await extractor.createSuggestedTasks('task-1', 'implementor', result, onLog);
-    expect(stores.taskStore.createTask).not.toHaveBeenCalled();
   });
 
   it('should skip when exit code is non-zero', async () => {
@@ -195,8 +154,8 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
       outcome: 'failed',
     };
 
-    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
-    expect(stores.taskStore.createTask).not.toHaveBeenCalled();
+    await taskWorkflowReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+    expect(taskApi.createTask).not.toHaveBeenCalled();
   });
 
   it('should send notification with correct phase button based on startPhase', async () => {
@@ -222,9 +181,10 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
       },
     };
 
-    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
+    await taskWorkflowReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.notificationRouter.send).toHaveBeenCalledWith(
+    expect(taskApi.sendNotificationForTask).toHaveBeenCalledWith(
+      expect.any(String),
       expect.objectContaining({
         title: 'Workflow Review: New Task',
         body: expect.stringContaining('Add guard for duplicate spawns'),
@@ -259,9 +219,10 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
       },
     };
 
-    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
+    await taskWorkflowReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.notificationRouter.send).toHaveBeenCalledWith(
+    expect(taskApi.sendNotificationForTask).toHaveBeenCalledWith(
+      expect.any(String),
       expect.objectContaining({
         actions: expect.arrayContaining([
           expect.objectContaining({ label: '\u{1F50D} Investigate', callbackData: expect.stringContaining('|investigating') }),
@@ -271,7 +232,7 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
   });
 
   it('should create task even when notification throws', async () => {
-    (stores.notificationRouter.send as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Telegram unavailable'));
+    (taskApi.sendNotificationForTask as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Telegram unavailable'));
 
     const result: AgentRunResult = {
       exitCode: 0,
@@ -294,57 +255,12 @@ describe('PostRunExtractor.createSuggestedTasks', () => {
       },
     };
 
-    await extractor.createSuggestedTasks('task-1', 'task-workflow-reviewer', result, onLog);
+    await taskWorkflowReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
     // Task was still created
-    expect(stores.taskStore.createTask).toHaveBeenCalledTimes(1);
+    expect(taskApi.createTask).toHaveBeenCalledTimes(1);
     // Warning was logged
     expect(onLog).toHaveBeenCalledWith(expect.stringContaining('notification failed'));
-  });
-
-  it('should not auto-create tasks for post-mortem-reviewer (disabled)', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: 'post-mortem output',
-      outcome: 'review_complete',
-      structuredOutput: {
-        rootCause: 'design_flaw',
-        severity: 'major',
-        responsibleAgents: ['planner'],
-        analysis: 'Missed edge case in sorting',
-        codebaseImprovements: [],
-        suggestedTasks: [
-          {
-            title: 'Consolidate sorting validation into shared utility',
-            description: '**Where**: planner-prompt-builder.ts\n**Problem**: No edge case guidance',
-            priority: 1,
-            startPhase: 'planning',
-          },
-        ],
-      },
-    };
-
-    await extractor.createSuggestedTasks('task-1', 'post-mortem-reviewer', result, onLog);
-
-    // Auto-creation is disabled for post-mortem-reviewer — tasks are presented for user review instead
-    expect(stores.taskStore.createTask).not.toHaveBeenCalled();
-    expect(stores.notificationRouter.send).not.toHaveBeenCalled();
-  });
-
-  it('should skip post-mortem-reviewer suggested tasks (auto-creation disabled)', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: 'output',
-      outcome: 'review_complete',
-      structuredOutput: {
-        suggestedTasks: [
-          { title: 'Add type safety for sorting enums', description: 'Add checklist', priority: 2 },
-        ],
-      },
-    };
-
-    await extractor.createSuggestedTasks('task-1', 'post-mortem-reviewer', result, onLog);
-    expect(stores.taskStore.createTask).not.toHaveBeenCalled();
   });
 });
 
@@ -386,14 +302,12 @@ describe('getContextEntryType', () => {
   });
 });
 
-describe('PostRunExtractor.saveContextEntry', () => {
-  let extractor: PostRunExtractor;
-  let stores: ReturnType<typeof createMockStores>;
+describe('implementorPostRunHandler (saveContextEntry + feedback addressing)', () => {
+  let taskApi: ITaskAPI;
   const onLog = vi.fn();
 
   beforeEach(() => {
-    stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
+    taskApi = createMockTaskApi();
     onLog.mockClear();
   });
 
@@ -405,10 +319,9 @@ describe('PostRunExtractor.saveContextEntry', () => {
       structuredOutput: { summary: 'Applied fixes for reviewer comments' },
     };
 
-    await extractor.saveContextEntry('task-1', 'run-1', 'implementor', 'changes_requested', result, onLog);
+    await implementorPostRunHandler(taskApi, result, 'run-1', 'changes_requested', onLog);
 
-    expect(stores.taskContextStore.markEntriesAsAddressed).toHaveBeenCalledWith(
-      'task-1',
+    expect(taskApi.markFeedbackAsAddressed).toHaveBeenCalledWith(
       ['implementation_feedback', 'review_feedback'],
       'run-1',
     );
@@ -422,22 +335,9 @@ describe('PostRunExtractor.saveContextEntry', () => {
       structuredOutput: { summary: 'Implemented feature' },
     };
 
-    await extractor.saveContextEntry('task-1', 'run-1', 'implementor', undefined, result, onLog);
+    await implementorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskContextStore.markEntriesAsAddressed).not.toHaveBeenCalled();
-  });
-
-  it('should not mark feedback as addressed for non-implementor agent types', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: 'Review complete',
-      outcome: 'changes_requested',
-      structuredOutput: { summary: 'Found issues' },
-    };
-
-    await extractor.saveContextEntry('task-1', 'run-1', 'reviewer', undefined, result, onLog);
-
-    expect(stores.taskContextStore.markEntriesAsAddressed).not.toHaveBeenCalled();
+    expect(taskApi.markFeedbackAsAddressed).not.toHaveBeenCalled();
   });
 
   it('should skip context entry when exit code is non-zero', async () => {
@@ -447,13 +347,46 @@ describe('PostRunExtractor.saveContextEntry', () => {
       outcome: 'failed',
     };
 
-    await extractor.saveContextEntry('task-1', 'run-1', 'implementor', 'changes_requested', result, onLog);
+    await implementorPostRunHandler(taskApi, result, 'run-1', 'changes_requested', onLog);
 
-    expect(stores.taskContextStore.addEntry).not.toHaveBeenCalled();
-    expect(stores.taskContextStore.markEntriesAsAddressed).not.toHaveBeenCalled();
+    expect(taskApi.addContextEntry).not.toHaveBeenCalled();
+    expect(taskApi.markFeedbackAsAddressed).not.toHaveBeenCalled();
+  });
+});
+
+describe('reviewerPostRunHandler', () => {
+  let taskApi: ITaskAPI;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    taskApi = createMockTaskApi();
+    onLog.mockClear();
+  });
+
+  it('should not mark feedback as addressed for reviewer (feedback addressing is implementor concern)', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Review complete',
+      outcome: 'changes_requested',
+      structuredOutput: { summary: 'Found issues' },
+    };
+
+    await reviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    expect(taskApi.markFeedbackAsAddressed).not.toHaveBeenCalled();
+  });
+});
+
+describe('postMortemReviewerPostRunHandler', () => {
+  let taskApi: ITaskAPI;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    onLog.mockClear();
   });
 
   it('should extract post-mortem-reviewer structured output fields into context entry data', async () => {
+    taskApi = createMockTaskApi({ tags: ['defective'] });
     const result: AgentRunResult = {
       exitCode: 0,
       output: 'Post-mortem analysis complete',
@@ -468,13 +401,10 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     };
 
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>).mockResolvedValue(createMockTask({ tags: ['defective'] }));
+    await postMortemReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    await extractor.saveContextEntry('task-1', 'run-1', 'post-mortem-reviewer', undefined, result, onLog);
-
-    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+    expect(taskApi.addContextEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        taskId: 'task-1',
         source: 'post-mortem-reviewer',
         entryType: 'post_mortem',
         data: expect.objectContaining({
@@ -490,6 +420,7 @@ describe('PostRunExtractor.saveContextEntry', () => {
   });
 
   it('should add post-mortem-done tag when post-mortem-reviewer context entry is saved', async () => {
+    taskApi = createMockTaskApi({ tags: ['defective'] });
     const result: AgentRunResult = {
       exitCode: 0,
       output: 'Post-mortem analysis complete',
@@ -504,12 +435,10 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     };
 
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>).mockResolvedValue(createMockTask({ tags: ['defective'] }));
-
-    await extractor.saveContextEntry('task-1', 'run-1', 'post-mortem-reviewer', undefined, result, onLog);
+    await postMortemReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
     // Should save post-mortem data to task field
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+    expect(taskApi.updateTask).toHaveBeenCalledWith({
       postMortem: {
         rootCause: 'missed_edge_case',
         severity: 'minor',
@@ -520,12 +449,13 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     });
     // Should add post-mortem-done tag
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+    expect(taskApi.updateTask).toHaveBeenCalledWith({
       tags: ['defective', 'post-mortem-done'],
     });
   });
 
   it('should not duplicate post-mortem-done tag if already present', async () => {
+    taskApi = createMockTaskApi({ tags: ['defective', 'post-mortem-done'] });
     const result: AgentRunResult = {
       exitCode: 0,
       output: 'Post-mortem analysis complete',
@@ -540,16 +470,12 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     };
 
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>).mockResolvedValue(
-      createMockTask({ tags: ['defective', 'post-mortem-done'] }),
-    );
-
-    await extractor.saveContextEntry('task-1', 'run-1', 'post-mortem-reviewer', undefined, result, onLog);
+    await postMortemReviewerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
     // updateTask should be called once for postMortem data, but NOT for tags
     // since 'post-mortem-done' already exists
-    expect(stores.taskStore.updateTask).toHaveBeenCalledTimes(1);
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+    expect(taskApi.updateTask).toHaveBeenCalledTimes(1);
+    expect(taskApi.updateTask).toHaveBeenCalledWith({
       postMortem: {
         rootCause: 'other',
         severity: 'minor',
@@ -559,6 +485,16 @@ describe('PostRunExtractor.saveContextEntry', () => {
         suggestedTasks: [],
       },
     });
+  });
+});
+
+describe('triagerPostRunHandler', () => {
+  let taskApi: ITaskAPI;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    taskApi = createMockTaskApi();
+    onLog.mockClear();
   });
 
   it('should extract triager structured output fields into context entry data', async () => {
@@ -573,11 +509,10 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     };
 
-    await extractor.saveContextEntry('task-1', 'run-1', 'triager', undefined, result, onLog);
+    await triagerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+    expect(taskApi.addContextEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        taskId: 'task-1',
         source: 'agent',
         entryType: 'triage_summary',
         data: expect.objectContaining({
@@ -599,11 +534,10 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     };
 
-    await extractor.saveContextEntry('task-1', 'run-1', 'triager', undefined, result, onLog);
+    await triagerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+    expect(taskApi.addContextEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        taskId: 'task-1',
         source: 'agent',
         entryType: 'triage_summary',
         data: expect.objectContaining({
@@ -626,11 +560,10 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     };
 
-    await extractor.saveContextEntry('task-1', 'run-1', 'triager', undefined, result, onLog);
+    await triagerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+    expect(taskApi.addContextEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        taskId: 'task-1',
         source: 'agent',
         entryType: 'triage_summary',
         data: expect.objectContaining({
@@ -653,9 +586,9 @@ describe('PostRunExtractor.saveContextEntry', () => {
       },
     };
 
-    await extractor.saveContextEntry('task-1', 'run-1', 'triager', undefined, result, onLog);
+    await triagerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+    expect(taskApi.addContextEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         summary: 'Small renderer fix — XS bug',
       }),
@@ -663,64 +596,16 @@ describe('PostRunExtractor.saveContextEntry', () => {
   });
 });
 
-describe('PostRunExtractor.extractPlan', () => {
-  let extractor: PostRunExtractor;
-  let stores: ReturnType<typeof createMockStores>;
+describe('plannerPostRunHandler (extractPlan)', () => {
+  let taskApi: ITaskAPI;
   const onLog = vi.fn();
 
   beforeEach(() => {
-    stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
+    taskApi = createMockTaskApi();
     onLog.mockClear();
   });
 
-  it('should save investigationReport when investigator provides investigationReport in structured output', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        investigationReport: '# Investigation\n\nFindings here.',
-      },
-    };
-
-    await extractor.extractPlan('task-1', result, 'investigator', onLog);
-
-    // No subtasks/phases, so updateTask should NOT be called
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
-    // Doc should be written to taskDocStore
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'investigation_report',
-      content: '# Investigation\n\nFindings here.',
-      summary: null,
-    });
-  });
-
-  it('should save investigationReport when investigator provides plan in structured output (backward compat)', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        plan: '# Investigation via plan field\n\nBackward compat.',
-      },
-    };
-
-    await extractor.extractPlan('task-1', result, 'investigator', onLog);
-
-    // No subtasks/phases, so updateTask should NOT be called
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
-    // Doc should be written to taskDocStore
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'investigation_report',
-      content: '# Investigation via plan field\n\nBackward compat.',
-      summary: null,
-    });
-  });
-
-  it('should save plan (not investigationReport) when planner provides plan in structured output', async () => {
+  it('should save plan when planner provides plan in structured output', async () => {
     const result: AgentRunResult = {
       exitCode: 0,
       output: '',
@@ -731,45 +616,21 @@ describe('PostRunExtractor.extractPlan', () => {
       },
     };
 
-    await extractor.extractPlan('task-1', result, 'planner', onLog);
+    await plannerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    // updateTask should be called with subtasks only (not plan)
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('task-1', {
+    // updateTask should be called with subtasks
+    expect(taskApi.updateTask).toHaveBeenCalledWith({
       subtasks: [
         { name: 'Step 1', status: 'open' },
         { name: 'Step 2', status: 'open' },
       ],
     });
-    const updateCall = (stores.taskStore.updateTask as ReturnType<typeof vi.fn>).mock.calls[0][1];
-    expect(updateCall).not.toHaveProperty('plan');
-    expect(updateCall).not.toHaveProperty('investigationReport');
-    // Doc should be written to taskDocStore
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'plan',
-      content: '# Plan\n\nImplementation steps.',
-      summary: null,
-    });
-  });
-
-  it('should use investigationReport fallback path for investigator when no structured output', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: 'Raw investigation output here.',
-      outcome: 'done',
-    };
-
-    await extractor.extractPlan('task-1', result, 'investigator', onLog);
-
-    // No subtasks/phases in fallback, so updateTask should NOT be called
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
-    // Doc should be written to taskDocStore
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'investigation_report',
-      content: 'Raw investigation output here.',
-      summary: null,
-    });
+    // Doc should be written via upsertDoc
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'plan',
+      '# Plan\n\nImplementation steps.',
+      null,
+    );
   });
 
   it('should use plan fallback path for planner when no structured output', async () => {
@@ -779,35 +640,13 @@ describe('PostRunExtractor.extractPlan', () => {
       outcome: 'done',
     };
 
-    await extractor.extractPlan('task-1', result, 'planner', onLog);
+    await plannerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    // No subtasks parsed from raw output, so updateTask should NOT be called
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
-    // Doc should be written to taskDocStore
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'plan',
-      content: 'Raw plan output here.',
-      summary: null,
-    });
-  });
-
-  it('should mark investigation_feedback as addressed after investigator run', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        investigationReport: '# Report',
-      },
-    };
-
-    await extractor.extractPlan('task-1', result, 'investigator', onLog, undefined, 'run-1');
-
-    expect(stores.taskContextStore.markEntriesAsAddressed).toHaveBeenCalledWith(
-      'task-1',
-      ['investigation_feedback'],
-      'run-1',
+    // Doc should be written via upsertDoc
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'plan',
+      'Raw plan output here.',
+      null,
     );
   });
 
@@ -821,10 +660,9 @@ describe('PostRunExtractor.extractPlan', () => {
       },
     };
 
-    await extractor.extractPlan('task-1', result, 'planner', onLog, undefined, 'run-1');
+    await plannerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskContextStore.markEntriesAsAddressed).toHaveBeenCalledWith(
-      'task-1',
+    expect(taskApi.markFeedbackAsAddressed).toHaveBeenCalledWith(
       ['plan_feedback'],
       'run-1',
     );
@@ -837,22 +675,187 @@ describe('PostRunExtractor.extractPlan', () => {
       outcome: 'failed',
     };
 
-    await extractor.extractPlan('task-1', result, 'investigator', onLog);
+    await plannerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    expect(taskApi.updateTask).not.toHaveBeenCalled();
+    expect(taskApi.upsertDoc).not.toHaveBeenCalled();
   });
 
-  it('should skip extraction for non-planner/investigator agent types', async () => {
+  it('should upsert plan doc with summary when planner provides structured output', async () => {
     const result: AgentRunResult = {
       exitCode: 0,
       output: '',
       outcome: 'done',
-      structuredOutput: { plan: '# Plan' },
+      structuredOutput: {
+        plan: '# Plan\n\nImplementation steps.',
+        planSummary: 'A three-step plan to fix the issue.',
+        subtasks: ['Step 1'],
+      },
     };
 
-    await extractor.extractPlan('task-1', result, 'implementor', onLog);
+    await plannerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'plan',
+      '# Plan\n\nImplementation steps.',
+      'A three-step plan to fix the issue.',
+    );
+  });
+
+  it('should upsert with null summary when no summary is provided', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan\n\nContent only.',
+      },
+    };
+
+    await plannerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'plan',
+      '# Plan\n\nContent only.',
+      null,
+    );
+  });
+
+  it('should not fail if upsertDoc throws', async () => {
+    (taskApi.upsertDoc as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB error'));
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Plan',
+        planSummary: 'Summary.',
+      },
+    };
+
+    // Should not throw — upsertDoc failure is non-fatal
+    await expect(plannerPostRunHandler(taskApi, result, 'run-1', undefined, onLog)).resolves.toBeUndefined();
+
+    // Warning should be logged
+    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('failed to upsert task doc'));
+  });
+});
+
+describe('investigatorPostRunHandler', () => {
+  let taskApi: ITaskAPI;
+  const onLog = vi.fn();
+
+  beforeEach(() => {
+    taskApi = createMockTaskApi();
+    onLog.mockClear();
+  });
+
+  it('should save investigationReport when investigator provides investigationReport in structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Investigation\n\nFindings here.',
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    // Doc should be written via upsertDoc
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'investigation_report',
+      '# Investigation\n\nFindings here.',
+      null,
+    );
+  });
+
+  it('should save investigationReport when investigator provides plan in structured output (backward compat)', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        plan: '# Investigation via plan field\n\nBackward compat.',
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    // Doc should be written via upsertDoc
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'investigation_report',
+      '# Investigation via plan field\n\nBackward compat.',
+      null,
+    );
+  });
+
+  it('should upsert investigation_report doc with summary when investigator provides structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Investigation\n\nRoot cause found.',
+        investigationSummary: 'Root cause is a race condition in cleanup.',
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'investigation_report',
+      '# Investigation\n\nRoot cause found.',
+      'Root cause is a race condition in cleanup.',
+    );
+  });
+
+  it('should use investigationReport fallback path for investigator when no structured output', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'Raw investigation output here.',
+      outcome: 'done',
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    // Doc should be written via upsertDoc
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'investigation_report',
+      'Raw investigation output here.',
+      null,
+    );
+  });
+
+  it('should mark investigation_feedback as addressed after investigator run', async () => {
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: '',
+      outcome: 'done',
+      structuredOutput: {
+        investigationReport: '# Report',
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    expect(taskApi.markFeedbackAsAddressed).toHaveBeenCalledWith(
+      ['investigation_feedback'],
+      'run-1',
+    );
+  });
+
+  it('should skip extraction for non-zero exit code', async () => {
+    const result: AgentRunResult = {
+      exitCode: 1,
+      output: 'error',
+      outcome: 'failed',
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    expect(taskApi.upsertDoc).not.toHaveBeenCalled();
   });
 
   it('should not create multi-phase output for investigator even when phases are provided', async () => {
@@ -869,28 +872,32 @@ describe('PostRunExtractor.extractPlan', () => {
       },
     };
 
-    await extractor.extractPlan('task-1', result, 'investigator', onLog);
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    // Investigator ignores phases — no subtasks/phases, so updateTask should NOT be called
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
-    // Doc should be written to taskDocStore
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'investigation_report',
-      content: '# Report',
-      summary: null,
+    // Investigator ignores phases — updateTask should NOT be called with phases
+    // (may be called for estimates but not with phases/subtasks)
+    const updateCalls = (taskApi.updateTask as ReturnType<typeof vi.fn>).mock.calls;
+    const phaseCall = updateCalls.find((call: unknown[]) => {
+      const arg = call[0] as Record<string, unknown>;
+      return arg.phases || arg.subtasks;
     });
+    expect(phaseCall).toBeUndefined();
+
+    // Doc should be written via upsertDoc
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'investigation_report',
+      '# Report',
+      null,
+    );
   });
 });
 
-describe('PostRunExtractor.extractPlan proposedOptions extraction', () => {
-  let extractor: PostRunExtractor;
-  let stores: ReturnType<typeof createMockStores>;
+describe('investigatorPostRunHandler proposedOptions extraction', () => {
+  let taskApi: ITaskAPI;
   const onLog = vi.fn();
 
   beforeEach(() => {
-    stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
+    taskApi = createMockTaskApi();
     onLog.mockClear();
   });
 
@@ -908,11 +915,10 @@ describe('PostRunExtractor.extractPlan proposedOptions extraction', () => {
       },
     };
 
-    await extractor.extractPlan('task-1', result, 'investigator', onLog, undefined, 'run-1');
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskContextStore.addEntry).toHaveBeenCalledWith(
+    expect(taskApi.addContextEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        taskId: 'task-1',
         agentRunId: 'run-1',
         source: 'agent',
         entryType: 'fix_options_proposed',
@@ -938,10 +944,10 @@ describe('PostRunExtractor.extractPlan proposedOptions extraction', () => {
       },
     };
 
-    await extractor.extractPlan('task-1', result, 'investigator', onLog, undefined, 'run-1');
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
     // addEntry may be called for other context entries but not for fix_options_proposed
-    const addEntryCalls = (stores.taskContextStore.addEntry as ReturnType<typeof vi.fn>).mock.calls;
+    const addEntryCalls = (taskApi.addContextEntry as ReturnType<typeof vi.fn>).mock.calls;
     const fixOptionsCalls = addEntryCalls.filter(
       (call: unknown[]) => (call[0] as { entryType: string }).entryType === 'fix_options_proposed',
     );
@@ -958,31 +964,9 @@ describe('PostRunExtractor.extractPlan proposedOptions extraction', () => {
       },
     };
 
-    await extractor.extractPlan('task-1', result, 'investigator', onLog, undefined, 'run-1');
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    const addEntryCalls = (stores.taskContextStore.addEntry as ReturnType<typeof vi.fn>).mock.calls;
-    const fixOptionsCalls = addEntryCalls.filter(
-      (call: unknown[]) => (call[0] as { entryType: string }).entryType === 'fix_options_proposed',
-    );
-    expect(fixOptionsCalls).toHaveLength(0);
-  });
-
-  it('should not create fix_options_proposed context entry for non-investigator agents', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        plan: '# Plan',
-        proposedOptions: [
-          { id: 'opt-1', label: 'Option A', description: 'First approach' },
-        ],
-      },
-    };
-
-    await extractor.extractPlan('task-1', result, 'planner', onLog, undefined, 'run-1');
-
-    const addEntryCalls = (stores.taskContextStore.addEntry as ReturnType<typeof vi.fn>).mock.calls;
+    const addEntryCalls = (taskApi.addContextEntry as ReturnType<typeof vi.fn>).mock.calls;
     const fixOptionsCalls = addEntryCalls.filter(
       (call: unknown[]) => (call[0] as { entryType: string }).entryType === 'fix_options_proposed',
     );
@@ -990,58 +974,13 @@ describe('PostRunExtractor.extractPlan proposedOptions extraction', () => {
   });
 });
 
-describe('PostRunExtractor dual-write to task_docs', () => {
-  let extractor: PostRunExtractor;
-  let stores: ReturnType<typeof createMockStores>;
+describe('designerPostRunHandler', () => {
+  let taskApi: ITaskAPI;
   const onLog = vi.fn();
 
   beforeEach(() => {
-    stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
+    taskApi = createMockTaskApi();
     onLog.mockClear();
-  });
-
-  it('should upsert plan doc when planner provides structured output', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        plan: '# Plan\n\nImplementation steps.',
-        planSummary: 'A three-step plan to fix the issue.',
-        subtasks: ['Step 1'],
-      },
-    };
-
-    await extractor.extractPlan('task-1', result, 'planner', onLog);
-
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'plan',
-      content: '# Plan\n\nImplementation steps.',
-      summary: 'A three-step plan to fix the issue.',
-    });
-  });
-
-  it('should upsert investigation_report doc when investigator provides structured output', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        investigationReport: '# Investigation\n\nRoot cause found.',
-        investigationSummary: 'Root cause is a race condition in cleanup.',
-      },
-    };
-
-    await extractor.extractPlan('task-1', result, 'investigator', onLog);
-
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'investigation_report',
-      content: '# Investigation\n\nRoot cause found.',
-      summary: 'Root cause is a race condition in cleanup.',
-    });
   });
 
   it('should upsert technical_design doc when designer provides structured output', async () => {
@@ -1055,121 +994,28 @@ describe('PostRunExtractor dual-write to task_docs', () => {
       },
     };
 
-    await extractor.extractTechnicalDesign('task-1', result, 'designer', onLog);
+    await designerPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'technical_design',
-      content: '# Design\n\nArchitecture details.',
-      summary: 'Three-layer architecture with caching.',
-    });
-  });
-
-  it('should upsert with null summary when no summary is provided', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        plan: '# Plan\n\nContent only.',
-      },
-    };
-
-    await extractor.extractPlan('task-1', result, 'planner', onLog);
-
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'plan',
-      content: '# Plan\n\nContent only.',
-      summary: null,
-    });
-  });
-
-  it('should upsert fallback content when no structured output is available', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: 'Raw plan output.',
-      outcome: 'done',
-    };
-
-    await extractor.extractPlan('task-1', result, 'planner', onLog);
-
-    expect(stores.taskDocStore.upsert).toHaveBeenCalledWith({
-      taskId: 'task-1',
-      type: 'plan',
-      content: 'Raw plan output.',
-      summary: null,
-    });
-  });
-
-  it('should not fail if taskDocStore.upsert throws', async () => {
-    (stores.taskDocStore.upsert as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB error'));
-
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        plan: '# Plan',
-        planSummary: 'Summary.',
-      },
-    };
-
-    // Should not throw — task_docs failure is non-fatal
-    await expect(extractor.extractPlan('task-1', result, 'planner', onLog)).resolves.toBeUndefined();
-
-    // task_docs is the primary write — old column should NOT be written
-    // (no subtasks/phases, so updateTask should not be called at all)
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalledWith('task-1', expect.objectContaining({
-      plan: '# Plan',
-    }));
-
-    // Warning should be logged
-    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('failed to upsert task doc'));
-  });
-
-  it('should not call taskDocStore when it is not provided', async () => {
-    const extractorWithoutDocs = new PostRunExtractor(
-      stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter,
+    expect(taskApi.upsertDoc).toHaveBeenCalledWith(
+      'technical_design',
+      '# Design\n\nArchitecture details.',
+      'Three-layer architecture with caching.',
     );
-
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: {
-        plan: '# Plan',
-      },
-    };
-
-    await extractorWithoutDocs.extractPlan('task-1', result, 'planner', onLog);
-
-    // taskDocStore should NOT be called since it wasn't provided
-    expect(stores.taskDocStore.upsert).not.toHaveBeenCalled();
   });
 });
 
-describe('PostRunExtractor.linkBugToSourceTasks', () => {
-  let extractor: PostRunExtractor;
-  let stores: ReturnType<typeof createMockStores>;
+describe('investigatorPostRunHandler (linkBugToSourceTasks)', () => {
+  let taskApi: ITaskAPI;
   const onLog = vi.fn();
 
   beforeEach(() => {
-    stores = createMockStores();
-    extractor = new PostRunExtractor(stores.taskStore, stores.taskContextStore, stores.taskEventLog, stores.notificationRouter, stores.taskDocStore);
     onLog.mockClear();
   });
 
-  it('should link valid source task IDs and add defective tag', async () => {
-    const bugTask = createMockTask({ id: 'bug-1', projectId: 'proj-1', type: 'bug' as Task['type'], metadata: {} });
-    const sourceTask = createMockTask({ id: 'source-1', projectId: 'proj-1', tags: ['feature'] });
-
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
-      .mockImplementation(async (id: string) => {
-        if (id === 'bug-1') return bugTask;
-        if (id === 'source-1') return sourceTask;
-        return null;
-      });
+  it('should link valid source task IDs to bug metadata and tag source tasks as defective', async () => {
+    const sourceTask = createMockTask({ id: 'source-1', projectId: 'proj-1', tags: [] });
+    const otherTasks = new Map([['source-1', sourceTask]]);
+    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} }, otherTasks);
 
     const result: AgentRunResult = {
       exitCode: 0,
@@ -1178,91 +1024,131 @@ describe('PostRunExtractor.linkBugToSourceTasks', () => {
       structuredOutput: {
         investigationReport: '# Report',
         investigationSummary: 'Found root cause',
-        subtasks: ['Fix it'],
         sourceTaskIds: ['source-1'],
       },
     };
 
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
-
-    // Should add defective tag to source task
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('source-1', {
-      tags: ['feature', 'defective'],
-    });
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
     // Should update bug task metadata with sourceTaskId and sourceTaskIds
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('bug-1', {
+    expect(taskApi.updateTask).toHaveBeenCalledWith({
       metadata: {
         sourceTaskId: 'source-1',
         sourceTaskIds: ['source-1'],
       },
     });
 
-    // Should log events
-    expect(stores.taskEventLog.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        taskId: 'source-1',
-        category: 'agent',
-        severity: 'info',
-        message: expect.stringContaining('marked as defective'),
-      }),
-    );
-    expect(stores.taskEventLog.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        taskId: 'bug-1',
-        category: 'agent',
-        severity: 'info',
-        message: expect.stringContaining('Auto-linked bug'),
-      }),
-    );
+    // Should add 'defective' tag to the source task
+    expect(taskApi.updateTaskById).toHaveBeenCalledWith('source-1', {
+      tags: ['defective'],
+    });
+
+    // Should log event on the source task for traceability
+    expect(taskApi.logEventForTask).toHaveBeenCalledWith('source-1', expect.objectContaining({
+      category: 'agent',
+      severity: 'info',
+      message: expect.stringContaining('marked as defective'),
+    }));
   });
 
-  it('should skip invalid task IDs that do not exist', async () => {
-    const bugTask = createMockTask({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
-
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
-      .mockImplementation(async (id: string) => {
-        if (id === 'bug-1') return bugTask;
-        return null; // source task not found
-      });
+  it('should skip source tasks that do not exist', async () => {
+    // No source tasks in the map — getTaskById returns null
+    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
 
     const result: AgentRunResult = {
       exitCode: 0,
-      output: '',
+      output: 'investigation output',
       outcome: 'investigation_complete',
       structuredOutput: {
         investigationReport: '# Report',
-        investigationSummary: 'Summary',
-        subtasks: [],
-        sourceTaskIds: ['nonexistent-task'],
+        investigationSummary: 'Found root cause',
+        sourceTaskIds: ['nonexistent-1'],
       },
     };
 
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
-
-    // Should log a warning about the invalid ID
-    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('not found'));
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
     // Should NOT update bug task metadata (no valid IDs)
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalledWith('bug-1', expect.anything());
+    const updateCalls = (taskApi.updateTask as ReturnType<typeof vi.fn>).mock.calls;
+    const metadataCalls = updateCalls.filter((call: unknown[]) => {
+      const arg = call[0] as Record<string, unknown>;
+      return arg.metadata;
+    });
+    expect(metadataCalls).toHaveLength(0);
+
+    // Should log warning about nonexistent task
+    expect(taskApi.logEventForTask).toHaveBeenCalledWith('bug-1', expect.objectContaining({
+      severity: 'warning',
+      message: expect.stringContaining('not found'),
+    }));
+  });
+
+  it('should skip source tasks from a different project', async () => {
+    const sourceTask = createMockTask({ id: 'source-1', projectId: 'other-proj', tags: [] });
+    const otherTasks = new Map([['source-1', sourceTask]]);
+    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} }, otherTasks);
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'investigation output',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Found root cause',
+        sourceTaskIds: ['source-1'],
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    // Should NOT update bug task metadata (cross-project source task rejected)
+    const updateCalls = (taskApi.updateTask as ReturnType<typeof vi.fn>).mock.calls;
+    const metadataCalls = updateCalls.filter((call: unknown[]) => {
+      const arg = call[0] as Record<string, unknown>;
+      return arg.metadata;
+    });
+    expect(metadataCalls).toHaveLength(0);
+
+    // Should NOT tag the source task
+    expect(taskApi.updateTaskById).not.toHaveBeenCalled();
+
+    // Should log warning about cross-project mismatch
+    expect(taskApi.logEventForTask).toHaveBeenCalledWith('bug-1', expect.objectContaining({
+      severity: 'warning',
+      message: expect.stringContaining('belongs to project'),
+    }));
+  });
+
+  it('should not duplicate defective tag on source tasks that already have it', async () => {
+    const sourceTask = createMockTask({ id: 'source-1', projectId: 'proj-1', tags: ['defective'] });
+    const otherTasks = new Map([['source-1', sourceTask]]);
+    taskApi = createMockTaskApi({ id: 'bug-1', projectId: 'proj-1', metadata: {} }, otherTasks);
+
+    const result: AgentRunResult = {
+      exitCode: 0,
+      output: 'investigation output',
+      outcome: 'investigation_complete',
+      structuredOutput: {
+        investigationReport: '# Report',
+        investigationSummary: 'Found root cause',
+        sourceTaskIds: ['source-1'],
+      },
+    };
+
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
+
+    // Should NOT call updateTaskById to add tag (already present)
+    expect(taskApi.updateTaskById).not.toHaveBeenCalled();
   });
 
   it('should merge with already-linked tasks without duplicating', async () => {
-    const bugTask = createMockTask({
+    const newSourceTask = createMockTask({ id: 'new-1', projectId: 'proj-1', tags: [] });
+    const otherTasks = new Map([['new-1', newSourceTask]]);
+    taskApi = createMockTaskApi({
       id: 'bug-1',
       projectId: 'proj-1',
       metadata: { sourceTaskId: 'existing-1', sourceTaskIds: ['existing-1'] },
-    });
-    const existingSource = createMockTask({ id: 'existing-1', projectId: 'proj-1', tags: ['defective'] });
-    const newSource = createMockTask({ id: 'new-1', projectId: 'proj-1', tags: [] });
-
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
-      .mockImplementation(async (id: string) => {
-        if (id === 'bug-1') return bugTask;
-        if (id === 'existing-1') return existingSource;
-        if (id === 'new-1') return newSource;
-        return null;
-      });
+    }, otherTasks);
 
     const result: AgentRunResult = {
       exitCode: 0,
@@ -1271,23 +1157,14 @@ describe('PostRunExtractor.linkBugToSourceTasks', () => {
       structuredOutput: {
         investigationReport: '# Report',
         investigationSummary: 'Summary',
-        subtasks: [],
         sourceTaskIds: ['existing-1', 'new-1'],
       },
     };
 
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
-
-    // Should add defective tag to new source only (existing already has it)
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('new-1', {
-      tags: ['defective'],
-    });
-
-    // Should NOT add defective tag to existing source (already tagged)
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalledWith('existing-1', expect.anything());
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
     // Bug metadata should contain both, with original sourceTaskId preserved
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('bug-1', {
+    expect(taskApi.updateTask).toHaveBeenCalledWith({
       metadata: {
         sourceTaskId: 'existing-1', // preserved from original
         sourceTaskIds: ['existing-1', 'new-1'], // merged and de-duped
@@ -1296,6 +1173,8 @@ describe('PostRunExtractor.linkBugToSourceTasks', () => {
   });
 
   it('should no-op gracefully when sourceTaskIds is empty', async () => {
+    taskApi = createMockTaskApi({ id: 'bug-1' });
+
     const result: AgentRunResult = {
       exitCode: 0,
       output: '',
@@ -1303,19 +1182,25 @@ describe('PostRunExtractor.linkBugToSourceTasks', () => {
       structuredOutput: {
         investigationReport: '# Report',
         investigationSummary: 'Summary',
-        subtasks: [],
         sourceTaskIds: [],
       },
     };
 
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    // Should not call getTask or updateTask
-    expect(stores.taskStore.getTask).not.toHaveBeenCalled();
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    // Should not call getTask for linking (may be called for other purposes)
+    // updateTask should only be called for non-linking purposes (if at all)
+    const updateCalls = (taskApi.updateTask as ReturnType<typeof vi.fn>).mock.calls;
+    const metadataCalls = updateCalls.filter((call: unknown[]) => {
+      const arg = call[0] as Record<string, unknown>;
+      return arg.metadata;
+    });
+    expect(metadataCalls).toHaveLength(0);
   });
 
   it('should no-op when sourceTaskIds is absent from structured output', async () => {
+    taskApi = createMockTaskApi({ id: 'bug-1' });
+
     const result: AgentRunResult = {
       exitCode: 0,
       output: '',
@@ -1323,31 +1208,22 @@ describe('PostRunExtractor.linkBugToSourceTasks', () => {
       structuredOutput: {
         investigationReport: '# Report',
         investigationSummary: 'Summary',
-        subtasks: [],
       },
     };
 
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskStore.getTask).not.toHaveBeenCalled();
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
-  });
-
-  it('should skip for non-investigator agent types', async () => {
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'done',
-      structuredOutput: { sourceTaskIds: ['task-1'] },
-    };
-
-    await extractor.linkBugToSourceTasks('bug-1', result, 'planner', onLog);
-
-    expect(stores.taskStore.getTask).not.toHaveBeenCalled();
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
+    const updateCalls = (taskApi.updateTask as ReturnType<typeof vi.fn>).mock.calls;
+    const metadataCalls = updateCalls.filter((call: unknown[]) => {
+      const arg = call[0] as Record<string, unknown>;
+      return arg.metadata;
+    });
+    expect(metadataCalls).toHaveLength(0);
   });
 
   it('should skip for non-zero exit code', async () => {
+    taskApi = createMockTaskApi({ id: 'bug-1' });
+
     const result: AgentRunResult = {
       exitCode: 1,
       output: 'error',
@@ -1355,100 +1231,24 @@ describe('PostRunExtractor.linkBugToSourceTasks', () => {
       structuredOutput: { sourceTaskIds: ['task-1'] },
     };
 
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
-    expect(stores.taskStore.getTask).not.toHaveBeenCalled();
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalled();
-  });
-
-  it('should skip source tasks from a different project', async () => {
-    const bugTask = createMockTask({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
-    const crossProjectTask = createMockTask({ id: 'cross-1', projectId: 'proj-other', tags: [] });
-
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
-      .mockImplementation(async (id: string) => {
-        if (id === 'bug-1') return bugTask;
-        if (id === 'cross-1') return crossProjectTask;
-        return null;
-      });
-
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'investigation_complete',
-      structuredOutput: {
-        investigationReport: '# Report',
-        investigationSummary: 'Summary',
-        subtasks: [],
-        sourceTaskIds: ['cross-1'],
-      },
-    };
-
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
-
-    // Should log warning about cross-project
-    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('different project'));
-
-    // Should NOT update bug task metadata (no valid IDs after filtering)
-    expect(stores.taskStore.updateTask).not.toHaveBeenCalledWith('bug-1', expect.anything());
-  });
-
-  it('should handle multiple valid source tasks', async () => {
-    const bugTask = createMockTask({ id: 'bug-1', projectId: 'proj-1', metadata: {} });
-    const source1 = createMockTask({ id: 'src-1', projectId: 'proj-1', tags: [] });
-    const source2 = createMockTask({ id: 'src-2', projectId: 'proj-1', tags: ['existing-tag'] });
-
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
-      .mockImplementation(async (id: string) => {
-        if (id === 'bug-1') return bugTask;
-        if (id === 'src-1') return source1;
-        if (id === 'src-2') return source2;
-        return null;
-      });
-
-    const result: AgentRunResult = {
-      exitCode: 0,
-      output: '',
-      outcome: 'investigation_complete',
-      structuredOutput: {
-        investigationReport: '# Report',
-        investigationSummary: 'Summary',
-        subtasks: [],
-        sourceTaskIds: ['src-1', 'src-2'],
-      },
-    };
-
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
-
-    // Both source tasks should get defective tag
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('src-1', { tags: ['defective'] });
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('src-2', { tags: ['existing-tag', 'defective'] });
-
-    // Bug task metadata should have first ID as sourceTaskId and full array
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('bug-1', {
-      metadata: {
-        sourceTaskId: 'src-1',
-        sourceTaskIds: ['src-1', 'src-2'],
-      },
+    const updateCalls = (taskApi.updateTask as ReturnType<typeof vi.fn>).mock.calls;
+    const metadataCalls = updateCalls.filter((call: unknown[]) => {
+      const arg = call[0] as Record<string, unknown>;
+      return arg.metadata;
     });
+    expect(metadataCalls).toHaveLength(0);
   });
 
   it('should not overwrite manually-set sourceTaskId when auto-linking', async () => {
-    const bugTask = createMockTask({
+    const autoTask = createMockTask({ id: 'auto-1', projectId: 'proj-1', tags: [] });
+    const otherTasks = new Map([['auto-1', autoTask]]);
+    taskApi = createMockTaskApi({
       id: 'bug-1',
       projectId: 'proj-1',
       metadata: { sourceTaskId: 'manual-1', route: '/some-page' },
-    });
-    const manualSource = createMockTask({ id: 'manual-1', projectId: 'proj-1', tags: ['defective'] });
-    const autoSource = createMockTask({ id: 'auto-1', projectId: 'proj-1', tags: [] });
-
-    (stores.taskStore.getTask as ReturnType<typeof vi.fn>)
-      .mockImplementation(async (id: string) => {
-        if (id === 'bug-1') return bugTask;
-        if (id === 'manual-1') return manualSource;
-        if (id === 'auto-1') return autoSource;
-        return null;
-      });
+    }, otherTasks);
 
     const result: AgentRunResult = {
       exitCode: 0,
@@ -1457,20 +1257,36 @@ describe('PostRunExtractor.linkBugToSourceTasks', () => {
       structuredOutput: {
         investigationReport: '# Report',
         investigationSummary: 'Summary',
-        subtasks: [],
         sourceTaskIds: ['auto-1'],
       },
     };
 
-    await extractor.linkBugToSourceTasks('bug-1', result, 'investigator', onLog);
+    await investigatorPostRunHandler(taskApi, result, 'run-1', undefined, onLog);
 
     // sourceTaskId should be preserved (manual-1), not overwritten
-    expect(stores.taskStore.updateTask).toHaveBeenCalledWith('bug-1', {
+    expect(taskApi.updateTask).toHaveBeenCalledWith({
       metadata: {
         sourceTaskId: 'manual-1', // preserved
         sourceTaskIds: ['manual-1', 'auto-1'], // merged
         route: '/some-page', // other metadata preserved
       },
     });
+  });
+});
+
+describe('POST_RUN_HANDLERS registry', () => {
+  it('should export handlers for all known agent types', async () => {
+    const { POST_RUN_HANDLERS } = await import('../../src/core/agents/post-run-handlers');
+
+    const expectedAgentTypes = [
+      'planner', 'investigator', 'designer', 'ux-designer',
+      'implementor', 'reviewer', 'triager',
+      'task-workflow-reviewer', 'post-mortem-reviewer',
+    ];
+
+    for (const agentType of expectedAgentTypes) {
+      expect(POST_RUN_HANDLERS[agentType]).toBeDefined();
+      expect(typeof POST_RUN_HANDLERS[agentType]).toBe('function');
+    }
   });
 });

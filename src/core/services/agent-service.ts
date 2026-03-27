@@ -37,7 +37,9 @@ import { now } from '../stores/utils';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 import { SubtaskSyncInterceptor } from './subtask-sync-interceptor';
 import { AgentOutputFlusher } from './agent-output-flusher';
-import { PostRunExtractor } from './post-run-extractor';
+import { TaskAPI } from './task-api';
+import { POST_RUN_HANDLERS } from '../agents/post-run-handlers';
+import { analyzeRunMessages } from './run-diagnostics-analyzer';
 import { getAppLogger } from './app-logger';
 import { formatSystemNotification } from './pipeline-notification-context';
 
@@ -63,7 +65,6 @@ export class AgentService implements IAgentService {
   private spawningTasks = new Set<string>();
   /** Interrupted runs awaiting session resume on next execute() for the same task. */
   private pendingResumes = new Map<string, import('../../shared/types').AgentRun>();
-  private readonly postRunExtractor: PostRunExtractor;
 
   private enqueueInjectedMessage?: (
     sessionId: string,
@@ -97,9 +98,7 @@ export class AgentService implements IAgentService {
     ) => void,
     private onTaskUpdated?: (taskId: string, task: import('../../shared/types').Task) => void,
     private taskDocStore?: ITaskDocStore,
-  ) {
-    this.postRunExtractor = new PostRunExtractor(this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter, this.taskDocStore);
-  }
+  ) {}
 
   setInjectedMessageHandler(
     handler: (sessionId: string, content: string, metadata: Record<string, unknown>) => void,
@@ -1017,23 +1016,32 @@ export class AgentService implements IAgentService {
         }
       }
 
-      // --- Post-run extraction (plan, technical design, context entry) ---
+      // --- Post-run handler: per-agent persistence via TaskAPI ---
       const postRunLog = (message: string) => {
         this.taskEventLog.log({ taskId, category: 'agent_debug', severity: 'debug', message }).catch(() => {});
       };
       const extractionPostLog = (message: string, details?: Record<string, unknown>, durationMs?: number) => {
         emitPostLog('extraction', message, details, durationMs);
       };
-      await this.postRunExtractor.extractDoc(taskId, result, agentType, postRunLog, context.revisionReason, run.id, extractionPostLog);
-      await this.postRunExtractor.extractTaskEstimates(taskId, result, agentType, postRunLog, extractionPostLog);
-      await this.postRunExtractor.saveContextEntry(taskId, run.id, agentType, context.revisionReason, result, postRunLog, extractionPostLog);
-      await this.postRunExtractor.createSuggestedTasks(taskId, agentType, result, postRunLog, extractionPostLog);
-      await this.postRunExtractor.linkBugToSourceTasks(taskId, result, agentType, postRunLog, extractionPostLog);
+      const handler = POST_RUN_HANDLERS[agentType];
+      if (handler) {
+        const taskApiInstance = new TaskAPI(taskId, this.taskStore, this.taskContextStore, this.taskEventLog, this.notificationRouter, this.taskDocStore);
+        await handler(taskApiInstance, result, run.id, context.revisionReason, postRunLog, extractionPostLog);
+      } else {
+        postRunLog(`No post-run handler registered for agent type "${agentType}" — skipping extraction`);
+      }
 
-      // Compute and persist run diagnostics
-      const diagnostics = this.postRunExtractor.computeRunDiagnostics(flusher.getBufferedMessages(), result);
-      if (diagnostics) {
-        await this.agentRunStore.updateRun(run.id, { diagnostics });
+      // Compute and persist run diagnostics (pure computation, agent-type-independent)
+      const bufferedMessages = flusher.getBufferedMessages();
+      if (bufferedMessages && bufferedMessages.length > 0) {
+        try {
+          const diagnostics = analyzeRunMessages(bufferedMessages, !!result.structuredOutput);
+          if (diagnostics) {
+            await this.agentRunStore.updateRun(run.id, { diagnostics });
+          }
+        } catch {
+          // Non-fatal — diagnostics are best-effort
+        }
       }
 
       // Extract summary for outcome transition context (previously done by appendSummaryComment)

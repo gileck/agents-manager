@@ -588,6 +588,10 @@ After each successful agent run (exitCode === 0), a context entry is saved:
 
 The summary is extracted from the agent's structured output (`planSummary`, `investigationSummary`, `designSummary`, or `summary` field). Context entries are loaded and prepended to subsequent agent prompts, giving each run knowledge of prior work.
 
+### Post-Run Handler Pattern
+
+After each agent run, `agent-service.ts` creates a task-scoped `TaskAPI` instance and invokes the agent's registered post-run handler from `POST_RUN_HANDLERS` (`src/core/agents/post-run-handlers.ts`). Each handler is a plain function colocated with its prompt builder (e.g., `planner-post-run-handler.ts` beside `planner-prompt-builder.ts`). The handler maps the agent's structured output to `TaskAPI` persistence calls (upsert docs, update task, save context entries, mark feedback as addressed). Shared utilities live in `src/core/agents/post-run-utils.ts`.
+
 ## Orphan Recovery
 
 On startup, `recoverOrphanedRuns()`:
