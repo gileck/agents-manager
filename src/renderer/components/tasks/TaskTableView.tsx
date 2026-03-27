@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUp, ArrowDown, ChevronsUpDown, Search, ChevronDown, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
@@ -59,6 +59,15 @@ const NAMED_COLOR_CSS: Record<string, string> = {
   yellow: '#eab308',
   orange: '#f97316',
 };
+
+function useDebouncedCallback(callback: (value: string) => void, delay: number) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { clearTimeout(timerRef.current); }, []);
+  return (value: string) => {
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => callback(value), delay);
+  };
+}
 
 function getStatusDotColor(status: string, pipeline: Pipeline | null): string | undefined {
   if (!pipeline) return undefined;
@@ -167,6 +176,19 @@ export function TaskTableView() {
   const [filters, setFilters] = useLocalStorage<FilterState>('taskTable.filters', EMPTY_FILTERS);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
 
+  // Debounced search — type into local state, propagate to filters after 300ms
+  const [localSearch, setLocalSearch] = useState(filters.search);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  const debouncedSearch = useDebouncedCallback(
+    (value) => setFilters({ ...filtersRef.current, search: value }),
+    300,
+  );
+
+  // Sync local search when parent resets filters (e.g. "Clear all")
+  useEffect(() => { setLocalSearch(filters.search); }, [filters.search]);
+
   // Build backend filter from UI state
   const taskFilter: TaskFilter = {};
   if (currentProjectId) taskFilter.projectId = currentProjectId;
@@ -230,7 +252,8 @@ export function TaskTableView() {
     return COLUMNS.reduce((sum, col) => sum + (columnWidths[col.field] ?? col.defaultWidth), 0);
   }, [columnWidths]);
 
-  const activeFilterCount = countActiveFilters(filters);
+  // Count only panel-resident filters (not search, which is always visible inline)
+  const activeFilterCount = countActiveFilters({ ...filters, search: '' });
   const hasActiveFilters = activeFilterCount > 0;
 
   const handleSort = (field: TableSortField) => {
@@ -297,8 +320,11 @@ export function TaskTableView() {
             <input
               type="text"
               placeholder="Search tasks..."
-              value={filters.search}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              value={localSearch}
+              onChange={(e) => {
+                setLocalSearch(e.target.value);
+                debouncedSearch(e.target.value);
+              }}
               className="h-8 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
