@@ -61,6 +61,16 @@ export function DocsPanel({
     ? contextEntries.filter(e => e.entryType === selectedPhase.feedbackType)
     : [];
 
+  // Fix options for investigation_review
+  const fixOptions = useMemo<ProposedFixOption[] | null>(() => {
+    if (!isSelectedInReview || task.status !== 'investigation_review') return null;
+    const entry = [...contextEntries]
+      .filter(e => e.entryType === 'fix_options_proposed')
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+    const options = (entry?.data as { options?: ProposedFixOption[] })?.options;
+    return options && options.length > 0 ? options : null;
+  }, [isSelectedInReview, task.status, contextEntries]);
+
   // Find approve transition
   const approveTransition = transitions.find(t => t.to === 'implementing');
 
@@ -173,34 +183,19 @@ export function DocsPanel({
             <PlanMarkdown content={selectedDoc.content} />
 
             {/* Fix option cards for investigation_review — shown right after report content */}
-            {isSelectedInReview && task.status === 'investigation_review' && (() => {
-              const fixOptionsEntry = [...contextEntries]
-                .filter(e => e.entryType === 'fix_options_proposed')
-                .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
-              const fixOptions = (fixOptionsEntry?.data as { options?: ProposedFixOption[] })?.options;
-              if (fixOptions && fixOptions.length > 0) {
-                return (
-                  <FixOptionCards
-                    options={fixOptions}
-                    taskId={task.id}
-                    taskTitle={task.title}
-                    transitions={transitions}
-                    transitioning={transitioning}
-                    onTransition={(toStatus) => onAction(toStatus, '', selectedPhase.feedbackType)}
-                  />
-                );
-              }
-              return null;
-            })()}
+            {fixOptions && (
+              <FixOptionCards
+                options={fixOptions}
+                taskId={task.id}
+                taskTitle={task.title}
+                transitions={transitions}
+                transitioning={transitioning}
+                onTransition={(toStatus) => onAction(toStatus, '', selectedPhase.feedbackType)}
+              />
+            )}
 
             {/* Quick approve button during review (non-investigation or no fix options) */}
-            {isSelectedInReview && approveTransition && !(task.status === 'investigation_review' && (() => {
-              const fixOptionsEntry = [...contextEntries]
-                .filter(e => e.entryType === 'fix_options_proposed')
-                .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
-              const fixOptions = (fixOptionsEntry?.data as { options?: ProposedFixOption[] })?.options;
-              return fixOptions && fixOptions.length > 0;
-            })()) && (
+            {isSelectedInReview && approveTransition && !fixOptions && (
               <div style={{ display: 'flex', gap: 8, paddingTop: 16, marginTop: 16, borderTop: '1px solid var(--border)' }}>
                 <Button
                   onClick={() => onAction(approveTransition.to, '', selectedPhase?.feedbackType ?? '')}

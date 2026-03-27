@@ -5,6 +5,7 @@ import { Button } from '../ui/button';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { reportError } from '../../lib/error-handler';
 import { buildFixOptionSummary } from '../../utils/fix-option-summary';
+import { isEscapeTransition } from '../../utils/getRecommendedTransition';
 import type { ProposedFixOption, Transition } from '../../../shared/types';
 
 // ─── Size → target status mapping ─────────────────────────────────────────────
@@ -89,9 +90,14 @@ export function FixOptionCards({
   const [overrideTarget, setOverrideTarget] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Forward transitions only (exclude escape transitions like "Request Investigation Changes")
+  // Forward transitions only (for the fix option cards' primary actions)
   const forwardTransitions = transitions.filter(
     t => t.to === 'implementing' || t.to === 'planning' || t.to === 'designing'
+  );
+
+  // Non-forward transitions (e.g. "Request Investigation Changes") — rendered separately
+  const escapeTransitions = transitions.filter(
+    t => !forwardTransitions.some(ft => ft.to === t.to) && !isEscapeTransition(t)
   );
 
   const handleSelectOption = useCallback(async (option: ProposedFixOption) => {
@@ -171,8 +177,8 @@ export function FixOptionCards({
         {options.map((option) => {
           const size = inferSize(option);
           const colors = SIZE_COLORS[size];
-          const defaultTarget = overrideTarget[option.id] ?? getDefaultTarget(size, forwardTransitions);
-          const defaultLabel = SIZE_LABELS[size];
+          const resolvedTarget = overrideTarget[option.id] ?? getDefaultTarget(size, forwardTransitions);
+          const buttonLabel = OVERRIDE_TARGETS.find(t => t.status === resolvedTarget)?.label ?? SIZE_LABELS[size];
           const isExpanded = expandedId === option.id;
 
           return (
@@ -295,13 +301,13 @@ export function FixOptionCards({
                   onClick={() => handleSelectOption(option)}
                   disabled={isDisabled}
                 >
-                  {saving ? 'Saving...' : `${defaultLabel} →`}
+                  {saving ? 'Saving...' : `${buttonLabel} →`}
                 </Button>
 
                 {/* Override target dropdown */}
                 {forwardTransitions.length > 1 && (
                   <select
-                    value={defaultTarget}
+                    value={resolvedTarget}
                     onChange={(e) => setOverrideTarget(prev => ({ ...prev, [option.id]: e.target.value }))}
                     disabled={isDisabled}
                     title="Override target phase"
@@ -350,6 +356,29 @@ export function FixOptionCards({
           );
         })}
       </div>
+
+      {/* Non-forward transitions (e.g. "Request Investigation Changes") */}
+      {escapeTransitions.length > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginTop: compact ? 8 : 12,
+          flexWrap: 'wrap',
+        }}>
+          {escapeTransitions.map((t) => (
+            <Button
+              key={t.to}
+              variant="outline"
+              size="sm"
+              onClick={() => onTransition(t.to)}
+              disabled={isDisabled}
+            >
+              {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

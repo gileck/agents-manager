@@ -28,7 +28,7 @@ interface ReportPageProps {
 export function ReportPage({ config }: ReportPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [transitioning, setTransitioning] = useState(false);
+  const [transitioning, setTransitioning] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useLocalStorage(config.chatStorageKey, true);
 
   const { task, refetch } = useTask(id!);
@@ -116,7 +116,7 @@ export function ReportPage({ config }: ReportPageProps) {
 
   const handleTransition = useCallback(async (toStatus: string) => {
     if (!id) return;
-    setTransitioning(true);
+    setTransitioning(toStatus);
     try {
       const result = await window.api.tasks.transition(id, toStatus, 'admin');
       if (result.success) {
@@ -131,7 +131,7 @@ export function ReportPage({ config }: ReportPageProps) {
     } catch (err) {
       reportError(err instanceof Error ? err : new Error(String(err)), 'Review transition');
     } finally {
-      setTransitioning(false);
+      setTransitioning(null);
     }
   }, [id, refetch, refetchTransitions, navigate]);
 
@@ -209,7 +209,7 @@ export function ReportPage({ config }: ReportPageProps) {
 
   const actionButtons = isReviewStatus && approveTransition ? (
     <>
-      <Button size="sm" disabled={transitioning} onClick={() => handleFeedbackAction(approveTransition.to, '')}>
+      <Button size="sm" disabled={transitioning !== null} onClick={() => handleFeedbackAction(approveTransition.to, '')}>
         {transitioning ? 'Submitting...' : approveTransition.label || 'Approve & Implement'}
       </Button>
       {chatToggleButton}
@@ -239,7 +239,7 @@ export function ReportPage({ config }: ReportPageProps) {
               taskId={id}
               taskTitle={task.title}
               transitions={transitions ?? []}
-              transitioning={transitioning ? 'transitioning' : null}
+              transitioning={transitioning}
               onTransition={handleTransition}
             />
           )}
@@ -267,7 +267,7 @@ export function ReportPage({ config }: ReportPageProps) {
             onSend={sendMessage}
             onStop={stopChat}
             onRequestChanges={reviseTransition ? (comment) => handleFeedbackAction(reviseTransition.to, comment ?? '') : undefined}
-            requestingChanges={transitioning}
+            requestingChanges={transitioning !== null}
             hasConversation={chatEntries.length > 0}
             placeholder={config.chatPlaceholder}
           />
