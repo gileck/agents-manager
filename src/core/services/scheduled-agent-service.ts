@@ -9,6 +9,7 @@ import type { AgentLibRegistry } from './agent-lib-registry';
 import type { IAgentLib, AgentLibCallbacks } from '../interfaces/agent-lib';
 import { computeNextRunAt } from './automated-agent-schedule';
 import { getAppLogger } from './app-logger';
+import { getGlobalAgentReadOnlyPaths } from '../utils/user-paths';
 
 const DEFAULT_REPORT_OUTPUT_FORMAT = {
   type: 'json_schema',
@@ -206,7 +207,10 @@ export class ScheduledAgentService implements IScheduledAgentService {
         timeoutMs: agent.maxRunDurationMs,
         readOnly: agent.capabilities.readOnly,
         allowedPaths: [project.path!],
-        readOnlyPaths: agent.capabilities.readOnly ? [project.path!] : [],
+        readOnlyPaths: [
+          ...(agent.capabilities.readOnly ? [project.path!] : []),
+          ...getGlobalAgentReadOnlyPaths(),
+        ],
         outputFormat,
       }, callbacks);
 
