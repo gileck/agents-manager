@@ -99,4 +99,64 @@ describe('max_retries guard', () => {
     // 3 failed runs with max=3: count(3) is NOT > max(3), so allowed
     expect(result.success).toBe(true);
   });
+
+  it('should count failures per agent type, not globally', async () => {
+    // Create 4 failed runs for OTHER agent types (triager x2, investigator x2)
+    // These should NOT count towards the planner's retry budget
+    for (const agentType of ['triager', 'triager', 'investigator', 'investigator']) {
+      const run = await ctx.agentRunStore.createRun({
+        taskId,
+        agentType,
+        mode: 'new',
+      });
+      await ctx.agentRunStore.updateRun(run.id, { status: 'failed', output: 'startup error' });
+    }
+
+    // Task is at 'planning' status (from beforeEach).
+    // planning→planning (failed) auto-retry has max_retries(max:3) guard
+    // and start_agent(planner) hook.
+    // There are 4 total failed runs, but 0 are for 'planner',
+    // so the guard should allow it.
+    const task = await ctx.taskStore.getTask(taskId);
+    const result = await ctx.pipelineEngine.executeTransition(task!, 'planning', {
+      trigger: 'agent',
+      data: { outcome: 'failed' },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should block when per-agent-type retries exceeded', async () => {
+    // Create 4 failed runs specifically for 'planner' (exceeds max=3)
+    for (let i = 0; i < 4; i++) {
+      const run = await ctx.agentRunStore.createRun({
+        taskId,
+        agentType: 'planner',
+        mode: 'new',
+      });
+      await ctx.agentRunStore.updateRun(run.id, { status: 'failed', output: 'error' });
+    }
+
+    // Also create some failed runs for other agents — should not affect planner count
+    for (const agentType of ['triager', 'investigator']) {
+      const run = await ctx.agentRunStore.createRun({
+        taskId,
+        agentType,
+        mode: 'new',
+      });
+      await ctx.agentRunStore.updateRun(run.id, { status: 'failed', output: 'error' });
+    }
+
+    const task = await ctx.taskStore.getTask(taskId);
+    // planning→planning (failed) auto-retry has start_agent(planner) hook
+    const result = await ctx.pipelineEngine.executeTransition(task!, 'planning', {
+      trigger: 'agent',
+      data: { outcome: 'failed' },
+    });
+
+    // 4 planner failures > max(3), so should be blocked
+    expect(result.success).toBe(false);
+    expect(result.guardFailures).toBeDefined();
+    expect(result.guardFailures!.some(g => g.guard === 'max_retries')).toBe(true);
+  });
 });

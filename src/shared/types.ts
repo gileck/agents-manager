@@ -546,7 +546,7 @@ export interface TransitionHistoryEntry {
 
 export interface IGuardQueryContext {
   countUnresolvedDependencies(taskId: string): number;
-  countFailedRuns(taskId: string): number;
+  countFailedRuns(taskId: string, agentType?: string): number;
   countRunningRuns(taskId: string): number;
   getUserRole(username: string): 'admin' | 'user' | null;
 }

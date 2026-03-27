@@ -13,6 +13,6 @@ export interface IAgentRunStore {
   getAllRuns(limit?: number): Promise<AgentRun[]>;
   getRunsForAutomatedAgent(automatedAgentId: string, limit?: number): Promise<AgentRun[]>;
   getActiveRunForAutomatedAgent(automatedAgentId: string): Promise<AgentRun | null>;
-  countFailedRunsSync(taskId: string): number;
+  countFailedRunsSync(taskId: string, agentType?: string): number;
   countRunningRunsSync(taskId: string): number;
 }
