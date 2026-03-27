@@ -157,6 +157,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       prompt = rcLines.join('\n');
     } else if (mode === 'revision' && revisionReason === 'merge_failed') {
       // resolve merge failure (conflicts, failing CI checks, etc.)
+      const rebaseTarget = context.rebaseTarget ?? 'origin/main';
       const mfLines = [
         `The branch for this task has merge conflicts or the PR merge failed. Fix the issue so the branch can be merged cleanly.`,
         ``,
@@ -188,13 +189,13 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       mfLines.push(
         '',
         '## Instructions',
-        '1. Run `git fetch origin` to get the latest main.',
-        '2. Read the conflicting files and understand both sides before rebasing — know what main changed and what this branch changed.',
-        '3. Run `git rebase origin/main` to start the rebase.',
+        `1. Run \`git fetch origin\` to get the latest upstream changes.`,
+        `2. Read the conflicting files and understand both sides before rebasing — know what the base branch changed and what this branch changed.`,
+        `3. Run \`git rebase ${rebaseTarget}\` to start the rebase.`,
         '4. For each conflict, resolve by preserving the intent of both changes, then `git add` the resolved files.',
         '5. Run `git rebase --continue` after resolving each conflict.',
         '6. If the merge failure was caused by **failing CI checks** (see details above), investigate and fix the code issues.',
-        '7. Once the rebase is complete, run `yarn checks` (or the project equivalent). If checks fail, compare against `origin/main` — if the same failures exist on main, they are pre-existing and should be ignored. If tests fail due to **timeouts**, retry with an extended timeout: `TEST_TIMEOUT=60000 yarn checks`.',
+        `7. Once the rebase is complete, run \`yarn checks\` (or the project equivalent). If checks fail, compare against \`${rebaseTarget}\` — if the same failures exist on the base branch, they are pre-existing and should be ignored. If tests fail due to **timeouts**, retry with an extended timeout: \`TEST_TIMEOUT=60000 yarn checks\`.`,
         '8. Do NOT push — the pipeline will handle pushing after you finish.',
       );
       prompt = mfLines.join('\n');
