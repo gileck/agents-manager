@@ -186,6 +186,7 @@ export function createTestContext(): TestContext {
   const outcomeResolver = new OutcomeResolver(
     () => gitOps, pipelineEngine, taskStore,
     taskPhaseStore, taskArtifactStore, taskEventLog,
+    agentRunStore,
   );
 
   // Agent service (pass factory functions that return the shared stubs)
