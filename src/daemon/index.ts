@@ -81,6 +81,13 @@ async function main() {
   const wsServer = new DaemonWsServer(httpServer);
   wsHolder.server = wsServer;
 
+  // Reset any chat sessions stuck in non-idle status from a prior crash
+  try {
+    await services.chatAgentService.initialize();
+  } catch (err) {
+    services.appLogger.logError('daemon', 'Failed to reset stale chat session statuses', err);
+  }
+
   // Wire injected event handler so Tier 2 injected messages stream to the correct WS channels
   services.chatAgentService.setInjectedEventHandler((sessionId) => {
     return (event: import('../shared/types').ChatAgentEvent) => {

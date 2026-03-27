@@ -120,6 +120,8 @@ describe('ChatAgentService', () => {
       listSessionsForProject: vi.fn(),
       updateSession: vi.fn(),
       deleteSession: vi.fn(),
+      updateSessionStatus: vi.fn().mockResolvedValue(undefined),
+      resetStaleStatuses: vi.fn().mockResolvedValue(undefined),
     };
 
     mockProjectStore = {

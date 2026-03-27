@@ -105,4 +105,8 @@ export function registerChatSessionHandlers(api: ApiClient): void {
   registerIpcHandler(IPC_CHANNELS.CHAT_PERMISSION_RESPONSE, async (_, sessionId: string, requestId: string, allowed: boolean) => {
     return api.chat.sendPermissionResponse(sessionId, requestId, allowed);
   });
+
+  registerIpcHandler(IPC_CHANNELS.CHAT_SESSION_STATUS, async (_, sessionId: string) => {
+    return api.chat.getSessionStatus(sessionId);
+  });
 }

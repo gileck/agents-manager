@@ -54,6 +54,7 @@ import type {
   InAppNotification,
   InAppNotificationFilter,
   PermissionMode,
+  ChatSessionStatus,
   DevServerInfo,
   AgentNotificationPayload,
   StopAgentResult,
@@ -264,6 +265,7 @@ export interface ApiShape {
     trackTask(sessionId: string, taskId: string): Promise<void>;
     untrackTask(sessionId: string, taskId: string): Promise<void>;
     answerQuestion(sessionId: string, questionId: string, answers: Record<string, string>): Promise<void>;
+    sessionStatus(sessionId: string): Promise<{ status: ChatSessionStatus }>;
   };
 
   // Chat session operations

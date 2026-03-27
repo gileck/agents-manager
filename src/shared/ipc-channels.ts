@@ -260,6 +260,9 @@ export const IPC_CHANNELS = {
   // Chat question answering
   CHAT_ANSWER_QUESTION: 'chat:answer-question',
 
+  // Chat session status polling
+  CHAT_SESSION_STATUS: 'chat:session:status',
+
   // Worktree file operations
   WORKTREE_FILE_URL: 'worktree-file:url',
   WORKTREE_FILE_READ: 'worktree-file:read',

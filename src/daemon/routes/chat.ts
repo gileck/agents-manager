@@ -159,6 +159,18 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
     } catch (err) { next(err); }
   });
 
+  // GET /api/chat/sessions/:id/status — lightweight status poll for heartbeat
+  router.get('/api/chat/sessions/:id/status', async (req, res, next) => {
+    try {
+      const session = await services.chatSessionStore.getSession(req.params.id);
+      if (!session) {
+        res.status(404).json({ error: 'Session not found' });
+        return;
+      }
+      res.json({ status: session.status });
+    } catch (err) { next(err); }
+  });
+
   // DELETE /api/chat/sessions/:id — delete session
   router.delete('/api/chat/sessions/:id', async (req, res, next) => {
     try {

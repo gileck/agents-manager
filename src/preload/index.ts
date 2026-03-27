@@ -224,6 +224,7 @@ const IPC_CHANNELS = {
   CHAT_TRACK_TASK: 'chat:track-task',
   CHAT_UNTRACK_TASK: 'chat:untrack-task',
   CHAT_ANSWER_QUESTION: 'chat:answer-question',
+  CHAT_SESSION_STATUS: 'chat:session:status',
   WORKTREE_FILE_URL: 'worktree-file:url',
   WORKTREE_FILE_READ: 'worktree-file:read',
   SCREENSHOT_SAVE: 'screenshot:save',
@@ -549,6 +550,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_UNTRACK_TASK, sessionId, taskId),
     answerQuestion: (sessionId: string, questionId: string, answers: Record<string, string>): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_ANSWER_QUESTION, sessionId, questionId, answers),
+    sessionStatus: (sessionId: string): Promise<{ status: import('../shared/types').ChatSessionStatus }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_STATUS, sessionId),
   },
 
   // Chat session operations

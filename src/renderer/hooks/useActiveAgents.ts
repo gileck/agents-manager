@@ -22,8 +22,8 @@ export function useActiveAgents() {
     setLoading(true);
     fetchAgents().finally(() => setLoading(false));
 
-    // Poll every 2 seconds
-    const intervalId = setInterval(fetchAgents, 2000);
+    // Poll every 5 seconds (individual session status is now server-authoritative via useChat)
+    const intervalId = setInterval(fetchAgents, 5000);
 
     return () => clearInterval(intervalId);
   }, []);

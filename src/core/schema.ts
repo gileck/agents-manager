@@ -112,6 +112,7 @@ export const BASELINE_MIGRATION_NAMES: string[] = [
   '118_add_investigation_report_to_tasks',
   '119_add_post_mortem_to_tasks',
   '120_backfill_post_mortem_from_context_entries',
+  '123_add_status_to_chat_sessions',
 ];
 
 function escSql(s: string): string {
@@ -399,7 +400,8 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   source TEXT NOT NULL DEFAULT 'desktop',
   sidebar_hidden INTEGER NOT NULL DEFAULT 0,
   system_prompt_append TEXT DEFAULT NULL,
-  task_ids TEXT NOT NULL DEFAULT '[]'
+  task_ids TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'idle'
 );
 
 CREATE TABLE IF NOT EXISTS chat_messages (

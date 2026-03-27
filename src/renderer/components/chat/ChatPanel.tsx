@@ -55,6 +55,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
   const {
     messages,
     isStreaming,
+    isWaitingForInput,
     isQueued,
     loading,
     error,
@@ -119,10 +120,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     [agents, scope.type, scope.id],
   );
 
-  const isWaitingForInput = useMemo(
-    () => agents.some((a) => a.sessionId === currentSessionId && a.status === 'waiting_for_input'),
-    [agents, currentSessionId],
-  );
+  // isWaitingForInput is now derived from server-authoritative status via useChat
 
   const selectedAgentLib = currentSession?.agentLib || 'claude-code';
   const currentModels = agentLibModels[selectedAgentLib]?.models ?? [];
@@ -183,14 +181,21 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     }
   }, [currentSessionId, updateSession, streamingInputEnabled]);
 
+  // Bug 3 fix: use a ref for sessionId so debounced draft saves always
+  // target the correct session, even if the user switches tabs before
+  // the debounce timer fires.
+  const currentSessionIdRef = useRef(currentSessionId);
+  currentSessionIdRef.current = currentSessionId;
+
   const handleDraftChange = useCallback(async (draft: string) => {
-    if (!currentSessionId) return;
+    const sid = currentSessionIdRef.current;
+    if (!sid) return;
     try {
-      await updateSession(currentSessionId, { draft: draft || null });
+      await updateSession(sid, { draft: draft || null });
     } catch (err) {
       reportError(err, 'ChatPanel: update draft');
     }
-  }, [currentSessionId, updateSession]);
+  }, [updateSession]);
 
   const estimatedCost = (tokenUsage.inputTokens / 1_000_000) * 3.0 + (tokenUsage.outputTokens / 1_000_000) * 15.0;
   const showInlineTabs = scope.type === 'task';

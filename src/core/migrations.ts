@@ -209,5 +209,9 @@ FROM tasks WHERE technical_design IS NOT NULL AND technical_design != ''`,
       name: '122_reseed_pipelines_triaging',
       sql: `UPDATE pipelines SET statuses = '${escSql(JSON.stringify(AGENT_PIPELINE.statuses))}', transitions = '${escSql(JSON.stringify(AGENT_PIPELINE.transitions))}' WHERE id = '${escSql(AGENT_PIPELINE.id)}'`,
     },
+    {
+      name: '123_add_status_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'idle'`,
+    },
   ];
 }

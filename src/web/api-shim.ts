@@ -227,6 +227,7 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       trackTask: (sessionId, taskId) => api.chat.trackTask(sessionId, taskId),
       untrackTask: (sessionId, taskId) => api.chat.untrackTask(sessionId, taskId),
       answerQuestion: (sessionId, questionId, answers) => api.chat.answerQuestion(sessionId, questionId, answers),
+      sessionStatus: (sessionId) => api.chat.getSessionStatus(sessionId),
     },
 
     // ── Chat Sessions ─────────────────────────────────────────────────

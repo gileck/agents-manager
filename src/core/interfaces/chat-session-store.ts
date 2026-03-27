@@ -1,4 +1,4 @@
-import type { ChatScopeType, ChatSessionSource, ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput, ChatSessionWithDetails, TaskChatSessionWithTitle } from '../../shared/types';
+import type { ChatScopeType, ChatSessionSource, ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput, ChatSessionStatus, ChatSessionWithDetails, TaskChatSessionWithTitle } from '../../shared/types';
 
 // Re-export types from shared/types so existing consumers of this module are unaffected.
 export type { ChatSession, ChatSessionCreateInput, ChatSessionUpdateInput };
@@ -21,4 +21,6 @@ export interface IChatSessionStore {
   addTrackedTask(sessionId: string, taskId: string): Promise<void>;
   removeTrackedTask(sessionId: string, taskId: string): Promise<void>;
   getTrackedTaskIds(sessionId: string): Promise<string[]>;
+  updateSessionStatus(id: string, status: ChatSessionStatus): Promise<void>;
+  resetStaleStatuses(): Promise<void>;
 }

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { ChatMessage, AgentChatMessage, ChatImage, AgentNotificationPayload } from '../../shared/types';
+import type { ChatMessage, AgentChatMessage, ChatImage, AgentNotificationPayload, ChatSessionStatus } from '../../shared/types';
 import { convertDbMessages } from '../../shared/convert-db-messages';
 
 const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
+const STATUS_POLL_INTERVAL_MS = 5000;
 
 export interface RawEvent {
   timestamp: string;
@@ -19,22 +20,28 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
   const enableStreamingInput = options?.enableStreamingInput ?? false;
   const [dbMessages, setDbMessages] = useState<ChatMessage[]>([]);
   const [streamingMessages, setStreamingMessages] = useState<AgentChatMessage[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [queuedMessage, setQueuedMessage] = useState<QueuedMessage | null>(null);
   const [rawEvents, setRawEvents] = useState<RawEvent[]>([]);
+  const [serverStatus, setServerStatus] = useState<ChatSessionStatus>('idle');
+  // streamingRef provides instant UI responsiveness (set true on send, false on sentinel).
+  // serverStatus is the authoritative fallback for recovery.
   const streamingRef = useRef(false);
   const doSendRef = useRef<(message: string, images?: ChatImage[]) => Promise<void>>(null);
+
+  // Derive isStreaming from combined sources
+  const isStreaming = serverStatus === 'running' || serverStatus === 'waiting_for_input' || streamingRef.current;
+  const isWaitingForInput = serverStatus === 'waiting_for_input';
 
   // Load messages on mount or session change
   useEffect(() => {
     // Clear all state when session changes to avoid cross-session leaks
     setDbMessages([]);
     setStreamingMessages([]);
-    setIsStreaming(false);
-    setQueuedMessage(null);
     streamingRef.current = false;
+    setServerStatus('idle');
+    setQueuedMessage(null);
     setError(null);
     setRawEvents([]);
 
@@ -54,10 +61,19 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
         if (liveMessages.length > 0) {
           setStreamingMessages(liveMessages);
           streamingRef.current = true;
-          setIsStreaming(true);
         }
       })
       .catch(() => { /* session not running, ignore */ });
+
+    // Fetch server-authoritative status to detect in-flight sessions
+    window.api.chat.sessionStatus(sessionId)
+      .then(({ status }) => {
+        setServerStatus(status);
+        if (status === 'running' || status === 'waiting_for_input') {
+          streamingRef.current = true;
+        }
+      })
+      .catch(() => { /* ignore */ });
   }, [sessionId]);
 
   // Subscribe to chat output (for streaming state and completion sentinel)
@@ -70,7 +86,7 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
 
       if (chunk === CHAT_COMPLETE_SENTINEL) {
         streamingRef.current = false;
-        setIsStreaming(false);
+        setServerStatus('idle');
         // Reload messages from DB, then clear streaming messages so there is
         // no frame where the streaming content has been removed but the DB
         // messages haven't arrived yet (which would collapse the scroll
@@ -86,7 +102,7 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
 
       if (!streamingRef.current) {
         streamingRef.current = true;
-        setIsStreaming(true);
+        setServerStatus('running');
       }
     });
 
@@ -156,13 +172,39 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
     return () => { unsubscribe(); };
   }, [sessionId]);
 
+  // Polling heartbeat: when we think the agent is running, poll server status
+  // every few seconds. If the server says idle/error but we still think streaming,
+  // self-heal by resetting state and reloading messages from DB.
+  useEffect(() => {
+    if (!sessionId || !isStreaming) return;
+
+    const interval = setInterval(async () => {
+      if (!isStreaming) return; // re-check inside interval
+      try {
+        const { status } = await window.api.chat.sessionStatus(sessionId);
+        setServerStatus(status);
+        if (status === 'idle' || status === 'error') {
+          // Sentinel was missed — self-heal
+          streamingRef.current = false;
+          const freshMessages = await window.api.chat.messages(sessionId);
+          setDbMessages(freshMessages);
+          setStreamingMessages([]);
+        }
+      } catch {
+        /* ignore network errors during poll */
+      }
+    }, STATUS_POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [sessionId, isStreaming]);
+
   const doSend = useCallback(async (message: string, images?: ChatImage[]) => {
     if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
 
     setError(null);
     setStreamingMessages([]);
-    streamingRef.current = false;
-    setIsStreaming(true);
+    streamingRef.current = true;
+    setServerStatus('running');
 
     try {
       const { userMessage } = await window.api.chat.send(sessionId, message, images);
@@ -174,11 +216,11 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
         // Race condition: server still has an agent running but React isStreaming was stale.
         // Queue the message silently; the auto-send effect will retry when streaming ends.
         setQueuedMessage({ text: message, images });
-        // Keep isStreaming=true (set above); the chatOutput sentinel will clear it when done.
+        // Keep streaming state true; the chatOutput sentinel will clear it when done.
       } else {
         setError(errMsg);
-        setIsStreaming(false);
         streamingRef.current = false;
+        setServerStatus('idle');
       }
     }
   }, [sessionId]);
@@ -205,14 +247,14 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
   // Keep doSendRef in sync
   doSendRef.current = doSend;
 
-  // Auto-send queued message when streaming completes
+  // Auto-send queued message when streaming completes or sessionId becomes available
   useEffect(() => {
-    if (!isStreaming && queuedMessage) {
+    if (sessionId && !isStreaming && queuedMessage) {
       const { text, images } = queuedMessage;
       setQueuedMessage(null);
       doSendRef.current?.(text, images);
     }
-  }, [isStreaming, queuedMessage]);
+  }, [sessionId, isStreaming, queuedMessage]);
 
   const answerQuestion = useCallback(async (questionId: string, answers: Record<string, string>) => {
     if (!sessionId) return;
@@ -232,7 +274,14 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
   }, [sessionId]);
 
   const sendMessage = useCallback(async (message: string, images?: ChatImage[]) => {
-    if (!sessionId || (!message.trim() && (!images || images.length === 0))) return;
+    // Bug 1 fix: when sessionId is null, show an error instead of silently dropping
+    if (!sessionId) {
+      if (message.trim() || (images && images.length > 0)) {
+        setError('Session not ready — please try again');
+      }
+      return;
+    }
+    if (!message.trim() && (!images || images.length === 0)) return;
 
     if (isStreaming) {
       // Check if the agent is waiting for a question answer — route the message as the answer
@@ -272,7 +321,8 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
       await window.api.chat.clear(sessionId);
       setDbMessages([]);
       setStreamingMessages([]);
-      setIsStreaming(false);
+      streamingRef.current = false;
+      setServerStatus('idle');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -285,7 +335,8 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
       const summaryMessages = await window.api.chat.summarize(sessionId);
       setDbMessages(summaryMessages);
       setStreamingMessages([]);
-      setIsStreaming(false);
+      streamingRef.current = false;
+      setServerStatus('idle');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -424,6 +475,7 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
   return {
     messages,
     isStreaming,
+    isWaitingForInput,
     isQueued: queuedMessage !== null,
     loading,
     error,

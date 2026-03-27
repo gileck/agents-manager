@@ -195,9 +195,9 @@ describe('schema-baseline', () => {
     db.close();
   });
 
-  it('should have 101 baseline migration names', () => {
-    expect(BASELINE_MIGRATION_NAMES.length).toBe(101);
+  it('should have 102 baseline migration names', () => {
+    expect(BASELINE_MIGRATION_NAMES.length).toBe(102);
     expect(BASELINE_MIGRATION_NAMES[0]).toBe('001_create_items');
-    expect(BASELINE_MIGRATION_NAMES[100]).toBe('120_backfill_post_mortem_from_context_entries');
+    expect(BASELINE_MIGRATION_NAMES[101]).toBe('123_add_status_to_chat_sessions');
   });
 });

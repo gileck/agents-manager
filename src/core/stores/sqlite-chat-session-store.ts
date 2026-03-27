@@ -32,7 +32,7 @@ function toTaskSession(row: RawRow): TaskChatSessionWithTitle {
   };
 }
 
-const SESSION_SELECT = `id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, model, source, agent_role as agentRole, agent_run_id as agentRunId, permission_mode as permissionMode, sidebar_hidden as sidebarHidden, system_prompt_append as systemPromptAppend, enable_streaming as enableStreaming, enable_streaming_input as enableStreamingInput, draft, created_at as createdAt, updated_at as updatedAt`;
+const SESSION_SELECT = `id, project_id as projectId, scope_type as scopeType, scope_id as scopeId, name, agent_lib as agentLib, model, source, agent_role as agentRole, agent_run_id as agentRunId, permission_mode as permissionMode, sidebar_hidden as sidebarHidden, system_prompt_append as systemPromptAppend, enable_streaming as enableStreaming, enable_streaming_input as enableStreamingInput, draft, status, created_at as createdAt, updated_at as updatedAt`;
 
 export class SqliteChatSessionStore implements IChatSessionStore {
   constructor(private db: AppDatabase) {}
@@ -56,6 +56,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       enableStreaming: input.enableStreaming ?? true,
       enableStreamingInput: input.enableStreamingInput ?? false,
       draft: null,
+      status: 'idle',
       createdAt: now(),
       updatedAt: now(),
     };
@@ -120,7 +121,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       const params: unknown[] = [projectId];
       let sql = `
         SELECT cs.id, cs.project_id as projectId, cs.scope_type as scopeType, cs.scope_id as scopeId,
-               cs.name, cs.agent_lib as agentLib, cs.model, cs.source, cs.agent_role as agentRole, cs.agent_run_id as agentRunId, cs.permission_mode as permissionMode, cs.sidebar_hidden as sidebarHidden, cs.system_prompt_append as systemPromptAppend, cs.enable_streaming as enableStreaming, cs.enable_streaming_input as enableStreamingInput, cs.draft, cs.created_at as createdAt, cs.updated_at as updatedAt,
+               cs.name, cs.agent_lib as agentLib, cs.model, cs.source, cs.agent_role as agentRole, cs.agent_run_id as agentRunId, cs.permission_mode as permissionMode, cs.sidebar_hidden as sidebarHidden, cs.system_prompt_append as systemPromptAppend, cs.enable_streaming as enableStreaming, cs.enable_streaming_input as enableStreamingInput, cs.draft, cs.status, cs.created_at as createdAt, cs.updated_at as updatedAt,
                t.title as taskTitle, t.status as taskStatus
         FROM chat_sessions cs
         JOIN tasks t ON cs.scope_id = t.id
@@ -148,7 +149,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     try {
       const sql = `
         SELECT cs.id, cs.project_id as projectId, cs.scope_type as scopeType, cs.scope_id as scopeId,
-               cs.name, cs.agent_lib as agentLib, cs.model, cs.source, cs.agent_role as agentRole, cs.agent_run_id as agentRunId, cs.permission_mode as permissionMode, cs.sidebar_hidden as sidebarHidden, cs.system_prompt_append as systemPromptAppend, cs.enable_streaming as enableStreaming, cs.enable_streaming_input as enableStreamingInput, cs.draft, cs.created_at as createdAt, cs.updated_at as updatedAt,
+               cs.name, cs.agent_lib as agentLib, cs.model, cs.source, cs.agent_role as agentRole, cs.agent_run_id as agentRunId, cs.permission_mode as permissionMode, cs.sidebar_hidden as sidebarHidden, cs.system_prompt_append as systemPromptAppend, cs.enable_streaming as enableStreaming, cs.enable_streaming_input as enableStreamingInput, cs.draft, cs.status, cs.created_at as createdAt, cs.updated_at as updatedAt,
                COALESCE((SELECT COUNT(*) FROM chat_messages cm WHERE cm.session_id = cs.id), 0) as messageCount
         FROM chat_sessions cs
         WHERE cs.project_id = ? AND cs.scope_type = 'project'
@@ -203,6 +204,10 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       if (input.draft !== undefined) {
         setClauses.push('draft = ?');
         params.push(input.draft);
+      }
+      if (input.status !== undefined) {
+        setClauses.push('status = ?');
+        params.push(input.status);
       }
 
       if (setClauses.length === 0) {
@@ -320,6 +325,25 @@ export class SqliteChatSessionStore implements IChatSessionStore {
     } catch (error) {
       getAppLogger().logError('ChatSessionStore', 'getTrackedTaskIds failed', error);
       throw new Error(`Failed to get tracked task IDs: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  }
+
+  async updateSessionStatus(id: string, status: import('../../shared/types').ChatSessionStatus): Promise<void> {
+    try {
+      this.db.prepare(`UPDATE chat_sessions SET status = ? WHERE id = ?`).run(status, id);
+    } catch (error) {
+      getAppLogger().logError('ChatSessionStore', 'updateSessionStatus failed', error);
+    }
+  }
+
+  async resetStaleStatuses(): Promise<void> {
+    try {
+      const result = this.db.prepare(`UPDATE chat_sessions SET status = 'idle' WHERE status IN ('running', 'waiting_for_input', 'error')`).run();
+      if (result.changes > 0) {
+        getAppLogger().info('ChatSessionStore', `Reset ${result.changes} stale session(s) to idle`);
+      }
+    } catch (error) {
+      getAppLogger().logError('ChatSessionStore', 'resetStaleStatuses failed', error);
     }
   }
 }

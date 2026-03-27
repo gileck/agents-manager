@@ -1359,6 +1359,9 @@ export type ChatSessionSource = 'desktop' | 'telegram' | 'cli' | 'agent-chat';
 export type PermissionMode = 'read_only' | 'read_write' | 'full_access';
 
 
+/** Server-authoritative session lifecycle status, persisted in SQLite. */
+export type ChatSessionStatus = 'idle' | 'running' | 'waiting_for_input' | 'error';
+
 // Chat Session types
 export interface ChatSession {
   id: string;
@@ -1381,6 +1384,8 @@ export interface ChatSession {
   enableStreamingInput: boolean;
   /** Unsent draft text for this session's chat input. Null when there is no pending draft. */
   draft: string | null;
+  /** Server-authoritative lifecycle status: idle, running, waiting_for_input, or error. */
+  status: ChatSessionStatus;
   createdAt: number;
   updatedAt: number;
 }
@@ -1440,6 +1445,7 @@ export interface ChatSessionUpdateInput {
   enableStreaming?: boolean;
   enableStreamingInput?: boolean;
   draft?: string | null;
+  status?: ChatSessionStatus;
 }
 
 export interface TaskChatSessionWithTitle extends ChatSession {

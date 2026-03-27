@@ -235,6 +235,7 @@ export interface ApiClient {
     trackTask(sessionId: string, taskId: string): Promise<void>;
     untrackTask(sessionId: string, taskId: string): Promise<void>;
     answerQuestion(sessionId: string, questionId: string, answers: Record<string, string>): Promise<void>;
+    getSessionStatus(sessionId: string): Promise<{ status: import('../shared/types').ChatSessionStatus }>;
   };
 
   // Task Chat
@@ -597,6 +598,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       untrackTask: (sessionId, taskId) => req('DELETE', `/api/chat/sessions/${sessionId}/track-task/${taskId}`),
       answerQuestion: (sessionId, questionId, answers) =>
         req('POST', `/api/chat/sessions/${sessionId}/answer-question`, { questionId, answers }),
+      getSessionStatus: (sessionId) => req('GET', `/api/chat/sessions/${sessionId}/status`),
     },
 
     // -- Task Chat -----------------------------------------------------------

@@ -231,6 +231,10 @@ export class ChatAgentService {
     this.imageStorageDir = imageStorageDir ?? getChatImagesStorageDir();
   }
 
+  async initialize(): Promise<void> {
+    await this.chatSessionStore.resetStaleStatuses();
+  }
+
   /**
    * Validates inputs and creates a new chat session.
    * Centralises scope verification, projectId derivation, and agentLib validation
@@ -650,6 +654,8 @@ export class ChatAgentService {
       lastActivity: Date.now(),
       messagePreview: message.slice(0, 100),
     });
+    // Persist status to DB (fire-and-forget)
+    this.chatSessionStore.updateSessionStatus(sessionId, 'running').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
 
     // Load conversation history to detect whether this is a follow-up message.
     // Instead of manually replaying history (the SDK rejects assistant-role messages
@@ -728,6 +734,7 @@ export class ChatAgentService {
     const completion = this.runAgent(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, plugins: projectPlugins, enableStreaming: session.enableStreaming, enableStreamingInput: session.enableStreamingInput }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
+      this.chatSessionStore.updateSessionStatus(sessionId, 'error').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
       try { emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL }); } catch { /* best effort */ }
       const agent = this.runningAgents.get(sessionId);
@@ -778,6 +785,7 @@ export class ChatAgentService {
         agent.status = 'failed';
         agent.lastActivity = Date.now();
       }
+      this.chatSessionStore.updateSessionStatus(sessionId, 'idle').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
       controller.abort();
       // runAgent's finally block handles runningControllers cleanup and sentinel emission
     } else {
@@ -815,6 +823,7 @@ export class ChatAgentService {
     const agent = this.runningAgents.get(pending.sessionId);
     if (agent && agent.status === 'waiting_for_input') {
       agent.status = 'running';
+      this.chatSessionStore.updateSessionStatus(pending.sessionId, 'running').catch(() => {});
     }
   }
 
@@ -1273,6 +1282,7 @@ export class ChatAgentService {
         const waitingAgent = this.runningAgents.get(sessionId);
         if (waitingAgent && waitingAgent.status === 'running') {
           waitingAgent.status = 'waiting_for_input';
+          this.chatSessionStore.updateSessionStatus(sessionId, 'waiting_for_input').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
         }
 
         let onAbort: (() => void) | undefined;
@@ -1620,6 +1630,7 @@ export class ChatAgentService {
         agent.status = 'completed';
         agent.lastActivity = Date.now();
       }
+      this.chatSessionStore.updateSessionStatus(sessionId, 'idle').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
     } catch (err) {
       // Handle errors inside runAgent so the sentinel in finally is always the last event
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -1638,6 +1649,9 @@ export class ChatAgentService {
         agent.status = 'failed';
         agent.lastActivity = Date.now();
       }
+      // Aborted = user stop (idle); otherwise error
+      const dbStatus = abortController.signal.aborted ? 'idle' : 'error';
+      this.chatSessionStore.updateSessionStatus(sessionId, dbStatus).catch(() => {});
     } finally {
       this.runningControllers.delete(sessionId);
       this.runningRunIds.delete(sessionId);
@@ -1659,7 +1673,9 @@ export class ChatAgentService {
         }
       }, 5000); // 5 second delay
 
-      // Persist assistant response with cost data (full structured messages as JSON)
+      // Persist assistant response with cost data (full structured messages as JSON).
+      // This happens BEFORE the sentinel so the client's post-sentinel DB reload
+      // always finds the persisted response.
       if (turnMessages.length > 0) {
         try {
           await this.chatMessageStore.addMessage({
@@ -1677,16 +1693,17 @@ export class ChatAgentService {
           getAppLogger().logError('ChatAgentService', 'Failed to persist assistant response', persistErr);
           try { emitEvent({ type: 'text', text: '\n[Warning: Failed to save this response. It may not appear after refresh.]\n' }); } catch (deliveryErr) { getAppLogger().warn('ChatAgentService', 'persist-warning delivery failed', { error: deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr) }); }
         }
-
-        // Agent-chat responses are purely conversational — the agent does not
-        // modify the plan/design directly. Plan/design changes are handled by
-        // the "Request Changes" flow which transitions the task back to
-        // planning/designing and re-runs the full pipeline.
       }
 
-      // Auto-save agent-chat response as TaskContextEntry so it's visible
-      // in the review conversation even if the frontend missed the
-      // completion sentinel (e.g. user navigated away).
+      // Signal completion to renderer so it can reset streaming state.
+      // Emitted AFTER message persistence but BEFORE optional cleanup (TaskContext,
+      // AgentRun, injected queue) so the UI is never blocked by slow cleanup.
+      getAppLogger().info('ChatAgentService', `Chat agent finished for session ${sessionId}, sending completion sentinel`);
+      emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
+
+      // --- Below is async cleanup that does NOT block sentinel delivery ---
+
+      // Auto-save agent-chat response as TaskContextEntry
       if (extra?.isAgentChat && extra?.taskId && this.taskContextStore && turnMessages.length > 0) {
         const agentRole = extra.agentType;
         const entryType = agentRole ? AGENT_ROLE_TO_FEEDBACK_ENTRY_TYPE[agentRole] : undefined;
@@ -1725,7 +1742,6 @@ export class ChatAgentService {
             const systemPromptText = typeof systemPrompt === 'string' ? systemPrompt : (systemPrompt.append ?? '');
             const resolvedPrompt = existingRun.prompt ? existingRun.prompt : `${systemPromptText}\n\n${prompt}`;
 
-            // Defensive guard: detect accidental object-to-string coercion in stored prompts
             if (resolvedPrompt.includes('[object Object]')) {
               getAppLogger().logError('ChatAgentService', `AgentRun ${agentRunId} prompt contains "[object Object]" — an object was coerced to string instead of being serialized properly`, new Error('Prompt serialization bug'));
             }
@@ -1749,14 +1765,7 @@ export class ChatAgentService {
         }
       }
 
-      // Signal completion to renderer so it can reset streaming state
-      getAppLogger().info('ChatAgentService', `Chat agent finished for session ${sessionId}, sending completion sentinel`);
-      emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
-
       // Drain all queued injected messages for this session.
-      // Messages are stored as system messages and emitted as notifications.
-      // When autoNotify is set, deliverInjectedMessage also triggers a new
-      // agent turn (fire-and-forget).
       const queued = this.injectedQueue.get(sessionId);
       if (queued && queued.length > 0) {
         this.injectedQueue.delete(sessionId);
