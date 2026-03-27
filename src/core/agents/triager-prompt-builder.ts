@@ -177,9 +177,7 @@ export class TriagerPromptBuilder extends BaseAgentPromptBuilder {
     prompt += getTaskEstimationInstructions();
     prompt += getInteractiveInstructions(this.type);
 
-    if (context.validationErrors) {
-      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues and resubmit:\n\n${context.validationErrors}`;
-    }
+    prompt = this.appendValidationErrors(prompt, context, ' and resubmit');
 
     return prompt;
   }

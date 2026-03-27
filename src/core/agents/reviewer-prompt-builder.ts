@@ -1,14 +1,9 @@
-import type { AgentContext, AgentRunResult } from '../../shared/types';
+import type { AgentContext, AgentRunResult, ReviewComment } from '../../shared/types';
 import type { AgentLibResult } from '../interfaces/agent-lib';
 import { getActivePhase, getActivePhaseIndex, isMultiPhase } from '../../shared/phase-utils';
 import { BaseAgentPromptBuilder } from './base-agent-prompt-builder';
 
-export interface ReviewComment {
-  file: string;
-  severity: 'must_fix' | 'should_fix' | 'nit';
-  issue: string;
-  suggestion: string;
-}
+export type { ReviewComment } from '../../shared/types';
 
 interface ReviewStructuredOutput {
   verdict: 'approved' | 'changes_requested';
@@ -166,7 +161,7 @@ export class ReviewerPromptBuilder extends BaseAgentPromptBuilder {
         );
       }
     } else {
-      const desc = task.description ? ` ${task.description}` : '';
+      const desc = this.formatTaskDescription(task);
       lines.push(
         `You are a code reviewer. Review the changes in this branch for the following task: ${task.title}.${desc}`,
         '',

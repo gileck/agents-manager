@@ -1,6 +1,5 @@
 import React from 'react';
-import type { TaskContextEntry } from '../../../shared/types';
-import type { ReviewComment } from '../../../core/agents/reviewer-prompt-builder';
+import type { TaskContextEntry, ReviewComment } from '../../../shared/types';
 import { MarkdownContent } from '../chat/MarkdownContent';
 
 const SEVERITY_STYLES: Record<string, { bg: string; color: string; label: string }> = {

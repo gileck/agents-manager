@@ -69,6 +69,9 @@ See [agent-lib-features.md](./agent-lib-features.md) for the full feature matrix
 | | `src/core/agents/implementor-prompt-builder.ts` |
 | | `src/core/agents/reviewer-prompt-builder.ts` |
 | | `src/core/agents/task-workflow-reviewer-prompt-builder.ts` |
+| | `src/core/agents/post-mortem-reviewer-prompt-builder.ts` |
+| | `src/core/agents/triager-prompt-builder.ts` |
+| | `src/core/agents/ux-designer-prompt-builder.ts` |
 | **Consumer** | `src/core/agents/agent.ts` — `Agent` class combines a PromptBuilder with an AgentLib |
 
 **Key methods:** `buildSystemPrompt()`, `buildPrompt()`, `getOutputSchema()`
@@ -133,6 +136,7 @@ See [pipeline-engine.md](./pipeline-engine.md) for guard/hook details.
 | `IAgentDefinitionStore` | `sqlite-agent-definition-store.ts` |
 | `IAutomatedAgentStore` | `sqlite-automated-agent-store.ts` |
 | `ITaskContextStore` | `sqlite-task-context-store.ts` |
+| `ITaskDocStore` | `sqlite-task-doc-store.ts` |
 | `ITaskPhaseStore` | `sqlite-task-phase-store.ts` |
 | `ITaskArtifactStore` | `sqlite-task-artifact-store.ts` |
 | `IInAppNotificationStore` | `sqlite-in-app-notification-store.ts` |
@@ -141,6 +145,7 @@ See [pipeline-engine.md](./pipeline-engine.md) for guard/hook details.
 | `IUserStore` | `sqlite-user-store.ts` |
 | `IItemStore` | `sqlite-item-store.ts` |
 | `ITimelineStore` | `sqlite-timeline-store.ts` |
+| `ITransactionRunner` | `sqlite-transaction-runner.ts` |
 
 All interfaces are in `src/core/interfaces/`. All implementations are in `src/core/stores/`.
 

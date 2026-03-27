@@ -457,21 +457,19 @@ export class CodexCliLib extends BaseAgentLib {
       isError = true;
       const baseMessage = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
-      if (state.stoppedReason === 'timeout') {
-        killReason = 'timeout';
-        errorMessage = `codex-sdk timed out after ${Math.round((options.timeoutMs ?? 0) / 1000)}s`;
-      } else if (state.abortController.signal.aborted) {
-        killReason = state.stoppedReason ?? 'stopped';
-        errorMessage = `codex-sdk run aborted [kill_reason=${killReason}]`;
-      } else {
-        const diagnostics = this.buildDiagnostics(state, options, {
+
+      const result = this.handleEngineError(err, state, options, {
+        engineLabel: 'codex-sdk',
+        diagnosticsExtra: {
           sdk_error: baseMessage,
           ...(errorStack ? { stack: errorStack } : {}),
           cached_input_tokens: state.accumulatedCacheReadInputTokens,
           thread_id: activeThreadId ?? 'unknown',
-        });
-        errorMessage = `${baseMessage}\n\n--- Diagnostics ---\n${diagnostics}`;
-      }
+        },
+      });
+      killReason = result.killReason;
+      errorMessage = result.errorMessage;
+
       log('Codex SDK run failed', {
         error: baseMessage,
         stack: errorStack,

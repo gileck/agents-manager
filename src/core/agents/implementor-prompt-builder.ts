@@ -89,7 +89,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
 
   buildPrompt(context: AgentContext): string {
     const { task, mode, revisionReason } = context;
-    const desc = task.description ? ` ${task.description}` : '';
+    const desc = this.formatTaskDescription(task);
 
     let prompt: string;
 
@@ -344,9 +344,7 @@ export class ImplementorPromptBuilder extends BaseAgentPromptBuilder {
       prompt += getInteractiveInstructions(this.type);
     }
 
-    if (context.validationErrors) {
-      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
-    }
+    prompt = this.appendValidationErrors(prompt, context, ', then stage and commit');
 
     if (context.devServerUrl) {
       prompt += `\n\n## Dev Server\nThe application dev server is running at: ${context.devServerUrl}\nYou can test your changes by visiting this URL in the browser.`;

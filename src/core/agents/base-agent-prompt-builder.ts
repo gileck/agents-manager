@@ -50,6 +50,24 @@ export abstract class BaseAgentPromptBuilder {
   abstract buildPrompt(context: AgentContext): string;
   abstract inferOutcome(mode: string, exitCode: number, output: string): string;
 
+  /**
+   * Format the task description as a suffix string.
+   * Returns ` <description>` (with leading space) if description exists, empty string otherwise.
+   */
+  protected formatTaskDescription(task: { description?: string | null }): string {
+    return task.description ? ` ${task.description}` : '';
+  }
+
+  /**
+   * Append validation error instructions to a prompt if validation errors are present.
+   * Returns the prompt unchanged if there are no validation errors.
+   * @param commitSuffix - additional instruction appended after the errors (e.g. ', then stage and commit')
+   */
+  protected appendValidationErrors(prompt: string, context: AgentContext, commitSuffix = ''): string {
+    if (!context.validationErrors) return prompt;
+    return prompt + `\n\nThe previous attempt produced validation errors. Fix these issues${commitSuffix}:\n\n${context.validationErrors}`;
+  }
+
   protected isReadOnly(_context: AgentContext): boolean {
     return false;
   }

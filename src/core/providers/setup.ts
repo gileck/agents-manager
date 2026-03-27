@@ -468,6 +468,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
       projectStore: stores.projectStore, taskStore: stores.taskStore, pipelineStore: stores.pipelineStore,
       pipelineEngine, workflowService, chatSessionStore: stores.chatSessionStore, chatAgentService,
       agentRunStore: stores.agentRunStore, settingsStore: stores.settingsStore, notificationRouter,
+      createNotificationRouter: (bot, chatId) => new TelegramNotificationRouter(bot, chatId),
     },
     config?.telegramBotManagerCallbacks,
   );

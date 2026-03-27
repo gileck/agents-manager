@@ -1673,3 +1673,11 @@ export interface TaskDocCreateInput {
   content: string;
   summary?: string | null;
 }
+
+/** A structured review comment produced by the reviewer agent. */
+export interface ReviewComment {
+  file: string;
+  severity: 'must_fix' | 'should_fix' | 'nit';
+  issue: string;
+  suggestion: string;
+}

@@ -23,7 +23,9 @@ const DEFAULT_REPORT_OUTPUT_FORMAT = {
   },
 };
 
-export class ScheduledAgentService {
+import type { IScheduledAgentService } from '../interfaces/scheduled-agent-service';
+
+export class ScheduledAgentService implements IScheduledAgentService {
   private activeRuns = new Map<string, Promise<void>>();
   /** Maps runId → lib name so stop() can target the correct lib. */
   private activeRunLibs = new Map<string, string>();

@@ -40,7 +40,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
 
   buildPrompt(context: AgentContext): string {
     const { task, mode, revisionReason } = context;
-    const desc = task.description ? ` ${task.description}` : '';
+    const desc = this.formatTaskDescription(task);
 
     let prompt: string;
 
@@ -163,9 +163,7 @@ export class DesignerPromptBuilder extends BaseAgentPromptBuilder {
     prompt += getTaskEstimationInstructions();
     prompt += getInteractiveInstructions(this.type);
 
-    if (context.validationErrors) {
-      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues, then stage and commit:\n\n${context.validationErrors}`;
-    }
+    prompt = this.appendValidationErrors(prompt, context, ', then stage and commit');
 
     return prompt;
   }

@@ -436,4 +436,71 @@ export abstract class BaseAgentLib implements IAgentLib {
       `accumulated_tokens: ${state.accumulatedInputTokens}/${state.accumulatedOutputTokens}`,
     ].join('\n');
   }
+
+  // ============================================
+  // Utility: classify engine errors as timeout / abort / unexpected
+  // ============================================
+
+  /**
+   * Shared error classification for engine catch blocks.
+   * Determines whether an error was caused by a timeout, user-initiated abort,
+   * or an unexpected failure — and produces the appropriate killReason + errorMessage.
+   *
+   * Engines call this in their catch blocks instead of duplicating the 3-way branch.
+   *
+   * @param err - The caught error.
+   * @param state - The run state (checked for stoppedReason and abortController.signal).
+   * @param options - The original run options (used for timeout/session info and diagnostics).
+   * @param engineContext - Engine-specific varying parts:
+   *   - `engineLabel`: Human-readable engine name for error messages (e.g. "Agent", "codex-sdk").
+   *   - `diagnosticsExtra`: Additional key-value pairs merged into buildDiagnostics() output.
+   *   - `elapsedMs`: Optional elapsed time in milliseconds (used in timeout/abort messages).
+   */
+  protected handleEngineError(
+    err: unknown,
+    state: BaseRunState,
+    options: AgentLibRunOptions,
+    engineContext: {
+      engineLabel: string;
+      diagnosticsExtra?: Record<string, unknown>;
+      elapsedMs?: number;
+    },
+  ): { killReason: string | undefined; errorMessage: string } {
+    const baseMessage = err instanceof Error ? err.message : String(err);
+    const { engineLabel, diagnosticsExtra = {}, elapsedMs } = engineContext;
+
+    const elapsedSec = elapsedMs != null ? Math.round(elapsedMs / 1000) : undefined;
+    const timeoutSec = Math.round((options.timeoutMs ?? 0) / 1000);
+
+    if (state.stoppedReason === 'timeout') {
+      const elapsed = elapsedSec != null ? `after ${elapsedSec}s` : `timeout=${timeoutSec}s`;
+      const detail = elapsedSec != null
+        ? `${elapsed} (timeout=${timeoutSec}s, ${state.messageCount} messages processed)`
+        : `${elapsed}`;
+      return {
+        killReason: 'timeout',
+        errorMessage: `${engineLabel} timed out ${detail}`,
+      };
+    }
+
+    if (state.abortController.signal.aborted) {
+      const killReason = state.stoppedReason ?? 'stopped';
+      const elapsed = elapsedSec != null ? ` after ${elapsedSec}s` : '';
+      const messages = state.messageCount > 0 ? ` (${state.messageCount} messages processed)` : '';
+      return {
+        killReason,
+        errorMessage: `${engineLabel} aborted${elapsed}${messages} [kill_reason=${killReason}]`,
+      };
+    }
+
+    // Unexpected error — attach diagnostics
+    const diagnostics = this.buildDiagnostics(state, options, diagnosticsExtra);
+    let errorMessage: string;
+    if (options.resumeSession) {
+      errorMessage = `Session resume failed (session "${options.sessionId}"): ${baseMessage}\n\n--- Diagnostics ---\n${diagnostics}`;
+    } else {
+      errorMessage = `${baseMessage}\n\n--- Diagnostics ---\n${diagnostics}`;
+    }
+    return { killReason: undefined, errorMessage };
+  }
 }

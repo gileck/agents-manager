@@ -1,5 +1,5 @@
 import type { IAutomatedAgentStore } from '../interfaces/automated-agent-store';
-import type { ScheduledAgentService } from './scheduled-agent-service';
+import type { IScheduledAgentService } from '../interfaces/scheduled-agent-service';
 import { getAppLogger } from './app-logger';
 
 export class SchedulerSupervisor {
@@ -7,7 +7,7 @@ export class SchedulerSupervisor {
 
   constructor(
     private automatedAgentStore: IAutomatedAgentStore,
-    private scheduledAgentService: ScheduledAgentService,
+    private scheduledAgentService: IScheduledAgentService,
   ) {}
 
   start(intervalMs = 60_000): void {

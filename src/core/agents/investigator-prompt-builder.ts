@@ -46,7 +46,7 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
 
   buildPrompt(context: AgentContext): string {
     const { task, mode } = context;
-    const desc = task.description ? ` ${task.description}` : '';
+    const desc = this.formatTaskDescription(task);
     const invAmCli = `node bootstrap-cli.js`;
 
     let prompt: string;
@@ -125,9 +125,7 @@ export class InvestigatorPromptBuilder extends BaseAgentPromptBuilder {
       prompt = invLines.join('\n');
     }
 
-    if (context.validationErrors) {
-      prompt += `\n\nThe previous attempt produced validation errors. Fix these issues and resubmit your report:\n\n${context.validationErrors}`;
-    }
+    prompt = this.appendValidationErrors(prompt, context, ' and resubmit your report');
 
     return prompt;
   }

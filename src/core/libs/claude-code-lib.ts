@@ -433,27 +433,22 @@ export class ClaudeCodeLib extends BaseAgentLib {
       const sdkError = err instanceof Error ? err.message : String(err);
       const sdkStack = err instanceof Error ? err.stack : undefined;
       const elapsed = Date.now() - startTime;
-
       const stderrOutput = stderrChunks.join('').trim();
-      const diagnostics = this.buildDiagnostics(state, options, {
-        sdk_error: sdkError,
-        ...(stderrOutput ? { stderr: stderrOutput } : {}),
-        ...(sdkStack ? { stack: sdkStack } : {}),
-        elapsed: `${Math.round(elapsed / 1000)}s`,
-        result_text_length: getResultLength(),
-      });
 
-      if (state.stoppedReason === 'timeout') {
-        killReason = 'timeout';
-        errorMessage = `Agent timed out after ${Math.round(elapsed / 1000)}s (timeout=${Math.round((options.timeoutMs ?? 0) / 1000)}s, ${state.messageCount} messages processed)`;
-      } else if (state.abortController.signal.aborted) {
-        killReason = state.stoppedReason ?? 'stopped';
-        errorMessage = `Agent aborted after ${Math.round(elapsed / 1000)}s (${state.messageCount} messages processed) [kill_reason=${killReason}]`;
-      } else if (options.resumeSession) {
-        errorMessage = `Session resume failed (session "${options.sessionId}"): ${sdkError}\n\n--- Diagnostics ---\n${diagnostics}`;
-      } else {
-        errorMessage = `${sdkError}\n\n--- Diagnostics ---\n${diagnostics}`;
-      }
+      const result = this.handleEngineError(err, state, options, {
+        engineLabel: 'Agent',
+        elapsedMs: elapsed,
+        diagnosticsExtra: {
+          sdk_error: sdkError,
+          ...(stderrOutput ? { stderr: stderrOutput } : {}),
+          ...(sdkStack ? { stack: sdkStack } : {}),
+          elapsed: `${Math.round(elapsed / 1000)}s`,
+          result_text_length: getResultLength(),
+        },
+      });
+      killReason = result.killReason;
+      errorMessage = result.errorMessage;
+
       log(`Agent execution error`, {
         error: sdkError,
         ...(stderrOutput ? { stderr: stderrOutput } : {}),

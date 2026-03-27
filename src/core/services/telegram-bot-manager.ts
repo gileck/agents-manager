@@ -6,14 +6,16 @@ import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { IChatSessionStore } from '../interfaces/chat-session-store';
 import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { ISettingsStore } from '../interfaces/settings-store';
+import type TelegramBot from 'node-telegram-bot-api';
 import type { INotificationRouter } from '../interfaces/notification-router';
 import type { TelegramBotLogEntry, AgentChatMessage } from '../../shared/types';
 import type { ChatAgentService } from './chat-agent-service';
 import type { MultiChannelNotificationRouter } from './multi-channel-notification-router';
 import { TelegramAgentBotService } from './telegram-agent-bot-service';
-import { TelegramNotificationRouter } from './telegram-notification-router';
 import { validateTelegramConfig } from './telegram-config-validator';
 import { getAppLogger } from './app-logger';
+
+export type NotificationRouterFactory = (bot: TelegramBot, chatId: string) => INotificationRouter;
 
 export interface TelegramBotManagerCallbacks {
   onBotLog?: (projectId: string, entry: TelegramBotLogEntry) => void;
@@ -33,6 +35,7 @@ export interface TelegramBotManagerDeps {
   agentRunStore: IAgentRunStore;
   settingsStore: ISettingsStore;
   notificationRouter: MultiChannelNotificationRouter;
+  createNotificationRouter: NotificationRouterFactory;
 }
 
 interface ActiveBot {
@@ -85,7 +88,7 @@ export class TelegramBotManager {
     await botService.start(projectId, botToken, chatId);
 
     const bot = botService.getBot()!;
-    const telegramRouter = new TelegramNotificationRouter(bot, notificationChatId ?? chatId);
+    const telegramRouter = this.deps.createNotificationRouter(bot, notificationChatId ?? chatId);
     this.deps.notificationRouter.addRouter(telegramRouter);
 
     this.activeBots.set(projectId, { botService, notificationRouter: telegramRouter });

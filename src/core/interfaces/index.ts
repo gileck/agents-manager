@@ -33,3 +33,4 @@ export type { ITimelineStore } from './timeline-store';
 export type { TransitionRecord } from './pipeline-store';
 export type { ITransactionRunner } from './transaction-runner';
 export type { ITaskDocStore } from './task-doc-store';
+export type { IScheduledAgentService } from './scheduled-agent-service';
