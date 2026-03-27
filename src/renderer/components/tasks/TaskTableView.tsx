@@ -1,18 +1,24 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUp, ArrowDown, ChevronsUpDown, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowUp, ArrowDown, ChevronsUpDown, Search, ChevronDown, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { InlineError } from '../InlineError';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { formatRelativeTimestamp, buildPipelineMap, groupTasks, sortGroupEntries } from './task-helpers';
+import { formatRelativeTimestamp, buildPipelineMap, collectTags, countActiveFilters, groupTasks, sortGroupEntries } from './task-helpers';
 import type { GroupBy } from './task-helpers';
+import { EMPTY_FILTERS } from './TaskFilterBar';
+import type { FilterState } from './TaskFilterBar';
+import { TaskFilterPanel } from './TaskFilterPanel';
 import { useTasks } from '../../hooks/useTasks';
 import { usePipelines } from '../../hooks/usePipelines';
+import { useFeatures } from '../../hooks/useFeatures';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { getEffectiveCost, formatCost } from '../../../shared/cost-utils';
-import type { Pipeline, TaskFilter, AgentRun } from '../../../shared/types';
+import type { Pipeline, TaskFilter, AgentRun, TaskCreatedBy } from '../../../shared/types';
 
 type TableSortField = 'title' | 'status' | 'type' | 'subtasks' | 'createdBy' | 'runs' | 'failed' | 'cost' | 'created' | 'updated';
 type TableGroupBy = Extract<GroupBy, 'none' | 'status' | 'type' | 'createdDate'>;
@@ -53,6 +59,15 @@ const NAMED_COLOR_CSS: Record<string, string> = {
   yellow: '#eab308',
   orange: '#f97316',
 };
+
+function useDebouncedCallback(callback: (value: string) => void, delay: number) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { clearTimeout(timerRef.current); }, []);
+  return (value: string) => {
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => callback(value), delay);
+  };
+}
 
 function getStatusDotColor(status: string, pipeline: Pipeline | null): string | undefined {
   if (!pipeline) return undefined;
@@ -157,12 +172,53 @@ export function TaskTableView() {
   const { currentProjectId, loading: projectLoading } = useCurrentProject();
   const navigate = useNavigate();
 
+  // Persistent filters (matching the List view pattern)
+  const [filters, setFilters] = useLocalStorage<FilterState>('taskTable.filters', EMPTY_FILTERS);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+
+  // Debounced search — type into local state, propagate to filters after 300ms
+  const [localSearch, setLocalSearch] = useState(filters.search);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  const debouncedSearch = useDebouncedCallback(
+    (value) => setFilters({ ...filtersRef.current, search: value }),
+    300,
+  );
+
+  // Sync local search when parent resets filters (e.g. "Clear all")
+  useEffect(() => { setLocalSearch(filters.search); }, [filters.search]);
+
+  // Build backend filter from UI state
   const taskFilter: TaskFilter = {};
   if (currentProjectId) taskFilter.projectId = currentProjectId;
+  if (filters.search) taskFilter.search = filters.search;
+  if (filters.status) taskFilter.status = filters.status;
+  if (filters.assignee) taskFilter.assignee = filters.assignee;
+  if (filters.priority) taskFilter.priority = Number(filters.priority);
+  if (filters.pipelineId) taskFilter.pipelineId = filters.pipelineId;
+  if (filters.tag) taskFilter.tag = filters.tag;
+  if (filters.featureId) {
+    if (filters.featureId === '__none__') {
+      taskFilter.featureId = null;
+    } else {
+      taskFilter.featureId = filters.featureId;
+    }
+  }
+  if (filters.createdBy) taskFilter.createdBy = filters.createdBy as TaskCreatedBy;
 
   const { tasks, loading, error } = useTasks(taskFilter);
   const { pipelines, loading: pipelinesLoading, error: pipelinesError } = usePipelines();
+  const { features } = useFeatures(currentProjectId ? { projectId: currentProjectId } : undefined);
   const pipelineMap = useMemo(() => buildPipelineMap(pipelines), [pipelines]);
+  const availableTags = useMemo(() => collectTags(tasks), [tasks]);
+  const allStatuses = useMemo(
+    () => pipelines.flatMap((p) => p.statuses).reduce<string[]>((acc, s) => {
+      if (!acc.includes(s.name)) acc.push(s.name);
+      return acc;
+    }, []),
+    [pipelines],
+  );
 
   // Fetch all agent runs for stats
   const { data: allRuns, loading: runsLoading, error: runsError } = useIpc<AgentRun[]>(
@@ -171,7 +227,6 @@ export function TaskTableView() {
 
   const runStatsMap = useMemo(() => buildRunStatsMap(allRuns ?? []), [allRuns]);
 
-  const [search, setSearch] = useState('');
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
   const [sortField, setSortField] = useLocalStorage<TableSortField>('taskTable.sortField', 'updated');
   const [sortDir, setSortDir] = useLocalStorage<'asc' | 'desc'>('taskTable.sortDir', 'desc');
@@ -197,18 +252,9 @@ export function TaskTableView() {
     return COLUMNS.reduce((sum, col) => sum + (columnWidths[col.field] ?? col.defaultWidth), 0);
   }, [columnWidths]);
 
-  const filteredTasks = useMemo(() => {
-    if (!search.trim()) return tasks;
-    const q = search.toLowerCase();
-    return tasks.filter((t) =>
-      t.title.toLowerCase().includes(q)
-      || t.status.toLowerCase().includes(q)
-      || (t.type ?? '').toLowerCase().includes(q)
-      || (t.createdBy ?? '').toLowerCase().includes(q)
-      || (t.assignee ?? '').toLowerCase().includes(q)
-      || t.tags.some((tag) => tag.toLowerCase().includes(q))
-    );
-  }, [tasks, search]);
+  // Count only panel-resident filters (not search, which is always visible inline)
+  const activeFilterCount = countActiveFilters({ ...filters, search: '' });
+  const hasActiveFilters = activeFilterCount > 0;
 
   const handleSort = (field: TableSortField) => {
     if (sortField === field) {
@@ -220,7 +266,7 @@ export function TaskTableView() {
   };
 
   const sortedTasks = useMemo(() => {
-    return [...filteredTasks].sort((a, b) => {
+    return [...tasks].sort((a, b) => {
       let cmp: number;
       const statsA = runStatsMap.get(a.id) ?? { runs: 0, failed: 0, cost: 0 };
       const statsB = runStatsMap.get(b.id) ?? { runs: 0, failed: 0, cost: 0 };
@@ -242,7 +288,7 @@ export function TaskTableView() {
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [filteredTasks, sortField, sortDir, runStatsMap]);
+  }, [tasks, sortField, sortDir, runStatsMap]);
 
   const groups = useMemo(() => {
     if (groupBy === 'none') return null;
@@ -274,11 +320,38 @@ export function TaskTableView() {
             <input
               type="text"
               placeholder="Search tasks..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={localSearch}
+              onChange={(e) => {
+                setLocalSearch(e.target.value);
+                debouncedSearch(e.target.value);
+              }}
               className="h-8 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
+          <Button
+            variant={filterPanelOpen ? 'secondary' : 'outline'}
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setFilterPanelOpen((o) => !o)}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <Badge variant="default" className="ml-0.5 h-4 min-w-[1rem] px-1 text-[10px] leading-none">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setFilters(EMPTY_FILTERS)}
+            >
+              Clear all
+            </Button>
+          )}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Group:</span>
             <Select value={groupBy} onValueChange={(v) => setGroupBy(v as TableGroupBy)}>
@@ -294,10 +367,20 @@ export function TaskTableView() {
           </div>
           <p className="text-xs text-muted-foreground">
             {sortedTasks.length} {sortedTasks.length === 1 ? 'task' : 'tasks'}
-            {search && sortedTasks.length !== tasks.length && ` of ${tasks.length}`}
           </p>
           {runsError && <p className="text-xs text-destructive">Failed to load agent run stats</p>}
         </div>
+
+        {/* Collapsible filter panel */}
+        <TaskFilterPanel
+          open={filterPanelOpen}
+          filters={filters}
+          onFiltersChange={setFilters}
+          statuses={allStatuses}
+          pipelines={pipelines}
+          tags={availableTags}
+          features={features}
+        />
 
         {sortedTasks.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">No tasks found.</p>
