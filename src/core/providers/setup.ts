@@ -316,6 +316,7 @@ function createAgentModule(
   const outcomeResolver = new OutcomeResolver(
     createGitOps, pipelineEngine, stores.taskStore,
     stores.taskPhaseStore, stores.taskArtifactStore, stores.taskEventLog,
+    stores.agentRunStore,
   );
 
   // Scheduled agent service (created before AgentService — it is passed in as a dependency)

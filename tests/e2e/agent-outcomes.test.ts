@@ -74,7 +74,47 @@ describe('Agent Outcome Transitions', () => {
       expect(events.some((e) => e.message.includes('no changes detected'))).toBe(true);
     });
 
-    it('should transition implementing → ready_to_merge when branch HEAD equals origin/main (already on main)', async () => {
+    it('should transition implementing → open when first implementor run produces zero commits (HEAD equals origin/main)', async () => {
+      const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
+
+      // Configure empty diff + same HEAD as origin/main
+      const stub = ctx.gitOps as StubGitOps;
+      stub.diffOverride = '';
+      stub.revParseOverride = 'same-sha';
+
+      await ctx.worktreeManager.create('task/test-branch', task.id);
+      await ctx.worktreeManager.lock(task.id);
+      const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1' });
+      await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
+
+      // Only one implementor run exists (the current one) — this is the first run
+      const run = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'implementor',
+        mode: 'new',
+      });
+      await ctx.agentRunStore.updateRun(run.id, { status: 'completed', completedAt: now() });
+
+      await ctx.outcomeResolver.resolveAndTransition({
+        taskId: task.id,
+        result: { exitCode: 0, output: 'Done', outcome: 'pr_ready' },
+        run: { id: run.id },
+        worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
+        worktreeManager: ctx.worktreeManager,
+        phase: { id: phase.id },
+        context: { workdir: '/tmp', mode: 'new' } as never,
+      });
+
+      // First run with zero commits should go to open (no_changes), NOT ready_to_merge
+      const updatedTask = await ctx.taskStore.getTask(task.id);
+      expect(updatedTask!.status).toBe('open');
+
+      // Verify event log records the first-run zero-commits detection
+      const events = await ctx.taskEventLog.getEvents({ taskId: task.id, category: 'agent' });
+      expect(events.some((e) => e.message.includes('first implementor run produced zero commits'))).toBe(true);
+    });
+
+    it('should transition implementing → ready_to_merge when branch HEAD equals origin/main and prior runs exist (already on main)', async () => {
       const task = await ctx.createTaskAtStatus(projectId, AGENT_PIPELINE.id, 'implementing');
 
       // Configure empty diff + same HEAD as origin/main (work already on main)
@@ -87,11 +127,21 @@ describe('Agent Outcome Transitions', () => {
       const phase = await ctx.taskPhaseStore.createPhase({ taskId: task.id, phase: 'Phase 1' });
       await ctx.taskPhaseStore.updatePhase(phase.id, { status: 'active', startedAt: now() });
 
-      const run = await ctx.agentRunStore.createRun({
+      // Create a prior completed implementor run to simulate a retry scenario
+      const priorRun = await ctx.agentRunStore.createRun({
         taskId: task.id,
-        agentType: 'scripted',
+        agentType: 'implementor',
         mode: 'new',
       });
+      await ctx.agentRunStore.updateRun(priorRun.id, { status: 'completed', completedAt: now() });
+
+      // Create the current run (second completed implementor run)
+      const run = await ctx.agentRunStore.createRun({
+        taskId: task.id,
+        agentType: 'implementor',
+        mode: 'revision',
+      });
+      await ctx.agentRunStore.updateRun(run.id, { status: 'completed', completedAt: now() });
 
       await ctx.outcomeResolver.resolveAndTransition({
         taskId: task.id,
@@ -100,7 +150,7 @@ describe('Agent Outcome Transitions', () => {
         worktree: { branch: 'task/test-branch', path: '/tmp/worktrees/' + task.id },
         worktreeManager: ctx.worktreeManager,
         phase: { id: phase.id },
-        context: { workdir: '/tmp', mode: 'new' } as never,
+        context: { workdir: '/tmp', mode: 'revision' } as never,
       });
 
       const updatedTask = await ctx.taskStore.getTask(task.id);

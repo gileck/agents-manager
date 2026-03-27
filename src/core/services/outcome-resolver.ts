@@ -5,6 +5,7 @@ import type { ITaskStore } from '../interfaces/task-store';
 import type { ITaskPhaseStore } from '../interfaces/task-phase-store';
 import type { ITaskArtifactStore } from '../interfaces/task-artifact-store';
 import type { ITaskEventLog } from '../interfaces/task-event-log';
+import type { IAgentRunStore } from '../interfaces/agent-run-store';
 import type { IWorktreeManager } from '../interfaces/worktree-manager';
 import { isMultiPhase } from '../../shared/phase-utils';
 import { now } from '../stores/utils';
@@ -19,6 +20,7 @@ export class OutcomeResolver {
     private taskPhaseStore: ITaskPhaseStore,
     private taskArtifactStore: ITaskArtifactStore,
     private taskEventLog: ITaskEventLog,
+    private agentRunStore?: IAgentRunStore,
   ) {}
 
   async resolveAndTransition(params: {
@@ -181,15 +183,47 @@ export class OutcomeResolver {
           const revParseDuration = Math.round(performance.now() - revParseStart);
           onPostLog?.('git', `rev-parse HEAD=${headSha.slice(0, 8)}, ${baseRef}=${baseSha.slice(0, 8)}`, { headSha, baseSha, baseRef }, revParseDuration);
           if (headSha === baseSha) {
-            onPostLog?.('git', `Branch HEAD equals ${baseRef} — changes already merged`);
+            // Before assuming "already merged", check if there are prior completed
+            // implementor runs for this task. If this is the first run, the agent
+            // simply failed to produce commits — return no_changes instead.
+            let hasPriorCompletedRuns = false;
+            if (this.agentRunStore) {
+              try {
+                const runs = await this.agentRunStore.getRunsForTask(taskId);
+                // Count completed implementor runs (excluding the current one that just finished).
+                // A completed run with outcome pr_ready or similar indicates a prior successful attempt.
+                const completedImplRuns = runs.filter(
+                  r => r.agentType === 'implementor' && r.status === 'completed',
+                );
+                hasPriorCompletedRuns = completedImplRuns.length > 1;
+              } catch (runQueryErr) {
+                onPostLog?.('git', `Failed to query prior runs: ${runQueryErr instanceof Error ? runQueryErr.message : String(runQueryErr)}`);
+                // Fall through — if we can't determine history, use the safer no_changes
+              }
+            }
+
+            if (hasPriorCompletedRuns) {
+              onPostLog?.('git', `Branch HEAD equals ${baseRef} — changes already merged (prior completed runs exist)`);
+              await this.taskEventLog.log({
+                taskId,
+                category: 'agent',
+                severity: 'warning',
+                message: `No diff detected and branch HEAD equals ${baseRef} — changes likely already merged`,
+                data: { branch: worktree.branch, headSha, baseSha, baseRef },
+              });
+              return 'already_on_main';
+            }
+
+            // First implementor run with zero commits — agent failed to produce changes
+            onPostLog?.('git', `Branch HEAD equals ${baseRef} but no prior completed implementor runs — treating as no_changes`);
             await this.taskEventLog.log({
               taskId,
               category: 'agent',
               severity: 'warning',
-              message: `No diff detected and branch HEAD equals ${baseRef} — changes likely already merged`,
-              data: { branch: worktree.branch, headSha, baseSha, baseRef },
+              message: `No diff detected and branch HEAD equals ${baseRef} — first implementor run produced zero commits, treating as no_changes`,
+              data: { branch: worktree.branch, headSha, baseSha, baseRef, hasPriorCompletedRuns },
             });
-            return 'already_on_main';
+            return 'no_changes';
           }
         } catch (revParseErr) {
           onPostLog?.('git', `rev-parse failed: ${revParseErr instanceof Error ? revParseErr.message : String(revParseErr)}`);
