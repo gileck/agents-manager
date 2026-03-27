@@ -20,15 +20,13 @@ import { getChatImagesStorageDir } from '../utils/user-paths';
 import {
   type RunningAgent,
   type InjectedMessage,
-  parseUserContent,
-  extractTextFromContent,
   saveImagesToDisk,
-  isDefaultSessionName,
   parsePluginsConfig,
   DEFAULT_AGENT_LIB,
   CHAT_COMPLETE_SENTINEL,
 } from './chat-agent/chat-agent-helpers';
 import { runAgent, type RunAgentContext } from './chat-agent/agent-runner';
+import { summarizeMessages as doSummarize, autoNameSession as doAutoName, type ConversationUtilsContext } from './chat-agent/chat-conversation-utils';
 
 export type { RunningAgent } from './chat-agent/chat-agent-helpers';
 
@@ -677,85 +675,7 @@ export class ChatAgentService {
   }
 
   async summarizeMessages(sessionId: string): Promise<ChatMessage[]> {
-    this.stop(sessionId);
-
-    const messages = await this.chatMessageStore.getMessagesForSession(sessionId);
-    if (messages.length === 0) return [];
-
-    // Sum historical costs from existing messages
-    let historicalInputTokens = 0;
-    let historicalOutputTokens = 0;
-    let historicalCacheReadInputTokens = 0;
-    let historicalCacheCreationInputTokens = 0;
-    let historicalTotalCostUsd = 0;
-    for (const m of messages) {
-      historicalInputTokens += m.costInputTokens ?? 0;
-      historicalOutputTokens += m.costOutputTokens ?? 0;
-      historicalCacheReadInputTokens += m.cacheReadInputTokens ?? 0;
-      historicalCacheCreationInputTokens += m.cacheCreationInputTokens ?? 0;
-      historicalTotalCostUsd += m.totalCostUsd ?? 0;
-    }
-
-    // Build a summarization prompt
-    const conversationText = messages.map((m) => {
-      const roleLabel = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
-      const text = m.role === 'user' ? parseUserContent(m.content).text
-        : m.role === 'assistant' ? extractTextFromContent(m.content) : m.content;
-      return `[${roleLabel}]: ${text}`;
-    }).join('\n\n');
-
-    const summaryPrompt = `Summarize the following conversation concisely. Capture key topics discussed, decisions made, and important context. Output only the summary text, nothing else.\n\n${conversationText}`;
-
-    let summaryText = '';
-    let summaryCostInput: number | undefined;
-    let summaryCostOutput: number | undefined;
-    let summaryCacheReadInputTokens: number | undefined;
-    let summaryCacheCreationInputTokens: number | undefined;
-    let summaryTotalCostUsd: number | undefined;
-    try {
-      const lib = await this.resolveLibForSession(sessionId);
-      for await (const event of lib.query!(summaryPrompt, { maxTokens: 1000 })) {
-        if (event.type === 'text') {
-          summaryText += event.text;
-        } else if (event.type === 'result') {
-          summaryCostInput = event.usage?.input_tokens;
-          summaryCostOutput = event.usage?.output_tokens;
-          summaryCacheReadInputTokens = event.usage?.cache_read_input_tokens ?? undefined;
-          summaryCacheCreationInputTokens = event.usage?.cache_creation_input_tokens ?? undefined;
-          summaryTotalCostUsd = event.total_cost_usd ?? undefined;
-        }
-      }
-    } catch (err) {
-      summaryText = `[Summary generation failed: ${err instanceof Error ? err.message : String(err)}]\n\nOriginal conversation had ${messages.length} messages.`;
-    }
-
-    if (!summaryText.trim()) {
-      summaryText = `Conversation summary: ${messages.length} messages exchanged.`;
-    }
-
-    // Combine historical costs + summarization costs onto the summary message
-    const totalInputTokens = historicalInputTokens + (summaryCostInput ?? 0);
-    const totalOutputTokens = historicalOutputTokens + (summaryCostOutput ?? 0);
-    const totalCacheReadInputTokens = historicalCacheReadInputTokens + (summaryCacheReadInputTokens ?? 0);
-    const totalCacheCreationInputTokens = historicalCacheCreationInputTokens + (summaryCacheCreationInputTokens ?? 0);
-    const totalCostUsdValue = historicalTotalCostUsd + (summaryTotalCostUsd ?? 0);
-
-    // Append the summary as a new message — keep all existing messages for history
-    const summaryMsg = await this.chatMessageStore.addMessage({
-      sessionId,
-      role: 'system',
-      content: `[Conversation Summary]\n\n${summaryText}`,
-      costInputTokens: totalInputTokens || undefined,
-      costOutputTokens: totalOutputTokens || undefined,
-      cacheReadInputTokens: totalCacheReadInputTokens || undefined,
-      cacheCreationInputTokens: totalCacheCreationInputTokens || undefined,
-      totalCostUsd: totalCostUsdValue || undefined,
-    });
-
-    // Mark session as compacted so next sendMessage() starts a fresh SDK session
-    this.compactedSessions.add(sessionId);
-
-    return [summaryMsg];
+    return doSummarize(this.buildConversationUtilsContext(), sessionId);
   }
 
   async getRunningAgents(): Promise<RunningAgent[]> {
@@ -902,36 +822,7 @@ export class ChatAgentService {
    * Silently does nothing if the session no longer has a default name or if anything fails.
    */
   async autoNameSession(sessionId: string, firstMessage: string, onRenamed: (session: ChatSession) => void): Promise<void> {
-    try {
-      const messageText = firstMessage.slice(0, 300);
-      getAppLogger().info('ChatAgent', `Running autoNameSession with "${messageText.slice(0, 100)}"`);
-
-      const prompt = `Generate a short, descriptive name (3-6 words) for a chat session based on this first message. Return ONLY the name, with no quotes, punctuation, or explanation.\n\nFirst message: ${messageText}`;
-
-      let generatedName = '';
-      const start = Date.now();
-      const lib = await this.resolveLibForSession(sessionId);
-      for await (const event of lib.query!(prompt)) {
-        if (event.type === 'text') generatedName += event.text;
-      }
-      const elapsed = Date.now() - start;
-
-      // Strip leading/trailing punctuation/whitespace; enforce 50-char max
-      const cleanedName = generatedName.trim().replace(/^[^\w]+|[^\w]+$/g, '').slice(0, 50);
-      if (!cleanedName) return;
-
-      // Re-fetch to guard against manual rename that happened during the async call
-      const session = await this.chatSessionStore.getSession(sessionId);
-      if (!session || !isDefaultSessionName(session.name)) return;
-
-      const updatedSession = await this.chatSessionStore.updateSession(sessionId, { name: cleanedName });
-      if (!updatedSession) return;
-
-      getAppLogger().info('ChatAgent', `Changed session name to "${cleanedName}" (query took ${elapsed}ms)`);
-      onRenamed(updatedSession);
-    } catch {
-      // Silent failure — session retains its default name
-    }
+    return doAutoName(this.buildConversationUtilsContext(), sessionId, firstMessage, onRenamed);
   }
 
   private async resolveScope(session: { scopeType: string; scopeId: string }): Promise<{
@@ -968,6 +859,16 @@ export class ChatAgentService {
       projectName: project.name,
       projectDefaultAgentLib: project.config?.defaultAgentLib as string | undefined,
       projectPlugins: parsePluginsConfig(project.config?.plugins),
+    };
+  }
+
+  private buildConversationUtilsContext(): ConversationUtilsContext {
+    return {
+      chatMessageStore: this.chatMessageStore,
+      chatSessionStore: this.chatSessionStore,
+      compactedSessions: this.compactedSessions,
+      resolveLibForSession: (sid) => this.resolveLibForSession(sid),
+      stop: (sid) => this.stop(sid),
     };
   }
 
