@@ -576,6 +576,7 @@ export function TaskDetailPage() {
                   diagnostics={diagnostics}
                   refetchDiagnostics={refetchDiagnostics}
                   contextEntries={contextEntries ?? undefined}
+                  taskTitle={task.title}
                 />
               </div>
             )}

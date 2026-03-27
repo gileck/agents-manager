@@ -1,10 +1,11 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MessageSquare, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { InlineError } from '../components/InlineError';
 import { TaskSubPageLayout } from '../components/task-detail/TaskSubPageLayout';
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
+import { FixOptionCards } from '../components/docs/FixOptionCards';
 import { ReviewConversation } from '../components/plan/ReviewConversation';
 import { PostMortemReport } from '../components/reports/PostMortemReport';
 import { WorkflowReviewReport } from '../components/reports/WorkflowReviewReport';
@@ -13,7 +14,7 @@ import { useTask } from '../hooks/useTasks';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { reportError } from '../lib/error-handler';
-import type { Transition, TaskContextEntry, TaskDoc } from '../../shared/types';
+import type { Transition, TaskContextEntry, TaskDoc, ProposedFixOption } from '../../shared/types';
 import type { PostMortemData } from '../components/reports/PostMortemReport';
 import type { ReviewData } from '../components/reports/WorkflowReviewReport';
 import type { ReportPageConfig } from './reportConfigs';
@@ -27,7 +28,7 @@ interface ReportPageProps {
 export function ReportPage({ config }: ReportPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [transitioning, setTransitioning] = useState(false);
+  const [transitioning, setTransitioning] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useLocalStorage(config.chatStorageKey, true);
 
   const { task, refetch } = useTask(id!);
@@ -115,7 +116,7 @@ export function ReportPage({ config }: ReportPageProps) {
 
   const handleTransition = useCallback(async (toStatus: string) => {
     if (!id) return;
-    setTransitioning(true);
+    setTransitioning(toStatus);
     try {
       const result = await window.api.tasks.transition(id, toStatus, 'admin');
       if (result.success) {
@@ -130,7 +131,7 @@ export function ReportPage({ config }: ReportPageProps) {
     } catch (err) {
       reportError(err instanceof Error ? err : new Error(String(err)), 'Review transition');
     } finally {
-      setTransitioning(false);
+      setTransitioning(null);
     }
   }, [id, refetch, refetchTransitions, navigate]);
 
@@ -146,6 +147,19 @@ export function ReportPage({ config }: ReportPageProps) {
     }
     await handleTransition(toStatus);
   }, [id, config.entryType, config.label, refetchContext, handleTransition]);
+
+  // ─── Fix options (investigation review) ──────────────────────────────────
+
+  const fixOptions = useMemo(() => {
+    if (config.reviewStatus !== 'investigation_review') return null;
+    if (task?.status !== 'investigation_review') return null;
+    const entries = contextEntries ?? [];
+    const fixOptionsEntry = [...entries]
+      .filter(e => e.entryType === 'fix_options_proposed')
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+    const options = (fixOptionsEntry?.data as { options?: ProposedFixOption[] })?.options;
+    return options && options.length > 0 ? options : null;
+  }, [config.reviewStatus, task?.status, contextEntries]);
 
   // ─── Render left panel content ────────────────────────────────────────────
 
@@ -193,9 +207,9 @@ export function ReportPage({ config }: ReportPageProps) {
     </Button>
   );
 
-  const actionButtons = isReviewStatus && approveTransition ? (
+  const actionButtons = isReviewStatus && approveTransition && !fixOptions ? (
     <>
-      <Button size="sm" disabled={transitioning} onClick={() => handleFeedbackAction(approveTransition.to, '')}>
+      <Button size="sm" disabled={transitioning !== null} onClick={() => handleFeedbackAction(approveTransition.to, '')}>
         {transitioning ? 'Submitting...' : approveTransition.label || 'Approve & Implement'}
       </Button>
       {chatToggleButton}
@@ -218,6 +232,18 @@ export function ReportPage({ config }: ReportPageProps) {
           transition: 'width var(--motion-slow) var(--ease-standard)',
         }}>
           {renderLeftPanel()}
+          {/* Fix option cards after investigation report content */}
+          {fixOptions && id && task && (
+            <FixOptionCards
+              options={fixOptions}
+              taskId={id}
+              taskTitle={task.title}
+              transitions={transitions ?? []}
+              transitioning={transitioning}
+              onTransition={handleTransition}
+              taskType={task.type}
+            />
+          )}
         </div>
 
         {/* Right panel — conversation */}
@@ -242,7 +268,7 @@ export function ReportPage({ config }: ReportPageProps) {
             onSend={sendMessage}
             onStop={stopChat}
             onRequestChanges={reviseTransition ? (comment) => handleFeedbackAction(reviseTransition.to, comment ?? '') : undefined}
-            requestingChanges={transitioning}
+            requestingChanges={transitioning !== null}
             hasConversation={chatEntries.length > 0}
             placeholder={config.chatPlaceholder}
           />

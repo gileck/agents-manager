@@ -1,12 +1,11 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { PlanMarkdown } from '../task-detail/PlanMarkdown';
 import { MarkdownContent } from '../chat/MarkdownContent';
+import { FixOptionCards } from './FixOptionCards';
 import { DOC_PHASES, getPhaseByDocType, getPhaseByReviewStatus } from '../../../shared/doc-phases';
 import type { Task, TaskDoc, TaskContextEntry, Transition, DocArtifactType, PipelineStatus, ProposedFixOption } from '../../../shared/types';
-import { reportError } from '../../lib/error-handler';
-import { buildFixOptionSummary } from '../../utils/fix-option-summary';
 
 interface DocsPanelProps {
   task: Task;
@@ -61,6 +60,16 @@ export function DocsPanel({
   const feedbackEntries = selectedPhase
     ? contextEntries.filter(e => e.entryType === selectedPhase.feedbackType)
     : [];
+
+  // Fix options for investigation_review
+  const fixOptions = useMemo<ProposedFixOption[] | null>(() => {
+    if (!isSelectedInReview || task.status !== 'investigation_review') return null;
+    const entry = [...contextEntries]
+      .filter(e => e.entryType === 'fix_options_proposed')
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+    const options = (entry?.data as { options?: ProposedFixOption[] })?.options;
+    return options && options.length > 0 ? options : null;
+  }, [isSelectedInReview, task.status, contextEntries]);
 
   // Find approve transition
   const approveTransition = transitions.find(t => t.to === 'implementing');
@@ -173,16 +182,29 @@ export function DocsPanel({
             {/* Markdown content */}
             <PlanMarkdown content={selectedDoc.content} />
 
-            {/* Quick approve button during review — with fix option selector for investigation_review */}
-            {isSelectedInReview && approveTransition && (
-              <InvestigationFixOptionApprove
-                task={task}
-                contextEntries={contextEntries}
-                approveTransition={approveTransition}
+            {/* Fix option cards for investigation_review — shown right after report content */}
+            {fixOptions && (
+              <FixOptionCards
+                options={fixOptions}
+                taskId={task.id}
+                taskTitle={task.title}
+                transitions={transitions}
                 transitioning={transitioning}
-                onAction={onAction}
-                feedbackType={selectedPhase.feedbackType}
+                onTransition={(toStatus) => onAction(toStatus, '', selectedPhase.feedbackType)}
+                taskType={task.type}
               />
+            )}
+
+            {/* Quick approve button during review (non-investigation or no fix options) */}
+            {isSelectedInReview && approveTransition && !fixOptions && (
+              <div style={{ display: 'flex', gap: 8, paddingTop: 16, marginTop: 16, borderTop: '1px solid var(--border)' }}>
+                <Button
+                  onClick={() => onAction(approveTransition.to, '', selectedPhase?.feedbackType ?? '')}
+                  disabled={transitioning !== null}
+                >
+                  {transitioning === approveTransition.to ? 'Approving...' : approveTransition.label || 'Approve & Implement'}
+                </Button>
+              </div>
             )}
 
             {/* Review comments */}
@@ -232,131 +254,3 @@ export function DocsPanel({
   );
 }
 
-/** Sub-component: shows fix option dropdown + approve button when options exist, otherwise simple approve */
-function InvestigationFixOptionApprove({
-  task,
-  contextEntries,
-  approveTransition,
-  transitioning,
-  onAction,
-  feedbackType,
-}: {
-  task: Task;
-  contextEntries: TaskContextEntry[];
-  approveTransition: Transition;
-  transitioning: string | null;
-  onAction: (toStatus: string, comment: string, feedbackType: string) => Promise<void>;
-  feedbackType: string;
-}) {
-  // Only show dropdown in investigation_review when fix options exist
-  const fixOptionsEntry = useMemo(() => {
-    if (task.status !== 'investigation_review') return null;
-    return [...contextEntries]
-      .filter(e => e.entryType === 'fix_options_proposed')
-      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
-  }, [task.status, contextEntries]);
-
-  const options = (fixOptionsEntry?.data as { options?: ProposedFixOption[] })?.options;
-
-  const recommendedOption = options?.find(o => o.recommended) ?? options?.[0];
-  const [selectedId, setSelectedId] = useState(recommendedOption?.id ?? '');
-  const [saving, setSaving] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-
-  const selectedOption = options?.find(o => o.id === selectedId);
-
-  const handleApproveWithOption = useCallback(async () => {
-    if (!selectedOption || saving) return;
-    setSaving(true);
-    try {
-      await window.api.tasks.addContextEntry(task.id, {
-        source: 'user',
-        entryType: 'fix_option_selected',
-        summary: buildFixOptionSummary(selectedOption),
-        data: { option: selectedOption },
-      });
-      await onAction(approveTransition.to, '', feedbackType);
-    } catch (err) {
-      reportError(err, 'Save fix option selection');
-    } finally {
-      setSaving(false);
-    }
-  }, [selectedOption, saving, task.id, onAction, approveTransition.to, feedbackType]);
-
-  // No options available — fall back to simple approve button
-  if (!options || options.length === 0) {
-    return (
-      <div style={{ display: 'flex', gap: 8, paddingTop: 16, marginTop: 16, borderTop: '1px solid var(--border)' }}>
-        <Button
-          onClick={() => onAction(approveTransition.to, '', feedbackType)}
-          disabled={transitioning !== null}
-        >
-          {transitioning === approveTransition.to ? 'Approving...' : approveTransition.label || 'Approve & Implement'}
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ paddingTop: 16, marginTop: 16, borderTop: '1px solid var(--border)' }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <select
-          value={selectedId}
-          onChange={(e) => { setSelectedId(e.target.value); setExpanded(false); }}
-          disabled={transitioning !== null || saving}
-          style={{
-            maxWidth: 400,
-            fontSize: 13,
-            padding: '6px 10px',
-            borderRadius: 6,
-            border: '1px solid var(--border)',
-            background: 'var(--background)',
-            color: 'var(--foreground)',
-          }}
-        >
-          {options.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}{opt.recommended ? ' ★' : ''}
-            </option>
-          ))}
-        </select>
-        <Button
-          onClick={handleApproveWithOption}
-          disabled={transitioning !== null || saving}
-        >
-          {saving ? 'Saving...' : transitioning === approveTransition.to ? 'Approving...' : approveTransition.label || 'Approve & Implement'}
-        </Button>
-      </div>
-      {/* Expandable option description */}
-      {selectedOption && (
-        <div style={{ marginTop: 8 }}>
-          <button
-            onClick={() => setExpanded(!expanded)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 12,
-              color: 'var(--muted-foreground)',
-              padding: 0,
-            }}
-          >
-            {expanded ? '▾ Hide details' : '▸ Show option details'}
-          </button>
-          {expanded && (
-            <div style={{
-              marginTop: 6,
-              padding: '8px 12px',
-              borderRadius: 6,
-              border: '1px solid var(--border)',
-              background: 'var(--muted)',
-              fontSize: 13,
-            }}>
-              <MarkdownContent content={selectedOption.description} />
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
