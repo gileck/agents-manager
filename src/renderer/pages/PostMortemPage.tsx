@@ -263,6 +263,32 @@ function PostMortemResults({
         ) : null;
       })()}
 
+      {/* Architectural assessment */}
+      {data.architecturalAssessment && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+            Architectural Assessment
+          </p>
+          {data.architecturalAssessment.architectureSummary && (
+            <p className="text-sm whitespace-pre-wrap mb-3">{data.architecturalAssessment.architectureSummary}</p>
+          )}
+          {Array.isArray(data.architecturalAssessment.issues) && data.architecturalAssessment.issues.length > 0 && (
+            <div className="space-y-2">
+              {data.architecturalAssessment.issues.map((issue, i) => (
+                <div key={i} className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 space-y-1.5">
+                  <p className="text-sm font-medium">{issue.area}</p>
+                  <div className="text-xs space-y-1">
+                    <p><span className="font-semibold text-muted-foreground">Problem:</span> {issue.description}</p>
+                    <p><span className="font-semibold text-muted-foreground">Impact:</span> {issue.impact}</p>
+                    <p><span className="font-semibold text-muted-foreground">Suggestion:</span> {issue.suggestion}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Suggested tasks */}
       {Array.isArray(data.suggestedTasks) && data.suggestedTasks.length > 0 && (
         <div>

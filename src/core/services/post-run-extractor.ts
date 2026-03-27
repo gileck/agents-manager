@@ -444,6 +444,7 @@ export class PostRunExtractor {
           analysis?: string;
           codebaseImprovements?: string[];
           suggestedTasks?: Array<{ title: string; description: string }>;
+          architecturalAssessment?: { architectureSummary: string; issues: Array<{ area: string; description: string; impact: string; suggestion: string }> };
         }
         const pmso = result.structuredOutput as PostMortemReviewerOutput | undefined;
         entryData.rootCause = pmso?.rootCause;
@@ -452,6 +453,7 @@ export class PostRunExtractor {
         entryData.analysis = pmso?.analysis;
         entryData.codebaseImprovements = pmso?.codebaseImprovements;
         entryData.suggestedTasks = pmso?.suggestedTasks;
+        entryData.architecturalAssessment = pmso?.architecturalAssessment;
       }
       if (agentType === 'triager') {
         const tso = result.structuredOutput as { suggestedPhase?: string; phaseSkipJustification?: string; relevanceVerdict?: string } | undefined;
@@ -479,6 +481,7 @@ export class PostRunExtractor {
           if (entryData.analysis) pmData.analysis = entryData.analysis as string;
           if (entryData.codebaseImprovements) pmData.codebaseImprovements = entryData.codebaseImprovements as string[];
           if (entryData.suggestedTasks) pmData.suggestedTasks = entryData.suggestedTasks as PostMortemData['suggestedTasks'];
+          if (entryData.architecturalAssessment) pmData.architecturalAssessment = entryData.architecturalAssessment as PostMortemData['architecturalAssessment'];
           await this.taskStore.updateTask(taskId, { postMortem: pmData });
           onLog('Saved post-mortem data to task field');
         } catch (pmErr) {

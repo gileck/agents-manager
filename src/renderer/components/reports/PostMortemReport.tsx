@@ -95,6 +95,23 @@ export function PostMortemReport({ data, taskId, onTaskCreated }: PostMortemRepo
     markdownParts.push('');
   }
 
+  if (data.architecturalAssessment) {
+    markdownParts.push('## Architectural Assessment\n');
+    if (data.architecturalAssessment.architectureSummary) {
+      markdownParts.push(data.architecturalAssessment.architectureSummary);
+      markdownParts.push('');
+    }
+    if (Array.isArray(data.architecturalAssessment.issues) && data.architecturalAssessment.issues.length > 0) {
+      markdownParts.push('### Architectural Issues\n');
+      for (const issue of data.architecturalAssessment.issues) {
+        markdownParts.push(`#### ${issue.area}\n`);
+        markdownParts.push(`**Problem:** ${issue.description}\n`);
+        markdownParts.push(`**Impact:** ${issue.impact}\n`);
+        markdownParts.push(`**Suggestion:** ${issue.suggestion}\n`);
+      }
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header badges */}

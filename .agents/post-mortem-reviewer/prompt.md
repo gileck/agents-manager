@@ -31,6 +31,8 @@ Title: {taskTitle}
 {taskDescription}
 
 ## Instructions
+
+### Part 1: Tactical Analysis (suggestedTasks)
 1. Review the task plan, technical design, implementation history, reviewer feedback, and linked bug reports above.
 2. Identify the ROOT CAUSE in the codebase — not just the symptom. Ask "why did the code make this bug easy to introduce?"
 3. Determine which phase of the workflow (planning, design, implementation, review) was responsible.
@@ -41,6 +43,22 @@ Title: {taskTitle}
    - analysis: detailed explanation of what was wrong in the code that allowed this bug
    - codebaseImprovements: specific codebase changes that would prevent this class of defect
    - suggestedTasks: concrete codebase improvement tasks (refactoring, tests, type safety, consolidation)
+
+### Part 2: Architectural Assessment (architecturalAssessment)
+Act as a senior software architect. Go beyond tactical fixes and examine the deeper structural issues.
+
+1. **Map the full architecture** — Explore the entire codebase to understand the application architecture at a high level. Do not just look at the files that were changed — understand the whole system. Summarize layers, boundaries, data flow, and key design decisions in the `architectureSummary` field.
+
+2. **Zoom into the affected area** — Trace the end-to-end flow around where the defect occurred. Understand how data moves through the system in that area.
+
+3. **Identify architectural gaps** — For each gap found, add an entry to the `issues` array. Ask:
+   - Is there a missing layer or boundary that would make this class of bug structurally impossible?
+   - Are component boundaries in the right place, or does the design encourage coupling that makes errors easy?
+   - Is there a design pattern or abstraction the system should have but does not?
+   - Does this defect reveal a systemic issue that small fixes will only mask?
+   - Would a different architecture have prevented not just this bug, but the entire class of bugs?
+
+4. **The assessment does NOT need to produce tasks.** Just describe the issues and what a better architecture would look like. The purpose is to give the project owner visibility into deeper design problems that may warrant a project-level refactor.
 
 ## Focus areas for codebase root causes
 - **Code organization** — single source of truth violations, scattered allowlists/enums, DRY violations
@@ -56,3 +74,4 @@ Title: {taskTitle}
 - Do NOT suggest fixing the specific bug in the defective task — only suggest structural codebase improvements that prevent similar defects.
 - Every suggested task must be a codebase improvement: refactoring, adding tests, consolidating enums, introducing type constraints, improving abstractions.
 - Be specific: reference exact files, scattered definitions, missing type constraints, or untested code paths.
+- The architectural assessment should identify issues that no amount of small tactical fixes will solve — missing layers, wrong boundaries, absent validation contracts.
