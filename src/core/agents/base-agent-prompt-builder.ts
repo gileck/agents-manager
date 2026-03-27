@@ -126,9 +126,11 @@ export abstract class BaseAgentPromptBuilder {
       case 'info_provided':
         lines.push('The user has provided answers to your questions. Continue where you left off and use their decisions to complete the task.');
         break;
-      case 'merge_failed':
-        lines.push('A merge/rebase conflict was detected. Resolve the conflicts and ensure the branch is clean.');
+      case 'merge_failed': {
+        const target = context.rebaseTarget ?? 'origin/main';
+        lines.push(`A merge/rebase conflict was detected. Rebase against \`${target}\`, resolve the conflicts, and ensure the branch is clean.`);
         break;
+      }
       case 'uncommitted_changes':
         lines.push('There are uncommitted changes from a prior run. Stage and commit them to complete the task.');
         break;

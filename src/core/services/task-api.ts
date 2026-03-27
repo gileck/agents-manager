@@ -58,4 +58,16 @@ export class TaskAPI implements ITaskAPI {
   async createTask(input: TaskCreateInput): Promise<Task> {
     return this.taskStore.createTask(input);
   }
+
+  async getTaskById(taskId: string): Promise<Task | null> {
+    return this.taskStore.getTask(taskId);
+  }
+
+  async updateTaskById(taskId: string, updates: TaskUpdateInput): Promise<void> {
+    await this.taskStore.updateTask(taskId, updates);
+  }
+
+  async logEventForTask(taskId: string, input: { category: TaskEventCategory; severity: TaskEventSeverity; message: string; data?: Record<string, unknown> }): Promise<void> {
+    await this.taskEventLog.log({ ...input, taskId });
+  }
 }

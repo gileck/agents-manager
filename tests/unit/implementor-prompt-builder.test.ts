@@ -323,6 +323,18 @@ describe('ImplementorPromptBuilder', () => {
       expect(prompt).not.toContain('Merge Failure Details');
     });
 
+    it('should use custom rebaseTarget in merge_failed prompt for multi-phase tasks', () => {
+      const ctx = createContext({
+        mode: 'revision' as AgentMode,
+        revisionReason: 'merge_failed' as RevisionReason,
+        rebaseTarget: 'origin/task/2c032bbf/integration',
+        taskContext: [],
+      });
+      const prompt = builder.buildPrompt(ctx);
+      expect(prompt).toContain('git rebase origin/task/2c032bbf/integration');
+      expect(prompt).not.toContain('git rebase origin/main');
+    });
+
     it('should append validation errors when present', () => {
       const ctx = createContext({ mode: 'new', validationErrors: 'ESLint: unused variable' });
       const prompt = builder.buildPrompt(ctx);
