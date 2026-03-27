@@ -126,6 +126,8 @@ const FIELD_CONSTANT_MAP: Record<string, { constant: readonly string[]; label: s
 const KNOWN_EXTENSIONS: Record<string, string[]> = {
   // Triager's suggestedPhase also allows 'closed' (task irrelevant)
   'triager:.suggestedPhase': ['closed'],
+  // Investigator's proposedOptions[].size uses fix-tier letters (S/M/L/XL), not task-size values
+  'investigator:.proposedOptions[].size': ['S', 'M', 'L', 'XL'],
 };
 
 // ---------------------------------------------------------------------------

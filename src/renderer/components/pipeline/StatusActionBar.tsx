@@ -1,12 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { Button } from '../ui/button';
 import { SplitButton } from '../ui/SplitButton';
+import { FixOptionCards } from '../docs/FixOptionCards';
 import { getRecommendedTransition, isEscapeTransition } from '../../utils/getRecommendedTransition';
 import { AgentRunErrorBanner } from '../agent-run/AgentRunErrorBanner';
 import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity, TaskContextEntry, ProposedFixOption, GuardBlockRecord } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
-import { reportError } from '../../lib/error-handler';
-import { buildFixOptionSummary } from '../../utils/fix-option-summary';
 
 type TaskProps = {
   status: string;
@@ -93,6 +92,7 @@ export function StatusActionBar({
   taskId,
   guardBlocks,
   stuckReason,
+  taskTitle,
 }: {
   task: TaskProps;
   isAgentPipeline: boolean;
@@ -113,6 +113,7 @@ export function StatusActionBar({
   taskId?: string;
   guardBlocks?: GuardBlockRecord[];
   stuckReason?: string;
+  taskTitle?: string;
 }) {
   if (!isAgentPipeline) {
     // Fallback: render smart split button
@@ -275,7 +276,7 @@ export function StatusActionBar({
         </div>
       );
     }
-    // Investigation review with fix options dropdown
+    // Investigation review with fix option cards
     if (status === 'investigation_review' && contextEntries && taskId) {
       const fixOptionsEntry = [...contextEntries]
         .filter(e => e.entryType === 'fix_options_proposed')
@@ -284,12 +285,14 @@ export function StatusActionBar({
 
       if (options && options.length > 0) {
         return (
-          <InvestigationReviewWithOptions
+          <FixOptionCards
             options={options}
             taskId={taskId}
-            primaryTransitions={primaryTransitions}
+            taskTitle={taskTitle ?? ''}
+            transitions={primaryTransitions}
             transitioning={transitioning}
             onTransition={onTransition}
+            compact
           />
         );
       }
@@ -392,102 +395,3 @@ export function StatusActionBar({
   return null;
 }
 
-/** Sub-component for investigation_review with fix option dropdown */
-function InvestigationReviewWithOptions({
-  options,
-  taskId,
-  primaryTransitions,
-  transitioning,
-  onTransition,
-}: {
-  options: ProposedFixOption[];
-  taskId: string;
-  primaryTransitions: Transition[];
-  transitioning: string | null;
-  onTransition: (toStatus: string) => void;
-}) {
-  const recommendedOption = options.find(o => o.recommended) ?? options[0];
-  const [selectedId, setSelectedId] = useState(recommendedOption.id);
-  const [saving, setSaving] = useState(false);
-
-  const forwardTransitions = primaryTransitions.filter((t) => !isEscapeTransition(t));
-  const escapeTransitions = primaryTransitions.filter(isEscapeTransition);
-  const approveTransition = forwardTransitions.find(t => t.to === 'implementing') ?? forwardTransitions[0];
-
-  const handleApprove = useCallback(async () => {
-    if (!approveTransition || saving) return;
-    const selected = options.find(o => o.id === selectedId);
-    if (!selected) return;
-
-    setSaving(true);
-    try {
-      await window.api.tasks.addContextEntry(taskId, {
-        source: 'user',
-        entryType: 'fix_option_selected',
-        summary: buildFixOptionSummary(selected),
-        data: { option: selected },
-      });
-      onTransition(approveTransition.to);
-    } catch (err) {
-      reportError(err, 'Save fix option selection');
-    } finally {
-      setSaving(false);
-    }
-  }, [approveTransition, saving, options, selectedId, taskId, onTransition]);
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <select
-        value={selectedId}
-        onChange={(e) => setSelectedId(e.target.value)}
-        disabled={transitioning !== null || saving}
-        style={{
-          maxWidth: 400,
-          fontSize: 13,
-          padding: '4px 8px',
-          borderRadius: 6,
-          border: '1px solid var(--border)',
-          background: 'var(--background)',
-          color: 'var(--foreground)',
-        }}
-      >
-        {options.map((opt) => (
-          <option key={opt.id} value={opt.id}>
-            {opt.label}{opt.recommended ? ' ★' : ''}
-          </option>
-        ))}
-      </select>
-      {approveTransition && (
-        <Button
-          size="sm"
-          onClick={handleApprove}
-          disabled={transitioning !== null || saving}
-        >
-          {saving ? 'Saving...' : transitioning === approveTransition.to ? 'Transitioning...' : (approveTransition.label || 'Approve & Implement')}
-        </Button>
-      )}
-      {forwardTransitions.filter(t => t !== approveTransition).map((t) => (
-        <Button
-          key={t.to}
-          size="sm"
-          variant="outline"
-          onClick={() => onTransition(t.to)}
-          disabled={transitioning !== null || saving}
-        >
-          {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
-        </Button>
-      ))}
-      {escapeTransitions.map((t) => (
-        <Button
-          key={t.to}
-          size="sm"
-          variant="outline"
-          onClick={() => onTransition(t.to)}
-          disabled={transitioning !== null || saving}
-        >
-          {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
-        </Button>
-      ))}
-    </div>
-  );
-}

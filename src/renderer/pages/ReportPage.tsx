@@ -1,10 +1,11 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MessageSquare, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { InlineError } from '../components/InlineError';
 import { TaskSubPageLayout } from '../components/task-detail/TaskSubPageLayout';
 import { PlanMarkdown } from '../components/task-detail/PlanMarkdown';
+import { FixOptionCards } from '../components/docs/FixOptionCards';
 import { ReviewConversation } from '../components/plan/ReviewConversation';
 import { PostMortemReport } from '../components/reports/PostMortemReport';
 import { WorkflowReviewReport } from '../components/reports/WorkflowReviewReport';
@@ -13,7 +14,7 @@ import { useTask } from '../hooks/useTasks';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { reportError } from '../lib/error-handler';
-import type { Transition, TaskContextEntry, TaskDoc } from '../../shared/types';
+import type { Transition, TaskContextEntry, TaskDoc, ProposedFixOption } from '../../shared/types';
 import type { PostMortemData } from '../components/reports/PostMortemReport';
 import type { ReviewData } from '../components/reports/WorkflowReviewReport';
 import type { ReportPageConfig } from './reportConfigs';
@@ -147,6 +148,19 @@ export function ReportPage({ config }: ReportPageProps) {
     await handleTransition(toStatus);
   }, [id, config.entryType, config.label, refetchContext, handleTransition]);
 
+  // ─── Fix options (investigation review) ──────────────────────────────────
+
+  const fixOptions = useMemo(() => {
+    if (config.reviewStatus !== 'investigation_review') return null;
+    if (task?.status !== 'investigation_review') return null;
+    const entries = contextEntries ?? [];
+    const fixOptionsEntry = [...entries]
+      .filter(e => e.entryType === 'fix_options_proposed')
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+    const options = (fixOptionsEntry?.data as { options?: ProposedFixOption[] })?.options;
+    return options && options.length > 0 ? options : null;
+  }, [config.reviewStatus, task?.status, contextEntries]);
+
   // ─── Render left panel content ────────────────────────────────────────────
 
   function renderLeftPanel(): React.ReactNode {
@@ -218,6 +232,17 @@ export function ReportPage({ config }: ReportPageProps) {
           transition: 'width var(--motion-slow) var(--ease-standard)',
         }}>
           {renderLeftPanel()}
+          {/* Fix option cards after investigation report content */}
+          {fixOptions && id && task && (
+            <FixOptionCards
+              options={fixOptions}
+              taskId={id}
+              taskTitle={task.title}
+              transitions={transitions ?? []}
+              transitioning={transitioning ? 'transitioning' : null}
+              onTransition={handleTransition}
+            />
+          )}
         </div>
 
         {/* Right panel — conversation */}

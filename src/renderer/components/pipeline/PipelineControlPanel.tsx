@@ -22,6 +22,7 @@ interface PipelineControlPanelProps {
   diagnostics: PipelineDiagnostics | null;
   refetchDiagnostics: () => void;
   contextEntries?: TaskContextEntry[];
+  taskTitle?: string;
 }
 
 export function PipelineControlPanel({
@@ -42,6 +43,7 @@ export function PipelineControlPanel({
   diagnostics,
   refetchDiagnostics,
   contextEntries,
+  taskTitle,
 }: PipelineControlPanelProps) {
   const [forceDialogOpen, setForceDialogOpen] = useState(false);
   const [forcing, setForcing] = useState(false);
@@ -97,6 +99,7 @@ export function PipelineControlPanel({
         taskId={taskId}
         guardBlocks={diagnostics?.recentGuardBlocks}
         stuckReason={diagnostics?.stuckReason}
+        taskTitle={taskTitle}
       />
 
       {/* Force transition dialog */}

@@ -207,10 +207,13 @@ export const AGENT_PIPELINE: SeededPipeline = {
     { from: 'triage_review', to: 'backlog', trigger: 'manual', label: 'Move to Backlog' },
     { from: 'triage_review', to: 'closed', trigger: 'manual', label: 'Close Task' },
 
-    // Investigation review → implement (simple) / design (complex) / re-investigate
+    // Investigation review → implement (S) / plan (M) / design (L) / re-investigate
     { from: 'investigation_review', to: 'implementing', trigger: 'manual', label: 'Approve & Implement',
       guards: [{ name: 'no_running_agent' }],
       hooks: [startAgent('implementor', 'new')] },
+    { from: 'investigation_review', to: 'planning', trigger: 'manual', label: 'Approve & Plan',
+      guards: [{ name: 'no_running_agent' }],
+      hooks: [startAgent('planner', 'new')] },
     { from: 'investigation_review', to: 'designing', trigger: 'manual', label: 'Start Technical Design',
       guards: [{ name: 'no_running_agent' }],
       hooks: [startAgent('designer', 'new')] },
