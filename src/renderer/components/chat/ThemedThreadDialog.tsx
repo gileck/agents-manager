@@ -11,10 +11,20 @@ import { reportError } from '../../lib/error-handler';
 import type { ThreadIntent, ThreadIntentConfig } from '../../lib/thread-intent-prompts';
 import { THREAD_INTENTS } from '../../lib/thread-intent-prompts';
 
+const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac');
+
 interface ThemedThreadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   intent: ThreadIntent;
+}
+
+/**
+ * Navigation state passed when navigating to /chat/:sessionId after themed
+ * thread creation. ChatPage detects this and auto-sends the initial message.
+ */
+export interface ThemedThreadNavState {
+  initialMessage: string;
 }
 
 export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadDialogProps) {
@@ -34,7 +44,8 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
   }, [open]);
 
   const handleSubmit = useCallback(async () => {
-    if (!userInput.trim() || !currentProjectId) return;
+    const message = userInput.trim();
+    if (!message || !currentProjectId) return;
     setSubmitting(true);
     try {
       // 1. Create a new chat session
@@ -49,17 +60,10 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
       // 3. Close the dialog
       onOpenChange(false);
 
-      // 4. Navigate to the chat page with this session
-      navigate(`/chat/${session.id}`);
-
-      // 5. Auto-send the user's message after a brief delay to let the page mount
-      setTimeout(async () => {
-        try {
-          await window.api.chat.send(session.id, userInput.trim());
-        } catch (err) {
-          reportError(err, `Send ${config.label} message`);
-        }
-      }, 300);
+      // 4. Navigate to the chat page with the initial message in navigation state.
+      //    ChatPage detects this and auto-sends once the session is ready.
+      const navState: ThemedThreadNavState = { initialMessage: message };
+      navigate(`/chat/${session.id}`, { state: navState });
     } catch (err) {
       reportError(err, `Create ${config.label} thread`);
     } finally {
@@ -91,7 +95,7 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
             autoFocus
           />
           <p className="text-xs text-muted-foreground mt-2">
-            Press {navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'}+Enter to submit
+            Press {isMac ? 'Cmd' : 'Ctrl'}+Enter to submit
           </p>
         </div>
         <DialogFooter>

@@ -3,7 +3,8 @@
  *
  * Each intent defines a specialized system prompt that instructs the thread
  * agent how to handle the user's request — when to ask clarifying questions
- * and when to create a well-structured task via the `create_task` MCP tool.
+ * and when to create a well-structured task via the `create_task` MCP tool
+ * (defined in src/core/mcp/task-mcp-server.ts).
  */
 
 export type ThreadIntent = 'feature' | 'bug' | 'improvement';
@@ -24,7 +25,7 @@ const FEATURE_PROMPT = `You are a Feature Request assistant. Your job is to help
    - What is the expected behavior?
    - Who is the target user / what is the use case?
    - Are there any constraints or dependencies?
-4. Once you have enough information, create the task using the \`create_task\` MCP tool with:
+4. Once you have enough information, create the task using the available task-creation tool (e.g. \`create_task\`) with:
    - A concise, descriptive title
    - A well-structured description with scope, acceptance criteria, and any relevant context
    - Type: "feature"
@@ -42,7 +43,7 @@ const BUG_PROMPT = `You are a Bug Report assistant. Your job is to help the user
    - What was the expected behavior vs what actually happened?
    - How severe is this? (blocking, major, minor)
    - Any error messages or screenshots?
-4. Once you have enough information, create the task using the \`create_task\` MCP tool with:
+4. Once you have enough information, create the task using the available task-creation tool (e.g. \`create_task\`) with:
    - A concise title that describes the bug (e.g., "Fix: X fails when Y")
    - A well-structured description with reproduction steps, expected vs actual behavior, severity, and environment context
    - Type: "bug"
@@ -59,7 +60,7 @@ const IMPROVEMENT_PROMPT = `You are an Improvement Request assistant. Your job i
    - What is the current behavior that needs improvement?
    - What specific changes are you looking for?
    - What is the motivation / pain point?
-4. Once you have enough information, create the task using the \`create_task\` MCP tool with:
+4. Once you have enough information, create the task using the available task-creation tool (e.g. \`create_task\`) with:
    - A concise title that describes the improvement
    - A well-structured description explaining what exists today, what should change, and why
    - Type: "improvement"
