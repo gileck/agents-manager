@@ -272,6 +272,29 @@ describe('Agent (integration with BaseAgentLib)', () => {
 
       expect(lib.executeCalls[0].options.model).toBe('opus-4.6');
     });
+
+    it('always includes global read-only paths (screenshots, chat images) in readOnlyPaths', async () => {
+      const { agent, lib } = buildAgent();
+
+      await agent.execute(makeContext({ workdir: '/my/workdir' }), makeConfig());
+
+      const opts = lib.executeCalls[0].options;
+      // Should include the screenshot and chat-images directories
+      expect(opts.readOnlyPaths).toBeDefined();
+      expect(opts.readOnlyPaths!.some(p => p.includes('screenshots'))).toBe(true);
+      expect(opts.readOnlyPaths!.some(p => p.includes('chat-images'))).toBe(true);
+    });
+
+    it('includes global read-only paths even for non-readOnly agents', async () => {
+      const { agent, lib } = buildAgent();
+      // Default MockPromptBuilder returns readOnly: false
+
+      await agent.execute(makeContext({ workdir: '/my/workdir' }), makeConfig());
+
+      const opts = lib.executeCalls[0].options;
+      expect(opts.readOnlyPaths!.some(p => p.includes('screenshots'))).toBe(true);
+      expect(opts.readOnlyPaths!.some(p => p.includes('chat-images'))).toBe(true);
+    });
   });
 
   // ============================================
