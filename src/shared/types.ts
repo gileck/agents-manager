@@ -1675,6 +1675,8 @@ export interface ProposedFixOption {
   label: string;
   description: string;
   recommended?: boolean;
+  /** Size tier for the fix — determines default routing target. */
+  size?: 'S' | 'M' | 'L' | 'XL';
 }
 
 /** Input for creating or upserting a task doc. */
