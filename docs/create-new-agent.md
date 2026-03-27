@@ -1,13 +1,14 @@
 ---
 title: Creating a New Agent
 description: Step-by-step guide for adding a new agent type to the system
-summary: "After the registration boilerplate refactor, adding a new agent type requires only 3 files: a prompt builder, a DOC_PHASES entry, and extraction logic. Registries in setup.ts (AGENT_BUILDERS), types.ts (FEEDBACK_ENTRY_TYPES), and agent-service.ts (extractDoc) auto-derive from these sources."
+summary: "Adding a new agent type requires 3 files: a prompt builder, a DOC_PHASES entry, and a colocated post-run handler. Registries (AGENT_BUILDERS, POST_RUN_HANDLERS) auto-wire everything — no editing agent-service.ts."
 priority: 3
 key_points:
-  - "3-file workflow: (1) create prompt builder, (2) add DOC_PHASES entry, (3) add extraction method + registry entry"
+  - "3-file workflow: (1) create prompt builder, (2) add DOC_PHASES entry, (3) create colocated post-run handler"
   - "AGENT_BUILDERS map in src/core/agents/agent-builders.ts replaces scattered imports and registration lines in setup.ts"
   - "FEEDBACK_ENTRY_TYPES in types.ts auto-derives from DOC_PHASES — no manual array editing needed"
-  - "extractDoc() in post-run-extractor.ts dispatches to the right extractor via a registry map — no editing agent-service.ts"
+  - "POST_RUN_HANDLERS in src/core/agents/post-run-handlers.ts maps agent types to handler functions — no editing agent-service.ts"
+  - "Each handler is colocated with its prompt builder and maps LLM output → TaskAPI persistence calls"
 ---
 # Creating a New Agent
 
@@ -15,22 +16,18 @@ Step-by-step guide for adding a new agent type to the system.
 
 ## Overview
 
-Before the registration refactor, adding a new agent type required editing 7+ files with mostly boilerplate changes. Now the process requires only **3 files** (plus optional steps for non-standard agents):
+Adding a new agent type requires only **3 files** (plus optional steps for non-standard agents):
 
-| Before (7+ files) | After (3 files) |
+| File | Purpose |
 |---|---|
-| Prompt builder | Prompt builder |
-| `setup.ts` — import + registration | *(auto-wired via AGENT_BUILDERS)* |
-| `types.ts` — FEEDBACK_ENTRY_TYPES | *(auto-derived from DOC_PHASES)* |
-| `doc-phases.ts` — DOC_PHASES entry | DOC_PHASES entry |
-| `post-run-extractor.ts` — extraction + registry | Extraction method + registry entry |
-| `agent-service.ts` — extractor call | *(auto-dispatched via extractDoc)* |
-| `outcome-schemas.ts` — outcome signal | *(optional, only if custom outcomes)* |
+| Prompt builder (`src/core/agents/<name>-prompt-builder.ts`) | Defines the LLM prompt and structured output schema |
+| DOC_PHASES entry (`src/shared/doc-phases.ts`) | Registers doc type, feedback type, pipeline statuses |
+| Post-run handler (`src/core/agents/<name>-post-run-handler.ts`) | Maps LLM output → TaskAPI persistence calls |
 
-The reduction comes from three registries that auto-derive behavior:
+The reduction comes from registries that auto-derive behavior:
 1. **AGENT_BUILDERS** (`src/core/agents/agent-builders.ts`) — maps agent type strings to builder classes; `setup.ts` loops over it
-2. **FEEDBACK_ENTRY_TYPES** (`src/shared/types.ts`) — derived from `DOC_PHASES.map(p => p.feedbackType)` plus non-doc feedback types
-3. **docExtractors** (`src/core/services/post-run-extractor.ts`) — maps agent types to extraction methods; `agent-service.ts` calls a single `extractDoc()` dispatcher
+2. **POST_RUN_HANDLERS** (`src/core/agents/post-run-handlers.ts`) — maps agent types to post-run handler functions; `agent-service.ts` calls the handler automatically after each run
+3. **FEEDBACK_ENTRY_TYPES** (`src/shared/types.ts`) — derived from `DOC_PHASES.map(p => p.feedbackType)` plus non-doc feedback types
 
 ## Step 1: Create the Prompt Builder
 
@@ -107,57 +104,95 @@ export const DOC_PHASES: readonly DocPhaseEntry[] = [
 export type DocArtifactType = '...' | 'my_artifact';
 ```
 
-## Step 3: Add Extraction Logic
+## Step 3: Create a Post-Run Handler
 
-Add a new extraction method to `PostRunExtractor` and register it in the `docExtractors` map:
+Create a handler file colocated with the prompt builder:
+
+```
+src/core/agents/<agent-name>-post-run-handler.ts
+```
+
+Each handler is a function that receives a `TaskAPI` (scoped to the task) and maps the agent's structured output to persistence calls:
 
 ```ts
-// src/core/services/post-run-extractor.ts
+// src/core/agents/my-agent-post-run-handler.ts
+import type { AgentRunResult, RevisionReason } from '../../shared/types';
+import type { ITaskAPI } from '../interfaces/task-api';
+import type { OnLog, OnPostLog } from './post-run-handler';
+import { extractTaskEstimates, saveContextEntry } from './post-run-utils';
 
-// 1. Register in the constructor's docExtractors map:
-this.docExtractors = new Map([
-  // ... existing entries
-  ['my-agent', this.extractMyArtifact.bind(this)],
-]);
-
-// 2. Add the extraction method (same signature as extractPlan/extractTechnicalDesign):
-async extractMyArtifact(
-  taskId: string,
+export async function myAgentPostRunHandler(
+  taskApi: ITaskAPI,
   result: AgentRunResult,
-  agentType: string,
+  agentRunId: string | undefined,
+  revisionReason: RevisionReason | undefined,
   onLog: OnLog,
-  revisionReason?: RevisionReason,
-  agentRunId?: string,
   onPostLog?: OnPostLog,
 ): Promise<void> {
-  if (result.exitCode !== 0 || agentType !== 'my-agent') {
-    onPostLog?.('extractMyArtifact skipped', { agentType, exitCode: result.exitCode });
-    return;
-  }
-  const so = result.structuredOutput as { myContent?: string; mySummary?: string } | undefined;
-  if (so?.myContent) {
-    await this.upsertTaskDoc(taskId, 'my_artifact', so.myContent, so.mySummary ?? null, onLog);
-  }
-  // Mark feedback as addressed after successful run
-  if (agentRunId) {
-    try {
-      await this.markFeedbackAsAddressed(taskId, ['my_feedback'], agentRunId, onLog);
-    } catch (err) {
-      onLog(`Warning: failed to mark my_feedback as addressed: ${err instanceof Error ? err.message : String(err)}`);
+  // 1. Extract and persist documents
+  if (result.exitCode === 0) {
+    const so = result.structuredOutput as { myContent?: string; mySummary?: string } | undefined;
+    if (so?.myContent) {
+      await taskApi.upsertDoc('my_artifact', so.myContent, so.mySummary ?? null);
+    }
+    // Mark feedback as addressed
+    if (agentRunId) {
+      await taskApi.markFeedbackAsAddressed(['my_feedback'], agentRunId);
     }
   }
+
+  // 2. Extract task estimates (size/complexity) if applicable
+  await extractTaskEstimates(taskApi, result, 'my-agent', onLog, onPostLog);
+
+  // 3. Save context entry (summary for subsequent agents)
+  await saveContextEntry(taskApi, agentRunId ?? '', 'my-agent', revisionReason, result, {}, onLog, onPostLog);
 }
 ```
 
-Also add a case in `getContextEntryType()` for the new agent:
+Then register the handler in **POST_RUN_HANDLERS**:
 
 ```ts
-// In the switch statement:
+// src/core/agents/post-run-handlers.ts
+import { myAgentPostRunHandler } from './my-agent-post-run-handler';
+
+export const POST_RUN_HANDLERS: Record<string, PostRunHandler> = {
+  // ... existing entries
+  'my-agent': myAgentPostRunHandler,
+};
+```
+
+Also add a case in `getContextEntryType()` in `src/core/agents/post-run-utils.ts`:
+
+```ts
 case 'my-agent':
   return revisionReason === 'changes_requested' ? 'my_artifact_revision_summary' : 'my_artifact_summary';
 ```
 
-**No changes needed in `agent-service.ts`** — the `extractDoc()` dispatcher will automatically find and call your extractor.
+**No changes needed in `agent-service.ts`** — the handler registry is consulted automatically after each run.
+
+### TaskAPI Methods
+
+The `ITaskAPI` interface (scoped to the current task) provides:
+
+| Method | Purpose |
+|---|---|
+| `upsertDoc(type, content, summary)` | Persist a document artifact |
+| `updateTask(updates)` | Update task fields (subtasks, phases, tags, etc.) |
+| `getTask()` | Read the current task |
+| `addContextEntry(input)` | Add a context entry for subsequent agents |
+| `markFeedbackAsAddressed(types, runId)` | Mark feedback entries as addressed |
+| `logEvent(input)` | Log a task event |
+| `sendNotification(notification)` | Send a notification (scoped to this task) |
+| `createTask(input)` | Create a new task (e.g., suggested follow-up tasks) |
+
+### Shared Utilities
+
+`src/core/agents/post-run-utils.ts` provides reusable helpers:
+
+- `saveContextEntry()` — saves a context entry with structured summary extraction
+- `extractTaskEstimates()` — extracts size/complexity from structured output
+- `parseRawContent()` — fallback parser for raw agent output
+- `getContextEntryType()` — maps agent type → context entry type string
 
 ## Optional Steps
 
@@ -189,8 +224,8 @@ For UI-configurable agents, add an agent definition record via the `IAgentDefini
 - [ ] **AGENT_BUILDERS** entry added in `src/core/agents/agent-builders.ts`
 - [ ] **DOC_PHASES** entry added in `src/shared/doc-phases.ts` (if agent produces docs)
 - [ ] **DocArtifactType** union updated in `src/shared/types.ts` (if new doc type)
-- [ ] **Extraction method** added in `src/core/services/post-run-extractor.ts`
-- [ ] **docExtractors** registry entry added (same file, constructor)
-- [ ] **getContextEntryType()** case added (same file, bottom)
+- [ ] **Post-run handler** created in `src/core/agents/<name>-post-run-handler.ts`
+- [ ] **POST_RUN_HANDLERS** entry added in `src/core/agents/post-run-handlers.ts`
+- [ ] **getContextEntryType()** case added in `src/core/agents/post-run-utils.ts`
 - [ ] *(Optional)* Pipeline statuses/transitions in `seeded-pipelines.ts`
 - [ ] *(Optional)* Outcome schema in `outcome-schemas.ts`
