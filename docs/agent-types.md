@@ -148,7 +148,8 @@ Planner (mode='revision')   → resumes S1 (sees original plan + chat + feedback
 
 ### Files
 
-- Chat agent service: `src/core/services/chat-agent-service.ts` (send, buildSendContext, runAgent)
+- Chat agent service: `src/core/services/chat-agent-service.ts` (send, buildSendContext, stop)
+- Agent runner: `src/core/services/chat-agent/agent-runner.ts` (runAgent — streaming execution engine)
 - System prompts: `src/core/services/chat-prompt-parts.ts`
 - SDK integration: `src/core/libs/claude-code-lib.ts` (session options in execute method)
 

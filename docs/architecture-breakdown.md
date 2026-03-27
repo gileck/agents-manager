@@ -129,7 +129,10 @@ Pluggable execution backends registered in `AgentLibRegistry` and resolved at ru
 
 - `agent-service.ts` — orchestrates agent runs
 - `agent-supervisor.ts` — supervises agent execution
-- `chat-agent-service.ts` — handles chat-based agent interactions
+- `chat-agent-service.ts` — handles chat-based agent interactions (orchestration, session CRUD, injection)
+- `chat-agent/agent-runner.ts` — streaming agent execution engine (extracted from chat-agent-service)
+- `chat-agent/chat-agent-helpers.ts` — shared constants, types, and utility functions
+- `chat-agent/chat-conversation-utils.ts` — summarization and auto-naming utilities
 
 ---
 

@@ -779,9 +779,13 @@ Any error during guard evaluation results in the tool call being blocked (not al
 
 ## ChatAgentService
 
-**File:** `src/core/services/chat-agent-service.ts`
+**Files:**
+- `src/core/services/chat-agent-service.ts` — orchestration, session CRUD, injection system
+- `src/core/services/chat-agent/agent-runner.ts` — streaming execution engine (callbacks, hooks, subagent delegation, cleanup)
+- `src/core/services/chat-agent/chat-agent-helpers.ts` — constants, types, utility functions
+- `src/core/services/chat-agent/chat-conversation-utils.ts` — summarize and auto-name (one-shot LLM calls)
 
-`ChatAgentService` handles interactive chat sessions with AI agents, supporting both project-scoped and task-scoped conversations.
+`ChatAgentService` handles interactive chat sessions with AI agents, supporting both project-scoped and task-scoped conversations. The agent execution engine (`runAgent`) has been extracted to `agent-runner.ts` and receives dependencies via a `RunAgentContext` interface.
 
 ### Unified AgentLib Execution
 

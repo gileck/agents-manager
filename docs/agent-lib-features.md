@@ -16,7 +16,9 @@ feature independent of any specific engine — the interface contract, how the
 service layer wires it, and the end-to-end UX flow.
 
 **Interface file:** `src/core/interfaces/agent-lib.ts`
-**Service file:** `src/core/services/chat-agent-service.ts`
+**Service file:** `src/core/services/chat-agent-service.ts` (orchestration, session CRUD, injection)
+**Agent runner:** `src/core/services/chat-agent/agent-runner.ts` (streaming execution, callbacks, hooks)
+**Helpers:** `src/core/services/chat-agent/chat-agent-helpers.ts` (constants, types, utilities)
 **Reference implementation:** `src/core/libs/claude-code-lib.ts`
 
 ---
