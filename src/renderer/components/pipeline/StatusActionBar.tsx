@@ -3,7 +3,7 @@ import { Button } from '../ui/button';
 import { SplitButton } from '../ui/SplitButton';
 import { getRecommendedTransition, isEscapeTransition } from '../../utils/getRecommendedTransition';
 import { AgentRunErrorBanner } from '../agent-run/AgentRunErrorBanner';
-import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity, TaskContextEntry, ProposedFixOption } from '../../../shared/types';
+import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity, TaskContextEntry, ProposedFixOption, GuardBlockRecord } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
 import { reportError } from '../../lib/error-handler';
 import { buildFixOptionSummary } from '../../utils/fix-option-summary';
@@ -91,6 +91,8 @@ export function StatusActionBar({
   onOpenForceDialog,
   contextEntries,
   taskId,
+  guardBlocks,
+  stuckReason,
 }: {
   task: TaskProps;
   isAgentPipeline: boolean;
@@ -109,6 +111,8 @@ export function StatusActionBar({
   onOpenForceDialog?: () => void;
   contextEntries?: TaskContextEntry[];
   taskId?: string;
+  guardBlocks?: GuardBlockRecord[];
+  stuckReason?: string;
 }) {
   if (!isAgentPipeline) {
     // Fallback: render smart split button
@@ -189,6 +193,60 @@ export function StatusActionBar({
 
   // Human review (plan_review, investigation_review, pr_review, etc.)
   if (statusMeta.isHumanReview) {
+    // Guard-blocked banner: show when an agent transition was blocked by guards
+    const activeGuardBlocks = (guardBlocks ?? []).filter(
+      (gb) => gb.fromStatus === status && gb.trigger === 'agent',
+    );
+
+    if (activeGuardBlocks.length > 0 && isStuck) {
+      const latestBlock = activeGuardBlocks[activeGuardBlocks.length - 1];
+      const guardReasons = latestBlock.guardFailures.map((g) => g.reason).join('; ');
+      return (
+        <div className="rounded-md px-4 py-3 flex flex-col gap-3" style={{ backgroundColor: '#fefce8', border: '1px solid #fbbf24' }}>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span style={{ color: '#d97706', fontSize: 16 }}>&#x26A0;</span>
+              <span className="text-sm font-medium" style={{ color: '#92400e' }}>
+                Task is stuck — transition blocked
+              </span>
+            </div>
+            <p className="text-xs mt-1" style={{ color: '#92400e' }}>
+              Agent transition to &quot;{latestBlock.toStatus}&quot; was blocked: {guardReasons}
+            </p>
+            {stuckReason && stuckReason !== guardReasons && (
+              <p className="text-xs mt-0.5" style={{ color: '#a16207' }}>
+                {stuckReason}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-between">
+            <div className="flex gap-2">
+              {primaryTransitions.map((t) => (
+                <Button
+                  key={t.to}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onTransition(t.to)}
+                  disabled={transitioning !== null}
+                >
+                  {transitioning === t.to ? 'Transitioning...' : (t.label || `Move to ${t.to}`)}
+                </Button>
+              ))}
+              {onOpenForceDialog && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={onOpenForceDialog}
+                >
+                  Force...
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // PR review has special handling for the PR link
     if (status === 'pr_review' || status === 'ready_to_merge') {
       return (

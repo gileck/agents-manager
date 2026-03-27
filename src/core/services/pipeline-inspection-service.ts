@@ -3,7 +3,9 @@ import type {
   PipelineDiagnostics,
   HookRetryResult,
   HookFailureRecord,
+  GuardBlockRecord,
   Transition,
+  TransitionTrigger,
 } from '../../shared/types';
 import { getActivePhaseIndex } from '../../shared/phase-utils';
 import type { ITaskStore } from '../interfaces/task-store';
@@ -70,6 +72,22 @@ export class PipelineInspectionService implements IPipelineInspectionService {
         };
       });
 
+    // Guard block detection: find events where guard(s) blocked a transition
+    const guardBlocks: GuardBlockRecord[] = recentEvents
+      .filter((e) => !e.dismissed)
+      .filter((e) => e.category === 'system' && e.severity === 'warning'
+        && Array.isArray(e.data?.guardFailures) && (e.data.guardFailures as unknown[]).length > 0
+        && e.data?.fromStatus && e.data?.toStatus)
+      .map((e) => ({
+        id: e.id,
+        taskId: e.taskId,
+        fromStatus: e.data.fromStatus as string,
+        toStatus: e.data.toStatus as string,
+        trigger: (e.data.trigger as TransitionTrigger) ?? 'agent',
+        guardFailures: e.data.guardFailures as Array<{ guard: string; reason: string }>,
+        timestamp: e.createdAt,
+      }));
+
     // Agent state
     const latestRun = agentRuns[0] ?? null;
     const failedRuns = agentRuns.filter((r) => r.status === 'failed' || r.status === 'cancelled');
@@ -91,6 +109,22 @@ export class PipelineInspectionService implements IPipelineInspectionService {
         } else {
           stuckReason = 'Agent phase but no agent is running';
         }
+      }
+    }
+
+    // Guard-blocked stuck detection: when a task is in a human_review phase
+    // and an agent-driven transition was blocked by guards (e.g., max_retries),
+    // the task is effectively stuck — the agent can't proceed.
+    if (currentStatusDef?.category === 'human_review' && !isStuck) {
+      const guardBlocksFromCurrentStatus = guardBlocks.filter(
+        (gb) => gb.fromStatus === task.status && gb.trigger === 'agent',
+      );
+      if (guardBlocksFromCurrentStatus.length > 0) {
+        // Use the most recent guard block
+        const latestBlock = guardBlocksFromCurrentStatus[guardBlocksFromCurrentStatus.length - 1];
+        const reasons = latestBlock.guardFailures.map((g) => g.reason).join('; ');
+        isStuck = true;
+        stuckReason = `Guard blocked transition to "${latestBlock.toStatus}": ${reasons}`;
       }
     }
 
@@ -119,6 +153,7 @@ export class PipelineInspectionService implements IPipelineInspectionService {
       },
       allTransitions,
       recentHookFailures: hookFailures,
+      recentGuardBlocks: guardBlocks,
       phases: task.phases,
       activePhaseIndex: getActivePhaseIndex(task.phases),
       agentState: {
