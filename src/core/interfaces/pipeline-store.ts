@@ -20,4 +20,5 @@ export interface IPipelineStore {
   getPipelineForTaskType(taskType: string): Promise<Pipeline | null>;
   recordTransitionSync(record: TransitionRecord): void;
   getLastFromStatusSync(taskId: string): string | null;
+  countSelfLoopTransitionsSync(taskId: string, fromStatus: string, toStatus: string): number;
 }

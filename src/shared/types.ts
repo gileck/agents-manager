@@ -548,6 +548,7 @@ export interface IGuardQueryContext {
   countUnresolvedDependencies(taskId: string): number;
   countFailedRuns(taskId: string, agentType?: string): number;
   countRunningRuns(taskId: string): number;
+  countSelfLoopTransitions(taskId: string, fromStatus: string, toStatus: string): number;
   getUserRole(username: string): 'admin' | 'user' | null;
 }
 

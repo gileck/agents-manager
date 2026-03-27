@@ -200,4 +200,11 @@ export class SqlitePipelineStore implements IPipelineStore {
     ).get(taskId) as { from_status: string } | undefined;
     return row?.from_status ?? null;
   }
+
+  countSelfLoopTransitionsSync(taskId: string, fromStatus: string, toStatus: string): number {
+    const row = this.db.prepare(
+      'SELECT COUNT(*) as count FROM transition_history WHERE task_id = ? AND from_status = ? AND to_status = ?'
+    ).get(taskId, fromStatus, toStatus) as { count: number };
+    return row.count;
+  }
 }

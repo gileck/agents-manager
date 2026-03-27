@@ -159,14 +159,20 @@ describe('Guard-block diagnostics in PipelineInspectionService', () => {
     // Move to planning (manual transition)
     await ctx.pipelineEngine.executeTransition(task, 'planning', { trigger: 'manual' });
 
-    // Create 4 failed runs to exceed max_retries (max:3)
+    // Record 4 prior self-loop transitions to exceed max_retries (max:3).
+    // planning→planning is a self-loop, so the guard counts transition_history
+    // entries rather than failed agent runs.
     for (let i = 0; i < 4; i++) {
-      const run = await ctx.agentRunStore.createRun({
+      ctx.pipelineStore.recordTransitionSync({
+        id: require('crypto').randomUUID(),
         taskId: task.id,
-        agentType: 'planner',
-        mode: 'new',
+        fromStatus: 'planning',
+        toStatus: 'planning',
+        trigger: 'agent',
+        actor: null,
+        guardResults: {},
+        createdAt: Date.now() - (4 - i) * 1000,
       });
-      await ctx.agentRunStore.updateRun(run.id, { status: 'failed', output: 'error' });
     }
 
     // Try to trigger the planning → planning (failed) self-loop which has max_retries guard
