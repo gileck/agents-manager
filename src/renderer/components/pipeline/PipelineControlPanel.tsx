@@ -82,7 +82,7 @@ export function PipelineControlPanel({
         isAgentPipeline={isAgentPipeline}
         hasRunningAgent={hasRunningAgent}
         lastRun={lastRun}
-        isStuck={isStuck}
+        isStuck={isStuck || (diagnostics?.isStuck ?? false)}
         isFinalizing={isFinalizing}
         primaryTransitions={primaryTransitions}
         transitioning={transitioning}
@@ -95,6 +95,8 @@ export function PipelineControlPanel({
         onOpenForceDialog={() => setForceDialogOpen(true)}
         contextEntries={contextEntries}
         taskId={taskId}
+        guardBlocks={diagnostics?.recentGuardBlocks}
+        stuckReason={diagnostics?.stuckReason}
       />
 
       {/* Force transition dialog */}
