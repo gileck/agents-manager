@@ -195,7 +195,7 @@ export abstract class BaseAgentLib implements IAgentLib {
     };
 
     // Build sandbox guard
-    const sandboxGuard = new SandboxGuard(options.allowedPaths, options.readOnlyPaths);
+    const sandboxGuard = new SandboxGuard(options.allowedPaths, options.readOnlyPaths, options.cwd);
     let sandboxGuardCanUseToolCallCount = 0;
     let sandboxGuardHookCallCount = 0;
 

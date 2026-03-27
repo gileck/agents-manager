@@ -346,6 +346,88 @@ describe('SandboxGuard', () => {
   });
 
   // ============================================
+  // Relative path resolution with cwd
+  // ============================================
+  describe('Relative path resolution with cwd', () => {
+    it('should resolve relative Grep path against cwd, not process.cwd()', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      const result = cwdGuard.evaluateToolCall('Grep', { path: 'src/renderer/components/tasks' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should resolve relative Read path against cwd', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      const result = cwdGuard.evaluateToolCall('Read', { file_path: 'src/index.ts' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should resolve relative Glob path against cwd', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      const result = cwdGuard.evaluateToolCall('Glob', { path: 'src/components' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should resolve relative Write path against cwd', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      const result = cwdGuard.evaluateToolCall('Write', { file_path: 'src/new-file.ts' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should resolve ./ prefixed paths against cwd', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      const result = cwdGuard.evaluateToolCall('Read', { file_path: './src/index.ts' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should resolve bare filenames against cwd', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      const result = cwdGuard.evaluateToolCall('Read', { file_path: 'package.json' });
+      expect(result.allow).toBe(true);
+    });
+
+    it('should block relative paths that resolve outside allowed when using cwd', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      const result = cwdGuard.evaluateToolCall('Read', { file_path: '../../etc/passwd' });
+      expect(result.allow).toBe(false);
+    });
+
+    it('should block ../ relative paths that escape allowed boundaries', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      const result = cwdGuard.evaluateToolCall('Grep', { path: '../other-project/secrets' });
+      expect(result.allow).toBe(false);
+    });
+
+    it('should still handle absolute paths correctly when cwd is set', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], ['/tmp/readonly'], '/tmp/project');
+      // Absolute path within allowed
+      expect(cwdGuard.evaluateToolCall('Read', { file_path: '/tmp/project/src/index.ts' }).allow).toBe(true);
+      // Absolute path within readOnly
+      expect(cwdGuard.evaluateToolCall('Read', { file_path: '/tmp/readonly/data.json' }).allow).toBe(true);
+      // Absolute path outside
+      expect(cwdGuard.evaluateToolCall('Read', { file_path: '/var/log/syslog' }).allow).toBe(false);
+    });
+
+    it('should handle mixed absolute and relative paths correctly', () => {
+      const cwdGuard = new SandboxGuard(['/tmp/project'], [], '/tmp/project');
+      // Relative allowed
+      expect(cwdGuard.evaluateToolCall('Write', { file_path: 'src/file.ts' }).allow).toBe(true);
+      // Absolute allowed
+      expect(cwdGuard.evaluateToolCall('Write', { file_path: '/tmp/project/src/file.ts' }).allow).toBe(true);
+      // Relative blocked
+      expect(cwdGuard.evaluateToolCall('Write', { file_path: '../../outside/file.ts' }).allow).toBe(false);
+      // Absolute blocked
+      expect(cwdGuard.evaluateToolCall('Write', { file_path: '/home/user/file.ts' }).allow).toBe(false);
+    });
+
+    it('should default to process.cwd() when cwd is not provided', () => {
+      // The guard without cwd should still work (falls back to process.cwd())
+      const defaultGuard = new SandboxGuard(['/tmp/project']);
+      const result = defaultGuard.evaluateToolCall('Read', { file_path: '/tmp/project/file.ts' });
+      expect(result.allow).toBe(true);
+    });
+  });
+
+  // ============================================
   // Edge cases
   // ============================================
   describe('Edge cases', () => {
