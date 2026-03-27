@@ -1,4 +1,4 @@
-import { VALID_TASK_SIZES, VALID_TASK_COMPLEXITIES } from '../../shared/types';
+import { VALID_TASK_SIZES, VALID_TASK_COMPLEXITIES, VALID_START_PHASES } from '../../shared/types';
 import type { PlanComment, TaskContextEntry } from '../../shared/types';
 
 /**
@@ -161,6 +161,17 @@ export function getTaskEstimationInstructions(): string {
     'These are orthogonal: adding a field across 12 files is `xl` size but `low` complexity.',
     'These are optional — only set them if you have enough information to make a reasonable estimate.',
   ].join('\n');
+}
+
+/** Shared schema field for the recommended starting phase of a suggested task. */
+export function getStartPhaseField(): Record<string, object> {
+  return {
+    startPhase: {
+      type: 'string',
+      enum: [...VALID_START_PHASES],
+      description: 'Recommended starting phase for this task',
+    },
+  };
 }
 
 /** Prompt section telling agents they can ask interactive questions. */

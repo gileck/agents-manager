@@ -301,6 +301,14 @@ export type TaskComplexity = typeof VALID_TASK_COMPLEXITIES[number];
 export const VALID_START_PHASES = ['investigating', 'designing', 'planning', 'implementing'] as const;
 export type StartPhase = typeof VALID_START_PHASES[number];
 
+/**
+ * All pipeline agent phases (including triaging, which is not a valid *start* phase).
+ * Use this to type phase-related maps/labels that cover every pipeline phase.
+ * For the subset of phases a task can be *started* at, use VALID_START_PHASES.
+ */
+export const ALL_PIPELINE_PHASES = ['triaging', ...VALID_START_PHASES] as const;
+export type PipelinePhase = typeof ALL_PIPELINE_PHASES[number];
+
 export type TaskCreatedBy = 'user' | 'workflow-reviewer' | 'post-mortem-reviewer' | 'session-agent';
 
 export interface Task {
