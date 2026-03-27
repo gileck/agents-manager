@@ -277,6 +277,18 @@ export interface PostMortemSuggestedTask {
   startPhase?: string;
 }
 
+export interface PostMortemArchitecturalIssue {
+  area: string;
+  description: string;
+  impact: string;
+  suggestion: string;
+}
+
+export interface PostMortemArchitecturalAssessment {
+  architectureSummary: string;
+  issues: PostMortemArchitecturalIssue[];
+}
+
 export interface PostMortemData {
   rootCause?: string;
   severity?: string;
@@ -286,6 +298,7 @@ export interface PostMortemData {
   /** @deprecated Use codebaseImprovements. Kept for backward compatibility with old stored data. */
   processImprovements?: string[];
   suggestedTasks?: PostMortemSuggestedTask[];
+  architecturalAssessment?: PostMortemArchitecturalAssessment;
 }
 
 // Task types
