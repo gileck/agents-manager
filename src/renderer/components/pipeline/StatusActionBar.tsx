@@ -293,6 +293,7 @@ export function StatusActionBar({
             transitioning={transitioning}
             onTransition={onTransition}
             compact
+            taskType={task.type ?? undefined}
           />
         );
       }

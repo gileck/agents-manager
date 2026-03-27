@@ -191,6 +191,7 @@ export function DocsPanel({
                 transitions={transitions}
                 transitioning={transitioning}
                 onTransition={(toStatus) => onAction(toStatus, '', selectedPhase.feedbackType)}
+                taskType={task.type}
               />
             )}
 

@@ -6,7 +6,7 @@ import { MarkdownContent } from '../chat/MarkdownContent';
 import { reportError } from '../../lib/error-handler';
 import { buildFixOptionSummary } from '../../utils/fix-option-summary';
 import { isEscapeTransition } from '../../utils/getRecommendedTransition';
-import type { ProposedFixOption, Transition } from '../../../shared/types';
+import type { ProposedFixOption, Transition, TaskType } from '../../../shared/types';
 
 // ─── Size → target status mapping ─────────────────────────────────────────────
 
@@ -73,6 +73,8 @@ interface FixOptionCardsProps {
   onTransition: (toStatus: string) => void;
   /** Compact mode for StatusActionBar — shows smaller cards. */
   compact?: boolean;
+  /** Parent task type — used when creating a new task from a fix option. */
+  taskType?: TaskType;
 }
 
 export function FixOptionCards({
@@ -83,6 +85,7 @@ export function FixOptionCards({
   transitioning,
   onTransition,
   compact = false,
+  taskType,
 }: FixOptionCardsProps) {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
@@ -96,7 +99,7 @@ export function FixOptionCards({
   );
 
   // Non-forward transitions (e.g. "Request Investigation Changes") — rendered separately
-  const escapeTransitions = transitions.filter(
+  const secondaryTransitions = transitions.filter(
     t => !forwardTransitions.some(ft => ft.to === t.to) && !isEscapeTransition(t)
   );
 
@@ -147,7 +150,7 @@ export function FixOptionCards({
         pipelineId,
         title: option.label,
         description,
-        type: 'improvement',
+        type: taskType ?? 'improvement',
         priority: 2,
         tags: ['fix-option'],
         metadata: { sourceTaskId: taskId, fixOptionId: option.id },
@@ -357,8 +360,8 @@ export function FixOptionCards({
         })}
       </div>
 
-      {/* Non-forward transitions (e.g. "Request Investigation Changes") */}
-      {escapeTransitions.length > 0 && (
+      {/* Secondary transitions — non-forward, non-escape (e.g. "Request Investigation Changes") */}
+      {secondaryTransitions.length > 0 && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -366,7 +369,7 @@ export function FixOptionCards({
           marginTop: compact ? 8 : 12,
           flexWrap: 'wrap',
         }}>
-          {escapeTransitions.map((t) => (
+          {secondaryTransitions.map((t) => (
             <Button
               key={t.to}
               variant="outline"

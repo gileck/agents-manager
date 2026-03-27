@@ -207,7 +207,7 @@ export function ReportPage({ config }: ReportPageProps) {
     </Button>
   );
 
-  const actionButtons = isReviewStatus && approveTransition ? (
+  const actionButtons = isReviewStatus && approveTransition && !fixOptions ? (
     <>
       <Button size="sm" disabled={transitioning !== null} onClick={() => handleFeedbackAction(approveTransition.to, '')}>
         {transitioning ? 'Submitting...' : approveTransition.label || 'Approve & Implement'}
@@ -241,6 +241,7 @@ export function ReportPage({ config }: ReportPageProps) {
               transitions={transitions ?? []}
               transitioning={transitioning}
               onTransition={handleTransition}
+              taskType={task.type}
             />
           )}
         </div>
