@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
@@ -27,6 +27,7 @@ interface ThemedThreadDialogProps {
  */
 export interface ThemedThreadNavState {
   initialMessage: string;
+  initialImages?: ChatImage[];
 }
 
 export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadDialogProps) {
@@ -39,11 +40,16 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
 
   const config: ThreadIntentConfig = THREAD_INTENTS[intent];
 
-  // Reset form when dialog opens/closes
+  // Counter used as a React key to force-remount ImagePasteArea on dialog open,
+  // ensuring its internal state is reset regardless of Dialog mount/unmount behavior.
+  const resetKeyRef = useRef(0);
+
+  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       setUserInput('');
       setImages([]);
+      resetKeyRef.current += 1;
     }
   }, [open]);
 
@@ -52,35 +58,27 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
     if (!message || !currentProjectId) return;
     setSubmitting(true);
     try {
-      // 1. Save screenshots and build markdown image references
-      let screenshotMarkdown = '';
-      if (images.length > 0) {
-        try {
-          const { paths } = await window.api.screenshots.save(images);
-          if (paths.length > 0) {
-            const refs = paths.map((p, i) => `![screenshot-${i + 1}](${p})`);
-            screenshotMarkdown = '\n\n' + refs.join('\n');
-          }
-        } catch (err) {
-          reportError(err, 'Save screenshots');
-        }
-      }
-
-      // 2. Create a new chat session
+      // 1. Create a new chat session
       const session = await createSession(config.label);
       if (!session) return;
 
-      // 3. Update the session with the intent-specific system prompt
+      // 2. Update the session with the intent-specific system prompt
       await updateSession(session.id, {
         systemPromptAppend: config.systemPromptAppend,
       });
 
-      // 4. Close the dialog
+      // 3. Close the dialog
       onOpenChange(false);
 
-      // 5. Navigate to the chat page with the initial message in navigation state.
-      //    ChatPage detects this and auto-sends once the session is ready.
-      const navState: ThemedThreadNavState = { initialMessage: message + screenshotMarkdown };
+      // 4. Navigate to the chat page with the initial message (and images) in
+      //    navigation state. ChatPage detects this and auto-sends once the
+      //    session is ready. Images are passed as ChatImage[] so the chat API
+      //    handles screenshot saving and populates msg.images for proper
+      //    embedding in the message bubble.
+      const navState: ThemedThreadNavState = {
+        initialMessage: message,
+        initialImages: images.length > 0 ? images : undefined,
+      };
       navigate(`/chat/${session.id}`, { state: navState });
     } catch (err) {
       reportError(err, `Create ${config.label} thread`);
@@ -112,7 +110,7 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
             placeholder={config.placeholder}
             autoFocus
           />
-          <ImagePasteArea images={images} onImagesChange={setImages} />
+          <ImagePasteArea key={resetKeyRef.current} images={images} onImagesChange={setImages} />
           <p className="text-xs text-muted-foreground">
             Press {isMac ? 'Cmd' : 'Ctrl'}+Enter to submit
           </p>

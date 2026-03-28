@@ -40,7 +40,7 @@ export function ChatPage() {
     if (currentSessionId !== sessionId) return;
 
     initialMessageSentRef.current = sessionId;
-    window.api.chat.send(sessionId, navState.initialMessage).catch((err) => {
+    window.api.chat.send(sessionId, navState.initialMessage, navState.initialImages).catch((err) => {
       reportError(err, 'Send themed thread message');
     });
     // Clear navigation state so refreshing the page doesn't re-send
