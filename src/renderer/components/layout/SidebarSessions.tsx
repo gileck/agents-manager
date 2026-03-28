@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, CheckSquare, Loader2, Check, EyeOff, X, Clock, MessageCircleQuestion } from 'lucide-react';
+import { Plus, CheckSquare, Loader2, Check, EyeOff, X, Clock, MessageCircleQuestion, MessageSquare } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { formatRelativeTimestamp } from '../tasks/task-helpers';
 import { Input } from '../ui/input';
+import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { SidebarSection } from './SidebarSection';
 import { reportError } from '../../lib/error-handler';
+import { ThreadIntentIcon } from '../chat/ThreadIntentIcon';
+import { THREAD_INTENTS, type ThreadIntent } from '../../lib/thread-intent-prompts';
 import type { TaskChatSessionWithTitle, RunningAgent } from '../../../shared/types';
 import { useActiveAgents } from '../../hooks/useActiveAgents';
 
@@ -17,6 +20,7 @@ export function SidebarSessions() {
     sessions,
     currentSessionId,
     createSession,
+    updateSession,
     renameSession,
     hideSession,
     hideAllSessions,
@@ -29,6 +33,7 @@ export function SidebarSessions() {
   const [taskSessions, setTaskSessions] = useState<TaskChatSessionWithTitle[]>([]);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
 
   const { agents } = useActiveAgents();
   const [completedFlash, setCompletedFlash] = useState<Set<string>>(new Set());
@@ -75,16 +80,24 @@ export function SidebarSessions() {
       .catch((err) => reportError(err, 'Load task sessions'));
   }, [currentProjectId, sessions]);
 
-  const handleCreate = () => {
+  const handleCreate = (intent?: ThreadIntent) => {
+    setNewSessionOpen(false);
     const maxNum = sessions.reduce((max, s) => {
       const match = s.name.match(/^Session (\d+)$/);
       return match ? Math.max(max, Number(match[1])) : max;
     }, 0);
-    const name = `Session ${maxNum + 1}`;
-    createSession(name)
-      .then((newSession) => {
-        if (newSession?.id) navigate(`/chat/${newSession.id}`);
-        else navigate('/chat');
+    const defaultName = `Session ${maxNum + 1}`;
+    const name = intent ? THREAD_INTENTS[intent].label : defaultName;
+    createSession(name, intent)
+      .then(async (newSession) => {
+        if (!newSession?.id) { navigate('/chat'); return; }
+        // If an intent was chosen, attach the system prompt
+        if (intent) {
+          await updateSession(newSession.id, {
+            systemPromptAppend: THREAD_INTENTS[intent].systemPromptAppend,
+          });
+        }
+        navigate(`/chat/${newSession.id}`);
       })
       .catch((err) => reportError(err, 'Create session'));
   };
@@ -153,13 +166,35 @@ export function SidebarSessions() {
       >
         <Clock className="h-3.5 w-3.5" />
       </button>
-      <button
-        onClick={handleCreate}
-        className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
-        title="New session"
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
+      <Popover open={newSessionOpen} onOpenChange={setNewSessionOpen}>
+        <PopoverTrigger asChild>
+          <button
+            className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
+            title="New session"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-48 p-1">
+          <button
+            onClick={() => handleCreate()}
+            className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-md hover:bg-accent/70 text-foreground transition-colors"
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+            <span>Blank</span>
+          </button>
+          {(Object.entries(THREAD_INTENTS) as [ThreadIntent, typeof THREAD_INTENTS[ThreadIntent]][]).map(([key, config]) => (
+            <button
+              key={key}
+              onClick={() => handleCreate(key)}
+              className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-md hover:bg-accent/70 text-foreground transition-colors"
+            >
+              <ThreadIntentIcon intent={key} className="h-3.5 w-3.5" />
+              <span>{config.label}</span>
+            </button>
+          ))}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 
@@ -225,6 +260,13 @@ export function SidebarSessions() {
                   </form>
                 ) : (
                   <>
+                    <div className="shrink-0 text-muted-foreground">
+                      {session.threadIntent ? (
+                        <ThreadIntentIcon intent={session.threadIntent} className="h-3.5 w-3.5" />
+                      ) : (
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      )}
+                    </div>
                     <span className="flex-1 min-w-0 truncate text-xs font-medium">
                       {session.name}
                     </span>
