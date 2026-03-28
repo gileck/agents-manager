@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ChatMessage, AgentChatMessage, ChatImage, AgentNotificationPayload, ChatSessionStatus } from '../../shared/types';
 import { convertDbMessages } from '../../shared/convert-db-messages';
 
-const STATUS_POLL_INTERVAL_MS = 30000;
+const STATUS_POLL_INTERVAL_MS = 10000;
 
 export interface RawEvent {
   timestamp: string;
@@ -94,6 +94,22 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
           .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
       } else if (status === 'running') {
         streamingRef.current = true;
+      } else if (status === 'waiting_for_input') {
+        // Self-heal stale waiting_for_input: if no unanswered questions exist
+        // in the UI, treat as idle to avoid showing "Answer the question above..."
+        const hasUnansweredQuestion = streamingMessagesRef.current.some(
+          (msg) => msg.type === 'ask_user_question' && !msg.answered,
+        );
+        if (!hasUnansweredQuestion) {
+          setServerStatus('idle');
+          streamingRef.current = false;
+          window.api.chat.messages(sessionId)
+            .then((freshMessages) => {
+              setDbMessages(freshMessages);
+              setStreamingMessages([]);
+            })
+            .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
+        }
       }
     });
 
