@@ -19,6 +19,7 @@ export type { AgentSegment } from './utils/group-messages';
 interface ChatMessageListProps {
   messages: AgentChatMessage[];
   isRunning?: boolean;
+  isWaitingForInput?: boolean;
   onEditMessage?: (text: string) => void;
   onResume?: (text: string) => void;
   onPermissionResponse?: (requestId: string, allowed: boolean) => void;
@@ -143,7 +144,7 @@ function CollapsedSystemNotification({ title, text }: { title?: string; text: st
   );
 }
 
-export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, onPermissionResponse }: ChatMessageListProps) {
+export function ChatMessageList({ messages, isRunning, isWaitingForInput: isWaitingForInputProp, onEditMessage, onResume, onPermissionResponse }: ChatMessageListProps) {
   const { containerRef, endRef, autoScroll, handleScroll, scrollToLatest } = useAutoScroll({ messagesLength: messages.length });
   const navigate = useNavigate();
   const { answerQuestion } = useChatActions();
@@ -174,11 +175,8 @@ export function ChatMessageList({ messages, isRunning, onEditMessage, onResume, 
 
   const segments = useMemo(() => groupMessages(messages), [messages]);
 
-  // Derive waiting-for-input state from messages: true when an unanswered AskUserQuestion exists
-  const isWaitingForInput = useMemo(
-    () => messages.some((m) => m.type === 'ask_user_question' && !m.answered),
-    [messages],
-  );
+  // isWaitingForInput comes from useChat via props — single source of truth
+  const isWaitingForInput = isWaitingForInputProp ?? false;
 
   const rendered = useMemo(() => {
     // Pre-build toolId → toolResult map for top-level (ungrouped) tool calls

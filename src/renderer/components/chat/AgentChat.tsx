@@ -117,7 +117,7 @@ export function AgentChat({
             {emptyState}
           </div>
         ) : (
-          <ChatMessageList messages={messages} isRunning={isRunning} onEditMessage={handleEditMessage} onResume={handleResume} onPermissionResponse={onPermissionResponse} />
+          <ChatMessageList messages={messages} isRunning={isRunning} isWaitingForInput={isWaitingForInput} onEditMessage={handleEditMessage} onResume={handleResume} onPermissionResponse={onPermissionResponse} />
         )}
         <TaskStatusBar sessionId={sessionId ?? null} />
         <ChatInput

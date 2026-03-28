@@ -297,6 +297,7 @@ function CopySummaryButton({ text }: { text: string }) {
 export function CodexChatMessageList({
   messages,
   isRunning,
+  isWaitingForInput: isWaitingForInputProp,
   onEditMessage,
   onResume,
   onPermissionResponse,
@@ -328,11 +329,8 @@ export function CodexChatMessageList({
 
   const segments = useMemo(() => groupMessages(messages), [messages]);
 
-  // Derive waiting-for-input state from messages: true when an unanswered AskUserQuestion exists
-  const isWaitingForInput = useMemo(
-    () => messages.some((m) => m.type === 'ask_user_question' && !m.answered),
-    [messages],
-  );
+  // isWaitingForInput comes from useChat via props — single source of truth
+  const isWaitingForInput = isWaitingForInputProp ?? false;
 
   const rendered = useMemo(() => {
     const resultMap = new Map<string, AgentChatMessageToolResult>();

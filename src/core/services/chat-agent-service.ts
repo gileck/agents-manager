@@ -720,7 +720,7 @@ export class ChatAgentService {
   }
 
   private emitStatusChange(sessionId: string, status: import('../../shared/types').ChatSessionStatus): void {
-    getAppLogger().info('ChatAgentService', `emitStatusChange: ${status}`, { sessionId });
+    getAppLogger().info('ChatAgentService', `emitStatusChange: ${status} [session=${sessionId.slice(0, 8)}]`);
     this.chatSessionStore.updateSessionStatus(sessionId, status).catch((err) =>
       getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }),
     );

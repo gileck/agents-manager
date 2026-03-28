@@ -159,6 +159,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
   const {
     messages,
     isStreaming,
+    isWaitingForInput,
     isQueued,
     loading,
     error,
@@ -207,10 +208,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
     [agents, scope.type, scope.id],
   );
 
-  const isWaitingForInput = useMemo(
-    () => agents.some((a) => a.sessionId === currentSessionId && a.status === 'waiting_for_input'),
-    [agents, currentSessionId],
-  );
+  // isWaitingForInput comes from useChat — single source of truth for session status
 
   const selectedAgentLib = currentSession?.agentLib || 'claude-code';
   const currentModels = agentLibModels[selectedAgentLib]?.models ?? [];
@@ -556,6 +554,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
               <CodexChatMessageList
                 messages={messages}
                 isRunning={isStreaming}
+                isWaitingForInput={isWaitingForInput}
                 onEditMessage={handleEditMessage}
                 onResume={handleResume}
                 onPermissionResponse={respondToPermission}

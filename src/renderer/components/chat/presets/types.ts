@@ -40,6 +40,8 @@ export interface ChatMessageListPresetProps {
   messages: AgentChatMessage[];
   /** Whether the agent is currently running / streaming. */
   isRunning?: boolean;
+  /** Whether the agent is waiting for user input (AskUserQuestion). Comes from useChat — single source of truth. */
+  isWaitingForInput?: boolean;
   /** Called when the user edits & resends a previous message. */
   onEditMessage?: (text: string) => void;
   /** Called when the user clicks "Continue" or "Retry" after a stop/error. */
