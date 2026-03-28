@@ -361,13 +361,8 @@ export class ChatAgentService {
         // Attempt injection BEFORE persisting to DB to avoid orphaned messages
         const injected = lib.injectMessage(runId, message, injectionImages);
         if (injected) {
-          // Restore running status — the agent was waiting_for_input after the
+          // Restore running status — the agent was idle after the
           // previous turn's onTurnComplete, now it's actively processing again.
-          const agent = this.runningAgents.get(sessionId);
-          if (agent) {
-            agent.status = 'running';
-            agent.lastActivity = Date.now();
-          }
           this.emitStatusChange(sessionId, 'running');
         }
         if (!injected) {
@@ -491,7 +486,7 @@ export class ChatAgentService {
     // Resolve model: session > global default > engine default
     const sessionModel = session.model || this.getDefaultModel() || undefined;
 
-    // Track running agent
+    // Track running agent — status set by emitStatusChange (single source of truth)
     this.runningAgents.set(sessionId, {
       sessionId,
       sessionName: session.name,
@@ -499,7 +494,7 @@ export class ChatAgentService {
       scopeId: session.scopeId,
       projectId,
       projectName,
-      status: 'running',
+      status: 'idle', // placeholder — emitStatusChange below sets the real value
       startedAt: Date.now(),
       lastActivity: Date.now(),
       messagePreview: message.slice(0, 100),
@@ -585,11 +580,6 @@ export class ChatAgentService {
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
       this.emitStatusChange(sessionId, 'failed');
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
-      const agent = this.runningAgents.get(sessionId);
-      if (agent && (agent.status === 'running' || agent.status === 'waiting_for_input')) {
-        agent.status = 'failed';
-        agent.lastActivity = Date.now();
-      }
       this.runningControllers.delete(sessionId);
       this.runningRunIds.delete(sessionId);
     });
@@ -627,12 +617,6 @@ export class ChatAgentService {
     const controller = this.runningControllers.get(sessionId);
     if (controller) {
       getAppLogger().info('ChatAgentService', `Stopping chat agent for session ${sessionId}`);
-      // Immediately reflect stop in agent status so UI doesn't show stale "running"
-      const agent = this.runningAgents.get(sessionId);
-      if (agent && (agent.status === 'running' || agent.status === 'waiting_for_input')) {
-        agent.status = 'failed';
-        agent.lastActivity = Date.now();
-      }
       controller.abort();
       this.emitStatusChange(sessionId, 'idle');
       // runAgent's finally block handles runningControllers cleanup
@@ -670,7 +654,6 @@ export class ChatAgentService {
     // Restore agent status from 'waiting_for_input' back to 'running'
     const agent = this.runningAgents.get(pending.sessionId);
     if (agent && agent.status === 'waiting_for_input') {
-      agent.status = 'running';
       this.emitStatusChange(pending.sessionId, 'running');
     }
   }
@@ -719,11 +702,30 @@ export class ChatAgentService {
     this.statusChangeCallback = callback;
   }
 
+  /**
+   * THE ONLY WAY to change session status. Updates all three stores atomically:
+   *   1. In-memory RunningAgent (for useActiveAgents consumers)
+   *   2. SQLite DB (for polling fallback and crash recovery)
+   *   3. WS broadcast (for real-time frontend updates)
+   *
+   * No code outside this method should ever assign to agent.status directly.
+   */
   private emitStatusChange(sessionId: string, status: import('../../shared/types').ChatSessionStatus): void {
     getAppLogger().info('ChatAgentService', `emitStatusChange: ${status} [session=${sessionId.slice(0, 8)}]`);
+
+    // 1. In-memory — update RunningAgent if it exists
+    const agent = this.runningAgents.get(sessionId);
+    if (agent) {
+      agent.status = status as import('../../shared/types').RunningAgent['status'];
+      agent.lastActivity = Date.now();
+    }
+
+    // 2. DB — synchronous write (better-sqlite3 is sync under the async wrapper)
     this.chatSessionStore.updateSessionStatus(sessionId, status).catch((err) =>
       getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }),
     );
+
+    // 3. WS broadcast
     try {
       this.statusChangeCallback?.(sessionId, status);
     } catch (err) {

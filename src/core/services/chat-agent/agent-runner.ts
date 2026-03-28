@@ -197,7 +197,6 @@ export async function runAgent(
 
       const waitingAgent = ctx.runningAgents.get(sessionId);
       if (waitingAgent && waitingAgent.status === 'running') {
-        waitingAgent.status = 'waiting_for_input';
         ctx.emitStatusChange(sessionId, 'waiting_for_input');
       }
 
@@ -400,20 +399,10 @@ export async function runAgent(
             });
           }
 
-          // Update in-memory agent status and emit to DB/WS.
           // Always idle on turn completion — waiting_for_input is set
-          // exclusively by requestQuestionAnswers when a question is
-          // actively asked. This keeps in-memory, DB, and WS in sync.
-          const agent = ctx.runningAgents.get(sessionId);
-          if (agent) {
-            agent.status = 'idle';
-            agent.lastActivity = Date.now();
-          }
+          // exclusively by requestQuestionAnswers when a question is actively asked.
           getAppLogger().info('ChatAgentService', `onTurnComplete: emitting idle [session=${sessionId.slice(0, 8)}]`);
           ctx.emitStatusChange(sessionId, 'idle');
-
-          // Status change event signals the client that this turn is done
-          // (emitted by ctx.emitStatusChange above)
         },
       } : {}),
     };
@@ -497,12 +486,7 @@ export async function runAgent(
       emitMessage({ type: 'status', status: errorStatus, message: result.error, timestamp: Date.now() });
     }
 
-    // Mark as completed successfully
-    const agent = ctx.runningAgents.get(sessionId);
-    if (agent) {
-      agent.status = 'completed';
-      agent.lastActivity = Date.now();
-    }
+    // Mark as completed successfully (emitStatusChange updates in-memory + DB + WS)
     ctx.emitStatusChange(sessionId, 'completed');
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -515,13 +499,8 @@ export async function runAgent(
       emitEvent({ type: 'text', text: `\nError: ${errMsg}\n` });
       try { emitMessage({ type: 'status', status: 'failed', message: errMsg, stack: errStack, timestamp: Date.now() }); } catch (emitErr) { getAppLogger().warn('ChatAgentService', 'Failed to emit error status', { error: emitErr instanceof Error ? emitErr.message : String(emitErr) }); }
     }
-    const agent = ctx.runningAgents.get(sessionId);
-    if (agent) {
-      agent.status = 'failed';
-      agent.lastActivity = Date.now();
-    }
-    const dbStatus = abortController.signal.aborted ? 'idle' : 'failed';
-    ctx.emitStatusChange(sessionId, dbStatus);
+    const status = abortController.signal.aborted ? 'idle' : 'failed';
+    ctx.emitStatusChange(sessionId, status);
   } finally {
     ctx.runningControllers.delete(sessionId);
     ctx.runningRunIds.delete(sessionId);

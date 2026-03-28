@@ -315,7 +315,8 @@ describe('ChatAgentService', () => {
 
       agents = await service.getRunningAgents();
       expect(agents).toHaveLength(1);
-      expect(agents[0].status).toBe('failed');
+      // stop() emits 'idle' — session is ready for new messages
+      expect(agents[0].status).toBe('idle');
     });
 
     it('should handle stopping non-existent session gracefully', () => {
