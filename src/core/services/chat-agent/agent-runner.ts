@@ -408,14 +408,14 @@ export async function runAgent(
             agent.lastActivity = Date.now();
           }
 
-          // Only emit waiting_for_input if there are actually pending
-          // questions for this session. Otherwise emit idle to avoid the
-          // frontend showing "Answer the question above..." when no question
-          // was asked (the frontend derives isWaitingForInput from DB status).
-          const hasPendingQuestions = [...ctx.pendingQuestions.values()].some(p => p.sessionId === sessionId);
-          const dbStatus = hasPendingQuestions ? 'waiting_for_input' : 'idle';
-          getAppLogger().info('ChatAgentService', `onTurnComplete: hasPendingQuestions=${hasPendingQuestions}, dbStatus=${dbStatus}`, { sessionId, pendingCount: ctx.pendingQuestions.size });
-          ctx.emitStatusChange(sessionId, dbStatus);
+          // Always emit idle on turn completion. The waiting_for_input status
+          // is set exclusively by requestQuestionAnswers when a question is
+          // actively asked. We must NOT check pendingQuestions here because
+          // in streaming-input mode, injected messages can create new turns
+          // that complete while an old AskUserQuestion is still pending from
+          // a different execution context.
+          getAppLogger().info('ChatAgentService', `onTurnComplete: emitting idle [session=${sessionId.slice(0, 8)}]`);
+          ctx.emitStatusChange(sessionId, 'idle');
 
           // Status change event signals the client that this turn is done
           // (emitted by ctx.emitStatusChange above)
