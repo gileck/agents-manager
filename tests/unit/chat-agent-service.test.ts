@@ -858,6 +858,188 @@ describe('ChatAgentService', () => {
     });
   });
 
+  describe('streaming-input onTurnComplete', () => {
+    const streamingSession: ChatSession = {
+      ...mockSession,
+      enableStreamingInput: true,
+    };
+
+    /**
+     * Creates a mock lib that simulates streaming-input behavior:
+     * - execute() calls onTurnComplete mid-execution (like claude-code-lib does on SDK result)
+     * - execute() stays alive until resolve() is called (simulating the open message channel)
+     */
+    function createStreamingInputMockLib() {
+      let resolveExecute: ((result: { exitCode: number; output: string; model: string }) => void) | null = null;
+      const lib: IAgentLib = {
+        name: 'claude-code',
+        supportedFeatures: () => ({ images: true, hooks: true, thinking: true, nativeResume: true, streamingInput: true }),
+        getDefaultModel: () => 'claude-opus-4-6',
+        getSupportedModels: () => [{ value: 'claude-opus-4-6', label: 'Claude Opus 4.6' }],
+        execute: vi.fn().mockImplementation((_runId: string, _options: unknown, callbacks: {
+          onOutput?: (s: string) => void;
+          onMessage?: (m: AgentChatMessage) => void;
+          onTurnComplete?: () => void;
+        }) => {
+          // Emit assistant response then call onTurnComplete (simulating SDK result during streaming input)
+          callbacks.onOutput?.('Turn 1 response\n');
+          callbacks.onMessage?.({ type: 'assistant_text', text: 'Turn 1 response', timestamp: Date.now() });
+          callbacks.onTurnComplete?.();
+          return new Promise((resolve) => {
+            resolveExecute = resolve;
+          });
+        }),
+        stop: vi.fn().mockResolvedValue(undefined),
+        isAvailable: vi.fn().mockResolvedValue(true),
+        getTelemetry: vi.fn().mockReturnValue(null),
+        injectMessage: vi.fn().mockReturnValue(true),
+      };
+      return {
+        lib,
+        resolve: () => resolveExecute?.({ exitCode: 0, output: 'Done', model: 'claude-opus-4-6' }),
+      };
+    }
+
+    it('emits CHAT_COMPLETE_SENTINEL on turn completion (not just session end)', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(streamingSession);
+      const { lib } = createStreamingInputMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      const events: Array<{ type: string; text?: string }> = [];
+      await service.send('session-1', 'Hello', {
+        systemPrompt: '',
+        onEvent: (event) => events.push(event as { type: string; text?: string }),
+      });
+
+      // Flush microtasks so the background runAgentDelegate reaches execute()
+      await vi.advanceTimersByTimeAsync(0);
+
+      // onTurnComplete should have fired and emitted the sentinel
+      const sentinelEvents = events.filter(e => e.type === 'text' && e.text === '__CHAT_COMPLETE__');
+      expect(sentinelEvents.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('persists turn messages on turn completion', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(streamingSession);
+      const { lib } = createStreamingInputMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      const addMessageCalls: Array<{ role: string; content: string }> = [];
+      (mockMessageStore.addMessage as ReturnType<typeof vi.fn>).mockImplementation(async (input: { role: string; content: string }) => {
+        addMessageCalls.push({ role: input.role, content: input.content });
+        return { id: `msg-${addMessageCalls.length}`, sessionId: 'session-1', role: input.role, content: input.content, createdAt: Date.now() };
+      });
+
+      await service.send('session-1', 'Hello', { systemPrompt: '' });
+      await vi.advanceTimersByTimeAsync(0);
+
+      // onTurnComplete should have persisted the assistant messages
+      const assistantPersists = addMessageCalls.filter(c => c.role === 'assistant');
+      expect(assistantPersists.length).toBeGreaterThanOrEqual(1);
+      const content = JSON.parse(assistantPersists[0].content);
+      expect(content).toContainEqual(
+        expect.objectContaining({ type: 'assistant_text', text: 'Turn 1 response' }),
+      );
+    });
+
+    it('updates session status to waiting_for_input on turn completion', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(streamingSession);
+      const { lib } = createStreamingInputMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      await service.send('session-1', 'Hello', { systemPrompt: '' });
+      await vi.advanceTimersByTimeAsync(0);
+
+      // DB status should transition: running → waiting_for_input
+      const statusCalls = (mockSessionStore.updateSessionStatus as ReturnType<typeof vi.fn>).mock.calls;
+      const statuses = statusCalls.map((c: unknown[]) => c[1]);
+      expect(statuses).toContain('running');
+      expect(statuses).toContain('waiting_for_input');
+    });
+
+    it('restores running status when message is injected into waiting session', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(streamingSession);
+      const { lib } = createStreamingInputMockLib();
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      // Start the agent — will call onTurnComplete setting status to waiting_for_input
+      await service.send('session-1', 'Hello', { systemPrompt: '' });
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Check that the in-memory agent is waiting
+      const runningAgents = await service.getRunningAgents();
+      const agent = runningAgents.find((a: RunningAgent) => a.sessionId === 'session-1');
+      expect(agent?.status).toBe('waiting_for_input');
+
+      // Inject a message — should restore running status
+      await service.send('session-1', 'Follow-up', { systemPrompt: '' });
+
+      const statusCalls = (mockSessionStore.updateSessionStatus as ReturnType<typeof vi.fn>).mock.calls;
+      const statuses = statusCalls.map((c: unknown[]) => c[1]);
+      // Should see: running → waiting_for_input → running
+      expect(statuses).toEqual(expect.arrayContaining(['running', 'waiting_for_input', 'running']));
+    });
+
+    it('restores turnMessages on persistence failure so finally block can retry', async () => {
+      mockSessionStore.getSession = vi.fn().mockResolvedValue(streamingSession);
+
+      // Create a lib where onTurnComplete fires, then execute resolves shortly after
+      let resolveExecute: ((result: { exitCode: number; output: string; model: string }) => void) | null = null;
+      const lib: IAgentLib = {
+        name: 'claude-code',
+        supportedFeatures: () => ({ images: true, hooks: true, thinking: true, nativeResume: true, streamingInput: true }),
+        getDefaultModel: () => 'claude-opus-4-6',
+        getSupportedModels: () => [{ value: 'claude-opus-4-6', label: 'Claude Opus 4.6' }],
+        execute: vi.fn().mockImplementation((_runId: string, _options: unknown, callbacks: {
+          onOutput?: (s: string) => void;
+          onMessage?: (m: AgentChatMessage) => void;
+          onTurnComplete?: () => void;
+        }) => {
+          callbacks.onOutput?.('Response\n');
+          callbacks.onMessage?.({ type: 'assistant_text', text: 'Response', timestamp: Date.now() });
+          callbacks.onTurnComplete?.();
+          return new Promise((resolve) => { resolveExecute = resolve; });
+        }),
+        stop: vi.fn().mockResolvedValue(undefined),
+        isAvailable: vi.fn().mockResolvedValue(true),
+        getTelemetry: vi.fn().mockReturnValue(null),
+        injectMessage: vi.fn().mockReturnValue(false),
+      };
+      mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
+
+      // Make the first addMessage call (user message) succeed,
+      // the second (onTurnComplete assistant persist) fail,
+      // and subsequent calls succeed (finally block retry)
+      let callCount = 0;
+      const addMessageCalls: Array<{ role: string; content: string }> = [];
+      (mockMessageStore.addMessage as ReturnType<typeof vi.fn>).mockImplementation(async (input: { role: string; content: string }) => {
+        callCount++;
+        if (callCount === 2) {
+          throw new Error('Simulated DB failure');
+        }
+        addMessageCalls.push({ role: input.role, content: input.content });
+        return { id: `msg-${addMessageCalls.length}`, sessionId: 'session-1', role: input.role, content: input.content, createdAt: Date.now() };
+      });
+
+      const sendResult = await service.send('session-1', 'Hello', { systemPrompt: '' });
+
+      // Let the rejected promise settle so the .catch() handler restores turnMessages
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Resolve execute — the finally block should retry with the restored messages
+      resolveExecute?.({ exitCode: 0, output: 'Done', model: 'claude-opus-4-6' });
+      await sendResult.completion;
+
+      // The finally block should have persisted the restored messages
+      const assistantPersists = addMessageCalls.filter(c => c.role === 'assistant');
+      expect(assistantPersists.length).toBeGreaterThanOrEqual(1);
+      const content = JSON.parse(assistantPersists[assistantPersists.length - 1].content);
+      expect(content).toContainEqual(
+        expect.objectContaining({ type: 'assistant_text', text: 'Response' }),
+      );
+    });
+  });
+
   describe('AgentRun prompt serialization', () => {
     it('stores the system prompt text (not [object Object]) when systemPrompt is a preset object', async () => {
       const agentChatSession: ChatSession = {
