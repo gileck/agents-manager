@@ -33,7 +33,12 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
 
   // Derive isStreaming from combined sources
   const isStreaming = serverStatus === 'running' || serverStatus === 'waiting_for_input' || streamingRef.current;
-  const isWaitingForInput = serverStatus === 'waiting_for_input';
+  // Only show "waiting for input" when there's actually an unanswered question visible.
+  // This prevents stale/spurious waiting_for_input from blocking the input field.
+  const hasUnansweredQuestion = streamingMessages.some(
+    (msg) => msg.type === 'ask_user_question' && !msg.answered,
+  );
+  const isWaitingForInput = serverStatus === 'waiting_for_input' && hasUnansweredQuestion;
 
   // Load messages on mount or session change
   useEffect(() => {
