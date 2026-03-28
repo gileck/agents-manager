@@ -358,6 +358,18 @@ export class ChatAgentService {
 
         // Attempt injection BEFORE persisting to DB to avoid orphaned messages
         const injected = lib.injectMessage(runId, message, injectionImages);
+        if (injected) {
+          // Restore running status — the agent was waiting_for_input after the
+          // previous turn's onTurnComplete, now it's actively processing again.
+          const agent = this.runningAgents.get(sessionId);
+          if (agent) {
+            agent.status = 'running';
+            agent.lastActivity = Date.now();
+          }
+          this.chatSessionStore.updateSessionStatus(sessionId, 'running').catch((err) =>
+            getAppLogger().warn('ChatAgentService', 'Failed to persist running status on injection', { error: err instanceof Error ? err.message : String(err) }),
+          );
+        }
         if (!injected) {
           // The channel was closed (SDK finished processing its result) but the
           // runAgent() finally block hasn't executed yet, so runningControllers

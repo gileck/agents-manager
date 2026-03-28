@@ -281,6 +281,12 @@ export interface AgentLibCallbacks {
   onStreamEvent?: (event: { type: string; [key: string]: unknown }) => void;
   /** Called when a tool needs user permission approval. Blocks tool execution until resolved. */
   onPermissionRequest?: (request: PermissionRequest) => Promise<PermissionResponse>;
+  /**
+   * Called when the SDK finishes processing a turn but the session stays alive
+   * (enableStreamingInput mode). Allows the caller to emit per-turn completion
+   * signals without waiting for execute() to return.
+   */
+  onTurnComplete?: () => void;
 }
 
 export interface AgentLibResult {

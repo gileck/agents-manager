@@ -363,6 +363,19 @@ export class ClaudeCodeLib extends BaseAgentLib {
             log('Closing message channel after SDK result');
             messageChannel.close();
           }
+          // When streaming input IS enabled, the for-await loop stays alive
+          // (execute() never returns). Signal per-turn completion so the caller
+          // can emit the completion sentinel and update session status.
+          if (useStreamingInput) {
+            log('Streaming-input turn complete — notifying caller');
+            try {
+              callbacks.onTurnComplete?.();
+            } catch (turnCompleteErr) {
+              log('onTurnComplete callback threw — suppressing to keep SDK loop alive', {
+                error: turnCompleteErr instanceof Error ? turnCompleteErr.message : String(turnCompleteErr),
+              });
+            }
+          }
         } else if (message.type === 'system') {
           const sysMsg = message as SdkSystemMessage;
           if (sysMsg.subtype === 'compact_boundary') {

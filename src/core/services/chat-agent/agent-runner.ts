@@ -350,6 +350,7 @@ export async function runAgent(
     };
 
     const enableStreaming = extra?.enableStreaming !== false;
+    const enableStreamingInput = features.streamingInput && (extra?.enableStreamingInput === true);
 
     // Build callbacks
     const callbacks: AgentLibCallbacks = {
@@ -377,9 +378,46 @@ export async function runAgent(
           }
         },
       } : {}),
-    };
+      // Per-turn completion for streaming-input sessions: execute() stays alive
+      // across turns, so we must emit the sentinel and persist messages here
+      // instead of waiting for execute() to return (which only happens on stop).
+      ...(enableStreamingInput ? {
+        onTurnComplete: () => {
+          getAppLogger().info('ChatAgentService', `Streaming-input turn complete for session ${sessionId}`);
 
-    const enableStreamingInput = features.streamingInput && (extra?.enableStreamingInput === true);
+          // Snapshot and persist accumulated turn messages
+          if (turnMessages.length > 0) {
+            const snapshot = [...turnMessages];
+            turnMessages.length = 0;
+            ctx.chatMessageStore.addMessage({
+              sessionId,
+              role: 'assistant',
+              content: JSON.stringify(snapshot),
+            }).catch((persistErr) => {
+              getAppLogger().logError('ChatAgentService', 'Failed to persist turn messages on turn complete', persistErr);
+              // Restore messages so the finally block can retry persistence
+              turnMessages.unshift(...snapshot);
+            });
+          }
+
+          // Update in-memory agent status
+          const agent = ctx.runningAgents.get(sessionId);
+          if (agent) {
+            agent.status = 'waiting_for_input';
+            agent.lastActivity = Date.now();
+          }
+
+          // Update DB session status — use waiting_for_input to match in-memory
+          // status and avoid appearing stuck after a daemon restart.
+          ctx.chatSessionStore.updateSessionStatus(sessionId, 'waiting_for_input').catch((err) =>
+            getAppLogger().warn('ChatAgentService', 'Failed to persist session status on turn complete', { error: err instanceof Error ? err.message : String(err) }),
+          );
+
+          // Signal to the client that this turn is done
+          emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
+        },
+      } : {}),
+    };
 
     const executeOptions = {
       prompt,
