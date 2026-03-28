@@ -26,7 +26,6 @@ import { getScreenshotStorageDir } from '../../utils/user-paths';
 import {
   tagNestedSubagentMessage,
   WRITE_TOOL_NAMES,
-  CHAT_COMPLETE_SENTINEL,
   DEFAULT_CHAT_SUBAGENTS,
   AGENT_ROLE_TO_FEEDBACK_ENTRY_TYPE,
 } from './chat-agent-helpers';
@@ -60,6 +59,7 @@ export interface RunAgentContext {
 
   // Callbacks
   deliverInjectedMessage: (msg: InjectedMessage) => Promise<void>;
+  emitStatusChange: (sessionId: string, status: import('../../../shared/types').ChatSessionStatus) => void;
 }
 
 export interface RunAgentExtra {
@@ -198,7 +198,7 @@ export async function runAgent(
       const waitingAgent = ctx.runningAgents.get(sessionId);
       if (waitingAgent && waitingAgent.status === 'running') {
         waitingAgent.status = 'waiting_for_input';
-        ctx.chatSessionStore.updateSessionStatus(sessionId, 'waiting_for_input').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
+        ctx.emitStatusChange(sessionId, 'waiting_for_input');
       }
 
       let onAbort: (() => void) | undefined;
@@ -408,18 +408,16 @@ export async function runAgent(
             agent.lastActivity = Date.now();
           }
 
-          // Only persist waiting_for_input to DB if there are actually pending
-          // questions for this session. Otherwise persist idle to avoid the
+          // Only emit waiting_for_input if there are actually pending
+          // questions for this session. Otherwise emit idle to avoid the
           // frontend showing "Answer the question above..." when no question
           // was asked (the frontend derives isWaitingForInput from DB status).
           const hasPendingQuestions = [...ctx.pendingQuestions.values()].some(p => p.sessionId === sessionId);
           const dbStatus = hasPendingQuestions ? 'waiting_for_input' : 'idle';
-          ctx.chatSessionStore.updateSessionStatus(sessionId, dbStatus).catch((err) =>
-            getAppLogger().warn('ChatAgentService', 'Failed to persist session status on turn complete', { error: err instanceof Error ? err.message : String(err) }),
-          );
+          ctx.emitStatusChange(sessionId, dbStatus);
 
-          // Signal to the client that this turn is done
-          emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
+          // Status change event signals the client that this turn is done
+          // (emitted by ctx.emitStatusChange above)
         },
       } : {}),
     };
@@ -509,7 +507,7 @@ export async function runAgent(
       agent.status = 'completed';
       agent.lastActivity = Date.now();
     }
-    ctx.chatSessionStore.updateSessionStatus(sessionId, 'idle').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
+    ctx.emitStatusChange(sessionId, 'completed');
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     const errStack = err instanceof Error ? err.stack : undefined;
@@ -526,8 +524,8 @@ export async function runAgent(
       agent.status = 'failed';
       agent.lastActivity = Date.now();
     }
-    const dbStatus = abortController.signal.aborted ? 'idle' : 'error';
-    ctx.chatSessionStore.updateSessionStatus(sessionId, dbStatus).catch((err2) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err2 instanceof Error ? err2.message : String(err2) }));
+    const dbStatus = abortController.signal.aborted ? 'idle' : 'failed';
+    ctx.emitStatusChange(sessionId, dbStatus);
   } finally {
     ctx.runningControllers.delete(sessionId);
     ctx.runningRunIds.delete(sessionId);
@@ -569,9 +567,9 @@ export async function runAgent(
       }
     }
 
-    // Signal completion (AFTER message persistence, BEFORE cleanup)
-    getAppLogger().info('ChatAgentService', `Chat agent finished for session ${sessionId}, sending completion sentinel`);
-    emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL });
+    // Completion is signaled by the status change WS event
+    // (emitted by ctx.emitStatusChange in the try/catch blocks above)
+    getAppLogger().info('ChatAgentService', `Chat agent finished for session ${sessionId}`);
 
     // --- Post-sentinel async cleanup ---
 

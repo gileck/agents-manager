@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ChatMessage, AgentChatMessage, ChatImage, AgentNotificationPayload, ChatSessionStatus } from '../../shared/types';
 import { convertDbMessages } from '../../shared/convert-db-messages';
 
-const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
-const STATUS_POLL_INTERVAL_MS = 5000;
+const STATUS_POLL_INTERVAL_MS = 30000;
 
 export interface RawEvent {
   timestamp: string;
@@ -78,29 +77,36 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
       .catch(() => { /* ignore */ });
   }, [sessionId]);
 
-  // Subscribe to chat output (for streaming state and completion sentinel)
+  // Subscribe to push-based status changes (primary signal)
   useEffect(() => {
     if (!sessionId) return;
 
-    const unsubscribe = window.api.on.chatOutput((incomingProjectId: string, chunk: string) => {
-      if (incomingProjectId !== sessionId) return;
-      setRawEvents((prev) => [...prev, { timestamp: new Date().toISOString(), channel: 'chat:output', payload: chunk }]);
-
-      if (chunk === CHAT_COMPLETE_SENTINEL) {
+    const unsubscribe = window.api.on.chatSessionStatusChanged((incomingSessionId: string, { status }) => {
+      if (incomingSessionId !== sessionId) return;
+      setServerStatus(status);
+      if (status === 'idle' || status === 'completed' || status === 'failed' || status === 'error') {
         streamingRef.current = false;
-        setServerStatus('idle');
-        // Reload messages from DB, then clear streaming messages so there is
-        // no frame where the streaming content has been removed but the DB
-        // messages haven't arrived yet (which would collapse the scroll
-        // height and trick auto-scroll into jumping to the bottom).
         window.api.chat.messages(sessionId)
           .then((freshMessages) => {
             setDbMessages(freshMessages);
             setStreamingMessages([]);
           })
           .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
-        return;
+      } else if (status === 'running') {
+        streamingRef.current = true;
       }
+    });
+
+    return () => { unsubscribe(); };
+  }, [sessionId]);
+
+  // Subscribe to chat output (for streaming state detection)
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubscribe = window.api.on.chatOutput((incomingProjectId: string, chunk: string) => {
+      if (incomingProjectId !== sessionId) return;
+      setRawEvents((prev) => [...prev, { timestamp: new Date().toISOString(), channel: 'chat:output', payload: chunk }]);
 
       if (!streamingRef.current) {
         streamingRef.current = true;
@@ -188,8 +194,8 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
       try {
         const { status } = await window.api.chat.sessionStatus(sessionId);
         setServerStatus(status);
-        if (status === 'idle' || status === 'error') {
-          // Sentinel was missed — self-heal
+        if (status === 'idle' || status === 'completed' || status === 'failed' || status === 'error') {
+          // WS event was missed — self-heal
           streamingRef.current = false;
           const freshMessages = await window.api.chat.messages(sessionId);
           setDbMessages(freshMessages);

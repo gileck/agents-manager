@@ -625,9 +625,7 @@ export class TelegramAgentBotService implements ITelegramBotService {
       this.log('status', `Agent error: ${errMsg}`);
       getAppLogger().logError('TelegramAgentBot', 'Agent error', err);
       await this.send(chatId, 'An error occurred while processing your request. Please try again.');
-      // If send() threw before runAgent started, no sentinel was emitted via onEvent.
-      // Emit it here to reset any renderer streaming state.
-      safeEmitOutput('__CHAT_COMPLETE__');
+      // Status change WS event is emitted by ChatAgentService's safety-net handler
     }
   }
 

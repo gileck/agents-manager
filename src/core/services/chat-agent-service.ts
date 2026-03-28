@@ -23,7 +23,6 @@ import {
   saveImagesToDisk,
   parsePluginsConfig,
   DEFAULT_AGENT_LIB,
-  CHAT_COMPLETE_SENTINEL,
 } from './chat-agent/chat-agent-helpers';
 import { runAgent, type RunAgentContext } from './chat-agent/agent-runner';
 import { summarizeMessages as doSummarize, autoNameSession as doAutoName, type ConversationUtilsContext } from './chat-agent/chat-conversation-utils';
@@ -43,6 +42,7 @@ export class ChatAgentService {
   private injectedEventHandler?: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined;
   /** Sessions that were compacted — next sendMessage() should skip SDK resume. */
   private compactedSessions = new Set<string>();
+  private statusChangeCallback?: (sessionId: string, status: import('../../shared/types').ChatSessionStatus) => void;
   /** Maps sessionId → executeSessionId (runId) used by the agent lib for injection routing. */
   private runningRunIds = new Map<string, string>();
   private pendingQuestions = new Map<string, {
@@ -368,9 +368,7 @@ export class ChatAgentService {
             agent.status = 'running';
             agent.lastActivity = Date.now();
           }
-          this.chatSessionStore.updateSessionStatus(sessionId, 'running').catch((err) =>
-            getAppLogger().warn('ChatAgentService', 'Failed to persist running status on injection', { error: err instanceof Error ? err.message : String(err) }),
-          );
+          this.emitStatusChange(sessionId, 'running');
         }
         if (!injected) {
           // The channel was closed (SDK finished processing its result) but the
@@ -506,8 +504,7 @@ export class ChatAgentService {
       lastActivity: Date.now(),
       messagePreview: message.slice(0, 100),
     });
-    // Persist status to DB (fire-and-forget)
-    this.chatSessionStore.updateSessionStatus(sessionId, 'running').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
+    this.emitStatusChange(sessionId, 'running');
 
     // Load conversation history to detect whether this is a follow-up message.
     // Instead of manually replaying history (the SDK rejects assistant-role messages
@@ -586,9 +583,8 @@ export class ChatAgentService {
     const completion = this.runAgentDelegate(sessionId, projectPath, systemPrompt, prompt, abortController, agentLibName, emitEvent, images, sessionModel, { pipelineSessionId, resumeSession: shouldResume, isAgentChat, agentRunId, permissionMode: permissionMode ?? null, agentType: session.agentRole ?? undefined, taskId: session.scopeType === 'task' ? session.scopeId : undefined, plugins: projectPlugins, enableStreaming: session.enableStreaming, enableStreamingInput: session.enableStreamingInput }).catch((err) => {
       // Safety net: errors should be handled inside runAgent, but recover if one escapes
       getAppLogger().logError('ChatAgentService', `Unhandled error escaped runAgent for session ${sessionId}`, err);
-      this.chatSessionStore.updateSessionStatus(sessionId, 'error').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
+      this.emitStatusChange(sessionId, 'failed');
       try { emitEvent({ type: 'text', text: `\nError: ${err instanceof Error ? err.message : String(err)}\n` }); } catch { /* best effort */ }
-      try { emitEvent({ type: 'text', text: CHAT_COMPLETE_SENTINEL }); } catch { /* best effort */ }
       const agent = this.runningAgents.get(sessionId);
       if (agent && (agent.status === 'running' || agent.status === 'waiting_for_input')) {
         agent.status = 'failed';
@@ -637,9 +633,9 @@ export class ChatAgentService {
         agent.status = 'failed';
         agent.lastActivity = Date.now();
       }
-      this.chatSessionStore.updateSessionStatus(sessionId, 'idle').catch((err) => getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }));
       controller.abort();
-      // runAgent's finally block handles runningControllers cleanup and sentinel emission
+      this.emitStatusChange(sessionId, 'idle');
+      // runAgent's finally block handles runningControllers cleanup
     } else {
       getAppLogger().warn('ChatAgentService', `No running controller found for session ${sessionId}`);
     }
@@ -675,7 +671,7 @@ export class ChatAgentService {
     const agent = this.runningAgents.get(pending.sessionId);
     if (agent && agent.status === 'waiting_for_input') {
       agent.status = 'running';
-      this.chatSessionStore.updateSessionStatus(pending.sessionId, 'running').catch(() => {});
+      this.emitStatusChange(pending.sessionId, 'running');
     }
   }
 
@@ -715,6 +711,23 @@ export class ChatAgentService {
     handler: (sessionId: string) => ((event: ChatAgentEvent) => void) | undefined,
   ): void {
     this.injectedEventHandler = handler;
+  }
+
+  setStatusChangeCallback(
+    callback: (sessionId: string, status: import('../../shared/types').ChatSessionStatus) => void,
+  ): void {
+    this.statusChangeCallback = callback;
+  }
+
+  private emitStatusChange(sessionId: string, status: import('../../shared/types').ChatSessionStatus): void {
+    this.chatSessionStore.updateSessionStatus(sessionId, status).catch((err) =>
+      getAppLogger().warn('ChatAgentService', 'Failed to persist session status', { error: err instanceof Error ? err.message : String(err) }),
+    );
+    try {
+      this.statusChangeCallback?.(sessionId, status);
+    } catch (err) {
+      getAppLogger().logError('ChatAgentService', `Failed to broadcast status change for session ${sessionId}`, err);
+    }
   }
 
   /**
@@ -904,6 +917,7 @@ export class ChatAgentService {
       subscriptionRegistry: this.subscriptionRegistry,
       imageStorageDir: this.imageStorageDir,
       deliverInjectedMessage: (msg) => this.deliverInjectedMessage(msg),
+      emitStatusChange: (sid, st) => this.emitStatusChange(sid, st),
     };
   }
 

@@ -1364,7 +1364,7 @@ export type PermissionMode = 'read_only' | 'read_write' | 'full_access';
 
 
 /** Server-authoritative session lifecycle status, persisted in SQLite. */
-export type ChatSessionStatus = 'idle' | 'running' | 'waiting_for_input' | 'error';
+export type ChatSessionStatus = 'idle' | 'running' | 'waiting_for_input' | 'completed' | 'failed' | 'error';
 
 // Chat Session types
 export interface ChatSession {
@@ -1471,7 +1471,7 @@ export interface RunningAgent {
   scopeId: string;
   projectId: string;
   projectName: string;
-  status: 'running' | 'waiting_for_input' | 'completed' | 'failed';
+  status: Extract<ChatSessionStatus, 'running' | 'waiting_for_input' | 'completed' | 'failed'>;
   startedAt: number;
   lastActivity: number;
   messagePreview?: string;

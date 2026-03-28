@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RunningAgent } from '../../shared/types';
+import type { RunningAgent, ChatSessionStatus } from '../../shared/types';
 
 export function useActiveAgents() {
   const [agents, setAgents] = useState<RunningAgent[]>([]);
@@ -28,25 +28,24 @@ export function useActiveAgents() {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Subscribe to agent status updates via chat output
+  // Subscribe to push-based status change events
   useEffect(() => {
-    const handleChatOutput = (sessionId: string, chunk: string) => {
-      // When chat completes, update agent status
-      if (chunk === '__CHAT_COMPLETE__') {
-        setAgents((prev) =>
-          prev.map((agent) =>
-            agent.sessionId === sessionId && (agent.status === 'running' || agent.status === 'waiting_for_input')
-              ? { ...agent, status: 'completed', lastActivity: Date.now() }
-              : agent
-          )
-        );
-      }
+    // Map ChatSessionStatus to the narrower RunningAgent.status
+    const toAgentStatus = (s: ChatSessionStatus): RunningAgent['status'] => {
+      if (s === 'completed' || s === 'idle') return 'completed';
+      if (s === 'failed' || s === 'error') return 'failed';
+      return s; // 'running' | 'waiting_for_input'
     };
-
-    const unsubscribe = window.api.on.chatOutput(handleChatOutput);
-    return () => {
-      unsubscribe();
-    };
+    const unsubscribe = window.api.on.chatSessionStatusChanged((sessionId: string, { status }) => {
+      setAgents((prev) =>
+        prev.map((agent) =>
+          agent.sessionId === sessionId
+            ? { ...agent, status: toAgentStatus(status), lastActivity: Date.now() }
+            : agent
+        )
+      );
+    });
+    return () => { unsubscribe(); };
   }, []);
 
   const stopAgent = useCallback(async (sessionId: string) => {

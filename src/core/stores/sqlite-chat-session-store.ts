@@ -344,7 +344,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
 
   async resetStaleStatuses(): Promise<void> {
     try {
-      const result = this.db.prepare(`UPDATE chat_sessions SET status = 'idle' WHERE status IN ('running', 'waiting_for_input', 'error')`).run();
+      const result = this.db.prepare(`UPDATE chat_sessions SET status = 'idle' WHERE status IN ('running', 'waiting_for_input', 'completed', 'failed', 'error')`).run();
       if (result.changes > 0) {
         getAppLogger().info('ChatSessionStore', `Reset ${result.changes} stale session(s) to idle`);
       }

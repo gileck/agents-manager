@@ -230,6 +230,7 @@ const IPC_CHANNELS = {
   SCREENSHOT_SAVE: 'screenshot:save',
   CHAT_PERMISSION_REQUEST: 'chat:permission-request',
   CHAT_PERMISSION_RESPONSE: 'chat:permission-response',
+  CHAT_SESSION_STATUS_CHANGED: 'chat:session-status-changed',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -762,6 +763,11 @@ const api = {
       const listener = (_: IpcRendererEvent, sessionId: string, payload: AgentNotificationPayload) => callback(sessionId, payload);
       ipcRenderer.on(IPC_CHANNELS.CHAT_AGENT_NOTIFICATION, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_AGENT_NOTIFICATION, listener);
+    },
+    chatSessionStatusChanged: (callback: (sessionId: string, data: { status: string }) => void) => {
+      const listener = (_: IpcRendererEvent, sessionId: string, data: { status: string }) => callback(sessionId, data);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_STATUS_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_SESSION_STATUS_CHANGED, listener);
     },
   },
 };

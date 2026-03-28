@@ -88,6 +88,11 @@ async function main() {
     services.appLogger.logError('daemon', 'Failed to reset stale chat session statuses', err);
   }
 
+  // Wire status change callback so chat session status changes are broadcast via WS
+  services.chatAgentService.setStatusChangeCallback((sessionId, status) => {
+    wsServer.broadcast(WS_CHANNELS.CHAT_SESSION_STATUS_CHANGED, sessionId, { status });
+  });
+
   // Wire injected event handler so Tier 2 injected messages stream to the correct WS channels
   services.chatAgentService.setInjectedEventHandler((sessionId) => {
     return (event: import('../shared/types').ChatAgentEvent) => {

@@ -384,6 +384,10 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       chatAgentNotification: (callback) =>
         ws.subscribeGlobal(WS_CHANNELS.CHAT_AGENT_NOTIFICATION, (sessionId, data) =>
           callback(sessionId as string, data as AgentNotificationPayload)),
+
+      chatSessionStatusChanged: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.CHAT_SESSION_STATUS_CHANGED, (sessionId, data) =>
+          callback(sessionId as string, data as { status: import('../shared/types').ChatSessionStatus })),
     },
   };
 }

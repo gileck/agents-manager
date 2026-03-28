@@ -900,23 +900,27 @@ describe('ChatAgentService', () => {
       };
     }
 
-    it('emits CHAT_COMPLETE_SENTINEL on turn completion (not just session end)', async () => {
+    it('emits status change on turn completion via statusChangeCallback', async () => {
       mockSessionStore.getSession = vi.fn().mockResolvedValue(streamingSession);
       const { lib } = createStreamingInputMockLib();
       mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
 
-      const events: Array<{ type: string; text?: string }> = [];
+      const statusChanges: Array<{ sessionId: string; status: string }> = [];
+      service.setStatusChangeCallback((sessionId, status) => {
+        statusChanges.push({ sessionId, status });
+      });
+
       await service.send('session-1', 'Hello', {
         systemPrompt: '',
-        onEvent: (event) => events.push(event as { type: string; text?: string }),
       });
 
       // Flush microtasks so the background runAgentDelegate reaches execute()
       await vi.advanceTimersByTimeAsync(0);
 
-      // onTurnComplete should have fired and emitted the sentinel
-      const sentinelEvents = events.filter(e => e.type === 'text' && e.text === '__CHAT_COMPLETE__');
-      expect(sentinelEvents.length).toBeGreaterThanOrEqual(1);
+      // onTurnComplete should have fired and emitted a status change.
+      // With no pending questions, the status is 'idle' (not 'waiting_for_input').
+      const turnCompleteEvents = statusChanges.filter(e => e.status === 'idle' || e.status === 'waiting_for_input');
+      expect(turnCompleteEvents.length).toBeGreaterThanOrEqual(1);
     });
 
     it('persists turn messages on turn completion', async () => {

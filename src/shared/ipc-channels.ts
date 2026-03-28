@@ -273,4 +273,6 @@ export const IPC_CHANNELS = {
   /** PUSH-ONLY: main->renderer, do not invoke() — permission request from agent */
   CHAT_PERMISSION_REQUEST: 'chat:permission-request',
   CHAT_PERMISSION_RESPONSE: 'chat:permission-response',
+  /** PUSH-ONLY: main->renderer, do not invoke() — chat session status changed */
+  CHAT_SESSION_STATUS_CHANGED: 'chat:session-status-changed',
 } as const;

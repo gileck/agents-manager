@@ -24,4 +24,6 @@ export const WS_CHANNELS = {
   CHAT_AGENT_NOTIFICATION: 'chat:agent-notification',
   /** PUSH-ONLY: permission request from agent needing user approval */
   CHAT_PERMISSION_REQUEST: 'chat:permission-request',
+  /** PUSH-ONLY: broadcast when a chat session status changes */
+  CHAT_SESSION_STATUS_CHANGED: 'chat:session-status-changed',
 } as const;

@@ -358,5 +358,6 @@ export interface ApiShape {
     taskDeleted(callback: (taskId: string) => void): () => void;
     chatPermissionRequest(callback: (sessionId: string, request: AgentChatMessage) => void): () => void;
     chatAgentNotification(callback: (sessionId: string, payload: AgentNotificationPayload) => void): () => void;
+    chatSessionStatusChanged(callback: (sessionId: string, data: { status: ChatSessionStatus }) => void): () => void;
   };
 }

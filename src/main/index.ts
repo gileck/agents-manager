@@ -81,6 +81,8 @@ initializeApp({
         sendToRenderer(IPC_CHANNELS.CHAT_AGENT_NOTIFICATION, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_PERMISSION_REQUEST, (sessionId, data) =>
         sendToRenderer(IPC_CHANNELS.CHAT_PERMISSION_REQUEST, sessionId, data));
+      wsClient.subscribeGlobal(WS_CHANNELS.CHAT_SESSION_STATUS_CHANGED, (sessionId, data) =>
+        sendToRenderer(IPC_CHANNELS.CHAT_SESSION_STATUS_CHANGED, sessionId, data));
 
       // Create the tray icon with a simple menu
       tray = createTray({

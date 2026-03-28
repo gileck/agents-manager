@@ -40,6 +40,7 @@ export const WRITE_TOOL_NAMES = new Set([
 ]);
 
 export const DEFAULT_AGENT_LIB = 'claude-code';
+/** @deprecated Replaced by push-based `chat:session-status-changed` WS event. */
 export const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
 
 /**

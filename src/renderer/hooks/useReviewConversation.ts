@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AgentChatMessage, ChatSession } from '../../shared/types';
 import { reportError } from '../lib/error-handler';
 
-const CHAT_COMPLETE_SENTINEL = '__CHAT_COMPLETE__';
-
 /**
  * Bridges TaskContextEntry (the persisted data source) with agent-chat (real-time streaming).
  * Does NOT use useChat to avoid double-storing messages — manages its own WS subscriptions.
@@ -83,19 +81,21 @@ export function useReviewConversation(
     if (!session) return;
     const sessionId = session.id;
 
-    const unsubOutput = window.api.on.chatOutput((incomingId: string, chunk: string) => {
+    const unsubStatus = window.api.on.chatSessionStatusChanged((incomingId: string, { status }) => {
       if (incomingId !== sessionId) return;
-
-      if (chunk === CHAT_COMPLETE_SENTINEL) {
+      if (status === 'idle' || status === 'completed' || status === 'failed' || status === 'error') {
         streamingRef.current = false;
         setIsStreaming(false);
-        // Backend now saves the agent response as a TaskContextEntry.
-        // Just refetch entries and clear streaming state.
         onEntriesChangedRef.current();
         setStreamingMessages([]);
-        return;
+      } else if (status === 'running') {
+        streamingRef.current = true;
+        setIsStreaming(true);
       }
+    });
 
+    const unsubOutput = window.api.on.chatOutput((incomingId: string, _chunk: string) => {
+      if (incomingId !== sessionId) return;
       if (!streamingRef.current) {
         streamingRef.current = true;
         setIsStreaming(true);
@@ -109,6 +109,7 @@ export function useReviewConversation(
     });
 
     return () => {
+      unsubStatus();
       unsubOutput();
       unsubMsg();
     };
