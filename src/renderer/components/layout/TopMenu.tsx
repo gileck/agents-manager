@@ -30,6 +30,7 @@ import {
   Lightbulb,
   Bug,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { reportError } from '../../lib/error-handler';
 import { getPageTitle } from '../../lib/pages';
@@ -279,6 +280,14 @@ export function TopMenu() {
                 >
                   <Sparkles className="h-4 w-4 text-blue-500" />
                   Improvement
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-accent text-left"
+                  onClick={() => openThemedThread('incident')}
+                >
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  Investigate Incident
                 </button>
               </PopoverContent>
             </Popover>
