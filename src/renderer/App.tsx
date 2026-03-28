@@ -39,6 +39,7 @@ import { UxDesignReviewPage } from './pages/UxDesignReviewPage';
 import { useTheme } from './hooks/useTheme';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useTabNavigation } from './hooks/useTabNavigation';
+import { useTaskStatusToasts } from './hooks/useTaskStatusToasts';
 import { TabsProvider } from './contexts/TabsContext';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
 import { ProjectChatSessionsProvider } from './contexts/ProjectChatSessionsContext';
@@ -54,6 +55,8 @@ function AppRoutes() {
   useThemeConfig();
   // Manage page tabs (replaces useRouteRestore)
   useTabNavigation();
+  // Show toast notifications on task status changes
+  useTaskStatusToasts();
 
   useEffect(() => {
     // Listen for navigation events from main process
