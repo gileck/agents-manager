@@ -54,7 +54,7 @@ export class SqliteChatSessionStore implements IChatSessionStore {
       sidebarHidden: false,
       systemPromptAppend: null,
       enableStreaming: input.enableStreaming ?? true,
-      enableStreamingInput: input.enableStreamingInput ?? false,
+      enableStreamingInput: input.enableStreamingInput ?? true,
       draft: null,
       status: 'idle',
       createdAt: now(),

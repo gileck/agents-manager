@@ -5,11 +5,13 @@ import { Textarea } from '../ui/textarea';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '../ui/dialog';
+import { ImagePasteArea } from '../ui/ImagePasteArea';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useProjectChatSessions } from '../../contexts/ProjectChatSessionsContext';
 import { reportError } from '../../lib/error-handler';
 import type { ThreadIntent, ThreadIntentConfig } from '../../lib/thread-intent-prompts';
 import { THREAD_INTENTS } from '../../lib/thread-intent-prompts';
+import type { ChatImage } from '../../../shared/types';
 
 const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac');
 
@@ -29,6 +31,7 @@ export interface ThemedThreadNavState {
 
 export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadDialogProps) {
   const [userInput, setUserInput] = useState('');
+  const [images, setImages] = useState<ChatImage[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const { currentProjectId } = useCurrentProject();
   const { createSession, updateSession } = useProjectChatSessions();
@@ -40,6 +43,7 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
   useEffect(() => {
     if (open) {
       setUserInput('');
+      setImages([]);
     }
   }, [open]);
 
@@ -48,28 +52,42 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
     if (!message || !currentProjectId) return;
     setSubmitting(true);
     try {
-      // 1. Create a new chat session
+      // 1. Save screenshots and build markdown image references
+      let screenshotMarkdown = '';
+      if (images.length > 0) {
+        try {
+          const { paths } = await window.api.screenshots.save(images);
+          if (paths.length > 0) {
+            const refs = paths.map((p, i) => `![screenshot-${i + 1}](${p})`);
+            screenshotMarkdown = '\n\n' + refs.join('\n');
+          }
+        } catch (err) {
+          reportError(err, 'Save screenshots');
+        }
+      }
+
+      // 2. Create a new chat session
       const session = await createSession(config.label);
       if (!session) return;
 
-      // 2. Update the session with the intent-specific system prompt
+      // 3. Update the session with the intent-specific system prompt
       await updateSession(session.id, {
         systemPromptAppend: config.systemPromptAppend,
       });
 
-      // 3. Close the dialog
+      // 4. Close the dialog
       onOpenChange(false);
 
-      // 4. Navigate to the chat page with the initial message in navigation state.
+      // 5. Navigate to the chat page with the initial message in navigation state.
       //    ChatPage detects this and auto-sends once the session is ready.
-      const navState: ThemedThreadNavState = { initialMessage: message };
+      const navState: ThemedThreadNavState = { initialMessage: message + screenshotMarkdown };
       navigate(`/chat/${session.id}`, { state: navState });
     } catch (err) {
       reportError(err, `Create ${config.label} thread`);
     } finally {
       setSubmitting(false);
     }
-  }, [userInput, currentProjectId, createSession, updateSession, config, onOpenChange, navigate]);
+  }, [userInput, images, currentProjectId, createSession, updateSession, config, onOpenChange, navigate]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -85,7 +103,7 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
           <DialogTitle>{config.label}</DialogTitle>
           <DialogDescription>{config.description}</DialogDescription>
         </DialogHeader>
-        <div className="py-4">
+        <div className="py-4 space-y-3">
           <Textarea
             rows={5}
             value={userInput}
@@ -94,7 +112,8 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
             placeholder={config.placeholder}
             autoFocus
           />
-          <p className="text-xs text-muted-foreground mt-2">
+          <ImagePasteArea images={images} onImagesChange={setImages} />
+          <p className="text-xs text-muted-foreground">
             Press {isMac ? 'Cmd' : 'Ctrl'}+Enter to submit
           </p>
         </div>
