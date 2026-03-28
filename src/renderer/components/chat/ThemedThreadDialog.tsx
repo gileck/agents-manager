@@ -58,8 +58,8 @@ export function ThemedThreadDialog({ open, onOpenChange, intent }: ThemedThreadD
     if (!message || !currentProjectId) return;
     setSubmitting(true);
     try {
-      // 1. Create a new chat session
-      const session = await createSession(config.label);
+      // 1. Create a new chat session tagged with the thread intent
+      const session = await createSession(config.label, intent);
       if (!session) return;
 
       // 2. Update the session with the intent-specific system prompt

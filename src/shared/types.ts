@@ -1390,6 +1390,8 @@ export interface ChatSession {
   draft: string | null;
   /** Server-authoritative lifecycle status: idle, running, waiting_for_input, or error. */
   status: ChatSessionStatus;
+  /** The intent type used to create this thread (e.g. 'feature', 'bug', 'improvement'). Null for blank/generic sessions. */
+  threadIntent: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -1412,6 +1414,8 @@ export interface ChatSessionCreateInput {
   projectId: string;
   enableStreaming?: boolean;
   enableStreamingInput?: boolean;
+  /** The intent type for themed threads (e.g. 'feature', 'bug', 'improvement'). */
+  threadIntent?: string;
 }
 
 // Chat agent event types (used by ChatAgentService consumers)
@@ -1450,6 +1454,8 @@ export interface ChatSessionUpdateInput {
   enableStreamingInput?: boolean;
   draft?: string | null;
   status?: ChatSessionStatus;
+  /** The intent type for themed threads (e.g. 'feature', 'bug', 'improvement'). */
+  threadIntent?: string | null;
 }
 
 export interface TaskChatSessionWithTitle extends ChatSession {

@@ -110,6 +110,35 @@ describe('SqliteChatSessionStore', () => {
       const session = await store.createSession(input);
       expect(session.enableStreamingInput).toBe(false);
     });
+
+    it('should default threadIntent to null when not provided', async () => {
+      const input: ChatSessionCreateInput = {
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'General Chat',
+        projectId: testProjectId,
+      };
+
+      const session = await store.createSession(input);
+      expect(session.threadIntent).toBeNull();
+    });
+
+    it('should create a session with threadIntent', async () => {
+      const input: ChatSessionCreateInput = {
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Feature Thread',
+        projectId: testProjectId,
+        threadIntent: 'feature',
+      };
+
+      const session = await store.createSession(input);
+      expect(session.threadIntent).toBe('feature');
+
+      // Verify it persists through a round-trip
+      const retrieved = await store.getSession(session.id);
+      expect(retrieved!.threadIntent).toBe('feature');
+    });
   });
 
   describe('getSession', () => {
@@ -258,6 +287,37 @@ describe('SqliteChatSessionStore', () => {
 
       const result = await store.updateSession(created.id, {});
       expect(result).toEqual(created);
+    });
+
+    it('should update threadIntent', async () => {
+      const created = await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Chat',
+        projectId: testProjectId,
+      });
+
+      const updated = await store.updateSession(created.id, { threadIntent: 'bug' });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.threadIntent).toBe('bug');
+    });
+
+    it('should clear threadIntent when set to null', async () => {
+      const created = await store.createSession({
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Feature Chat',
+        projectId: testProjectId,
+        threadIntent: 'feature',
+      });
+
+      expect(created.threadIntent).toBe('feature');
+
+      const updated = await store.updateSession(created.id, { threadIntent: null });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.threadIntent).toBeNull();
     });
   });
 

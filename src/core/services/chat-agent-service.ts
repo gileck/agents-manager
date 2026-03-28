@@ -83,8 +83,9 @@ export class ChatAgentService {
     scopeId: string;
     name: string;
     agentLib?: string;
+    threadIntent?: string;
   }): Promise<import('../../shared/types').ChatSession> {
-    const { scopeType, scopeId, name, agentLib } = input;
+    const { scopeType, scopeId, name, agentLib, threadIntent } = input;
 
     if (!scopeType || (scopeType !== 'project' && scopeType !== 'task')) {
       throw Object.assign(new Error('scopeType must be "project" or "task"'), { status: 400 });
@@ -138,6 +139,7 @@ export class ChatAgentService {
       agentLib,
       projectId,
       permissionMode: defaultPermissionMode,
+      threadIntent,
     });
   }
 

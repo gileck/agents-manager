@@ -211,7 +211,7 @@ export interface ApiClient {
 
   // Chat
   chat: {
-    createSession(input: { scopeType: string; scopeId: string; name: string; agentLib?: string }): Promise<unknown>;
+    createSession(input: { scopeType: string; scopeId: string; name: string; agentLib?: string; threadIntent?: string }): Promise<unknown>;
     listSessions(scopeType: string, scopeId: string): Promise<unknown[]>;
     listTaskSessionsForProject(projectId: string): Promise<TaskChatSessionWithTitle[]>;
     listAllForProject(projectId: string): Promise<unknown[]>;

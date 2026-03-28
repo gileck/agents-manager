@@ -4,6 +4,7 @@ import { Plus, X, MoreVertical, Loader2, Check, MessageCircleQuestion } from 'lu
 import { cn } from '../../lib/utils';
 import { ChatSession, RunningAgent } from '../../../shared/types';
 import { Input } from '../ui/input';
+import { ThreadIntentIcon } from './ThreadIntentIcon';
 
 interface SessionTabsProps {
   sessions: ChatSession[];
@@ -103,6 +104,11 @@ export function SessionTabs({
               <div className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-500/80 text-white shrink-0">
                 <Check className="h-2 w-2" />
               </div>
+            )}
+
+            {/* Thread intent icon (feature/bug/improvement) */}
+            {session.threadIntent && runningCount === 0 && waitingCount === 0 && (
+              <ThreadIntentIcon intent={session.threadIntent} className="h-3 w-3 shrink-0" />
             )}
 
             {renameSessionId === session.id ? (

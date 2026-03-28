@@ -70,12 +70,12 @@ export function useChatSessions(scope: ChatScope | null) {
   }, []);
 
   const createSession = useCallback(
-    async (name: string) => {
+    async (name: string, threadIntent?: string) => {
       const currentScope = scopeRef.current;
       if (!currentScope) return;
 
       try {
-        const newSession = await window.api.chatSession.create(currentScope.type, currentScope.id, name);
+        const newSession = await window.api.chatSession.create(currentScope.type, currentScope.id, name, undefined, threadIntent);
         setSessions((prev) => [...prev, newSession]);
         setCurrentSessionId(newSession.id);
         localStorage.setItem(storageKey(currentScope), newSession.id);
@@ -134,7 +134,7 @@ export function useChatSessions(scope: ChatScope | null) {
     [sessions, currentSessionId]
   );
 
-  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreaming?: boolean; enableStreamingInput?: boolean; draft?: string | null }) => {
+  const updateSession = useCallback(async (sessionId: string, input: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreaming?: boolean; enableStreamingInput?: boolean; draft?: string | null; threadIntent?: string | null }) => {
     try {
       const updatedSession = await window.api.chatSession.update(sessionId, input);
       if (updatedSession) {

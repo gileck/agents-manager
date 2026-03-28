@@ -213,5 +213,9 @@ FROM tasks WHERE technical_design IS NOT NULL AND technical_design != ''`,
       name: '123_add_status_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'idle'`,
     },
+    {
+      name: '124_add_thread_intent_to_chat_sessions',
+      sql: `ALTER TABLE chat_sessions ADD COLUMN thread_intent TEXT DEFAULT NULL`,
+    },
   ];
 }

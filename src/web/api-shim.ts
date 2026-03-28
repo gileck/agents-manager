@@ -232,8 +232,8 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
 
     // ── Chat Sessions ─────────────────────────────────────────────────
     chatSession: {
-      create: (scopeType, scopeId, name, agentLib?) =>
-        api.chat.createSession({ scopeType, scopeId, name, agentLib }) as Promise<never>,
+      create: (scopeType, scopeId, name, agentLib?, threadIntent?) =>
+        api.chat.createSession({ scopeType, scopeId, name, agentLib, threadIntent }) as Promise<never>,
       list: (scopeType, scopeId) => api.chat.listSessions(scopeType, scopeId) as Promise<never>,
       listTaskSessions: (projectId) => api.chat.listTaskSessionsForProject(projectId),
       listAll: (projectId) => api.chat.listAllForProject(projectId) as Promise<never>,

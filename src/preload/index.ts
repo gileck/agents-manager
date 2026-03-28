@@ -556,15 +556,15 @@ const api = {
 
   // Chat session operations
   chatSession: {
-    create: (scopeType: 'project' | 'task', scopeId: string, name: string, agentLib?: string): Promise<ChatSession> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_CREATE, { scopeType, scopeId, name, agentLib }),
+    create: (scopeType: 'project' | 'task', scopeId: string, name: string, agentLib?: string, threadIntent?: string): Promise<ChatSession> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_CREATE, { scopeType, scopeId, name, agentLib, threadIntent }),
     list: (scopeType: 'project' | 'task', scopeId: string): Promise<ChatSession[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST, scopeType, scopeId),
     listTaskSessions: (projectId: string): Promise<TaskChatSessionWithTitle[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_TASK_SESSIONS, projectId),
     listAll: (projectId: string): Promise<ChatSessionWithDetails[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_LIST_ALL, projectId),
-    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null; enableStreamingInput?: boolean }): Promise<ChatSession | null> =>
+    update: (sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null; enableStreamingInput?: boolean; threadIntent?: string | null }): Promise<ChatSession | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_UPDATE, sessionId, input),
     delete: (sessionId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_DELETE, sessionId),
