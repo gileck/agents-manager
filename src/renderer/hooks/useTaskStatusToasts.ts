@@ -8,11 +8,13 @@
  *
  * Must be called inside a React Router context (needs useNavigate).
  */
+import React from 'react';
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { reportError } from '../lib/error-handler';
 import type { Task } from '../../shared/types';
+import { TaskStatusToast } from '../components/TaskStatusToast';
 import {
   STATUS_TOAST_ACTIONS,
   DEFAULT_TOAST_ACTIONS,
@@ -33,6 +35,51 @@ export function useTaskStatusToasts(): void {
   const recentRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
+    /**
+     * Execute the action associated with a toast button.
+     * Defined inside useEffect to close over the current `navigate`.
+     */
+    function handleAction(
+      action: ToastActionDescriptor,
+      taskId: string,
+    ): void {
+      switch (action.kind) {
+      case 'view':
+        navigate(`/tasks/${taskId}`);
+        break;
+
+      case 'review':
+        if (action.tab) {
+          navigate(`/tasks/${taskId}/${action.tab}`);
+        } else {
+          navigate(`/tasks/${taskId}`);
+        }
+        break;
+
+      case 'approve':
+      case 'merge':
+        if (action.transitionTo) {
+          window.api.tasks
+            .transition(taskId, action.transitionTo, 'admin')
+            .then((result) => {
+              if (result.success) {
+                toast.success(`Task transitioned to ${action.transitionTo}`);
+              } else {
+                toast.error(result.error || 'Transition failed');
+              }
+            })
+            .catch((err: unknown) => reportError(err, 'Task transition'));
+        } else {
+          navigate(`/tasks/${taskId}`);
+        }
+        break;
+
+      case 'retry':
+        navigate(`/tasks/${taskId}`);
+        break;
+      }
+    }
+
     const unsubscribe = window.api?.on?.taskStatusChanged?.(
       (taskId: string, task: Task) => {
         // Skip automated/synthetic task IDs
@@ -60,24 +107,25 @@ export function useTaskStatusToasts(): void {
         const primaryAction = actions[0];
         const secondaryAction = actions.length > 1 ? actions[1] : undefined;
 
-        const toastOptions: Parameters<typeof toast>[1] = {
-          description: `Status: ${statusLabel}`,
-          duration: TOAST_DURATION_MS,
-          action: primaryAction
-            ? {
-              label: primaryAction.label,
-              onClick: () => handleAction(primaryAction, taskId, task),
-            }
-            : undefined,
-          cancel: secondaryAction
-            ? {
-              label: secondaryAction.label,
-              onClick: () => handleAction(secondaryAction, taskId, task),
-            }
-            : undefined,
-        };
-
-        toast(title, toastOptions);
+        toast.custom(
+          (toastId) =>
+            React.createElement(TaskStatusToast, {
+              toastId,
+              title,
+              statusLabel,
+              onBodyClick: () => {
+                navigate(`/tasks/${taskId}`);
+                toast.dismiss(toastId);
+              },
+              primaryAction: primaryAction
+                ? { label: primaryAction.label, onClick: () => handleAction(primaryAction, taskId) }
+                : undefined,
+              secondaryAction: secondaryAction
+                ? { label: secondaryAction.label, onClick: () => handleAction(secondaryAction, taskId) }
+                : undefined,
+            }),
+          { duration: TOAST_DURATION_MS },
+        );
       },
     );
 
@@ -85,49 +133,4 @@ export function useTaskStatusToasts(): void {
       unsubscribe?.();
     };
   }, [navigate]);
-
-  /**
-   * Execute the action associated with a toast button.
-   */
-  function handleAction(
-    action: ToastActionDescriptor,
-    taskId: string,
-    _task: Task,
-  ): void {
-    switch (action.kind) {
-    case 'view':
-      navigate(`/tasks/${taskId}`);
-      break;
-
-    case 'review':
-      if (action.tab) {
-        navigate(`/tasks/${taskId}/${action.tab}`);
-      } else {
-        navigate(`/tasks/${taskId}`);
-      }
-      break;
-
-    case 'approve':
-    case 'merge':
-      if (action.transitionTo) {
-        window.api.tasks
-          .transition(taskId, action.transitionTo, 'admin')
-          .then((result) => {
-            if (result.success) {
-              toast.success(`Task transitioned to ${action.transitionTo}`);
-            } else {
-              toast.error(result.error || 'Transition failed');
-            }
-          })
-          .catch((err: unknown) => reportError(err, 'Task transition'));
-      } else {
-        navigate(`/tasks/${taskId}`);
-      }
-      break;
-
-    case 'retry':
-      navigate(`/tasks/${taskId}`);
-      break;
-    }
-  }
 }

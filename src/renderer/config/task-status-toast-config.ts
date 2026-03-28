@@ -46,7 +46,7 @@ export const STATUS_TOAST_ACTIONS: Record<string, ToastActionDescriptor[]> = {
   ],
   investigation_review: [
     { kind: 'review', label: 'Review', tab: 'investigation' },
-    { kind: 'view', label: 'View' },
+    { kind: 'approve', label: 'Approve & Implement', transitionTo: 'implementing' },
   ],
   ux_design_review: [
     { kind: 'review', label: 'Review UX', tab: 'ux-design' },
@@ -54,15 +54,18 @@ export const STATUS_TOAST_ACTIONS: Record<string, ToastActionDescriptor[]> = {
   ],
   design_review: [
     { kind: 'review', label: 'Review Design', tab: 'design' },
-    { kind: 'view', label: 'View' },
+    { kind: 'approve', label: 'Approve & Plan', transitionTo: 'planning' },
   ],
   plan_review: [
     { kind: 'review', label: 'Review Plan', tab: 'plan' },
-    { kind: 'view', label: 'View' },
+    { kind: 'approve', label: 'Approve & Implement', transitionTo: 'implementing' },
   ],
+  // pr_review approve has multiple guarded variants (has_following_phases,
+  // has_pending_phases, default) so we navigate to the task detail page
+  // and let the user pick the right action from the full UI.
   pr_review: [
-    { kind: 'review', label: 'Review PR', tab: 'code' },
-    { kind: 'view', label: 'View' },
+    { kind: 'review', label: 'Review PR' },
+    { kind: 'view', label: 'Approve\u2026' },
   ],
 
   // Ready to merge
