@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { SplitButton } from '../ui/SplitButton';
 import { FixOptionCards } from '../docs/FixOptionCards';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { getRecommendedTransition, isEscapeTransition } from '../../utils/getRecommendedTransition';
 import { AgentRunErrorBanner } from '../agent-run/AgentRunErrorBanner';
 import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity, TaskContextEntry, ProposedFixOption, GuardBlockRecord } from '../../../shared/types';
@@ -276,7 +277,7 @@ export function StatusActionBar({
         </div>
       );
     }
-    // Investigation review with fix option cards
+    // Investigation review with fix option cards — show "View Suggestions" button + dialog
     if (status === 'investigation_review' && contextEntries && taskId) {
       const fixOptionsEntry = [...contextEntries]
         .filter(e => e.entryType === 'fix_options_proposed')
@@ -285,16 +286,18 @@ export function StatusActionBar({
 
       if (options && options.length > 0) {
         return (
-          <FixOptionCards
-            options={options}
-            taskId={taskId}
-            taskTitle={taskTitle ?? ''}
-            transitions={primaryTransitions}
-            transitioning={transitioning}
-            onTransition={onTransition}
-            compact
-            taskType={task.type ?? undefined}
-          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <FixOptionCardsDialogButton
+              options={options}
+              taskId={taskId}
+              taskTitle={taskTitle ?? ''}
+              transitions={primaryTransitions}
+              transitioning={transitioning}
+              onTransition={onTransition}
+              taskType={task.type ?? undefined}
+            />
+            {renderSmartTransitions(task, primaryTransitions, transitioning, onTransition)}
+          </div>
         );
       }
     }
@@ -394,5 +397,58 @@ export function StatusActionBar({
   }
 
   return null;
+}
+
+// ─── Fix Option Cards Dialog ────────────────────────────────────────────────
+
+function FixOptionCardsDialogButton({
+  options,
+  taskId,
+  taskTitle,
+  transitions,
+  transitioning,
+  onTransition,
+  taskType,
+}: {
+  options: ProposedFixOption[];
+  taskId: string;
+  taskTitle: string;
+  transitions: Transition[];
+  transitioning: string | null;
+  onTransition: (toStatus: string) => void;
+  taskType?: TaskType;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => setOpen(true)}
+      >
+        View Suggestions
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent style={{ maxWidth: 600 }}>
+          <DialogHeader>
+            <DialogTitle>Fix Options</DialogTitle>
+          </DialogHeader>
+          <FixOptionCards
+            options={options}
+            taskId={taskId}
+            taskTitle={taskTitle}
+            transitions={transitions}
+            transitioning={transitioning}
+            onTransition={(toStatus) => {
+              setOpen(false);
+              onTransition(toStatus);
+            }}
+            taskType={taskType}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
