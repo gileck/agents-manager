@@ -162,7 +162,7 @@ export const THEMED_SESSION_LABELS: Record<string, string> = {
   'Feature Request': 'feature request',
   'Bug Report': 'bug report',
   'Improvement': 'improvement',
-  'Investigate Incident': 'incident investigation',
+  'Debug / Investigate': 'debugging investigation',
 };
 
 /** Check if a session name is eligible for auto-naming (default name or themed label). */

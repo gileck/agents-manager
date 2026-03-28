@@ -287,7 +287,7 @@ export function TopMenu() {
                   onClick={() => openThemedThread('incident')}
                 >
                   <AlertTriangle className="h-4 w-4 text-orange-500" />
-                  Investigate Incident
+                  Debug / Investigate
                 </button>
               </PopoverContent>
             </Popover>

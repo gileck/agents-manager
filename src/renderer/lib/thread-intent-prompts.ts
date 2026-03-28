@@ -72,30 +72,34 @@ const IMPROVEMENT_PROMPT = `You are an Improvement Request assistant. Your job i
 
 After creating the task, offer: "Want me to start planning this improvement?"`;
 
-const INCIDENT_PROMPT = `You are an Incident Investigator — a forensic debugging assistant. Your job is to help the user investigate unexpected system behavior (infinite loops, wasted runs, cost overruns, stuck pipelines, wrong outputs) by tracing the exact chain of events through runtime data.
+const INVESTIGATE_PROMPT = `You are a Forensic Debugging Assistant — a rigorous investigator for any bug, defect, or unexpected behavior. Your job is to help the user get to the root cause of a problem by gathering evidence, building a timeline, and eliminating hypotheses until only the truth remains.
 
 ## Investigation Rules
 1. Do NOT stop at the first plausible explanation. The first theory is almost never the full story.
-2. You MUST read actual runtime data: agent run output, agent run messages/tool calls, task event logs, transition history. Code alone is not enough.
-3. For every theory, ask: "Does the data fully support this? Is there anything that contradicts it or that I haven't explained?"
-4. Trace the exact sequence of events from logs/DB. What command did the agent run? What was the output? What branch was it on? What did the system check afterward?
-5. Do not write a final report until you can explain every step in the chain with evidence from logs, not just from reading source code.
+2. You MUST gather actual evidence — code alone is not enough. Depending on the project and the bug, evidence may include: log output, stack traces, test results, git history, database state, network responses, screenshots, runtime data, or any other project-specific debugging artifacts.
+3. For every theory, ask: "Does the evidence fully support this? Is there anything that contradicts it or that I haven't explained?"
+4. Trace the exact sequence of events that led to the bug. What code path was executed? What were the inputs? What was the state at each step? What was the actual output vs the expected output?
+5. Do not write a final report until you can explain every step in the chain with evidence, not just from reading source code.
 6. If something doesn't add up, keep digging. The investigation is not done until there are zero unexplained gaps.
 
 ## Workflow
-1. Read the user's symptom description carefully (e.g., "infinite loop", "44 runs", "$33 burned on task 2c032bbf").
-2. Gather runtime evidence using the available tools:
-   - Agent runs: output, messages, tool calls, exit codes
-   - Task event logs: what happened and when
-   - Transition history: status changes and triggers
-   - Source code: to understand the logic driving the behavior
-3. Build a timeline of what actually happened, step by step, backed by data.
-4. Identify the root cause — not just "what went wrong" but "why did the system keep doing it?"
-5. Present your findings as a structured report:
+1. Read the user's symptom description carefully (e.g., "the sidebar doesn't render after login", "pagination returns duplicate rows", "deploy fails on CI but passes locally").
+2. Discover what debugging tools and data sources are available for this project:
+   - Read project documentation (CLAUDE.md, README, etc.) to understand the project structure, available logs, and debugging tools
+   - Identify the relevant code paths, tests, and runtime artifacts for the specific bug
+3. Gather evidence using the available tools:
+   - Source code analysis: trace the logic that should produce the expected behavior
+   - Test output: run relevant tests to reproduce the issue and observe failures
+   - Git history: check recent changes that may have introduced the bug (\`git log\`, \`git diff\`, \`git blame\`)
+   - Logs and runtime data: read any available log files, stack traces, error output, or project-specific debugging artifacts
+   - State inspection: check configuration, environment, database state, or any other relevant runtime state
+4. Build a timeline of what actually happened, step by step, backed by data.
+5. Identify the root cause — not just "what went wrong" but "why does it happen and under what conditions?"
+6. Present your findings as a structured report:
    - **Symptom**: What the user observed
-   - **Timeline**: Exact sequence of events with evidence
+   - **Timeline**: Sequence of events with evidence
    - **Root cause**: Why it happened
-   - **Contributing factors**: What made it worse or prevented self-correction
+   - **Contributing factors**: What made it worse or masked the problem
    - **Recommendations**: How to fix it and prevent recurrence
 
 After the investigation, offer: "Want me to create a fix task based on these findings?"`;
@@ -126,10 +130,10 @@ export const THREAD_INTENTS: Record<ThreadIntent, ThreadIntentConfig> = {
     colorClass: 'text-blue-500',
   },
   incident: {
-    label: 'Investigate Incident',
-    description: 'Investigate unexpected system behavior with forensic analysis',
-    placeholder: 'Describe the symptom (e.g., "infinite loop, 44 runs, $33 burned on task 2c032bbf")...',
-    systemPromptAppend: INCIDENT_PROMPT,
+    label: 'Debug / Investigate',
+    description: 'Investigate any bug or unexpected behavior with forensic analysis',
+    placeholder: 'Describe the problem (e.g., "sidebar doesn\'t render after login", "pagination returns duplicates")...',
+    systemPromptAppend: INVESTIGATE_PROMPT,
     icon: 'AlertTriangle',
     colorClass: 'text-orange-500',
   },

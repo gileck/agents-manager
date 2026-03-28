@@ -30,7 +30,7 @@ describe('THEMED_SESSION_LABELS', () => {
     expect(THEMED_SESSION_LABELS).toHaveProperty('Feature Request');
     expect(THEMED_SESSION_LABELS).toHaveProperty('Bug Report');
     expect(THEMED_SESSION_LABELS).toHaveProperty('Improvement');
-    expect(THEMED_SESSION_LABELS).toHaveProperty('Investigate Incident');
+    expect(THEMED_SESSION_LABELS).toHaveProperty('Debug / Investigate');
   });
 });
 
@@ -45,7 +45,7 @@ describe('isAutoNameableSession', () => {
     expect(isAutoNameableSession('Feature Request')).toBe(true);
     expect(isAutoNameableSession('Bug Report')).toBe(true);
     expect(isAutoNameableSession('Improvement')).toBe(true);
-    expect(isAutoNameableSession('Investigate Incident')).toBe(true);
+    expect(isAutoNameableSession('Debug / Investigate')).toBe(true);
   });
 
   it('returns false for user-customized session names', () => {
