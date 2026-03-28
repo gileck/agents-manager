@@ -152,6 +152,23 @@ export function isDefaultSessionName(name: string): boolean {
   return name === 'General' || /^Session \d+$/.test(name);
 }
 
+/**
+ * Session names set by themed thread creation (Feature Request, Bug Report, etc.)
+ * that should still trigger auto-naming.
+ * Maps label → short intent description for use in the auto-naming prompt.
+ */
+export const THEMED_SESSION_LABELS: Record<string, string> = {
+  'Feature Request': 'feature request',
+  'Bug Report': 'bug report',
+  'Improvement': 'improvement',
+  'Investigate Incident': 'incident investigation',
+};
+
+/** Check if a session name is eligible for auto-naming (default name or themed label). */
+export function isAutoNameableSession(name: string): boolean {
+  return isDefaultSessionName(name) || name in THEMED_SESSION_LABELS;
+}
+
 /** Parse plugins config from project config into typed array. */
 export function parsePluginsConfig(raw: unknown): Array<{ type: 'local'; path: string }> | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;

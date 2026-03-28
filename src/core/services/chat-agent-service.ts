@@ -833,8 +833,8 @@ export class ChatAgentService {
    * then persists it and invokes onRenamed with the updated session.
    * Silently does nothing if the session no longer has a default name or if anything fails.
    */
-  async autoNameSession(sessionId: string, firstMessage: string, onRenamed: (session: ChatSession) => void): Promise<void> {
-    return doAutoName(this.buildConversationUtilsContext(), sessionId, firstMessage, onRenamed);
+  async autoNameSession(sessionId: string, firstMessage: string, onRenamed: (session: ChatSession) => void, sessionName?: string): Promise<void> {
+    return doAutoName(this.buildConversationUtilsContext(), sessionId, firstMessage, onRenamed, sessionName);
   }
 
   private async resolveScope(session: { scopeType: string; scopeId: string }): Promise<{
