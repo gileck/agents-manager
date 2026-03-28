@@ -6,6 +6,7 @@ import { WS_CHANNELS } from '../ws/channels';
 import type { ChatImage, PermissionMode } from '../../shared/types';
 import { MAX_MESSAGE_LENGTH } from '../../shared/constants';
 import { getAppLogger } from '../../core/services/app-logger';
+import { isAutoNameableSession } from '../../core/services/chat-agent/chat-agent-helpers';
 
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const VALID_PERMISSION_MODES = new Set<PermissionMode>(['read_only', 'read_write', 'full_access']);
@@ -217,11 +218,11 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
       if (
         currentSession &&
         existingMessages.length === 0 &&
-        (currentSession.name === 'General' || /^Session \d+$/.test(currentSession.name))
+        isAutoNameableSession(currentSession.name)
       ) {
         void services.chatAgentService.autoNameSession(sessionId, message, (updatedSession) => {
           ws?.broadcast(WS_CHANNELS.CHAT_SESSION_RENAMED, sessionId, updatedSession);
-        });
+        }, currentSession.name);
       }
 
       // Build prompt + resume options via service (keeps business logic out of routes)

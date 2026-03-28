@@ -10,7 +10,7 @@ import type { IChatSessionStore } from '../../interfaces/chat-session-store';
 import type { IAgentLib } from '../../interfaces/agent-lib';
 import type { ChatMessage, ChatSession } from '../../../shared/types';
 import { getAppLogger } from '../app-logger';
-import { parseUserContent, extractTextFromContent, isDefaultSessionName } from './chat-agent-helpers';
+import { parseUserContent, extractTextFromContent, isAutoNameableSession, THEMED_SESSION_LABELS } from './chat-agent-helpers';
 
 // ---------------------------------------------------------------------------
 // Context interface
@@ -121,12 +121,17 @@ export async function autoNameSession(
   sessionId: string,
   firstMessage: string,
   onRenamed: (session: ChatSession) => void,
+  sessionName?: string,
 ): Promise<void> {
   try {
     const messageText = firstMessage.slice(0, 300);
     getAppLogger().info('ChatAgent', `Running autoNameSession with "${messageText.slice(0, 100)}"`);
 
-    const prompt = `Generate a short, descriptive name (3-6 words) for a chat session based on this first message. Return ONLY the name, with no quotes, punctuation, or explanation.\n\nFirst message: ${messageText}`;
+    // Use an intent-aware prompt for themed threads (e.g. "Feature Request", "Bug Report")
+    const themedContext = sessionName ? THEMED_SESSION_LABELS[sessionName] : undefined;
+    const prompt = themedContext
+      ? `Generate a short, descriptive title (3-8 words) for a ${themedContext} thread based on this first message. The title should clearly describe the topic. Return ONLY the title, with no quotes, punctuation, or explanation.\n\nFirst message: ${messageText}`
+      : `Generate a short, descriptive name (3-6 words) for a chat session based on this first message. Return ONLY the name, with no quotes, punctuation, or explanation.\n\nFirst message: ${messageText}`;
 
     let generatedName = '';
     const start = Date.now();
@@ -142,7 +147,7 @@ export async function autoNameSession(
 
     // Re-fetch to guard against manual rename that happened during the async call
     const session = await ctx.chatSessionStore.getSession(sessionId);
-    if (!session || !isDefaultSessionName(session.name)) return;
+    if (!session || !isAutoNameableSession(session.name)) return;
 
     const updatedSession = await ctx.chatSessionStore.updateSession(sessionId, { name: cleanedName });
     if (!updatedSession) return;

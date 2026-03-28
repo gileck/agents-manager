@@ -12,6 +12,7 @@ export {
   extractTextFromContent,
   saveImagesToDisk,
   isDefaultSessionName,
+  isAutoNameableSession,
   parsePluginsConfig,
   tagNestedSubagentMessage,
   WRITE_TOOL_NAMES,
@@ -19,4 +20,5 @@ export {
   CHAT_COMPLETE_SENTINEL,
   DEFAULT_CHAT_SUBAGENTS,
   AGENT_ROLE_TO_FEEDBACK_ENTRY_TYPE,
+  THEMED_SESSION_LABELS,
 } from './chat-agent-helpers';
