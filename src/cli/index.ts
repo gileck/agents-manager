@@ -18,6 +18,7 @@ import { registerLogsCommands } from './commands/logs';
 import { registerGitCommands } from './commands/git';
 import { registerFeatureCommands } from './commands/features';
 import { registerSettingsCommands } from './commands/settings';
+import { registerThreadsCommands } from './commands/threads';
 
 const program = new Command();
 
@@ -63,6 +64,7 @@ async function main(): Promise<void> {
     registerGitCommands(program, api);
     registerFeatureCommands(program, api);
     registerSettingsCommands(program, api);
+    registerThreadsCommands(program, api, daemonUrl);
   }
 
   await program.parseAsync(process.argv);
