@@ -17,7 +17,7 @@ interface QueuedMessage {
 }
 
 export function useChat(sessionId: string | null, options?: { enableStreamingInput?: boolean }) {
-  const enableStreamingInput = options?.enableStreamingInput ?? false;
+  const enableStreamingInput = options?.enableStreamingInput ?? true;
   const [dbMessages, setDbMessages] = useState<ChatMessage[]>([]);
   const [streamingMessages, setStreamingMessages] = useState<AgentChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
