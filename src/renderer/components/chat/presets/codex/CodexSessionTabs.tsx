@@ -10,6 +10,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { SessionTabsPresetProps } from '../types';
 import type { RunningAgent } from '../../../../../shared/types';
+import { ThreadIntentIcon } from '../../ThreadIntentIcon';
 
 const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
@@ -91,6 +92,9 @@ export function CodexSessionTabs({
             )}
             {completed > 0 && running === 0 && waiting === 0 && (
               <span style={{ color: '#f59e0b', fontSize: '0.77em' }}>✓</span>
+            )}
+            {s.threadIntent && running === 0 && waiting === 0 && (
+              <ThreadIntentIcon intent={s.threadIntent} className="h-3 w-3 shrink-0" />
             )}
             {renameId === s.id ? (
               <form

@@ -291,7 +291,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
   router.patch('/api/chat/sessions/:id', async (req, res, next) => {
     try {
       const sessionId = req.params.id;
-      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: string | null; systemPromptAppend?: string | null; draft?: string | null; enableStreaming?: boolean; enableStreamingInput?: boolean };
+      const input = req.body as { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: string | null; systemPromptAppend?: string | null; draft?: string | null; enableStreaming?: boolean; enableStreamingInput?: boolean; threadIntent?: string | null };
       if (!input || typeof input !== 'object') {
         res.status(400).json({ error: 'Invalid input: expected object' });
         return;
@@ -316,7 +316,7 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
         res.status(404).json({ error: 'Session not found' });
         return;
       }
-      const updateInput: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null; enableStreaming?: boolean; enableStreamingInput?: boolean } = {};
+      const updateInput: { name?: string; agentLib?: string | null; model?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; draft?: string | null; enableStreaming?: boolean; enableStreamingInput?: boolean; threadIntent?: string | null } = {};
       if (input.name !== undefined) updateInput.name = input.name.trim();
       if (input.agentLib !== undefined) {
         if (input.agentLib !== null) {
@@ -382,6 +382,13 @@ export function chatRoutes(services: AppServices, wsHolder: WsHolder): Router {
           return;
         }
         updateInput.enableStreamingInput = input.enableStreamingInput;
+      }
+      if (input.threadIntent !== undefined) {
+        if (input.threadIntent !== null && typeof input.threadIntent !== 'string') {
+          res.status(400).json({ error: 'threadIntent must be a string or null' });
+          return;
+        }
+        updateInput.threadIntent = input.threadIntent;
       }
       const updated = await services.chatSessionStore.updateSession(sessionId, updateInput);
       res.json(updated);

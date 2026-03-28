@@ -14,10 +14,24 @@ import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useProjectChatSessions } from '../contexts/ProjectChatSessionsContext';
 import { reportError } from '../lib/error-handler';
 import { formatRelativeTimestamp } from '../components/tasks/task-helpers';
+import { ThreadIntentIcon } from '../components/chat/ThreadIntentIcon';
+import { THREAD_INTENTS, type ThreadIntent } from '../lib/thread-intent-prompts';
 import type { ChatSessionWithDetails } from '../../shared/types';
 
 type SortField = 'updatedAt' | 'createdAt' | 'name' | 'messageCount';
 type SortDir = 'desc' | 'asc';
+
+/** Filter values: 'all' shows everything, intent keys filter by that intent, 'blank' shows null-intent sessions. */
+type IntentFilter = 'all' | ThreadIntent | 'blank';
+
+const INTENT_FILTER_OPTIONS: { value: IntentFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  ...Object.entries(THREAD_INTENTS).map(([key, cfg]) => ({
+    value: key as ThreadIntent,
+    label: cfg.label,
+  })),
+  { value: 'blank', label: 'Blank' },
+];
 
 function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', {
@@ -37,6 +51,7 @@ export function ThreadsHistoryPage() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('updatedAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [intentFilter, setIntentFilter] = useState<IntentFilter>('all');
   const [deleteTarget, setDeleteTarget] = useState<ChatSessionWithDetails | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -52,9 +67,18 @@ export function ThreadsHistoryPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const result = q
+    let result = q
       ? sessions.filter((s) => s.name.toLowerCase().includes(q))
       : sessions;
+
+    // Apply intent filter
+    if (intentFilter !== 'all') {
+      if (intentFilter === 'blank') {
+        result = result.filter((s) => !s.threadIntent);
+      } else {
+        result = result.filter((s) => s.threadIntent === intentFilter);
+      }
+    }
 
     return [...result].sort((a, b) => {
       const dir = sortDir === 'desc' ? -1 : 1;
@@ -62,7 +86,7 @@ export function ThreadsHistoryPage() {
       if (sortBy === 'messageCount') return dir * (a.messageCount - b.messageCount);
       return dir * (a[sortBy] - b[sortBy]);
     });
-  }, [sessions, search, sortBy, sortDir]);
+  }, [sessions, search, sortBy, sortDir, intentFilter]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -114,8 +138,8 @@ export function ThreadsHistoryPage() {
           </div>
         </div>
 
-        {/* Search + Sort controls */}
-        <div className="flex items-center gap-3 mt-4">
+        {/* Search + Filter + Sort controls */}
+        <div className="flex items-center gap-3 mt-4 flex-wrap">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
@@ -125,6 +149,25 @@ export function ThreadsHistoryPage() {
               className="pl-8 h-8 text-sm"
             />
           </div>
+
+          {/* Intent filter chips */}
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Type:</span>
+            {INTENT_FILTER_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setIntentFilter(opt.value)}
+                className={`px-2 py-1 rounded transition-colors ${
+                  intentFilter === opt.value
+                    ? 'bg-accent text-foreground font-medium'
+                    : 'hover:bg-accent/50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <span>Sort:</span>
             {(['updatedAt', 'createdAt', 'name', 'messageCount'] as SortField[]).map((f) => (
@@ -151,7 +194,7 @@ export function ThreadsHistoryPage() {
           <p className="text-sm text-muted-foreground py-8 text-center">Loading...</p>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            {search ? 'No threads match your search.' : 'No threads found.'}
+            {search || intentFilter !== 'all' ? 'No threads match your filters.' : 'No threads found.'}
           </p>
         ) : (
           <div className="space-y-1">
@@ -160,12 +203,16 @@ export function ThreadsHistoryPage() {
                 key={session.id}
                 className="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent hover:bg-accent/40 hover:border-border/40 transition-colors"
               >
-                {/* Scope icon */}
+                {/* Intent icon or default message icon */}
                 <div className="shrink-0 text-muted-foreground">
-                  <MessageSquare className="h-3.5 w-3.5" />
+                  {session.threadIntent ? (
+                    <ThreadIntentIcon intent={session.threadIntent} className="h-3.5 w-3.5" />
+                  ) : (
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  )}
                 </div>
 
-                {/* Name + scope */}
+                {/* Name + badges */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <button
@@ -180,6 +227,11 @@ export function ThreadsHistoryPage() {
                     >
                       {session.name}
                     </button>
+                    {session.threadIntent && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                        {THREAD_INTENTS[session.threadIntent as ThreadIntent]?.label ?? session.threadIntent}
+                      </span>
+                    )}
                     {session.sidebarHidden && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
                         hidden

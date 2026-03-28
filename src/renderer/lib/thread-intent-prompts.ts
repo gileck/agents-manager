@@ -14,6 +14,10 @@ export interface ThreadIntentConfig {
   description: string;
   placeholder: string;
   systemPromptAppend: string;
+  /** Lucide icon name for display in tabs and lists. */
+  icon: 'Lightbulb' | 'Bug' | 'Sparkles' | 'AlertTriangle';
+  /** Tailwind text color class for the intent icon. */
+  colorClass: string;
 }
 
 const FEATURE_PROMPT = `You are a Feature Request assistant. Your job is to help the user describe a new feature they want built, clarify any ambiguities, and then create a well-structured task.
@@ -102,23 +106,31 @@ export const THREAD_INTENTS: Record<ThreadIntent, ThreadIntentConfig> = {
     description: 'Describe a new feature you want built',
     placeholder: 'Describe what you\'d like to build...',
     systemPromptAppend: FEATURE_PROMPT,
+    icon: 'Lightbulb',
+    colorClass: 'text-amber-500',
   },
   bug: {
     label: 'Bug Report',
     description: 'Report a bug you encountered',
     placeholder: 'Describe the bug you encountered...',
     systemPromptAppend: BUG_PROMPT,
+    icon: 'Bug',
+    colorClass: 'text-red-500',
   },
   improvement: {
     label: 'Improvement',
     description: 'Suggest an improvement to existing functionality',
     placeholder: 'Describe what you\'d like to improve...',
     systemPromptAppend: IMPROVEMENT_PROMPT,
+    icon: 'Sparkles',
+    colorClass: 'text-blue-500',
   },
   incident: {
     label: 'Investigate Incident',
     description: 'Investigate unexpected system behavior with forensic analysis',
     placeholder: 'Describe the symptom (e.g., "infinite loop, 44 runs, $33 burned on task 2c032bbf")...',
     systemPromptAppend: INCIDENT_PROMPT,
+    icon: 'AlertTriangle',
+    colorClass: 'text-orange-500',
   },
 };

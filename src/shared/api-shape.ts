@@ -270,11 +270,11 @@ export interface ApiShape {
 
   // Chat session operations
   chatSession: {
-    create(scopeType: 'project' | 'task', scopeId: string, name: string, agentLib?: string): Promise<ChatSession>;
+    create(scopeType: 'project' | 'task', scopeId: string, name: string, agentLib?: string, threadIntent?: string): Promise<ChatSession>;
     list(scopeType: 'project' | 'task', scopeId: string): Promise<ChatSession[]>;
     listTaskSessions(projectId: string): Promise<TaskChatSessionWithTitle[]>;
     listAll(projectId: string): Promise<ChatSessionWithDetails[]>;
-    update(sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreamingInput?: boolean }): Promise<ChatSession | null>;
+    update(sessionId: string, input: { name?: string; agentLib?: string | null; permissionMode?: PermissionMode | null; systemPromptAppend?: string | null; enableStreamingInput?: boolean; threadIntent?: string | null }): Promise<ChatSession | null>;
     delete(sessionId: string): Promise<boolean>;
     hide(sessionId: string): Promise<boolean>;
     unhide(sessionId: string): Promise<boolean>;
