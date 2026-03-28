@@ -942,7 +942,7 @@ describe('ChatAgentService', () => {
       );
     });
 
-    it('updates session status to waiting_for_input on turn completion', async () => {
+    it('updates session status to idle (not waiting_for_input) on turn completion when no questions pending', async () => {
       mockSessionStore.getSession = vi.fn().mockResolvedValue(streamingSession);
       const { lib } = createStreamingInputMockLib();
       mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
@@ -950,11 +950,14 @@ describe('ChatAgentService', () => {
       await service.send('session-1', 'Hello', { systemPrompt: '' });
       await vi.advanceTimersByTimeAsync(0);
 
-      // DB status should transition: running → waiting_for_input
+      // DB status should transition: running → idle (not waiting_for_input,
+      // since no pending questions exist)
       const statusCalls = (mockSessionStore.updateSessionStatus as ReturnType<typeof vi.fn>).mock.calls;
       const statuses = statusCalls.map((c: unknown[]) => c[1]);
       expect(statuses).toContain('running');
-      expect(statuses).toContain('waiting_for_input');
+      expect(statuses).toContain('idle');
+      // waiting_for_input should NOT be set when there are no pending questions
+      expect(statuses).not.toContain('waiting_for_input');
     });
 
     it('restores running status when message is injected into waiting session', async () => {
@@ -962,7 +965,7 @@ describe('ChatAgentService', () => {
       const { lib } = createStreamingInputMockLib();
       mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
 
-      // Start the agent — will call onTurnComplete setting status to waiting_for_input
+      // Start the agent — will call onTurnComplete setting in-memory status to waiting_for_input
       await service.send('session-1', 'Hello', { systemPrompt: '' });
       await vi.advanceTimersByTimeAsync(0);
 
@@ -976,8 +979,9 @@ describe('ChatAgentService', () => {
 
       const statusCalls = (mockSessionStore.updateSessionStatus as ReturnType<typeof vi.fn>).mock.calls;
       const statuses = statusCalls.map((c: unknown[]) => c[1]);
-      // Should see: running → waiting_for_input → running
-      expect(statuses).toEqual(expect.arrayContaining(['running', 'waiting_for_input', 'running']));
+      // DB status should see: running → idle → running (idle because no pending
+      // questions, even though in-memory status is waiting_for_input)
+      expect(statuses).toEqual(expect.arrayContaining(['running', 'idle', 'running']));
     });
 
     it('restores turnMessages on persistence failure so finally block can retry', async () => {
