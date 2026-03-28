@@ -94,7 +94,12 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
         window.api.chat.messages(sessionId)
           .then((freshMessages) => {
             setDbMessages(freshMessages);
-            setStreamingMessages([]);
+            // Only clear streaming messages if we're still in a terminal state.
+            // If a new turn started while the reload was in flight (streamingRef
+            // flipped back to true), don't wipe out the new streaming messages.
+            if (!streamingRef.current) {
+              setStreamingMessages([]);
+            }
           })
           .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
       } else if (status === 'running') {
@@ -111,7 +116,9 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
           window.api.chat.messages(sessionId)
             .then((freshMessages) => {
               setDbMessages(freshMessages);
-              setStreamingMessages([]);
+              if (!streamingRef.current) {
+                setStreamingMessages([]);
+              }
             })
             .catch((err: Error) => setError(`Failed to reload messages: ${err.message}`));
         }
@@ -220,7 +227,9 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
           streamingRef.current = false;
           const freshMessages = await window.api.chat.messages(sessionId);
           setDbMessages(freshMessages);
-          setStreamingMessages([]);
+          if (!streamingRef.current) {
+            setStreamingMessages([]);
+          }
         } else if (status === 'waiting_for_input') {
           // Self-heal stale waiting_for_input: if the server says waiting
           // but there are no unanswered questions in the UI, reset to idle.
@@ -232,7 +241,9 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
             setServerStatus('idle');
             const freshMessages = await window.api.chat.messages(sessionId);
             setDbMessages(freshMessages);
-            setStreamingMessages([]);
+            if (!streamingRef.current) {
+              setStreamingMessages([]);
+            }
           }
         }
       } catch {
