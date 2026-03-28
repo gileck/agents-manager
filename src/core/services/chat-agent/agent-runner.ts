@@ -400,16 +400,21 @@ export async function runAgent(
             });
           }
 
-          // Update in-memory agent status
+          // Update in-memory agent status — always waiting_for_input since the
+          // agent is alive and waiting for the next user message.
           const agent = ctx.runningAgents.get(sessionId);
           if (agent) {
             agent.status = 'waiting_for_input';
             agent.lastActivity = Date.now();
           }
 
-          // Update DB session status — use waiting_for_input to match in-memory
-          // status and avoid appearing stuck after a daemon restart.
-          ctx.chatSessionStore.updateSessionStatus(sessionId, 'waiting_for_input').catch((err) =>
+          // Only persist waiting_for_input to DB if there are actually pending
+          // questions for this session. Otherwise persist idle to avoid the
+          // frontend showing "Answer the question above..." when no question
+          // was asked (the frontend derives isWaitingForInput from DB status).
+          const hasPendingQuestions = [...ctx.pendingQuestions.values()].some(p => p.sessionId === sessionId);
+          const dbStatus = hasPendingQuestions ? 'waiting_for_input' : 'idle';
+          ctx.chatSessionStore.updateSessionStatus(sessionId, dbStatus).catch((err) =>
             getAppLogger().warn('ChatAgentService', 'Failed to persist session status on turn complete', { error: err instanceof Error ? err.message : String(err) }),
           );
 

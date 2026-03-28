@@ -29,6 +29,8 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
   // serverStatus is the authoritative fallback for recovery.
   const streamingRef = useRef(false);
   const doSendRef = useRef<(message: string, images?: ChatImage[]) => Promise<void>>(null);
+  // Ref to latest streaming messages — used inside polling interval to avoid stale closures
+  const streamingMessagesRef = useRef<AgentChatMessage[]>([]);
 
   // Derive isStreaming from combined sources
   const isStreaming = serverStatus === 'running' || serverStatus === 'waiting_for_input' || streamingRef.current;
@@ -172,6 +174,9 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
     return () => { unsubscribe(); };
   }, [sessionId]);
 
+  // Keep streamingMessagesRef in sync for use inside polling interval
+  streamingMessagesRef.current = streamingMessages;
+
   // Polling heartbeat: when we think the agent is running, poll server status
   // every few seconds. If the server says idle/error but we still think streaming,
   // self-heal by resetting state and reloading messages from DB.
@@ -189,6 +194,19 @@ export function useChat(sessionId: string | null, options?: { enableStreamingInp
           const freshMessages = await window.api.chat.messages(sessionId);
           setDbMessages(freshMessages);
           setStreamingMessages([]);
+        } else if (status === 'waiting_for_input') {
+          // Self-heal stale waiting_for_input: if the server says waiting
+          // but there are no unanswered questions in the UI, reset to idle.
+          const hasUnansweredQuestion = streamingMessagesRef.current.some(
+            (msg) => msg.type === 'ask_user_question' && !msg.answered,
+          );
+          if (!hasUnansweredQuestion) {
+            streamingRef.current = false;
+            setServerStatus('idle');
+            const freshMessages = await window.api.chat.messages(sessionId);
+            setDbMessages(freshMessages);
+            setStreamingMessages([]);
+          }
         }
       } catch {
         /* ignore network errors during poll */
