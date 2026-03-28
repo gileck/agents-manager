@@ -172,7 +172,7 @@ export function CodexChatPanel({ scope, sessionsOverride }: ChatPanelPresetProps
     tokenUsage,
     perTurnUsage,
     respondToPermission,
-  } = useChat(currentSessionId);
+  } = useChat(currentSessionId, { enableStreamingInput: (currentSession?.enableStreamingInput ?? true) });
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [showActions, setShowActions] = useState(false);

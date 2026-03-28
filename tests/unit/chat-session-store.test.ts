@@ -85,6 +85,31 @@ describe('SqliteChatSessionStore', () => {
       const session = await store.createSession(input);
       expect(session.agentLib).toBe('claude-code');
     });
+
+    it('should default enableStreamingInput to true', async () => {
+      const input: ChatSessionCreateInput = {
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'Streaming Input Chat',
+        projectId: testProjectId,
+      };
+
+      const session = await store.createSession(input);
+      expect(session.enableStreamingInput).toBe(true);
+    });
+
+    it('should allow explicitly setting enableStreamingInput to false', async () => {
+      const input: ChatSessionCreateInput = {
+        scopeType: 'project',
+        scopeId: testProjectId,
+        name: 'No Streaming Input Chat',
+        projectId: testProjectId,
+        enableStreamingInput: false,
+      };
+
+      const session = await store.createSession(input);
+      expect(session.enableStreamingInput).toBe(false);
+    });
   });
 
   describe('getSession', () => {

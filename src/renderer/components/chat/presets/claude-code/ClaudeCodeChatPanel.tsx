@@ -167,7 +167,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
     perTurnUsage,
     respondToPermission,
     rawEvents,
-  } = useChat(currentSessionId, { enableStreamingInput: (currentSession?.enableStreamingInput ?? false) });
+  } = useChat(currentSessionId, { enableStreamingInput: (currentSession?.enableStreamingInput ?? true) });
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [showRawView, setShowRawView] = useState(false);
@@ -249,7 +249,7 @@ export function ClaudeCodeChatPanel({ scope, sessionsOverride }: ChatPanelPreset
     catch (err) { reportError(err, 'ClaudeCodeChatPanel: update streaming'); }
   }, [currentSessionId, updateSession, streamingEnabled]);
 
-  const streamingInputEnabled = currentSession?.enableStreamingInput ?? false;
+  const streamingInputEnabled = currentSession?.enableStreamingInput ?? true;
   const libSupportsStreamingInput = agentLibFeatures[selectedAgentLib]?.streamingInput ?? false;
 
   const handleStreamingInputToggle = useCallback(async () => {

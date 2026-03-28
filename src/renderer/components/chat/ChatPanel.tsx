@@ -70,7 +70,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     perTurnUsage,
     respondToPermission,
     rawEvents,
-  } = useChat(currentSessionId, { enableStreamingInput: (currentSession?.enableStreamingInput ?? false) });
+  } = useChat(currentSessionId, { enableStreamingInput: (currentSession?.enableStreamingInput ?? true) });
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [showRawView, setShowRawView] = useState(false);
@@ -169,7 +169,7 @@ export function ChatPanel({ scope, sessionsOverride }: ChatPanelProps) {
     }
   }, [currentSessionId, updateSession, streamingEnabled]);
 
-  const streamingInputEnabled = currentSession?.enableStreamingInput ?? false;
+  const streamingInputEnabled = currentSession?.enableStreamingInput ?? true;
   const libSupportsStreamingInput = agentLibFeatures[selectedAgentLib]?.streamingInput ?? false;
 
   const handleStreamingInputToggle = useCallback(async () => {
