@@ -12,32 +12,8 @@ import { reportError } from '../../lib/error-handler';
 import { APP_PAGES } from '../../lib/pages';
 import type { PageDefinition } from '../../lib/pages';
 import type { Task, ChatSessionWithDetails } from '../../../shared/types';
-
-/* ── Status dot icons (reused from SidebarRecentTasks) ── */
-const STATUS_ICONS: Record<string, React.ReactNode> = {
-  done: (
-    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill="#22c55e" />
-      <path d="M4.5 8.5L7 11L11.5 5.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  open: (
-    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill="#3b82f6" />
-      <circle cx="8" cy="8" r="3" fill="white" />
-    </svg>
-  ),
-  closed: (
-    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill="#6b7280" />
-    </svg>
-  ),
-  _default: (
-    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="7" stroke="#22c55e" strokeWidth="2" fill="white" />
-    </svg>
-  ),
-};
+import { usePipelines } from '../../hooks/usePipelines';
+import { StatusIcon, useStatusColorMap } from '../pipeline/StatusIcon';
 
 const MAX_TASKS = 8;
 const MAX_THREADS = 5;
@@ -61,6 +37,8 @@ export function GlobalSearchDialog() {
   const { switchSession } = useProjectChatSessions();
   const { getCombo } = useKeyboardShortcutsConfig();
   const navigate = useNavigate();
+  const { pipelines } = usePipelines();
+  const statusColorMap = useStatusColorMap(pipelines);
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -343,7 +321,6 @@ export function GlobalSearchDialog() {
                 </div>
                 {tasks.map((task, idx) => {
                   const globalIdx = pageCount + idx;
-                  const icon = STATUS_ICONS[task.status] || STATUS_ICONS._default;
                   return (
                     <button
                       key={task.id}
@@ -356,7 +333,7 @@ export function GlobalSearchDialog() {
                           : 'text-foreground hover:bg-muted/40'
                       )}
                     >
-                      {icon}
+                      <StatusIcon status={task.status} colorMap={statusColorMap} />
                       <span className="text-sm font-medium truncate flex-1">{task.title}</span>
                       <span className="text-[10px] text-muted-foreground/60 capitalize bg-muted/30 px-1.5 py-0.5 rounded-full shrink-0">
                         {task.status}

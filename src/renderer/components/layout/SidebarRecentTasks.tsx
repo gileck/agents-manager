@@ -9,34 +9,11 @@ import { reportError } from '../../lib/error-handler';
 import type { Task } from '../../../shared/types';
 import { RunningIndicator } from './ActiveAgentsList';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
+import { usePipelines } from '../../hooks/usePipelines';
+import { StatusIcon, useStatusColorMap } from '../pipeline/StatusIcon';
 
 const RECENT_TASKS_LIMIT = 15;
 const STORAGE_KEY = 'sidebar.recentTasks.hiddenStatuses';
-
-const STATUS_ICONS: Record<string, React.ReactNode> = {
-  done: (
-    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill="#22c55e" />
-      <path d="M4.5 8.5L7 11L11.5 5.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  open: (
-    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill="#3b82f6" />
-      <circle cx="8" cy="8" r="3" fill="white" />
-    </svg>
-  ),
-  closed: (
-    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill="#6b7280" />
-    </svg>
-  ),
-  _default: (
-    <svg className="shrink-0 w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="7" stroke="#22c55e" strokeWidth="2" fill="white" />
-    </svg>
-  ),
-};
 
 function sortAndSlice(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, RECENT_TASKS_LIMIT);
@@ -65,6 +42,8 @@ export function SidebarRecentTasks({ runningTaskIds }: SidebarRecentTasksProps) 
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(readHiddenStatusesFromStorage);
   const navigate = useNavigate();
   const location = useLocation();
+  const { pipelines } = usePipelines();
+  const statusColorMap = useStatusColorMap(pipelines);
 
   // Initial fetch on project change
   useEffect(() => {
@@ -169,7 +148,7 @@ export function SidebarRecentTasks({ runningTaskIds }: SidebarRecentTasksProps) 
                       onChange={() => toggleStatus(status)}
                       className="accent-primary w-3 h-3 shrink-0"
                     />
-                    {STATUS_ICONS[status] ?? STATUS_ICONS._default}
+                    <StatusIcon status={status} colorMap={statusColorMap} />
                     <span className="truncate capitalize">{status}</span>
                   </label>
                 </li>
@@ -219,7 +198,7 @@ export function SidebarRecentTasks({ runningTaskIds }: SidebarRecentTasksProps) 
                     : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
                 )}
               >
-                {runningTaskIds.has(task.id) ? <RunningIndicator /> : (STATUS_ICONS[task.status] ?? STATUS_ICONS._default)}
+                {runningTaskIds.has(task.id) ? <RunningIndicator /> : <StatusIcon status={task.status} colorMap={statusColorMap} />}
                 <span className="flex-1 min-w-0 truncate font-medium">{task.title}</span>
                 <span
                   className={cn(
