@@ -1471,7 +1471,7 @@ export interface RunningAgent {
   scopeId: string;
   projectId: string;
   projectName: string;
-  status: Extract<ChatSessionStatus, 'running' | 'waiting_for_input' | 'completed' | 'failed'>;
+  status: Extract<ChatSessionStatus, 'idle' | 'running' | 'waiting_for_input' | 'completed' | 'failed'>;
   startedAt: number;
   lastActivity: number;
   messagePreview?: string;

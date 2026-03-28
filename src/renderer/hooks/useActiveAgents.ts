@@ -30,11 +30,9 @@ export function useActiveAgents() {
 
   // Subscribe to push-based status change events
   useEffect(() => {
-    // Map ChatSessionStatus to the narrower RunningAgent.status
     const toAgentStatus = (s: ChatSessionStatus): RunningAgent['status'] => {
-      if (s === 'completed' || s === 'idle') return 'completed';
-      if (s === 'failed' || s === 'error') return 'failed';
-      return s; // 'running' | 'waiting_for_input'
+      if (s === 'error') return 'failed'; // map 'error' to 'failed' (the only non-overlapping value)
+      return s as RunningAgent['status'];
     };
     const unsubscribe = window.api.on.chatSessionStatusChanged((sessionId: string, { status }) => {
       setAgents((prev) =>

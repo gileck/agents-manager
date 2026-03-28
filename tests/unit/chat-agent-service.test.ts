@@ -964,27 +964,26 @@ describe('ChatAgentService', () => {
       expect(statuses).not.toContain('waiting_for_input');
     });
 
-    it('restores running status when message is injected into waiting session', async () => {
+    it('restores running status when message is injected into idle session', async () => {
       mockSessionStore.getSession = vi.fn().mockResolvedValue(streamingSession);
       const { lib } = createStreamingInputMockLib();
       mockAgentLibRegistry.getLib = vi.fn().mockReturnValue(lib);
 
-      // Start the agent — will call onTurnComplete setting in-memory status to waiting_for_input
+      // Start the agent — onTurnComplete sets both in-memory and DB status to idle
       await service.send('session-1', 'Hello', { systemPrompt: '' });
       await vi.advanceTimersByTimeAsync(0);
 
-      // Check that the in-memory agent is waiting
+      // Check that the in-memory agent is idle (turn completed, no pending questions)
       const runningAgents = await service.getRunningAgents();
       const agent = runningAgents.find((a: RunningAgent) => a.sessionId === 'session-1');
-      expect(agent?.status).toBe('waiting_for_input');
+      expect(agent?.status).toBe('idle');
 
       // Inject a message — should restore running status
       await service.send('session-1', 'Follow-up', { systemPrompt: '' });
 
       const statusCalls = (mockSessionStore.updateSessionStatus as ReturnType<typeof vi.fn>).mock.calls;
       const statuses = statusCalls.map((c: unknown[]) => c[1]);
-      // DB status should see: running → idle → running (idle because no pending
-      // questions, even though in-memory status is waiting_for_input)
+      // DB status should see: running → idle → running
       expect(statuses).toEqual(expect.arrayContaining(['running', 'idle', 'running']));
     });
 

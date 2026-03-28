@@ -400,20 +400,15 @@ export async function runAgent(
             });
           }
 
-          // Update in-memory agent status — always waiting_for_input since the
-          // agent is alive and waiting for the next user message.
+          // Update in-memory agent status and emit to DB/WS.
+          // Always idle on turn completion — waiting_for_input is set
+          // exclusively by requestQuestionAnswers when a question is
+          // actively asked. This keeps in-memory, DB, and WS in sync.
           const agent = ctx.runningAgents.get(sessionId);
           if (agent) {
-            agent.status = 'waiting_for_input';
+            agent.status = 'idle';
             agent.lastActivity = Date.now();
           }
-
-          // Always emit idle on turn completion. The waiting_for_input status
-          // is set exclusively by requestQuestionAnswers when a question is
-          // actively asked. We must NOT check pendingQuestions here because
-          // in streaming-input mode, injected messages can create new turns
-          // that complete while an old AskUserQuestion is still pending from
-          // a different execution context.
           getAppLogger().info('ChatAgentService', `onTurnComplete: emitting idle [session=${sessionId.slice(0, 8)}]`);
           ctx.emitStatusChange(sessionId, 'idle');
 

@@ -692,7 +692,7 @@ export class ChatAgentService {
     // Clean up stale agents (older than 1 hour)
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
     for (const [sessionId, agent] of this.runningAgents) {
-      if (agent.status !== 'running' && agent.status !== 'waiting_for_input' && agent.lastActivity < oneHourAgo) {
+      if (agent.status !== 'running' && agent.status !== 'waiting_for_input' && agent.status !== 'idle' && agent.lastActivity < oneHourAgo) {
         this.runningAgents.delete(sessionId);
       }
     }
