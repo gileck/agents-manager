@@ -414,6 +414,7 @@ export async function runAgent(
           // was asked (the frontend derives isWaitingForInput from DB status).
           const hasPendingQuestions = [...ctx.pendingQuestions.values()].some(p => p.sessionId === sessionId);
           const dbStatus = hasPendingQuestions ? 'waiting_for_input' : 'idle';
+          getAppLogger().info('ChatAgentService', `onTurnComplete: hasPendingQuestions=${hasPendingQuestions}, dbStatus=${dbStatus}`, { sessionId, pendingCount: ctx.pendingQuestions.size });
           ctx.emitStatusChange(sessionId, dbStatus);
 
           // Status change event signals the client that this turn is done
