@@ -29,7 +29,7 @@ import { useIpc } from '@template/renderer/hooks/useIpc';
 import { DocsPanel } from '../components/docs/DocsPanel';
 import { getPhaseByReviewStatus } from '../../shared/doc-phases';
 import type {
-  Transition, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
+  Transition, TransitionsWithRecommendation, TaskArtifact, AgentRun, TaskUpdateInput, PendingPrompt,
   DebugTimelineEntry, Worktree, TaskContextEntry, HookFailure, TaskDoc,
 } from '../../shared/types';
 import { usePipelineStatusMeta } from '../hooks/usePipelineStatusMeta';
@@ -58,10 +58,12 @@ export function TaskDetailPage() {
   const { features } = useFeatures(task ? { projectId: task.projectId } : undefined);
   const { pipelines } = usePipelines();
 
-  const { data: transitions, refetch: refetchTransitions } = useIpc<Transition[]>(
-    () => id ? window.api.tasks.transitions(id) : Promise.resolve([]),
+  const emptyTransitions: TransitionsWithRecommendation = { transitions: [], recommended: null, forward: [], backward: [], escape: [] };
+  const { data: transitionsData, refetch: refetchTransitions } = useIpc<TransitionsWithRecommendation>(
+    () => id ? window.api.tasks.transitions(id) : Promise.resolve(emptyTransitions),
     [id, task?.status]
   );
+  const transitions = transitionsData?.transitions ?? [];
 
   const { data: debugTimeline, refetch: refetchDebug } = useIpc<DebugTimelineEntry[]>(
     () => id ? window.api.tasks.debugTimeline(id) : Promise.resolve([]),
@@ -577,6 +579,9 @@ export function TaskDetailPage() {
                   refetchDiagnostics={refetchDiagnostics}
                   contextEntries={contextEntries ?? undefined}
                   taskTitle={task.title}
+                  recommendedTransition={transitionsData?.recommended}
+                  forwardTransitions={transitionsData?.forward}
+                  escapeTransitions={transitionsData?.escape}
                 />
               </div>
             )}
@@ -753,6 +758,7 @@ export function TaskDetailPage() {
             transitioning={transitioning}
             onAction={handleFeedbackAction}
             pipelineStatuses={pipeline?.statuses}
+            escapeTransitions={transitionsData?.escape}
           />
         </TabsContent>
 

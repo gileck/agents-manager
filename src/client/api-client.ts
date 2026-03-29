@@ -92,7 +92,7 @@ export interface ApiClient {
     reset(id: string, pipelineId?: string): Promise<Task>;
     transition(id: string, toStatus: string, actor?: string): Promise<unknown>;
     forceTransition(id: string, toStatus: string, actor?: string): Promise<unknown>;
-    getTransitions(id: string): Promise<unknown[]>;
+    getTransitions(id: string): Promise<unknown>;
     getAllTransitions(id: string): Promise<unknown>;
     guardCheck(id: string, toStatus: string, trigger: string): Promise<unknown>;
     getPipelineDiagnostics(id: string): Promise<unknown>;

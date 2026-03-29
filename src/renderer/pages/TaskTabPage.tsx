@@ -75,7 +75,7 @@ function DetailsContent({ id }: { id: string }) {
     () => window.api.tasks.contextEntries(id), [id],
   );
   const { data: transitions, error: transitionsError } = useIpc<Transition[]>(
-    () => window.api.tasks.transitions(id), [id, task?.status],
+    () => window.api.tasks.transitions(id).then(r => r.transitions), [id, task?.status],
   );
 
   const [transitioning, setTransitioning] = useState<string | null>(null);
@@ -168,7 +168,7 @@ function ImplementationContent({ id }: { id: string }) {
     () => window.api.artifacts.list(id), [id],
   );
   const { data: transitions, refetch: refetchTransitions } = useIpc<Transition[]>(
-    () => window.api.tasks.transitions(id), [id, task?.status],
+    () => window.api.tasks.transitions(id).then(r => r.transitions), [id, task?.status],
   );
   const { data: contextEntries, refetch: refetchContext } = useIpc<TaskContextEntry[]>(
     () => window.api.tasks.contextEntries(id), [id],

@@ -23,6 +23,9 @@ interface PipelineControlPanelProps {
   refetchDiagnostics: () => void;
   contextEntries?: TaskContextEntry[];
   taskTitle?: string;
+  recommendedTransition?: Transition | null;
+  forwardTransitions?: Transition[];
+  escapeTransitions?: Transition[];
 }
 
 export function PipelineControlPanel({
@@ -44,6 +47,9 @@ export function PipelineControlPanel({
   refetchDiagnostics,
   contextEntries,
   taskTitle,
+  recommendedTransition,
+  forwardTransitions,
+  escapeTransitions,
 }: PipelineControlPanelProps) {
   const [forceDialogOpen, setForceDialogOpen] = useState(false);
   const [forcing, setForcing] = useState(false);
@@ -100,6 +106,9 @@ export function PipelineControlPanel({
         guardBlocks={diagnostics?.recentGuardBlocks}
         stuckReason={diagnostics?.stuckReason}
         taskTitle={taskTitle}
+        recommendedTransition={recommendedTransition}
+        forwardTransitions={forwardTransitions}
+        escapeTransitions={escapeTransitions}
       />
 
       {/* Force transition dialog */}

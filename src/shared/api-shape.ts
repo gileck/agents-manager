@@ -14,7 +14,7 @@ import type {
   Project, ProjectCreateInput, ProjectUpdateInput,
   Task, TaskCreateInput, TaskUpdateInput, TaskFilter,
   Feature, FeatureCreateInput, FeatureUpdateInput, FeatureFilter,
-  Pipeline, Transition,
+  Pipeline, TransitionsWithRecommendation,
   AgentRun, AgentMode, AgentRunStatus,
   AgentDefinition, AgentDefinitionCreateInput, AgentDefinitionUpdateInput,
   TaskEvent, TaskEventFilter,
@@ -104,7 +104,7 @@ export interface ApiShape {
     delete(id: string): Promise<boolean>;
     reset(id: string, pipelineId?: string): Promise<Task | null>;
     transition(taskId: string, toStatus: string, actor?: string): Promise<TransitionResult>;
-    transitions(taskId: string): Promise<Transition[]>;
+    transitions(taskId: string): Promise<TransitionsWithRecommendation>;
     dependencies(taskId: string): Promise<Task[]>;
     dependents(taskId: string): Promise<Task[]>;
     addDependency(taskId: string, dependsOnTaskId: string): Promise<void>;

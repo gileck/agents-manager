@@ -14,7 +14,7 @@ import { useTask } from '../hooks/useTasks';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { reportError } from '../lib/error-handler';
-import type { Transition, TaskContextEntry, TaskDoc, ProposedFixOption } from '../../shared/types';
+import type { TaskContextEntry, TaskDoc, ProposedFixOption, TransitionsWithRecommendation } from '../../shared/types';
 import type { PostMortemData } from '../components/reports/PostMortemReport';
 import type { ReviewData } from '../components/reports/WorkflowReviewReport';
 import type { ReportPageConfig } from './reportConfigs';
@@ -33,10 +33,13 @@ export function ReportPage({ config }: ReportPageProps) {
 
   const { task, refetch } = useTask(id!);
 
-  const { data: transitions, refetch: refetchTransitions, error: transitionsError } = useIpc<Transition[]>(
-    () => id ? window.api.tasks.transitions(id) : Promise.resolve([]),
+  const emptyTransitions: TransitionsWithRecommendation = { transitions: [], recommended: null, forward: [], backward: [], escape: [] };
+  const { data: transitionsData, refetch: refetchTransitions, error: transitionsError } = useIpc<TransitionsWithRecommendation>(
+    () => id ? window.api.tasks.transitions(id) : Promise.resolve(emptyTransitions),
     [id, task?.status],
   );
+  const transitions = transitionsData?.transitions ?? [];
+  const escapeTransitions = transitionsData?.escape ?? [];
 
   const { data: contextEntries, refetch: refetchContext, error: entriesError } = useIpc<TaskContextEntry[]>(
     () => id ? window.api.tasks.contextEntries(id) : Promise.resolve([]),
@@ -238,10 +241,11 @@ export function ReportPage({ config }: ReportPageProps) {
               options={fixOptions}
               taskId={id}
               taskTitle={task.title}
-              transitions={transitions ?? []}
+              transitions={transitions}
               transitioning={transitioning}
               onTransition={handleTransition}
               taskType={task.type}
+              escapeTransitions={escapeTransitions}
             />
           )}
         </div>

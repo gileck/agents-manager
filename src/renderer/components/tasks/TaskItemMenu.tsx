@@ -105,7 +105,7 @@ export function TaskItemMenu({ task, pipeline, onStatusChange, onDuplicate, onDe
     setTransitions(null);
     window.api.tasks
       .transitions(task.id)
-      .then((t) => setTransitions(t))
+      .then((r) => setTransitions(r.transitions))
       .catch(() => setLoadError('Failed to load statuses'));
   }, [open, task.id]);
 
