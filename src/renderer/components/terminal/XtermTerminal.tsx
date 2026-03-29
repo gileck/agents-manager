@@ -80,9 +80,10 @@ export function XtermTerminal({ terminalId, visible = true }: XtermTerminalProps
     termRef.current = term;
     fitRef.current = fit;
 
-    // Initial fit
+    // Initial fit + focus
     requestAnimationFrame(() => {
       fit.fit();
+      term.focus();
       window.api.terminals.resize(terminalId, term.cols, term.rows)
         .catch((err) => reportError(err, 'Terminal initial resize'));
     });
@@ -125,7 +126,7 @@ export function XtermTerminal({ terminalId, visible = true }: XtermTerminalProps
     };
   }, [terminalId, handleResize]);
 
-  // Re-fit when visibility changes (e.g. navigating back to terminal page).
+  // Re-fit and auto-focus when visibility changes (e.g. navigating back to terminal page).
   // Uses resize dance to force shell redraw even if dimensions haven't changed.
   useEffect(() => {
     if (!visible) return;
@@ -133,6 +134,7 @@ export function XtermTerminal({ terminalId, visible = true }: XtermTerminalProps
     const term = termRef.current;
     if (!fit || !term) return;
     requestAnimationFrame(() => {
+      term.focus();
       try {
         fit.fit();
       } catch {
