@@ -1,18 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, TerminalSquare, X, CircleDot } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { Input } from '../ui/input';
 import { SidebarSection } from './SidebarSection';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
-import { useTerminals } from '../../hooks/useTerminals';
+import { useTerminalsContext } from '../../contexts/TerminalsContext';
 import { reportError } from '../../lib/error-handler';
 
 export function SidebarTerminals() {
   const { currentProjectId, currentProject } = useCurrentProject();
-  const { terminals, currentTerminalId, createTerminal, closeTerminal, switchTerminal } = useTerminals();
+  const { terminals, currentTerminalId, createTerminal, closeTerminal, renameTerminal, switchTerminal } = useTerminalsContext();
   const navigate = useNavigate();
   const location = useLocation();
   const onTerminalPage = location.pathname.startsWith('/terminal');
+
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameName, setRenameName] = useState('');
 
   const handleCreate = async () => {
     if (!currentProjectId || !currentProject) return;
@@ -35,6 +39,19 @@ export function SidebarTerminals() {
   const handleClose = async (e: React.MouseEvent, terminalId: string) => {
     e.stopPropagation();
     await closeTerminal(terminalId);
+  };
+
+  const handleStartRename = (terminalId: string, currentName: string) => {
+    setRenameId(terminalId);
+    setRenameName(currentName);
+  };
+
+  const handleRename = () => {
+    if (renameId && renameName.trim()) {
+      renameTerminal(renameId, renameName.trim());
+    }
+    setRenameId(null);
+    setRenameName('');
   };
 
   const headerButtons = (
@@ -69,6 +86,10 @@ export function SidebarTerminals() {
               <div
                 key={terminal.id}
                 onClick={() => handleClick(terminal.id)}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  handleStartRename(terminal.id, terminal.name);
+                }}
                 className={cn(
                   'group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer transition-colors mb-1 border border-transparent',
                   isActive
@@ -76,24 +97,43 @@ export function SidebarTerminals() {
                     : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground'
                 )}
               >
-                <TerminalSquare className="h-3.5 w-3.5 shrink-0" />
-                <span className="flex-1 min-w-0 truncate text-xs font-medium">
-                  {terminal.name}
-                </span>
-                {isRunning && (
-                  <CircleDot className="h-3 w-3 text-green-500 shrink-0" />
+                {renameId === terminal.id ? (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleRename(); }}
+                    className="flex-1 min-w-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Input
+                      value={renameName}
+                      onChange={(e) => setRenameName(e.target.value)}
+                      onBlur={handleRename}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setRenameId(null); }}
+                      className="h-7 px-2 py-0 text-xs"
+                      autoFocus
+                    />
+                  </form>
+                ) : (
+                  <>
+                    <TerminalSquare className="h-3.5 w-3.5 shrink-0" />
+                    <span className="flex-1 min-w-0 truncate text-xs font-medium">
+                      {terminal.name}
+                    </span>
+                    {isRunning && (
+                      <CircleDot className="h-3 w-3 text-green-500 shrink-0" />
+                    )}
+                    <button
+                      onClick={(e) => handleClose(e, terminal.id)}
+                      className={cn(
+                        'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
+                        'opacity-0 group-hover:opacity-100',
+                        isActive && 'hover:bg-primary-foreground/20'
+                      )}
+                      title="Close terminal"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
                 )}
-                <button
-                  onClick={(e) => handleClose(e, terminal.id)}
-                  className={cn(
-                    'p-0.5 rounded hover:bg-accent transition-opacity shrink-0',
-                    'opacity-0 group-hover:opacity-100',
-                    isActive && 'hover:bg-primary-foreground/20'
-                  )}
-                  title="Close terminal"
-                >
-                  <X className="h-3 w-3" />
-                </button>
               </div>
             );
           })}

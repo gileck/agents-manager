@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Plus, TerminalSquare } from 'lucide-react';
-import { XtermTerminal } from '../components/terminal/XtermTerminal';
-import { useTerminals } from '../hooks/useTerminals';
+import { useTerminalsContext } from '../contexts/TerminalsContext';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { reportError } from '../lib/error-handler';
 
@@ -10,7 +9,7 @@ export function TerminalPage() {
   const { terminalId } = useParams<{ terminalId?: string }>();
   const navigate = useNavigate();
   const { currentProjectId, currentProject } = useCurrentProject();
-  const { terminals, currentTerminalId, createTerminal, switchTerminal } = useTerminals();
+  const { terminals, currentTerminalId, createTerminal, switchTerminal } = useTerminalsContext();
 
   // Sync URL param with hook state
   useEffect(() => {
@@ -58,9 +57,10 @@ export function TerminalPage() {
     );
   }
 
+  // Terminal content is rendered by PersistentTerminals in Layout.
+  // This page only shows the tab bar when multiple terminals exist.
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Terminal tabs */}
       {terminals.length > 1 && (
         <div className="flex items-center gap-1 px-2 py-1 border-b border-border/60 bg-card/50">
           {terminals.map((t) => (
@@ -86,19 +86,6 @@ export function TerminalPage() {
           </button>
         </div>
       )}
-
-      {/* Terminal content */}
-      <div className="flex-1 min-h-0 p-1">
-        {terminals.map((t) => (
-          <div
-            key={t.id}
-            className="w-full h-full"
-            style={{ display: t.id === activeTerminalId ? 'block' : 'none' }}
-          >
-            <XtermTerminal terminalId={t.id} />
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

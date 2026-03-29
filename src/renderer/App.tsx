@@ -44,6 +44,7 @@ import { useTaskStatusToasts } from './hooks/useTaskStatusToasts';
 import { TabsProvider } from './contexts/TabsContext';
 import { CurrentProjectProvider } from './contexts/CurrentProjectContext';
 import { ProjectChatSessionsProvider } from './contexts/ProjectChatSessionsContext';
+import { TerminalsProvider } from './contexts/TerminalsContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/toaster';
 
@@ -214,12 +215,14 @@ export default function App() {
   return (
     <CurrentProjectProvider>
       <ProjectChatSessionsProvider>
-        <TabsProvider>
-          <ErrorBoundary>
-            <AppRoutes />
-          </ErrorBoundary>
-          <Toaster />
-        </TabsProvider>
+        <TerminalsProvider>
+          <TabsProvider>
+            <ErrorBoundary>
+              <AppRoutes />
+            </ErrorBoundary>
+            <Toaster />
+          </TabsProvider>
+        </TerminalsProvider>
       </ProjectChatSessionsProvider>
     </CurrentProjectProvider>
   );

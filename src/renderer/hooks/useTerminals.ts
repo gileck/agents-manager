@@ -55,6 +55,12 @@ export function useTerminals() {
     }
   }, [currentTerminalId]);
 
+  const renameTerminal = useCallback((terminalId: string, name: string) => {
+    setTerminals((prev) =>
+      prev.map((t) => (t.id === terminalId ? { ...t, name } : t))
+    );
+  }, []);
+
   const switchTerminal = useCallback((terminalId: string) => {
     setCurrentTerminalId(terminalId);
   }, []);
@@ -64,6 +70,7 @@ export function useTerminals() {
     currentTerminalId,
     createTerminal,
     closeTerminal,
+    renameTerminal,
     switchTerminal,
     refresh,
   };
