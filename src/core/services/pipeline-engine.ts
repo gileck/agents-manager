@@ -16,6 +16,7 @@ import type {
   TransitionHook,
   PostProcessingLogCategory,
   IGuardQueryContext,
+  TransitionsWithRecommendation,
 } from '../../shared/types';
 import type { IPipelineStore } from '../interfaces/pipeline-store';
 import type { ITaskStore } from '../interfaces/task-store';
@@ -62,6 +63,76 @@ export class PipelineEngine implements IPipelineEngine {
       if (trigger && t.trigger !== trigger) return false;
       return true;
     });
+  }
+
+  async getTransitionsWithRecommendation(task: Task): Promise<TransitionsWithRecommendation> {
+    const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
+    if (!pipeline) return { transitions: [], recommended: null, forward: [], backward: [], escape: [] };
+
+    const manualTransitions = pipeline.transitions.filter(
+      (t) => (t.from === task.status || t.from === '*') && t.trigger === 'manual',
+    );
+
+    // Build a map of status name → position for classification
+    const positionMap = new Map<string, number>();
+    for (const s of pipeline.statuses) {
+      if (s.position !== undefined) {
+        positionMap.set(s.name, s.position);
+      }
+    }
+
+    const currentPosition = positionMap.get(task.status);
+    const currentStatusDef = pipeline.statuses.find((s) => s.name === task.status);
+    const currentCategory = currentStatusDef?.category;
+
+    // Escape statuses: terminal category OR statuses without a position (e.g. backlog).
+    // Using position-based detection avoids hardcoding pipeline-specific status names.
+    const escapeStatusNames = new Set(
+      pipeline.statuses
+        .filter((s) => s.category === 'terminal' || s.position === undefined)
+        .map((s) => s.name),
+    );
+
+    // Classify transitions
+    const forward: Transition[] = [];
+    const backward: Transition[] = [];
+    const escape: Transition[] = [];
+
+    for (const t of manualTransitions) {
+      if (escapeStatusNames.has(t.to)) {
+        escape.push(t);
+      } else if (currentPosition !== undefined) {
+        const targetPosition = positionMap.get(t.to);
+        if (targetPosition !== undefined && targetPosition > currentPosition) {
+          forward.push(t);
+        } else {
+          backward.push(t);
+        }
+      } else {
+        // No position data — treat as forward
+        forward.push(t);
+      }
+    }
+
+    // Pick recommended transition
+    let recommended: Transition | null = null;
+    if (currentCategory === 'human_review' && forward.length > 0) {
+      // For review statuses: recommend the forward transition with the lowest target position
+      recommended = forward.reduce((best, t) => {
+        const bestPos = positionMap.get(best.to) ?? Infinity;
+        const tPos = positionMap.get(t.to) ?? Infinity;
+        return tPos < bestPos ? t : best;
+      });
+    } else if (forward.length > 0) {
+      // For all other categories: first forward transition in definition order
+      recommended = forward[0];
+    } else if (manualTransitions.length > 0) {
+      // Fallback: first non-escape transition, or first transition overall
+      const nonEscape = manualTransitions.filter((t) => !escapeStatusNames.has(t.to));
+      recommended = nonEscape[0] ?? manualTransitions[0];
+    }
+
+    return { transitions: manualTransitions, recommended, forward, backward, escape };
   }
 
   async executeTransition(task: Task, toStatus: string, context?: TransitionContext, onPostLog?: OnPostLog): Promise<TransitionResult> {

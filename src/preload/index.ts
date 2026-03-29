@@ -4,7 +4,7 @@ import type {
   Project, ProjectCreateInput, ProjectUpdateInput,
   Task, TaskCreateInput, TaskUpdateInput, TaskFilter,
   Feature, FeatureCreateInput, FeatureUpdateInput, FeatureFilter,
-  Pipeline, Transition,
+  Pipeline, TransitionsWithRecommendation,
   AgentRun, AgentMode, AgentRunStatus,
   AgentDefinition, AgentDefinitionCreateInput, AgentDefinitionUpdateInput,
   TaskEvent, TaskEventFilter,
@@ -293,7 +293,7 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_RESET, id, pipelineId),
     transition: (taskId: string, toStatus: string, actor?: string): Promise<TransitionResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_TRANSITION, taskId, toStatus, actor),
-    transitions: (taskId: string): Promise<Transition[]> =>
+    transitions: (taskId: string): Promise<TransitionsWithRecommendation> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_TRANSITIONS, taskId),
     dependencies: (taskId: string): Promise<Task[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEPENDENCIES, taskId),
