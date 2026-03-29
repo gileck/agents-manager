@@ -10,6 +10,26 @@ interface XtermTerminalProps {
   visible?: boolean;
 }
 
+/**
+ * Resize dance: send nudged dimensions first, then correct ones after 50ms.
+ * Forces kernel SIGWINCH even on same-size reconnections (e.g. after navigating
+ * away and back). Without the nudge, the shell/tmux may skip the redraw.
+ */
+function resizeDance(
+  terminalId: string,
+  cols: number,
+  rows: number,
+): void {
+  // Step 1: nudge by +1 col to force a size change
+  window.api.terminals.resize(terminalId, cols + 1, rows)
+    .catch(() => { /* ignore nudge errors */ });
+  // Step 2: correct dimensions after 50ms — guarantees SIGWINCH fires
+  setTimeout(() => {
+    window.api.terminals.resize(terminalId, cols, rows)
+      .catch((err) => reportError(err, 'Terminal resize'));
+  }, 50);
+}
+
 export function XtermTerminal({ terminalId, visible = true }: XtermTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -105,12 +125,22 @@ export function XtermTerminal({ terminalId, visible = true }: XtermTerminalProps
     };
   }, [terminalId, handleResize]);
 
-  // Re-fit when visibility changes (e.g. navigating back to terminal page)
+  // Re-fit when visibility changes (e.g. navigating back to terminal page).
+  // Uses resize dance to force shell redraw even if dimensions haven't changed.
   useEffect(() => {
-    if (visible) {
-      requestAnimationFrame(handleResize);
-    }
-  }, [visible, handleResize]);
+    if (!visible) return;
+    const fit = fitRef.current;
+    const term = termRef.current;
+    if (!fit || !term) return;
+    requestAnimationFrame(() => {
+      try {
+        fit.fit();
+      } catch {
+        return;
+      }
+      resizeDance(terminalId, term.cols, term.rows);
+    });
+  }, [visible, terminalId]);
 
   return (
     <div

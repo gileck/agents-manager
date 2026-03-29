@@ -9,6 +9,9 @@ import type { TerminalSession } from '../shared/types';
 import type { DaemonWsServer } from './ws/ws-server';
 import { WS_CHANNELS } from './ws/channels';
 
+/** Batch PTY output at ~60fps to avoid flooding WS during high-throughput AI output */
+const BATCH_INTERVAL_MS = 16;
+
 // Lazy-load node-pty to avoid crashes if native module isn't built
 let pty: typeof ptyModule | null = null;
 function getPty(): typeof ptyModule {
@@ -29,6 +32,10 @@ function getPty(): typeof ptyModule {
 interface ManagedTerminal {
   session: TerminalSession;
   process: ptyModule.IPty;
+  /** Accumulated output waiting to be flushed */
+  pendingData: string;
+  /** Timer for the current batch window */
+  batchTimer: ReturnType<typeof setTimeout> | null;
 }
 
 export class TerminalManager {
@@ -75,21 +82,47 @@ export class TerminalManager {
       createdAt: Date.now(),
     };
 
-    const managed: ManagedTerminal = { session, process: proc };
+    const managed: ManagedTerminal = {
+      session,
+      process: proc,
+      pendingData: '',
+      batchTimer: null,
+    };
     this.terminals.set(id, managed);
 
-    // Relay output to WS subscribers
+    // Relay output to WS subscribers — batched at ~60fps
     proc.onData((data) => {
-      this.wsHolder.server?.broadcast(WS_CHANNELS.TERMINAL_OUTPUT, id, data);
+      managed.pendingData += data;
+      if (!managed.batchTimer) {
+        managed.batchTimer = setTimeout(() => {
+          this.flushOutput(id);
+        }, BATCH_INTERVAL_MS);
+      }
     });
 
     proc.onExit(({ exitCode }) => {
+      // Flush any remaining output before signaling exit
+      this.flushOutput(id);
       managed.session.status = 'exited';
       managed.session.exitCode = exitCode;
       this.wsHolder.server?.broadcast(WS_CHANNELS.TERMINAL_EXITED, id, { exitCode });
     });
 
     return session;
+  }
+
+  private flushOutput(terminalId: string): void {
+    const managed = this.terminals.get(terminalId);
+    if (!managed) return;
+    if (managed.batchTimer) {
+      clearTimeout(managed.batchTimer);
+      managed.batchTimer = null;
+    }
+    if (managed.pendingData) {
+      const data = managed.pendingData;
+      managed.pendingData = '';
+      this.wsHolder.server?.broadcast(WS_CHANNELS.TERMINAL_OUTPUT, terminalId, data);
+    }
   }
 
   list(): TerminalSession[] {
@@ -115,6 +148,11 @@ export class TerminalManager {
   close(terminalId: string): void {
     const managed = this.terminals.get(terminalId);
     if (!managed) return;
+    // Clear any pending batch timer
+    if (managed.batchTimer) {
+      clearTimeout(managed.batchTimer);
+      managed.batchTimer = null;
+    }
     try {
       managed.process.kill();
     } catch (err) {
