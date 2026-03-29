@@ -6,16 +6,14 @@ import '@xterm/xterm/css/xterm.css';
 
 interface XtermTerminalProps {
   terminalId: string;
-  /** Called once the terminal has mounted and is ready for data */
-  onReady?: () => void;
+  /** Whether the terminal container is currently visible — triggers re-fit */
+  visible?: boolean;
 }
 
-export function XtermTerminal({ terminalId, onReady }: XtermTerminalProps) {
+export function XtermTerminal({ terminalId, visible = true }: XtermTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
-  const onReadyRef = useRef(onReady);
-  onReadyRef.current = onReady;
 
   const handleResize = useCallback(() => {
     const fit = fitRef.current;
@@ -67,7 +65,6 @@ export function XtermTerminal({ terminalId, onReady }: XtermTerminalProps) {
       fit.fit();
       window.api.terminals.resize(terminalId, term.cols, term.rows)
         .catch((err) => reportError(err, 'Terminal initial resize'));
-      onReadyRef.current?.();
     });
 
     // Send user input to the daemon PTY
@@ -107,6 +104,13 @@ export function XtermTerminal({ terminalId, onReady }: XtermTerminalProps) {
       fitRef.current = null;
     };
   }, [terminalId, handleResize]);
+
+  // Re-fit when visibility changes (e.g. navigating back to terminal page)
+  useEffect(() => {
+    if (visible) {
+      requestAnimationFrame(handleResize);
+    }
+  }, [visible, handleResize]);
 
   return (
     <div

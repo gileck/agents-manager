@@ -38,7 +38,10 @@ export function PersistentTerminals() {
           className="w-full h-full"
           style={{ display: t.id === currentTerminalId ? 'block' : 'none' }}
         >
-          <XtermTerminal terminalId={t.id} />
+          <XtermTerminal
+            terminalId={t.id}
+            visible={onTerminalPage && t.id === currentTerminalId}
+          />
         </div>
       ))}
     </div>,
