@@ -1229,6 +1229,16 @@ export interface AllTransitionsResult {
   system: TransitionWithGuards[];
 }
 
+export type TransitionClassification = 'forward' | 'backward' | 'escape';
+
+export interface TransitionsWithRecommendation {
+  transitions: Transition[];
+  recommended: Transition | null;
+  forward: Transition[];
+  backward: Transition[];
+  escape: Transition[];
+}
+
 export interface HookRetryResult {
   success: boolean;
   hookName: string;

@@ -24,7 +24,7 @@ export function TaskActionCard({ task, rawOutput }: TaskActionCardProps) {
 
   useEffect(() => {
     window.api.tasks.transitions(task.id)
-      .then((result) => setTransitions(result))
+      .then((result) => setTransitions(result.transitions))
       .catch(() => setTransitionsError('Transitions unavailable'));
   }, [task.id]);
 

@@ -3,7 +3,6 @@ import { Button } from '../ui/button';
 import { SplitButton } from '../ui/SplitButton';
 import { FixOptionCards } from '../docs/FixOptionCards';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
-import { getRecommendedTransition, isEscapeTransition } from '../../utils/getRecommendedTransition';
 import { AgentRunErrorBanner } from '../agent-run/AgentRunErrorBanner';
 import type { AgentRun, Transition, ImplementationPhase, TaskType, TaskSize, TaskComplexity, TaskContextEntry, ProposedFixOption, GuardBlockRecord } from '../../../shared/types';
 import type { StatusMeta } from '../../hooks/usePipelineStatusMeta';
@@ -17,16 +16,14 @@ type TaskProps = {
 };
 
 function renderSmartTransitions(
-  task: TaskProps,
   primaryTransitions: Transition[],
   transitioning: string | null,
-  onTransition: (toStatus: string) => void
+  onTransition: (toStatus: string) => void,
+  recommended?: Transition | null,
+  forwardTransitions?: Transition[],
+  escapeTransitions?: Transition[],
 ) {
   if (!primaryTransitions.length) return null;
-
-  const recommended = getRecommendedTransition(task, primaryTransitions);
-  const escapeTransitions = primaryTransitions.filter(isEscapeTransition);
-  const forwardTransitions = primaryTransitions.filter((t) => !isEscapeTransition(t));
 
   // Single transition: plain button, no dropdown needed
   if (primaryTransitions.length === 1) {
@@ -60,13 +57,15 @@ function renderSmartTransitions(
     );
   }
 
-  const otherForwardTransitions = forwardTransitions.filter((t) => t.to !== recommended.to);
+  const forward = forwardTransitions ?? primaryTransitions.filter((t) => t.to !== recommended.to);
+  const otherForward = forward.filter((t) => t.to !== recommended.to);
+  const escape = escapeTransitions ?? [];
 
   return (
     <SplitButton
       primaryTransition={recommended}
-      otherForwardTransitions={otherForwardTransitions}
-      escapeTransitions={escapeTransitions}
+      otherForwardTransitions={otherForward}
+      escapeTransitions={escape}
       transitioning={transitioning}
       onTransition={onTransition}
     />
@@ -94,6 +93,9 @@ export function StatusActionBar({
   guardBlocks,
   stuckReason,
   taskTitle,
+  recommendedTransition,
+  forwardTransitions,
+  escapeTransitions,
 }: {
   task: TaskProps;
   isAgentPipeline: boolean;
@@ -115,10 +117,13 @@ export function StatusActionBar({
   guardBlocks?: GuardBlockRecord[];
   stuckReason?: string;
   taskTitle?: string;
+  recommendedTransition?: Transition | null;
+  forwardTransitions?: Transition[];
+  escapeTransitions?: Transition[];
 }) {
   if (!isAgentPipeline) {
     // Fallback: render smart split button
-    const rendered = renderSmartTransitions(task, primaryTransitions, transitioning, onTransition);
+    const rendered = renderSmartTransitions(primaryTransitions, transitioning, onTransition, recommendedTransition, forwardTransitions, escapeTransitions);
     if (!rendered) return null;
     return <div className="flex items-center gap-2 flex-wrap">{rendered}</div>;
   }
@@ -127,7 +132,7 @@ export function StatusActionBar({
 
   // Ready category (open, reported, etc.): show smart primary forward transition
   if (statusMeta.isReady) {
-    const rendered = renderSmartTransitions(task, primaryTransitions, transitioning, onTransition);
+    const rendered = renderSmartTransitions(primaryTransitions, transitioning, onTransition, recommendedTransition, forwardTransitions, escapeTransitions);
     if (!rendered) return null;
     return <div className="flex items-center gap-2 flex-wrap">{rendered}</div>;
   }
@@ -296,12 +301,12 @@ export function StatusActionBar({
               onTransition={onTransition}
               taskType={task.type ?? undefined}
             />
-            {renderSmartTransitions(task, primaryTransitions, transitioning, onTransition)}
+            {renderSmartTransitions(primaryTransitions, transitioning, onTransition, recommendedTransition, forwardTransitions, escapeTransitions)}
           </div>
         );
       }
     }
-    // Triage review: use triager's suggestedPhase as recommended CTA
+    // Triage review: use triager's suggestedPhase as recommended CTA (overrides engine recommendation)
     if (status === 'triage_review' && contextEntries) {
       const triageEntry = [...contextEntries]
         .filter(e => e.entryType === 'triage_summary')
@@ -311,8 +316,8 @@ export function StatusActionBar({
       if (suggestedPhase) {
         const matchingTransition = primaryTransitions.find(t => t.to === suggestedPhase);
         if (matchingTransition) {
-          const otherForward = primaryTransitions.filter(t => !isEscapeTransition(t) && t.to !== suggestedPhase);
-          const escapes = primaryTransitions.filter(t => isEscapeTransition(t) && t.to !== suggestedPhase);
+          const otherForward = (forwardTransitions ?? []).filter(t => t.to !== suggestedPhase);
+          const escapes = escapeTransitions ?? [];
 
           return (
             <div className="flex items-center gap-2 flex-wrap">
@@ -329,10 +334,10 @@ export function StatusActionBar({
       }
     }
     // Generic human review (plan_review, design_review, investigation_review without options, etc.)
-    // Use SplitButton with recommended transition instead of flat button dump
+    // Use SplitButton with engine-provided recommended transition
     return (
       <div className="flex items-center gap-2 flex-wrap">
-        {renderSmartTransitions(task, primaryTransitions, transitioning, onTransition)}
+        {renderSmartTransitions(primaryTransitions, transitioning, onTransition, recommendedTransition, forwardTransitions, escapeTransitions)}
       </div>
     );
   }
@@ -451,4 +456,3 @@ function FixOptionCardsDialogButton({
     </>
   );
 }
-

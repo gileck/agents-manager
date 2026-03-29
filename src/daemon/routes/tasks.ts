@@ -116,22 +116,22 @@ export function taskRoutes(services: AppServices, wsHolder: WsHolder = {}): Rout
   router.get('/api/tasks/:id/transitions', async (req, res, next) => {
     try {
       const task = await services.taskStore.getTask(req.params.id);
-      if (!task) { res.json([]); return; }
-      const transitions = await services.pipelineEngine.getValidTransitions(task, 'manual');
+      if (!task) { res.json({ transitions: [], recommended: null, forward: [], backward: [], escape: [] }); return; }
+      const result = await services.pipelineEngine.getTransitionsWithRecommendation(task);
 
       // De-duplicate transitions with the same label by pre-checking guards.
       // When multiple transitions share a label (e.g. guarded "Approve" → done
       // vs unguarded "Approve" → ready_to_merge), only show the first one whose
       // guards pass, so the UI renders a single button.
       const labelCounts = new Map<string, number>();
-      for (const t of transitions) {
+      for (const t of result.transitions) {
         const key = t.label ?? t.to;
         labelCounts.set(key, (labelCounts.get(key) ?? 0) + 1);
       }
 
       const seenLabels = new Set<string>();
       const filtered = [];
-      for (const t of transitions) {
+      for (const t of result.transitions) {
         const key = t.label ?? t.to;
         if (seenLabels.has(key)) {
           continue;
@@ -147,7 +147,20 @@ export function taskRoutes(services: AppServices, wsHolder: WsHolder = {}): Rout
         filtered.push(t);
       }
 
-      res.json(filtered);
+      // Rebuild classification from the de-duplicated list
+      const filteredSet = new Set(filtered);
+      const filteredForward = result.forward.filter((t) => filteredSet.has(t));
+      const filteredBackward = result.backward.filter((t) => filteredSet.has(t));
+      const filteredEscape = result.escape.filter((t) => filteredSet.has(t));
+      const filteredRecommended = result.recommended && filteredSet.has(result.recommended) ? result.recommended : (filteredForward[0] ?? filtered[0] ?? null);
+
+      res.json({
+        transitions: filtered,
+        recommended: filteredRecommended,
+        forward: filteredForward,
+        backward: filteredBackward,
+        escape: filteredEscape,
+      });
     } catch (err) { next(err); }
   });
 

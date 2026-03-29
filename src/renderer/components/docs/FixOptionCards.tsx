@@ -5,8 +5,12 @@ import { Button } from '../ui/button';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { reportError } from '../../lib/error-handler';
 import { buildFixOptionSummary } from '../../utils/fix-option-summary';
-import { isEscapeTransition } from '../../utils/getRecommendedTransition';
 import type { ProposedFixOption, Transition, TaskType } from '../../../shared/types';
+
+const ESCAPE_STATUSES = new Set(['backlog', 'closed']);
+function isEscapeTransition(t: Transition): boolean {
+  return ESCAPE_STATUSES.has(t.to);
+}
 
 // ─── Size → target status mapping ─────────────────────────────────────────────
 

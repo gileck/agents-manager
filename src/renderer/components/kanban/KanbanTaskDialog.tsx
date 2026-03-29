@@ -50,7 +50,7 @@ export function KanbanTaskDialog({ task, onClose, onTaskMoved }: KanbanTaskDialo
     }
     let cancelled = false;
     window.api.tasks.transitions(task.id).then((result) => {
-      if (!cancelled) setTransitions(result);
+      if (!cancelled) setTransitions(result.transitions);
     }).catch((err) => {
       reportError(err, 'KanbanTaskDialog: fetch transitions');
       if (!cancelled) setTransitions([]);

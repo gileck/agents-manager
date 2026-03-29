@@ -34,7 +34,7 @@ export function ReportPage({ config }: ReportPageProps) {
   const { task, refetch } = useTask(id!);
 
   const { data: transitions, refetch: refetchTransitions, error: transitionsError } = useIpc<Transition[]>(
-    () => id ? window.api.tasks.transitions(id) : Promise.resolve([]),
+    () => id ? window.api.tasks.transitions(id).then(r => r.transitions) : Promise.resolve([]),
     [id, task?.status],
   );
 
