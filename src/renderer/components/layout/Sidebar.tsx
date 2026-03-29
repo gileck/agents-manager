@@ -13,6 +13,7 @@ import { ActiveAgentsEntries } from './ActiveAgentsList';
 import { useActiveAgentRuns } from '../../hooks/useActiveAgentRuns';
 import { SidebarSection } from './SidebarSection';
 import { SidebarSessions } from './SidebarSessions';
+import { SidebarTerminals } from './SidebarTerminals';
 import { SidebarAutomatedAgents } from './SidebarAutomatedAgents';
 import { SidebarRecentTasks } from './SidebarRecentTasks';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
@@ -182,6 +183,7 @@ export function Sidebar({ onReportBug }: SidebarProps) {
       {!isCollapsed && (
         <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
           <SidebarSessions />
+          <SidebarTerminals />
           <SidebarRecentTasks runningTaskIds={new Set(entries.filter(e => e.run.status === 'running').map(e => e.run.taskId))} />
           <SidebarAutomatedAgents />
           <SidebarSection

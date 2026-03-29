@@ -11,6 +11,7 @@ import {
   DollarSign,
   GitBranch,
   Terminal,
+  TerminalSquare,
   Settings,
   Palette,
   Workflow,
@@ -49,6 +50,7 @@ export const APP_PAGES: PageDefinition[] = [
   { id: 'post-mortem', path: '/post-mortem', label: 'Post-Mortem', icon: Bug, iconName: 'Bug', keywords: ['retrospective', 'review'], group: 'main' },
   { id: 'cost', path: '/cost', label: 'Cost', icon: DollarSign, iconName: 'DollarSign', keywords: ['billing', 'usage', 'spend', 'money'], group: 'main' },
   { id: 'source-control', path: '/source-control', label: 'Source Control', icon: GitBranch, iconName: 'GitBranch', keywords: ['git', 'branches', 'pull requests', 'pr'], group: 'main' },
+  { id: 'terminal', path: '/terminal', label: 'Terminal', icon: TerminalSquare, iconName: 'TerminalSquare', keywords: ['shell', 'console', 'pty', 'command'], group: 'main' },
   { id: 'debug-logs', path: '/debug-logs', label: 'Debug Logs', icon: Terminal, iconName: 'Terminal', keywords: ['logs', 'console', 'output'], group: 'main' },
   { id: 'settings', path: '/settings', label: 'Settings', icon: Settings, iconName: 'Settings', keywords: ['preferences', 'config', 'configuration'], group: 'main' },
 
@@ -90,6 +92,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   GitBranch,
   DollarSign,
   Terminal,
+  TerminalSquare,
   BarChart3,
   Zap,
   Palette,

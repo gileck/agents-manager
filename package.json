@@ -36,7 +36,7 @@
     "dev:daemon": "npx tsx scripts/dev-daemon.ts",
     "ensure-native": "node scripts/ensure-native-binding.js",
     "dev:start": "npm run ensure-native && npx tsx scripts/dev-daemon.ts --web",
-    "build:daemon": "esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api --external:sharp",
+    "build:daemon": "esbuild src/daemon/index.ts --bundle --platform=node --outfile=dist-daemon/index.js --external:better-sqlite3 --external:node-telegram-bot-api --external:sharp --external:node-pty",
     "lint": "eslint src/ template/ tests/",
     "typecheck": "bash scripts/typecheck.sh",
     "typecheck:web": "tsc --noEmit -p config/tsconfig.web.json",
@@ -85,6 +85,9 @@
     "tsconfig-paths": "^4.2.0",
     "uuid": "^10.0.0",
     "ws": "^8.19.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "node-pty": "^1.0.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

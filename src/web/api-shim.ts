@@ -13,7 +13,7 @@ import type { ApiShape } from '../shared/api-shape';
 import type {
   AgentChatMessage, AgentRun, AgentRunStatus,
   ChatSession, InAppNotification, TelegramBotLogEntry,
-  DevServerInfo, Task, AgentNotificationPayload,
+  DevServerInfo, Task, AgentNotificationPayload, TerminalSession,
 } from '../shared/types';
 
 export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiShape {
@@ -286,6 +286,15 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       save: (images) => api.screenshots.save(images),
     },
 
+    // ── Terminals ──────────────────────────────────────────────────────
+    terminals: {
+      create: (projectId, name, cwd) => api.terminals.create(projectId, name, cwd) as Promise<TerminalSession>,
+      list: () => api.terminals.list() as Promise<TerminalSession[]>,
+      write: (terminalId, data) => api.terminals.write(terminalId, data) as Promise<void>,
+      resize: (terminalId, cols, rows) => api.terminals.resize(terminalId, cols, rows) as Promise<void>,
+      close: (terminalId) => api.terminals.close(terminalId) as Promise<void>,
+    },
+
     // ── Shell ─────────────────────────────────────────────────────────
     shell: {
       openInChrome: (url) => api.shell.openInChrome(url),
@@ -388,6 +397,14 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       chatSessionStatusChanged: (callback) =>
         ws.subscribeGlobal(WS_CHANNELS.CHAT_SESSION_STATUS_CHANGED, (sessionId, data) =>
           callback(sessionId as string, data as { status: import('../shared/types').ChatSessionStatus })),
+
+      terminalOutput: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.TERMINAL_OUTPUT, (terminalId, data) =>
+          callback(terminalId as string, data as string)),
+
+      terminalExited: (callback) =>
+        ws.subscribeGlobal(WS_CHANNELS.TERMINAL_EXITED, (terminalId, data) =>
+          callback(terminalId as string, data as { exitCode: number })),
     },
   };
 }

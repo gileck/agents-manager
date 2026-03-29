@@ -26,6 +26,7 @@ import { TelegramPage } from './pages/TelegramPage';
 import { CostPage } from './pages/CostPage';
 import { SourceControlPage } from './pages/SourceControlPage';
 
+import { TerminalPage } from './pages/TerminalPage';
 import { DebugLogsPage } from './pages/DebugLogsPage';
 import { AgentRunsListPage } from './pages/AgentRunsListPage';
 import { KeyboardShortcutsPage } from './pages/KeyboardShortcutsPage';
@@ -183,6 +184,8 @@ function AppRoutes() {
         <Route path="features/:id" element={<FeatureDetailPage />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="chat/:sessionId" element={<ChatPage />} />
+        <Route path="terminal" element={<TerminalPage />} />
+        <Route path="terminal/:terminalId" element={<TerminalPage />} />
         <Route path="threads" element={<ThreadsHistoryPage />} />
         <Route path="automated-agents" element={<AutomatedAgentsPage />} />
         <Route path="automated-agents/:id" element={<AutomatedAgentDetailPage />} />

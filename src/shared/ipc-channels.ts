@@ -275,4 +275,15 @@ export const IPC_CHANNELS = {
   CHAT_PERMISSION_RESPONSE: 'chat:permission-response',
   /** PUSH-ONLY: main->renderer, do not invoke() — chat session status changed */
   CHAT_SESSION_STATUS_CHANGED: 'chat:session-status-changed',
+
+  // Terminal operations
+  TERMINAL_CREATE: 'terminal:create',
+  TERMINAL_LIST: 'terminal:list',
+  TERMINAL_WRITE: 'terminal:write',
+  TERMINAL_RESIZE: 'terminal:resize',
+  TERMINAL_CLOSE: 'terminal:close',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  TERMINAL_OUTPUT: 'terminal:output',
+  /** PUSH-ONLY: main->renderer, do not invoke() */
+  TERMINAL_EXITED: 'terminal:exited',
 } as const;

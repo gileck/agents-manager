@@ -28,14 +28,16 @@ import { devServerRoutes } from './routes/dev-servers';
 import { screenshotRoutes } from './routes/screenshots';
 import { taskDocRoutes } from './routes/task-docs';
 import { worktreeFileRoutes } from './routes/worktree-file';
+import { terminalRoutes } from './routes/terminals';
 import { errorHandler } from './middleware/error-handler';
 import type { AppServices } from '../core/providers/setup';
 import type { DaemonWsServer } from './ws/ws-server';
+import type { TerminalManager } from './terminal-manager';
 
 /** Mutable holder resolved after the WS server is created */
 export type WsHolder = { server?: DaemonWsServer };
 
-export function createServer(services: AppServices, wsHolder: WsHolder = {}): { app: express.Application; httpServer: HttpServer } {
+export function createServer(services: AppServices, wsHolder: WsHolder = {}, terminalManager?: TerminalManager): { app: express.Application; httpServer: HttpServer } {
   const app = express();
   app.use(cors({
     origin: (origin, cb) => {
@@ -78,6 +80,11 @@ export function createServer(services: AppServices, wsHolder: WsHolder = {}): { 
   app.use(automatedAgentRoutes(services, wsHolder));
   app.use(devServerRoutes(services));
   app.use(screenshotRoutes(services));
+
+  // Terminal routes
+  if (terminalManager) {
+    app.use(terminalRoutes(terminalManager));
+  }
 
   // Utility routes (no services dependency)
   app.use(shellRoutes());

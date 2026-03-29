@@ -63,6 +63,7 @@ import type {
   EffectiveAgentConfig,
   AgentFileInitResult,
   RevisionReason,
+  TerminalSession,
 } from './types';
 
 export interface ApiShape {
@@ -330,6 +331,15 @@ export interface ApiShape {
     openFileInVscode(filePath: string, line?: number): Promise<void>;
   };
 
+  // Terminal operations
+  terminals: {
+    create(projectId: string, name: string, cwd: string): Promise<TerminalSession>;
+    list(): Promise<TerminalSession[]>;
+    write(terminalId: string, data: string): Promise<void>;
+    resize(terminalId: string, cols: number, rows: number): Promise<void>;
+    close(terminalId: string): Promise<void>;
+  };
+
   // Dialog operations
   dialog: {
     pickFolder(): Promise<string | null>;
@@ -359,5 +369,7 @@ export interface ApiShape {
     chatPermissionRequest(callback: (sessionId: string, request: AgentChatMessage) => void): () => void;
     chatAgentNotification(callback: (sessionId: string, payload: AgentNotificationPayload) => void): () => void;
     chatSessionStatusChanged(callback: (sessionId: string, data: { status: ChatSessionStatus }) => void): () => void;
+    terminalOutput(callback: (terminalId: string, data: string) => void): () => void;
+    terminalExited(callback: (terminalId: string, data: { exitCode: number }) => void): () => void;
   };
 }

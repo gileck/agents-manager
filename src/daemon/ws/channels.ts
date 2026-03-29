@@ -26,4 +26,8 @@ export const WS_CHANNELS = {
   CHAT_PERMISSION_REQUEST: 'chat:permission-request',
   /** PUSH-ONLY: broadcast when a chat session status changes */
   CHAT_SESSION_STATUS_CHANGED: 'chat:session-status-changed',
+  /** PUSH-ONLY: terminal output data */
+  TERMINAL_OUTPUT: 'terminal:output',
+  /** PUSH-ONLY: terminal exited */
+  TERMINAL_EXITED: 'terminal:exited',
 } as const;

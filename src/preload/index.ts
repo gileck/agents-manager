@@ -52,6 +52,7 @@ import type {
   EffectiveAgentConfig,
   AgentFileInitResult,
   RevisionReason,
+  TerminalSession,
 } from '../shared/types';
 
 // Channel constants must be inlined here — Electron's sandboxed preload
@@ -231,6 +232,13 @@ const IPC_CHANNELS = {
   CHAT_PERMISSION_REQUEST: 'chat:permission-request',
   CHAT_PERMISSION_RESPONSE: 'chat:permission-response',
   CHAT_SESSION_STATUS_CHANGED: 'chat:session-status-changed',
+  TERMINAL_CREATE: 'terminal:create',
+  TERMINAL_LIST: 'terminal:list',
+  TERMINAL_WRITE: 'terminal:write',
+  TERMINAL_RESIZE: 'terminal:resize',
+  TERMINAL_CLOSE: 'terminal:close',
+  TERMINAL_OUTPUT: 'terminal:output',
+  TERMINAL_EXITED: 'terminal:exited',
 } as const;
 
 // Define the API that will be exposed to the renderer
@@ -639,6 +647,20 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.SCREENSHOT_SAVE, images),
   },
 
+  // Terminal operations
+  terminals: {
+    create: (projectId: string, name: string, cwd: string): Promise<TerminalSession> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_CREATE, projectId, name, cwd),
+    list: (): Promise<TerminalSession[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_LIST),
+    write: (terminalId: string, data: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_WRITE, terminalId, data),
+    resize: (terminalId: string, cols: number, rows: number): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_RESIZE, terminalId, cols, rows),
+    close: (terminalId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_CLOSE, terminalId),
+  },
+
   // Shell operations
   shell: {
     openInChrome: (url: string): Promise<void> =>
@@ -768,6 +790,16 @@ const api = {
       const listener = (_: IpcRendererEvent, sessionId: string, data: { status: string }) => callback(sessionId, data);
       ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_STATUS_CHANGED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_SESSION_STATUS_CHANGED, listener);
+    },
+    terminalOutput: (callback: (terminalId: string, data: string) => void) => {
+      const listener = (_: IpcRendererEvent, terminalId: string, data: string) => callback(terminalId, data);
+      ipcRenderer.on(IPC_CHANNELS.TERMINAL_OUTPUT, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TERMINAL_OUTPUT, listener);
+    },
+    terminalExited: (callback: (terminalId: string, data: { exitCode: number }) => void) => {
+      const listener = (_: IpcRendererEvent, terminalId: string, data: { exitCode: number }) => callback(terminalId, data);
+      ipcRenderer.on(IPC_CHANNELS.TERMINAL_EXITED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TERMINAL_EXITED, listener);
     },
   },
 };

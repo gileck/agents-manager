@@ -4,6 +4,7 @@ import { createServer } from './server';
 import { DaemonWsServer } from './ws/ws-server';
 import { WS_CHANNELS } from './ws/channels';
 import { startSupervisors, stopSupervisors } from './lifecycle';
+import { TerminalManager } from './terminal-manager';
 import { getAppLogger } from '../core/services/app-logger';
 
 const PORT = parseInt(process.env.AM_DAEMON_PORT ?? '3847', 10);
@@ -74,8 +75,11 @@ async function main() {
 
   services.appLogger.info('daemon', 'Daemon starting');
 
+  // Create the terminal manager (uses wsHolder by reference — populated after WS server init)
+  const terminalManager = new TerminalManager(wsHolder);
+
   // Create the HTTP server and Express app
-  const { httpServer } = createServer(services, wsHolder);
+  const { httpServer } = createServer(services, wsHolder, terminalManager);
 
   // Attach WebSocket server to the HTTP server
   const wsServer = new DaemonWsServer(httpServer);
@@ -169,6 +173,13 @@ async function main() {
     await services.devServerManager.stopAll().catch(err => {
       services.appLogger.logError('daemon', 'Failed to stop dev servers', err);
     });
+
+    // Kill all terminal sessions
+    try {
+      terminalManager.disposeAll();
+    } catch (err) {
+      services.appLogger.logError('daemon', 'Failed to dispose terminals', err);
+    }
 
     // Drain running agents before closing connections
     try {

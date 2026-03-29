@@ -1718,3 +1718,19 @@ export interface ReviewComment {
   issue: string;
   suggestion: string;
 }
+
+// ============================================
+// Terminal Session Types
+// ============================================
+
+export type TerminalStatus = 'running' | 'exited';
+
+export interface TerminalSession {
+  id: string;
+  projectId: string;
+  name: string;
+  cwd: string;
+  status: TerminalStatus;
+  exitCode: number | null;
+  createdAt: number;
+}

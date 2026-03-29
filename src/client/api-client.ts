@@ -320,6 +320,15 @@ export interface ApiClient {
     save(images: ChatImage[]): Promise<{ paths: string[] }>;
   };
 
+  // Terminal operations
+  terminals: {
+    create(projectId: string, name: string, cwd: string): Promise<unknown>;
+    list(): Promise<unknown[]>;
+    write(terminalId: string, data: string): Promise<void>;
+    resize(terminalId: string, cols: number, rows: number): Promise<void>;
+    close(terminalId: string): Promise<void>;
+  };
+
   // Shell operations (OS-level commands)
   shell: {
     openInChrome(url: string): Promise<void>;
@@ -730,6 +739,19 @@ export function createApiClient(baseUrl: string): ApiClient {
     // -- Screenshots ---------------------------------------------------------
     screenshots: {
       save: (images) => req('POST', '/api/screenshots', { images }),
+    },
+
+    // -- Terminal operations ------------------------------------------------
+    terminals: {
+      create: (projectId: string, name: string, cwd: string) =>
+        req('POST', '/api/terminals', { projectId, name, cwd }),
+      list: () => req('GET', '/api/terminals'),
+      write: (terminalId: string, data: string) =>
+        req('POST', `/api/terminals/${terminalId}/write`, { data }),
+      resize: (terminalId: string, cols: number, rows: number) =>
+        req('POST', `/api/terminals/${terminalId}/resize`, { cols, rows }),
+      close: (terminalId: string) =>
+        req('DELETE', `/api/terminals/${terminalId}`),
     },
 
     // -- Shell operations ---------------------------------------------------
