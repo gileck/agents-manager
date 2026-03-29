@@ -85,10 +85,11 @@ export class PipelineEngine implements IPipelineEngine {
     const currentStatusDef = pipeline.statuses.find((s) => s.name === task.status);
     const currentCategory = currentStatusDef?.category;
 
-    // Escape statuses: terminal category statuses (done, closed) and backlog
+    // Escape statuses: terminal category OR statuses without a position (e.g. backlog).
+    // Using position-based detection avoids hardcoding pipeline-specific status names.
     const escapeStatusNames = new Set(
       pipeline.statuses
-        .filter((s) => s.category === 'terminal' || s.name === 'backlog')
+        .filter((s) => s.category === 'terminal' || s.position === undefined)
         .map((s) => s.name),
     );
 

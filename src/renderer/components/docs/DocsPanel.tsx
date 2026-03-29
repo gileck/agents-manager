@@ -16,6 +16,8 @@ interface DocsPanelProps {
   onAction: (toStatus: string, comment: string, feedbackType: string) => Promise<void>;
   /** Pipeline statuses for computing the "Approved" badge. */
   pipelineStatuses?: PipelineStatus[];
+  /** Escape transitions (e.g. backlog, closed) provided by the API. */
+  escapeTransitions?: Transition[];
 }
 
 export function DocsPanel({
@@ -26,6 +28,7 @@ export function DocsPanel({
   transitioning,
   onAction,
   pipelineStatuses,
+  escapeTransitions,
 }: DocsPanelProps) {
   const navigate = useNavigate();
 
@@ -192,6 +195,7 @@ export function DocsPanel({
                 transitioning={transitioning}
                 onTransition={(toStatus) => onAction(toStatus, '', selectedPhase.feedbackType)}
                 taskType={task.type}
+                escapeTransitions={escapeTransitions}
               />
             )}
 

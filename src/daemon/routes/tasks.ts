@@ -152,7 +152,9 @@ export function taskRoutes(services: AppServices, wsHolder: WsHolder = {}): Rout
       const filteredForward = result.forward.filter((t) => filteredSet.has(t));
       const filteredBackward = result.backward.filter((t) => filteredSet.has(t));
       const filteredEscape = result.escape.filter((t) => filteredSet.has(t));
-      const filteredRecommended = result.recommended && filteredSet.has(result.recommended) ? result.recommended : (filteredForward[0] ?? filtered[0] ?? null);
+      const filteredRecommended = result.recommended && filteredSet.has(result.recommended)
+        ? result.recommended
+        : (filteredForward[0] ?? filteredBackward[0] ?? null);
 
       res.json({
         transitions: filtered,

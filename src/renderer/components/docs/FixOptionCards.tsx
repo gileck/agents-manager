@@ -7,11 +7,6 @@ import { reportError } from '../../lib/error-handler';
 import { buildFixOptionSummary } from '../../utils/fix-option-summary';
 import type { ProposedFixOption, Transition, TaskType } from '../../../shared/types';
 
-const ESCAPE_STATUSES = new Set(['backlog', 'closed']);
-function isEscapeTransition(t: Transition): boolean {
-  return ESCAPE_STATUSES.has(t.to);
-}
-
 // ─── Size → target status mapping ─────────────────────────────────────────────
 
 type FixSize = 'S' | 'M' | 'L' | 'XL';
@@ -79,6 +74,8 @@ interface FixOptionCardsProps {
   compact?: boolean;
   /** Parent task type — used when creating a new task from a fix option. */
   taskType?: TaskType;
+  /** Escape transitions (e.g. backlog, closed) provided by the API — used to filter secondary actions. */
+  escapeTransitions?: Transition[];
 }
 
 export function FixOptionCards({
@@ -90,6 +87,7 @@ export function FixOptionCards({
   onTransition,
   compact = false,
   taskType,
+  escapeTransitions = [],
 }: FixOptionCardsProps) {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
@@ -103,8 +101,9 @@ export function FixOptionCards({
   );
 
   // Non-forward transitions (e.g. "Request Investigation Changes") — rendered separately
+  const escapeTargets = new Set(escapeTransitions.map(t => t.to));
   const secondaryTransitions = transitions.filter(
-    t => !forwardTransitions.some(ft => ft.to === t.to) && !isEscapeTransition(t)
+    t => !forwardTransitions.some(ft => ft.to === t.to) && !escapeTargets.has(t.to)
   );
 
   const handleSelectOption = useCallback(async (option: ProposedFixOption) => {

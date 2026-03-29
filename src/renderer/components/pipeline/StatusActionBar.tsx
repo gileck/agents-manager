@@ -300,6 +300,7 @@ export function StatusActionBar({
               transitioning={transitioning}
               onTransition={onTransition}
               taskType={task.type ?? undefined}
+              escapeTransitions={escapeTransitions}
             />
             {renderSmartTransitions(primaryTransitions, transitioning, onTransition, recommendedTransition, forwardTransitions, escapeTransitions)}
           </div>
@@ -414,6 +415,7 @@ function FixOptionCardsDialogButton({
   transitioning,
   onTransition,
   taskType,
+  escapeTransitions,
 }: {
   options: ProposedFixOption[];
   taskId: string;
@@ -422,6 +424,7 @@ function FixOptionCardsDialogButton({
   transitioning: string | null;
   onTransition: (toStatus: string) => void;
   taskType?: TaskType;
+  escapeTransitions?: Transition[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -450,6 +453,7 @@ function FixOptionCardsDialogButton({
               onTransition(toStatus);
             }}
             taskType={taskType}
+            escapeTransitions={escapeTransitions}
           />
         </DialogContent>
       </Dialog>

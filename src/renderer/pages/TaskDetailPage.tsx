@@ -758,6 +758,7 @@ export function TaskDetailPage() {
             transitioning={transitioning}
             onAction={handleFeedbackAction}
             pipelineStatuses={pipeline?.statuses}
+            escapeTransitions={transitionsData?.escape}
           />
         </TabsContent>
 
