@@ -6,8 +6,9 @@ import { useTerminalsContext } from '../../contexts/TerminalsContext';
 
 /**
  * Renders all terminal xterm instances persistently via a portal into <main>.
- * Hidden via CSS when not on a /terminal route — avoids unmount/remount
- * when navigating between pages.
+ * Uses display:none when not on a /terminal route to avoid layout interference
+ * with the page content underneath. xterm instances survive display:none since
+ * they remain in the DOM; re-fit is triggered via the `visible` prop on show.
  */
 export function PersistentTerminals() {
   const { terminals, currentTerminalId } = useTerminalsContext();
@@ -27,9 +28,8 @@ export function PersistentTerminals() {
       style={{
         position: 'absolute',
         inset: 0,
-        zIndex: onTerminalPage ? 10 : -1,
-        visibility: onTerminalPage ? 'visible' : 'hidden',
-        pointerEvents: onTerminalPage ? 'auto' : 'none',
+        zIndex: 10,
+        display: onTerminalPage ? 'block' : 'none',
       }}
     >
       {terminals.map((t) => (
