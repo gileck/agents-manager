@@ -76,7 +76,7 @@ async function main() {
   services.appLogger.info('daemon', 'Daemon starting');
 
   // Create the terminal manager (uses wsHolder by reference — populated after WS server init)
-  const terminalManager = new TerminalManager(wsHolder);
+  const terminalManager = new TerminalManager(wsHolder, services.terminalStore);
 
   // Create the HTTP server and Express app
   const { httpServer } = createServer(services, wsHolder, terminalManager);
@@ -84,6 +84,13 @@ async function main() {
   // Attach WebSocket server to the HTTP server
   const wsServer = new DaemonWsServer(httpServer);
   wsHolder.server = wsServer;
+
+  // Restore persisted claude terminals from DB
+  try {
+    await terminalManager.restoreFromDb();
+  } catch (err) {
+    services.appLogger.logError('daemon', 'Failed to restore terminals', err);
+  }
 
   // Reset any chat sessions stuck in non-idle status from a prior crash
   try {

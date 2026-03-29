@@ -1,11 +1,16 @@
 /**
  * Manages node-pty terminal instances for the in-app terminal feature.
- * Each terminal is identified by a UUID and relays I/O over WebSocket.
+ *
+ * Two terminal types:
+ * - 'blank': ephemeral shell, not persisted to DB
+ * - 'claude': spawns `claude --session-id <uuid>`, persisted to DB,
+ *   resumed with `claude --resume <sessionId>` on daemon restart
  */
 
 import { randomUUID } from 'crypto';
 import type * as ptyModule from 'node-pty';
-import type { TerminalSession } from '../shared/types';
+import type { TerminalSession, TerminalType } from '../shared/types';
+import type { ITerminalStore } from '../core/interfaces/terminal-store';
 import type { DaemonWsServer } from './ws/ws-server';
 import { WS_CHANNELS } from './ws/channels';
 
@@ -32,28 +37,73 @@ function getPty(): typeof ptyModule {
 interface ManagedTerminal {
   session: TerminalSession;
   process: ptyModule.IPty;
-  /** Accumulated output waiting to be flushed */
   pendingData: string;
-  /** Timer for the current batch window */
   batchTimer: ReturnType<typeof setTimeout> | null;
 }
 
 export class TerminalManager {
   private terminals = new Map<string, ManagedTerminal>();
   private wsHolder: { server?: DaemonWsServer };
+  private terminalStore: ITerminalStore | null;
 
-  constructor(wsHolder: { server?: DaemonWsServer }) {
+  constructor(wsHolder: { server?: DaemonWsServer }, terminalStore?: ITerminalStore) {
     this.wsHolder = wsHolder;
+    this.terminalStore = terminalStore ?? null;
   }
 
-  create(projectId: string, name: string, cwd: string): TerminalSession {
+  /** Restore persisted Claude terminals from DB on daemon startup. */
+  async restoreFromDb(): Promise<void> {
+    if (!this.terminalStore) return;
+    const saved = await this.terminalStore.listTerminals();
+    for (const t of saved) {
+      if (t.type !== 'claude' || !t.claudeSessionId) continue;
+      try {
+        this.spawnPty(t.id, t.projectId, t.name, t.cwd, 'claude', t.claudeSessionId, true);
+        console.log(`[TerminalManager] Restored claude terminal ${t.id}`);
+      } catch (err) {
+        console.error(`[TerminalManager] Failed to restore terminal ${t.id}:`, err);
+        await this.terminalStore.deleteTerminal(t.id).catch(() => {});
+      }
+    }
+  }
+
+  async create(projectId: string, name: string, cwd: string, type: TerminalType): Promise<TerminalSession> {
     const id = randomUUID();
-    const shell = process.env.SHELL || '/bin/zsh';
+    const claudeSessionId = type === 'claude' ? randomUUID() : null;
+
+    const session = this.spawnPty(id, projectId, name, cwd, type, claudeSessionId, false);
+
+    // Persist claude terminals to DB
+    if (type === 'claude' && this.terminalStore) {
+      await this.terminalStore.createTerminal({
+        id, projectId, name, cwd, type, claudeSessionId: claudeSessionId ?? undefined,
+      });
+    }
+
+    return session;
+  }
+
+  private spawnPty(
+    id: string, projectId: string, name: string, cwd: string,
+    type: TerminalType, claudeSessionId: string | null, isResume: boolean,
+  ): TerminalSession {
     const nodePty = getPty();
+
+    let command: string;
+    let args: string[];
+    if (type === 'claude' && claudeSessionId) {
+      command = 'claude';
+      args = isResume
+        ? ['--resume', claudeSessionId]
+        : ['--session-id', claudeSessionId];
+    } else {
+      command = process.env.SHELL || '/bin/zsh';
+      args = [];
+    }
 
     let proc: ptyModule.IPty;
     try {
-      proc = nodePty.spawn(shell, [], {
+      proc = nodePty.spawn(command, args, {
         name: 'xterm-256color',
         cols: 120,
         rows: 30,
@@ -67,41 +117,27 @@ export class TerminalManager {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       throw Object.assign(
-        new Error(`Failed to create terminal: ${errMsg}. Shell="${shell}", cwd="${cwd}"`),
+        new Error(`Failed to create terminal: ${errMsg}. Command="${command}", cwd="${cwd}"`),
         { status: 400 },
       );
     }
 
     const session: TerminalSession = {
-      id,
-      projectId,
-      name,
-      cwd,
-      status: 'running',
-      exitCode: null,
-      createdAt: Date.now(),
+      id, projectId, name, cwd, type, claudeSessionId,
+      status: 'running', exitCode: null, createdAt: Date.now(),
     };
 
-    const managed: ManagedTerminal = {
-      session,
-      process: proc,
-      pendingData: '',
-      batchTimer: null,
-    };
+    const managed: ManagedTerminal = { session, process: proc, pendingData: '', batchTimer: null };
     this.terminals.set(id, managed);
 
-    // Relay output to WS subscribers — batched at ~60fps
     proc.onData((data) => {
       managed.pendingData += data;
       if (!managed.batchTimer) {
-        managed.batchTimer = setTimeout(() => {
-          this.flushOutput(id);
-        }, BATCH_INTERVAL_MS);
+        managed.batchTimer = setTimeout(() => this.flushOutput(id), BATCH_INTERVAL_MS);
       }
     });
 
     proc.onExit(({ exitCode }) => {
-      // Flush any remaining output before signaling exit
       this.flushOutput(id);
       managed.session.status = 'exited';
       managed.session.exitCode = exitCode;
@@ -114,10 +150,7 @@ export class TerminalManager {
   private flushOutput(terminalId: string): void {
     const managed = this.terminals.get(terminalId);
     if (!managed) return;
-    if (managed.batchTimer) {
-      clearTimeout(managed.batchTimer);
-      managed.batchTimer = null;
-    }
+    if (managed.batchTimer) { clearTimeout(managed.batchTimer); managed.batchTimer = null; }
     if (managed.pendingData) {
       const data = managed.pendingData;
       managed.pendingData = '';
@@ -145,30 +178,29 @@ export class TerminalManager {
     managed.process.resize(cols, rows);
   }
 
-  close(terminalId: string): void {
+  async close(terminalId: string): Promise<void> {
     const managed = this.terminals.get(terminalId);
     if (!managed) return;
-    // Clear any pending batch timer
-    if (managed.batchTimer) {
-      clearTimeout(managed.batchTimer);
-      managed.batchTimer = null;
-    }
-    try {
-      managed.process.kill();
-    } catch (err) {
+    if (managed.batchTimer) { clearTimeout(managed.batchTimer); managed.batchTimer = null; }
+    try { managed.process.kill(); } catch (err) {
       console.error(`[TerminalManager] kill() failed for terminal ${terminalId}:`, err);
     }
     this.terminals.delete(terminalId);
+    if (this.terminalStore) {
+      await this.terminalStore.deleteTerminal(terminalId).catch((err) => {
+        console.error(`[TerminalManager] DB delete failed for ${terminalId}:`, err);
+      });
+    }
   }
 
-  /** Kill all terminals — call on daemon shutdown */
+  /** Kill all terminals — call on daemon shutdown. Does NOT delete from DB (so claude terminals can be restored). */
   disposeAll(): void {
-    for (const [id] of this.terminals) {
-      try {
-        this.close(id);
-      } catch (err) {
-        console.error(`[TerminalManager] disposeAll: failed to close terminal ${id}:`, err);
+    for (const [, managed] of this.terminals) {
+      if (managed.batchTimer) { clearTimeout(managed.batchTimer); managed.batchTimer = null; }
+      try { managed.process.kill(); } catch (err) {
+        console.error(`[TerminalManager] disposeAll failed:`, err);
       }
     }
+    this.terminals.clear();
   }
 }

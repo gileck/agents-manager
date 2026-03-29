@@ -649,8 +649,8 @@ const api = {
 
   // Terminal operations
   terminals: {
-    create: (projectId: string, name: string, cwd: string): Promise<TerminalSession> =>
-      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_CREATE, projectId, name, cwd),
+    create: (projectId: string, name: string, cwd: string, type: 'blank' | 'claude' = 'blank'): Promise<TerminalSession> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_CREATE, projectId, name, cwd, type),
     list: (): Promise<TerminalSession[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_LIST),
     write: (terminalId: string, data: string): Promise<void> =>

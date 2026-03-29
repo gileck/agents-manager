@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, TerminalSquare, X, CircleDot } from 'lucide-react';
+import { Plus, TerminalSquare, X, CircleDot, Bot } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Input } from '../ui/input';
+import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { SidebarSection } from './SidebarSection';
 import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useTerminalsContext } from '../../contexts/TerminalsContext';
 import { reportError } from '../../lib/error-handler';
+import type { TerminalType } from '../../../shared/types';
 
 export function SidebarTerminals() {
   const { currentProjectId, currentProject } = useCurrentProject();
@@ -17,15 +19,18 @@ export function SidebarTerminals() {
 
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
 
-  const handleCreate = async () => {
+  const handleCreate = async (type: TerminalType) => {
+    setNewMenuOpen(false);
     if (!currentProjectId || !currentProject) return;
     if (!currentProject.path) {
       reportError(new Error('Project path not set — configure it in project settings'), 'Create terminal');
       return;
     }
     const num = terminals.length + 1;
-    const session = await createTerminal(currentProjectId, `Terminal ${num}`, currentProject.path);
+    const name = type === 'claude' ? `Claude Code ${num}` : `Terminal ${num}`;
+    const session = await createTerminal(currentProjectId, name, currentProject.path, type);
     if (session) {
       navigate(`/terminal/${session.id}`);
     }
@@ -55,13 +60,32 @@ export function SidebarTerminals() {
   };
 
   const headerButtons = (
-    <button
-      onClick={handleCreate}
-      className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
-      title="New terminal"
-    >
-      <Plus className="h-3.5 w-3.5" />
-    </button>
+    <Popover open={newMenuOpen} onOpenChange={setNewMenuOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
+          title="New terminal"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-48 p-1">
+        <button
+          onClick={() => handleCreate('blank')}
+          className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-md hover:bg-accent/70 text-foreground transition-colors"
+        >
+          <TerminalSquare className="h-3.5 w-3.5 text-muted-foreground" />
+          <span>Blank</span>
+        </button>
+        <button
+          onClick={() => handleCreate('claude')}
+          className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-md hover:bg-accent/70 text-foreground transition-colors"
+        >
+          <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+          <span>Claude Code</span>
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 
   if (!currentProjectId) {
@@ -81,6 +105,7 @@ export function SidebarTerminals() {
           {terminals.map((terminal) => {
             const isActive = onTerminalPage && terminal.id === currentTerminalId;
             const isRunning = terminal.status === 'running';
+            const isClaude = terminal.type === 'claude';
 
             return (
               <div
@@ -114,7 +139,10 @@ export function SidebarTerminals() {
                   </form>
                 ) : (
                   <>
-                    <TerminalSquare className="h-3.5 w-3.5 shrink-0" />
+                    {isClaude
+                      ? <Bot className="h-3.5 w-3.5 shrink-0" />
+                      : <TerminalSquare className="h-3.5 w-3.5 shrink-0" />
+                    }
                     <span className="flex-1 min-w-0 truncate text-xs font-medium">
                       {terminal.name}
                     </span>

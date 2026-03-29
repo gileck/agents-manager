@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { TerminalSession } from '../../shared/types';
+import type { TerminalSession, TerminalType } from '../../shared/types';
 import { reportError } from '../lib/error-handler';
 
 export function useTerminals() {
@@ -31,9 +31,9 @@ export function useTerminals() {
     return unsub;
   }, []);
 
-  const createTerminal = useCallback(async (projectId: string, name: string, cwd: string) => {
+  const createTerminal = useCallback(async (projectId: string, name: string, cwd: string, type: TerminalType = 'blank') => {
     try {
-      const session = await window.api.terminals.create(projectId, name, cwd);
+      const session = await window.api.terminals.create(projectId, name, cwd, type);
       setTerminals((prev) => [...prev, session]);
       setCurrentTerminalId(session.id);
       return session;

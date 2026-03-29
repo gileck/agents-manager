@@ -26,6 +26,7 @@ import type { IAutomatedAgentStore } from '../interfaces/automated-agent-store';
 import type { IInAppNotificationStore } from '../interfaces/in-app-notification-store';
 import type { IItemStore } from '../interfaces/item-store';
 import type { ITaskDocStore } from '../interfaces/task-doc-store';
+import type { ITerminalStore } from '../interfaces/terminal-store';
 import type { AgentLibRegistry as AgentLibRegistryType } from '../services/agent-lib-registry';
 import { SqliteProjectStore } from '../stores/sqlite-project-store';
 import { SqlitePipelineStore } from '../stores/sqlite-pipeline-store';
@@ -50,6 +51,7 @@ import { SqliteAutomatedAgentStore } from '../stores/sqlite-automated-agent-stor
 import { SqliteInAppNotificationStore } from '../stores/sqlite-in-app-notification-store';
 import { SqliteItemStore } from '../stores/sqlite-item-store';
 import { SqliteTaskDocStore } from '../stores/sqlite-task-doc-store';
+import { SqliteTerminalStore } from '../stores/sqlite-terminal-store';
 import { AppLogger, initAppLogger, getAppLogger } from '../services/app-logger';
 import { PipelineEngine } from '../services/pipeline-engine';
 import { AgentFrameworkImpl } from '../services/agent-framework-impl';
@@ -156,6 +158,7 @@ export interface AppServices {
   subscriptionRegistry: AgentSubscriptionRegistry;
   itemStore: IItemStore;
   taskDocStore: ITaskDocStore;
+  terminalStore: ITerminalStore;
   telegramBotManager: TelegramBotManager;
 }
 
@@ -194,13 +197,14 @@ function createStores(db: Database.Database) {
   const inAppNotificationStore = new SqliteInAppNotificationStore(db);
   const itemStore = new SqliteItemStore(db);
   const taskDocStore = new SqliteTaskDocStore(db);
+  const terminalStore = new SqliteTerminalStore(db);
   return {
     projectStore, pipelineStore, taskStore, taskEventLog, activityLog,
     agentRunStore, userStore, txRunner, appDebugLog,
     taskArtifactStore, taskPhaseStore, pendingPromptStore, taskContextStore,
     featureStore, agentDefinitionStore, chatMessageStore, chatSessionStore,
     kanbanBoardStore, settingsStore, automatedAgentStore, inAppNotificationStore, itemStore,
-    taskDocStore,
+    taskDocStore, terminalStore,
   };
 }
 
@@ -531,6 +535,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     subscriptionRegistry,
     itemStore: stores.itemStore,
     taskDocStore: stores.taskDocStore,
+    terminalStore: stores.terminalStore,
     telegramBotManager,
   };
 }

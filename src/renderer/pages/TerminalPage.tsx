@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, TerminalSquare } from 'lucide-react';
+import { TerminalSquare, Bot } from 'lucide-react';
 import { useTerminalsContext } from '../contexts/TerminalsContext';
 import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { reportError } from '../lib/error-handler';
+import type { TerminalType } from '../../shared/types';
 
 export function TerminalPage() {
   const { terminalId } = useParams<{ terminalId?: string }>();
@@ -25,14 +26,15 @@ export function TerminalPage() {
     }
   }, [terminalId, terminals, navigate]);
 
-  const handleNewTerminal = async () => {
+  const handleNewTerminal = async (type: TerminalType) => {
     if (!currentProjectId || !currentProject) return;
     if (!currentProject.path) {
       reportError(new Error('Project path not set — configure it in project settings'), 'Create terminal');
       return;
     }
     const num = terminals.length + 1;
-    const session = await createTerminal(currentProjectId, `Terminal ${num}`, currentProject.path);
+    const name = type === 'claude' ? `Claude Code ${num}` : `Terminal ${num}`;
+    const session = await createTerminal(currentProjectId, name, currentProject.path, type);
     if (session) {
       navigate(`/terminal/${session.id}`);
     }
@@ -43,16 +45,25 @@ export function TerminalPage() {
   // Empty state — no terminals yet
   if (terminals.length === 0 || !activeTerminalId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 text-muted-foreground">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 text-muted-foreground">
         <TerminalSquare className="h-12 w-12 opacity-40" />
         <p className="text-sm">No terminals open</p>
-        <button
-          onClick={handleNewTerminal}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New Terminal
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => handleNewTerminal('blank')}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
+          >
+            <TerminalSquare className="h-4 w-4" />
+            Blank Terminal
+          </button>
+          <button
+            onClick={() => handleNewTerminal('claude')}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Bot className="h-4 w-4" />
+            Claude Code
+          </button>
+        </div>
       </div>
     );
   }
@@ -73,17 +84,10 @@ export function TerminalPage() {
                   : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
               }`}
             >
-              <TerminalSquare className="h-3 w-3" />
+              {t.type === 'claude' ? <Bot className="h-3 w-3" /> : <TerminalSquare className="h-3 w-3" />}
               {t.name}
             </button>
           ))}
-          <button
-            onClick={handleNewTerminal}
-            className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
-            title="New terminal"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
         </div>
       )}
     </div>

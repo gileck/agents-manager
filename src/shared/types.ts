@@ -1724,13 +1724,23 @@ export interface ReviewComment {
 // ============================================
 
 export type TerminalStatus = 'running' | 'exited';
+export type TerminalType = 'blank' | 'claude';
 
 export interface TerminalSession {
   id: string;
   projectId: string;
   name: string;
   cwd: string;
+  type: TerminalType;
+  claudeSessionId: string | null;
   status: TerminalStatus;
   exitCode: number | null;
   createdAt: number;
 }
+
+export type TerminalCreateInput = {
+  projectId: string;
+  name: string;
+  cwd: string;
+  type: TerminalType;
+};

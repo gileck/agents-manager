@@ -322,7 +322,7 @@ export interface ApiClient {
 
   // Terminal operations
   terminals: {
-    create(projectId: string, name: string, cwd: string): Promise<unknown>;
+    create(projectId: string, name: string, cwd: string, type: string): Promise<unknown>;
     list(): Promise<unknown[]>;
     write(terminalId: string, data: string): Promise<void>;
     resize(terminalId: string, cols: number, rows: number): Promise<void>;
@@ -743,8 +743,8 @@ export function createApiClient(baseUrl: string): ApiClient {
 
     // -- Terminal operations ------------------------------------------------
     terminals: {
-      create: (projectId: string, name: string, cwd: string) =>
-        req('POST', '/api/terminals', { projectId, name, cwd }),
+      create: (projectId: string, name: string, cwd: string, type: string) =>
+        req('POST', '/api/terminals', { projectId, name, cwd, type }),
       list: () => req('GET', '/api/terminals'),
       write: (terminalId: string, data: string) =>
         req('POST', `/api/terminals/${terminalId}/write`, { data }),

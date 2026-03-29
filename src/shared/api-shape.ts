@@ -333,7 +333,7 @@ export interface ApiShape {
 
   // Terminal operations
   terminals: {
-    create(projectId: string, name: string, cwd: string): Promise<TerminalSession>;
+    create(projectId: string, name: string, cwd: string, type: 'blank' | 'claude'): Promise<TerminalSession>;
     list(): Promise<TerminalSession[]>;
     write(terminalId: string, data: string): Promise<void>;
     resize(terminalId: string, cols: number, rows: number): Promise<void>;

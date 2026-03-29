@@ -3,8 +3,8 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import type { ApiClient } from '../../client/api-client';
 
 export function registerTerminalHandlers(api: ApiClient): void {
-  registerIpcHandler(IPC_CHANNELS.TERMINAL_CREATE, async (_, projectId: string, name: string, cwd: string) => {
-    return api.terminals.create(projectId, name, cwd);
+  registerIpcHandler(IPC_CHANNELS.TERMINAL_CREATE, async (_, projectId: string, name: string, cwd: string, type: string) => {
+    return api.terminals.create(projectId, name, cwd, type || 'blank');
   });
 
   registerIpcHandler(IPC_CHANNELS.TERMINAL_LIST, async () => {

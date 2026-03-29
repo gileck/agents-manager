@@ -217,5 +217,20 @@ FROM tasks WHERE technical_design IS NOT NULL AND technical_design != ''`,
       name: '124_add_thread_intent_to_chat_sessions',
       sql: `ALTER TABLE chat_sessions ADD COLUMN thread_intent TEXT DEFAULT NULL`,
     },
+    {
+      name: '125_create_terminals',
+      sql: `
+CREATE TABLE IF NOT EXISTS terminals (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  cwd TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'blank' CHECK(type IN ('blank','claude')),
+  claude_session_id TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+CREATE INDEX IF NOT EXISTS idx_terminals_project_id ON terminals(project_id)`,
+    },
   ];
 }

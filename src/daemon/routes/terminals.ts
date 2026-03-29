@@ -7,11 +7,12 @@ export function terminalRoutes(terminalManager: TerminalManager): Router {
   // Create a new terminal session
   router.post('/api/terminals', async (req, res, next) => {
     try {
-      const { projectId, name, cwd } = req.body as { projectId: string; name: string; cwd: string };
+      const { projectId, name, cwd, type } = req.body as { projectId: string; name: string; cwd: string; type?: string };
       if (!projectId || typeof projectId !== 'string') { res.status(400).json({ error: 'projectId is required' }); return; }
       if (!name || typeof name !== 'string') { res.status(400).json({ error: 'name is required' }); return; }
       if (!cwd || typeof cwd !== 'string') { res.status(400).json({ error: 'cwd is required' }); return; }
-      const session = terminalManager.create(projectId, name, cwd);
+      const terminalType = type === 'claude' ? 'claude' as const : 'blank' as const;
+      const session = await terminalManager.create(projectId, name, cwd, terminalType);
       res.json(session);
     } catch (err) { next(err); }
   });
@@ -48,7 +49,7 @@ export function terminalRoutes(terminalManager: TerminalManager): Router {
   // Close a terminal
   router.delete('/api/terminals/:id', async (req, res, next) => {
     try {
-      terminalManager.close(req.params.id);
+      await terminalManager.close(req.params.id);
       res.json({ ok: true });
     } catch (err) { next(err); }
   });

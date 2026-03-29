@@ -288,7 +288,7 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
 
     // ── Terminals ──────────────────────────────────────────────────────
     terminals: {
-      create: (projectId, name, cwd) => api.terminals.create(projectId, name, cwd) as Promise<TerminalSession>,
+      create: (projectId, name, cwd, type) => api.terminals.create(projectId, name, cwd, type) as Promise<TerminalSession>,
       list: () => api.terminals.list() as Promise<TerminalSession[]>,
       write: (terminalId, data) => api.terminals.write(terminalId, data) as Promise<void>,
       resize: (terminalId, cols, rows) => api.terminals.resize(terminalId, cols, rows) as Promise<void>,
