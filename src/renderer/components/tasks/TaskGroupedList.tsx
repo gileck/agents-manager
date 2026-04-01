@@ -107,7 +107,7 @@ export function TaskGroupedList({
           <div key={groupKey} className="rounded-lg border border-border/60 overflow-hidden">
             {/* Group header */}
             <button
-              className="group flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors"
+              className="group/header flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors"
               onClick={() => toggleGroup(groupKey)}
             >
               <input
@@ -117,7 +117,7 @@ export function TaskGroupedList({
                 onClick={(e) => e.stopPropagation()}
                 onChange={() => onToggleSelectGroup(groupTaskIds)}
                 className={`h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer transition-opacity shrink-0 ${
-                  selectMode ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  selectMode || someGroupSelected ? 'opacity-100' : 'opacity-0 group-hover/header:opacity-60 hover:!opacity-100'
                 }`}
               />
               {isCollapsed ? (
