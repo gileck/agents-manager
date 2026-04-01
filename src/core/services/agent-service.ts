@@ -229,7 +229,8 @@ export class AgentService implements IAgentService {
     const worktreeManager = this.createWorktreeManager(projectPath);
 
     // 2. Create agent run record
-    run = await this.agentRunStore.createRun({ taskId, agentType, mode });
+    const correlationId = additionalContext?.correlationId as string | undefined;
+    run = await this.agentRunStore.createRun({ taskId, agentType, mode, correlationId });
     // 3. Manage phase
     let phase = await this.taskPhaseStore.getActivePhase(taskId);
     if (!phase) {

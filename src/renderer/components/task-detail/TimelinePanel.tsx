@@ -83,6 +83,8 @@ export function TimelinePanel({ entries, isLive, showFullPageButton = true, task
   const [severityFilter, setSeverityFilter] = useState<Set<string>>(new Set(ALL_SEVERITIES));
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [correlationFilter, setCorrelationFilter] = useState<string | null>(null);
 
   // Pre-stringify data for search — avoid repeated JSON.stringify in filter
   const stringifiedData = useMemo(
@@ -99,6 +101,8 @@ export function TimelinePanel({ entries, isLive, showFullPageButton = true, task
       .filter(({ entry, originalIdx }) => {
         if (!sourceFilter.has(entry.source)) return false;
         if (!severityFilter.has(entry.severity)) return false;
+        if (errorsOnly && entry.severity !== 'error') return false;
+        if (correlationFilter && entry.correlationId !== correlationFilter) return false;
         if (lowerSearch) {
           const titleMatch = entry.title.toLowerCase().includes(lowerSearch);
           const dataMatch = stringifiedData[originalIdx]?.includes(lowerSearch) ?? false;
@@ -111,7 +115,7 @@ export function TimelinePanel({ entries, isLive, showFullPageButton = true, task
       return [...filtered].reverse();
     }
     return filtered;
-  }, [entries, sourceFilter, severityFilter, search, sortNewest, stringifiedData]);
+  }, [entries, sourceFilter, severityFilter, search, sortNewest, stringifiedData, errorsOnly, correlationFilter]);
 
   // Toggle helpers
   const toggleFilter = useCallback((set: Set<string>, value: string, setter: (s: Set<string>) => void) => {
@@ -204,6 +208,16 @@ export function TimelinePanel({ entries, isLive, showFullPageButton = true, task
               {viewMode === 'compact' ? 'Compact' : 'Detailed'}
             </Button>
 
+            {/* Errors Only */}
+            <Button variant={errorsOnly ? 'default' : 'outline'} size="sm"
+              onClick={() => setErrorsOnly((v) => !v)}
+              style={{
+                fontSize: 12, height: 30, padding: '0 10px',
+                ...(errorsOnly ? { backgroundColor: '#ef4444', borderColor: '#ef4444', color: '#fff' } : {}),
+              }}>
+              Errors Only
+            </Button>
+
             {/* Copy all */}
             <Button variant="outline" size="sm" onClick={handleCopyAll} disabled={processedEntries.length === 0}
               style={{ fontSize: 12, height: 30, padding: '0 10px' }}>
@@ -279,6 +293,34 @@ export function TimelinePanel({ entries, isLive, showFullPageButton = true, task
         </div>
       </div>
 
+      {/* --- Correlation filter banner --- */}
+      {correlationFilter && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)', borderBottom: '1px solid var(--border)',
+          fontSize: 12, flexShrink: 0,
+        }}>
+          <span style={{ color: 'var(--muted-foreground)' }}>Showing correlation chain:</span>
+          <code style={{
+            backgroundColor: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6',
+            padding: '1px 6px', borderRadius: 3, fontSize: 11, fontFamily: 'monospace',
+          }}>
+            {correlationFilter.slice(0, 12)}...
+          </code>
+          <button
+            onClick={() => setCorrelationFilter(null)}
+            style={{
+              background: 'none', border: '1px solid var(--border)', borderRadius: 4,
+              padding: '1px 8px', fontSize: 10, cursor: 'pointer', color: 'var(--muted-foreground)',
+              marginLeft: 'auto',
+            }}
+            className="hover:bg-accent"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* --- Entry list --- */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {processedEntries.length === 0 ? (
@@ -296,9 +338,9 @@ export function TimelinePanel({ entries, isLive, showFullPageButton = true, task
             </p>
           </div>
         ) : viewMode === 'compact' ? (
-          <CompactView entries={processedEntries} expandedIds={expandedIds} onToggleExpand={toggleExpand} />
+          <CompactView entries={processedEntries} expandedIds={expandedIds} onToggleExpand={toggleExpand} onCorrelationClick={setCorrelationFilter} />
         ) : (
-          <LargeView entries={processedEntries} expandedIds={expandedIds} onToggleExpand={toggleExpand} />
+          <LargeView entries={processedEntries} expandedIds={expandedIds} onToggleExpand={toggleExpand} onCorrelationClick={setCorrelationFilter} />
         )}
       </div>
 
@@ -312,10 +354,12 @@ function CompactView({
   entries,
   expandedIds,
   onToggleExpand,
+  onCorrelationClick,
 }: {
   entries: { entry: DebugTimelineEntry; originalIdx: number }[];
   expandedIds: Set<number>;
   onToggleExpand: (idx: number) => void;
+  onCorrelationClick?: (id: string) => void;
 }) {
   return (
     <div style={{ paddingTop: 4 }}>
@@ -349,6 +393,9 @@ function CompactView({
                   backgroundColor: SEVERITY_COLORS[entry.severity] ?? '#9ca3af',
                 }}
               />
+              {entry.correlationId && (
+                <CorrelationBadge correlationId={entry.correlationId} onClick={onCorrelationClick} />
+              )}
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                 {entry.title}
               </span>
@@ -358,7 +405,7 @@ function CompactView({
                 </span>
               )}
             </div>
-            {isExpanded && <ExpandedDetail entry={entry} />}
+            {isExpanded && <ExpandedDetail entry={entry} onCorrelationClick={onCorrelationClick} />}
           </div>
         );
       })}
@@ -372,10 +419,12 @@ function LargeView({
   entries,
   expandedIds,
   onToggleExpand,
+  onCorrelationClick,
 }: {
   entries: { entry: DebugTimelineEntry; originalIdx: number }[];
   expandedIds: Set<number>;
   onToggleExpand: (idx: number) => void;
+  onCorrelationClick?: (id: string) => void;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 8 }}>
@@ -410,6 +459,9 @@ function LargeView({
               >
                 {entry.severity}
               </span>
+              {entry.correlationId && (
+                <CorrelationBadge correlationId={entry.correlationId} onClick={onCorrelationClick} />
+              )}
               <span style={{ marginLeft: 'auto', fontFamily: 'monospace', fontSize: 11, color: 'var(--muted-foreground)', flexShrink: 0 }}>
                 {formatDate(entry.timestamp)}
               </span>
@@ -425,7 +477,7 @@ function LargeView({
               {entry.title}
             </p>
 
-            {isExpanded && <ExpandedDetail entry={entry} />}
+            {isExpanded && <ExpandedDetail entry={entry} onCorrelationClick={onCorrelationClick} />}
           </div>
         );
       })}
@@ -435,7 +487,7 @@ function LargeView({
 
 // --- Expanded Detail View ---
 
-function ExpandedDetail({ entry }: { entry: DebugTimelineEntry }) {
+function ExpandedDetail({ entry, onCorrelationClick }: { entry: DebugTimelineEntry; onCorrelationClick?: (id: string) => void }) {
   const [detailCopied, setDetailCopied] = useState(false);
 
   const handleCopy = useCallback((e: React.MouseEvent) => {
@@ -446,6 +498,9 @@ function ExpandedDetail({ entry }: { entry: DebugTimelineEntry }) {
       `Severity: ${entry.severity}`,
       `Title: ${entry.title}`,
     ];
+    if (entry.correlationId) {
+      parts.push(`CorrelationId: ${entry.correlationId}`);
+    }
     if (entry.data) {
       parts.push(`Data:\n${JSON.stringify(entry.data, null, 2)}`);
     }
@@ -465,13 +520,19 @@ function ExpandedDetail({ entry }: { entry: DebugTimelineEntry }) {
       }}
     >
       {/* Detail metadata */}
-      <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '3px 10px', marginBottom: entry.data ? 8 : 0, fontSize: 11 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: '3px 10px', marginBottom: entry.data ? 8 : 0, fontSize: 11 }}>
         <span style={{ color: 'var(--muted-foreground)' }}>Timestamp</span>
         <span style={{ fontFamily: 'monospace' }}>{formatDate(entry.timestamp)}</span>
         <span style={{ color: 'var(--muted-foreground)' }}>Source</span>
         <span style={{ color: SOURCE_COLORS[entry.source] ?? 'var(--foreground)', fontWeight: 600 }}>{entry.source}</span>
         <span style={{ color: 'var(--muted-foreground)' }}>Severity</span>
         <span style={{ color: SEVERITY_COLORS[entry.severity] ?? 'var(--foreground)', fontWeight: 600 }}>{entry.severity}</span>
+        {entry.correlationId && (
+          <>
+            <span style={{ color: 'var(--muted-foreground)' }}>Correlation</span>
+            <CorrelationBadge correlationId={entry.correlationId} onClick={onCorrelationClick} />
+          </>
+        )}
       </div>
 
       {/* Data */}
@@ -502,6 +563,35 @@ function ExpandedDetail({ entry }: { entry: DebugTimelineEntry }) {
         </div>
       )}
     </div>
+  );
+}
+
+// --- Correlation Badge ---
+
+function CorrelationBadge({ correlationId, onClick }: { correlationId: string; onClick?: (id: string) => void }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(correlationId);
+      }}
+      title={`Filter by correlation: ${correlationId}`}
+      style={{
+        background: 'rgba(139, 92, 246, 0.12)',
+        border: '1px solid rgba(139, 92, 246, 0.3)',
+        borderRadius: 3,
+        padding: '0 4px',
+        fontSize: 9,
+        fontFamily: 'monospace',
+        color: '#8b5cf6',
+        cursor: 'pointer',
+        flexShrink: 0,
+        lineHeight: '16px',
+      }}
+      className="hover:bg-accent"
+    >
+      {correlationId.slice(0, 8)}
+    </button>
   );
 }
 

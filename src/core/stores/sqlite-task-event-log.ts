@@ -13,6 +13,7 @@ interface TaskEventRow {
   data: string;
   created_at: number;
   dismissed: number;
+  correlation_id: string | null;
 }
 
 function rowToEvent(row: TaskEventRow): TaskEvent {
@@ -25,6 +26,7 @@ function rowToEvent(row: TaskEventRow): TaskEvent {
     data: parseJson<Record<string, unknown>>(row.data, {}),
     createdAt: row.created_at,
     dismissed: (row.dismissed ?? 0) === 1,
+    ...(row.correlation_id ? { correlationId: row.correlation_id } : {}),
   };
 }
 
@@ -37,8 +39,8 @@ export class SqliteTaskEventLog implements ITaskEventLog {
       const timestamp = now();
 
       this.db.prepare(`
-        INSERT INTO task_events (id, task_id, category, severity, message, data, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO task_events (id, task_id, category, severity, message, data, created_at, correlation_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         input.taskId,
@@ -47,6 +49,7 @@ export class SqliteTaskEventLog implements ITaskEventLog {
         input.message,
         JSON.stringify(input.data ?? {}),
         timestamp,
+        input.correlationId ?? null,
       );
 
       return {
@@ -57,6 +60,7 @@ export class SqliteTaskEventLog implements ITaskEventLog {
         message: input.message,
         data: input.data ?? {},
         createdAt: timestamp,
+        ...(input.correlationId ? { correlationId: input.correlationId } : {}),
       };
     } catch (err) {
       getAppLogger().logError('TaskEventLog', 'log failed', err);
@@ -97,6 +101,10 @@ export class SqliteTaskEventLog implements ITaskEventLog {
       if (filter?.until !== undefined) {
         conditions.push('created_at <= ?');
         values.push(filter.until);
+      }
+      if (filter?.correlationId) {
+        conditions.push('correlation_id = ?');
+        values.push(filter.correlationId);
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
