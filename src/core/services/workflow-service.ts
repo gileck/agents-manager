@@ -30,6 +30,8 @@ import type { IGitOps } from '../interfaces/git-ops';
 import type { ITaskContextStore } from '../interfaces/task-context-store';
 import type { IWorkflowService } from '../interfaces/workflow-service';
 import type { IDevServerManager } from '../interfaces/dev-server-manager';
+import { hasPendingPhases, getActivePhaseIndex } from '../../shared/phase-utils';
+import { getAppLogger } from './app-logger';
 
 interface QuestionResponse {
   questionId: string;
@@ -239,6 +241,7 @@ export class WorkflowService implements IWorkflowService {
       const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
       const targetStatus = pipeline?.statuses.find((s) => s.name === toStatus);
       if (targetStatus?.isFinal) {
+        getAppLogger().info('WorkflowService', `Task reached final status "${toStatus}" — running worktree cleanup`, { taskId, fromStatus: task.status, toStatus });
         await this.cleanupWorktree(task);
       }
     }
@@ -548,6 +551,9 @@ export class WorkflowService implements IWorkflowService {
     try {
       const project = await this.projectStore.getProject(task.projectId);
       if (!project?.path) return;
+
+      getAppLogger().info('WorkflowService', `cleanupWorktree: starting for task ${task.id} (status=${task.status})`, { taskId: task.id });
+
       const wm = this.createWorktreeManager(project.path);
       const worktree = await wm.get(task.id);
       const gitOps = this.createGitOps(project.path);
@@ -568,6 +574,7 @@ export class WorkflowService implements IWorkflowService {
         if (branch) {
           try {
             await gitOps.deleteRemoteBranch(branch);
+            getAppLogger().info('WorkflowService', `cleanupWorktree: deleted worktree and remote branch "${branch}"`, { taskId: task.id, branch });
           } catch (branchErr) {
             const msg = branchErr instanceof Error ? branchErr.message : String(branchErr);
             if (!/not found|does not exist|couldn't find remote ref/i.test(msg)) {
@@ -580,23 +587,38 @@ export class WorkflowService implements IWorkflowService {
         }
       }
 
-      // Clean up the task integration branch for multi-phase tasks (best-effort)
+      // Clean up the task integration branch for multi-phase tasks (best-effort).
+      // Re-read the task to get the latest phase state — the advance_phase hook
+      // may have activated the next phase in a nested transition after we were called.
       const taskBranch = (task.metadata?.taskBranch as string) || undefined;
       if (taskBranch) {
-        try {
-          await gitOps.deleteRemoteBranch(taskBranch);
-        } catch (branchErr) {
-          const msg = branchErr instanceof Error ? branchErr.message : String(branchErr);
-          if (!/not found|does not exist|couldn't find remote ref/i.test(msg)) {
-            this.taskEventLog.log({
-              taskId: task.id, category: 'worktree', severity: 'warning',
-              message: `Failed to delete remote task branch "${taskBranch}": ${msg}`,
-            }).catch(() => { /* best-effort logging */ });
+        const freshTask = await this.taskStore.getTask(task.id);
+        const phases = freshTask?.phases ?? task.phases;
+        const stillHasPhases = phases && (hasPendingPhases(phases) || getActivePhaseIndex(phases) >= 0);
+
+        if (stillHasPhases) {
+          const pendingCount = phases?.filter(p => p.status !== 'completed').length ?? 0;
+          getAppLogger().info('WorkflowService', `cleanupWorktree: skipping integration branch deletion — ${pendingCount} phase(s) still pending`, { taskId: task.id, taskBranch, pendingCount });
+        } else {
+          try {
+            await gitOps.deleteRemoteBranch(taskBranch);
+            getAppLogger().info('WorkflowService', `cleanupWorktree: deleted remote integration branch "${taskBranch}"`, { taskId: task.id, taskBranch });
+          } catch (branchErr) {
+            const msg = branchErr instanceof Error ? branchErr.message : String(branchErr);
+            if (!/not found|does not exist|couldn't find remote ref/i.test(msg)) {
+              this.taskEventLog.log({
+                taskId: task.id, category: 'worktree', severity: 'warning',
+                message: `Failed to delete remote task branch "${taskBranch}": ${msg}`,
+              }).catch(() => { /* best-effort logging */ });
+            }
           }
         }
       }
+
+      getAppLogger().info('WorkflowService', `cleanupWorktree: completed for task ${task.id}`, { taskId: task.id });
     } catch (err) {
       const cleanupMsg = err instanceof Error ? err.message : String(err);
+      getAppLogger().warn('WorkflowService', `cleanupWorktree failed: ${cleanupMsg}`, { taskId: task.id, error: cleanupMsg });
       this.taskEventLog.log({
         taskId: task.id,
         category: 'worktree',

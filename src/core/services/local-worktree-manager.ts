@@ -81,6 +81,20 @@ export class LocalWorktreeManager implements IWorktreeManager {
         } else {
           throw new Error(`Failed to create worktree for branch "${branch}" from base "${base}": ${msg}`, { cause: err });
         }
+      } else if (/invalid reference|not a valid ref/i.test(msg)) {
+        // The base ref doesn't exist — provide diagnostics to help debug
+        const localExists = await this.git(['show-ref', '--verify', `refs/heads/${base.replace(/^origin\//, '')}`])
+          .then(() => 'yes')
+          .catch(() => 'no');
+        const remoteExists = await this.git(['ls-remote', '--heads', 'origin', base.replace(/^origin\//, '')])
+          .then(out => out.trim().length > 0 ? 'yes' : 'no')
+          .catch(() => 'check failed');
+        throw new Error(
+          `Failed to create worktree: base ref "${base}" not found. ` +
+          `Local branch exists: ${localExists}. Remote branch exists: ${remoteExists}. ` +
+          `Original error: ${msg}`,
+          { cause: err },
+        );
       } else {
         throw new Error(`Failed to create worktree for branch "${branch}" from base "${base}": ${msg}`, { cause: err });
       }
