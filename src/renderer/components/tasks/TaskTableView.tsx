@@ -1,12 +1,14 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUp, ArrowDown, ChevronsUpDown, Search, ChevronDown, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { ArrowUp, ArrowDown, ChevronsUpDown, Search, ChevronDown, ChevronRight, SlidersHorizontal, Settings2, Eye, EyeOff } from 'lucide-react';
 import { TaskTypeIcon } from './TaskTypeIcon';
 import { Card, CardContent } from '../ui/card';
 import { InlineError } from '../InlineError';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
+import { InlineStatusTransition } from './InlineStatusTransition';
 import { formatRelativeTimestamp, buildPipelineMap, collectTags, countActiveFilters, groupTasks, sortGroupEntries } from './task-helpers';
 import type { GroupBy } from './task-helpers';
 import { EMPTY_FILTERS } from './TaskFilterBar';
@@ -19,7 +21,9 @@ import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useIpc } from '@template/renderer/hooks/useIpc';
 import { getEffectiveCost, formatCost } from '../../../shared/cost-utils';
-import type { Pipeline, TaskFilter, AgentRun, TaskCreatedBy } from '../../../shared/types';
+import { toast } from 'sonner';
+import { reportError } from '../../lib/error-handler';
+import type { Pipeline, Task, TaskFilter, AgentRun, TaskCreatedBy } from '../../../shared/types';
 
 type TableSortField = 'title' | 'status' | 'type' | 'subtasks' | 'createdBy' | 'runs' | 'failed' | 'cost' | 'created' | 'updated';
 type TableGroupBy = Extract<GroupBy, 'none' | 'status' | 'type' | 'createdDate'>;
@@ -208,7 +212,7 @@ export function TaskTableView() {
   }
   if (filters.createdBy) taskFilter.createdBy = filters.createdBy as TaskCreatedBy;
 
-  const { tasks, loading, error } = useTasks(taskFilter);
+  const { tasks, loading, error, refetch } = useTasks(taskFilter);
   const { pipelines, loading: pipelinesLoading, error: pipelinesError } = usePipelines();
   const { features } = useFeatures(currentProjectId ? { projectId: currentProjectId } : undefined);
   const pipelineMap = useMemo(() => buildPipelineMap(pipelines), [pipelines]);
@@ -228,7 +232,23 @@ export function TaskTableView() {
 
   const runStatsMap = useMemo(() => buildRunStatsMap(allRuns ?? []), [allRuns]);
 
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
+  const [columnWidths, setColumnWidths] = useLocalStorage<Record<string, number>>('taskTable.columnWidths', DEFAULT_WIDTHS);
+  const [hiddenColumns, setHiddenColumns] = useLocalStorage<string[]>('taskTable.hiddenColumns', []);
+
+  const visibleColumns = useMemo(
+    () => COLUMNS.filter((c) => !hiddenColumns.includes(c.field)),
+    [hiddenColumns],
+  );
+
+  const toggleColumnVisibility = useCallback((field: string) => {
+    setHiddenColumns((prev) => {
+      if (prev.includes(field)) return prev.filter((f) => f !== field);
+      // Don't allow hiding all columns — keep at least the title
+      if (field === 'title') return prev;
+      return [...prev, field];
+    });
+  }, [setHiddenColumns]);
+
   const [sortField, setSortField] = useLocalStorage<TableSortField>('taskTable.sortField', 'updated');
   const [sortDir, setSortDir] = useLocalStorage<'asc' | 'desc'>('taskTable.sortDir', 'desc');
   const [groupBy, setGroupBy] = useLocalStorage<TableGroupBy>('taskTable.groupBy', 'none');
@@ -250,8 +270,8 @@ export function TaskTableView() {
   }, []);
 
   const tableWidth = useMemo(() => {
-    return COLUMNS.reduce((sum, col) => sum + (columnWidths[col.field] ?? col.defaultWidth), 0);
-  }, [columnWidths]);
+    return visibleColumns.reduce((sum, col) => sum + (columnWidths[col.field] ?? col.defaultWidth), 0);
+  }, [columnWidths, visibleColumns]);
 
   // Count only panel-resident filters (not search, which is always visible inline)
   const activeFilterCount = countActiveFilters({ ...filters, search: '' });
@@ -295,6 +315,106 @@ export function TaskTableView() {
     if (groupBy === 'none') return null;
     return sortGroupEntries(groupTasks(sortedTasks, groupBy, pipelineMap), groupBy, pipelineMap);
   }, [sortedTasks, groupBy, pipelineMap]);
+
+  // Status change handler
+  const handleStatusChange = useCallback(async (taskId: string, toStatus: string) => {
+    try {
+      const result = await window.api.tasks.transition(taskId, toStatus, 'admin');
+      if (result.success) {
+        toast.success(`Status changed to "${toStatus}"`);
+        await refetch();
+      } else if (result.guardFailures && result.guardFailures.length > 0) {
+        const reasons = result.guardFailures.map((g) => g.reason).join('; ');
+        reportError(`Transition blocked: ${reasons}`, 'Transition');
+      } else {
+        reportError(result.error ?? 'Unknown error', 'Transition');
+      }
+    } catch (err) {
+      reportError(err, 'Transition');
+    }
+  }, [refetch]);
+
+  /** Render a single table cell based on column field. */
+  const renderCell = (field: TableSortField, task: Task, stats: TaskRunStats, doneSubtasks: number, statusColor: string | undefined, pipeline: Pipeline | null) => {
+    switch (field) {
+      case 'title':
+        return (
+          <td key={field} className="px-3 py-2 font-medium overflow-hidden">
+            <span className="block truncate" title={task.title}>{task.title}</span>
+          </td>
+        );
+      case 'created':
+        return (
+          <td key={field} className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+            {formatRelativeTimestamp(task.createdAt)}
+          </td>
+        );
+      case 'updated':
+        return (
+          <td key={field} className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+            {formatRelativeTimestamp(task.updatedAt)}
+          </td>
+        );
+      case 'status':
+        return (
+          <td key={field} className="px-3 py-2 whitespace-nowrap overflow-hidden">
+            <InlineStatusTransition
+              task={task}
+              pipeline={pipeline}
+              onStatusChange={handleStatusChange}
+              variant="dot"
+            />
+          </td>
+        );
+      case 'type':
+        return (
+          <td key={field} className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+            <span className="inline-flex items-center gap-1.5 capitalize">
+              <TaskTypeIcon type={task.type} size={14} />
+              {task.type ?? '-'}
+            </span>
+          </td>
+        );
+      case 'subtasks':
+        return (
+          <td key={field} className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+            {task.subtasks.length > 0
+              ? <span>{doneSubtasks}/{task.subtasks.length}</span>
+              : <span className="text-muted-foreground/50">-</span>
+            }
+          </td>
+        );
+      case 'createdBy':
+        return (
+          <td key={field} className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+            {task.createdBy ?? '-'}
+          </td>
+        );
+      case 'runs':
+        return (
+          <td key={field} className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+            {runsLoading ? <span className="text-muted-foreground/40">...</span> : (stats.runs || '-')}
+          </td>
+        );
+      case 'failed':
+        return (
+          <td key={field} className="px-3 py-2 whitespace-nowrap overflow-hidden">
+            {runsLoading ? <span className="text-muted-foreground/40">...</span> : stats.failed > 0
+              ? <span className="text-red-500">{stats.failed}</span>
+              : <span className="text-muted-foreground/50">-</span>
+            }
+          </td>
+        );
+      case 'cost':
+        return (
+          <td key={field} className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+            {runsLoading ? <span className="text-muted-foreground/40">...</span> : stats.cost > 0 ? formatCost(stats.cost) : '-'}
+          </td>
+        );
+      default:
+        return null;
+    }
+  };
 
   if (projectLoading || loading || pipelinesLoading) {
     return <div className="p-8"><p className="text-muted-foreground">Loading tasks...</p></div>;
@@ -366,6 +486,46 @@ export function TaskTableView() {
               </SelectContent>
             </Select>
           </div>
+          {/* Column visibility toggle */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Settings2 className="w-3.5 h-3.5" />
+                Columns
+                {hiddenColumns.length > 0 && (
+                  <Badge variant="default" className="ml-0.5 h-4 min-w-[1rem] px-1 text-[10px] leading-none">
+                    {COLUMNS.length - hiddenColumns.length}/{COLUMNS.length}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="p-2 w-52">
+              <p className="text-xs font-medium text-muted-foreground px-2 py-1">Toggle columns</p>
+              {COLUMNS.map((col) => {
+                const isVisible = !hiddenColumns.includes(col.field);
+                const isTitle = col.field === 'title';
+                return (
+                  <button
+                    key={col.field}
+                    className={`flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-md transition-colors ${
+                      isTitle ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent cursor-pointer'
+                    }`}
+                    onClick={() => !isTitle && toggleColumnVisibility(col.field)}
+                    disabled={isTitle}
+                  >
+                    {isVisible ? (
+                      <Eye className="h-3.5 w-3.5 text-foreground" />
+                    ) : (
+                      <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                    <span className={isVisible ? 'text-foreground' : 'text-muted-foreground'}>
+                      {col.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
           <p className="text-xs text-muted-foreground">
             {sortedTasks.length} {sortedTasks.length === 1 ? 'task' : 'tasks'}
           </p>
@@ -390,7 +550,7 @@ export function TaskTableView() {
             <table className="text-sm" style={{ width: tableWidth, tableLayout: 'fixed' }}>
               <thead>
                 <tr className="border-b bg-muted/30">
-                  {COLUMNS.map((col) => (
+                  {visibleColumns.map((col) => (
                     <ResizableHeader
                       key={col.field}
                       field={col.field}
@@ -419,7 +579,7 @@ export function TaskTableView() {
                           className="bg-muted/40 border-b border-border/40 cursor-pointer select-none hover:bg-muted/60 transition-colors"
                           onClick={() => toggleGroup(groupKey)}
                         >
-                          <td colSpan={COLUMNS.length} className="px-3 py-1.5">
+                          <td colSpan={visibleColumns.length} className="px-3 py-1.5">
                             <span className="inline-flex items-center gap-2 text-sm font-medium">
                               {isCollapsed
                                 ? <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -450,51 +610,7 @@ export function TaskTableView() {
                               className="border-b border-border/40 last:border-b-0 hover:bg-accent/40 cursor-pointer transition-colors"
                               onClick={() => navigate(`/tasks/${task.id}`)}
                             >
-                              <td className="px-3 py-2 font-medium overflow-hidden">
-                                <span className="block truncate">{task.title}</span>
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                                {formatRelativeTimestamp(task.createdAt)}
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                                {formatRelativeTimestamp(task.updatedAt)}
-                              </td>
-                              <td className="px-3 py-2 whitespace-nowrap overflow-hidden">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <span
-                                    className="h-2 w-2 rounded-full shrink-0 bg-muted-foreground/40"
-                                    style={statusColor ? { backgroundColor: statusColor } : undefined}
-                                  />
-                                  <span className="text-muted-foreground">{task.status}</span>
-                                </span>
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                                <span className="inline-flex items-center gap-1.5 capitalize">
-                                  <TaskTypeIcon type={task.type} size={14} />
-                                  {task.type ?? '-'}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                                {task.subtasks.length > 0
-                                  ? <span>{doneSubtasks}/{task.subtasks.length}</span>
-                                  : <span className="text-muted-foreground/50">-</span>
-                                }
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                                {task.createdBy ?? '-'}
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                                {runsLoading ? <span className="text-muted-foreground/40">...</span> : (stats.runs || '-')}
-                              </td>
-                              <td className="px-3 py-2 whitespace-nowrap overflow-hidden">
-                                {runsLoading ? <span className="text-muted-foreground/40">...</span> : stats.failed > 0
-                                  ? <span className="text-red-500">{stats.failed}</span>
-                                  : <span className="text-muted-foreground/50">-</span>
-                                }
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                                {runsLoading ? <span className="text-muted-foreground/40">...</span> : stats.cost > 0 ? formatCost(stats.cost) : '-'}
-                              </td>
+                              {visibleColumns.map((col) => renderCell(col.field, task, stats, doneSubtasks, statusColor, pipeline))}
                             </tr>
                           );
                         })}
@@ -514,51 +630,7 @@ export function TaskTableView() {
                         className="border-b border-border/40 last:border-b-0 hover:bg-accent/40 cursor-pointer transition-colors"
                         onClick={() => navigate(`/tasks/${task.id}`)}
                       >
-                        <td className="px-3 py-2 font-medium overflow-hidden">
-                          <span className="block truncate">{task.title}</span>
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                          {formatRelativeTimestamp(task.createdAt)}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                          {formatRelativeTimestamp(task.updatedAt)}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap overflow-hidden">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span
-                              className="h-2 w-2 rounded-full shrink-0 bg-muted-foreground/40"
-                              style={statusColor ? { backgroundColor: statusColor } : undefined}
-                            />
-                            <span className="text-muted-foreground">{task.status}</span>
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                          <span className="inline-flex items-center gap-1.5 capitalize">
-                            <TaskTypeIcon type={task.type} size={14} />
-                            {task.type ?? '-'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                          {task.subtasks.length > 0
-                            ? <span>{doneSubtasks}/{task.subtasks.length}</span>
-                            : <span className="text-muted-foreground/50">-</span>
-                          }
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                          {task.createdBy ?? '-'}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                          {runsLoading ? <span className="text-muted-foreground/40">...</span> : (stats.runs || '-')}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap overflow-hidden">
-                          {runsLoading ? <span className="text-muted-foreground/40">...</span> : stats.failed > 0
-                            ? <span className="text-red-500">{stats.failed}</span>
-                            : <span className="text-muted-foreground/50">-</span>
-                          }
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
-                          {runsLoading ? <span className="text-muted-foreground/40">...</span> : stats.cost > 0 ? formatCost(stats.cost) : '-'}
-                        </td>
+                        {visibleColumns.map((col) => renderCell(col.field, task, stats, doneSubtasks, statusColor, pipeline))}
                       </tr>
                     );
                   })

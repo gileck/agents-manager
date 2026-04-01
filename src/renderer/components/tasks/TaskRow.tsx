@@ -6,6 +6,7 @@ import { GitPullRequest } from 'lucide-react';
 import { TaskItemMenu } from './TaskItemMenu';
 import { TaskListRow } from './TaskListRow';
 import { TaskTypeIcon } from './TaskTypeIcon';
+import { TaskContextMenu } from './TaskContextMenu';
 import { formatRelativeTimestamp } from './task-helpers';
 import type { ViewMode } from './task-helpers';
 import type { Task, Pipeline } from '../../../shared/types';
@@ -69,26 +70,33 @@ export function TaskRow({
 
   // Card mode — plain border-rounded div, no description to reduce clutter
   return (
-    <div
-      className={`group cursor-pointer border rounded-lg bg-card px-3 py-2.5 hover:bg-accent/50 transition-colors ${selected ? 'ring-2 ring-primary' : ''} ${hasActiveAgent ? 'border-l-2 border-l-green-500' : ''}`}
-      onClick={onClick}
+    <TaskContextMenu
+      task={task}
+      pipeline={pipeline}
+      onStatusChange={onStatusChange}
+      onDelete={onDelete}
+      onDuplicate={onDuplicate}
     >
-      <div className="flex items-center gap-3">
-        {selectMode && (
+      <div
+        className={`group cursor-pointer border rounded-lg bg-card px-3 py-2.5 hover:bg-accent/50 transition-colors ${selected ? 'ring-2 ring-primary' : ''} ${hasActiveAgent ? 'border-l-2 border-l-green-500' : ''}`}
+        onClick={onClick}
+      >
+        <div className="flex items-center gap-3">
           <input
             type="checkbox"
             checked={selected}
             onChange={onToggleSelect}
             onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+            className={`h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer transition-opacity ${
+              selectMode || selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'
+            }`}
           />
-        )}
-        {!hideStatus && <PipelineBadge status={task.status} pipeline={pipeline} />}
-        <Badge variant={PRIORITY_VARIANTS[task.priority] ?? 'outline'}>P{task.priority}</Badge>
-        <TaskTypeIcon type={task.type} size={16} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium truncate">{task.title}</span>
+          {!hideStatus && <PipelineBadge status={task.status} pipeline={pipeline} />}
+          <Badge variant={PRIORITY_VARIANTS[task.priority] ?? 'outline'}>P{task.priority}</Badge>
+          <TaskTypeIcon type={task.type} size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-medium truncate" title={task.title}>{task.title}</span>
             {featureName && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
                 {featureName}
@@ -148,7 +156,8 @@ export function TaskRow({
             onDelete={onDelete}
           />
         </div>
+        </div>
       </div>
-    </div>
+    </TaskContextMenu>
   );
 }
