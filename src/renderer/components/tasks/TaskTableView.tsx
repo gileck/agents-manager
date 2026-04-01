@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUp, ArrowDown, ChevronsUpDown, Search, ChevronDown, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { TaskTypeIcon } from './TaskTypeIcon';
 import { Card, CardContent } from '../ui/card';
 import { InlineError } from '../InlineError';
 import { Button } from '../ui/button';
@@ -467,8 +468,11 @@ export function TaskTableView() {
                                   <span className="text-muted-foreground">{task.status}</span>
                                 </span>
                               </td>
-                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden capitalize">
-                                {task.type ?? '-'}
+                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+                                <span className="inline-flex items-center gap-1.5 capitalize">
+                                  <TaskTypeIcon type={task.type} size={14} />
+                                  {task.type ?? '-'}
+                                </span>
                               </td>
                               <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                                 {task.subtasks.length > 0
@@ -528,8 +532,11 @@ export function TaskTableView() {
                             <span className="text-muted-foreground">{task.status}</span>
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden capitalize">
-                          {task.type ?? '-'}
+                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+                          <span className="inline-flex items-center gap-1.5 capitalize">
+                            <TaskTypeIcon type={task.type} size={14} />
+                            {task.type ?? '-'}
+                          </span>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                           {task.subtasks.length > 0
