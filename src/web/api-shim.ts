@@ -312,13 +312,16 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
     window: {
       openProject: (projectId: string) => {
         const url = `${window.location.origin}?projectId=${encodeURIComponent(projectId)}#/`;
-        // Use window features to open a standalone browser window instead of a tab
+        // Use popup=yes + dimensions to request a standalone browser window.
+        // Use a unique target name per project so re-opening focuses the existing window.
         const { width, height } = window.screen;
         const w = Math.min(1200, Math.round(width * 0.8));
         const h = Math.min(800, Math.round(height * 0.8));
         const left = Math.round((width - w) / 2);
         const top = Math.round((height - h) / 2);
-        const newWindow = window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top}`);
+        const target = `project-${projectId}`;
+        const features = `popup=yes,width=${w},height=${h},left=${left},top=${top}`;
+        const newWindow = window.open(url, target, features);
         if (!newWindow) {
           return Promise.reject(new Error(
             'Failed to open project window. Please allow popups for this site.',

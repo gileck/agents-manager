@@ -81,26 +81,28 @@ export function ProjectPickerDialog() {
   }, [selectedIndex]);
 
   /* ── Select action ── */
-  const selectItem = useCallback(async (item: PickerItem) => {
+  const selectItem = useCallback((item: PickerItem) => {
     setOpen(false);
     if (item.type === 'add') {
-      try {
-        const folderPath = await window.api.dialog.pickFolder();
-        if (!folderPath) return;
-        const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop() ?? folderPath;
-        const project = await window.api.projects.create({ name: folderName, path: folderPath });
-        await window.api.window.openProject(project.id);
-      } catch (err) {
-        reportError(err, 'Add project');
-      }
+      // Async: folder picker → create → open (popup may be blocked after await)
+      (async () => {
+        try {
+          const folderPath = await window.api.dialog.pickFolder();
+          if (!folderPath) return;
+          const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop() ?? folderPath;
+          const project = await window.api.projects.create({ name: folderName, path: folderPath });
+          window.api.window.openProject(project.id).catch((err) =>
+            reportError(err, 'Open new project window'));
+        } catch (err) {
+          reportError(err, 'Add project');
+        }
+      })();
     } else if (item.isCurrent) {
       // Already on this project — do nothing
     } else {
-      try {
-        await window.api.window.openProject(item.id);
-      } catch (err) {
-        reportError(err, 'Open project in new window');
-      }
+      // Call window.open synchronously from click handler to avoid popup blocking
+      window.api.window.openProject(item.id).catch((err) =>
+        reportError(err, 'Open project in new window'));
     }
   }, []);
 
