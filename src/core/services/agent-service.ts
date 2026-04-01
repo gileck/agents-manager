@@ -292,7 +292,6 @@ export class AgentService implements IAgentService {
     // re-push it from the local ref to self-heal.
     if (multiPhase && taskBranch && baseBranch) {
       const gitOpsCheck = this.createGitOps(projectPath);
-      await gitOpsCheck.fetch('origin');
       const remoteExists = await gitOpsCheck.remoteBranchExists(taskBranch);
       if (!remoteExists) {
         getAppLogger().warn(`Agent:${agentType}`, `Integration branch "${taskBranch}" missing from remote — re-pushing from local ref`, { taskId, taskBranch });

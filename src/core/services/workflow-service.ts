@@ -167,7 +167,7 @@ export class WorkflowService implements IWorkflowService {
     // Clean up worktree before deleting the task (need task to resolve project)
     const task = await this.taskStore.getTask(id);
     if (task) {
-      await this.cleanupWorktree(task);
+      await this.cleanupWorktree(task, true);
     }
 
     const result = await this.taskStore.deleteTask(id);
@@ -201,7 +201,7 @@ export class WorkflowService implements IWorkflowService {
       }
     }
 
-    await this.cleanupWorktree(task);
+    await this.cleanupWorktree(task, true);
 
     const result = await this.taskStore.resetTask(id, pipelineId);
     if (result) {
@@ -547,7 +547,7 @@ export class WorkflowService implements IWorkflowService {
     return lines.join('\n');
   }
 
-  private async cleanupWorktree(task: Task): Promise<void> {
+  private async cleanupWorktree(task: Task, force = false): Promise<void> {
     try {
       const project = await this.projectStore.getProject(task.projectId);
       if (!project?.path) return;
@@ -596,7 +596,7 @@ export class WorkflowService implements IWorkflowService {
         const phases = freshTask?.phases ?? task.phases;
         const stillHasPhases = phases && (hasPendingPhases(phases) || getActivePhaseIndex(phases) >= 0);
 
-        if (stillHasPhases) {
+        if (!force && stillHasPhases) {
           const pendingCount = phases?.filter(p => p.status !== 'completed').length ?? 0;
           getAppLogger().info('WorkflowService', `cleanupWorktree: skipping integration branch deletion — ${pendingCount} phase(s) still pending`, { taskId: task.id, taskBranch, pendingCount });
         } else {
