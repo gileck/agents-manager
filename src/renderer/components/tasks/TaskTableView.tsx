@@ -532,8 +532,11 @@ export function TaskTableView() {
                             <span className="text-muted-foreground">{task.status}</span>
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden capitalize">
-                          {task.type ?? '-'}
+                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
+                          <span className="inline-flex items-center gap-1.5 capitalize">
+                            <TaskTypeIcon type={task.type} size={14} />
+                            {task.type ?? '-'}
+                          </span>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground whitespace-nowrap overflow-hidden">
                           {task.subtasks.length > 0
