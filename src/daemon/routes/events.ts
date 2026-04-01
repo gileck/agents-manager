@@ -58,6 +58,26 @@ export function eventRoutes(services: AppServices): Router {
   });
 
   // ============================================
+  // Error Aggregation
+  // ============================================
+
+  router.get('/api/tasks/:id/errors', (req, res, next) => {
+    try {
+      const filter: { taskId: string; correlationId?: string } = { taskId: req.params.id };
+      if (req.query.correlationId) filter.correlationId = req.query.correlationId as string;
+      const errors = services.errorAggregationService.getErrors(filter);
+      res.json(errors);
+    } catch (err) { next(err); }
+  });
+
+  router.get('/api/tasks/:id/correlation-groups', (req, res, next) => {
+    try {
+      const groups = services.errorAggregationService.getCorrelationGroups(req.params.id);
+      res.json(groups);
+    } catch (err) { next(err); }
+  });
+
+  // ============================================
   // App Debug Logs
   // ============================================
 

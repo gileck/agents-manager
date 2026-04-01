@@ -78,6 +78,7 @@ import { TaskReviewReportBuilder } from '../services/task-review-report-builder'
 import { ValidationRunner } from '../services/validation-runner';
 import { OutcomeResolver } from '../services/outcome-resolver';
 import { TimelineService } from '../services/timeline/timeline-service';
+import { ErrorAggregationService } from '../services/error-aggregation-service';
 import { EventSource } from '../services/timeline/sources/event-source';
 import { ActivitySource } from '../services/timeline/sources/activity-source';
 import { TransitionSource } from '../services/timeline/sources/transition-source';
@@ -143,6 +144,7 @@ export interface AppServices {
   createScmPlatform: (path: string) => import('../interfaces/scm-platform').IScmPlatform;
   agentSupervisor: AgentSupervisor;
   timelineService: TimelineService;
+  errorAggregationService: ErrorAggregationService;
   chatMessageStore: IChatMessageStore;
   chatSessionStore: IChatSessionStore;
   chatAgentService: ChatAgentService;
@@ -274,7 +276,8 @@ function createTimelineModule(db: Database.Database) {
     new PromptSource(timelineStore),
     new ContextSource(timelineStore),
   ]);
-  return { timelineService };
+  const errorAggregationService = new ErrorAggregationService(timelineService);
+  return { timelineService, errorAggregationService };
 }
 
 /**
@@ -431,7 +434,7 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
   const { notificationRouter } = createNotificationModule(stores, config);
 
   // 5. Timeline service (created before AgentService because TaskReviewReportBuilder needs it)
-  const { timelineService } = createTimelineModule(db);
+  const { timelineService, errorAggregationService } = createTimelineModule(db);
 
   // 6. Agent module (lib registry, framework, automation services, and agent service)
   const {
@@ -537,5 +540,6 @@ export function createAppServices(db: Database.Database, config?: AppServicesCon
     taskDocStore: stores.taskDocStore,
     terminalStore: stores.terminalStore,
     telegramBotManager,
+    errorAggregationService,
   };
 }

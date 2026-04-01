@@ -31,8 +31,8 @@ export class SqliteTimelineStore implements ITimelineStore {
 
   getAgentRunEntries(taskId: string): DebugTimelineEntry[] {
     const rows = this.db.prepare(
-      'SELECT mode, agent_type, status, exit_code, outcome, cost_input_tokens, cost_output_tokens, started_at, completed_at FROM agent_runs WHERE task_id = ?'
-    ).all(taskId) as { mode: string; agent_type: string; status: string; exit_code: number | null; outcome: string | null; cost_input_tokens: number | null; cost_output_tokens: number | null; started_at: number; completed_at: number | null }[];
+      'SELECT mode, agent_type, status, exit_code, outcome, cost_input_tokens, cost_output_tokens, started_at, completed_at, correlation_id FROM agent_runs WHERE task_id = ?'
+    ).all(taskId) as { mode: string; agent_type: string; status: string; exit_code: number | null; outcome: string | null; cost_input_tokens: number | null; cost_output_tokens: number | null; started_at: number; completed_at: number | null; correlation_id: string | null }[];
 
     return rows.map((r) =>
       makeEntry(
@@ -41,6 +41,7 @@ export class SqliteTimelineStore implements ITimelineStore {
         r.status === 'failed' ? 'error' : 'info',
         `Agent ${r.mode}/${r.agent_type}: ${r.status}`,
         { exitCode: r.exit_code, outcome: r.outcome, inputTokens: r.cost_input_tokens, outputTokens: r.cost_output_tokens },
+        r.correlation_id ?? undefined,
       )
     );
   }
@@ -73,8 +74,8 @@ export class SqliteTimelineStore implements ITimelineStore {
 
   getEventEntries(taskId: string): DebugTimelineEntry[] {
     const rows = this.db.prepare(
-      "SELECT category, severity, message, data, created_at FROM task_events WHERE task_id = ? AND category != 'status_change'"
-    ).all(taskId) as { category: string; severity: string; message: string; data: string; created_at: number }[];
+      "SELECT category, severity, message, data, created_at, correlation_id FROM task_events WHERE task_id = ? AND category != 'status_change'"
+    ).all(taskId) as { category: string; severity: string; message: string; data: string; created_at: number; correlation_id: string | null }[];
 
     return rows.map((r) =>
       makeEntry(
@@ -83,6 +84,7 @@ export class SqliteTimelineStore implements ITimelineStore {
         (r.severity as DebugTimelineEntry['severity']) || 'info',
         r.message,
         { category: r.category, ...safeParse(r.data) },
+        r.correlation_id ?? undefined,
       )
     );
   }
@@ -120,8 +122,8 @@ export class SqliteTimelineStore implements ITimelineStore {
 
   getTransitionEntries(taskId: string): DebugTimelineEntry[] {
     const rows = this.db.prepare(
-      'SELECT from_status, to_status, trigger, guard_results, created_at FROM transition_history WHERE task_id = ?'
-    ).all(taskId) as { from_status: string; to_status: string; trigger: string; guard_results: string; created_at: number }[];
+      'SELECT from_status, to_status, trigger, guard_results, created_at, correlation_id FROM transition_history WHERE task_id = ?'
+    ).all(taskId) as { from_status: string; to_status: string; trigger: string; guard_results: string; created_at: number; correlation_id: string | null }[];
 
     return rows.map((r) =>
       makeEntry(
@@ -130,6 +132,7 @@ export class SqliteTimelineStore implements ITimelineStore {
         'info',
         `${r.from_status} → ${r.to_status} (${r.trigger})`,
         { fromStatus: r.from_status, toStatus: r.to_status, trigger: r.trigger, guardResults: safeParse(r.guard_results) },
+        r.correlation_id ?? undefined,
       )
     );
   }

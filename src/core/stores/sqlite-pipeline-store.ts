@@ -180,8 +180,8 @@ export class SqlitePipelineStore implements IPipelineStore {
 
   recordTransitionSync(record: import('../interfaces/pipeline-store').TransitionRecord): void {
     this.db.prepare(`
-      INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO transition_history (id, task_id, from_status, to_status, trigger, actor, guard_results, created_at, correlation_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       record.id,
       record.taskId,
@@ -191,6 +191,7 @@ export class SqlitePipelineStore implements IPipelineStore {
       record.actor ?? null,
       JSON.stringify(record.guardResults),
       record.createdAt,
+      record.correlationId ?? null,
     );
   }
 

@@ -9,6 +9,7 @@ export interface TransitionRecord {
   actor: string | null;
   guardResults: Record<string, unknown>;
   createdAt: number;
+  correlationId?: string;
 }
 
 export interface IPipelineStore {

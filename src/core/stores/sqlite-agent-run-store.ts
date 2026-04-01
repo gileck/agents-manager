@@ -32,6 +32,7 @@ interface AgentRunRow {
   engine: string | null;
   session_id: string | null;
   diagnostics: string | null;
+  correlation_id: string | null;
 }
 
 function rowToRun(row: AgentRunRow): AgentRun {
@@ -63,6 +64,7 @@ function rowToRun(row: AgentRunRow): AgentRun {
     engine: row.engine ?? null,
     sessionId: row.session_id ?? null,
     diagnostics: parseJson<RunDiagnostics | null>(row.diagnostics, null),
+    correlationId: row.correlation_id ?? null,
   };
 }
 
@@ -74,17 +76,10 @@ export class SqliteAgentRunStore implements IAgentRunStore {
       const id = generateId();
       const timestamp = now();
 
-      if (input.automatedAgentId) {
-        this.db.prepare(`
-          INSERT INTO agent_runs (id, task_id, agent_type, mode, status, started_at, automated_agent_id)
-          VALUES (?, ?, ?, ?, 'running', ?, ?)
-        `).run(id, input.taskId, input.agentType, input.mode, timestamp, input.automatedAgentId);
-      } else {
-        this.db.prepare(`
-          INSERT INTO agent_runs (id, task_id, agent_type, mode, status, started_at)
-          VALUES (?, ?, ?, ?, 'running', ?)
-        `).run(id, input.taskId, input.agentType, input.mode, timestamp);
-      }
+      this.db.prepare(`
+        INSERT INTO agent_runs (id, task_id, agent_type, mode, status, started_at, automated_agent_id, correlation_id)
+        VALUES (?, ?, ?, ?, 'running', ?, ?, ?)
+      `).run(id, input.taskId, input.agentType, input.mode, timestamp, input.automatedAgentId ?? null, input.correlationId ?? null);
 
       return (await this.getRun(id))!;
     } catch (err) {
