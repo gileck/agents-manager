@@ -110,6 +110,8 @@ export interface ApiClient {
     getWorktree(id: string): Promise<unknown>;
     getArtifacts(id: string): Promise<unknown[]>;
     getTimeline(id: string): Promise<unknown>;
+    getErrors(id: string, correlationId?: string): Promise<unknown>;
+    getCorrelationGroups(id: string): Promise<unknown>;
   };
 
   // Agents
@@ -421,6 +423,8 @@ export function createApiClient(baseUrl: string): ApiClient {
       getWorktree: (id) => req('GET', `/api/tasks/${id}/worktree`),
       getArtifacts: (id) => req('GET', `/api/tasks/${id}/artifacts`),
       getTimeline: (id) => req('GET', `/api/tasks/${id}/timeline`),
+      getErrors: (id, correlationId?) => req('GET', `/api/tasks/${id}/errors${correlationId ? `?correlationId=${encodeURIComponent(correlationId)}` : ''}`),
+      getCorrelationGroups: (id) => req('GET', `/api/tasks/${id}/correlation-groups`),
     },
 
     // -- Agents --------------------------------------------------------------

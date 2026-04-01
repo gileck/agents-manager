@@ -11,6 +11,7 @@ export interface PromptHandlerDeps {
 export function registerPromptHandler(engine: IPipelineEngine, deps: PromptHandlerDeps): void {
   engine.registerHook('create_prompt', async (task: Task, transition: Transition, context: TransitionContext, params?: Record<string, unknown>): Promise<HookResult> => {
     const resumeOutcome = params?.resumeOutcome as string | undefined;
+    const correlationId = context.correlationId;
     const data = context.data as { agentRunId?: string; payload?: Record<string, unknown> } | undefined;
     if (!data?.agentRunId) {
       throw new Error(`create_prompt hook on ${transition.from} → ${transition.to}: agentRunId missing from transition context`);
@@ -30,6 +31,7 @@ export function registerPromptHandler(engine: IPipelineEngine, deps: PromptHandl
       severity: 'info',
       message: `Prompt created via hook (type: ${transition.agentOutcome ?? 'prompt'}, resumeOutcome: ${resumeOutcome ?? 'none'})`,
       data: { resumeOutcome, agentOutcome: transition.agentOutcome },
+      correlationId,
     });
 
     return { success: true };

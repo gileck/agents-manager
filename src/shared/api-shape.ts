@@ -121,6 +121,8 @@ export interface ApiShape {
     addContextEntry(taskId: string, input: { source: string; entryType: string; summary: string; data?: Record<string, unknown> }): Promise<TaskContextEntry>;
     addFeedback(taskId: string, input: { entryType: string; content: string; source?: string; agentRunId?: string }): Promise<TaskContextEntry>;
     debugTimeline(taskId: string): Promise<DebugTimelineEntry[]>;
+    errors(taskId: string, correlationId?: string): Promise<DebugTimelineEntry[]>;
+    correlationGroups(taskId: string): Promise<Record<string, DebugTimelineEntry[]>>;
     worktree(taskId: string): Promise<Worktree | null>;
     workflowReview(taskId: string): Promise<AgentRun>;
     postMortem(taskId: string, input?: { postMortemInput?: string; linkedBugDescriptions?: string[] }): Promise<AgentRun>;

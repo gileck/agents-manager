@@ -232,5 +232,20 @@ CREATE TABLE IF NOT EXISTS terminals (
 );
 CREATE INDEX IF NOT EXISTS idx_terminals_project_id ON terminals(project_id)`,
     },
+    {
+      name: '126_add_correlation_id_to_task_events',
+      sql: `ALTER TABLE task_events ADD COLUMN correlation_id TEXT DEFAULT NULL;
+CREATE INDEX IF NOT EXISTS idx_task_events_correlation_id ON task_events(correlation_id)`,
+    },
+    {
+      name: '127_add_correlation_id_to_agent_runs',
+      sql: `ALTER TABLE agent_runs ADD COLUMN correlation_id TEXT DEFAULT NULL;
+CREATE INDEX IF NOT EXISTS idx_agent_runs_correlation_id ON agent_runs(correlation_id)`,
+    },
+    {
+      name: '128_add_correlation_id_to_transition_history',
+      sql: `ALTER TABLE transition_history ADD COLUMN correlation_id TEXT DEFAULT NULL;
+CREATE INDEX IF NOT EXISTS idx_transition_history_correlation_id ON transition_history(correlation_id)`,
+    },
   ];
 }
