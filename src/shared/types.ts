@@ -452,6 +452,7 @@ export interface TaskEvent {
   data: Record<string, unknown>;
   createdAt: number;
   dismissed?: boolean;
+  correlationId?: string;
 }
 
 export interface TaskEventCreateInput {
@@ -460,6 +461,8 @@ export interface TaskEventCreateInput {
   severity?: TaskEventSeverity;
   message: string;
   data?: Record<string, unknown>;
+  /** Optional correlation ID linking this event to a transition chain. */
+  correlationId?: string;
 }
 
 export interface TaskEventFilter {
@@ -470,6 +473,8 @@ export interface TaskEventFilter {
   until?: number;
   /** Maximum number of rows to return. Defaults to 5000. */
   limit?: number;
+  /** Filter by correlation ID to show all events from a single transition chain. */
+  correlationId?: string;
 }
 
 // Activity log types
@@ -517,6 +522,8 @@ export interface TransitionContext {
   trigger: TransitionTrigger;
   actor?: string;
   data?: Record<string, unknown>;
+  /** Correlation ID linking a transition to all downstream hooks, agent runs, and log entries. */
+  correlationId?: string;
 }
 
 export interface TransitionResult {
@@ -620,6 +627,7 @@ export interface AgentRun {
   engine: string | null;
   sessionId: string | null;
   diagnostics: RunDiagnostics | null;
+  correlationId: string | null;
 }
 
 export interface AgentRunCreateInput {
@@ -627,6 +635,8 @@ export interface AgentRunCreateInput {
   agentType: string;
   mode: AgentMode;
   automatedAgentId?: string;
+  /** Correlation ID linking this run to the transition that triggered it. */
+  correlationId?: string;
 }
 
 export interface AgentRunUpdateInput {
@@ -1300,6 +1310,8 @@ export interface DebugTimelineEntry {
   severity: 'info' | 'warning' | 'error' | 'debug';
   title: string;
   data?: Record<string, unknown>;
+  /** Correlation ID linking this entry to a transition chain. */
+  correlationId?: string;
 }
 
 export interface DashboardStats {

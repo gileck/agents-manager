@@ -136,7 +136,11 @@ export class PipelineEngine implements IPipelineEngine {
   }
 
   async executeTransition(task: Task, toStatus: string, context?: TransitionContext, onPostLog?: OnPostLog): Promise<TransitionResult> {
-    const ctx: TransitionContext = context ?? { trigger: 'manual' };
+    const ctx: TransitionContext = { ...(context ?? { trigger: 'manual' }) };
+    // Generate a correlationId for this transition chain if not already provided
+    if (!ctx.correlationId) {
+      ctx.correlationId = generateId();
+    }
 
     // Reject if a transition is already in flight for this task
     if (this.transitionsInFlight.has(task.id)) {
@@ -284,6 +288,7 @@ export class PipelineEngine implements IPipelineEngine {
           severity: 'error',
           message: `Transition ${task.status} → ${toStatus} aborted: required hook(s) failed`,
           data: { failures: requiredFailures.map(f => ({ hook: f.hook, error: f.error })) },
+          correlationId: ctx.correlationId,
         });
         // Check if the failed hook requested a follow-up transition.
         // Release the in-flight lock first so the follow-up transition is not blocked.
@@ -300,9 +305,10 @@ export class PipelineEngine implements IPipelineEngine {
               severity: 'info',
               message: `Dispatching follow-up transition to "${followUp.to}" after hook failure`,
               data: { followUpTo: followUp.to, followUpTrigger: followUp.trigger },
+              correlationId: ctx.correlationId,
             }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
 
-            this.executeTransition(latestTask, followUp.to, { trigger: followUp.trigger, actor: ctx.actor })
+            this.executeTransition(latestTask, followUp.to, { trigger: followUp.trigger, actor: ctx.actor, correlationId: ctx.correlationId })
               .catch(err => {
                 const msg = err instanceof Error ? err.message : String(err);
                 this.taskEventLog.log({
@@ -366,6 +372,7 @@ export class PipelineEngine implements IPipelineEngine {
           trigger: ctx.trigger,
           actor: ctx.actor,
         },
+        correlationId: ctx.correlationId,
       });
 
       // Run non-required hooks (best_effort and fire_and_forget) after status is committed
@@ -421,7 +428,11 @@ export class PipelineEngine implements IPipelineEngine {
    *   the operation.
    */
   async executeForceTransition(task: Task, toStatus: string, context?: TransitionContext): Promise<TransitionResult> {
-    const ctx: TransitionContext = context ?? { trigger: 'manual' };
+    const ctx: TransitionContext = { ...(context ?? { trigger: 'manual' }) };
+    // Generate a correlationId for this force-transition chain if not already provided
+    if (!ctx.correlationId) {
+      ctx.correlationId = generateId();
+    }
 
     const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
     if (!pipeline) {
@@ -481,6 +492,7 @@ export class PipelineEngine implements IPipelineEngine {
         actor: ctx.actor,
         forced: true,
       },
+      correlationId: ctx.correlationId,
     });
 
     return { success: true, task: updatedTask, ...(hookFailures.length > 0 ? { hookFailures } : {}) };
@@ -600,6 +612,7 @@ export class PipelineEngine implements IPipelineEngine {
       actor: ctx.actor ?? null,
       guardResults,
       createdAt: timestamp,
+      correlationId: ctx.correlationId,
     });
 
     return { ...freshTask, status: toStatus, updatedAt: timestamp };
@@ -631,12 +644,14 @@ export class PipelineEngine implements IPipelineEngine {
         params: hook.params,
         policy,
         ...(forced ? { forced: true } : {}),
+        ...(ctx.correlationId ? { correlationId: ctx.correlationId } : {}),
       };
+      const correlationId = ctx.correlationId;
 
       if (!hookFn) {
         if (forced) {
           await this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'system',
             severity: 'warning',
             message: `Hook "${hook.name}" not registered (skipped during force transition)`,
@@ -646,7 +661,7 @@ export class PipelineEngine implements IPipelineEngine {
           const failure: HookFailure = { hook: hook.name, error: `Hook "${hook.name}" not registered`, policy };
           hookFailures.push(failure);
           this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'system',
             severity: 'warning',
             message: `Hook "${hook.name}" not registered — skipping`,
@@ -660,7 +675,7 @@ export class PipelineEngine implements IPipelineEngine {
         // Log started event
         onPostLog?.('pipeline', `Hook "${hook.name}" started (fire_and_forget)`, { hookName: hook.name, policy });
         this.taskEventLog.log({
-          taskId,
+          taskId, correlationId,
           category: 'hook_execution',
           severity: 'info',
           message: `Hook "${hook.name}" starting (fire_and_forget)`,
@@ -673,7 +688,7 @@ export class PipelineEngine implements IPipelineEngine {
           onPostLog?.('pipeline', `Hook "${hook.name}" completed (fire_and_forget)`, { hookName: hook.name, policy }, ffDuration);
           // Log hook_execution event for fire_and_forget success
           this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'hook_execution',
             severity: 'info',
             message: `Hook "${hook.name}" succeeded (fire_and_forget)`,
@@ -684,7 +699,7 @@ export class PipelineEngine implements IPipelineEngine {
           const message = err instanceof Error ? err.message : String(err);
           onPostLog?.('pipeline', `Hook "${hook.name}" failed (fire_and_forget): ${message}`, { hookName: hook.name, policy, error: message }, ffDuration);
           this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'system',
             severity: 'error',
             message: `Hook "${hook.name}" failed (fire_and_forget${forced ? ', forced' : ''}): ${message}`,
@@ -692,7 +707,7 @@ export class PipelineEngine implements IPipelineEngine {
           }).catch((logErr) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', logErr));
           // Log hook_execution event for fire_and_forget failure
           this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'hook_execution',
             severity: 'error',
             message: `Hook "${hook.name}" failed (fire_and_forget): ${message}`,
@@ -706,7 +721,7 @@ export class PipelineEngine implements IPipelineEngine {
       // Log started event
       onPostLog?.('pipeline', `Hook "${hook.name}" starting (${policy})`, { hookName: hook.name, policy });
       await this.taskEventLog.log({
-        taskId,
+        taskId, correlationId,
         category: 'hook_execution',
         severity: 'info',
         message: `Hook "${hook.name}" starting (${policy})`,
@@ -722,7 +737,7 @@ export class PipelineEngine implements IPipelineEngine {
           onPostLog?.('pipeline', `Hook "${hook.name}" failed (${policy}): ${failure.error}`, { hookName: hook.name, policy, error: failure.error }, duration);
           const severity = policy === 'required' ? 'error' as const : forced ? 'error' as const : 'warning' as const;
           this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'system',
             severity,
             message: `Hook "${hook.name}" failed${forced ? ' during force transition' : ''} (${policy}): ${failure.error}`,
@@ -730,7 +745,7 @@ export class PipelineEngine implements IPipelineEngine {
           }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
           // Log hook_execution event for failure
           this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'hook_execution',
             severity,
             message: `Hook "${hook.name}" failed (${policy}): ${failure.error}`,
@@ -740,7 +755,7 @@ export class PipelineEngine implements IPipelineEngine {
           onPostLog?.('pipeline', `Hook "${hook.name}" succeeded (${policy})`, { hookName: hook.name, policy }, duration);
           // Log system event for success
           this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'system',
             severity: 'info',
             message: `Hook "${hook.name}" succeeded (${policy})`,
@@ -748,7 +763,7 @@ export class PipelineEngine implements IPipelineEngine {
           }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
           // Log hook_execution event for success
           this.taskEventLog.log({
-            taskId,
+            taskId, correlationId,
             category: 'hook_execution',
             severity: 'info',
             message: `Hook "${hook.name}" succeeded (${policy})`,
@@ -763,7 +778,7 @@ export class PipelineEngine implements IPipelineEngine {
         onPostLog?.('pipeline', `Hook "${hook.name}" threw (${policy}): ${message}`, { hookName: hook.name, policy, error: message }, duration);
         const severity = policy === 'required' ? 'error' as const : forced ? 'error' as const : 'warning' as const;
         this.taskEventLog.log({
-          taskId,
+          taskId, correlationId,
           category: 'system',
           severity,
           message: `Hook "${hook.name}" threw${forced ? ' during force transition' : ''} (${policy}): ${message}`,
@@ -771,7 +786,7 @@ export class PipelineEngine implements IPipelineEngine {
         }).catch((err) => getAppLogger().logError('PipelineEngine', 'Audit log write failed', err));
         // Log hook_execution event for thrown error
         this.taskEventLog.log({
-          taskId,
+          taskId, correlationId,
           category: 'hook_execution',
           severity,
           message: `Hook "${hook.name}" threw (${policy}): ${message}`,

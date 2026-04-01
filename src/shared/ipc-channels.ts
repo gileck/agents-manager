@@ -94,6 +94,8 @@ export const IPC_CHANNELS = {
 
   // Debug timeline
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
+  TASK_ERRORS: 'task:errors',
+  TASK_CORRELATION_GROUPS: 'task:correlation-groups',
 
   // Worktree
   TASK_WORKTREE: 'task:worktree',
@@ -286,4 +288,7 @@ export const IPC_CHANNELS = {
   TERMINAL_OUTPUT: 'terminal:output',
   /** PUSH-ONLY: main->renderer, do not invoke() */
   TERMINAL_EXITED: 'terminal:exited',
+
+  // Window management
+  WINDOW_OPEN_PROJECT: 'window:open-project',
 } as const;

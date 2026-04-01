@@ -17,7 +17,7 @@ export interface AgentHandlerDeps {
 }
 
 export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandlerDeps): void {
-  engine.registerHook('start_agent', async (task: Task, transition: Transition, _context: TransitionContext, params?: Record<string, unknown>): Promise<HookResult> => {
+  engine.registerHook('start_agent', async (task: Task, transition: Transition, context: TransitionContext, params?: Record<string, unknown>): Promise<HookResult> => {
     if (!params?.mode) {
       throw new Error(`start_agent hook on transition ${transition.from} → ${transition.to} is missing required "mode" param`);
     }
@@ -27,6 +27,7 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
     const mode = params.mode as AgentMode;
     const agentType = params.agentType as string;
     const revisionReason = params.revisionReason as RevisionReason | undefined;
+    const correlationId = context.correlationId;
     const callbacks = deps.createStreamingCallbacks?.(task.id);
     const onOutput = callbacks?.onOutput ?? (() => {});
     const onMessage = callbacks?.onMessage ?? (() => {});
@@ -38,6 +39,7 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
       onOutput,
       onMessage,
       onStatus,
+      correlationId ? { correlationId } : undefined,
     ).catch(async (err) => {
       const msg = err instanceof Error ? err.message : String(err);
       try {
@@ -47,6 +49,7 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
           severity: 'error',
           message: `start_agent hook failed: ${msg}`,
           data: { error: msg, mode, agentType },
+          correlationId,
         });
       } catch { /* db may be closed during shutdown */ }
     });
@@ -62,6 +65,7 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
               severity: 'error',
               message: `Agent failed to start within 5s for task ${task.id} (mode=${mode}) — retrying once`,
               data: { mode, agentType, retried: true },
+              correlationId,
             });
 
             // Retry startAgent once
@@ -72,6 +76,7 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
                 onOutput,
                 onMessage,
                 onStatus,
+                correlationId ? { correlationId } : undefined,
               );
             } catch (retryErr) {
               const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
@@ -82,6 +87,7 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
                   severity: 'error',
                   message: `start_agent retry also failed for task ${task.id}: ${retryMsg}`,
                   data: { error: retryMsg, mode, agentType, retried: true },
+                  correlationId,
                 });
               } catch { /* db may be closed */ }
               return; // Don't schedule follow-up check if retry itself threw
@@ -99,6 +105,7 @@ export function registerAgentHandler(engine: IPipelineEngine, deps: AgentHandler
                     severity: 'error',
                     message: `Agent still not running after retry for task ${task.id} (mode=${mode})`,
                     data: { mode, agentType, retried: true, finalCheck: true },
+                    correlationId,
                   });
                 }
               } catch { /* best-effort */ }

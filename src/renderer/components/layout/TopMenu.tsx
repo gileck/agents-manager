@@ -47,7 +47,7 @@ const utilityButtonClass =
   'h-9 rounded-full border border-border/70 bg-card/65 hover:bg-accent/70 text-muted-foreground hover:text-foreground';
 
 export function TopMenu() {
-  const { currentProject, currentProjectId, setCurrentProjectId } = useCurrentProject();
+  const { currentProject, currentProjectId } = useCurrentProject();
   const { projects, refetch: refetchProjects } = useProjects();
   const { resolvedTheme, setTheme } = useTheme();
   const { pipelines } = usePipelines();
@@ -116,7 +116,8 @@ export function TopMenu() {
       const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop() ?? folderPath;
       const project = await window.api.projects.create({ name: folderName, path: folderPath });
       await refetchProjects();
-      setCurrentProjectId(project.id);
+      // Always open the new project in a dedicated window
+      await window.api.window.openProject(project.id);
     } catch (err) {
       reportError(err, 'Add project');
     }
@@ -197,8 +198,10 @@ export function TopMenu() {
             onValueChange={(id) => {
               if (id === '__add_project__') {
                 handleAddProject();
-              } else {
-                setCurrentProjectId(id);
+              } else if (id !== currentProjectId) {
+                // Call window.open synchronously from click handler to avoid popup blocking
+                window.api.window.openProject(id).catch((err) =>
+                  reportError(err, 'Open project in new window'));
               }
             }}
           >

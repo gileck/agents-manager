@@ -75,6 +75,8 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       addContextEntry: (taskId, input) => api.tasks.addContext(taskId, input) as Promise<never>,
       addFeedback: (taskId, input) => api.tasks.addFeedback(taskId, input) as Promise<never>,
       debugTimeline: (taskId) => api.tasks.getTimeline(taskId) as Promise<never>,
+      errors: (taskId, correlationId?) => api.tasks.getErrors(taskId, correlationId) as Promise<never>,
+      correlationGroups: (taskId) => api.tasks.getCorrelationGroups(taskId) as Promise<never>,
       worktree: (taskId) => api.tasks.getWorktree(taskId) as Promise<never>,
       workflowReview: (taskId) => api.agents.workflowReview(taskId) as Promise<never>,
       postMortem: (taskId, input?) => api.agents.postMortem(taskId, input) as Promise<never>,
@@ -306,6 +308,29 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
     // ── Dialog ────────────────────────────────────────────────────────
     dialog: {
       pickFolder: () => api.shell.pickFolder(),
+    },
+
+    // ── Window management ────────────────────────────────────────────
+    window: {
+      openProject: (projectId: string) => {
+        const url = `${window.location.origin}?projectId=${encodeURIComponent(projectId)}#/`;
+        // Use popup=yes + dimensions to request a standalone browser window.
+        // Use a unique target name per project so re-opening focuses the existing window.
+        const { width, height } = window.screen;
+        const w = Math.min(1200, Math.round(width * 0.8));
+        const h = Math.min(800, Math.round(height * 0.8));
+        const left = Math.round((width - w) / 2);
+        const top = Math.round((height - h) / 2);
+        const target = `project-${projectId}`;
+        const features = `popup=yes,width=${w},height=${h},left=${left},top=${top}`;
+        const newWindow = window.open(url, target, features);
+        if (!newWindow) {
+          return Promise.reject(new Error(
+            'Failed to open project window. Please allow popups for this site.',
+          ));
+        }
+        return Promise.resolve();
+      },
     },
 
     // ── Push Events (via browser WebSocket) ───────────────────────────

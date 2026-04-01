@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { reportError } from '../lib/error-handler';
 import { STATIC_PAGES_MAP } from '../lib/pages';
+import { useCurrentProject } from './CurrentProjectContext';
 
 // --- Types ---
 
@@ -289,21 +290,25 @@ function tabsReducer(state: TabsState, action: TabsAction): TabsState {
 
 // --- Persistence ---
 
-const STORAGE_KEY = 'page-tabs-v1';
-const RECENT_PAGES_KEY = 'recent-pages-v1';
+const STORAGE_KEY_BASE = 'page-tabs-v1';
+const RECENT_PAGES_KEY_BASE = 'recent-pages-v1';
 const MAX_RECENT = 20;
 
-function saveTabsState(state: TabsState) {
+function storageKey(base: string, projectId: string | null): string {
+  return projectId ? `${base}:${projectId}` : base;
+}
+
+function saveTabsState(state: TabsState, projectId: string | null) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(storageKey(STORAGE_KEY_BASE, projectId), JSON.stringify(state));
   } catch (err) {
     console.warn('[TabsContext] Failed to persist tabs state:', err);
   }
 }
 
-function loadTabsState(): TabsState | null {
+function loadTabsState(projectId: string | null): TabsState | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(STORAGE_KEY_BASE, projectId));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.tabs)) return null;
@@ -331,9 +336,9 @@ export interface RecentPage {
   visitedAt: number;
 }
 
-export function getRecentPages(): RecentPage[] {
+export function getRecentPages(projectId: string | null = null): RecentPage[] {
   try {
-    const raw = localStorage.getItem(RECENT_PAGES_KEY);
+    const raw = localStorage.getItem(storageKey(RECENT_PAGES_KEY_BASE, projectId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -344,15 +349,15 @@ export function getRecentPages(): RecentPage[] {
   }
 }
 
-export function addRecentPage(path: string, label: string, iconName: string) {
-  const existing = getRecentPages();
+export function addRecentPage(path: string, label: string, iconName: string, projectId: string | null = null) {
+  const existing = getRecentPages(projectId);
   // Skip if already at the head of the list
   if (existing[0]?.path === path) return;
   const pages = existing.filter(p => p.path !== path);
   pages.unshift({ path, label, iconName, visitedAt: Date.now() });
   if (pages.length > MAX_RECENT) pages.length = MAX_RECENT;
   try {
-    localStorage.setItem(RECENT_PAGES_KEY, JSON.stringify(pages));
+    localStorage.setItem(storageKey(RECENT_PAGES_KEY_BASE, projectId), JSON.stringify(pages));
   } catch (err) {
     console.warn('[TabsContext] Failed to persist recent pages:', err);
   }
@@ -391,8 +396,10 @@ export function useTabsContext() {
 const DEFAULT_STATE: TabsState = { tabs: [], activeTabId: null, recentlyClosed: [] };
 
 export function TabsProvider({ children }: { children: React.ReactNode }) {
+  const { currentProjectId } = useCurrentProject();
+
   const [state, dispatch] = useReducer(tabsReducer, DEFAULT_STATE, () => {
-    return loadTabsState() || DEFAULT_STATE;
+    return loadTabsState(currentProjectId) || DEFAULT_STATE;
   });
 
   const [config, setConfigState] = React.useState<TabsConfig>({
@@ -416,16 +423,33 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     }).catch((err) => reportError(err, 'TabsContext: load tab settings'));
   }, []);
 
+  // Reload tab state when projectId changes (e.g. on initial mount after context loads)
+  const prevProjectIdRef = useRef<string | null>(currentProjectId);
+  useEffect(() => {
+    if (currentProjectId !== prevProjectIdRef.current) {
+      prevProjectIdRef.current = currentProjectId;
+      const restored = loadTabsState(currentProjectId);
+      if (restored) {
+        dispatch({ type: 'RESTORE', state: restored });
+      }
+    }
+  }, [currentProjectId]);
+
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
+    // Skip saving right after a projectId change — wait for RESTORE to apply first
+    if (currentProjectId !== prevProjectIdRef.current) return;
     clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => saveTabsState(state), 150);
+    saveTimerRef.current = setTimeout(() => saveTabsState(state, currentProjectId), 150);
     return () => clearTimeout(saveTimerRef.current);
-  }, [state]);
+  }, [state, currentProjectId]);
+
+  const projectIdRef = useRef(currentProjectId);
+  projectIdRef.current = currentProjectId;
 
   const openTab = useCallback((path: string) => {
     const info = computeTabInfo(path);
-    addRecentPage(path, info.label, info.iconName);
+    addRecentPage(path, info.label, info.iconName, projectIdRef.current);
     if (!configRef.current.enabled) return;
     dispatch({
       type: 'OPEN_TAB', path,

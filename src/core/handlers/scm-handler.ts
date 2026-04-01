@@ -58,9 +58,10 @@ async function captureAndReturnMergeFailure(
 }
 
 export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps): void {
-  engine.registerHook('merge_pr', async (task: Task, _transition: Transition, _context: TransitionContext, _params?: Record<string, unknown>): Promise<HookResult> => {
+  engine.registerHook('merge_pr', async (task: Task, _transition: Transition, context: TransitionContext, _params?: Record<string, unknown>): Promise<HookResult> => {
+    const correlationId = context.correlationId;
     const ghLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', data?: Record<string, unknown>) =>
-      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data: { hookName: 'merge_pr', ...data } });
+      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data: { hookName: 'merge_pr', ...data }, correlationId });
 
     const artifacts = await deps.taskArtifactStore.getArtifactsForTask(task.id, 'pr');
     if (artifacts.length === 0) {
@@ -148,6 +149,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
   });
 
   engine.registerHook('push_and_create_pr', async (task: Task, transition: Transition, context: TransitionContext, _params?: Record<string, unknown>): Promise<HookResult> => {
+    const correlationId = context.correlationId;
     const data = context.data as { branch?: string } | undefined;
     const branch = data?.branch;
     if (!branch) {
@@ -157,6 +159,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
         severity: 'error',
         message: 'push_and_create_pr hook: no branch in transition context',
         data: { hookName: 'push_and_create_pr' },
+        correlationId,
       });
       return { success: false, error: 'No branch in transition context' };
     }
@@ -169,6 +172,7 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
         severity: 'error',
         message: `push_and_create_pr hook: project ${task.projectId} has no path`,
         data: { hookName: 'push_and_create_pr' },
+        correlationId,
       });
       return { success: false, error: `Project ${task.projectId} has no path` };
     }
@@ -176,9 +180,9 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
     const scmPlatform = deps.createScmPlatform(project.path);
 
     const gitLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', logData?: Record<string, unknown>) =>
-      deps.taskEventLog.log({ taskId: task.id, category: 'git', severity, message, data: { hookName: 'push_and_create_pr', ...logData } });
+      deps.taskEventLog.log({ taskId: task.id, category: 'git', severity, message, data: { hookName: 'push_and_create_pr', ...logData }, correlationId });
     const ghLog = (message: string, severity: 'info' | 'warning' | 'error' = 'info', logData?: Record<string, unknown>) =>
-      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data: { hookName: 'push_and_create_pr', ...logData } });
+      deps.taskEventLog.log({ taskId: task.id, category: 'github', severity, message, data: { hookName: 'push_and_create_pr', ...logData }, correlationId });
 
     // Resolve the worktree path for this task so git operations run in the
     // checked-out branch (not the main repo checkout).

@@ -1,7 +1,7 @@
-import { app, dialog, Tray } from 'electron';
+import { app, dialog, Tray, ipcMain } from 'electron';
 import { initializeApp } from '@template/main/core/app';
 import { createTray, buildStandardMenu } from '@template/main/core/tray';
-import { sendToRenderer } from '@template/main/core/window';
+import { broadcastToAllWindows, createWindow, showWindow } from '@template/main/core/window';
 import { registerIpcHandlers } from './ipc-handlers';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
 import { createApiClient, createWsClient } from '../client';
@@ -35,58 +35,68 @@ initializeApp({
       // Register IPC handlers (thin wrappers around the API client)
       registerIpcHandlers(api);
 
+      // Register window management IPC handler
+      ipcMain.handle(IPC_CHANNELS.WINDOW_OPEN_PROJECT, (_event, projectId: string) => {
+        if (!projectId || typeof projectId !== 'string') {
+          throw new Error('window:open-project requires a non-empty projectId string');
+        }
+        createWindow(projectId);
+        showWindow(projectId);
+      });
+
       // Set up WebSocket client for real-time event forwarding
       wsClient = createWsClient(daemonWsUrl, { reconnect: true });
 
-      // Forward daemon WS events to the Electron renderer
+      // Forward daemon WS events to all Electron renderer windows.
+      // Each renderer filters events by its own projectId from URL.
       wsClient.subscribeGlobal(WS_CHANNELS.AGENT_OUTPUT, (taskId, data) =>
-        sendToRenderer(IPC_CHANNELS.AGENT_OUTPUT, taskId, data));
+        broadcastToAllWindows(IPC_CHANNELS.AGENT_OUTPUT, taskId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.AGENT_MESSAGE, (taskId, data) =>
-        sendToRenderer(IPC_CHANNELS.AGENT_MESSAGE, taskId, data));
+        broadcastToAllWindows(IPC_CHANNELS.AGENT_MESSAGE, taskId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.AGENT_STATUS, (taskId, data) =>
-        sendToRenderer(IPC_CHANNELS.AGENT_STATUS, taskId, data));
+        broadcastToAllWindows(IPC_CHANNELS.AGENT_STATUS, taskId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.AGENT_INTERRUPTED_RUNS, (_id, data) =>
-        sendToRenderer(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, data));
+        broadcastToAllWindows(IPC_CHANNELS.AGENT_INTERRUPTED_RUNS, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_OUTPUT, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.CHAT_OUTPUT, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.CHAT_OUTPUT, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_MESSAGE, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.CHAT_MESSAGE, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.CHAT_MESSAGE, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_STREAM_DELTA, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.CHAT_STREAM_DELTA, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.CHAT_STREAM_DELTA, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TASK_CHAT_OUTPUT, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.TASK_CHAT_OUTPUT, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.TASK_CHAT_OUTPUT, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TASK_CHAT_MESSAGE, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.TASK_CHAT_MESSAGE, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.TASK_CHAT_MESSAGE, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TELEGRAM_BOT_LOG, (projectId, data) =>
-        sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_LOG, projectId, data));
+        broadcastToAllWindows(IPC_CHANNELS.TELEGRAM_BOT_LOG, projectId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, (projectId, data) =>
-        sendToRenderer(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, data));
+        broadcastToAllWindows(IPC_CHANNELS.TELEGRAM_BOT_STATUS_CHANGED, projectId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.NAVIGATE, (_id, data) =>
-        sendToRenderer(IPC_CHANNELS.NAVIGATE, data));
+        broadcastToAllWindows(IPC_CHANNELS.NAVIGATE, data));
       wsClient.subscribeGlobal(WS_CHANNELS.MAIN_DIVERGED, (_id, data) =>
-        sendToRenderer(IPC_CHANNELS.MAIN_DIVERGED, data));
+        broadcastToAllWindows(IPC_CHANNELS.MAIN_DIVERGED, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_SESSION_RENAMED, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.CHAT_SESSION_RENAMED, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.CHAT_SESSION_RENAMED, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.NOTIFICATION_ADDED, (_id, data) =>
-        sendToRenderer(IPC_CHANNELS.NOTIFICATION_ADDED, data));
+        broadcastToAllWindows(IPC_CHANNELS.NOTIFICATION_ADDED, data));
       wsClient.subscribeGlobal(WS_CHANNELS.DEV_SERVER_LOG, (taskId, data) =>
-        sendToRenderer(IPC_CHANNELS.DEV_SERVER_LOG, taskId, data));
+        broadcastToAllWindows(IPC_CHANNELS.DEV_SERVER_LOG, taskId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.DEV_SERVER_STATUS, (taskId, data) =>
-        sendToRenderer(IPC_CHANNELS.DEV_SERVER_STATUS_CHANGED, taskId, data));
+        broadcastToAllWindows(IPC_CHANNELS.DEV_SERVER_STATUS_CHANGED, taskId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TASK_STATUS_CHANGED, (taskId, data) =>
-        sendToRenderer(IPC_CHANNELS.TASK_STATUS_CHANGED, taskId, data));
+        broadcastToAllWindows(IPC_CHANNELS.TASK_STATUS_CHANGED, taskId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TASK_DELETED, (taskId) =>
-        sendToRenderer(IPC_CHANNELS.TASK_DELETED, taskId));
+        broadcastToAllWindows(IPC_CHANNELS.TASK_DELETED, taskId));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_AGENT_NOTIFICATION, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.CHAT_AGENT_NOTIFICATION, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.CHAT_AGENT_NOTIFICATION, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_PERMISSION_REQUEST, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.CHAT_PERMISSION_REQUEST, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.CHAT_PERMISSION_REQUEST, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.CHAT_SESSION_STATUS_CHANGED, (sessionId, data) =>
-        sendToRenderer(IPC_CHANNELS.CHAT_SESSION_STATUS_CHANGED, sessionId, data));
+        broadcastToAllWindows(IPC_CHANNELS.CHAT_SESSION_STATUS_CHANGED, sessionId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TERMINAL_OUTPUT, (terminalId, data) =>
-        sendToRenderer(IPC_CHANNELS.TERMINAL_OUTPUT, terminalId, data));
+        broadcastToAllWindows(IPC_CHANNELS.TERMINAL_OUTPUT, terminalId, data));
       wsClient.subscribeGlobal(WS_CHANNELS.TERMINAL_EXITED, (terminalId, data) =>
-        sendToRenderer(IPC_CHANNELS.TERMINAL_EXITED, terminalId, data));
+        broadcastToAllWindows(IPC_CHANNELS.TERMINAL_EXITED, terminalId, data));
 
       // Create the tray icon with a simple menu
       tray = createTray({

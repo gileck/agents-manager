@@ -177,6 +177,14 @@ export function registerTaskHandlers(api: ApiClient): void {
     return api.tasks.getTimeline(taskId);
   });
 
+  registerIpcHandler(IPC_CHANNELS.TASK_ERRORS, async (_, taskId: string, correlationId?: string) => {
+    return api.tasks.getErrors(taskId, correlationId);
+  });
+
+  registerIpcHandler(IPC_CHANNELS.TASK_CORRELATION_GROUPS, async (_, taskId: string) => {
+    return api.tasks.getCorrelationGroups(taskId);
+  });
+
   // ============================================
   // Worktree
   // ============================================

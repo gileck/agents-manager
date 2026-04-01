@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { createWindow, getWindow, showWindow } from './window';
+import { createWindow, getWindow, showWindow, getAllWindows, hasAnyWindow } from './window';
 
 export interface AppConfig {
   onReady?: () => void | Promise<void>;
@@ -30,13 +30,15 @@ export function initializeApp(config: AppConfig = {}): void {
       return;
     } else {
       app.on('second-instance', () => {
-        // Someone tried to run a second instance, focus our window
-        const window = getWindow();
-        if (window) {
+        // Someone tried to run a second instance — show/focus existing windows
+        const allWindows = getAllWindows();
+        if (allWindows.length > 0) {
+          // Show and focus the most recently used window
           showWindow();
-          if (process.env.ELECTRON_DEBUG === '1' || process.env.NODE_ENV === 'development') {
+          const win = getWindow();
+          if (win && (process.env.ELECTRON_DEBUG === '1' || process.env.NODE_ENV === 'development')) {
             console.log('Second instance detected, opening DevTools');
-            window.webContents.openDevTools({ mode: 'detach' });
+            win.webContents.openDevTools({ mode: 'detach' });
           }
         }
         if (onSecondInstance) {
@@ -58,7 +60,7 @@ export function initializeApp(config: AppConfig = {}): void {
 
     isInitialized = true;
 
-    // Create the window
+    // Create a default window (no projectId — renderer will read from settings)
     createWindow();
 
     // Show window if requested or in debug mode
@@ -74,9 +76,8 @@ export function initializeApp(config: AppConfig = {}): void {
   // macOS: Show window when clicking dock icon
   app.on('activate', () => {
     if (!isInitialized) return;
-    const window = getWindow();
-    if (window) {
-      showWindow();
+    if (hasAnyWindow()) {
+      showWindow(); // Shows last-focused or first available
     } else {
       createWindow();
       showWindow();

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ThemeConfig, ThemeColors } from '../../shared/types';
 import { DEFAULT_THEME_CONFIG, COLOR_VAR_MAP, THEME_PRESETS } from '../theme-presets';
+import { useCurrentProject } from '../contexts/CurrentProjectContext';
 
 const STYLE_ID = 'theme-overrides';
 const SAVE_DEBOUNCE_MS = 300;
@@ -52,49 +53,87 @@ function removeStyleOverrides(): void {
 /**
  * Hook for loading, saving, and applying theme customizations via CSS variable overrides.
  *
- * - Loads saved ThemeConfig from settings on mount
- * - Applies overrides immediately by injecting a <style> element
- * - Persists changes to settings via IPC
- * - Provides helpers for preset selection and reset
+ * Theme config is stored **per-project** in the project's `config.themeConfig` field.
+ * This means each project window gets its own color theme — a strong visual signal
+ * for which project you're working on.
+ *
+ * Falls back to global settings.themeConfig if no project is selected.
  */
 export function useThemeConfig() {
+  const { currentProjectId, currentProject } = useCurrentProject();
   const [themeConfig, setThemeConfigState] = useState<ThemeConfig>(DEFAULT_THEME_CONFIG);
   const [isLoaded, setIsLoaded] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Mirror of themeConfig state accessible synchronously (React 18 batching
-  // defers state updater execution, so we can't read new state immediately
-  // after setState).
   const configRef = useRef<ThemeConfig>(DEFAULT_THEME_CONFIG);
+  const loadedProjectIdRef = useRef<string | null>(null);
 
   /**
-   * Debounce-persist a theme config to settings via IPC.
-   * Cancels any pending save so only the latest config is written.
+   * Save theme config to the current project's config (or global settings as fallback).
+   */
+  const saveThemeConfig = useCallback(async (config: ThemeConfig | null) => {
+    const projectId = currentProjectId;
+    if (projectId) {
+      try {
+        const project = await window.api.projects.get(projectId);
+        if (project) {
+          const updatedConfig = { ...project.config, themeConfig: config ? JSON.stringify(config) : null };
+          await window.api.projects.update(projectId, { config: updatedConfig });
+        }
+      } catch (err) {
+        console.error('Failed to save project theme config:', err);
+      }
+    } else {
+      // Fallback: save to global settings
+      try {
+        await window.api.settings.update({ themeConfig: config ? JSON.stringify(config) : null });
+      } catch (err) {
+        console.error('Failed to save theme config:', err);
+      }
+    }
+  }, [currentProjectId]);
+
+  /**
+   * Debounce-persist a theme config.
    */
   const debounceSave = useCallback((config: ThemeConfig) => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        await window.api.settings.update({ themeConfig: JSON.stringify(config) });
-      } catch (err) {
-        console.error('Failed to save theme config:', err);
-      }
+    saveTimeoutRef.current = setTimeout(() => {
+      saveThemeConfig(config);
     }, SAVE_DEBOUNCE_MS);
-  }, []);
+  }, [saveThemeConfig]);
 
-  // Load saved config on mount
+  // Load theme config when project changes
   useEffect(() => {
     async function load() {
       try {
-        const settings = await window.api.settings.get();
-        if (settings.themeConfig) {
-          const parsed = JSON.parse(settings.themeConfig) as ThemeConfig;
+        let themeConfigStr: string | null = null;
+
+        if (currentProjectId && currentProject) {
+          // Read from project config
+          themeConfigStr = (currentProject.config?.themeConfig as string) ?? null;
+        }
+
+        if (!themeConfigStr && !currentProjectId) {
+          // No project — fall back to global settings
+          const settings = await window.api.settings.get();
+          themeConfigStr = settings.themeConfig;
+        }
+
+        if (themeConfigStr) {
+          const parsed = JSON.parse(themeConfigStr) as ThemeConfig;
           configRef.current = parsed;
           setThemeConfigState(parsed);
           applyStyleOverrides(parsed);
+        } else {
+          // No saved config — revert to defaults
+          configRef.current = DEFAULT_THEME_CONFIG;
+          setThemeConfigState(DEFAULT_THEME_CONFIG);
+          removeStyleOverrides();
         }
-        // If no saved config, the defaults from globals.css are used (no overrides needed)
+
+        loadedProjectIdRef.current = currentProjectId;
       } catch (err) {
         console.error('Failed to load theme config:', err);
       } finally {
@@ -102,10 +141,10 @@ export function useThemeConfig() {
       }
     }
     load();
-  }, []);
+  }, [currentProjectId, currentProject]);
 
   /**
-   * Update the theme config, apply it immediately, and debounce-persist to settings.
+   * Update the theme config, apply it immediately, and debounce-persist.
    */
   const setThemeConfig = useCallback((config: ThemeConfig) => {
     configRef.current = config;
@@ -131,18 +170,11 @@ export function useThemeConfig() {
     configRef.current = DEFAULT_THEME_CONFIG;
     setThemeConfigState(DEFAULT_THEME_CONFIG);
     removeStyleOverrides();
-    try {
-      await window.api.settings.update({ themeConfig: null });
-    } catch (err) {
-      console.error('Failed to reset theme config:', err);
-    }
-  }, []);
+    await saveThemeConfig(null);
+  }, [saveThemeConfig]);
 
   /**
    * Update a single color in the current config (for either light or dark mode).
-   * Reads the latest config from a ref (not React state) so we can compute
-   * the next config and apply CSS overrides synchronously — React 18 batching
-   * defers setState updater execution, making the old pattern unreliable.
    */
   const updateColor = useCallback((
     key: keyof ThemeColors,

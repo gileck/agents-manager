@@ -5,6 +5,7 @@ import { TopMenu } from './TopMenu';
 import { TabBar } from './TabBar';
 import { QuickSwitcher } from './QuickSwitcher';
 import { GlobalSearchDialog } from './GlobalSearchDialog';
+import { ProjectPickerDialog } from './ProjectPickerDialog';
 import { BugReportDialog } from '../bugs/BugReportDialog';
 import { PersistentTerminals } from '../terminal/PersistentTerminals';
 
@@ -24,6 +25,7 @@ export function Layout() {
       <BugReportDialog open={bugDialogOpen} onOpenChange={setBugDialogOpen} />
       <QuickSwitcher />
       <GlobalSearchDialog />
+      <ProjectPickerDialog />
     </>
   );
 }

@@ -118,6 +118,8 @@ const IPC_CHANNELS = {
   TASK_DOCS_GET: 'task:docs:get',
   TASK_DOCS_UPSERT: 'task:docs:upsert',
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
+  TASK_ERRORS: 'task:errors',
+  TASK_CORRELATION_GROUPS: 'task:correlation-groups',
   TASK_WORKTREE: 'task:worktree',
   FEATURE_LIST: 'feature:list',
   FEATURE_GET: 'feature:get',
@@ -161,6 +163,7 @@ const IPC_CHANNELS = {
   OPEN_IN_VSCODE: 'shell:open-in-vscode',
   OPEN_FILE_IN_VSCODE: 'shell:open-file-in-vscode',
   DIALOG_PICK_FOLDER: 'dialog:pick-folder',
+  WINDOW_OPEN_PROJECT: 'window:open-project',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
   CHAT_MESSAGES: 'chat:messages',
@@ -333,6 +336,10 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.TASK_ADD_FEEDBACK, taskId, input),
     debugTimeline: (taskId: string): Promise<DebugTimelineEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_DEBUG_TIMELINE, taskId),
+    errors: (taskId: string, correlationId?: string): Promise<DebugTimelineEntry[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_ERRORS, taskId, correlationId),
+    correlationGroups: (taskId: string): Promise<Record<string, DebugTimelineEntry[]>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_CORRELATION_GROUPS, taskId),
     worktree: (taskId: string): Promise<Worktree | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE, taskId),
     workflowReview: (taskId: string): Promise<AgentRun> =>
@@ -677,6 +684,12 @@ const api = {
   dialog: {
     pickFolder: (): Promise<string | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG_PICK_FOLDER),
+  },
+
+  // Window management
+  window: {
+    openProject: (projectId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.WINDOW_OPEN_PROJECT, projectId),
   },
 
   // Event listeners (main -> renderer)

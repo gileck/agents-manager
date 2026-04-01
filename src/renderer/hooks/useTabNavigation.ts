@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTabsContext } from '../contexts/TabsContext';
+import { useCurrentProject } from '../contexts/CurrentProjectContext';
 import { useKeyboardShortcutsConfig } from './useKeyboardShortcutsConfig';
 import { matchesKeyEvent } from '../lib/keyboardShortcuts';
 
@@ -13,6 +14,7 @@ export function useTabNavigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const { state, config, openTab, closeTab, switchTab, setQuickSwitcherOpen, getCloseTabTarget, reopenTab } = useTabsContext();
+  const { currentProjectId } = useCurrentProject();
   const { getCombo } = useKeyboardShortcutsConfig();
   const hasRestored = useRef(false);
 
@@ -29,7 +31,8 @@ export function useTabNavigation() {
     } else {
       // Fallback to old route restore behavior
       try {
-        const saved = localStorage.getItem('app.lastRoute');
+        const routeKey = currentProjectId ? `app.lastRoute:${currentProjectId}` : 'app.lastRoute';
+        const saved = localStorage.getItem(routeKey);
         if (saved && saved.startsWith('/') && saved !== '/' && saved !== location.pathname) {
           navigate(saved, { replace: true });
         }
@@ -43,11 +46,12 @@ export function useTabNavigation() {
   useEffect(() => {
     openTab(location.pathname);
     try {
-      localStorage.setItem('app.lastRoute', location.pathname);
+      const routeKey = currentProjectId ? `app.lastRoute:${currentProjectId}` : 'app.lastRoute';
+      localStorage.setItem(routeKey, location.pathname);
     } catch {
       // localStorage may be unavailable — non-critical
     }
-  }, [location.pathname, openTab]);
+  }, [location.pathname, openTab, currentProjectId]);
 
   // Navigate to a specific tab
   const navigateToTab = useCallback((tabId: string) => {
@@ -67,16 +71,22 @@ export function useTabNavigation() {
     }
   }, [getCloseTabTarget, closeTab, navigate]);
 
-  // Global search shortcut — works regardless of tab config
+  // Global shortcuts — work regardless of tab config
   useEffect(() => {
-    const handleGlobalSearch = (event: KeyboardEvent) => {
+    const handleGlobalShortcuts = (event: KeyboardEvent) => {
       if (matchesKeyEvent(getCombo('global.search'), event)) {
         event.preventDefault();
         window.dispatchEvent(new CustomEvent('open-global-search'));
+        return;
+      }
+      if (matchesKeyEvent(getCombo('global.projectPicker'), event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('open-project-picker'));
+        return;
       }
     };
-    window.addEventListener('keydown', handleGlobalSearch);
-    return () => window.removeEventListener('keydown', handleGlobalSearch);
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [getCombo]);
 
   // Global keyboard shortcuts for tabs

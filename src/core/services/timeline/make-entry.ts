@@ -15,6 +15,7 @@ export function makeEntry(
   severity: DebugTimelineEntry['severity'],
   title: string,
   data?: Record<string, unknown>,
+  correlationId?: string,
 ): DebugTimelineEntry {
   return {
     id: djb2(`${timestamp}-${source}-${(data?.category as string | undefined) ?? ''}-${title}`),
@@ -23,5 +24,6 @@ export function makeEntry(
     severity,
     title,
     ...(data !== undefined ? { data } : {}),
+    ...(correlationId ? { correlationId } : {}),
   };
 }
