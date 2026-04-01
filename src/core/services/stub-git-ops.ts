@@ -149,6 +149,11 @@ export class StubGitOps implements IGitOps {
     if (idx >= 0) this.branches.splice(idx, 1);
   }
 
+  async remoteBranchExists(_branch: string): Promise<boolean> {
+    this.throwIfConfigured('remoteBranchExists');
+    return true;
+  }
+
   async getCommitDetail(hash: string): Promise<GitCommitDetail> {
     const commit = this.commits.find((c) => c.hash === hash);
     return {

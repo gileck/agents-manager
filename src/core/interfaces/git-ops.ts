@@ -35,4 +35,6 @@ export interface IGitOps {
   refExists(branch: string): Promise<boolean>;
   /** Force-delete a local branch: `git branch -D <name>`. */
   deleteLocalBranch(name: string): Promise<void>;
+  /** Check if a remote branch exists: `git ls-remote --heads origin <branch>`. */
+  remoteBranchExists(branch: string): Promise<boolean>;
 }

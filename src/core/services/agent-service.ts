@@ -286,6 +286,38 @@ export class AgentService implements IAgentService {
       }
     }
 
+    // Defensive: ensure the integration branch exists on the remote before
+    // attempting to create a worktree that branches from it. The branch may
+    // have been deleted by a prior cleanupWorktree race condition. If missing,
+    // re-push it from the local ref to self-heal.
+    if (multiPhase && taskBranch && baseBranch) {
+      const gitOpsCheck = this.createGitOps(projectPath);
+      const remoteExists = await gitOpsCheck.remoteBranchExists(taskBranch);
+      if (!remoteExists) {
+        getAppLogger().warn(`Agent:${agentType}`, `Integration branch "${taskBranch}" missing from remote — re-pushing from local ref`, { taskId, taskBranch });
+        await this.taskEventLog.log({
+          taskId,
+          category: 'git',
+          severity: 'warning',
+          message: `Integration branch "${taskBranch}" missing from remote — re-pushing to self-heal`,
+          data: { taskBranch },
+        });
+        try {
+          await gitOpsCheck.push(taskBranch);
+        } catch (pushErr) {
+          const pushMsg = pushErr instanceof Error ? pushErr.message : String(pushErr);
+          // If the local ref doesn't exist either, recreate from origin/main
+          if (/src refspec.*does not match|error: failed to push/i.test(pushMsg)) {
+            getAppLogger().warn(`Agent:${agentType}`, `Local ref "${taskBranch}" also missing — recreating from origin/main`, { taskId, taskBranch });
+            await gitOpsCheck.createBranchRef(taskBranch, 'origin/main');
+            await gitOpsCheck.push(taskBranch);
+          } else {
+            throw new Error(`Failed to restore integration branch "${taskBranch}": ${pushMsg}`, { cause: pushErr });
+          }
+        }
+      }
+    }
+
     let worktree = await worktreeManager.get(taskId);
     if (!worktree) {
       // Clean refs that would conflict with hierarchical branch creation

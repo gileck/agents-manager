@@ -143,6 +143,15 @@ export class LocalGitOps implements IGitOps {
     await this.git(['branch', '-D', name]);
   }
 
+  async remoteBranchExists(branch: string): Promise<boolean> {
+    try {
+      const output = await this.git(['ls-remote', '--heads', 'origin', branch]);
+      return output.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   async getCommitDetail(hash: string): Promise<GitCommitDetail> {
     const body = await this.git(['log', '-1', '--format=%b', hash]);
     const filesOutput = await this.git(['diff', '--name-status', `${hash}^`, hash]);

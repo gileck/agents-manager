@@ -458,6 +458,18 @@ describe('registerScmHandler', () => {
       expect(mockScmPlatform.mergePR).toHaveBeenCalledWith('https://github.com/owner/repo/pull/42');
     });
 
+    it('skips merge and returns success when PR is already merged', async () => {
+      (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+        makeArtifact(),
+      ]);
+      (mockScmPlatform.getPRStatus as ReturnType<typeof vi.fn>).mockResolvedValue('merged');
+
+      const result = await hooks['merge_pr'](makeTask(), makeTransition(), makeContext());
+
+      expect(result.success).toBe(true);
+      expect(mockScmPlatform.mergePR).not.toHaveBeenCalled();
+    });
+
     it('fetches main when pullMainAfterMerge is enabled and main is not checked out', async () => {
       (mockTaskArtifactStore.getArtifactsForTask as ReturnType<typeof vi.fn>).mockResolvedValue([
         makeArtifact(),

@@ -108,6 +108,12 @@ export function registerScmHandler(engine: IPipelineEngine, deps: ScmHandlerDeps
 
     await ghLog(`Merging PR: ${prUrl}`);
     try {
+      // Check if PR is already merged to avoid a misleading "merged successfully" log
+      const prStatus = await scmPlatform.getPRStatus(prUrl);
+      if (prStatus === 'merged') {
+        await ghLog('PR already merged — skipping merge', 'info', { url: prUrl });
+        return { success: true };
+      }
       await scmPlatform.mergePR(prUrl);
       await ghLog('PR merged successfully', 'info', { url: prUrl });
     } catch (err) {
