@@ -75,9 +75,7 @@ export class CodexAppServerLib extends BaseAgentLib {
   getSupportedModels(): AgentLibModelOption[] {
     return [
       { value: 'gpt-5.4', label: 'GPT-5.4' },
-      { value: 'gpt-5.4-2026-03-05', label: 'GPT-5.4 (2026-03-05 snapshot)' },
-      { value: 'gpt-5.4-pro', label: 'GPT-5.4 Pro' },
-      { value: 'gpt-5.4-pro-2026-03-05', label: 'GPT-5.4 Pro (2026-03-05 snapshot)' },
+      { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
       { value: 'codex-mini-latest', label: 'Codex Mini Latest' },
     ];
   }
