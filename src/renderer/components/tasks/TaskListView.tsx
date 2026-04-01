@@ -204,6 +204,7 @@ export function TaskListView() {
   const someSelected = selectedIds.size > 0 && selectedIds.size < tasks.length;
 
   const toggleSelect = (id: string) => {
+    if (!selectMode) setSelectMode(true);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -214,6 +215,7 @@ export function TaskListView() {
     setSelectedIds(allSelected ? new Set() : new Set(tasks.map((t) => t.id)));
   };
   const handleToggleSelectGroup = (taskIds: string[]) => {
+    if (!selectMode) setSelectMode(true);
     setSelectedIds((prev) => {
       const allSelected_ = taskIds.every((id) => prev.has(id));
       const next = new Set(prev);
@@ -444,7 +446,12 @@ export function TaskListView() {
             features={features}
             statusSummary={
               sortedTasks.length > 0
-                ? <TaskStatusSummary tasks={sortedTasks} pipelineMap={pipelineMap} />
+                ? <TaskStatusSummary
+                    tasks={sortedTasks}
+                    pipelineMap={pipelineMap}
+                    activeStatus={filters.status}
+                    onStatusClick={(status) => setFilters({ ...filters, status })}
+                  />
                 : undefined
             }
             selectMode={selectMode}
