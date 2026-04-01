@@ -17,7 +17,8 @@ export const SHORTCUT_REGISTRY: ShortcutDefinition[] = [
   { id: 'tabs.reopenTab',     context: 'tabs',   description: 'Reopen last closed tab',        defaultCombo: 'CmdOrCtrl+Shift+t' },
   { id: 'tabs.jumpToTab',     context: 'tabs',   description: 'Jump to tab by index (1–9)',    defaultCombo: 'CmdOrCtrl+1–9', notCustomizable: true },
   // Global shortcuts
-  { id: 'global.search',   context: 'global', description: 'Search tasks & threads', defaultCombo: 'CmdOrCtrl+o' },
+  { id: 'global.search',        context: 'global', description: 'Search tasks & threads', defaultCombo: 'CmdOrCtrl+o' },
+  { id: 'global.projectPicker', context: 'global', description: 'Open project picker',    defaultCombo: 'CmdOrCtrl+n' },
   // Kanban shortcuts
   { id: 'kanban.navLeft',       context: 'kanban', description: 'Navigate to previous column',  defaultCombo: 'ArrowLeft' },
   { id: 'kanban.navRight',      context: 'kanban', description: 'Navigate to next column',      defaultCombo: 'ArrowRight' },

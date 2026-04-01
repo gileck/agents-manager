@@ -71,16 +71,22 @@ export function useTabNavigation() {
     }
   }, [getCloseTabTarget, closeTab, navigate]);
 
-  // Global search shortcut — works regardless of tab config
+  // Global shortcuts — work regardless of tab config
   useEffect(() => {
-    const handleGlobalSearch = (event: KeyboardEvent) => {
+    const handleGlobalShortcuts = (event: KeyboardEvent) => {
       if (matchesKeyEvent(getCombo('global.search'), event)) {
         event.preventDefault();
         window.dispatchEvent(new CustomEvent('open-global-search'));
+        return;
+      }
+      if (matchesKeyEvent(getCombo('global.projectPicker'), event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('open-project-picker'));
+        return;
       }
     };
-    window.addEventListener('keydown', handleGlobalSearch);
-    return () => window.removeEventListener('keydown', handleGlobalSearch);
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [getCombo]);
 
   // Global keyboard shortcuts for tabs
