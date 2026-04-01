@@ -75,6 +75,8 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       addContextEntry: (taskId, input) => api.tasks.addContext(taskId, input) as Promise<never>,
       addFeedback: (taskId, input) => api.tasks.addFeedback(taskId, input) as Promise<never>,
       debugTimeline: (taskId) => api.tasks.getTimeline(taskId) as Promise<never>,
+      errors: (taskId, correlationId?) => api.tasks.getErrors(taskId, correlationId) as Promise<never>,
+      correlationGroups: (taskId) => api.tasks.getCorrelationGroups(taskId) as Promise<never>,
       worktree: (taskId) => api.tasks.getWorktree(taskId) as Promise<never>,
       workflowReview: (taskId) => api.agents.workflowReview(taskId) as Promise<never>,
       postMortem: (taskId, input?) => api.agents.postMortem(taskId, input) as Promise<never>,

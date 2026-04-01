@@ -136,7 +136,7 @@ export class PipelineEngine implements IPipelineEngine {
   }
 
   async executeTransition(task: Task, toStatus: string, context?: TransitionContext, onPostLog?: OnPostLog): Promise<TransitionResult> {
-    const ctx: TransitionContext = context ?? { trigger: 'manual' };
+    const ctx: TransitionContext = { ...(context ?? { trigger: 'manual' }) };
     // Generate a correlationId for this transition chain if not already provided
     if (!ctx.correlationId) {
       ctx.correlationId = generateId();
@@ -428,7 +428,11 @@ export class PipelineEngine implements IPipelineEngine {
    *   the operation.
    */
   async executeForceTransition(task: Task, toStatus: string, context?: TransitionContext): Promise<TransitionResult> {
-    const ctx: TransitionContext = context ?? { trigger: 'manual' };
+    const ctx: TransitionContext = { ...(context ?? { trigger: 'manual' }) };
+    // Generate a correlationId for this force-transition chain if not already provided
+    if (!ctx.correlationId) {
+      ctx.correlationId = generateId();
+    }
 
     const pipeline = await this.pipelineStore.getPipeline(task.pipelineId);
     if (!pipeline) {
@@ -488,6 +492,7 @@ export class PipelineEngine implements IPipelineEngine {
         actor: ctx.actor,
         forced: true,
       },
+      correlationId: ctx.correlationId,
     });
 
     return { success: true, task: updatedTask, ...(hookFailures.length > 0 ? { hookFailures } : {}) };

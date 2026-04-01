@@ -94,6 +94,8 @@ export const IPC_CHANNELS = {
 
   // Debug timeline
   TASK_DEBUG_TIMELINE: 'task:debug-timeline',
+  TASK_ERRORS: 'task:errors',
+  TASK_CORRELATION_GROUPS: 'task:correlation-groups',
 
   // Worktree
   TASK_WORKTREE: 'task:worktree',
