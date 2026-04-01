@@ -2,6 +2,7 @@ import React from 'react';
 import { Badge } from '../ui/badge';
 import { GitPullRequest } from 'lucide-react';
 import { TaskItemMenu } from './TaskItemMenu';
+import { TaskTypeIcon } from './TaskTypeIcon';
 import { formatRelativeTimestamp } from './task-helpers';
 import type { Task, Pipeline } from '../../../shared/types';
 
@@ -93,6 +94,9 @@ export function TaskListRow({
           title={task.status}
         />
       )}
+
+      {/* Type icon */}
+      <TaskTypeIcon type={task.type} size={14} />
 
       {/* Title */}
       <span className="flex-1 min-w-0 font-medium text-sm truncate">

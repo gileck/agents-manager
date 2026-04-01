@@ -5,6 +5,7 @@ import { PipelineBadge } from '../pipeline/PipelineBadge';
 import { GitPullRequest } from 'lucide-react';
 import { TaskItemMenu } from './TaskItemMenu';
 import { TaskListRow } from './TaskListRow';
+import { TaskTypeIcon } from './TaskTypeIcon';
 import { formatRelativeTimestamp } from './task-helpers';
 import type { ViewMode } from './task-helpers';
 import type { Task, Pipeline } from '../../../shared/types';
@@ -84,6 +85,7 @@ export function TaskRow({
         )}
         {!hideStatus && <PipelineBadge status={task.status} pipeline={pipeline} />}
         <Badge variant={PRIORITY_VARIANTS[task.priority] ?? 'outline'}>P{task.priority}</Badge>
+        <TaskTypeIcon type={task.type} size={16} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium truncate">{task.title}</span>
