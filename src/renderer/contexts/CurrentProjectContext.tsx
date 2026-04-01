@@ -102,8 +102,8 @@ export function CurrentProjectProvider({ children }: { children: React.ReactNode
   }, [loadProject]);
 
   const setCurrentProjectId = useCallback(async (id: string | null) => {
-    if (isLocked && id && id !== currentProjectId) {
-      // Window is URL-scoped to a project — open the other project in a new window
+    // Switching to a different project always opens a new window
+    if (id && id !== currentProjectId && currentProjectId) {
       try {
         await window.api.window.openProject(id);
       } catch (err) {
@@ -121,7 +121,8 @@ export function CurrentProjectProvider({ children }: { children: React.ReactNode
       }
       return;
     }
-    // Not URL-scoped: behave as before (update local state + global settings)
+    // Not URL-scoped: update local state + global settings
+    // (used for initial project selection when no project is set yet)
     try {
       setCurrentProjectIdState(id);
       await window.api.settings.update({ currentProjectId: id });
