@@ -1,8 +1,12 @@
 import { BrowserWindow, app } from 'electron';
 import * as path from 'path';
 
-let mainWindow: BrowserWindow | null = null;
+/** Map of projectId → BrowserWindow. Key '__default__' for windows without a project. */
+const windows = new Map<string, BrowserWindow>();
 let isQuitting = false;
+
+// Track the most recently focused window for activate/second-instance
+let lastFocusedKey: string | null = null;
 
 // Register once at module level to prevent duplicate listener accumulation
 // when createWindow() is called multiple times (e.g. from activate or showWindow).
@@ -10,8 +14,20 @@ app.on('before-quit', () => {
   isQuitting = true;
 });
 
-export function createWindow(): BrowserWindow {
-  mainWindow = new BrowserWindow({
+function windowKey(projectId?: string): string {
+  return projectId || '__default__';
+}
+
+export function createWindow(projectId?: string): BrowserWindow {
+  const key = windowKey(projectId);
+
+  // If a window already exists for this project, return it
+  const existing = windows.get(key);
+  if (existing && !existing.isDestroyed()) {
+    return existing;
+  }
+
+  const win = new BrowserWindow({
     width: 900,
     height: 700,
     show: false,
@@ -20,14 +36,12 @@ export function createWindow(): BrowserWindow {
     minimizable: true,
     maximizable: true,
     fullscreenable: false,
-    backgroundColor: '#ffffff', // Force white background
+    backgroundColor: '#ffffff',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(app.getAppPath(), 'dist-main', 'src', 'preload', 'index.js'),
     },
-    // Remove standard window buttons for menu bar style (optional)
-    // titleBarStyle: 'hidden',
   });
 
   const shouldOpenDevTools =
@@ -49,100 +63,141 @@ export function createWindow(): BrowserWindow {
     },
   };
 
-  mainWindow.webContents.on('did-fail-load', listeners.failLoad);
-  mainWindow.webContents.on('render-process-gone', listeners.processGone);
-  mainWindow.webContents.on('unresponsive', listeners.unresponsive);
-  mainWindow.webContents.on('responsive', listeners.responsive);
+  win.webContents.on('did-fail-load', listeners.failLoad);
+  win.webContents.on('render-process-gone', listeners.processGone);
+  win.webContents.on('unresponsive', listeners.unresponsive);
+  win.webContents.on('responsive', listeners.responsive);
 
   // Only forward renderer console messages in debug mode
   if (shouldOpenDevTools) {
-    mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
       // Skip noisy React DevTools message
       if (message.includes('Download the React DevTools')) return;
       console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
     });
   }
 
-  // Load the renderer
-  // Use app.getAppPath() to get the project root directory
+  // Load the renderer with projectId as query parameter
   const appPath = app.getAppPath();
   const indexPath = path.join(appPath, 'dist', 'index.html');
 
-  mainWindow.loadFile(indexPath);
+  const loadPromise = projectId
+    ? win.loadFile(indexPath, { search: `?projectId=${encodeURIComponent(projectId)}` })
+    : win.loadFile(indexPath);
+  loadPromise.catch((err) => {
+    console.error(`Failed to load renderer${projectId ? ` for project ${projectId}` : ''}:`, err);
+  });
 
   if (shouldOpenDevTools) {
-    mainWindow.webContents.once('did-finish-load', () => {
-      mainWindow?.webContents.openDevTools({ mode: 'detach' });
+    win.webContents.once('did-finish-load', () => {
+      win?.webContents.openDevTools({ mode: 'detach' });
     });
   }
 
   // Hide window instead of closing when user clicks X
-  mainWindow.on('close', (event) => {
-    if (!mainWindow || isQuitting) return;
+  win.on('close', (event) => {
+    if (isQuitting) return;
     event.preventDefault();
-    mainWindow.hide();
+    win.hide();
   });
 
-  // Hide window when it loses focus (menu bar app behavior)
-  // Uncomment for strict menu bar popup behavior:
-  // mainWindow.on('blur', () => {
-  //   hideWindow();
-  // });
+  // Track focus for last-focused tracking
+  win.on('focus', () => {
+    lastFocusedKey = key;
+  });
 
-  mainWindow.on('closed', () => {
-    if (mainWindow) {
-      mainWindow.webContents.removeListener('did-fail-load', listeners.failLoad);
-      mainWindow.webContents.removeListener('render-process-gone', listeners.processGone);
-      mainWindow.webContents.removeListener('unresponsive', listeners.unresponsive);
-      mainWindow.webContents.removeListener('responsive', listeners.responsive);
+  win.on('closed', () => {
+    win.webContents.removeListener('did-fail-load', listeners.failLoad);
+    win.webContents.removeListener('render-process-gone', listeners.processGone);
+    win.webContents.removeListener('unresponsive', listeners.unresponsive);
+    win.webContents.removeListener('responsive', listeners.responsive);
+    windows.delete(key);
+    if (lastFocusedKey === key) {
+      lastFocusedKey = null;
     }
-    mainWindow = null;
   });
 
-  return mainWindow;
+  windows.set(key, win);
+  lastFocusedKey = key;
+
+  return win;
 }
 
-export function getWindow(): BrowserWindow | null {
-  return mainWindow;
-}
-
-export function showWindow(): void {
-  if (!mainWindow) {
-    mainWindow = createWindow();
+export function getWindow(projectId?: string): BrowserWindow | null {
+  if (projectId) {
+    const win = windows.get(windowKey(projectId));
+    return win && !win.isDestroyed() ? win : null;
   }
-
-  // Position window below the tray icon (optional - for menu bar popup style)
-  // const trayBounds = tray?.getBounds();
-  // if (trayBounds) {
-  //   const windowBounds = mainWindow.getBounds();
-  //   const x = Math.round(trayBounds.x + (trayBounds.width / 2) - (windowBounds.width / 2));
-  //   const y = Math.round(trayBounds.y + trayBounds.height);
-  //   mainWindow.setPosition(x, y, false);
-  // }
-
-  mainWindow.show();
-  mainWindow.focus();
+  // No projectId: return last focused, or first available
+  if (lastFocusedKey) {
+    const win = windows.get(lastFocusedKey);
+    if (win && !win.isDestroyed()) return win;
+  }
+  for (const win of windows.values()) {
+    if (!win.isDestroyed()) return win;
+  }
+  return null;
 }
 
-export function hideWindow(): void {
-  if (mainWindow) {
-    mainWindow.hide();
+export function getAllWindows(): BrowserWindow[] {
+  return Array.from(windows.values()).filter(w => !w.isDestroyed());
+}
+
+export function showWindow(projectId?: string): void {
+  let win = getWindow(projectId);
+  if (!win) {
+    win = createWindow(projectId);
+  }
+  win.show();
+  win.focus();
+}
+
+export function hideWindow(projectId?: string): void {
+  const win = getWindow(projectId);
+  if (win) {
+    win.hide();
   }
 }
 
-export function toggleWindow(): void {
-  if (!mainWindow) {
-    mainWindow = createWindow();
-    showWindow();
-  } else if (mainWindow.isVisible()) {
-    hideWindow();
+export function toggleWindow(projectId?: string): void {
+  const win = getWindow(projectId);
+  if (!win) {
+    createWindow(projectId);
+    showWindow(projectId);
+  } else if (win.isVisible()) {
+    hideWindow(projectId);
   } else {
-    showWindow();
+    showWindow(projectId);
   }
 }
 
-export function sendToRenderer(channel: string, ...args: unknown[]): void {
-  if (mainWindow && mainWindow.webContents) {
-    mainWindow.webContents.send(channel, ...args);
+/** Send an IPC message to all open renderer windows. */
+export function broadcastToAllWindows(channel: string, ...args: unknown[]): void {
+  for (const win of windows.values()) {
+    if (!win.isDestroyed() && win.webContents) {
+      try {
+        win.webContents.send(channel, ...args);
+      } catch (err) {
+        console.error(`Failed to send ${channel} to window:`, err);
+      }
+    }
   }
+}
+
+/** @deprecated Use broadcastToAllWindows instead */
+export function sendToRenderer(channel: string, ...args: unknown[]): void {
+  broadcastToAllWindows(channel, ...args);
+}
+
+export function closeAllWindows(): void {
+  for (const win of windows.values()) {
+    if (!win.isDestroyed()) {
+      win.destroy();
+    }
+  }
+  windows.clear();
+}
+
+export function hasAnyWindow(): boolean {
+  return getAllWindows().length > 0;
 }

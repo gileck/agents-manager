@@ -345,6 +345,11 @@ export interface ApiShape {
     pickFolder(): Promise<string | null>;
   };
 
+  // Window management
+  window: {
+    openProject(projectId: string): Promise<void>;
+  };
+
   // Event listeners (push events from daemon)
   on: {
     navigate(callback: (path: string) => void): () => void;

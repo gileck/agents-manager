@@ -286,4 +286,7 @@ export const IPC_CHANNELS = {
   TERMINAL_OUTPUT: 'terminal:output',
   /** PUSH-ONLY: main->renderer, do not invoke() */
   TERMINAL_EXITED: 'terminal:exited',
+
+  // Window management
+  WINDOW_OPEN_PROJECT: 'window:open-project',
 } as const;

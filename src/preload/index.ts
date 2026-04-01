@@ -161,6 +161,7 @@ const IPC_CHANNELS = {
   OPEN_IN_VSCODE: 'shell:open-in-vscode',
   OPEN_FILE_IN_VSCODE: 'shell:open-file-in-vscode',
   DIALOG_PICK_FOLDER: 'dialog:pick-folder',
+  WINDOW_OPEN_PROJECT: 'window:open-project',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
   CHAT_MESSAGES: 'chat:messages',
@@ -677,6 +678,12 @@ const api = {
   dialog: {
     pickFolder: (): Promise<string | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG_PICK_FOLDER),
+  },
+
+  // Window management
+  window: {
+    openProject: (projectId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.WINDOW_OPEN_PROJECT, projectId),
   },
 
   // Event listeners (main -> renderer)

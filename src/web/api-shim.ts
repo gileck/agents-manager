@@ -308,6 +308,22 @@ export function createWebApiShim(daemonUrl: string, daemonWsUrl: string): ApiSha
       pickFolder: () => api.shell.pickFolder(),
     },
 
+    // ── Window management ────────────────────────────────────────────
+    window: {
+      openProject: (projectId: string) => {
+        const newWindow = window.open(
+          `${window.location.origin}?projectId=${encodeURIComponent(projectId)}#/`,
+          '_blank',
+        );
+        if (!newWindow) {
+          return Promise.reject(new Error(
+            'Failed to open project window. Please allow popups for this site.',
+          ));
+        }
+        return Promise.resolve();
+      },
+    },
+
     // ── Push Events (via browser WebSocket) ───────────────────────────
     on: {
       navigate: (callback) =>

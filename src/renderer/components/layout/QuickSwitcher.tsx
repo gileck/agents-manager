@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { cn, fuzzyMatch } from '../../lib/utils';
 import { useTabsContext, ICON_MAP, getRecentPages } from '../../contexts/TabsContext';
+import { useCurrentProject } from '../../contexts/CurrentProjectContext';
 
 interface SwitcherItem {
   key: string;
@@ -16,6 +17,7 @@ interface SwitcherItem {
 
 export function QuickSwitcher() {
   const { state, config, quickSwitcherOpen, setQuickSwitcherOpen, switchTab } = useTabsContext();
+  const { currentProjectId } = useCurrentProject();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -40,7 +42,7 @@ export function QuickSwitcher() {
 
     // Recent pages not in open tabs
     const openPaths = new Set(state.tabs.map(t => t.path));
-    const recentPages = getRecentPages();
+    const recentPages = getRecentPages(currentProjectId);
     for (const page of recentPages) {
       if (!openPaths.has(page.path)) {
         items.push({
@@ -54,7 +56,7 @@ export function QuickSwitcher() {
     }
 
     return items;
-  }, [state.tabs]);
+  }, [state.tabs, currentProjectId]);
 
   const filtered = useMemo(() => {
     if (!query) return allItems;
